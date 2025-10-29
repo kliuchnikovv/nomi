@@ -8,19 +8,18 @@ import (
 )
 
 type AuditSecurity struct {
-	ID        int64           `db:"id"`
-	ProfileID string          `db:"profile_id"`
-	Provider  string          `db:"provider"`
-	Action    string          `db:"action"`
-	TokenID   uuid.UUID       `db:"token_id"`
-	At        time.Time       `db:"at"`
-	Meta      json.RawMessage `db:"meta"`
+	ID        int64           `gorm:"primaryKey;autoIncrement"`
+	ProfileID string          `gorm:"index;type:text"`
+	Provider  string          `gorm:"type:text"`
+	Action    string          `gorm:"type:text"`
+	TokenID   uuid.UUID       `gorm:"type:uuid"`
+	At        time.Time       `gorm:"column:at"`
+	Meta      json.RawMessage `gorm:"type:jsonb"`
 }
 
 func (s *Storage) SaveAuditSecurity(audit *AuditSecurity) error {
-	_, err := s.DB.Exec(`
-		INSERT INTO audit_security (profile_id, provider, action, token_id, meta)
-		VALUES ($1, $2, $3, $4, $5)
-	`, audit.ProfileID, audit.Provider, audit.Action, audit.TokenID, audit.Meta)
-	return err
+	if audit.At.IsZero() {
+		audit.At = time.Now()
+	}
+	return s.DB.Create(audit).Error
 }

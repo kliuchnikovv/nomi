@@ -6,19 +6,15 @@ import (
 )
 
 type IntegrationLog struct {
-	ID        int64           `db:"id"`
-	ProfileID string          `db:"profile_id"`
-	Provider  string          `db:"provider"`
-	AgentID   string          `db:"agent_id"`
-	Action    string          `db:"action"`
-	Timestamp time.Time       `db:"timestamp"`
-	Details   json.RawMessage `db:"details"`
+	ID        int64           `gorm:"primaryKey;autoIncrement"`
+	ProfileID string          `gorm:"index;type:text"`
+	Provider  string          `gorm:"type:text"`
+	AgentID   string          `gorm:"type:text"`
+	Action    string          `gorm:"type:text"`
+	Timestamp time.Time       `gorm:"column:timestamp"`
+	Details   json.RawMessage `gorm:"type:jsonb"`
 }
 
 func (s *Storage) SaveIntegrationLog(log *IntegrationLog) error {
-	_, err := s.DB.Exec(`
-		INSERT INTO integration_logs (profile_id, provider, agent_id, action, timestamp, details)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, log.ProfileID, log.Provider, log.AgentID, log.Action, log.Timestamp, log.Details)
-	return err
+	return s.DB.Create(log).Error
 }

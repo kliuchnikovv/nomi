@@ -1,30 +1,41 @@
 package storage
 
 import (
-	"database/sql"
 	"fmt"
 
 	"github.com/kliuchnikovv/genie-api/internal/config"
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type Storage struct {
-	DB *sql.DB
+	DB *gorm.DB
 }
 
 func New(cfg *config.Config) (*Storage, error) {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=disable",
-		cfg.Database.Host, cfg.Database.Port, cfg.Database.User, cfg.Database.Password, cfg.Database.DBName)
+	dsn := fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s port=%d sslmode=disable TimeZone=UTC",
+		cfg.Database.Host,
+		cfg.Database.User,
+		cfg.Database.Password,
+		cfg.Database.DBName,
+		cfg.Database.Port,
+	)
 
-	db, err := sql.Open("postgres", psqlInfo)
+	gdb, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := db.Ping(); err != nil {
+	// Auto-migrate models to keep schema in sync with GORM models.
+	// We run AutoMigrate because you asked to enable AutoMigrate. Existing SQL migrations can remain as canonical source if you prefer.
+	if err := gdb.AutoMigrate(
+		&OAuthToken{},
+		&IntegrationLog{},
+		&AuditSecurity{},
+	); err != nil {
 		return nil, err
 	}
 
-	return &Storage{DB: db}, nil
+	return &Storage{DB: gdb}, nil
 }

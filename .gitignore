@@ -17,5 +17,10 @@
 # Go workspace file
 go.work
 
+# Go debug bins
+__debug*
+
 # Config
 configs/config.yaml
+
+
