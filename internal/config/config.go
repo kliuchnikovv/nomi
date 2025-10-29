@@ -1,0 +1,43 @@
+package config
+
+import (
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Server struct {
+		Port int `yaml:"port"`
+	} `yaml:"server"`
+	Database struct {
+		Host     string `yaml:"host"`
+		Port     int    `yaml:"port"`
+		User     string `yaml:"user"`
+		Password string `yaml:"password"`
+		DBName   string `yaml:"dbname"`
+	} `yaml:"database"`
+	OAuth2 struct {
+		Providers map[string]struct {
+			ClientID     string   `yaml:"client_id"`
+			ClientSecret string   `yaml:"client_secret"`
+			RedirectURL  string   `yaml:"redirect_url"`
+			IssuerURL    string   `yaml:"issuer_url"`
+			Scopes       []string `yaml:"scopes"`
+		} `yaml:"providers"`
+	} `yaml:"oauth2"`
+}
+
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
