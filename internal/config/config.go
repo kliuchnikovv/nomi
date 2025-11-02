@@ -29,7 +29,8 @@ type Config struct {
 	} `yaml:"oauth2"`
 	Token struct {
 		// Refresh token if it will expire in less than this many minutes
-		RefreshBeforeMinutes int `yaml:"refresh_before_minutes"`
+		RefreshBeforeMinutes int    `yaml:"refresh_before_minutes"`
+		JWTSecret            string `yaml:"jwt_secret"`
 	} `yaml:"token"`
 }
 
