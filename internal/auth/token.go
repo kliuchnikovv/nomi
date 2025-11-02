@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
@@ -14,7 +15,7 @@ var (
 )
 
 type Claims struct {
-	UserID uint `json:"user_id"`
+	UserID uuid.UUID `json:"user_id"`
 	jwt.RegisteredClaims
 }
 

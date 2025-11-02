@@ -142,7 +142,7 @@ definitions:
       email:
         type: string
       id:
-        type: integer
+        type: string
       name:
         type: string
       updated_at:
@@ -151,7 +151,7 @@ definitions:
 info:
   contact: {}
 paths:
-  /api/disconnect/{profile}/google:
+  /api/api/disconnect/{profile}/google:
     post:
       parameters:
       - description: Profile ID
@@ -165,7 +165,7 @@ paths:
       summary: Disconnect Google
       tags:
       - oauth
-  /api/logs:
+  /api/api/logs:
     get:
       parameters:
       - description: Profile ID
@@ -213,7 +213,7 @@ paths:
       summary: Log integration usage
       tags:
       - logs
-  /api/oauth/google/login:
+  /api/api/oauth/google/login:
     post:
       consumes:
       - application/json
@@ -238,7 +238,7 @@ paths:
       summary: Start Google OAuth login
       tags:
       - oauth
-  /api/oauth/google/reauthorize:
+  /api/api/oauth/google/reauthorize:
     post:
       consumes:
       - application/json
@@ -263,7 +263,7 @@ paths:
       summary: Reauthorize Google OAuth
       tags:
       - oauth
-  /api/permissions/{profile}/{provider}:
+  /api/api/permissions/{profile}/{provider}:
     put:
       consumes:
       - application/json
@@ -303,7 +303,7 @@ paths:
       summary: Update token permissions (scopes)
       tags:
       - oauth
-  /api/permissions/{profile}/google:
+  /api/api/permissions/{profile}/google:
     get:
       description: Returns permissions per category for the Google integration
       parameters:
@@ -324,7 +324,7 @@ paths:
       summary: List Google permissions
       tags:
       - oauth
-  /api/status/{profile}/google:
+  /api/api/status/{profile}/google:
     get:
       description: Returns connection state, account email and scope list
       parameters:
@@ -343,7 +343,7 @@ paths:
       summary: Get Google connection status
       tags:
       - oauth
-  /api/token/{profile}/{provider}:
+  /api/api/token/{profile}/{provider}:
     get:
       description: GetToken returns the token for a given profile+provider. If the
         token is
@@ -401,7 +401,7 @@ paths:
       summary: Update OAuth token
       tags:
       - oauth
-  /auth/login:
+  /api/auth/login:
     post:
       consumes:
       - application/json
@@ -435,7 +435,7 @@ paths:
       summary: Вход пользователя
       tags:
       - auth
-  /auth/me:
+  /api/auth/me:
     get:
       consumes:
       - application/json
@@ -456,7 +456,7 @@ paths:
       summary: Информация о текущем пользователе
       tags:
       - auth
-  /auth/register:
+  /api/auth/register:
     post:
       consumes:
       - application/json
@@ -486,7 +486,7 @@ paths:
       summary: Регистрация нового пользователя
       tags:
       - auth
-  /oauth/{provider}/callback:
+  /api/oauth/{provider}/callback:
     get:
       description: Exchanges code for token, verifies ID token and persists token
       parameters:
@@ -517,7 +517,7 @@ paths:
       summary: OAuth callback
       tags:
       - oauth
-  /oauth/{provider}/login:
+  /api/oauth/{provider}/login:
     post:
       consumes:
       - application/json

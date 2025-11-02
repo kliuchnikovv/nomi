@@ -1,26 +1,105 @@
 package storage
 
 import (
+	"context"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
+	"gorm.io/gorm"
 )
 
-func (s *Storage) CreateChat(c *chat.Chat) (*chat.Chat, error) {
-	// Implementation for creating a chat in the database
-	return c, nil
+func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
+	chatModel := &ChatModel{
+		ID:        c.ID,
+		UserID:    userID,
+		Model:     c.Model,
+		Title:     c.Title,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := s.DB.WithContext(ctx).Create(chatModel).Error; err != nil {
+		return nil, err
+	}
+
+	return &chat.Chat{
+		ID:        chatModel.ID,
+		Model:     chatModel.Model,
+		Title:     chatModel.Title,
+		CreatedAt: chatModel.CreatedAt,
+		UpdatedAt: chatModel.UpdatedAt,
+	}, nil
 }
 
-func (s *Storage) GetChat(id uuid.UUID) (*chat.Chat, error) {
-	// Implementation for getting a chat from the database
-	return &chat.Chat{ID: id}, nil
+func (s *Storage) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) (*chat.Chat, error) {
+	var chatModel ChatModel
+	if err := s.DB.WithContext(ctx).
+		Where("id = ? AND user_id = ?", chatID, userID).
+		First(&chatModel).Error; err != nil {
+		return nil, err
+	}
+
+	return &chat.Chat{
+		ID:         chatModel.ID,
+		Model:      chatModel.Model,
+		Title:      chatModel.Title,
+		CreatedAt:  chatModel.CreatedAt,
+		UpdatedAt:  chatModel.UpdatedAt,
+		ArchivedAt: chatModel.ArchivedAt,
+	}, nil
 }
 
-func (s *Storage) UpdateChat(c *chat.Chat) (*chat.Chat, error) {
-	// Implementation for updating a chat in the database
-	return c, nil
+func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.Chat, error) {
+	var chatModels []ChatModel
+	if err := s.DB.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Find(&chatModels).Error; err != nil {
+		return nil, err
+	}
+
+	chats := make([]*chat.Chat, len(chatModels))
+	for i, model := range chatModels {
+		chats[i] = &chat.Chat{
+			ID:         model.ID,
+			Model:      model.Model,
+			Title:      model.Title,
+			CreatedAt:  model.CreatedAt,
+			UpdatedAt:  model.UpdatedAt,
+			ArchivedAt: model.ArchivedAt,
+		}
+	}
+	return chats, nil
 }
 
-func (s *Storage) DeleteChat(id uuid.UUID) error {
-	// Implementation for deleting a chat from the database
+func (s *Storage) UpdateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
+	result := s.DB.WithContext(ctx).Model(&ChatModel{}).
+		Where("id = ? AND user_id = ?", c.ID, userID).
+		Updates(map[string]any{
+			"title":       c.Title,
+			"model":       c.Model,
+			"updated_at":  time.Now(),
+			"archived_at": c.ArchivedAt,
+		})
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	return s.GetChat(ctx, userID, c.ID)
+}
+
+func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {
+	result := s.DB.WithContext(ctx).Where("id = ? AND user_id = ?", chatID, userID).Delete(&ChatModel{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
 	return nil
 }

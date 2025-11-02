@@ -19,31 +19,38 @@ func NewChatHandler(storage *storage.Storage) *ChatHandler {
 	}
 }
 
-func (h *ChatHandler) CreateChat(c *gin.Context) {
-	var newChat chat.Chat
-	if err := c.ShouldBindJSON(&newChat); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+// func (h *ChatHandler) CreateChat(c *gin.Context) {
+// 	var newChat chat.Chat
+// 	if err := c.ShouldBindJSON(&newChat); err != nil {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	createdChat, err := h.storage.CreateChat(&newChat)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+// 	createdChat, err := h.storage.CreateChat(ctx, userID, &newChat)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+// 		return
+// 	}
 
-	c.JSON(http.StatusCreated, createdChat)
-}
+// 	c.JSON(http.StatusCreated, createdChat)
+// }
 
 func (h *ChatHandler) GetChat(c *gin.Context) {
-	id := c.Param("id")
-	uid, err := uuid.Parse(id)
+	var ctx = c.Request.Context()
+
+	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
 		return
 	}
 
-	chat, err := h.storage.GetChat(uid)
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	chat, err := h.storage.GetChat(ctx, user.ID, chatID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
 		return
@@ -53,10 +60,17 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 }
 
 func (h *ChatHandler) UpdateChat(c *gin.Context) {
-	id := c.Param("id")
-	uid, err := uuid.Parse(id)
+	var ctx = c.Request.Context()
+
+	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		return
+	}
+
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -66,8 +80,8 @@ func (h *ChatHandler) UpdateChat(c *gin.Context) {
 		return
 	}
 
-	updatedChat.ID = uid
-	chat, err := h.storage.UpdateChat(&updatedChat)
+	updatedChat.ID = chatID
+	chat, err := h.storage.UpdateChat(ctx, user.ID, &updatedChat)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -77,14 +91,21 @@ func (h *ChatHandler) UpdateChat(c *gin.Context) {
 }
 
 func (h *ChatHandler) DeleteChat(c *gin.Context) {
-	id := c.Param("id")
-	uid, err := uuid.Parse(id)
+	var ctx = c.Request.Context()
+
+	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
 		return
 	}
 
-	if err := h.storage.DeleteChat(uid); err != nil {
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.storage.DeleteChat(ctx, user.ID, chatID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

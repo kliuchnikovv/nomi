@@ -1,13 +1,18 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
+
+var zeroUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
 type MessageHandler struct {
 	storage *storage.Storage
@@ -20,10 +25,17 @@ func NewMessageHandler(storage *storage.Storage) *MessageHandler {
 }
 
 func (h *MessageHandler) CreateMessage(c *gin.Context) {
-	chatID := c.Param("id")
-	uid, err := uuid.Parse(chatID)
+	var ctx = c.Request.Context()
+
+	chatID, err := uuid.Parse(c.Param("chat_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chat UUID"})
+		return
+	}
+
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -33,8 +45,27 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 		return
 	}
 
-	newMessage.ChatID = uid
-	createdMessage, err := h.storage.CreateMessage(&newMessage)
+	var chatObj *chat.Chat
+	if chatID != zeroUUID {
+		chatObj, err = h.storage.GetChat(ctx, user.ID, chatID)
+	} else {
+		chatObj, err = h.storage.CreateChat(ctx, user.ID, &chat.Chat{
+			ID:         uuid.New(),
+			Model:      uuid.New(), // TODO: replace with actual models
+			Title:      newMessage.Text,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+			ArchivedAt: nil,
+			DeletedAt:  nil,
+		})
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	newMessage.ChatID = chatObj.ID
+	createdMessage, err := h.storage.CreateMessage(ctx, user.ID, &newMessage)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -44,18 +75,43 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 }
 
 func (h *MessageHandler) GetMessages(c *gin.Context) {
-	chatID := c.Param("id")
-	uid, err := uuid.Parse(chatID)
+	var ctx = c.Request.Context()
+
+	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chat UUID"})
 		return
 	}
 
-	messages, err := h.storage.GetMessages(uid)
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	messages, err := h.storage.GetMessages(ctx, user.ID, chatID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, messages)
+}
+
+func userFromCtx(ctx context.Context) (*storage.User, error) {
+	var userObj *storage.User
+	if v := ctx.Value("user"); v != nil {
+		switch u := v.(type) {
+		case *storage.User:
+			userObj = u
+		case storage.User:
+			userObj = &u
+		}
+	}
+
+	if userObj == nil {
+		return nil, fmt.Errorf("user not found in context")
+	}
+
+	return userObj, nil
 }

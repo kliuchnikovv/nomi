@@ -15,7 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/disconnect/{profile}/google": {
+        "/api/api/disconnect/{profile}/google": {
             "post": {
                 "tags": [
                     "oauth"
@@ -37,7 +37,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/logs": {
+        "/api/api/logs": {
             "get": {
                 "produces": [
                     "application/json"
@@ -111,7 +111,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/oauth/google/login": {
+        "/api/api/oauth/google/login": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -150,7 +150,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/oauth/google/reauthorize": {
+        "/api/api/oauth/google/reauthorize": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -189,7 +189,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/permissions/{profile}/google": {
+        "/api/api/permissions/{profile}/google": {
             "get": {
                 "description": "Returns permissions per category for the Google integration",
                 "produces": [
@@ -221,7 +221,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/permissions/{profile}/{provider}": {
+        "/api/api/permissions/{profile}/{provider}": {
             "put": {
                 "description": "Update scopes for a stored token (permissions)",
                 "consumes": [
@@ -281,7 +281,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/status/{profile}/google": {
+        "/api/api/status/{profile}/google": {
             "get": {
                 "description": "Returns connection state, account email and scope list",
                 "produces": [
@@ -310,7 +310,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/token/{profile}/{provider}": {
+        "/api/api/token/{profile}/{provider}": {
             "get": {
                 "description": "GetToken returns the token for a given profile+provider. If the token is",
                 "tags": [
@@ -393,7 +393,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/login": {
+        "/api/auth/login": {
             "post": {
                 "description": "Аутентифицирует пользователя и возвращает JWT токен",
                 "consumes": [
@@ -445,7 +445,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/me": {
+        "/api/auth/me": {
             "get": {
                 "security": [
                     {
@@ -479,7 +479,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/register": {
+        "/api/auth/register": {
             "post": {
                 "description": "Создает нового пользователя и возвращает JWT токен",
                 "consumes": [
@@ -525,7 +525,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/oauth/{provider}/callback": {
+        "/api/oauth/{provider}/callback": {
             "get": {
                 "description": "Exchanges code for token, verifies ID token and persists token",
                 "produces": [
@@ -572,7 +572,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/oauth/{provider}/login": {
+        "/api/oauth/{provider}/login": {
             "post": {
                 "description": "Returns provider authorization URL based on requested scopes",
                 "consumes": [
@@ -853,7 +853,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "type": "integer"
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"
@@ -876,8 +876,6 @@ var SwaggerInfo = &swag.Spec{
 	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
-	LeftDelim:        "{{",
-	RightDelim:       "}}",
 }
 
 func init() {

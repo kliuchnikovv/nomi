@@ -4,13 +4,14 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 // User представляет информацию о пользователе
 type User struct {
-	ID           uint           `json:"id" gorm:"primaryKey"`
+	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
 	Email        string         `json:"email" gorm:"uniqueIndex;not null"`
 	PasswordHash string         `json:"-" gorm:"not null"`
 	Name         string         `json:"name"`
@@ -51,9 +52,9 @@ func (s *Storage) GetUserByEmail(ctx context.Context, email string) (*User, erro
 }
 
 // GetUserByID получает пользователя по ID
-func (s *Storage) GetUserByID(ctx context.Context, id uint) (*User, error) {
+func (s *Storage) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	var user User
-	result := s.DB.WithContext(ctx).First(&user, id)
+	result := s.DB.WithContext(ctx).First(&user, "id = ?", id)
 	if result.Error != nil {
 		return nil, result.Error
 	}

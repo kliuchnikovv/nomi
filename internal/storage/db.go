@@ -3,7 +3,6 @@ package storage
 import (
 	"fmt"
 
-	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -28,15 +27,19 @@ func New(cfg *config.Config) (*Storage, error) {
 		return nil, err
 	}
 
+	// Enable UUID extension for PostgreSQL
+	if err := gdb.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
+		return nil, err
+	}
+
 	// Auto-migrate models to keep schema in sync with GORM models.
-	// We run AutoMigrate because you asked to enable AutoMigrate. Existing SQL migrations can remain as canonical source if you prefer.
 	if err := gdb.AutoMigrate(
 		&OAuthToken{},
 		&IntegrationLog{},
 		&AuditSecurity{},
 		&User{},
-		&chat.Message{},
-		&chat.Chat{},
+		&ChatModel{},
+		&MessageModel{},
 	); err != nil {
 		return nil, err
 	}
