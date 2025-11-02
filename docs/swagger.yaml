@@ -1,0 +1,437 @@
+definitions:
+  handlers.AuthURLResponse:
+    properties:
+      auth_url:
+        type: string
+    type: object
+  handlers.GoogleAuthResponse:
+    properties:
+      auth_url:
+        type: string
+      status:
+        $ref: '#/definitions/handlers.GoogleStatusResponse'
+    type: object
+  handlers.GoogleLoginRequest:
+    properties:
+      permissions:
+        items:
+          $ref: '#/definitions/handlers.PermissionChoice'
+        type: array
+      scopes:
+        items:
+          type: string
+        type: array
+    type: object
+  handlers.GoogleReauthorizeRequest:
+    properties:
+      permissions:
+        items:
+          $ref: '#/definitions/handlers.PermissionChoice'
+        type: array
+    type: object
+  handlers.GoogleStatusResponse:
+    properties:
+      account_email:
+        type: string
+      scopes:
+        items:
+          $ref: '#/definitions/handlers.ScopeInfo'
+        type: array
+      state:
+        type: string
+    type: object
+  handlers.LogEntry:
+    properties:
+      details:
+        type: string
+      impact:
+        type: string
+      summary:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  handlers.LogsListResponse:
+    properties:
+      entries:
+        items:
+          $ref: '#/definitions/handlers.LogEntry'
+        type: array
+    type: object
+  handlers.MessageResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  handlers.OAuthLoginRequest:
+    properties:
+      profile_id:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+    type: object
+  handlers.PermissionChoice:
+    properties:
+      allowed:
+        type: boolean
+      category:
+        type: string
+      level:
+        description: read|write|null
+        type: string
+    type: object
+  handlers.PermissionEntry:
+    properties:
+      allowed:
+        type: boolean
+      category:
+        type: string
+      description:
+        type: string
+      title:
+        type: string
+    type: object
+  handlers.PermissionsRequest:
+    properties:
+      scopes:
+        items:
+          type: string
+        type: array
+    type: object
+  handlers.ScopeInfo:
+    properties:
+      id:
+        type: string
+      level:
+        description: read_only|modify
+        type: string
+      name:
+        type: string
+    type: object
+  storage.IntegrationLog:
+    type: object
+info:
+  contact: {}
+paths:
+  /api/disconnect/{profile}/google:
+    post:
+      parameters:
+      - description: Profile ID
+        in: path
+        name: profile
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      summary: Disconnect Google
+      tags:
+      - oauth
+  /api/logs:
+    get:
+      parameters:
+      - description: Profile ID
+        in: query
+        name: profile
+        type: string
+      - description: 'Provider (default: google)'
+        in: query
+        name: provider
+        type: string
+      - description: 'Max entries (default: 50)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.LogsListResponse'
+      summary: List integration logs
+      tags:
+      - logs
+    post:
+      consumes:
+      - application/json
+      description: Record an integration usage log entry
+      parameters:
+      - description: Integration log entry
+        in: body
+        name: log
+        required: true
+        schema:
+          $ref: '#/definitions/storage.IntegrationLog'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Log integration usage
+      tags:
+      - logs
+  /api/oauth/google/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Profile ID
+        in: query
+        name: profile
+        required: true
+        type: string
+      - description: Requested permissions and scopes
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/handlers.GoogleLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.GoogleAuthResponse'
+      summary: Start Google OAuth login
+      tags:
+      - oauth
+  /api/oauth/google/reauthorize:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Profile ID
+        in: query
+        name: profile
+        required: true
+        type: string
+      - description: Requested permissions
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/handlers.GoogleReauthorizeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.GoogleAuthResponse'
+      summary: Reauthorize Google OAuth
+      tags:
+      - oauth
+  /api/permissions/{profile}/{provider}:
+    put:
+      consumes:
+      - application/json
+      description: Update scopes for a stored token (permissions)
+      parameters:
+      - description: Profile ID
+        in: path
+        name: profile
+        required: true
+        type: string
+      - description: Provider
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: Scopes to set
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.PermissionsRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update token permissions (scopes)
+      tags:
+      - oauth
+  /api/permissions/{profile}/google:
+    get:
+      description: Returns permissions per category for the Google integration
+      parameters:
+      - description: Profile ID
+        in: path
+        name: profile
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.PermissionEntry'
+            type: array
+      summary: List Google permissions
+      tags:
+      - oauth
+  /api/status/{profile}/google:
+    get:
+      description: Returns connection state, account email and scope list
+      parameters:
+      - description: Profile ID
+        in: path
+        name: profile
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.GoogleStatusResponse'
+      summary: Get Google connection status
+      tags:
+      - oauth
+  /api/token/{profile}/{provider}:
+    get:
+      description: GetToken returns the token for a given profile+provider. If the
+        token is
+      parameters:
+      - description: Profile ID
+        in: path
+        name: profile
+        required: true
+        type: string
+      - description: Provider
+        in: path
+        name: provider
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get OAuth token
+      tags:
+      - oauth
+    put:
+      consumes:
+      - application/json
+      description: UpdateToken replaces/stores token JSON for given profile+provider.
+        The
+      parameters:
+      - description: Profile ID
+        in: path
+        name: profile
+        required: true
+        type: string
+      - description: Provider
+        in: path
+        name: provider
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update OAuth token
+      tags:
+      - oauth
+  /oauth/{provider}/callback:
+    get:
+      description: Exchanges code for token, verifies ID token and persists token
+      parameters:
+      - description: Provider
+        in: path
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: OAuth callback
+      tags:
+      - oauth
+  /oauth/{provider}/login:
+    post:
+      consumes:
+      - application/json
+      description: Returns provider authorization URL based on requested scopes
+      parameters:
+      - description: Provider
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: Requested scopes
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/handlers.OAuthLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AuthURLResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Start OAuth login (generic)
+      tags:
+      - oauth
+swagger: "2.0"

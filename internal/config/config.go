@@ -26,6 +26,10 @@ type Config struct {
 			Scopes       []string `yaml:"scopes"`
 		} `yaml:"providers"`
 	} `yaml:"oauth2"`
+	Token struct {
+		// Refresh token if it will expire in less than this many minutes
+		RefreshBeforeMinutes int `yaml:"refresh_before_minutes"`
+	} `yaml:"token"`
 }
 
 func Load(path string) (*Config, error) {

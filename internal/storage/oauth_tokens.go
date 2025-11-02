@@ -32,3 +32,23 @@ func (s *Storage) SaveOAuthToken(token *OAuthToken) error {
 	}
 	return s.DB.Create(token).Error
 }
+
+// GetOAuthTokenByProfileProvider finds the latest token for profile+provider
+func (s *Storage) GetOAuthTokenByProfileProvider(profileID, provider string) (*OAuthToken, error) {
+	var t OAuthToken
+	if err := s.DB.Where("profile_id = ? AND provider = ? AND deleted_at IS NULL", profileID, provider).First(&t).Error; err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// UpdateOAuthToken updates the token record (save merged fields)
+func (s *Storage) UpdateOAuthToken(token *OAuthToken) error {
+	token.UpdatedAt = time.Now()
+	return s.DB.Save(token).Error
+}
+
+// DeleteOAuthTokenByProfileProvider deletes (soft-delete) token by profile and provider
+func (s *Storage) DeleteOAuthTokenByProfileProvider(profileID, provider string) error {
+	return s.DB.Where("profile_id = ? AND provider = ?", profileID, provider).Delete(&OAuthToken{}).Error
+}
