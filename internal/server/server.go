@@ -29,20 +29,20 @@ func wrap(h http.HandlerFunc) gin.HandlerFunc {
 }
 
 func New(cfg *config.Config, db *storage.Storage) *http.Server {
-	r := gin.New()
+    r := gin.New()
 
-	// Инициализация обработчиков
-	tokenManager := auth.NewTokenManager(cfg.Token.JWTSecret)
-	authMiddleware := auth.NewAuthMiddleware(tokenManager, db)
-	authHandler := handlers.NewAuthHandler(db, tokenManager)
-	oauthHandler := handlers.NewOAuth(cfg, db)
-	chatHandler := handlers.NewChatHandler(db)
-	messageHandler := handlers.NewMessageHandler(db)
+    // Инициализация обработчиков
+    tokenManager := auth.NewTokenManager(cfg.Token.JWTSecret)
+    authMiddleware := auth.NewAuthMiddleware(tokenManager, db)
+    authHandler := handlers.NewAuthHandler(db, tokenManager)
+    oauthHandler := handlers.NewOAuth(cfg, db)
+    chatHandler := handlers.NewChatHandler(db)
+    messageHandler := handlers.NewMessageHandler(db)
 
-	// Auth API
-	r.POST("/api/auth/register", wrap(http.HandlerFunc(authHandler.Register)))
-	r.POST("/api/auth/login", wrap(http.HandlerFunc(authHandler.Login)))
-	r.GET("/api/auth/me", gin.WrapH(authMiddleware.RequireAuth(http.HandlerFunc(authHandler.GetMe))))
+    // Auth API
+    r.POST("/api/auth/register", wrap(http.HandlerFunc(authHandler.Register)))
+    r.POST("/api/auth/login", wrap(http.HandlerFunc(authHandler.Login)))
+    r.GET("/api/auth/me", gin.WrapH(authMiddleware.RequireAuth(http.HandlerFunc(authHandler.GetMe))))
 
 	// existing handlers are standard http handlers; wrap them so they work
 	r.GET("/", gin.WrapF(http.HandlerFunc(handlers.HelloWorld)))
@@ -61,20 +61,20 @@ func New(cfg *config.Config, db *storage.Storage) *http.Server {
 	r.POST("/oauth/:provider/login", wrap(http.HandlerFunc(oauthHandler.Redirect)))
 	r.GET("/oauth/:provider/callback", wrap(http.HandlerFunc(oauthHandler.Callback)))
 
-	// Token management API
-	r.GET("/api/token/:profile/:provider", wrap(http.HandlerFunc(oauthHandler.GetToken)))
-	r.PUT("/api/token/:profile/:provider", wrap(http.HandlerFunc(oauthHandler.UpdateToken)))
-	r.DELETE("/api/token/:profile/:provider", wrap(http.HandlerFunc(oauthHandler.Disconnect)))
-	r.POST("/api/logs", wrap(http.HandlerFunc(oauthHandler.LogUsage)))
-	r.PUT("/api/permissions/:profile/:provider", wrap(http.HandlerFunc(oauthHandler.UpdatePermissions)))
+    // Token management API
+    r.GET("/api/token/:profile/:provider", wrap(http.HandlerFunc(oauthHandler.GetToken)))
+    r.PUT("/api/token/:profile/:provider", wrap(http.HandlerFunc(oauthHandler.UpdateToken)))
+    r.DELETE("/api/token/:profile/:provider", wrap(http.HandlerFunc(oauthHandler.Disconnect)))
+    r.POST("/api/logs", wrap(http.HandlerFunc(oauthHandler.LogUsage)))
+    r.PUT("/api/permissions/:profile/:provider", wrap(http.HandlerFunc(oauthHandler.UpdatePermissions)))
 
-	// Additional Google-specific endpoints required by Swagger
-	r.GET("/api/status/:profile/google", wrap(http.HandlerFunc(oauthHandler.StatusGoogle)))
-	r.GET("/api/permissions/:profile/google", wrap(http.HandlerFunc(oauthHandler.GetPermissionsGoogle)))
-	r.GET("/api/logs", wrap(http.HandlerFunc(oauthHandler.ListLogs)))
-	r.POST("/api/disconnect/:profile/google", wrap(http.HandlerFunc(oauthHandler.DisconnectGooglePost)))
-	r.POST("/api/oauth/google/login", wrap(http.HandlerFunc(oauthHandler.OAuthGoogleLogin)))
-	r.POST("/api/oauth/google/reauthorize", wrap(http.HandlerFunc(oauthHandler.OAuthGoogleReauthorize)))
+    // Additional Google-specific endpoints required by Swagger
+    r.GET("/api/status/:profile/google", wrap(http.HandlerFunc(oauthHandler.StatusGoogle)))
+    r.GET("/api/permissions/:profile/google", wrap(http.HandlerFunc(oauthHandler.GetPermissionsGoogle)))
+    r.GET("/api/logs", wrap(http.HandlerFunc(oauthHandler.ListLogs)))
+    r.POST("/api/disconnect/:profile/google", wrap(http.HandlerFunc(oauthHandler.DisconnectGooglePost)))
+    r.POST("/api/oauth/google/login", wrap(http.HandlerFunc(oauthHandler.OAuthGoogleLogin)))
+    r.POST("/api/oauth/google/reauthorize", wrap(http.HandlerFunc(oauthHandler.OAuthGoogleReauthorize)))
 
 	// Serve Swagger UI (requires generated docs by swag). If generated
 	// docs package is not present, fall back to the local static files

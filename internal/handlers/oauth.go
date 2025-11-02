@@ -140,7 +140,7 @@ func NewOAuth(cfg *config.Config, db *storage.Storage) *OAuth {
 // @Param provider path string true "Provider"
 // @Success 200 {object} map[string]interface{}
 // @Failure 404 {object} map[string]string
-// @Router /api/token/{profile}/{provider} [get]
+// @Router /api/api/token/{profile}/{provider} [get]
 func (o *OAuth) GetToken(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	profileID := vars["profile"]
@@ -221,7 +221,7 @@ func (o *OAuth) Disconnect(w http.ResponseWriter, r *http.Request) {
 // @Param log body storage.IntegrationLog true "Integration log entry"
 // @Success 204
 // @Failure 400 {object} map[string]string
-// @Router /api/logs [post]
+// @Router /api/api/logs [post]
 // LogUsage accepts a usage log entry and persists it.
 func (o *OAuth) LogUsage(w http.ResponseWriter, r *http.Request) {
 	var lg storage.IntegrationLog
@@ -249,7 +249,7 @@ func (o *OAuth) LogUsage(w http.ResponseWriter, r *http.Request) {
 // @Success 204
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
-// @Router /api/permissions/{profile}/{provider} [put]
+// @Router /api/api/permissions/{profile}/{provider} [put]
 // UpdatePermissions updates the scopes for a stored token and persists it.
 func (o *OAuth) UpdatePermissions(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -286,7 +286,7 @@ func (o *OAuth) UpdatePermissions(w http.ResponseWriter, r *http.Request) {
 // @Accept json
 // @Success 204
 // @Failure 400 {object} map[string]string
-// @Router /api/token/{profile}/{provider} [put]
+// @Router /api/api/token/{profile}/{provider} [put]
 func (o *OAuth) UpdateToken(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	profileID := vars["profile"]
@@ -339,7 +339,7 @@ func (o *OAuth) UpdateToken(w http.ResponseWriter, r *http.Request) {
 // @Param profile path string true "Profile ID"
 // @Produce json
 // @Success 200 {object} GoogleStatusResponse
-// @Router /api/status/{profile}/google [get]
+// @Router /api/api/status/{profile}/google [get]
 func (o *OAuth) StatusGoogle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	profileID := vars["profile"]
@@ -373,7 +373,7 @@ func (o *OAuth) StatusGoogle(w http.ResponseWriter, r *http.Request) {
 // @Param profile path string true "Profile ID"
 // @Produce json
 // @Success 200 {array} PermissionEntry
-// @Router /api/permissions/{profile}/google [get]
+// @Router /api/api/permissions/{profile}/google [get]
 func (o *OAuth) GetPermissionsGoogle(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	profileID := vars["profile"]
@@ -413,7 +413,7 @@ func hasAny(sc map[string]bool, substr string) bool {
 // @Param provider query string false "Provider (default: google)"
 // @Param limit query int false "Max entries (default: 50)"
 // @Success 200 {object} LogsListResponse
-// @Router /api/logs [get]
+// @Router /api/api/logs [get]
 func (o *OAuth) ListLogs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	profile := q.Get("profile")
@@ -461,7 +461,7 @@ func (o *OAuth) ListLogs(w http.ResponseWriter, r *http.Request) {
 // @Tags oauth
 // @Param profile path string true "Profile ID"
 // @Success 204
-// @Router /api/disconnect/{profile}/google [post]
+// @Router /api/api/disconnect/{profile}/google [post]
 func (o *OAuth) DisconnectGooglePost(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	profileID := vars["profile"]
@@ -480,7 +480,7 @@ func (o *OAuth) DisconnectGooglePost(w http.ResponseWriter, r *http.Request) {
 // @Param profile query string true "Profile ID"
 // @Param body body GoogleLoginRequest false "Requested permissions and scopes"
 // @Success 200 {object} GoogleAuthResponse
-// @Router /api/oauth/google/login [post]
+// @Router /api/api/oauth/google/login [post]
 func (o *OAuth) OAuthGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	provider := "google"
 	cfg, ok := o.configs[provider]
@@ -523,7 +523,7 @@ func (o *OAuth) OAuthGoogleLogin(w http.ResponseWriter, r *http.Request) {
 // @Param profile query string true "Profile ID"
 // @Param body body GoogleReauthorizeRequest false "Requested permissions"
 // @Success 200 {object} GoogleAuthResponse
-// @Router /api/oauth/google/reauthorize [post]
+// @Router /api/api/oauth/google/reauthorize [post]
 func (o *OAuth) OAuthGoogleReauthorize(w http.ResponseWriter, r *http.Request) {
 	provider := "google"
 	cfg, ok := o.configs[provider]
@@ -555,7 +555,7 @@ func (o *OAuth) OAuthGoogleReauthorize(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} AuthURLResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /oauth/{provider}/login [post]
+// @Router /api/oauth/{provider}/login [post]
 func (o *OAuth) Redirect(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	provider := vars["provider"]
@@ -610,7 +610,7 @@ func (o *OAuth) Redirect(w http.ResponseWriter, r *http.Request) {
 // @Success 200 {object} MessageResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /oauth/{provider}/callback [get]
+// @Router /api/oauth/{provider}/callback [get]
 func (o *OAuth) Callback(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	providerName := vars["provider"]

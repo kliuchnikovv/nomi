@@ -46,7 +46,7 @@ type AuthResponse struct {
 // @Success 200 {object} AuthResponse
 // @Failure 400 {object} string "Invalid request"
 // @Failure 500 {object} string "Internal server error"
-// @Router /auth/register [post]
+// @Router /api/auth/register [post]
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -93,7 +93,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // @Failure 400 {object} string "Invalid request"
 // @Failure 401 {object} string "Invalid credentials"
 // @Failure 500 {object} string "Internal server error"
-// @Router /auth/login [post]
+// @Router /api/auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -144,7 +144,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Security Bearer
 // @Success 200 {object} storage.User
 // @Failure 401 {object} string "Unauthorized"
-// @Router /auth/me [get]
+// @Router /api/auth/me [get]
 func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	user, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
