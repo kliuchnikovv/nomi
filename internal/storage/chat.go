@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
-	chatModel := &ChatModel{
+	chatModel := &Chat{
 		ID:        c.ID,
 		UserID:    userID,
 		Model:     c.Model,
@@ -33,7 +33,7 @@ func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 }
 
 func (s *Storage) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) (*chat.Chat, error) {
-	var chatModel ChatModel
+	var chatModel Chat
 	if err := s.DB.WithContext(ctx).
 		Where("id = ? AND user_id = ?", chatID, userID).
 		First(&chatModel).Error; err != nil {
@@ -51,7 +51,7 @@ func (s *Storage) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUI
 }
 
 func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.Chat, error) {
-	var chatModels []ChatModel
+	var chatModels []Chat
 	if err := s.DB.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Find(&chatModels).Error; err != nil {
@@ -73,7 +73,7 @@ func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.C
 }
 
 func (s *Storage) UpdateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
-	result := s.DB.WithContext(ctx).Model(&ChatModel{}).
+	result := s.DB.WithContext(ctx).Model(&Chat{}).
 		Where("id = ? AND user_id = ?", c.ID, userID).
 		Updates(map[string]any{
 			"title":       c.Title,
@@ -94,7 +94,7 @@ func (s *Storage) UpdateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 }
 
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {
-	result := s.DB.WithContext(ctx).Where("id = ? AND user_id = ?", chatID, userID).Delete(&ChatModel{})
+	result := s.DB.WithContext(ctx).Where("id = ? AND user_id = ?", chatID, userID).Delete(&Chat{})
 	if result.Error != nil {
 		return result.Error
 	}

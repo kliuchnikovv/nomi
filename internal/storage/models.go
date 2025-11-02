@@ -7,8 +7,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// ChatModel представляет чат в базе данных
-type ChatModel struct {
+// Chat представляет чат в базе данных
+type Chat struct {
 	ID         uuid.UUID  `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
 	UserID     uuid.UUID  `gorm:"type:uuid;not null"`
 	Model      uuid.UUID  `gorm:"type:uuid;not null"`
@@ -19,8 +19,8 @@ type ChatModel struct {
 	DeletedAt  gorm.DeletedAt
 }
 
-// MessageModel представляет сообщение в базе данных
-type MessageModel struct {
+// Message представляет сообщение в базе данных
+type Message struct {
 	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
 	ChatID    uuid.UUID `gorm:"type:uuid;not null"`
 	UserID    uuid.UUID `gorm:"type:uuid;not null"`

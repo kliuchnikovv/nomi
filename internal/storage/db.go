@@ -38,8 +38,8 @@ func New(cfg *config.Config) (*Storage, error) {
 		&IntegrationLog{},
 		&AuditSecurity{},
 		&User{},
-		&ChatModel{},
-		&MessageModel{},
+		&Chat{},
+		&Message{},
 	); err != nil {
 		return nil, err
 	}

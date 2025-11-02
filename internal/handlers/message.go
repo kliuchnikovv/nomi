@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
@@ -27,7 +28,7 @@ func NewMessageHandler(storage *storage.Storage) *MessageHandler {
 func (h *MessageHandler) CreateMessage(c *gin.Context) {
 	var ctx = c.Request.Context()
 
-	chatID, err := uuid.Parse(c.Param("chat_id"))
+	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chat UUID"})
 		return
@@ -100,17 +101,21 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 
 func userFromCtx(ctx context.Context) (*storage.User, error) {
 	var userObj *storage.User
-	if v := ctx.Value("user"); v != nil {
-		switch u := v.(type) {
-		case *storage.User:
-			userObj = u
-		case storage.User:
-			userObj = &u
-		}
+
+	v := ctx.Value(auth.UserContextKey)
+	if v == nil {
+		return nil, fmt.Errorf("user not found in context")
+	}
+
+	switch u := v.(type) {
+	case *storage.User:
+		userObj = u
+	case storage.User:
+		userObj = &u
 	}
 
 	if userObj == nil {
-		return nil, fmt.Errorf("user not found in context")
+		return nil, fmt.Errorf("user found with different type")
 	}
 
 	return userObj, nil

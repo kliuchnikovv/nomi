@@ -59,6 +59,24 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 	c.JSON(http.StatusOK, chat)
 }
 
+func (h *ChatHandler) ListChats(c *gin.Context) {
+	var ctx = c.Request.Context()
+
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	chats, err := h.storage.GetUserChats(ctx, user.ID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, chats)
+}
+
 func (h *ChatHandler) UpdateChat(c *gin.Context) {
 	var ctx = c.Request.Context()
 
