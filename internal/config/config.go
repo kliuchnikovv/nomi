@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 
+	"github.com/a8m/envsubst"
 	"gopkg.in/yaml.v3"
 )
 
@@ -38,8 +39,14 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// Заменяем переменные окружения
+	expanded, err := envsubst.Bytes(data)
+	if err != nil {
+		return nil, err
+	}
+
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := yaml.Unmarshal(expanded, &cfg); err != nil {
 		return nil, err
 	}
 

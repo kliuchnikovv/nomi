@@ -20,7 +20,14 @@ import (
 // @host localhost
 // @BasePath /
 func main() {
-	cfg, err := config.Load("configs/config.yaml")
+	// Определяем какой конфиг использовать
+	configPath := "configs/config.yaml"
+	if os.Getenv("RAILWAY_ENVIRONMENT") != "" {
+		configPath = "configs/config.railway.yaml"
+		log.Printf("Running in Railway environment, using %s", configPath)
+	}
+
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
