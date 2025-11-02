@@ -1,4 +1,11 @@
 definitions:
+  handlers.AuthResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/storage.User'
+    type: object
   handlers.AuthURLResponse:
     properties:
       auth_url:
@@ -51,6 +58,13 @@ definitions:
       timestamp:
         type: string
     type: object
+  handlers.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
   handlers.LogsListResponse:
     properties:
       entries:
@@ -100,6 +114,15 @@ definitions:
           type: string
         type: array
     type: object
+  handlers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
   handlers.ScopeInfo:
     properties:
       id:
@@ -111,6 +134,19 @@ definitions:
         type: string
     type: object
   storage.IntegrationLog:
+    type: object
+  storage.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
     type: object
 info:
   contact: {}
@@ -365,6 +401,91 @@ paths:
       summary: Update OAuth token
       tags:
       - oauth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Аутентифицирует пользователя и возвращает JWT токен
+      parameters:
+      - description: Данные для входа
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "401":
+          description: Invalid credentials
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Вход пользователя
+      tags:
+      - auth
+  /auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает информацию о текущем аутентифицированном пользователе
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/storage.User'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      security:
+      - Bearer: []
+      summary: Информация о текущем пользователе
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Создает нового пользователя и возвращает JWT токен
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Регистрация нового пользователя
+      tags:
+      - auth
   /oauth/{provider}/callback:
     get:
       description: Exchanges code for token, verifies ID token and persists token
