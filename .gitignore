@@ -1,0 +1,65 @@
+# Environment & secrets
+.env
+*.env
+.env.*
+.envrc
+client_creds.json
+token.json
+
+# Python cache/bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+pip-venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+__pypackages__/
+
+# Test/coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+coverage.xml
+htmlcov/
+coverage/
+.hypothesis/
+
+# IDE/editor
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+.devcontainer/
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Node (if present)
+node_modules/
+
+# Alembic cache (keep versions/ scripts)
+alembic/*.pyc
+
+# Misc caches
+.cache/
+
+# OS junk
+Thumbs.db
+ehthumbs.db
+Icon?
