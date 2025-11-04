@@ -1,11 +1,11 @@
 package storage
 
 import (
-	"context"
-	"time"
+    "context"
+    "time"
 
-	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
+    "github.com/google/uuid"
+    "github.com/kliuchnikovv/genie-api/internal/chat"
 )
 
 func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.Message) (*chat.Message, error) {
@@ -24,11 +24,12 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 	}
 
 	return &chat.Message{
-		ID:     messageModel.ID,
-		ChatID: messageModel.ChatID,
-		Role:   chat.Role(messageModel.Role),
-		Text:   messageModel.Text,
-		Sender: messageModel.UserID,
+		ID:        messageModel.ID,
+		ChatID:    messageModel.ChatID,
+		Role:      chat.Role(messageModel.Role),
+		Text:      messageModel.Text,
+		Sender:    messageModel.UserID,
+		CreatedAt: messageModel.CreatedAt,
 	}, nil
 }
 
@@ -45,12 +46,30 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 	result := make([]*chat.Message, len(messages))
 	for i, msg := range messages {
 		result[i] = &chat.Message{
-			ID:     msg.ID,
-			ChatID: msg.ChatID,
-			Role:   chat.Role(msg.Role),
-			Text:   msg.Text,
-			Sender: msg.UserID,
+			ID:        msg.ID,
+			ChatID:    msg.ChatID,
+			Role:      chat.Role(msg.Role),
+			Text:      msg.Text,
+			Sender:    msg.UserID,
+			CreatedAt: msg.CreatedAt,
 		}
 	}
 	return result, nil
+}
+
+// UpdateMessageText updates message text ensuring the message belongs to the user's chat
+func (s *Storage) UpdateMessageText(ctx context.Context, userID uuid.UUID, messageID uuid.UUID, newText string) error {
+    // Use a subquery to scope update to messages belonging to user's chats
+    sub := s.DB.Table("messages").
+        Select("messages.id").
+        Joins("JOIN chats ON chats.id = messages.chat_id").
+        Where("messages.id = ? AND chats.user_id = ?", messageID, userID)
+
+    return s.DB.WithContext(ctx).
+        Model(&Message{}).
+        Where("id IN (?)", sub).
+        Updates(map[string]any{
+            "text":       newText,
+            "updated_at": time.Now(),
+        }).Error
 }

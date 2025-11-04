@@ -23,3 +23,6 @@ oauth2:
 token:
   refresh_before_minutes: 5
   jwt_secret: ${JWT_SECRET}
+
+llm:
+  base_url: ${LLM_BASE_URL}

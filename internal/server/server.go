@@ -1,14 +1,16 @@
 package server
 
 import (
-	"fmt"
-	"net/http"
+    "fmt"
+    "net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
+	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -47,6 +49,39 @@ func wrapWithAuthHttp(h http.HandlerFunc, authMiddleware *auth.AuthMiddleware) g
 	return gin.WrapH(authMiddleware.RequireAuth(h))
 }
 
+// chatEventsAdapter adapts notifier.Notifier to the interface expected by
+// handlers.MessageHandler.Events via gin context.
+type chatEventsAdapter struct {
+	c *gin.Context
+	n *notifier.Notifier
+}
+
+type mapEvent = map[string]interface{}
+
+func (a chatEventsAdapter) Subscribe(chatID uuid.UUID) chan mapEvent {
+	src := a.n.Subscribe(chatID)
+	out := make(chan mapEvent, 8)
+	go func() {
+		for ev := range src {
+			if m, ok := ev.Payload.(map[string]interface{}); ok {
+				out <- m
+			}
+		}
+		close(out)
+	}()
+	a.c.Set("_rawChatSub", src)
+	return out
+}
+
+func (a chatEventsAdapter) Unsubscribe(chatID uuid.UUID, ch chan mapEvent) {
+	if v, exists := a.c.Get("_rawChatSub"); exists {
+		if raw, ok := v.(chan notifier.Event); ok {
+			a.n.Unsubscribe(chatID, raw)
+		}
+	}
+	close(ch)
+}
+
 func New(cfg *config.Config, db *storage.Storage) *http.Server {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
@@ -56,12 +91,20 @@ func New(cfg *config.Config, db *storage.Storage) *http.Server {
 	authMiddleware := auth.NewAuthMiddleware(tokenManager, db)
 	authHandler := handlers.NewAuthHandler(db, tokenManager)
 	oauthHandler := handlers.NewOAuth(cfg, db)
+    streamHandler := handlers.NewStreamHandler(cfg.LLM.BaseURL, db)
 	chatHandler := handlers.NewChatHandler(db)
-	messageHandler := handlers.NewMessageHandler(db)
+	// Shared notifier for SSE
+	n := notifier.New()
+	messageHandler := handlers.NewMessageHandler(db).WithNotifier(func(chatID uuid.UUID, ev interface{}) {
+		// publish as-is; clients interpret payload
+		n.Publish(chatID, notifier.Event{Type: "message", Payload: ev})
+	})
+    // gRPC processor removed; using WS proxy to Python
 
 	// Auth API
 	r.POST("/api/auth/register", wrap(http.HandlerFunc(authHandler.Register)))
 	r.POST("/api/auth/login", wrap(http.HandlerFunc(authHandler.Login)))
+	r.POST("/api/auth/refresh", wrap(http.HandlerFunc(authHandler.Refresh)))
 	r.GET("/api/auth/me", gin.WrapH(
 		authMiddleware.RequireAuth(
 			http.HandlerFunc(authHandler.GetMe),
@@ -78,9 +121,17 @@ func New(cfg *config.Config, db *storage.Storage) *http.Server {
 	r.PUT("/api/chats/:id", wrapWithAuth(chatHandler.UpdateChat, authMiddleware))
 	r.DELETE("/api/chats/:id", wrapWithAuth(chatHandler.DeleteChat, authMiddleware))
 
+    // Chat streaming API (WebSocket only)
+    r.GET("/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
+
 	// Message API (protected)
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
+	// SSE events stream per chat
+	r.GET("/api/chats/:id/events", func(c *gin.Context) {
+		c.Set("chatEventsSub", chatEventsAdapter{c: c, n: n})
+		wrapWithAuth(messageHandler.Events, authMiddleware)(c)
+	})
 
 	// oauth flows (public endpoints)
 	r.POST("/oauth/:provider/login", wrap(http.HandlerFunc(oauthHandler.Redirect)))

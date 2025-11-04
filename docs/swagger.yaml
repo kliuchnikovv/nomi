@@ -1,6 +1,8 @@
 definitions:
   handlers.AuthResponse:
     properties:
+      refresh_token:
+        type: string
       token:
         type: string
       user:

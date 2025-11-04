@@ -21,11 +21,13 @@ type Chat struct {
 
 // Message представляет сообщение в базе данных
 type Message struct {
-	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	ChatID    uuid.UUID `gorm:"type:uuid;not null"`
-	UserID    uuid.UUID `gorm:"type:uuid;not null"`
-	Role      string    `gorm:"type:varchar(20);not null"`
-	Text      string    `gorm:"type:text;not null"`
-	CreatedAt time.Time `gorm:"not null"`
-	UpdatedAt time.Time `gorm:"not null"`
+    ID        uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+    ChatID    uuid.UUID `gorm:"type:uuid;not null"`
+    UserID    uuid.UUID `gorm:"type:uuid;not null"`
+    Role      string    `gorm:"type:varchar(20);not null"`
+    Text      string    `gorm:"type:text;not null"`
+    CreatedAt time.Time `gorm:"not null"`
+    UpdatedAt time.Time `gorm:"not null"`
 }
+
+// ChatSession mapping removed: streaming uses explicit chatId

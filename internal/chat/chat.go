@@ -25,9 +25,10 @@ const (
 )
 
 type Message struct {
-	ID     uuid.UUID `json:"id"`
-	ChatID uuid.UUID `json:"chat_id"`
-	Sender uuid.UUID `json:"sender"`
-	Role   Role      `json:"role"`
-	Text   string    `json:"text"`
+    ID     uuid.UUID `json:"id"`
+    ChatID uuid.UUID `json:"chat_id"`
+    Sender uuid.UUID `json:"sender"`
+    Role   Role      `json:"role"`
+    Text   string    `json:"text"`
+    CreatedAt time.Time `json:"created_at"`
 }

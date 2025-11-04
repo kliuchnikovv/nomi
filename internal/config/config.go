@@ -8,9 +8,13 @@ import (
 )
 
 type Config struct {
-	Server struct {
-		Port int `yaml:"port"`
-	} `yaml:"server"`
+    Server struct {
+        Port int `yaml:"port"`
+    } `yaml:"server"`
+    // Processor removed (using WS proxy)
+    LLM struct {
+        BaseURL string `yaml:"base_url"`
+    } `yaml:"llm"`
 	Database struct {
 		Host     string `yaml:"host"`
 		Port     int    `yaml:"port"`

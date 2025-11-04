@@ -635,6 +635,9 @@ const docTemplate = `{
         "handlers.AuthResponse": {
             "type": "object",
             "properties": {
+                "refresh_token": {
+                    "type": "string"
+                },
                 "token": {
                     "type": "string"
                 },
