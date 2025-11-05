@@ -7,7 +7,4 @@ python-dotenv>=1.0
 # App/framework deps used in repo
 agno
 fastapi
-uvicorn
 starlette
-google-auth
-google-auth-oauthlib
