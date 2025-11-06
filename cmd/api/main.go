@@ -3,7 +3,6 @@ package main
 //go:generate swag init -g ./internal/handlers/oauth.go -o ./docs
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/server"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"go.uber.org/zap"
 )
 
 // @title Genie API
@@ -32,29 +32,39 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	zapCfg := zap.NewProductionConfig()
+	zapCfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	zapCfg.Encoding = "json"
+
+	logger, err := zapCfg.Build()
+	if err != nil {
+		log.Fatalf("failed to create logger: %v", err)
+	}
+	defer logger.Sync()
+
 	// Auto-generate Swagger docs before starting the server unless SKIP_SWAG=1
 	if os.Getenv("SKIP_SWAG") != "1" {
 		cmd := exec.Command("swag", "init", "-g", "./internal/handlers/oauth.go", "-o", "./docs")
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
-			log.Printf("warning: swag generation failed: %v", err)
+			logger.Error("warning: swag generation failed", zap.Error(err))
 		} else {
-			log.Printf("swagger docs generated into ./docs")
+			logger.Info("swagger docs generated into ./docs")
 		}
 	} else {
-		log.Printf("skipping swagger generation due to SKIP_SWAG=1")
+		logger.Info("skipping swagger generation due to SKIP_SWAG=1")
 	}
 
 	db, err := storage.New(cfg)
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		logger.Fatal("failed to connect to database: %v", zap.Error(err))
 	}
 
-	srv := server.New(cfg, db)
+	srv := server.New(logger, cfg, db)
 
-	fmt.Printf("Server is listening on port %d\n", cfg.Server.Port)
+	logger.Info("Server is listening", zap.Int("port", cfg.Server.Port))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("server failed: %v", err)
+		logger.Fatal("server failed: %v", zap.Error(err))
 	}
 }

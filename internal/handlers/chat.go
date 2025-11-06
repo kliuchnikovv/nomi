@@ -19,22 +19,6 @@ func NewChatHandler(storage *storage.Storage) *ChatHandler {
 	}
 }
 
-// func (h *ChatHandler) CreateChat(c *gin.Context) {
-// 	var newChat chat.Chat
-// 	if err := c.ShouldBindJSON(&newChat); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 		return
-// 	}
-
-// 	createdChat, err := h.storage.CreateChat(ctx, userID, &newChat)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-// 		return
-// 	}
-
-// 	c.JSON(http.StatusCreated, createdChat)
-// }
-
 func (h *ChatHandler) GetChat(c *gin.Context) {
 	var ctx = c.Request.Context()
 
