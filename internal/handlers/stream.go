@@ -46,10 +46,12 @@ func NewStreamHandler(
 
 	if len(llmBaseURL) != 0 {
 		llmURL, err = buildPathForWS(llmBaseURL)
+	} else {
+		logger.Warn("LLM base URL not configured - WebSockets not available - empty url")
 	}
 
-	if len(llmBaseURL) == 0 || err != nil {
-		logger.Warn("LLM base URL not configured - WebSockets not available")
+	if err != nil {
+		logger.Warn("LLM base URL not configured - WebSockets not available", zap.Error(err))
 	}
 
 	return &StreamHandler{
