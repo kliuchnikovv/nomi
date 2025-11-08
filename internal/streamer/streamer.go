@@ -111,16 +111,18 @@ func (streamer *Streamer) Stream(
 			}
 
 			resetTimer()
-			if frame.Kind == TokenKind {
-				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
-					ID:        frame.Payload.MessageID,
-					ChatID:    streamer.chatID,
-					Sender:    storage.ZeroUUID,
-					Role:      chat.RoleAssistant,
-					Text:      frame.Payload.Message,
-					CreatedAt: time.Now().UTC(),
-				}); err != nil {
-					streamer.logger.Error("failed to upsert message", zap.Error(err))
+			if frame.Operation == MessageOperation {
+				if frame.Kind == TokenKind {
+					if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
+						ID:        frame.Payload.MessageID,
+						ChatID:    streamer.chatID,
+						Sender:    storage.ZeroUUID,
+						Role:      chat.RoleAssistant,
+						Text:      frame.Payload.Message,
+						CreatedAt: time.Now().UTC(),
+					}); err != nil {
+						streamer.logger.Error("failed to upsert message", zap.Error(err))
+					}
 				}
 			}
 
@@ -153,15 +155,17 @@ func (streamer *Streamer) Stream(
 			}
 
 			resetTimer()
-			if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
-				ID:        uuid.New(),
-				ChatID:    streamer.chatID,
-				Sender:    streamer.userID,
-				Role:      chat.RoleUser,
-				Text:      frame.Payload.Message,
-				CreatedAt: time.Now().UTC(),
-			}); err != nil {
-				streamer.logger.Error("failed to upsert message", zap.Error(err))
+			if frame.Operation == MessageOperation {
+				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
+					ID:        uuid.New(),
+					ChatID:    streamer.chatID,
+					Sender:    streamer.userID,
+					Role:      chat.RoleUser,
+					Text:      frame.Payload.Message,
+					CreatedAt: time.Now().UTC(),
+				}); err != nil {
+					streamer.logger.Error("failed to upsert message", zap.Error(err))
+				}
 			}
 
 			// Ensure model is connected before forwarding client message.

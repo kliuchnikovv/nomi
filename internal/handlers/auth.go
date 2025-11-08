@@ -1,12 +1,12 @@
 package handlers
 
 import (
-    "encoding/json"
-    "net/http"
-    "time"
+	"encoding/json"
+	"net/http"
+	"time"
 
-    "github.com/kliuchnikovv/genie-api/internal/auth"
-    "github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/genie-api/internal/auth"
+	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
 type AuthHandler struct {
@@ -33,9 +33,9 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-    Token string        `json:"token"`
-    RefreshToken string `json:"refresh_token"`
-    User  *storage.User `json:"user"`
+	Token        string        `json:"token"`
+	RefreshToken string        `json:"refresh_token"`
+	User         *storage.User `json:"user"`
 }
 
 // Register обрабатывает регистрацию нового пользователя
@@ -69,25 +69,25 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-    // Генерируем JWT токен + refresh
-    token, err := h.tokenManager.GenerateToken(user)
-    if err != nil {
-        http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-        return
-    }
-    rtoken, err := h.tokenManager.GenerateRefreshToken()
-    if err != nil {
-        http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
-        return
-    }
-    if err := h.storage.SaveRefreshToken(r.Context(), user.ID, rtoken, 30*24*time.Hour); err != nil { // 30d
-        http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
-        return
-    }
+	// Генерируем JWT токен + refresh
+	token, err := h.tokenManager.GenerateToken(user)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	rtoken, err := h.tokenManager.GenerateRefreshToken()
+	if err != nil {
+		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
+		return
+	}
+	if err := h.storage.SaveRefreshToken(r.Context(), user.ID, rtoken, 30*24*time.Hour); err != nil { // 30d
+		http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
+		return
+	}
 
 	// Отправляем ответ
 	w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(AuthResponse{Token: token, RefreshToken: rtoken, User: user})
+	json.NewEncoder(w).Encode(AuthResponse{Token: token, RefreshToken: rtoken, User: user})
 }
 
 // Login обрабатывает вход пользователя
@@ -128,61 +128,63 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-    // Генерируем JWT токен + refresh
-    token, err := h.tokenManager.GenerateToken(user)
-    if err != nil {
-        http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-        return
-    }
-    rtoken, err := h.tokenManager.GenerateRefreshToken()
-    if err != nil {
-        http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
-        return
-    }
-    if err := h.storage.SaveRefreshToken(r.Context(), user.ID, rtoken, 30*24*time.Hour); err != nil {
-        http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
-        return
-    }
+	// Генерируем JWT токен + refresh
+	token, err := h.tokenManager.GenerateToken(user)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	rtoken, err := h.tokenManager.GenerateRefreshToken()
+	if err != nil {
+		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
+		return
+	}
+	if err := h.storage.SaveRefreshToken(r.Context(), user.ID, rtoken, 30*24*time.Hour); err != nil {
+		http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
+		return
+	}
 
 	// Отправляем ответ
 	w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(AuthResponse{Token: token, RefreshToken: rtoken, User: user})
+	json.NewEncoder(w).Encode(AuthResponse{Token: token, RefreshToken: rtoken, User: user})
 
 }
 
 // Refresh принимает refresh_token и возвращает новую пару access+refresh (ротация)
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-    var body struct{ RefreshToken string `json:"refresh_token"` }
-    if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.RefreshToken == "" {
-        http.Error(w, "Invalid request body", http.StatusBadRequest)
-        return
-    }
-    rec, err := h.storage.ConsumeRefreshToken(r.Context(), body.RefreshToken)
-    if err != nil {
-        http.Error(w, "Invalid or expired refresh token", http.StatusUnauthorized)
-        return
-    }
-    user, err := h.storage.GetUserByID(r.Context(), rec.UserID)
-    if err != nil {
-        http.Error(w, "User not found", http.StatusUnauthorized)
-        return
-    }
-    access, err := h.tokenManager.GenerateToken(user)
-    if err != nil {
-        http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-        return
-    }
-    newRefresh, err := h.tokenManager.GenerateRefreshToken()
-    if err != nil {
-        http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
-        return
-    }
-    if err := h.storage.SaveRefreshToken(r.Context(), user.ID, newRefresh, 30*24*time.Hour); err != nil {
-        http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
-        return
-    }
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(AuthResponse{Token: access, RefreshToken: newRefresh, User: user})
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.RefreshToken == "" {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	rec, err := h.storage.ConsumeRefreshToken(r.Context(), body.RefreshToken)
+	if err != nil {
+		http.Error(w, "Invalid or expired refresh token", http.StatusUnauthorized)
+		return
+	}
+	user, err := h.storage.GetUserByID(r.Context(), rec.UserID)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+	access, err := h.tokenManager.GenerateToken(user)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	newRefresh, err := h.tokenManager.GenerateRefreshToken()
+	if err != nil {
+		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
+		return
+	}
+	if err := h.storage.SaveRefreshToken(r.Context(), user.ID, newRefresh, 30*24*time.Hour); err != nil {
+		http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AuthResponse{Token: access, RefreshToken: newRefresh, User: user})
 }
 
 // GetMe возвращает информацию о текущем пользователе
