@@ -111,7 +111,7 @@ func (streamer *Streamer) Stream(
 			}
 
 			resetTimer()
-			if frame.Operation == MessageOperation && frame.Payload.Kind == TokenKind {
+			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
 				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
 					ID:        frame.Payload.MessageID,
 					ChatID:    streamer.chatID,
