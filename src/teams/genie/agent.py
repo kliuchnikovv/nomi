@@ -24,7 +24,7 @@ class GenieAgent(Agent):
             db=db,
             name=name,
             model=model,
-            tools=tools,
+            # tools=tools,
             description="You are helpful assistant.",
             # instructions=instruction,
             # expected_output=expected_output,

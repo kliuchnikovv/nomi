@@ -7,11 +7,7 @@ from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools.gmail import GmailTools
 from google.oauth2.credentials import Credentials
 
-from src.internal.store.token import make_engine, TokenStorePG
-from src.internal.store.remote_token import TokenStoreRemote
 from src.teams.genie.agent import GenieAgent
-# gRPC message processor is deprecated in favor of WS; not mounted
-from src.server import sse as sse_server
 from src.server import ws as ws_server
 
 from dotenv import load_dotenv
@@ -37,22 +33,12 @@ from starlette.middleware.sessions import SessionMiddleware
 
 debug_mode = True
 
-engine = make_engine("postgresql+asyncpg://postgres:postgres@localhost:5432/postgres")
-db = None  # Using SQLAlchemy engine directly; agent DB not required here
-
-oauth_service_url = os.getenv("OAUTH_SERVICE_URL")
-if oauth_service_url:
-    token_store = TokenStoreRemote(oauth_service_url)
-else:
-    token_store = TokenStorePG(engine)
-
 model=Gemini(
     id="gemini-2.0-flash",
     api_key=os.getenv("GOOGLE_API_KEY"),
 )
 
 agent = GenieAgent(
-    db=db,
     model=model,
     tools=[
         GmailTools(
@@ -77,13 +63,6 @@ app = agent_os.get_app()
 # Sessions for OAuth state (required for request.session)
 session_secret = os.getenv("SESSION_SECRET") or "dev-session-secret-change-me"
 app.add_middleware(SessionMiddleware, secret_key=session_secret)
-
-# Routes: SSE streaming endpoint
-try:
-    app.include_router(sse_server.router(agent))
-    logging.info("SSE routes mounted at /llm/stream")
-except Exception:
-    logging.exception("Failed to mount SSE routes")
 
 try:
     app.include_router(ws_server.router(agent))

@@ -1,7 +1,0 @@
-Alembic environment for SQLAlchemy migrations.
-
-Key metadata is imported from `src.internal.store.token:metadata`.
-
-Commands:
-  alembic revision --autogenerate -m "message"
-  alembic upgrade head
