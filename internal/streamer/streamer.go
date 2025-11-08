@@ -142,10 +142,8 @@ func (streamer *Streamer) Stream(
 				// Client closed — keep model alive until it finishes.
 				streamer.logger.Debug("client chan is closed; keeping model alive")
 				if err := modelReader.Write(ctx, Frame{
+					Kind:      TokenKind,
 					Operation: DoneOperation,
-					Payload: Payload{
-						Kind: TokenKind,
-					},
 				}); err != nil {
 					streamer.logger.Error("failed to write to model", zap.Error(err))
 					_ = model.Close()
@@ -207,10 +205,8 @@ func (streamer *Streamer) Stream(
 
 				streamer.logger.Debug("client err chan is closed; keeping model alive")
 				if err := modelReader.Write(ctx, Frame{
+					Kind:      TokenKind,
 					Operation: DoneOperation,
-					Payload: Payload{
-						Kind: TokenKind,
-					},
 				}); err != nil {
 					streamer.logger.Error("failed to write to model", zap.Error(err))
 					_ = model.Close()
