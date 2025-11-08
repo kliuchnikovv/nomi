@@ -16,6 +16,7 @@ import (
 
 	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/genie-api/internal/streamer"
 )
 
 // TODO: refactor this
@@ -88,114 +89,123 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	var query = *h.llmURL
 	query.RawQuery = input.q.Encode()
 
-	llmConn, _, err := websocket.DefaultDialer.Dial(query.String(), nil)
-	if err != nil {
-		log.Printf("ws: upstream dial failed: %v, path is %s", err, query.String())
-		_ = clientConn.WriteMessage(
-			websocket.CloseMessage,
-			websocket.FormatCloseMessage(
-				websocket.CloseTryAgainLater,
-				"upstream unavailable",
-			),
-		)
-		return
-	}
-	defer llmConn.Close()
+	// Provide connector to (re)establish model connection with initial meta.
+	connectModel := func() (*websocket.Conn, error) {
+		hdr := http.Header{}
+		hdr.Add("Cookie", "session_id=123") //TODO:
 
-	if err := h.sendWSMessage(llmConn, Meta, wsData{
-		ChatID: input.chatID.String(),
-		Type:   "chat",
-	}); err != nil {
-		_ = clientConn.WriteMessage(
-			websocket.CloseMessage,
-			websocket.FormatCloseMessage(
-				websocket.ClosePolicyViolation,
-				"can't send meta message to upstream",
-			),
-		)
-		return
+		values := query.Query()
+		values.Add("chat_id", input.chatID.String())
+		query.RawQuery = values.Encode()
+
+		conn, _, err := websocket.DefaultDialer.Dial(query.String(), hdr)
+		if err != nil {
+			log.Printf("ws: upstream dial failed: %v, path is %s", err, query.String())
+			return nil, err
+		}
+		if err := h.sendWSMessage(conn, streamer.Frame{
+			ID:        0,
+			Kind:      streamer.MetaKind,
+			Operation: streamer.PingOperation,
+			Timestamp: time.Now().UTC(),
+		}); err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		return conn, nil
 	}
+
+	streamer.New(
+		h.storage,
+		h.logger,
+		input.user.ID,
+		input.chatID,
+		connectModel,
+	).Stream(streamer.NewSocketReader(
+		clientConn,
+		h.logger.With(zap.String("handler", "socker-reader")),
+	))
 
 	// Proxy upstream->client and accumulate tokens
-	done := make(chan struct{})
-	var accum strings.Builder
-	var assistantMsgID uuid.UUID
+	// done := make(chan struct{})
+	// var accum strings.Builder
+	// var assistantMsgID uuid.UUID
 
-	go func() {
-		defer close(done)
-		for {
-			mt, data, err := llmConn.ReadMessage()
-			if err != nil {
-				if !websocket.IsCloseError(err) && !strings.Contains(err.Error(), "close") {
-					log.Printf("ws: upstream read error chatId=%s err=%v", input.chatID, err)
-				}
-				return
-			}
-			if err := clientConn.WriteMessage(mt, data); err != nil {
-				log.Printf("ws: write to client failed chatId=%s err=%v", input.chatID, err)
-				return
-			}
+	// go func() {
+	// 	defer close(done)
+	// 	for {
+	// 		mt, data, err := llmConn.ReadMessage()
+	// 		if err != nil {
+	// 			if !websocket.IsCloseError(err) && !strings.Contains(err.Error(), "close") {
+	// 				log.Printf("ws: upstream read error chatId=%s err=%v", input.chatID, err)
+	// 			}
+	// 			return
+	// 		}
+	// 		if err := clientConn.WriteMessage(mt, data); err != nil {
+	// 			log.Printf("ws: write to client failed chatId=%s err=%v", input.chatID, err)
+	// 			return
+	// 		}
 
-			if mt != websocket.TextMessage {
-				continue
-			}
+	// 		if mt != websocket.TextMessage {
+	// 			continue
+	// 		}
 
-			var m struct {
-				Event string          `json:"event"`
-				Data  json.RawMessage `json:"data"`
-			}
-			if json.Unmarshal(data, &m) != nil {
-				continue
-			}
+	// 		var m struct {
+	// 			Event string          `json:"event"`
+	// 			Data  json.RawMessage `json:"data"`
+	// 		}
+	// 		if json.Unmarshal(data, &m) != nil {
+	// 			continue
+	// 		}
 
-			if m.Event == "done" {
-				// already persisted incrementally
-				continue
-			}
+	// 		if m.Event == "done" {
+	// 			// already persisted incrementally
+	// 			continue
+	// 		}
 
-			if m.Event != "token" {
-				continue
-			}
-			var d struct {
-				Delta string `json:"delta"`
-			}
-			if json.Unmarshal(m.Data, &d) != nil {
-				continue
-			}
+	// 		if m.Event != "token" {
+	// 			continue
+	// 		}
+	// 		var d struct {
+	// 			Delta string `json:"delta"`
+	// 		}
+	// 		if json.Unmarshal(m.Data, &d) != nil {
+	// 			continue
+	// 		}
 
-			accum.WriteString(d.Delta)
-			if l := accum.Len(); l%500 == 0 {
-				log.Printf("ws: token accumulation chatId=%s size=%d", input.chatID, l)
-			}
+	// 		accum.WriteString(d.Delta)
+	// 		if l := accum.Len(); l%500 == 0 {
+	// 			log.Printf("ws: token accumulation chatId=%s size=%d", input.chatID, l)
+	// 		}
 
-			if assistantMsgID == uuid.Nil {
-				if saved, err := h.storage.CreateMessage(c.Request.Context(), input.user.ID, &chat.Message{ChatID: input.chatID, Role: chat.RoleAssistant, Text: accum.String()}); err == nil {
-					assistantMsgID = saved.ID
-					log.Printf("ws: assistant draft created id=%s chatId=%s", assistantMsgID, input.chatID)
-				} else {
-					log.Printf("ws: assistant draft create failed chatId=%s err=%v", input.chatID, err)
-				}
-			} else {
-				if err := h.storage.UpdateMessageText(c.Request.Context(), input.user.ID, assistantMsgID, accum.String()); err != nil {
-					log.Printf("ws: assistant draft update failed id=%s err=%v", assistantMsgID, err)
-				}
-			}
-		}
-	}()
+	// 		if assistantMsgID == uuid.Nil {
+	// 			if saved, err := h.storage.CreateMessage(c.Request.Context(), input.user.ID, &chat.Message{ChatID: input.chatID, Role: chat.RoleAssistant, Text: accum.String()}); err == nil {
+	// 				assistantMsgID = saved.ID
+	// 				log.Printf("ws: assistant draft created id=%s chatId=%s", assistantMsgID, input.chatID)
+	// 			} else {
+	// 				log.Printf("ws: assistant draft create failed chatId=%s err=%v", input.chatID, err)
+	// 			}
+	// 		} else {
+	// 			if err := h.storage.UpdateMessageText(c.Request.Context(), input.user.ID, assistantMsgID, accum.String()); err != nil {
+	// 				log.Printf("ws: assistant draft update failed id=%s err=%v", assistantMsgID, err)
+	// 			}
+	// 		}
+	// 	}
+	// }()
 
-	// Optionally read from client to keep connection alive; ignore content
-	for {
-		if _, _, err := clientConn.ReadMessage(); err != nil {
-			if !websocket.IsCloseError(err) {
-				log.Printf("ws: client read loop ended chatId=%s err=%v", input.chatID, err)
-			} else {
-				log.Printf("ws: client closed chatId=%s", input.chatID)
-			}
-			break
-		}
-	}
-	<-done
-	log.Printf("ws: upstream stream finished chatId=%s", input.chatID)
+	// // Optionally read from client to keep connection alive; ignore content
+	// for {
+	// 	if _, _, err := clientConn.ReadMessage(); err != nil {
+	// 		if !websocket.IsCloseError(err) {
+	// 			log.Printf("ws: client read loop ended chatId=%s err=%v", input.chatID, err)
+	// 		} else {
+	// 			log.Printf("ws: client closed chatId=%s", input.chatID)
+	// 		}
+	// 		break
+	// 	}
+	// }
+	// <-done
+	// log.Printf("ws: upstream stream finished chatId=%s", input.chatID)
 }
 
 func (h *StreamHandler) validate(c *gin.Context) (*StreamInput, int, error) {
@@ -224,7 +234,7 @@ func (h *StreamHandler) validate(c *gin.Context) (*StreamInput, int, error) {
 		return nil, http.StatusBadRequest, fmt.Errorf("bad chatId: %w", err)
 	}
 
-	if chatID == zeroUUID {
+	if chatID == storage.ZeroUUID {
 		created, err := h.storage.CreateChat(ctx, user.ID,
 			&chat.Chat{
 				ID:        uuid.New(),
@@ -276,15 +286,9 @@ func (h *StreamHandler) sendHTTPError(
 
 func (h *StreamHandler) sendWSMessage(
 	conn *websocket.Conn,
-	event Event,
-	data wsData,
+	frame streamer.Frame,
 ) error {
-	meta := wsMessage{
-		Event: event,
-		Data:  data,
-	}
-
-	b, err := json.Marshal(meta)
+	b, err := json.Marshal(frame)
 	if err != nil {
 		return err
 	}
@@ -292,28 +296,28 @@ func (h *StreamHandler) sendWSMessage(
 	return conn.WriteMessage(websocket.TextMessage, b)
 }
 
-type Event string
+// type Event string
 
-const (
-	Token Event = "token"
-	Done  Event = "done"
-	Meta  Event = "meta"
-)
+// const (
+// 	Token Event = "token"
+// 	Done  Event = "done"
+// 	Meta  Event = "meta"
+// // )
 
-type wsMessage struct {
-	Event Event  `json:"event"`
-	Data  wsData `json:"data"`
-}
+// type wsMessage struct {
+// 	Event Event  `json:"event"`
+// 	Data  wsData `json:"data"`
+// }
 
-type wsData struct {
-	Delta            string `json:"delta,omitempty"`
-	Index            uint   `json:"index,omitempty"`
-	FinishReason     string `json:"finish_reason,omitempty"`
-	Type             string `json:"type,omitempty"`
-	ChatID           string `json:"chat_id,omitempty"`
-	PromptTokens     uint   `json:"prompt_tokens,omitempty"`
-	CompletionTokens uint   `json:"completion_tokens,omitempty"`
-}
+// type wsData struct {
+// 	Delta            string `json:"delta,omitempty"`
+// 	Index            uint   `json:"index,omitempty"`
+// 	FinishReason     string `json:"finish_reason,omitempty"`
+// 	Type             string `json:"type,omitempty"`
+// 	ChatID           string `json:"chat_id,omitempty"`
+// 	PromptTokens     uint   `json:"prompt_tokens,omitempty"`
+// 	CompletionTokens uint   `json:"completion_tokens,omitempty"`
+// }
 
 func buildPathForWS(baseUrl string) (*url.URL, error) {
 	// Build upstream WS URL: ws(s)://<result>/llm/ws

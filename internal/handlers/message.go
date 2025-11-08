@@ -13,8 +13,6 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
-var zeroUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
-
 type MessageHandler struct {
 	storage *storage.Storage
 }
@@ -47,7 +45,7 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 	}
 
 	var chatObj *chat.Chat
-	if chatID != zeroUUID {
+	if chatID != storage.ZeroUUID {
 		chatObj, err = h.storage.GetChat(ctx, user.ID, chatID)
 	} else {
 		chatObj, err = h.storage.CreateChat(ctx, user.ID, &chat.Chat{
