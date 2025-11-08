@@ -41,11 +41,15 @@ def router(agent: Agent) -> APIRouter:
         logger.info("[WS] Open: chat_id=%s session_id=%s", chat_id, session_id)
 
         next_id = 0
+        # Track last time we received any client message
+        last_activity = time.monotonic()
         try:
             # Пример: таймауты чтения (idle close)
             while True:
                 try:
                     raw = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                    # Any received frame counts as activity
+                    last_activity = time.monotonic()
                     try:
                         data = json.loads(raw)
                         frame = Frame(**data)
@@ -71,7 +75,32 @@ def router(agent: Agent) -> APIRouter:
                         )
                         continue
                 except asyncio.TimeoutError:
-                    # keepalive
+                    # No incoming messages within read timeout window
+                    idle_for = time.monotonic() - last_activity
+                    if idle_for >= 180:
+                        # Close idle connection after 3 minutes without client messages
+                        logger.info(
+                            "[WS] Idle timeout: closing chat_id=%s session_id=%s idle_for=%.1fs",
+                            chat_id,
+                            session_id,
+                            idle_for,
+                        )
+                        try:
+                            next_id = await _send_frame(
+                                websocket=websocket,
+                                frame=make_done(
+                                    id=next_id,
+                                    payload={
+                                        "message": "done",
+                                        "reason": "idle_timeout",
+                                    },
+                                ),
+                            )
+                        finally:
+                            with contextlib.suppress(Exception):
+                                await websocket.close(code=1000, reason="idle timeout")
+                        break
+                    # Otherwise send keepalive ping
                     logger.debug("[WS] Keepalive ping: chat_id=%s session_id=%s", chat_id, session_id)
                     next_id = await _send_frame(
                         websocket=websocket,
