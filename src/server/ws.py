@@ -304,7 +304,6 @@ async def _process_message(
             id=next_id,
             op=Op.MESSAGE,
             payload={
-                "kind": Kind.META,
                 "message_id": message_id,
             }
         ),
@@ -329,7 +328,6 @@ async def _process_message(
                 payload={
                     "ix": idx,
                     "eof": idx == len(_chunk_text(reply))-1,
-                    "kind": Kind.DATA,
                     "message": chunk,
                     "message_id": message_id,
                 }
