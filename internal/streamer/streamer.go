@@ -111,18 +111,16 @@ func (streamer *Streamer) Stream(
 			}
 
 			resetTimer()
-			if frame.Operation == MessageOperation {
-				if frame.Kind == TokenKind {
-					if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
-						ID:        frame.Payload.MessageID,
-						ChatID:    streamer.chatID,
-						Sender:    storage.ZeroUUID,
-						Role:      chat.RoleAssistant,
-						Text:      frame.Payload.Message,
-						CreatedAt: time.Now().UTC(),
-					}); err != nil {
-						streamer.logger.Error("failed to upsert message", zap.Error(err))
-					}
+			if frame.Operation == MessageOperation && frame.Payload.Kind == TokenKind {
+				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
+					ID:        frame.Payload.MessageID,
+					ChatID:    streamer.chatID,
+					Sender:    storage.ZeroUUID,
+					Role:      chat.RoleAssistant,
+					Text:      frame.Payload.Message,
+					CreatedAt: time.Now().UTC(),
+				}); err != nil {
+					streamer.logger.Error("failed to upsert message", zap.Error(err))
 				}
 			}
 
@@ -144,8 +142,10 @@ func (streamer *Streamer) Stream(
 				// Client closed — keep model alive until it finishes.
 				streamer.logger.Debug("client chan is closed; keeping model alive")
 				if err := modelReader.Write(ctx, Frame{
-					Kind:      TokenKind,
 					Operation: DoneOperation,
+					Payload: Payload{
+						Kind: TokenKind,
+					},
 				}); err != nil {
 					streamer.logger.Error("failed to write to model", zap.Error(err))
 					_ = model.Close()
@@ -207,8 +207,10 @@ func (streamer *Streamer) Stream(
 
 				streamer.logger.Debug("client err chan is closed; keeping model alive")
 				if err := modelReader.Write(ctx, Frame{
-					Kind:      TokenKind,
 					Operation: DoneOperation,
+					Payload: Payload{
+						Kind: TokenKind,
+					},
 				}); err != nil {
 					streamer.logger.Error("failed to write to model", zap.Error(err))
 					_ = model.Close()

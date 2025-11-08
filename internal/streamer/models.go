@@ -31,7 +31,6 @@ const (
 type Frame struct {
 	ID        int       `json:"id"`
 	Timestamp time.Time `json:"ts"`
-	Kind      Kind      `json:"kind"`
 	Channel   string    `json:"channel"`
 	Operation Operation `json:"op"`
 	Payload   Payload   `json:"payload"`
