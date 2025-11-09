@@ -105,8 +105,11 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		}
 		if err := h.sendWSMessage(conn, streamer.Frame{
 			ID:        0,
-			Kind:      streamer.MetaKind,
-			Operation: streamer.PingOperation,
+			Kind:      streamer.TokenKind,
+			Operation: streamer.MessageOperation,
+			Payload: streamer.Payload{
+				Message: input.q.Get("q"),
+			},
 			Timestamp: time.Now().UTC(),
 		}); err != nil {
 			_ = conn.Close()
