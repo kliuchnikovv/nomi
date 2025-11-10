@@ -15,7 +15,7 @@ var ZeroUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
 func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.Message) (*chat.Message, error) {
 	messageModel := &Message{
-		ID:        m.ID,
+		ID:        uuid.New(),
 		ChatID:    m.ChatID,
 		UserID:    userID,
 		Role:      string(m.Role),
