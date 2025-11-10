@@ -265,16 +265,10 @@ func (h *StreamHandler) validate(c *gin.Context) (*StreamInput, int, error) {
 		}
 	}
 
-	// Persist user message from q
-	if _, err := h.storage.CreateMessage(ctx, user.ID,
-		&chat.Message{
-			ChatID: chatID,
-			Role:   chat.RoleUser,
-			Text:   qv.Get("q"),
-		},
-	); err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("message creation failed: %w", err)
-	}
+	// // Persist user message from q
+	// if _, err := h.storage.GetMessage(ctx, user.ID,	); err != nil {
+	// 	return nil, http.StatusInternalServerError, fmt.Errorf("message creation failed: %w", err)
+	// }
 
 	return &StreamInput{
 		chatID: chatID,
