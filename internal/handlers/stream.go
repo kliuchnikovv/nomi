@@ -14,7 +14,6 @@ import (
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
-	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/kliuchnikovv/genie-api/internal/streamer"
 )
@@ -22,9 +21,10 @@ import (
 // TODO: refactor this
 
 type StreamInput struct {
-	chatID uuid.UUID
-	q      url.Values
-	user   *storage.User
+	chatID  uuid.UUID
+	q       url.Values // TODO: backward comp - remove
+	user    *storage.User
+	message string
 }
 
 type StreamHandler struct {
@@ -108,7 +108,7 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 			Kind:      streamer.TokenKind,
 			Operation: streamer.MessageOperation,
 			Payload: streamer.Payload{
-				Message: input.q.Get("q"),
+				Message: input.message,
 			},
 			Timestamp: time.Now().UTC(),
 		}); err != nil {
@@ -233,6 +233,11 @@ func (h *StreamHandler) validate(c *gin.Context) (*StreamInput, int, error) {
 		return nil, http.StatusBadRequest, fmt.Errorf("missing query parameter 'chatId'")
 	}
 
+	messageIDStr := c.Query("messageId")
+	if messageIDStr == "" {
+		return nil, http.StatusBadRequest, fmt.Errorf("missing query parameter 'messageId'")
+	}
+
 	var ctx = c.Request.Context()
 	user, _ := userFromCtx(ctx)
 	if user == nil {
@@ -244,36 +249,25 @@ func (h *StreamHandler) validate(c *gin.Context) (*StreamInput, int, error) {
 		return nil, http.StatusBadRequest, fmt.Errorf("bad chatId: %w", err)
 	}
 
-	if chatID == storage.ZeroUUID {
-		created, err := h.storage.CreateChat(ctx, user.ID,
-			&chat.Chat{
-				ID:        uuid.New(),
-				Model:     uuid.New(),
-				Title:     qv.Get("q"),
-				CreatedAt: time.Now().UTC(),
-				UpdatedAt: time.Now().UTC(),
-			},
-		)
-		if err != nil {
-			return nil, http.StatusInternalServerError, fmt.Errorf("chat creation failed: %w", err)
-		}
-
-		chatID = created.ID
-	} else {
-		if _, err := h.storage.GetChat(ctx, user.ID, chatID); err != nil {
-			return nil, http.StatusBadRequest, fmt.Errorf("chat not found: %w", err)
-		}
+	messageID, err := uuid.Parse(messageIDStr)
+	if err != nil {
+		return nil, http.StatusBadRequest, fmt.Errorf("bad messageId: %w", err)
 	}
 
-	// // Persist user message from q
-	// if _, err := h.storage.GetMessage(ctx, user.ID,	); err != nil {
-	// 	return nil, http.StatusInternalServerError, fmt.Errorf("message creation failed: %w", err)
-	// }
+	if _, err := h.storage.GetChat(ctx, user.ID, chatID); err != nil {
+		return nil, http.StatusBadRequest, fmt.Errorf("chat not found: %w", err)
+	}
+
+	message, err := h.storage.GetMessage(ctx, user.ID, messageID)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("message creation failed: %w", err)
+	}
 
 	return &StreamInput{
-		chatID: chatID,
-		q:      qv,
-		user:   user,
+		chatID:  chatID,
+		q:       qv,
+		user:    user,
+		message: message.Text,
 	}, 0, nil
 }
 
