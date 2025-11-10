@@ -118,6 +118,13 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		return conn, nil
 	}
 
+	h.sendWSMessage(clientConn, streamer.Frame{
+		Kind:      streamer.MetaKind,
+		ChatID:    input.chatID,
+		Operation: streamer.MessageOperation,
+		Timestamp: time.Now().UTC(),
+	})
+
 	streamer.New(
 		h.storage,
 		h.logger,

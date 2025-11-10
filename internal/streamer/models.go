@@ -17,19 +17,21 @@ const (
 type Operation string
 
 const (
-	MessageOperation Operation = "message"
-	AckOperation     Operation = "ack"
-	NackOperation    Operation = "nack"
-	JoinOperation    Operation = "join"
-	LeaveOperation   Operation = "leave"
 	PingOperation    Operation = "ping"
-	PongOperation    Operation = "pong"
 	ErrorOperation   Operation = "error"
+	MessageOperation Operation = "message"
 	DoneOperation    Operation = "done"
+
+	AckOperation   Operation = "ack"
+	NackOperation  Operation = "nack"
+	JoinOperation  Operation = "join"
+	LeaveOperation Operation = "leave"
+	PongOperation  Operation = "pong"
 )
 
 type Frame struct {
 	ID        int       `json:"id"`
+	ChatID    uuid.UUID `json:"chat_id"`
 	Timestamp time.Time `json:"ts"`
 	Kind      Kind      `json:"kind"`
 	Channel   string    `json:"channel"`
