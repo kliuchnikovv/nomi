@@ -44,6 +44,7 @@ func New(
 	// Auth API
 	r.POST("/api/auth/register", wrap(http.HandlerFunc(authHandler.Register)))
 	r.POST("/api/auth/login", wrap(http.HandlerFunc(authHandler.Login)))
+	// r.POST("/api/auth/logout", wrapWithAuth(authHandler.Logout, authMiddleware))
 	r.POST("/api/auth/refresh", wrap(http.HandlerFunc(authHandler.Refresh)))
 	r.GET("/api/auth/me", gin.WrapH(
 		authMiddleware.RequireAuth(
