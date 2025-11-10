@@ -53,6 +53,7 @@ func New(
 	))
 
 	// Chat API (protected)
+	r.POST("/api/chats", wrapWithAuth(chatHandler.CreateChat, authMiddleware))
 	r.GET("/api/chats", wrapWithAuth(chatHandler.ListChats, authMiddleware))
 	r.GET("/api/chats/:id", wrapWithAuth(chatHandler.GetChat, authMiddleware))
 	r.PUT("/api/chats/:id", wrapWithAuth(chatHandler.UpdateChat, authMiddleware))

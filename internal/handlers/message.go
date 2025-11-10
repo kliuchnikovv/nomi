@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -44,22 +43,9 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 		return
 	}
 
-	var chatObj *chat.Chat
-	if chatID != storage.ZeroUUID {
-		chatObj, err = h.storage.GetChat(ctx, user.ID, chatID)
-	} else {
-		chatObj, err = h.storage.CreateChat(ctx, user.ID, &chat.Chat{
-			ID:         uuid.New(),
-			Model:      uuid.New(), // TODO: replace with actual models
-			Title:      newMessage.Text,
-			CreatedAt:  time.Now().UTC(),
-			UpdatedAt:  time.Now().UTC(),
-			ArchivedAt: nil,
-			DeletedAt:  nil,
-		})
-	}
+	chatObj, err := h.storage.GetChat(ctx, user.ID, chatID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
