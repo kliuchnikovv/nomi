@@ -112,6 +112,7 @@ func (streamer *Streamer) Stream(
 
 			resetTimer()
 			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
+				streamer.logger.Info("upserting message", zap.Any("frame", frame), zap.String("message_id", frame.Payload.MessageID.String()))
 				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
 					ID:        frame.Payload.MessageID,
 					ChatID:    frame.ChatID,
@@ -153,7 +154,7 @@ func (streamer *Streamer) Stream(
 			}
 
 			resetTimer()
-			if frame.Operation == MessageOperation {
+			if frame.Operation == MessageOperation && frame.Payload.MessageID == storage.ZeroUUID {
 				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
 					ID:        uuid.New(),
 					ChatID:    frame.ChatID,
