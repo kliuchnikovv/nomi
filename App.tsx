@@ -5,41 +5,60 @@
  * @format
  */
 
-import { NewAppScreen } from '@react-native/new-app-screen';
+import React, { useMemo } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import ChatLayout from './src/screens/main/screen.tsx';
 import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
+    SafeAreaProvider,
+    useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+import { MainProvider } from './src/screens/main/context';
 
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
-  );
+import { AuthScreen } from './src/screens/auth/screen.tsx';
+import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
+
+function App() {
+    const isDarkMode = useColorScheme() === 'dark';
+
+    return (
+        <SafeAreaProvider>
+            <AuthProvider>
+                <StatusBar
+                    barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+                />
+                <MainProvider>
+                    <AppContent />
+                </MainProvider>
+            </AuthProvider>
+        </SafeAreaProvider>
+    );
 }
 
 function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
+    const insets = useSafeAreaInsets();
+    const { isAuthenticated, isLoading } = useAuth();
+    const paddingStyle = useMemo(
+        () => ({ paddingTop: insets.top, paddingBottom: insets.bottom }),
+        [insets.top, insets.bottom],
+    );
 
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
+    if (isLoading) {
+        return <View style={styles.container} />;
+    }
+
+    return (
+        <View style={[styles.container, paddingStyle]}>
+            {isAuthenticated ? <ChatLayout /> : <AuthScreen />}
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+    container: {
+        flex: 1,
+        backgroundColor: '#282c34',
+    },
 });
 
 export default App;
