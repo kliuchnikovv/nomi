@@ -16,7 +16,7 @@ type Streamer struct {
 	logger  *zap.Logger
 
 	userID uuid.UUID
-	chatID uuid.UUID
+	// chatID uuid.UUID
 
 	connectModel func() (*websocket.Conn, error)
 }
@@ -25,14 +25,14 @@ func New(
 	storage *storage.Storage,
 	logger *zap.Logger,
 	userID uuid.UUID,
-	chatID uuid.UUID,
+	// chatID uuid.UUID,
 	connectModel func() (*websocket.Conn, error),
 ) *Streamer {
 	return &Streamer{
-		storage:      storage,
-		logger:       logger,
-		userID:       userID,
-		chatID:       chatID,
+		storage: storage,
+		logger:  logger,
+		userID:  userID,
+		// chatID:       chatID,
 		connectModel: connectModel,
 	}
 }
@@ -114,7 +114,7 @@ func (streamer *Streamer) Stream(
 			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
 				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
 					ID:        frame.Payload.MessageID,
-					ChatID:    streamer.chatID,
+					ChatID:    frame.ChatID,
 					Sender:    storage.ZeroUUID,
 					Role:      chat.RoleAssistant,
 					Text:      frame.Payload.Message,
@@ -156,7 +156,7 @@ func (streamer *Streamer) Stream(
 			if frame.Operation == MessageOperation {
 				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
 					ID:        uuid.New(),
-					ChatID:    streamer.chatID,
+					ChatID:    frame.ChatID,
 					Sender:    streamer.userID,
 					Role:      chat.RoleUser,
 					Text:      frame.Payload.Message,

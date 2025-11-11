@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -73,9 +72,18 @@ func NewStreamHandler(
 // ChatWS upgrades to WebSocket and forwards upstream SSE events as JSON messages.
 // Each WS message is a JSON object: { id, event, data }
 func (h *StreamHandler) ChatWS(c *gin.Context) {
-	input, code, err := h.validate(c)
-	if code != 0 {
-		h.sendHTTPError(c, code, err)
+	// input, code, err := h.validate(c)
+	// if code != 0 {
+	// 	h.sendHTTPError(c, code, err)
+	// 	return
+	// }
+
+	var ctx = c.Request.Context()
+	user, _ := userFromCtx(ctx)
+	if user == nil {
+		h.sendHTTPError(c,
+			http.StatusBadRequest, fmt.Errorf("can't find user info in context"),
+		)
 		return
 	}
 
@@ -87,7 +95,7 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	defer clientConn.Close()
 
 	var query = *h.llmURL
-	query.RawQuery = input.q.Encode()
+	// query.RawQuery = input.q.Encode()
 
 	// Provide connector to (re)establish model connection with initial meta.
 	connectModel := func() (*websocket.Conn, error) {
@@ -95,7 +103,7 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		hdr.Add("Cookie", "session_id=123") //TODO:
 
 		values := query.Query()
-		values.Add("chat_id", input.chatID.String())
+		// values.Add("chat_id", input.chatID.String())
 		query.RawQuery = values.Encode()
 
 		conn, _, err := websocket.DefaultDialer.Dial(query.String(), hdr)
@@ -103,24 +111,24 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 			log.Printf("ws: upstream dial failed: %v, path is %s", err, query.String())
 			return nil, err
 		}
-		if err := h.sendWSMessage(conn, streamer.Frame{
-			ID:        0,
-			Kind:      streamer.TokenKind,
-			Operation: streamer.MessageOperation,
-			Payload: streamer.Payload{
-				Message: input.message,
-			},
-			Timestamp: time.Now().UTC(),
-		}); err != nil {
-			_ = conn.Close()
-			return nil, err
-		}
+		// if err := h.sendWSMessage(conn, streamer.Frame{
+		// 	ID:        0,
+		// 	Kind:      streamer.TokenKind,
+		// 	Operation: streamer.MessageOperation,
+		// 	Payload: streamer.Payload{
+		// 		Message: input.message,
+		// 	},
+		// 	Timestamp: time.Now().UTC(),
+		// }); err != nil {
+		// 	_ = conn.Close()
+		// 	return nil, err
+		// }
 		return conn, nil
 	}
 
 	h.sendWSMessage(clientConn, streamer.Frame{
-		Kind:      streamer.MetaKind,
-		ChatID:    input.chatID,
+		Kind: streamer.MetaKind,
+		// ChatID:    input.chatID,
 		Operation: streamer.MessageOperation,
 		Timestamp: time.Now().UTC(),
 	})
@@ -128,8 +136,8 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	streamer.New(
 		h.storage,
 		h.logger,
-		input.user.ID,
-		input.chatID,
+		user.ID,
+		// input.chatID,
 		connectModel,
 	).Stream(streamer.NewSocketReader(
 		clientConn,
@@ -223,20 +231,20 @@ func (h *StreamHandler) validate(c *gin.Context) (*StreamInput, int, error) {
 		return nil, http.StatusServiceUnavailable, fmt.Errorf("LLM base URL not configured")
 	}
 
-	qv := c.Request.URL.Query()
-	if strings.TrimSpace(qv.Get("q")) == "" {
-		return nil, http.StatusBadRequest, fmt.Errorf("missing query parameter 'q'")
-	}
+	// qv := c.Request.URL.Query()
+	// if strings.TrimSpace(qv.Get("q")) == "" {
+	// 	return nil, http.StatusBadRequest, fmt.Errorf("missing query parameter 'q'")
+	// }
 
-	chatIDStr := c.Query("chatId")
-	if chatIDStr == "" {
-		return nil, http.StatusBadRequest, fmt.Errorf("missing query parameter 'chatId'")
-	}
+	// chatIDStr := c.Query("chatId")
+	// if chatIDStr == "" {
+	// 	return nil, http.StatusBadRequest, fmt.Errorf("missing query parameter 'chatId'")
+	// }
 
-	messageIDStr := c.Query("messageId")
-	if messageIDStr == "" {
-		return nil, http.StatusBadRequest, fmt.Errorf("missing query parameter 'messageId'")
-	}
+	// messageIDStr := c.Query("messageId")
+	// if messageIDStr == "" {
+	// 	return nil, http.StatusBadRequest, fmt.Errorf("missing query parameter 'messageId'")
+	// }
 
 	var ctx = c.Request.Context()
 	user, _ := userFromCtx(ctx)
@@ -244,30 +252,30 @@ func (h *StreamHandler) validate(c *gin.Context) (*StreamInput, int, error) {
 		return nil, http.StatusBadRequest, fmt.Errorf("can't find user info in context")
 	}
 
-	chatID, err := uuid.Parse(chatIDStr)
-	if err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("bad chatId: %w", err)
-	}
+	// chatID, err := uuid.Parse(chatIDStr)
+	// if err != nil {
+	// 	return nil, http.StatusBadRequest, fmt.Errorf("bad chatId: %w", err)
+	// }
 
-	messageID, err := uuid.Parse(messageIDStr)
-	if err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("bad messageId: %w", err)
-	}
+	// messageID, err := uuid.Parse(messageIDStr)
+	// if err != nil {
+	// 	return nil, http.StatusBadRequest, fmt.Errorf("bad messageId: %w", err)
+	// }
 
-	if _, err := h.storage.GetChat(ctx, user.ID, chatID); err != nil {
-		return nil, http.StatusBadRequest, fmt.Errorf("chat not found: %w", err)
-	}
+	// if _, err := h.storage.GetChat(ctx, user.ID, chatID); err != nil {
+	// 	return nil, http.StatusBadRequest, fmt.Errorf("chat not found: %w", err)
+	// }
 
-	message, err := h.storage.GetMessage(ctx, user.ID, messageID)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("message creation failed: %w", err)
-	}
+	// message, err := h.storage.GetMessage(ctx, user.ID, messageID)
+	// if err != nil {
+	// 	return nil, http.StatusInternalServerError, fmt.Errorf("message creation failed: %w", err)
+	// }
 
 	return &StreamInput{
-		chatID:  chatID,
-		q:       qv,
-		user:    user,
-		message: message.Text,
+		// chatID:  chatID,
+		// q:       qv,
+		user: user,
+		// message: message.Text,
 	}, 0, nil
 }
 
