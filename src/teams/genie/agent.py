@@ -31,4 +31,5 @@ class GenieAgent(Agent):
             add_history_to_context=True,
             add_datetime_to_context=True,
             debug_mode=debug_mode,
+            stream=True
         )

@@ -42,10 +42,7 @@ agent = GenieAgent(
     model=model,
     tools=[
         GmailTools(
-            creds=Credentials(
-                token="",
-
-            ),
+            creds=Credentials(token=""),
             credentials_path="./client_creds.json", port=8080,
         ),
         GoogleCalendarTools(credentials_path="./client_creds.json", oauth_port=8080),

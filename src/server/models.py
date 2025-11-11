@@ -36,8 +36,10 @@ class Frame(BaseModel):
     id: int
     ts: datetime
     kind: Kind
-    channel: Optional[str] = None
     op: Op
+    chat_id: Optional[str] = None
+    message_id: Optional[str] = None
+    channel: Optional[str] = None
     corr_id: Optional[str] = None
     seq: Optional[int] = Field(default=None, ge=0)
     stream: Optional[StreamInfo] = None
