@@ -25,7 +25,7 @@ class GenieAgent(Agent):
             name=name,
             model=model,
             # tools=tools,
-            description="You are helpful assistant.",
+            description="You are helpful personal assistant.",
             # instructions=instruction,
             # expected_output=expected_output,
             add_history_to_context=True,

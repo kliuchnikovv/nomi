@@ -1,6 +1,8 @@
 import os
 import logging
 
+from agno.db.base import AsyncBaseDb
+from agno.db.postgres import PostgresDb
 from agno.os import AgentOS
 from agno.models.google import Gemini
 from agno.tools.googlecalendar import GoogleCalendarTools
@@ -38,7 +40,14 @@ model=Gemini(
     api_key=os.getenv("GOOGLE_API_KEY"),
 )
 
+db: PostgresDb | None = None
+db_dsn = os.getenv("DB_DSN")
+
+if db_dsn:
+    db = PostgresDb(db_dsn)
+
 agent = GenieAgent(
+    db=db,
     model=model,
     tools=[
         GmailTools(
