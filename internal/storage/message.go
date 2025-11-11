@@ -14,8 +14,13 @@ import (
 var ZeroUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
 func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.Message) (*chat.Message, error) {
+	var id = uuid.New()
+	if m.ID != ZeroUUID {
+		id = m.ID
+	}
+
 	messageModel := &Message{
-		ID:        uuid.New(),
+		ID:        id,
 		ChatID:    m.ChatID,
 		UserID:    userID,
 		Role:      string(m.Role),
