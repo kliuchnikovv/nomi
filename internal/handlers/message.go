@@ -43,13 +43,7 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 		return
 	}
 
-	chatObj, err := h.storage.GetChat(ctx, user.ID, chatID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-
-	newMessage.ChatID = chatObj.ID
+	newMessage.ChatID = chatID
 	createdMessage, err := h.storage.CreateMessage(ctx, user.ID, &newMessage)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
