@@ -4,15 +4,20 @@ import {
     FlatList,
     KeyboardAvoidingView,
     Platform,
-    Text,
     View,
     Animated,
+    Linking,
+    Pressable,
+    ToastAndroid,
 } from 'react-native';
 
 import { styles } from './styles';
 
+import Markdown from 'react-native-markdown-display';
 import ChatInput from './input/component';
 import { useChat } from './context';
+import { ActionSheetIOS, Share } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 export default function ChatScreen() {
     const { messages, sendMessage, assistantWorking } = useChat();
@@ -21,6 +26,7 @@ export default function ChatScreen() {
     const blink = useRef(new Animated.Value(1)).current;
     const typingTimer = useRef<NodeJS.Timeout | null>(null);
     const [shownChars, setShownChars] = useState(0);
+    const [inputBarHeight, setInputBarHeight] = useState(0);
     const lastAssistantIndex = useMemo(() => {
         if (!messages || messages.length === 0) return -1;
         const idx = messages.length - 1;
@@ -30,8 +36,16 @@ export default function ChatScreen() {
     useEffect(() => {
         Animated.loop(
             Animated.sequence([
-                Animated.timing(blink, { toValue: 0, duration: 450, useNativeDriver: true }),
-                Animated.timing(blink, { toValue: 1, duration: 450, useNativeDriver: true }),
+                Animated.timing(blink, {
+                    toValue: 0,
+                    duration: 450,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(blink, {
+                    toValue: 1,
+                    duration: 450,
+                    useNativeDriver: true,
+                }),
             ]),
         ).start();
     }, [blink]);
@@ -77,6 +91,28 @@ export default function ChatScreen() {
         };
     }, [messages, lastAssistantIndex, assistantWorking]);
 
+    const copyMsg = (text: string) => {
+        Clipboard.setString(text || '');
+        if (Platform.OS === 'android') {
+            ToastAndroid.show('Скопировано', ToastAndroid.SHORT);
+        }
+    };
+
+    const onLongPressMsg = (text: string) => {
+        if (Platform.OS === 'ios') {
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    options: ['Копировать', 'Отмена'],
+                    cancelButtonIndex: 1,
+                    userInterfaceStyle: 'dark',
+                },
+                idx => idx === 0 && copyMsg(text),
+            );
+        } else {
+            copyMsg(text);
+        }
+    };
+
     return (
         <KeyboardAvoidingView
             style={styles.root}
@@ -86,35 +122,68 @@ export default function ChatScreen() {
             <FlatList
                 ref={flatRef}
                 style={styles.list}
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[
+                    styles.listContent,
+                    { paddingBottom: inputBarHeight + 12 },
+                ]}
+                contentInset={{ bottom: inputBarHeight }}
+                scrollIndicatorInsets={{ bottom: inputBarHeight }}
                 keyboardShouldPersistTaps="handled"
                 data={messages ?? []}
                 keyExtractor={m => m.id}
+                onContentSizeChange={() => {
+                    // ensure scroll after layout/content changes
+                    requestAnimationFrame(() =>
+                        flatRef.current?.scrollToEnd({ animated: false }),
+                    );
+                }}
                 renderItem={({ item, index }) => {
                     const isLastAssistant =
                         index === (messages?.length ?? 0) - 1 &&
                         item.role === 'assistant';
                     const showTyping = isLastAssistant;
                     const displayedText = showTyping
-                        ? item.text.slice(0, Math.min(shownChars, item.text.length))
+                        ? item.text.slice(
+                              0,
+                              Math.min(shownChars, item.text.length),
+                          )
                         : item.text;
                     return (
-                    <View
-                        style={[
-                            styles.bubble,
-                            item.role === 'user'
-                                ? styles.bubbleUser
-                                : styles.bubbleAssistant,
-                        ]}
-                    >
-                        <Text style={styles.bubbleText}>{displayedText}</Text>
-                        {showTyping && assistantWorking ? (
-                            <Animated.Text style={[styles.bubbleText, { opacity: blink }]}>_</Animated.Text>
-                        ) : null}
-                    </View>
-                )}}
+                        <View
+                            style={
+                                item.role === 'user'
+                                    ? [styles.bubble, styles.bubbleUser]
+                                    : styles.assistantContainer
+                            }
+                        >
+                            <Pressable
+                                onLongPress={() => onLongPressMsg(item.text)}
+                                delayLongPress={250}
+                                style={({ pressed }) => [
+                                    item.role === 'user'
+                                        ? [styles.bubble, styles.bubbleUser]
+                                        : styles.assistantContainer,
+                                    pressed && { opacity: 0.75 },
+                                ]}
+                            >
+                                <Markdown
+                                    style={styles.markdownStyles}
+                                    onLinkPress={url => {
+                                        Linking.openURL(url).catch(() => {});
+                                        return false;
+                                    }}
+                                >
+                                    {displayedText || ''}
+                                </Markdown>
+                            </Pressable>
+                        </View>
+                    );
+                }}
             />
-            <View style={styles.inputBar}>
+            <View
+                style={styles.inputBar}
+                onLayout={e => setInputBarHeight(e.nativeEvent.layout.height)}
+            >
                 <ChatInput onSend={sendMessage} />
             </View>
         </KeyboardAvoidingView>

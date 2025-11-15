@@ -224,7 +224,7 @@ export class ChatSocket {
         }
     }
 
-    sendMessage(message: string, sessionId: string, messageID: string) {
+    sendMessage(message: string, sessionId: string, messageID?: string) {
         console.log('Sending message:', message, sessionId);
         const chatID = this.getChatId();
         // const messageID = this.getMessageId();

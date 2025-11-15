@@ -102,10 +102,8 @@ export default function MainScreen() {
                     <View style={{ width: 36 }} />
                 </View>
                 <ChatProvider
-                    chat={activeChat}
                     activeChatID={activeChatID ? activeChatID : emptyChatID}
                     setActiveChatID={setActiveChatID}
-                    getChats={getChats}
                 >
                     <ChatScreen/>
                 </ChatProvider>

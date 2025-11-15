@@ -189,7 +189,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
             await getChats();
         } catch (error) {
-            alertError(`Can't delete chat: ${error}`)
+            // alertError(`Can't delete chat: ${error}`)
             console.error('Failed to delete main:', error);
         }
     }

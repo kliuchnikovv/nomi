@@ -9,10 +9,8 @@ import React, {
     useCallback,
 } from 'react';
 import { ChatContextType, Props } from './models';
-import { alertError } from '../auth/models.tsx';
 import { useAuth } from '../auth/context.tsx';
-import { ChatSocket } from '../../socket'; // Import ChatSocket
-import { v4 as uuidv4 } from 'uuid';
+import { ChatSocket } from '../../socket';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -28,10 +26,8 @@ export function useChat() {
 
 export function ChatProvider({
     children,
-    chat,
     activeChatID,
     setActiveChatID,
-    getChats,
 }: Props) {
     const [messages, setMessages] = useState<Message[]>([]);
     const socketRef = useRef<ChatSocket | null>(null); // Declare socketRef
@@ -72,7 +68,7 @@ export function ChatProvider({
 
         // Не открываем сокет, пока у нас placeholder chat_id
         if (!activeChatID || activeChatID === emptyChatID) {
-            console.warn('WebSocket useEffect: Skipping WS init until real chat_id is set');
+            // console.warn('WebSocket useEffect: Skipping WS init until real chat_id is set');
             socketRef.current?.close();
             socketRef.current = null;
             return;
@@ -161,7 +157,7 @@ export function ChatProvider({
 
             setMessages(data);
         } catch (error) {
-            alertError(`Failed to fetch messages for chat: ${error}`);
+            // alertError(`Failed to fetch messages for chat: ${error}`);
             console.error(
                 `Failed to fetch messages for chat ${chatID}:`,
                 error,
@@ -191,7 +187,7 @@ export function ChatProvider({
             }
         } catch (e) {
             console.error('Failed to create chat before sending:', e);
-            alertError(`Не удалось создать чат: ${e}` as any);
+            // alertError(`Не удалось создать чат: ${e}` as any);
             return;
         }
 
@@ -220,7 +216,7 @@ export function ChatProvider({
             }
         } catch (e) {
             console.error('Failed to create message before sending:', e);
-            alertError(`Не удалось создать сообщение: ${e}` as any);
+            // alertError(`Не удалось создать сообщение: ${e}` as any);
             return;
         }
 
@@ -235,10 +231,10 @@ export function ChatProvider({
         [sendStreamingMessage],
     );
 
-    function newWebSocket(token: string, chatID: string) {
+    function newWebSocket(tkn: string, chatID: string) {
         const sock = new ChatSocket(
             API_URL,
-            () => token,
+            () => tkn,
             () => chatID,
             () => currentMessageID,
         )
@@ -261,7 +257,7 @@ export function ChatProvider({
             },
             onError: (err: any) => {
                 console.error('WebSocket error:', err);
-                alertError(`WebSocket error: ${err?.error?.message || err}`);
+                // alertError(`WebSocket error: ${err?.error?.message || err}`);
             },
             onUnauthorized: async () => {
                 return await refreshToken();

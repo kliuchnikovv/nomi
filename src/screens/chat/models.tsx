@@ -3,10 +3,8 @@ import {ReactNode} from 'react';
 
 export type Props = {
     children: ReactNode;
-    chat: Chat | null;
     activeChatID: string;
     setActiveChatID: (id: string) => void;
-    getChats: () => void;
 };
 
 export interface ChatContextType {
