@@ -87,6 +87,7 @@ func New(
 	r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteTool, authMiddleware))
 
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
+	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)
 	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
 
 	// TODO: OAUTH is diabled now

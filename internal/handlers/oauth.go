@@ -2,12 +2,13 @@ package handlers
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
@@ -20,18 +21,16 @@ import (
 	"gorm.io/gorm"
 )
 
-const oauthStateCookieName = "oauth_state"
-
-type oauthStatePayload struct {
-	UserID string `json:"user_id"`
-	Nonce  string `json:"nonce"`
-}
+const (
+	oauthSessionCookieName = "oauth_sid"
+)
 
 type OAuthHandler struct {
 	cfg           *config.Config
 	storage       *storage.Storage
 	oauthConfigs  map[string]*oauth2.Config
 	oidcProviders map[string]*oidc.Provider
+	sessionTTL    time.Duration
 }
 
 func NewOAuthHandler(
@@ -74,6 +73,7 @@ func NewOAuthHandler(
 		storage:       storage,
 		oauthConfigs:  oauthConfigs,
 		oidcProviders: oidcProviders,
+		sessionTTL:    5 * time.Minute,
 	}, nil
 }
 
@@ -86,31 +86,67 @@ func (h *OAuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	if _, err := h.providerConfig(providerName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	session := &storage.OAuthSession{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		Provider:  providerName,
+		State:     uuid.NewString(),
+		ExpiresAt: time.Now().UTC().Add(h.sessionTTL),
+	}
+	if err := h.storage.CreateOAuthSession(ctx, session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create oauth session"})
+		return
+	}
+
+	redirectURL := fmt.Sprintf("/api/oauth/%s/redirect?sid=%s", providerName, session.ID.String())
+	c.JSON(http.StatusOK, gin.H{"redirect_url": redirectURL})
+}
+
+func (h *OAuthHandler) Redirect(c *gin.Context) {
+	ctx := c.Request.Context()
+	providerName := c.Param("provider")
+	sidParam := c.Query("sid")
+	sid, err := uuid.Parse(sidParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session id"})
+		return
+	}
+
+	session, err := h.storage.GetOAuthSession(ctx, sid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid oauth session"})
+		return
+	}
+	if session.Provider != providerName {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider mismatch"})
+		return
+	}
+	if time.Now().After(session.ExpiresAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "oauth session expired"})
+		return
+	}
+
 	oauthCfg, err := h.providerConfig(providerName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	state, nonce, err := buildState(user.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build state"})
-		return
-	}
-
-	setOAuthStateCookie(c, nonce, 600)
-
 	authURL := oauthCfg.AuthCodeURL(
-		state,
+		session.State,
 		oauth2.AccessTypeOffline,
 		oauth2.ApprovalForce,
 		oauth2.SetAuthURLParam("prompt", "consent"),
 		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
 	)
 
-	c.JSON(http.StatusOK, gin.H{
-		"auth_url": authURL,
-	})
+	setOAuthSessionCookie(c, session.ID.String(), int(h.sessionTTL.Seconds()))
+	c.Redirect(http.StatusFound, authURL)
 }
 
 func (h *OAuthHandler) Callback(c *gin.Context) {
@@ -128,19 +164,35 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	payload, err := parseState(state)
+	sidCookie, err := c.Cookie(oauthSessionCookieName)
 	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session cookie missing"})
+		return
+	}
+
+	sid, err := uuid.Parse(sidCookie)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session cookie"})
+		return
+	}
+
+	session, err := h.storage.GetOAuthSession(ctx, sid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "oauth session not found"})
+		return
+	}
+	if session.Provider != providerName {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider mismatch"})
+		return
+	}
+	if time.Now().After(session.ExpiresAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "oauth session expired"})
+		return
+	}
+	if session.State != state {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
 		return
 	}
-
-	nonceCookie, err := c.Cookie(oauthStateCookieName)
-	if err != nil || nonceCookie != payload.Nonce {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid oauth state"})
-		return
-	}
-
-	setOAuthStateCookie(c, "", -1)
 
 	code := c.Query("code")
 	if code == "" {
@@ -181,13 +233,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	userID, err := uuid.Parse(payload.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user"})
-		return
-	}
-
-	user, err := h.storage.GetUserByID(ctx, userID)
+	user, err := h.storage.GetUserByID(ctx, session.UserID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
 		return
@@ -233,10 +279,14 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("%s account connected", providerName),
-		"email":   claims.Email,
-	})
+	if err := h.storage.DeleteOAuthSession(ctx, session.ID); err != nil {
+		// log but continue
+	}
+
+	setOAuthSessionCookie(c, "", -1)
+
+	deepLink := fmt.Sprintf("genie://oauth/callback?provider=%s&status=ok&email=%s", providerName, url.QueryEscape(claims.Email))
+	c.Redirect(http.StatusFound, deepLink)
 }
 
 func (h *OAuthHandler) providerConfig(name string) (*oauth2.Config, error) {
@@ -255,22 +305,10 @@ func (h *OAuthHandler) oidcProvider(name string) (*oidc.Provider, error) {
 	return provider, nil
 }
 
-func buildState(userID uuid.UUID) (string, string, error) {
-	payload := oauthStatePayload{
-		UserID: userID.String(),
-		Nonce:  uuid.NewString(),
-	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return "", "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(data), payload.Nonce, nil
-}
-
-func setOAuthStateCookie(c *gin.Context, value string, maxAge int) {
+func setOAuthSessionCookie(c *gin.Context, value string, maxAge int) {
 	secure := c.Request.TLS != nil
 	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     oauthStateCookieName,
+		Name:     oauthSessionCookieName,
 		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
@@ -278,16 +316,4 @@ func setOAuthStateCookie(c *gin.Context, value string, maxAge int) {
 		Secure:   secure,
 		SameSite: http.SameSiteNoneMode,
 	})
-}
-
-func parseState(state string) (*oauthStatePayload, error) {
-	data, err := base64.RawURLEncoding.DecodeString(state)
-	if err != nil {
-		return nil, err
-	}
-	var payload oauthStatePayload
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, err
-	}
-	return &payload, nil
 }

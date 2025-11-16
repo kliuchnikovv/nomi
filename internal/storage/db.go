@@ -35,6 +35,7 @@ func New(cfg *config.Config) (*Storage, error) {
 	// Auto-migrate models to keep schema in sync with GORM models.
 	if err := gdb.AutoMigrate(
 		&OAuthToken{},
+		&OAuthSession{},
 		&IntegrationLog{},
 		&AuditSecurity{},
 		&User{},
