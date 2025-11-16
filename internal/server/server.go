@@ -38,7 +38,7 @@ func New(
 		streamHandler  = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
 		toolsHandler   = handlers.NewToolsHandler(db)
 		oauthHandler   = func() *handlers.OAuthHandler {
-			h, err := handlers.NewOAuthHandler(cfg, db)
+			h, err := handlers.NewOAuthHandler(logger, cfg, db)
 			if err != nil {
 				logger.Fatal("failed to initialize oauth handler", zap.Error(err))
 			}

@@ -15,6 +15,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/lib/pq"
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 )
@@ -33,7 +34,11 @@ type OAuthHandler struct {
 	oidcProviders map[string]*oidc.Provider
 }
 
-func NewOAuthHandler(cfg *config.Config, storage *storage.Storage) (*OAuthHandler, error) {
+func NewOAuthHandler(
+	logger *zap.Logger,
+	cfg *config.Config,
+	storage *storage.Storage,
+) (*OAuthHandler, error) {
 	if len(cfg.OAuth2.Providers) == 0 {
 		return nil, fmt.Errorf("no oauth providers configured")
 	}
@@ -54,6 +59,7 @@ func NewOAuthHandler(cfg *config.Config, storage *storage.Storage) (*OAuthHandle
 			base := strings.TrimSuffix(cfg.OAuth2.CallbackBase, "/")
 			redirect = fmt.Sprintf("%s/api/oauth/%s/callback", base, name)
 		}
+		logger.Info("redirect url", zap.String("url", redirect))
 		oauthConfigs[name] = &oauth2.Config{
 			ClientID:     providerCfg.ClientID,
 			ClientSecret: providerCfg.ClientSecret,
