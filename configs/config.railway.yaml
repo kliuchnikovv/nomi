@@ -9,7 +9,7 @@ database:
   dbname: ${PGDATABASE}
 
 oauth2:
-  callback_base: "https://disciplined-quietude-production-f4b1.up.railway.app"
+  callback_base: ${CALLBACK_BASE}
   providers:
     google:
       client_id: ${GOOGLE_CLIENT_ID}
