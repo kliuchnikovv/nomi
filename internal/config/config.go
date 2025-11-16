@@ -8,13 +8,13 @@ import (
 )
 
 type Config struct {
-    Server struct {
-        Port int `yaml:"port"`
-    } `yaml:"server"`
-    // Processor removed (using WS proxy)
-    LLM struct {
-        BaseURL string `yaml:"base_url"`
-    } `yaml:"llm"`
+	Server struct {
+		Port int `yaml:"port"`
+	} `yaml:"server"`
+	// Processor removed (using WS proxy)
+	LLM struct {
+		BaseURL string `yaml:"base_url"`
+	} `yaml:"llm"`
 	Database struct {
 		Host     string `yaml:"host"`
 		Port     int    `yaml:"port"`
@@ -23,7 +23,8 @@ type Config struct {
 		DBName   string `yaml:"dbname"`
 	} `yaml:"database"`
 	OAuth2 struct {
-		Providers map[string]struct {
+		CallbackBase string `yaml:"callback_base"`
+		Providers    map[string]struct {
 			ClientID     string   `yaml:"client_id"`
 			ClientSecret string   `yaml:"client_secret"`
 			RedirectURL  string   `yaml:"redirect_url"`

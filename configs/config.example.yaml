@@ -9,11 +9,11 @@ database:
   dbname: "genie"
 
 oauth2:
+  callback_base: "http://localhost:8080"
   providers:
     google:
       client_id: "YOUR_CLIENT_ID"
       client_secret: "YOUR_CLIENT_SECRET"
-      redirect_url: "http://localhost:8080/oauth/callback"
       issuer_url: "https://accounts.google.com"
       scopes:
         - "openid"

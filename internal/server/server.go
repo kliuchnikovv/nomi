@@ -36,6 +36,14 @@ func New(
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler  = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
+		toolsHandler   = handlers.NewToolsHandler(db)
+		oauthHandler   = func() *handlers.OAuthHandler {
+			h, err := handlers.NewOAuthHandler(cfg, db)
+			if err != nil {
+				logger.Fatal("failed to initialize oauth handler", zap.Error(err))
+			}
+			return h
+		}()
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -65,6 +73,21 @@ func New(
 	// Message API (protected)
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
+
+	// r.POST("/api/tool-configs", wrapWithAuth(toolsHandler.CreateToolConfig, authMiddleware))
+	r.GET("/api/tool-configs", wrapWithAuth(toolsHandler.ListToolConfigs, authMiddleware))
+	r.GET("/api/tool-configs/:id", wrapWithAuth(toolsHandler.GetToolConfig, authMiddleware))
+	// r.PUT("/api/tool-configs/:id", wrapWithAuth(toolsHandler.UpdateToolConfig, authMiddleware))
+	// r.DELETE("/api/tool-configs/:id", wrapWithAuth(toolsHandler.DeleteToolConfig, authMiddleware))
+
+	r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateTool, authMiddleware))
+	r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))
+	r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetTool, authMiddleware))
+	r.PUT("/api/tools/:id", wrapWithAuth(toolsHandler.UpdateTool, authMiddleware))
+	r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteTool, authMiddleware))
+
+	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
+	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
 
 	// TODO: OAUTH is diabled now
 

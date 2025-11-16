@@ -41,6 +41,8 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Chat{},
 		&Message{},
 		&RefreshToken{},
+		&Tool{},
+		&ToolConfig{},
 	); err != nil {
 		return nil, err
 	}
