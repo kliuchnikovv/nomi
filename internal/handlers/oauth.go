@@ -202,7 +202,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 
 	token, err := oauthCfg.Exchange(context.Background(), code)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token exchange failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "token exchange failed", "error": err.Error()})
 		return
 	}
 
