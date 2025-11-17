@@ -89,7 +89,7 @@ func New(
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
 	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)
 	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
-	r.GET("/api/oauth/:tool/status", wrapWithAuth(toolsHandler.GetOAuthStatus, authMiddleware))
+	r.GET("/api/oauth/status/:tool", wrapWithAuth(toolsHandler.GetOAuthStatus, authMiddleware))
 
 	// TODO: OAUTH is diabled now
 
