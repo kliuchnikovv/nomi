@@ -104,7 +104,7 @@ func (h *OAuthHandler) Login(c *gin.Context) {
 	}
 
 	redirectURL := fmt.Sprintf("%s/api/oauth/%s/redirect?sid=%s", h.cfg.OAuth2.CallbackBase, providerName, session.ID.String())
-	c.JSON(http.StatusOK, gin.H{"redirect_url": redirectURL})
+	c.JSON(http.StatusOK, gin.H{"auth_url": redirectURL})
 }
 
 func (h *OAuthHandler) Redirect(c *gin.Context) {
