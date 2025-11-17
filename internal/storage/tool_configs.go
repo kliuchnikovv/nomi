@@ -46,6 +46,14 @@ func (s *Storage) GetToolConfig(ctx context.Context, id uuid.UUID) (*ToolConfig,
 	return &cfg, nil
 }
 
+func (s *Storage) GetToolConfigByName(ctx context.Context, name string) (*ToolConfig, error) {
+	var cfg ToolConfig
+	if err := s.DB.WithContext(ctx).First(&cfg, "name = ?", name).Error; err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
 func (s *Storage) UpdateToolConfig(ctx context.Context, cfg *ToolConfig) (*ToolConfig, error) {
 	now := time.Now().UTC()
 	result := s.DB.WithContext(ctx).Model(&ToolConfig{}).

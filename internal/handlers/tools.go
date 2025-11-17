@@ -30,6 +30,13 @@ type toolConfigRequest struct {
 	Params   string `json:"params" binding:"required"`
 }
 
+type toolOAuthStatusResponse struct {
+	Provider     string   `json:"provider"`
+	Authorized   bool     `json:"authorized"`
+	AccountEmail string   `json:"account_email,omitempty"`
+	Scopes       []string `json:"scopes,omitempty"`
+}
+
 func (h *ToolsHandler) CreateToolConfig(c *gin.Context) {
 	ctx := c.Request.Context()
 	if _, err := userFromCtx(ctx); err != nil {
@@ -309,4 +316,51 @@ func (h *ToolsHandler) DeleteTool(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (h *ToolsHandler) GetOAuthStatus(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	name := c.Param("name")
+	if len(name) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tool name"})
+		return
+	}
+
+	config, err := h.storage.GetToolConfigByName(ctx, name)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Tool config not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	status := toolOAuthStatusResponse{
+		Provider: config.Provider,
+	}
+
+	token, err := h.storage.GetOAuthTokenByUser(ctx, user.ID, config.Provider)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusOK, status)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	scopes := make([]string, len(token.Scopes))
+	copy(scopes, token.Scopes)
+	status.Authorized = true
+	status.AccountEmail = token.AccountEmail
+	status.Scopes = scopes
+
+	c.JSON(http.StatusOK, status)
 }
