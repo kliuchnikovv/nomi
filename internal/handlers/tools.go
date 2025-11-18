@@ -326,27 +326,17 @@ func (h *ToolsHandler) GetOAuthStatus(c *gin.Context) {
 		return
 	}
 
-	toolName := c.Param("tool")
-	if len(toolName) == 0 {
+	provider := c.Param("provider")
+	if len(provider) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tool name"})
 		return
 	}
 
-	config, err := h.storage.GetToolConfigByName(ctx, toolName)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Tool config not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	status := toolOAuthStatusResponse{
-		Provider: config.Provider,
+		Provider: provider,
 	}
 
-	token, err := h.storage.GetOAuthTokenByUser(ctx, user.ID, config.Provider)
+	token, err := h.storage.GetOAuthTokenByUser(ctx, user.ID, provider)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusOK, status)
