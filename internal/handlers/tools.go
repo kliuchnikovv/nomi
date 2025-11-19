@@ -189,6 +189,19 @@ func (h *ToolsHandler) CreateTool(c *gin.Context) {
 		return
 	}
 
+	tools, err := h.storage.GetTools(ctx, user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	for _, tool := range tools {
+		if tool.Name == payload.Name || tool.ConfigID == payload.ConfigID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "tool already created"})
+			return
+		}
+	}
+
 	tool := &storage.Tool{
 		ConfigID: payload.ConfigID,
 		Name:     payload.Name,
