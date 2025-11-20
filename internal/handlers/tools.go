@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 )
 
@@ -36,6 +38,56 @@ type toolOAuthStatusResponse struct {
 	Authorized   bool     `json:"authorized"`
 	AccountEmail string   `json:"account_email,omitempty"`
 	Scopes       []string `json:"scopes,omitempty"`
+}
+
+// enrichParamsWithOAuthTokens получает OAuth токены и добавляет их в params инструмента
+func (h *ToolsHandler) enrichParamsWithOAuthTokens(ctx *gin.Context, userID uuid.UUID, configID uuid.UUID, paramsJSON string) (string, error) {
+	// Получаем ToolConfig чтобы узнать provider
+	config, err := h.storage.GetToolConfig(ctx.Request.Context(), configID)
+	if err != nil {
+		return paramsJSON, err
+	}
+
+	// Получаем OAuth токен для provider
+	oauthToken, err := h.storage.GetOAuthTokenByUser(ctx.Request.Context(), userID, config.Provider)
+	if err != nil {
+		// Если токен не найден, возвращаем params без изменений
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return paramsJSON, nil
+		}
+		return paramsJSON, err
+	}
+
+	// Декодируем OAuth токен из JSON байтов
+	var token oauth2.Token
+	if err := json.Unmarshal(oauthToken.TokenEncrypted, &token); err != nil {
+		return paramsJSON, err
+	}
+
+	// Парсим существующие params
+	var params map[string]interface{}
+	if paramsJSON == "" {
+		params = make(map[string]interface{})
+	} else {
+		if err := json.Unmarshal([]byte(paramsJSON), &params); err != nil {
+			// Если не удалось распарсить, создаем новый объект
+			params = make(map[string]interface{})
+		}
+	}
+
+	// Добавляем токены в params
+	params["access_token"] = token.AccessToken
+	if token.RefreshToken != "" {
+		params["refresh_token"] = token.RefreshToken
+	}
+
+	// Сериализуем обратно в JSON
+	enrichedParamsJSON, err := json.Marshal(params)
+	if err != nil {
+		return paramsJSON, err
+	}
+
+	return string(enrichedParamsJSON), nil
 }
 
 func (h *ToolsHandler) CreateToolConfig(c *gin.Context) {
@@ -208,10 +260,18 @@ func (h *ToolsHandler) CreateTool(c *gin.Context) {
 		enabled = *payload.Enabled
 	}
 
+	// Обогащаем params OAuth токенами
+	enrichedParams, err := h.enrichParamsWithOAuthTokens(c, user.ID, payload.ConfigID, payload.Params)
+	if err != nil {
+		// Логируем ошибку, но продолжаем создание с исходными params
+		// Это позволит создать tool даже если OAuth токен еще не получен
+		enrichedParams = payload.Params
+	}
+
 	tool := &storage.Tool{
 		ConfigID: payload.ConfigID,
 		Name:     payload.Name,
-		Params:   payload.Params,
+		Params:   enrichedParams,
 		Enabled:  enabled,
 	}
 
@@ -297,11 +357,19 @@ func (h *ToolsHandler) UpdateTool(c *gin.Context) {
 		enabled = *payload.Enabled
 	}
 
+	// Обогащаем params OAuth токенами
+	enrichedParams, err := h.enrichParamsWithOAuthTokens(c, user.ID, payload.ConfigID, payload.Params)
+	if err != nil {
+		// Логируем ошибку, но продолжаем обновление с исходными params
+		// Это позволит обновить tool даже если OAuth токен не найден
+		enrichedParams = payload.Params
+	}
+
 	tool := &storage.Tool{
 		ID:       toolID,
 		ConfigID: payload.ConfigID,
 		Name:     payload.Name,
-		Params:   payload.Params,
+		Params:   enrichedParams,
 		Enabled:  enabled,
 	}
 
