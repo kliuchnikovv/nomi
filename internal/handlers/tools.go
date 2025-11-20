@@ -13,11 +13,15 @@ import (
 )
 
 type ToolsHandler struct {
-	storage *storage.Storage
+	storage      *storage.Storage
+	oauthConfigs map[string]*oauth2.Config
 }
 
-func NewToolsHandler(storage *storage.Storage) *ToolsHandler {
-	return &ToolsHandler{storage: storage}
+func NewToolsHandler(storage *storage.Storage, oauthConfigs map[string]*oauth2.Config) *ToolsHandler {
+	return &ToolsHandler{
+		storage:      storage,
+		oauthConfigs: oauthConfigs,
+	}
 }
 
 type toolRequest struct {
@@ -65,13 +69,13 @@ func (h *ToolsHandler) enrichParamsWithOAuthTokens(ctx *gin.Context, userID uuid
 	}
 
 	// Парсим существующие params
-	var params map[string]interface{}
+	var params map[string]any
 	if paramsJSON == "" {
-		params = make(map[string]interface{})
+		params = make(map[string]any)
 	} else {
 		if err := json.Unmarshal([]byte(paramsJSON), &params); err != nil {
 			// Если не удалось распарсить, создаем новый объект
-			params = make(map[string]interface{})
+			params = make(map[string]any)
 		}
 	}
 
@@ -79,6 +83,19 @@ func (h *ToolsHandler) enrichParamsWithOAuthTokens(ctx *gin.Context, userID uuid
 	params["access_token"] = token.AccessToken
 	if token.RefreshToken != "" {
 		params["refresh_token"] = token.RefreshToken
+	}
+
+	// Добавляем OAuth конфигурацию провайдера
+	if oauthCfg, ok := h.oauthConfigs[config.Provider]; ok && oauthCfg != nil {
+		if oauthCfg.Endpoint.TokenURL != "" {
+			params["token_uri"] = oauthCfg.Endpoint.TokenURL
+		}
+		if oauthCfg.ClientID != "" {
+			params["client_id"] = oauthCfg.ClientID
+		}
+		if oauthCfg.ClientSecret != "" {
+			params["client_secret"] = oauthCfg.ClientSecret
+		}
 	}
 
 	// Сериализуем обратно в JSON

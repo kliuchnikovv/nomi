@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -37,34 +36,14 @@ func NewOAuthHandler(
 	logger *zap.Logger,
 	cfg *config.Config,
 	storage *storage.Storage,
+	oauthConfigs map[string]*oauth2.Config,
+	oidcProviders map[string]*oidc.Provider,
 ) (*OAuthHandler, error) {
-	if len(cfg.OAuth2.Providers) == 0 {
-		return nil, fmt.Errorf("no oauth providers configured")
-	}
-
-	oauthConfigs := make(map[string]*oauth2.Config)
-	oidcProviders := make(map[string]*oidc.Provider)
-	for name, providerCfg := range cfg.OAuth2.Providers {
-		provider, err := oidc.NewProvider(context.Background(), providerCfg.IssuerURL)
+	var err error
+	if oauthConfigs == nil || oidcProviders == nil {
+		oauthConfigs, oidcProviders, err = BuildOAuthResources(logger, cfg)
 		if err != nil {
 			return nil, err
-		}
-		oidcProviders[name] = provider
-		redirect := providerCfg.RedirectURL
-		if redirect == "" {
-			if cfg.OAuth2.CallbackBase == "" {
-				return nil, fmt.Errorf("redirect_url missing for provider %s and callback_base unset", name)
-			}
-			base := strings.TrimSuffix(cfg.OAuth2.CallbackBase, "/")
-			redirect = fmt.Sprintf("%s/api/oauth/%s/callback", base, name)
-		}
-		logger.Info("redirect url", zap.String("url", redirect))
-		oauthConfigs[name] = &oauth2.Config{
-			ClientID:     providerCfg.ClientID,
-			ClientSecret: providerCfg.ClientSecret,
-			RedirectURL:  redirect,
-			Scopes:       providerCfg.Scopes,
-			Endpoint:     provider.Endpoint(),
 		}
 	}
 

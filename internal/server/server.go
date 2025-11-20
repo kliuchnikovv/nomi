@@ -27,6 +27,11 @@ func New(
 		ginzap.RecoveryWithZap(logger, true),
 	)
 
+	oauthConfigs, oidcProviders, err := handlers.BuildOAuthResources(logger, cfg)
+	if err != nil {
+		logger.Fatal("failed to initialize oauth providers", zap.Error(err))
+	}
+
 	// Инициализация обработчиков
 	var (
 		// oauthHandler   = handlers.NewOAuth(cfg, db)
@@ -36,9 +41,9 @@ func New(
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler  = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
-		toolsHandler   = handlers.NewToolsHandler(db)
+		toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs)
 		oauthHandler   = func() *handlers.OAuthHandler {
-			h, err := handlers.NewOAuthHandler(logger, cfg, db)
+			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
 			if err != nil {
 				logger.Fatal("failed to initialize oauth handler", zap.Error(err))
 			}
