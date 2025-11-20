@@ -6,13 +6,14 @@ import time
 import uuid
 
 from agno.agent import Agent
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Cookie
 
 from src.agents.factory import AgentFactory
 from src.server.models import Frame, Op
 from src.server.utils import make_meta, make_error, make_done, make_data
 from src.tools.config import ToolConfigClient
+from src.tools.models import ToolSpec
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,82 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         logger.info("[WS] Open: session_id=%s", session_id)
 
         next_id = 0
+        
+        # Ждем инструменты от genie-api при подключении (genie-api отправляет их автоматически)
+        tools_specs: List[ToolSpec] = []
         try:
-            agent = await agent_factory.build(session_id)
+            # Ждем первый фрейм с инструментами
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            data = json.loads(raw)
+            frame = Frame(**data)
+            
+            if frame.op == Op.TOOLS:
+                # Получили инструменты от genie-api
+                payload = frame.payload
+                if payload:
+                    if not isinstance(payload, dict):
+                        payload = payload if hasattr(payload, '__dict__') else {}
+                    
+                    tools_obj = payload.get("tools") if isinstance(payload, dict) else None
+                    if tools_obj:
+                        if isinstance(tools_obj, dict):
+                            tools_data = tools_obj.get("tools", [])
+                        elif isinstance(tools_obj, list):
+                            tools_data = tools_obj
+                        else:
+                            tools_data = []
+                        
+                        if isinstance(tools_data, list):
+                            for tool_dict in tools_data:
+                                if not isinstance(tool_dict, dict):
+                                    continue
+                                try:
+                                    params = tool_dict.get("params", {})
+                                    if isinstance(params, str):
+                                        try:
+                                            params = json.loads(params)
+                                        except json.JSONDecodeError:
+                                            params = {}
+                                    
+                                    tool_spec = ToolSpec(
+                                        name=tool_dict.get("name", ""),
+                                        enabled=tool_dict.get("enabled", True),
+                                        params=params if isinstance(params, dict) else {},
+                                    )
+                                    tools_specs.append(tool_spec)
+                                except Exception as e:
+                                    logger.warning(
+                                        "[WS] Failed to parse tool: session_id=%s error=%s tool=%s",
+                                        session_id,
+                                        e,
+                                        tool_dict,
+                                    )
+                                    continue
+                
+                logger.info("[WS] Received tools: session_id=%s count=%d", session_id, len(tools_specs))
+            else:
+                logger.warning(
+                    "[WS] Expected TOOLS frame but got: session_id=%s op=%s",
+                    session_id,
+                    frame.op,
+                )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[WS] Timeout waiting for tools: session_id=%s",
+                session_id,
+            )
+            # Продолжаем без инструментов
+        except Exception as exc:
+            logger.warning(
+                "[WS] Failed to receive tools: session_id=%s error=%s",
+                session_id,
+                exc,
+            )
+            # Продолжаем без инструментов
+
+        try:
+            # Создаем агента с полученными инструментами
+            agent = await agent_factory.build(session_id, tools_specs=tools_specs if tools_specs else None)
         except Exception as exc:
             next_id = await _send_frame(
                 websocket=websocket,
@@ -60,42 +135,6 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                 await websocket.close(code=1011, reason="Agent init failed")
             logger.exception("[WS] Agent init failed: session_id=%s", session_id)
             return
-
-        # Запрашиваем инструменты из genie-api при подключении
-        try:
-            tools = await agent_factory.config_client.fetch_tools_list(session_id)
-            # Отправляем фрейм с инструментами клиенту
-            tools_payload = {
-                "tools": [
-                    {
-                        "name": tool.name,
-                        "enabled": tool.enabled,
-                        "params": tool.params,
-                    }
-                    for tool in tools
-                ]
-            }
-            next_id = await _send_frame(
-                websocket=websocket,
-                frame=make_data(
-                    id=next_id,
-                    op=Op.TOOLS,
-                    chat_id=None,
-                    payload=tools_payload,
-                ),
-            )
-            logger.info(
-                "[WS] Sent tools: session_id=%s count=%d",
-                session_id,
-                len(tools),
-            )
-        except Exception as exc:
-            # Логируем ошибку, но не закрываем соединение
-            logger.warning(
-                "[WS] Failed to fetch tools: session_id=%s error=%s",
-                session_id,
-                exc,
-            )
 
         # Track last time we received any client message
         last_activity = time.monotonic()
@@ -394,6 +433,106 @@ async def _send_frame(
 ) -> int:
     await websocket.send_json(frame.marshal())
     return frame.id+1
+
+
+async def _wait_for_tools_response(
+    websocket: WebSocket,
+    request_id: int,
+    session_id: str,
+    timeout: float = 10.0,
+) -> List[ToolSpec]:
+    """
+    Ждет ответ с инструментами от genie-api.
+    Возвращает список ToolSpec объектов.
+    """
+    import json
+    
+    try:
+        # Ждем ответ с инструментами с таймаутом
+        raw = await asyncio.wait_for(websocket.receive_text(), timeout=timeout)
+        data = json.loads(raw)
+        frame = Frame(**data)
+        
+        # Проверяем, что это ответ на наш запрос инструментов
+        if frame.op == Op.TOOLS and frame.id == request_id:
+            payload = frame.payload
+            if payload is None:
+                logger.warning("[WS] Empty tools payload: session_id=%s", session_id)
+                return []
+            
+            # Преобразуем payload в dict, если это еще не dict
+            if not isinstance(payload, dict):
+                payload = payload if hasattr(payload, '__dict__') else {}
+            
+            # Структура ответа: payload.tools.tools (вложенный объект)
+            # Или может быть payload.tools если tools - это сразу список
+            tools_obj = payload.get("tools") if isinstance(payload, dict) else None
+            
+            if tools_obj is None:
+                logger.warning("[WS] No tools in payload: session_id=%s payload=%s", session_id, payload)
+                return []
+            
+            # Извлекаем список инструментов
+            if isinstance(tools_obj, dict):
+                tools_data = tools_obj.get("tools", [])
+            elif isinstance(tools_obj, list):
+                tools_data = tools_obj
+            else:
+                logger.warning("[WS] Unexpected tools format: session_id=%s tools_obj=%s", session_id, tools_obj)
+                return []
+            
+            if isinstance(tools_data, list):
+                tools = []
+                for tool_dict in tools_data:
+                    if not isinstance(tool_dict, dict):
+                        continue
+                    try:
+                        # Парсим params, если это строка JSON
+                        params = tool_dict.get("params", {})
+                        if isinstance(params, str):
+                            try:
+                                params = json.loads(params)
+                            except json.JSONDecodeError:
+                                params = {}
+                        
+                        tool_spec = ToolSpec(
+                            name=tool_dict.get("name", ""),
+                            enabled=tool_dict.get("enabled", True),
+                            params=params if isinstance(params, dict) else {},
+                        )
+                        tools.append(tool_spec)
+                    except Exception as e:
+                        logger.warning(
+                            "[WS] Failed to parse tool: session_id=%s error=%s tool=%s",
+                            session_id,
+                            e,
+                            tool_dict,
+                        )
+                        continue
+                return tools
+        
+        # Если это не ответ с инструментами, возвращаем пустой список
+        logger.warning(
+            "[WS] Unexpected frame while waiting for tools: session_id=%s op=%s id=%d",
+            session_id,
+            frame.op,
+            frame.id,
+        )
+        return []
+    except asyncio.TimeoutError:
+        logger.warning(
+            "[WS] Timeout waiting for tools response: session_id=%s timeout=%.1f",
+            session_id,
+            timeout,
+        )
+        return []
+    except Exception as exc:
+        logger.warning(
+            "[WS] Error waiting for tools response: session_id=%s error=%s",
+            session_id,
+            exc,
+        )
+        return []
 
 async def _process_message(
     agent: Agent,
