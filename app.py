@@ -13,6 +13,10 @@ from src.tools.config import ToolConfigClient
 
 from dotenv import load_dotenv
 
+# Загружаем переменные окружения из .env файла, если он существует
+# Если файл не найден, используем переменные окружения из системы (для продакшн)
+load_dotenv()
+
 # ---- Logging ----
 def _init_logging():
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -26,9 +30,6 @@ def _init_logging():
         root.addHandler(h)
     logging.getLogger("agno").setLevel(level)
     logging.info("Logging initialized at %s", level_name)
-
-if not load_dotenv():
-    raise Exception("can't load env variables")
 
 debug_mode = os.getenv("DEBUG") == "True"
 _init_logging()
