@@ -68,7 +68,7 @@ func New(
 	r.DELETE("/api/chats/:id", wrapWithAuth(chatHandler.DeleteChat, authMiddleware))
 
 	// Chat streaming API (WebSocket only)
-	r.GET("/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
+	r.GET("/api/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
 
 	// Message API (protected)
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
