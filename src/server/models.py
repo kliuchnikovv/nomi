@@ -18,6 +18,7 @@ class Op(str, Enum):
     PONG = "pong"
     ERROR = "error"
     DONE = "done"
+    TOOLS = "tools"
 
 class StreamInfo(BaseModel):
     id: str

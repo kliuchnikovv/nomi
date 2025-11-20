@@ -7,16 +7,17 @@ import uuid
 
 from agno.agent import Agent
 from typing import Optional, Tuple
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Cookie
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Cookie
 
-from src.server.models import Frame, Kind, Op
+from src.agents.factory import AgentFactory
+from src.server.models import Frame, Op
 from src.server.utils import make_meta, make_error, make_done, make_data
+from src.tools.config import ToolConfigClient
 
 logger = logging.getLogger(__name__)
 
 
-
-def router(agent: Agent) -> APIRouter:
+def router(agent_factory: AgentFactory) -> APIRouter:
     r = APIRouter()
 
     @r.websocket("/llm/ws")
@@ -41,6 +42,61 @@ def router(agent: Agent) -> APIRouter:
         logger.info("[WS] Open: session_id=%s", session_id)
 
         next_id = 0
+        try:
+            agent = await agent_factory.build(session_id)
+        except Exception as exc:
+            next_id = await _send_frame(
+                websocket=websocket,
+                frame=make_error(
+                    id=next_id,
+                    chat_id=None,
+                    code="agent_init_failed",
+                    message="Unable to build agent tooling.",
+                    http=500,
+                    details={"error": str(exc)},
+                ),
+            )
+            with contextlib.suppress(Exception):
+                await websocket.close(code=1011, reason="Agent init failed")
+            logger.exception("[WS] Agent init failed: session_id=%s", session_id)
+            return
+
+        # Запрашиваем инструменты из genie-api при подключении
+        try:
+            tools = await agent_factory.config_client.fetch_tools_list(session_id)
+            # Отправляем фрейм с инструментами клиенту
+            tools_payload = {
+                "tools": [
+                    {
+                        "name": tool.name,
+                        "enabled": tool.enabled,
+                        "params": tool.params,
+                    }
+                    for tool in tools
+                ]
+            }
+            next_id = await _send_frame(
+                websocket=websocket,
+                frame=make_data(
+                    id=next_id,
+                    op=Op.TOOLS,
+                    chat_id=None,
+                    payload=tools_payload,
+                ),
+            )
+            logger.info(
+                "[WS] Sent tools: session_id=%s count=%d",
+                session_id,
+                len(tools),
+            )
+        except Exception as exc:
+            # Логируем ошибку, но не закрываем соединение
+            logger.warning(
+                "[WS] Failed to fetch tools: session_id=%s error=%s",
+                session_id,
+                exc,
+            )
+
         # Track last time we received any client message
         last_activity = time.monotonic()
         try:

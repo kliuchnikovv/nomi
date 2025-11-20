@@ -16,10 +16,15 @@ class DummyAgent:
         return f"echo:{text}"
 
 
+class DummyAgentFactory:
+    async def build(self, session_id: str) -> DummyAgent:
+        return DummyAgent()
+
+
 @pytest.fixture(scope="module")
 def app() -> FastAPI:
     app = FastAPI()
-    app.include_router(ws_router(DummyAgent()))
+    app.include_router(ws_router(DummyAgentFactory()))
     return app
 
 
@@ -166,4 +171,3 @@ def test_client_reconnect_placeholder():
 @pytest.mark.skip(reason="Perf/resource tests are not suitable for unit test suite")
 def test_perf_and_resources_placeholder():
     pass
-

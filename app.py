@@ -1,20 +1,17 @@
 import os
 import logging
 
-from agno.db.base import AsyncBaseDb
 from agno.db.postgres import PostgresDb
 from agno.os import AgentOS
 from agno.models.google import Gemini
-from agno.tools.googlecalendar import GoogleCalendarTools
-from agno.tools.gmail import GmailTools
-from google.oauth2.credentials import Credentials
+from starlette.middleware.sessions import SessionMiddleware
 
-from src.teams.genie.agent import GenieAgent
+from src.agents.genie import GenieAgent
 from src.server import ws as ws_server
+from src.agents.factory import AgentFactory
+from src.tools.config import ToolConfigClient
 
 from dotenv import load_dotenv
-
-load_dotenv()
 
 # ---- Logging ----
 def _init_logging():
@@ -30,10 +27,11 @@ def _init_logging():
     logging.getLogger("agno").setLevel(level)
     logging.info("Logging initialized at %s", level_name)
 
-_init_logging()
-from starlette.middleware.sessions import SessionMiddleware
+if not load_dotenv():
+    raise Exception("can't load env variables")
 
-debug_mode = True
+debug_mode = os.getenv("DEBUG") == "True"
+_init_logging()
 
 model=Gemini(
     id="gemini-2.0-flash",
@@ -42,41 +40,43 @@ model=Gemini(
 
 db: PostgresDb | None = None
 db_dsn = os.getenv("DB_DSN")
-
 if db_dsn:
     db = PostgresDb(db_dsn)
 
-agent = GenieAgent(
+tool_config_url = os.getenv("TOOL_CONFIG_URL", "http://localhost:8080")
+tool_config_client = ToolConfigClient(tool_config_url)
+agent_factory = AgentFactory(
     db=db,
     model=model,
-    tools=[
-        GmailTools(
-            creds=Credentials(token=""),
-            credentials_path="./client_creds.json", port=8080,
-        ),
-        GoogleCalendarTools(credentials_path="./client_creds.json", oauth_port=8080),
-    ],
+    config_client=tool_config_client,
     debug_mode=debug_mode,
 )
 
+result = tool_config_client.fetch_tools("00000000-0000-0000-0000-000000000000")
+
 agent_os = AgentOS(
-    agents=[
-        agent,
-    ],
+    agents=[GenieAgent(
+        db=db,
+        model=model,
+        debug_mode=debug_mode,
+    )]
 )
+global app
 app = agent_os.get_app()
 
+@app.on_event("shutdown")
+async def _shutdown_tool_config_client():
+    await tool_config_client.close()
+
 # Sessions for OAuth state (required for request.session)
-session_secret = os.getenv("SESSION_SECRET") or "dev-session-secret-change-me"
+session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")
 app.add_middleware(SessionMiddleware, secret_key=session_secret)
 
 try:
-    app.include_router(ws_server.router(agent))
+    app.include_router(ws_server.router(agent_factory))
     logging.info("WS route mounted at /llm/ws")
 except Exception:
     logging.exception("Failed to mount WS routes")
-
-# No lifespan hooks required now that gRPC is disabled
 
 if __name__ == "__main__":
     agent_os.serve(
@@ -85,3 +85,4 @@ if __name__ == "__main__":
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", 7777)),
     )
+
