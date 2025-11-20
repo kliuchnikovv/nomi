@@ -91,28 +91,6 @@ func New(
 	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
 	r.GET("/api/oauth/:provider", wrapWithAuth(toolsHandler.GetOAuthStatus, authMiddleware))
 
-	// TODO: OAUTH is diabled now
-
-	// oauth flows (public endpoints)
-	// r.POST("/oauth/:provider/login", wrap(http.HandlerFunc(oauthHandler.Redirect)))
-	// r.GET("/oauth/:provider/callback", wrap(http.HandlerFunc(oauthHandler.Callback)))
-
-	// Token management API (protected)
-	// r.GET("/api/token/:profile/:provider", wrapWithAuthHttp(oauthHandler.GetToken, authMiddleware))
-	// r.PUT("/api/token/:profile/:provider", wrapWithAuthHttp(oauthHandler.UpdateToken, authMiddleware))
-	// r.DELETE("/api/token/:profile/:provider", wrapWithAuthHttp(oauthHandler.Disconnect, authMiddleware))
-	// r.POST("/api/logs", wrapWithAuthHttp(oauthHandler.LogUsage, authMiddleware))
-	// r.PUT("/api/permissions/:profile/:provider", wrapWithAuthHttp(oauthHandler.UpdatePermissions, authMiddleware))
-
-	//
-	// Additional Google-specific endpoints required by Swagger (protected)
-	// r.GET("/api/status/:profile/google", wrapWithAuthHttp(oauthHandler.StatusGoogle, authMiddleware))
-	// r.GET("/api/permissions/:profile/google", wrapWithAuthHttp(oauthHandler.GetPermissionsGoogle, authMiddleware))
-	// r.GET("/api/logs", wrapWithAuthHttp(oauthHandler.ListLogs, authMiddleware))
-	// r.POST("/api/disconnect/:profile/google", wrapWithAuthHttp(oauthHandler.DisconnectGooglePost, authMiddleware))
-	// r.POST("/api/oauth/google/login", wrapWithAuthHttp(oauthHandler.OAuthGoogleLogin, authMiddleware))
-	// r.POST("/api/oauth/google/reauthorize", wrapWithAuthHttp(oauthHandler.OAuthGoogleReauthorize, authMiddleware))
-
 	// Serve Swagger UI (requires generated docs by swag). If generated
 	// docs package is not present, fall back to the local static files
 	// produced by `swag init` (docs/swagger.json + docs/swagger.html).

@@ -21,6 +21,7 @@ const (
 	ErrorOperation   Operation = "error"
 	MessageOperation Operation = "message"
 	DoneOperation    Operation = "done"
+	ToolsOperation   Operation = "tools"
 
 	AckOperation   Operation = "ack"
 	NackOperation  Operation = "nack"
@@ -47,10 +48,11 @@ type Payload struct {
 	Index       uint      `json:"ix,omitempty"`
 	EndOfBuffer bool      `json:"eof,omitempty"`
 
-	Type             string `json:"type,omitempty"`
-	PromptTokens     uint   `json:"prompt_tokens,omitempty"`
-	CompletionTokens uint   `json:"completion_tokens,omitempty"`
-	ElapsedMS        uint   `json:"elapsed_ms,omitempty"`
+	Type             string      `json:"type,omitempty"`
+	PromptTokens     uint        `json:"prompt_tokens,omitempty"`
+	CompletionTokens uint        `json:"completion_tokens,omitempty"`
+	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
+	Tools            interface{} `json:"tools,omitempty"`
 }
 
 type ErrorInfo struct {

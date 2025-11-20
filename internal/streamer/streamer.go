@@ -69,6 +69,43 @@ func (streamer *Streamer) Stream(
 	_ = dialModel()
 	clientFrames, clientErrs := client.Read(ctx)
 
+	// Send tools to model immediately upon connection
+	if modelReader != nil {
+		tools, err := streamer.storage.GetTools(ctx, streamer.userID)
+		if err != nil {
+			streamer.logger.Error("failed to fetch tools for initial send", zap.Error(err))
+		} else {
+			// Convert tools to response format
+			toolsPayload := make([]map[string]interface{}, 0, len(tools))
+			for _, tool := range tools {
+				toolsPayload = append(toolsPayload, map[string]interface{}{
+					"name":    tool.Name,
+					"enabled": tool.Enabled,
+					"params":  tool.Params,
+				})
+			}
+
+			// Send tools to model (AgnoProject) immediately
+			toolsFrame := Frame{
+				ID:        0,
+				ChatID:    uuid.Nil,
+				Kind:      TokenKind,
+				Operation: ToolsOperation,
+				Timestamp: time.Now().UTC(),
+				Payload: Payload{
+					Tools: map[string]interface{}{
+						"tools": toolsPayload,
+					},
+				},
+			}
+			if err := modelReader.Write(ctx, toolsFrame); err != nil {
+				streamer.logger.Error("failed to send initial tools frame to model", zap.Error(err))
+			} else {
+				streamer.logger.Info("sent initial tools to model", zap.Int("count", len(tools)))
+			}
+		}
+	}
+
 	// Make channels mutable so we can nil them out when their source closes.
 	// This prevents select from immediately choosing a closed channel and
 	// allows us to keep the connection alive until the client closes.
@@ -111,6 +148,7 @@ func (streamer *Streamer) Stream(
 			}
 
 			resetTimer()
+
 			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
 				streamer.logger.Info("upserting message", zap.Any("frame", frame), zap.String("message_id", frame.Payload.MessageID.String()))
 				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
@@ -154,6 +192,7 @@ func (streamer *Streamer) Stream(
 			}
 
 			resetTimer()
+
 			if frame.Operation == MessageOperation && frame.Payload.MessageID == storage.ZeroUUID {
 				streamer.logger.Info("got frame to upsert", zap.Any("frame", frame), zap.String("message_id", frame.Payload.MessageID.String()))
 				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
