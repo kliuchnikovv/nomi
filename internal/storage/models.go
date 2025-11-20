@@ -36,6 +36,7 @@ type Tool struct {
 	UserID    uuid.UUID `gorm:"type:uuid;not null"`
 	Name      string    `gorm:"type:text;not null"`
 	Params    string    `gorm:"type:text;not null"`
+	Enabled   bool      `gorm:"default:true;not null"`
 	CreatedAt time.Time `gorm:"not null"`
 	UpdatedAt time.Time `gorm:"not null"`
 }

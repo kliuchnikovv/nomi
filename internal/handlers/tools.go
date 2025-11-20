@@ -22,6 +22,7 @@ type toolRequest struct {
 	Name     string    `json:"name" binding:"required"`
 	ConfigID uuid.UUID `json:"config_id"`
 	Params   string    `json:"params" binding:"required"`
+	Enabled  *bool     `json:"enabled"`
 }
 
 type toolConfigRequest struct {
@@ -202,10 +203,16 @@ func (h *ToolsHandler) CreateTool(c *gin.Context) {
 		}
 	}
 
+	enabled := true
+	if payload.Enabled != nil {
+		enabled = *payload.Enabled
+	}
+
 	tool := &storage.Tool{
 		ConfigID: payload.ConfigID,
 		Name:     payload.Name,
 		Params:   payload.Params,
+		Enabled:  enabled,
 	}
 
 	created, err := h.storage.CreateTool(ctx, user.ID, tool)
@@ -285,11 +292,17 @@ func (h *ToolsHandler) UpdateTool(c *gin.Context) {
 		return
 	}
 
+	enabled := true
+	if payload.Enabled != nil {
+		enabled = *payload.Enabled
+	}
+
 	tool := &storage.Tool{
 		ID:       toolID,
 		ConfigID: payload.ConfigID,
 		Name:     payload.Name,
 		Params:   payload.Params,
+		Enabled:  enabled,
 	}
 
 	updated, err := h.storage.UpdateTool(ctx, user.ID, tool)

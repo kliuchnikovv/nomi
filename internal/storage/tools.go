@@ -25,6 +25,7 @@ func (s *Storage) CreateTool(ctx context.Context, userID uuid.UUID, tool *Tool) 
 		UserID:    userID,
 		Name:      tool.Name,
 		Params:    tool.Params,
+		Enabled:   tool.Enabled,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -70,6 +71,7 @@ func (s *Storage) UpdateTool(ctx context.Context, userID uuid.UUID, tool *Tool) 
 			"config_id":  tool.ConfigID,
 			"name":       tool.Name,
 			"params":     tool.Params,
+			"enabled":    tool.Enabled,
 			"updated_at": now,
 		})
 
