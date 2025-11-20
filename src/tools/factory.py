@@ -8,6 +8,8 @@ from agno.tools.gmail import GmailTools
 from agno.tools.googlecalendar import GoogleCalendarTools
 from google.oauth2.credentials import Credentials
 
+DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
+
 logger = logging.getLogger(__name__)
 
 ToolBuilder = Callable[[Dict[str, Any]], Toolkit]
@@ -49,53 +51,51 @@ def _instantiate_tool(cls: type[Toolkit], kwargs_list: List[Dict[str, Any]] | Di
     return cls()
 
 
-def _build_gmail(params: Dict[str, Any]) -> Toolkit:
-    # Конвертируем access/refresh токены в Credentials для GmailTools
-    base = {k: v for k, v in params.items() if v is not None}
-    access_token = base.pop("access_token", None)
-    refresh_token = base.pop("refresh_token", None)
+def _make_credentials(params: Dict[str, Any]) -> Credentials | None:
+    token = params.get("access_token") or params.get("token")
+    refresh = params.get("refresh_token")
+    token_uri = params.get("token_uri") or DEFAULT_TOKEN_URI
+    client_id = params.get("client_id")
+    client_secret = params.get("client_secret")
 
+    if not any([token, refresh, client_id, client_secret]):
+        return None
+
+    try:
+        return Credentials(
+            token=token,
+            refresh_token=refresh,
+            token_uri=token_uri,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+    except Exception as exc:
+        logger.warning("Failed to build credentials, will continue without: %s", exc)
+        return None
+
+
+def _build_gmail(params: Dict[str, Any]) -> Toolkit:
+    base_allowed = {"port", "name"}
+    base = {k: v for k, v in params.items() if k in base_allowed and v is not None}
     variants: List[Dict[str, Any]] = []
 
-    # Попытка 1: creds из токенов
-    if access_token or refresh_token:
-        try:
-            variants.append({**base, "creds": Credentials(token=access_token, refresh_token=refresh_token)})
-        except Exception as exc:
-            logger.warning("Failed to build Gmail credentials, will try other variants: %s", exc)
+    creds = _make_credentials(params)
+    if creds:
+        variants.append({**base, "creds": creds})
 
-    # Попытка 2: прямые поля, если конструктор их понимает
-    if access_token:
-        variants.append({**base, "access_token": access_token})
-        variants.append({**base, "token": access_token})
-    if refresh_token:
-        variants.append({**base, "refresh_token": refresh_token})
-
-    # Попытка 3: без токенов
     variants.append(base)
 
     return _instantiate_tool(GmailTools, variants, "gmail")
 
 
 def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
-    # GoogleCalendarTools не принимает лишние kwargs; пробуем прокинуть creds
-    base = {k: v for k, v in params.items() if v is not None}
-    access_token = base.pop("access_token", None)
-    refresh_token = base.pop("refresh_token", None)
-
+    base_allowed = {"name"}  # Calendar инструмент не использует порт
+    base = {k: v for k, v in params.items() if k in base_allowed and v is not None}
     variants: List[Dict[str, Any]] = []
 
-    if access_token or refresh_token:
-        try:
-            variants.append({**base, "creds": Credentials(token=access_token, refresh_token=refresh_token)})
-        except Exception as exc:
-            logger.warning("Failed to build Calendar credentials, will try other variants: %s", exc)
-
-    if access_token:
-        variants.append({**base, "access_token": access_token})
-        variants.append({**base, "token": access_token})
-    if refresh_token:
-        variants.append({**base, "refresh_token": refresh_token})
+    creds = _make_credentials(params)
+    if creds:
+        variants.append({**base, "creds": creds})
 
     variants.append(base)
 
