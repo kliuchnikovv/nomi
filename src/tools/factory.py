@@ -97,8 +97,8 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
     variants: List[Dict[str, Any]] = []
 
     creds = _make_credentials(params)
-    if creds:
-        variants.append({**base, "creds": creds})
+    if creds and creds.token:
+        variants.append({**base, "access_token": creds.token})
 
     variants.append(base)
 
