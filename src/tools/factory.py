@@ -97,12 +97,14 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
     variants: List[Dict[str, Any]] = []
 
     creds = _make_credentials(params)
-    if creds and creds.token:
-        variants.append({**base, "access_token": creds.token})
-
-    variants.append(base)
-
-    return _instantiate_tool(GoogleCalendarTools, variants, "google_calendar")
+    
+    # GoogleCalendarTools не принимает creds в __init__, но использует их в _auth
+    # Поэтому создаем тул и проставляем creds вручную
+    tool = _instantiate_tool(GoogleCalendarTools, variants, "google_calendar")
+    if creds:
+        tool.creds = creds
+    
+    return tool
 
 
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
