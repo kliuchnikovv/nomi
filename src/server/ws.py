@@ -70,8 +70,10 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                             tools_data = []
                         
                         if isinstance(tools_data, list):
+                            logger.debug("[WS] tools not appended: not list")
                             for tool_dict in tools_data:
                                 if not isinstance(tool_dict, dict):
+                                    logger.debug("[WS] tool not appended: not dict")
                                     continue
                                 try:
                                     params = tool_dict.get("params", {})
@@ -87,6 +89,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                         params=params if isinstance(params, dict) else {},
                                     )
                                     tools_specs.append(tool_spec)
+                                    logger.debug("[WS] tool appended: name=%s", tool_spec.name)
                                 except Exception as e:
                                     logger.warning(
                                         "[WS] Failed to parse tool: session_id=%s error=%s tool=%s",
