@@ -55,6 +55,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             if frame.op == Op.TOOLS:
                 # Получили инструменты от genie-api
                 payload = frame.payload
+                logger.debug("[WS] Tools payload raw: session_id=%s payload=%s", session_id, payload)
                 if payload:
                     if not isinstance(payload, dict):
                         payload = payload if hasattr(payload, '__dict__') else {}
@@ -95,7 +96,14 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                     )
                                     continue
                 
-                logger.info("[WS] Received tools: session_id=%s count=%d", session_id, len(tools_specs))
+                tool_names = [t.name for t in tools_specs]
+                logger.info(
+                    "[WS] Received tools: session_id=%s count=%d names=%s",
+                    session_id,
+                    len(tools_specs),
+                    tool_names,
+                )
+                logger.debug("[WS] Tools details: session_id=%s specs=%s", session_id, tools_specs)
             else:
                 logger.warning(
                     "[WS] Expected TOOLS frame but got: session_id=%s op=%s",
@@ -456,6 +464,7 @@ async def _wait_for_tools_response(
         # Проверяем, что это ответ на наш запрос инструментов
         if frame.op == Op.TOOLS and frame.id == request_id:
             payload = frame.payload
+            logger.debug("[WS] Tools response payload raw: session_id=%s payload=%s", session_id, payload)
             if payload is None:
                 logger.warning("[WS] Empty tools payload: session_id=%s", session_id)
                 return []
@@ -509,6 +518,14 @@ async def _wait_for_tools_response(
                             tool_dict,
                         )
                         continue
+                tool_names = [t.name for t in tools]
+                logger.info(
+                    "[WS] Received tools response: session_id=%s count=%d names=%s",
+                    session_id,
+                    len(tools),
+                    tool_names,
+                )
+                logger.debug("[WS] Tools response details: session_id=%s specs=%s", session_id, tools)
                 return tools
         
         # Если это не ответ с инструментами, возвращаем пустой список
