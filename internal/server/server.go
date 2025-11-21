@@ -84,6 +84,7 @@ func New(
 	r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetTool, authMiddleware))
 	r.PUT("/api/tools/:id", wrapWithAuth(toolsHandler.UpdateTool, authMiddleware))
 	r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteTool, authMiddleware))
+	r.GET("/api/integrations", wrapWithAuth(toolsHandler.ListIntegrations, authMiddleware))
 
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
 	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)

@@ -186,6 +186,28 @@ func (h *ToolsHandler) DeleteTool(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+type IntegrationInfo struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Provider string `json:"provider"`
+}
+
+func (h *ToolsHandler) ListIntegrations(c *gin.Context) {
+	integrations := []IntegrationInfo{
+		{
+			ID:       "gmail",
+			Name:     "Gmail",
+			Provider: "gmail",
+		},
+		{
+			ID:       "calendar",
+			Name:     "Google Calendar",
+			Provider: "calendar",
+		},
+	}
+	c.JSON(http.StatusOK, integrations)
+}
+
 func (h *ToolsHandler) GetOAuthStatus(c *gin.Context) {
 	ctx := c.Request.Context()
 	user, err := userFromCtx(ctx)
