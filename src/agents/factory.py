@@ -47,18 +47,18 @@ class AgentFactory:
                 else:
                     logger.debug("[WS] tool not appended: not enabled")
             tools = await build_tools(config)
-        else:
-            # Fallback к старым инструментам если не получили спецификации
-            tools = [GmailTools(
-                creds=Credentials(
-                    token=None,
-                    refresh_token="1//049lHvWs1nUl4CgYIARAAGAQSNwF-L9IrlhRoF0I4oyko8cWyyHUA1M2ixcwD0me_vaRRtAo04uFxopWDmQro8q57XmNS5JKBEGo"
-                )
-            ), GoogleCalendarTools(
-                access_token=""
-            )]
+        # else:
+        #     # Fallback к старым инструментам если не получили спецификации
+        #     tools = [GmailTools(
+        #         creds=Credentials(
+        #             token=None,
+        #             refresh_token="1//049lHvWs1nUl4CgYIARAAGAQSNwF-L9IrlhRoF0I4oyko8cWyyHUA1M2ixcwD0me_vaRRtAo04uFxopWDmQro8q57XmNS5JKBEGo"
+        #         )
+        #     ), GoogleCalendarTools(
+        #         access_token=""
+        #     )]
 
-        logger.debug("[WS] tools: {tools}")
+        logger.debug("[WS] tools: %s", [t.name for t in tools ])
 
         return GenieAgent(
             db=self._db,
