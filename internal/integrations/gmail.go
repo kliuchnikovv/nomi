@@ -145,7 +145,7 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 	// 4. Create or Update Tool
 	params := map[string]any{
 		"creds": map[string]any{
-			"token":  token.AccessToken,
+			"token":         token.AccessToken,
 			"refresh_token": token.RefreshToken,
 			"token_type":    token.TokenType,
 			"expiry":        token.Expiry,
@@ -174,14 +174,14 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 
 	if existingTool != nil {
 		existingTool.Params = string(paramsJSON)
-		existingTool.Name = "Gmail Integration" // Ensure name is set/updated
+		existingTool.Name = "Gmail" // Ensure name is set/updated
 		if _, err := g.storage.UpdateTool(ctx, user.ID, existingTool); err != nil {
 			return "", fmt.Errorf("failed to update tool: %w", err)
 		}
 	} else {
 		newTool := &storage.Tool{
 			UserID:   user.ID,
-			Name:     "Gmail Integration",
+			Name:     "Gmail",
 			Provider: ProviderGmail,
 			Params:   string(paramsJSON),
 			Enabled:  true,

@@ -187,12 +187,32 @@ func (h *ToolsHandler) DeleteTool(c *gin.Context) {
 }
 
 type IntegrationInfo struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Provider string `json:"provider"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	Connected bool   `json:"connected"`
 }
 
 func (h *ToolsHandler) ListIntegrations(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get user's tools to check connection status
+	tools, err := h.storage.GetTools(ctx, user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	connectedProviders := make(map[string]bool)
+	for _, t := range tools {
+		connectedProviders[t.Provider] = true
+	}
+
 	integrations := []IntegrationInfo{
 		{
 			ID:       "gmail",
@@ -205,6 +225,14 @@ func (h *ToolsHandler) ListIntegrations(c *gin.Context) {
 			Provider: "calendar",
 		},
 	}
+
+	// Update connected status
+	for i := range integrations {
+		if connectedProviders[integrations[i].Provider] {
+			integrations[i].Connected = true
+		}
+	}
+
 	c.JSON(http.StatusOK, integrations)
 }
 
