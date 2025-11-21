@@ -79,12 +79,6 @@ func New(
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
 
-	// r.POST("/api/tool-configs", wrapWithAuth(toolsHandler.CreateToolConfig, authMiddleware))
-	r.GET("/api/tool-configs", wrapWithAuth(toolsHandler.ListToolConfigs, authMiddleware))
-	r.GET("/api/tool-configs/:id", wrapWithAuth(toolsHandler.GetToolConfig, authMiddleware))
-	// r.PUT("/api/tool-configs/:id", wrapWithAuth(toolsHandler.UpdateToolConfig, authMiddleware))
-	// r.DELETE("/api/tool-configs/:id", wrapWithAuth(toolsHandler.DeleteToolConfig, authMiddleware))
-
 	r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateTool, authMiddleware))
 	r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))
 	r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetTool, authMiddleware))

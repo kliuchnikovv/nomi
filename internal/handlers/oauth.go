@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/lib/pq"
 	"go.uber.org/zap"
@@ -25,11 +26,13 @@ const (
 )
 
 type OAuthHandler struct {
-	cfg           *config.Config
-	storage       *storage.Storage
-	oauthConfigs  map[string]*oauth2.Config
-	oidcProviders map[string]*oidc.Provider
-	sessionTTL    time.Duration
+	cfg                 *config.Config
+	storage             *storage.Storage
+	oauthConfigs        map[string]*oauth2.Config
+	oidcProviders       map[string]*oidc.Provider
+	gmailIntegration    *integrations.GmailIntegration
+	calendarIntegration *integrations.CalendarIntegration
+	sessionTTL          time.Duration
 }
 
 func NewOAuthHandler(
@@ -47,12 +50,24 @@ func NewOAuthHandler(
 		}
 	}
 
+	gmailIntegration, err := integrations.NewGmailIntegration(logger, cfg, storage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init gmail integration: %w", err)
+	}
+
+	calendarIntegration, err := integrations.NewCalendarIntegration(logger, cfg, storage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init calendar integration: %w", err)
+	}
+
 	return &OAuthHandler{
-		cfg:           cfg,
-		storage:       storage,
-		oauthConfigs:  oauthConfigs,
-		oidcProviders: oidcProviders,
-		sessionTTL:    5 * time.Minute,
+		cfg:                 cfg,
+		storage:             storage,
+		oauthConfigs:        oauthConfigs,
+		oidcProviders:       oidcProviders,
+		gmailIntegration:    gmailIntegration,
+		calendarIntegration: calendarIntegration,
+		sessionTTL:          5 * time.Minute,
 	}, nil
 }
 
@@ -65,9 +80,11 @@ func (h *OAuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.providerConfig(providerName); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if providerName != integrations.ProviderGmail && providerName != integrations.ProviderCalendar {
+		if _, err := h.providerConfig(providerName); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	session := &storage.OAuthSession{
@@ -110,19 +127,26 @@ func (h *OAuthHandler) Redirect(c *gin.Context) {
 		return
 	}
 
-	oauthCfg, err := h.providerConfig(providerName)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	var authURL string
+	if providerName == integrations.ProviderGmail {
+		authURL = h.gmailIntegration.GetAuthURL(session.State)
+	} else if providerName == integrations.ProviderCalendar {
+		authURL = h.calendarIntegration.GetAuthURL(session.State)
+	} else {
+		oauthCfg, err := h.providerConfig(providerName)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 
-	authURL := oauthCfg.AuthCodeURL(
-		session.State,
-		oauth2.AccessTypeOffline,
-		oauth2.ApprovalForce,
-		oauth2.SetAuthURLParam("prompt", "consent"),
-		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
-	)
+		authURL = oauthCfg.AuthCodeURL(
+			session.State,
+			oauth2.AccessTypeOffline,
+			oauth2.ApprovalForce,
+			oauth2.SetAuthURLParam("prompt", "consent"),
+			oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+		)
+	}
 
 	setOAuthSessionCookie(c, session.ID.String(), int(h.sessionTTL.Seconds()))
 	c.Redirect(http.StatusFound, authURL)
@@ -131,10 +155,11 @@ func (h *OAuthHandler) Redirect(c *gin.Context) {
 func (h *OAuthHandler) Callback(c *gin.Context) {
 	ctx := c.Request.Context()
 	providerName := c.Param("provider")
-	oauthCfg, err := h.providerConfig(providerName)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if providerName != integrations.ProviderGmail && providerName != integrations.ProviderCalendar {
+		if _, err := h.providerConfig(providerName); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	state := c.Query("state")
@@ -179,82 +204,114 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	token, err := oauthCfg.Exchange(context.Background(), code)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "token exchange failed", "error": err.Error()})
-		return
-	}
-
-	oidcProvider, err := h.oidcProvider(providerName)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "id_token missing"})
-		return
-	}
-
-	verifier := oidcProvider.Verifier(&oidc.Config{ClientID: oauthCfg.ClientID})
-	idToken, err := verifier.Verify(context.Background(), rawIDToken)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify id_token"})
-		return
-	}
-
-	var claims struct {
-		Email string `json:"email"`
-		Sub   string `json:"sub"`
-	}
-	if err := idToken.Claims(&claims); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read claims"})
-		return
-	}
-
-	user, err := h.storage.GetUserByID(ctx, session.UserID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
-		return
-	}
-
-	tokenBytes, err := json.Marshal(token)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode token"})
-		return
-	}
-
-	newToken := &storage.OAuthToken{
-		UserID:         user.ID,
-		ProfileID:      user.ID.String(),
-		Provider:       providerName,
-		AccountEmail:   claims.Email,
-		ExternalUserID: claims.Sub,
-		Scopes:         pq.StringArray(oauthCfg.Scopes),
-		TokenEncrypted: tokenBytes,
-		Version:        1,
-	}
-
-	existing, err := h.storage.GetOAuthTokenByUser(ctx, user.ID, providerName)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		if err := h.storage.SaveOAuthToken(ctx, newToken); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save token"})
+	var email string
+	if providerName == integrations.ProviderGmail {
+		user, err := h.storage.GetUserByID(ctx, session.UserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
+			return
+		}
+		email, err = h.gmailIntegration.HandleCallback(ctx, code, user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	} else if providerName == integrations.ProviderCalendar {
+		user, err := h.storage.GetUserByID(ctx, session.UserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
+			return
+		}
+		email, err = h.calendarIntegration.HandleCallback(ctx, code, user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 	} else {
-		existing.AccountEmail = newToken.AccountEmail
-		existing.ExternalUserID = newToken.ExternalUserID
-		existing.TokenEncrypted = newToken.TokenEncrypted
-		existing.Scopes = newToken.Scopes
-		existing.ProfileID = newToken.ProfileID
-		if err := h.storage.UpdateOAuthToken(ctx, existing); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token"})
+		oauthCfg, err := h.providerConfig(providerName)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		token, err := oauthCfg.Exchange(context.Background(), code)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "token exchange failed", "error": err.Error()})
+			return
+		}
+
+		oidcProvider, err := h.oidcProvider(providerName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		rawIDToken, ok := token.Extra("id_token").(string)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "id_token missing"})
+			return
+		}
+
+		verifier := oidcProvider.Verifier(&oidc.Config{ClientID: oauthCfg.ClientID})
+		idToken, err := verifier.Verify(context.Background(), rawIDToken)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify id_token"})
+			return
+		}
+
+		var claims struct {
+			Email string `json:"email"`
+			Sub   string `json:"sub"`
+		}
+		if err := idToken.Claims(&claims); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read claims"})
+			return
+		}
+		email = claims.Email
+
+		user, err := h.storage.GetUserByID(ctx, session.UserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
+			return
+		}
+
+		tokenBytes, err := json.Marshal(token)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode token"})
+			return
+		}
+
+		newToken := &storage.OAuthToken{
+			UserID:         user.ID,
+			ProfileID:      user.ID.String(),
+			Provider:       providerName,
+			AccountEmail:   claims.Email,
+			ExternalUserID: claims.Sub,
+			Scopes:         pq.StringArray(oauthCfg.Scopes),
+			TokenEncrypted: tokenBytes,
+			Version:        1,
+		}
+
+		existing, err := h.storage.GetOAuthTokenByUser(ctx, user.ID, providerName)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := h.storage.SaveOAuthToken(ctx, newToken); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save token"})
+				return
+			}
+		} else {
+			existing.AccountEmail = newToken.AccountEmail
+			existing.ExternalUserID = newToken.ExternalUserID
+			existing.TokenEncrypted = newToken.TokenEncrypted
+			existing.Scopes = newToken.Scopes
+			existing.ProfileID = newToken.ProfileID
+			if err := h.storage.UpdateOAuthToken(ctx, existing); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token"})
+				return
+			}
 		}
 	}
 
@@ -264,7 +321,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 
 	setOAuthSessionCookie(c, "", -1)
 
-	deepLink := fmt.Sprintf("genie://oauth/callback?provider=%s&status=ok&email=%s", providerName, url.QueryEscape(claims.Email))
+	deepLink := fmt.Sprintf("genie://oauth/callback?provider=%s&status=ok&email=%s", providerName, url.QueryEscape(email))
 	c.Redirect(http.StatusFound, deepLink)
 }
 

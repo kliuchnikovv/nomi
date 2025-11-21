@@ -21,9 +21,9 @@ func (s *Storage) CreateTool(ctx context.Context, userID uuid.UUID, tool *Tool) 
 	now := time.Now().UTC()
 	stored := &Tool{
 		ID:        tool.ID,
-		ConfigID:  tool.ConfigID,
 		UserID:    userID,
 		Name:      tool.Name,
+		Provider:  tool.Provider,
 		Params:    tool.Params,
 		Enabled:   tool.Enabled,
 		CreatedAt: now,
@@ -68,8 +68,8 @@ func (s *Storage) UpdateTool(ctx context.Context, userID uuid.UUID, tool *Tool) 
 	result := s.DB.WithContext(ctx).Model(&Tool{}).
 		Where("id = ? AND user_id = ?", tool.ID, userID).
 		Updates(map[string]any{
-			"config_id":  tool.ConfigID,
 			"name":       tool.Name,
+			"provider":   tool.Provider,
 			"params":     tool.Params,
 			"enabled":    tool.Enabled,
 			"updated_at": now,

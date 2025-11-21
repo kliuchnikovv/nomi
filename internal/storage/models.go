@@ -32,20 +32,11 @@ type Message struct {
 
 type Tool struct {
 	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	ConfigID  uuid.UUID `gorm:"type:uuid;not null"`
 	UserID    uuid.UUID `gorm:"type:uuid;not null"`
-	Name      string    `gorm:"type:text;not null"`
-	Params    string    `gorm:"type:text;not null"`
-	Enabled   bool      `gorm:"default:true;not null"`
-	CreatedAt time.Time `gorm:"not null"`
-	UpdatedAt time.Time `gorm:"not null"`
-}
-
-type ToolConfig struct {
-	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
 	Name      string    `gorm:"type:text;not null"`
 	Provider  string    `gorm:"type:text;not null"`
 	Params    string    `gorm:"type:text;not null"`
+	Enabled   bool      `gorm:"default:true;not null"`
 	CreatedAt time.Time `gorm:"not null"`
 	UpdatedAt time.Time `gorm:"not null"`
 }
