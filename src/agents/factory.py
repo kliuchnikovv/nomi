@@ -38,12 +38,14 @@ class AgentFactory:
     async def build(self, session_id: str, tools_specs: Optional[List[ToolSpec]] = None) -> Agent:
         tools: List[Toolkit] = []
         
+        logger.debug("[WS] tools: %s", [t.name for t in tools_specs ])
         if tools_specs:
             # Строим инструменты из полученных спецификаций
             config = ToolsConfig()
             for tool_spec in tools_specs:
                 if tool_spec.enabled:
                     config.add(tool_spec.name, **tool_spec.params)
+                    logger.debug("[WS] tool appended: enabled")
                 else:
                     logger.debug("[WS] tool not appended: not enabled")
             tools = await build_tools(config)
