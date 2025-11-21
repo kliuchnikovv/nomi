@@ -52,11 +52,14 @@ def _instantiate_tool(cls: type[Toolkit], kwargs_list: List[Dict[str, Any]] | Di
 
 
 def _make_credentials(params: Dict[str, Any]) -> Credentials | None:
-    token = params.get("access_token") or params.get("token")
-    refresh = params.get("refresh_token")
-    token_uri = params.get("token_uri") or DEFAULT_TOKEN_URI
-    client_id = params.get("client_id")
-    client_secret = params.get("client_secret")
+    # Support nested creds dict
+    creds_data = params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
+
+    token = creds_data.get("access_token") or creds_data.get("token")
+    refresh = creds_data.get("refresh_token")
+    token_uri = creds_data.get("token_uri") or DEFAULT_TOKEN_URI
+    client_id = creds_data.get("client_id")
+    client_secret = creds_data.get("client_secret")
 
     if not any([token, refresh, client_id, client_secret]):
         return None
@@ -103,8 +106,8 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
 
 
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
-    "Gmail": lambda params: GmailTools(**params),
-    "Google Calendar": lambda params: GoogleCalendarTools(**params),
+    "Gmail": _build_gmail,
+    "Google Calendar": _build_google_calendar,
 }
 
 
