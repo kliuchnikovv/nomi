@@ -70,7 +70,6 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                             tools_data = []
                         
                         if isinstance(tools_data, list):
-                            logger.debug("[WS] tools not appended: not list")
                             for tool_dict in tools_data:
                                 if not isinstance(tool_dict, dict):
                                     logger.debug("[WS] tool not appended: not dict")
@@ -130,6 +129,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         try:
             # Создаем агента с полученными инструментами
             agent = await agent_factory.build(session_id, tools_specs=tools_specs if tools_specs else None)
+            logger.debug("[WS] agent tools are %s", agent.tools[0].name)
         except Exception as exc:
             next_id = await _send_frame(
                 websocket=websocket,
