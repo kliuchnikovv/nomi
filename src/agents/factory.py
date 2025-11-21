@@ -1,3 +1,5 @@
+import logging
+
 from typing import List, Optional
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
@@ -12,6 +14,7 @@ from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools import Toolkit
 from google.oauth2.credentials import Credentials
 
+logger = logging.getLogger(__name__)
 
 class AgentFactory:
     def __init__(
@@ -41,6 +44,8 @@ class AgentFactory:
             for tool_spec in tools_specs:
                 if tool_spec.enabled:
                     config.add(tool_spec.name, **tool_spec.params)
+                else:
+                    logger.debug("[WS] tool not appended: not enabled")
             tools = await build_tools(config)
         else:
             # Fallback к старым инструментам если не получили спецификации
@@ -52,6 +57,8 @@ class AgentFactory:
             ), GoogleCalendarTools(
                 access_token=""
             )]
+
+        logger.debug("[WS] tools: {tools}")
 
         return GenieAgent(
             db=self._db,
