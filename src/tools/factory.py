@@ -103,8 +103,8 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
 
 
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
-    "gmail": _build_gmail,
-    "google_calendar": _build_google_calendar,
+    "gmail": lambda params: GmailTools(**params),
+    "google_calendar": lambda params: GoogleCalendarTools(**params),
 }
 
 
