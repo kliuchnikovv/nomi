@@ -3,12 +3,15 @@ package main
 //go:generate swag init -g ./internal/handlers/oauth.go -o ./docs
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/daemon"
+	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/server"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
@@ -61,7 +64,22 @@ func main() {
 		logger.Fatal("failed to connect to database: %v", zap.Error(err))
 	}
 
-	srv := server.New(logger, cfg, db)
+	llmClient, err := integrations.NewLLMClient(logger, cfg)
+	if err != nil {
+		logger.Fatal("failed to init llm client: %v", zap.Error(err))
+	}
+
+	imapService := integrations.NewGmailIMAPService(logger, db, llmClient)
+	imapDaemon := daemon.NewIMAPDaemon(logger, db, imapService)
+
+	// Start daemon
+	go func() {
+		if err := imapDaemon.Start(context.Background()); err != nil {
+			logger.Error("failed to start imap daemon", zap.Error(err))
+		}
+	}()
+
+	srv := server.New(logger, cfg, db, imapDaemon)
 
 	logger.Info("Server is listening", zap.Int("port", cfg.Server.Port))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

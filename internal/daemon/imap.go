@@ -1,0 +1,228 @@
+package daemon
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/emersion/go-imap"
+	"github.com/emersion/go-imap/client"
+	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/integrations"
+	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"go.uber.org/zap"
+)
+
+type IMAPDaemon struct {
+	logger      *zap.Logger
+	storage     *storage.Storage
+	imapService *integrations.GmailIMAPService
+
+	mu          sync.RWMutex
+	connections map[uuid.UUID]*toolWatcher
+}
+
+type toolWatcher struct {
+	toolID uuid.UUID
+	userID uuid.UUID
+	cancel context.CancelFunc
+}
+
+func NewIMAPDaemon(logger *zap.Logger, store *storage.Storage, imapService *integrations.GmailIMAPService) *IMAPDaemon {
+	return &IMAPDaemon{
+		logger:      logger.With(zap.String("component", "imap_daemon")),
+		storage:     store,
+		imapService: imapService,
+		connections: make(map[uuid.UUID]*toolWatcher),
+	}
+}
+
+func (d *IMAPDaemon) Start(ctx context.Context) error {
+	d.logger.Info("starting imap daemon")
+
+	// Load all enabled gmail tools
+	var tools []storage.Tool
+	if err := d.storage.DB.Where("provider = ? AND enabled = ?", "gmail", true).Find(&tools).Error; err != nil {
+		return fmt.Errorf("failed to load tools: %w", err)
+	}
+
+	for _, t := range tools {
+		d.AddTool(ctx, t)
+	}
+
+	return nil
+}
+
+func (d *IMAPDaemon) AddTool(ctx context.Context, tool storage.Tool) {
+	if tool.Provider != "gmail" || !tool.Enabled {
+		return
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if _, exists := d.connections[tool.ID]; exists {
+		d.logger.Info("tool already watched", zap.String("tool_id", tool.ID.String()))
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background()) // Use background context for long-running watcher
+	watcher := &toolWatcher{
+		toolID: tool.ID,
+		userID: tool.UserID,
+		cancel: cancel,
+	}
+	d.connections[tool.ID] = watcher
+
+	go d.watch(ctx, tool)
+}
+
+func (d *IMAPDaemon) RemoveTool(toolID uuid.UUID) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if watcher, exists := d.connections[toolID]; exists {
+		watcher.cancel()
+		delete(d.connections, toolID)
+		d.logger.Info("stopped watching tool", zap.String("tool_id", toolID.String()))
+	}
+}
+
+func (d *IMAPDaemon) UpdateTool(ctx context.Context, tool storage.Tool) {
+	d.RemoveTool(tool.ID)
+	d.AddTool(ctx, tool)
+}
+
+func (d *IMAPDaemon) watch(ctx context.Context, tool storage.Tool) {
+	d.logger.Info("starting watcher for tool", zap.String("tool_id", tool.ID.String()))
+	defer d.logger.Info("stopped watcher for tool", zap.String("tool_id", tool.ID.String()))
+
+	// Retry loop
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		if err := d.connectAndListen(ctx, tool); err != nil {
+			d.logger.Error("watcher error, retrying in 30s", zap.String("tool_id", tool.ID.String()), zap.Error(err))
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(30 * time.Second):
+				continue
+			}
+		}
+	}
+}
+
+func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) error {
+	var params struct {
+		Creds struct {
+			Token string `json:"token"`
+		} `json:"creds"`
+	}
+	if err := json.Unmarshal([]byte(tool.Params), &params); err != nil {
+		return fmt.Errorf("failed to parse params: %w", err)
+	}
+
+	if params.Creds.Token == "" {
+		return fmt.Errorf("no token found")
+	}
+
+	c, err := client.DialTLS("imap.gmail.com:993", nil)
+	if err != nil {
+		return fmt.Errorf("failed to dial: %w", err)
+	}
+	defer c.Logout()
+
+	// Authenticate
+	oauthToken, err := d.storage.GetOAuthTokenByUser(ctx, tool.UserID, "gmail")
+	if err != nil {
+		return fmt.Errorf("failed to get oauth token: %w", err)
+	}
+
+	saslClient := &integrations.Xoauth2Client{
+		Username: oauthToken.AccountEmail,
+		Token:    params.Creds.Token,
+	}
+
+	if err := c.Authenticate(saslClient); err != nil {
+		return fmt.Errorf("auth failed: %w", err)
+	}
+
+	if _, err := c.Select("INBOX", false); err != nil {
+		return fmt.Errorf("failed to select inbox: %w", err)
+	}
+
+	// Create a channel to receive mailbox updates
+	updates := make(chan client.Update)
+	c.Updates = updates
+
+	// Start IDLE
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- c.Idle(stop, nil)
+	}()
+
+	d.logger.Info("idling...", zap.String("tool_id", tool.ID.String()))
+
+	// Initial fetch
+	if err := d.fetchNewMessages(ctx, c, tool.UserID); err != nil {
+		d.logger.Error("initial fetch failed", zap.Error(err))
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			close(stop)
+			return nil
+		case update := <-updates:
+			if _, ok := update.(*client.MailboxUpdate); ok {
+				d.logger.Info("mailbox updated", zap.String("tool_id", tool.ID.String()))
+				if err := d.fetchNewMessages(ctx, c, tool.UserID); err != nil {
+					d.logger.Error("fetch failed", zap.Error(err))
+				}
+			}
+		case err := <-done:
+			return err
+		}
+	}
+}
+
+func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, userID uuid.UUID) error {
+	criteria := imap.NewSearchCriteria()
+	criteria.WithoutFlags = []string{imap.SeenFlag}
+	uids, err := c.Search(criteria)
+	if err != nil {
+		return err
+	}
+
+	if len(uids) == 0 {
+		return nil
+	}
+
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(uids...)
+
+	section := &imap.BodySectionName{}
+	items := []imap.FetchItem{imap.FetchEnvelope, section.FetchItem()}
+
+	messages := make(chan *imap.Message, 10)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.Fetch(seqset, items, messages)
+	}()
+
+	for msg := range messages {
+		if err := d.imapService.ProcessMessage(ctx, userID, msg, section); err != nil {
+			d.logger.Error("failed to process message", zap.Error(err))
+		}
+	}
+
+	return <-done
+}

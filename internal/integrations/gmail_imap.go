@@ -67,32 +67,12 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	defer c.Logout()
 
 	// Authenticate using XOAUTH2
-	// Note: go-imap doesn't support XOAUTH2 out of the box easily without an extension or SASL.
-	// However, for simplicity, we might try standard login if password was stored, but we have OAuth token.
-	// We need to use XOAUTH2 SASL mechanism.
-	// Since emersion/go-imap/sasl is needed for XOAUTH2 and we didn't add it,
-	// we might face an issue here.
-	// Let's assume for now we can use the token as password if the library supports it or we need to implement the SASL client.
-	// Actually, standard Login command usually takes user and password. OAuth requires AUTHENTICATE command.
-	// Let's try to use a helper or just standard Login with the token if Gmail supports it (unlikely).
-	// Wait, we need `github.com/emersion/go-sasl` for XOAUTH2.
-	// I will add it to the plan if needed, but for now let's try to proceed or use a workaround.
-	// Actually, let's use `c.Authenticate` with a custom SASL client if needed.
-	// But wait, I can't easily add a new dependency without `go get`.
-	// Let's check if I can implement a simple XOAUTH2 client.
-
-	// Implementing simple XOAUTH2 SASL client
-	// mechanism: XOAUTH2
-	// response: user=<user>@gmail.com^Aauth=Bearer <token>^A^A
-
-	// We need the user's email. It should be in the token or we need to fetch it.
-	// The OAuthToken struct has AccountEmail.
 	oauthToken, err := s.storage.GetOAuthTokenByUser(ctx, userID, "gmail")
 	if err != nil {
 		return fmt.Errorf("failed to get oauth token info: %w", err)
 	}
 
-	saslClient := &xoauth2Client{
+	saslClient := &Xoauth2Client{
 		Username: oauthToken.AccountEmail,
 		Token:    params.Creds.Token,
 	}
@@ -133,45 +113,8 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	}()
 
 	for msg := range messages {
-		body := ""
-		r := msg.GetBody(section)
-		if r != nil {
-			b, _ := io.ReadAll(r)
-			body = string(b)
-		}
-
-		// Simple body extraction (naive)
-		// In reality, we need to parse MIME parts.
-		// For now, let's assume text/plain or just save raw body.
-
-		inboxItem := &storage.Inbox{
-			UserID:     userID,
-			Sender:     msg.Envelope.From[0].Address(),
-			Subject:    msg.Envelope.Subject,
-			Snippet:    "", // TODO: extract snippet
-			Body:       body,
-			Status:     "pending",
-			ReceivedAt: msg.Envelope.Date,
-		}
-
-		if err := s.storage.DB.Create(inboxItem).Error; err != nil {
-			s.logger.Error("failed to save inbox item", zap.Error(err))
-			continue
-		}
-
-		// 5. Process with LLM
-		prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", inboxItem.Sender, inboxItem.Subject, inboxItem.Body)
-		response, err := s.llmClient.Generate(ctx, prompt)
-		if err != nil {
-			s.logger.Error("failed to generate llm response", zap.Error(err))
-			inboxItem.Status = "failed"
-		} else {
-			inboxItem.Response = response
-			inboxItem.Status = "processed"
-		}
-
-		if err := s.storage.DB.Save(inboxItem).Error; err != nil {
-			s.logger.Error("failed to update inbox item", zap.Error(err))
+		if err := s.ProcessMessage(ctx, userID, msg, section); err != nil {
+			s.logger.Error("failed to process message", zap.Error(err))
 		}
 	}
 
@@ -182,18 +125,61 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	return nil
 }
 
-// xoauth2Client implements sasl.Client for XOAUTH2
-type xoauth2Client struct {
+func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID, msg *imap.Message, section *imap.BodySectionName) error {
+	body := ""
+	r := msg.GetBody(section)
+	if r != nil {
+		b, _ := io.ReadAll(r)
+		body = string(b)
+	}
+
+	// Simple body extraction (naive)
+	// In reality, we need to parse MIME parts.
+	// For now, let's assume text/plain or just save raw body.
+
+	inboxItem := &storage.Inbox{
+		UserID:     userID,
+		Sender:     msg.Envelope.From[0].Address(),
+		Subject:    msg.Envelope.Subject,
+		Snippet:    "", // TODO: extract snippet
+		Body:       body,
+		Status:     "pending",
+		ReceivedAt: msg.Envelope.Date,
+	}
+
+	if err := s.storage.DB.Create(inboxItem).Error; err != nil {
+		return fmt.Errorf("failed to save inbox item: %w", err)
+	}
+
+	// 5. Process with LLM
+	prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", inboxItem.Sender, inboxItem.Subject, inboxItem.Body)
+	response, err := s.llmClient.Generate(ctx, prompt)
+	if err != nil {
+		s.logger.Error("failed to generate llm response", zap.Error(err))
+		inboxItem.Status = "failed"
+	} else {
+		inboxItem.Response = response
+		inboxItem.Status = "processed"
+	}
+
+	if err := s.storage.DB.Save(inboxItem).Error; err != nil {
+		return fmt.Errorf("failed to update inbox item: %w", err)
+	}
+	return nil
+}
+
+// Xoauth2Client implements sasl.Client for XOAUTH2
+type Xoauth2Client struct {
 	Username string
 	Token    string
 }
 
-func (a *xoauth2Client) Start() (mech string, ir []byte, err error) {
+func (a *Xoauth2Client) Start() (mech string, ir []byte, err error) {
 	mech = "XOAUTH2"
 	ir = []byte("user=" + a.Username + "\x01auth=Bearer " + a.Token + "\x01\x01")
 	return
 }
 
-func (a *xoauth2Client) Next(challenge []byte) (response []byte, err error) {
+func (a *Xoauth2Client) Next(challenge []byte) (response []byte, err error) {
 	return []byte{}, nil
 }

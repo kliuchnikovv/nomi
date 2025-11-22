@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/daemon"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
@@ -18,12 +19,14 @@ import (
 type ToolsHandler struct {
 	storage      *storage.Storage
 	oauthConfigs map[string]*oauth2.Config
+	imapDaemon   *daemon.IMAPDaemon
 }
 
-func NewToolsHandler(storage *storage.Storage, oauthConfigs map[string]*oauth2.Config) *ToolsHandler {
+func NewToolsHandler(storage *storage.Storage, oauthConfigs map[string]*oauth2.Config, imapDaemon *daemon.IMAPDaemon) *ToolsHandler {
 	return &ToolsHandler{
 		storage:      storage,
 		oauthConfigs: oauthConfigs,
+		imapDaemon:   imapDaemon,
 	}
 }
 
@@ -70,6 +73,10 @@ func (h *ToolsHandler) CreateTool(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if h.imapDaemon != nil {
+		h.imapDaemon.AddTool(ctx, *created)
 	}
 
 	c.JSON(http.StatusCreated, created)
@@ -161,6 +168,10 @@ func (h *ToolsHandler) UpdateTool(c *gin.Context) {
 		return
 	}
 
+	if h.imapDaemon != nil {
+		h.imapDaemon.UpdateTool(ctx, *updated)
+	}
+
 	c.JSON(http.StatusOK, updated)
 }
 
@@ -185,6 +196,10 @@ func (h *ToolsHandler) DeleteTool(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if h.imapDaemon != nil {
+		h.imapDaemon.RemoveTool(toolID)
 	}
 
 	c.Status(http.StatusNoContent)

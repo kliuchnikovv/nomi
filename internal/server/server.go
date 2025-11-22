@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/daemon"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	swaggerFiles "github.com/swaggo/files"
@@ -20,6 +21,7 @@ func New(
 	logger *zap.Logger,
 	cfg *config.Config,
 	db *storage.Storage,
+	imapDaemon *daemon.IMAPDaemon,
 ) *http.Server {
 	var r = gin.New()
 	r.Use(
@@ -41,7 +43,7 @@ func New(
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler  = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
-		toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs)
+		toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon)
 		oauthHandler   = func() *handlers.OAuthHandler {
 			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
 			if err != nil {
