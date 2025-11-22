@@ -260,10 +260,11 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 
 	d.logger.Info("idling...", zap.String("tool_id", tool.ID.String()))
 
-	// Initial fetch
+	// Initial fetch - not critical, continue even if it fails
 	d.logger.Info("performing initial message fetch", zap.String("tool_id", tool.ID.String()))
 	if err := d.fetchNewMessages(ctx, c, tool.UserID); err != nil {
-		d.logger.Error("initial fetch failed", zap.String("tool_id", tool.ID.String()), zap.Error(err))
+		d.logger.Warn("initial fetch failed, continuing with IDLE", zap.String("tool_id", tool.ID.String()), zap.Error(err))
+		// Don't return error - we can still listen for new messages via IDLE
 	}
 
 	for {
@@ -301,6 +302,17 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 		zap.String("user_id", userID.String()),
 		zap.Int("count", len(uids)),
 	)
+
+	// Limit to prevent overloading - process max 50 messages at a time
+	const maxMessagesPerFetch = 50
+	if len(uids) > maxMessagesPerFetch {
+		d.logger.Warn("limiting message fetch",
+			zap.String("user_id", userID.String()),
+			zap.Int("total", len(uids)),
+			zap.Int("fetching", maxMessagesPerFetch),
+		)
+		uids = uids[:maxMessagesPerFetch]
+	}
 
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(uids...)
