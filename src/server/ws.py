@@ -129,7 +129,6 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         try:
             # Создаем агента с полученными инструментами
             agent = await agent_factory.build(session_id, tools_specs=tools_specs)
-            logger.debug("[WS] agent tools are %s", agent.tools[0].name)
         except Exception as exc:
             next_id = await _send_frame(
                 websocket=websocket,
