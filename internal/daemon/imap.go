@@ -154,6 +154,12 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 		return fmt.Errorf("failed to unmarshal token: %w", err)
 	}
 
+	d.logger.Info("checking token",
+		zap.String("tool_id", tool.ID.String()),
+		zap.Time("expiry", token.Expiry),
+		zap.Bool("has_refresh_token", token.RefreshToken != ""),
+	)
+
 	// Map "gmail" provider to "google" config
 	configName := "gmail"
 	if _, ok := d.oauthConfigs["gmail"]; !ok {
@@ -182,6 +188,8 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 		if err := d.storage.UpdateOAuthToken(ctx, oauthToken); err != nil {
 			d.logger.Error("failed to save refreshed token", zap.Error(err))
 		}
+	} else {
+		d.logger.Info("token not refreshed (valid)", zap.String("tool_id", tool.ID.String()))
 	}
 
 	saslClient := &integrations.Xoauth2Client{
