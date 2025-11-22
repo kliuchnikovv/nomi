@@ -7,18 +7,21 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/kliuchnikovv/genie-api/internal/streamer"
 	"go.uber.org/zap"
 )
 
 type LLMClient struct {
-	logger *zap.Logger
-	url    *url.URL
+	logger  *zap.Logger
+	url     *url.URL
+	storage *storage.Storage
 }
 
-func NewLLMClient(logger *zap.Logger, cfg *config.Config) (*LLMClient, error) {
+func NewLLMClient(logger *zap.Logger, cfg *config.Config, store *storage.Storage) (*LLMClient, error) {
 	if cfg.LLM.BaseURL == "" {
 		return nil, fmt.Errorf("LLM base URL is not configured")
 	}
@@ -40,12 +43,13 @@ func NewLLMClient(logger *zap.Logger, cfg *config.Config) (*LLMClient, error) {
 	}
 
 	return &LLMClient{
-		logger: logger.With(zap.String("component", "llm_client")),
-		url:    u,
+		logger:  logger.With(zap.String("component", "llm_client")),
+		url:     u,
+		storage: store,
 	}, nil
 }
 
-func (c *LLMClient) Generate(ctx context.Context, prompt string) (string, error) {
+func (c *LLMClient) Generate(ctx context.Context, userID uuid.UUID, prompt string) (string, error) {
 	// Add session_id to avoid "invalid session_id: None" error
 	// For background processing (IMAP), we use a system session
 	headers := http.Header{}
@@ -56,6 +60,39 @@ func (c *LLMClient) Generate(ctx context.Context, prompt string) (string, error)
 		return "", fmt.Errorf("failed to dial LLM: %w", err)
 	}
 	defer conn.Close()
+
+	// Send tools to LLM first (same as in streamer)
+	tools, err := c.storage.GetTools(ctx, userID)
+	if err != nil {
+		c.logger.Warn("failed to fetch tools for LLM", zap.Error(err))
+	} else if len(tools) > 0 {
+		// Convert tools to payload format
+		toolsPayload := make([]map[string]interface{}, 0, len(tools))
+		for _, tool := range tools {
+			toolsPayload = append(toolsPayload, map[string]interface{}{
+				"name":    tool.Name,
+				"enabled": tool.Enabled,
+				"params":  tool.Params,
+			})
+		}
+
+		toolsFrame := streamer.Frame{
+			Kind:      streamer.TokenKind,
+			Operation: streamer.ToolsOperation,
+			Timestamp: time.Now().UTC(),
+			Payload: streamer.Payload{
+				Tools: map[string]interface{}{
+					"tools": toolsPayload,
+				},
+			},
+		}
+
+		if err := conn.WriteJSON(toolsFrame); err != nil {
+			c.logger.Error("failed to send tools to LLM", zap.Error(err))
+		} else {
+			c.logger.Info("sent tools to LLM", zap.Int("count", len(tools)))
+		}
+	}
 
 	// Send message
 	frame := streamer.Frame{

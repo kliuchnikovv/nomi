@@ -170,7 +170,7 @@ func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID,
 
 	// Process with LLM
 	prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", inboxItem.Sender, inboxItem.Subject, inboxItem.Body)
-	response, err := s.llmClient.Generate(ctx, prompt)
+	response, err := s.llmClient.Generate(ctx, userID, prompt)
 	if err != nil {
 		s.logger.Error("failed to generate llm response", zap.Error(err))
 		inboxItem.Status = "failed"

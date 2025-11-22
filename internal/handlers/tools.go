@@ -276,7 +276,7 @@ func (h *ToolsHandler) SyncGmail(c *gin.Context) {
 	// Let's assume we can't easily get the main logger here without refactoring.
 	logger, _ := zap.NewProduction()
 
-	llmClient, err := integrations.NewLLMClient(logger, cfg)
+	llmClient, err := integrations.NewLLMClient(logger, cfg, h.storage)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to init llm client: %v", err)})
 		return

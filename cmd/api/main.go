@@ -65,7 +65,7 @@ func main() {
 		logger.Fatal("failed to connect to database: %v", zap.Error(err))
 	}
 
-	llmClient, err := integrations.NewLLMClient(logger, cfg)
+	llmClient, err := integrations.NewLLMClient(logger, cfg, db)
 	if err != nil {
 		logger.Fatal("failed to init llm client: %v", zap.Error(err))
 	}
