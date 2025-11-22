@@ -60,6 +60,11 @@ func (d *IMAPDaemon) Start(ctx context.Context) error {
 
 func (d *IMAPDaemon) AddTool(ctx context.Context, tool storage.Tool) {
 	if tool.Provider != "gmail" || !tool.Enabled {
+		d.logger.Debug("skipping tool (not gmail or disabled)",
+			zap.String("tool_id", tool.ID.String()),
+			zap.String("provider", tool.Provider),
+			zap.Bool("enabled", tool.Enabled),
+		)
 		return
 	}
 
@@ -70,6 +75,12 @@ func (d *IMAPDaemon) AddTool(ctx context.Context, tool storage.Tool) {
 		d.logger.Info("tool already watched", zap.String("tool_id", tool.ID.String()))
 		return
 	}
+
+	d.logger.Info("adding tool to watch",
+		zap.String("tool_id", tool.ID.String()),
+		zap.String("user_id", tool.UserID.String()),
+		zap.String("name", tool.Name),
+	)
 
 	ctx, cancel := context.WithCancel(context.Background()) // Use background context for long-running watcher
 	watcher := &toolWatcher{
@@ -87,9 +98,15 @@ func (d *IMAPDaemon) RemoveTool(toolID uuid.UUID) {
 	defer d.mu.Unlock()
 
 	if watcher, exists := d.connections[toolID]; exists {
+		d.logger.Info("removing tool from watch",
+			zap.String("tool_id", toolID.String()),
+			zap.String("user_id", watcher.userID.String()),
+		)
 		watcher.cancel()
 		delete(d.connections, toolID)
-		d.logger.Info("stopped watching tool", zap.String("tool_id", toolID.String()))
+		d.logger.Info("tool removed successfully", zap.String("tool_id", toolID.String()))
+	} else {
+		d.logger.Warn("attempted to remove non-existent tool", zap.String("tool_id", toolID.String()))
 	}
 }
 
@@ -244,8 +261,9 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 	d.logger.Info("idling...", zap.String("tool_id", tool.ID.String()))
 
 	// Initial fetch
+	d.logger.Info("performing initial message fetch", zap.String("tool_id", tool.ID.String()))
 	if err := d.fetchNewMessages(ctx, c, tool.UserID); err != nil {
-		d.logger.Error("initial fetch failed", zap.Error(err))
+		d.logger.Error("initial fetch failed", zap.String("tool_id", tool.ID.String()), zap.Error(err))
 	}
 
 	for {
@@ -275,8 +293,14 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 	}
 
 	if len(uids) == 0 {
+		d.logger.Debug("no new messages found", zap.String("user_id", userID.String()))
 		return nil
 	}
+
+	d.logger.Info("found new messages",
+		zap.String("user_id", userID.String()),
+		zap.Int("count", len(uids)),
+	)
 
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(uids...)
@@ -291,8 +315,34 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 	}()
 
 	for msg := range messages {
+		subject := ""
+		sender := ""
+		if msg.Envelope != nil {
+			subject = msg.Envelope.Subject
+			if len(msg.Envelope.From) > 0 {
+				sender = msg.Envelope.From[0].Address()
+			}
+		}
+
+		d.logger.Info("processing message",
+			zap.String("user_id", userID.String()),
+			zap.String("from", sender),
+			zap.String("subject", subject),
+		)
+
 		if err := d.imapService.ProcessMessage(ctx, userID, msg, section); err != nil {
-			d.logger.Error("failed to process message", zap.Error(err))
+			d.logger.Error("failed to process message",
+				zap.String("user_id", userID.String()),
+				zap.String("from", sender),
+				zap.String("subject", subject),
+				zap.Error(err),
+			)
+		} else {
+			d.logger.Info("message processed successfully",
+				zap.String("user_id", userID.String()),
+				zap.String("from", sender),
+				zap.String("subject", subject),
+			)
 		}
 	}
 
