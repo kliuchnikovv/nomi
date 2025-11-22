@@ -4,6 +4,7 @@ go 1.25.2
 
 require (
 	github.com/coreos/go-oidc/v3 v3.4.0
+	github.com/emersion/go-imap v1.2.1
 	github.com/gin-gonic/gin v1.11.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
@@ -18,6 +19,7 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 )

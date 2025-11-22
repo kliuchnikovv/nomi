@@ -43,6 +43,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Message{},
 		&RefreshToken{},
 		&Tool{},
+		&Inbox{},
 	); err != nil {
 		return nil, err
 	}

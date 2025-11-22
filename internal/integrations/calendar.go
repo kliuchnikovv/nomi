@@ -145,13 +145,15 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 
 	// 4. Create or Update Tool
 	params := map[string]any{
-		"access_token":  token.AccessToken,
-		"refresh_token": token.RefreshToken,
-		"token_type":    token.TokenType,
-		"expiry":        token.Expiry,
-		"client_id":     c.oauthConfig.ClientID,
-		"client_secret": c.oauthConfig.ClientSecret,
-		"token_uri":     c.oauthConfig.Endpoint.TokenURL,
+		"creds": map[string]any{
+			"token":         token.AccessToken,
+			"refresh_token": token.RefreshToken,
+			"token_type":    token.TokenType,
+			"expiry":        token.Expiry,
+			"client_id":     c.oauthConfig.ClientID,
+			"client_secret": c.oauthConfig.ClientSecret,
+			"token_uri":     c.oauthConfig.Endpoint.TokenURL,
+		},
 	}
 	paramsJSON, err := json.Marshal(params)
 	if err != nil {

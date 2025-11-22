@@ -2,11 +2,15 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 )
@@ -234,6 +238,42 @@ func (h *ToolsHandler) ListIntegrations(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, integrations)
+}
+
+func (h *ToolsHandler) SyncGmail(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// TODO: Inject dependencies properly instead of creating them here
+	// For now, we'll create them on the fly to avoid changing the struct signature too much
+	// In a real app, these should be injected in NewToolsHandler
+	cfg, err := config.Load("configs/config.yaml") // This is bad practice, but quick for now. Ideally pass cfg to handler.
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load config"})
+		return
+	}
+
+	// We need a logger. We can try to get it from context if middleware puts it there, or create a new one.
+	// Let's assume we can't easily get the main logger here without refactoring.
+	logger, _ := zap.NewProduction()
+
+	llmClient, err := integrations.NewLLMClient(logger, cfg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to init llm client: %v", err)})
+		return
+	}
+
+	service := integrations.NewGmailIMAPService(logger, h.storage, llmClient)
+	if err := service.Sync(ctx, user.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "synced"})
 }
 
 func (h *ToolsHandler) GetOAuthStatus(c *gin.Context) {

@@ -40,3 +40,17 @@ type Tool struct {
 	CreatedAt time.Time `gorm:"not null"`
 	UpdatedAt time.Time `gorm:"not null"`
 }
+
+type Inbox struct {
+	ID         uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID     uuid.UUID `gorm:"type:uuid;not null"`
+	Sender     string    `gorm:"type:text;not null"`
+	Subject    string    `gorm:"type:text;not null"`
+	Snippet    string    `gorm:"type:text;not null"`
+	Body       string    `gorm:"type:text;not null"`
+	Response   string    `gorm:"type:text"`
+	Status     string    `gorm:"type:varchar(20);default:'pending';not null"`
+	ReceivedAt time.Time `gorm:"not null"`
+	CreatedAt  time.Time `gorm:"not null"`
+	UpdatedAt  time.Time `gorm:"not null"`
+}
