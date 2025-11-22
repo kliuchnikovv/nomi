@@ -38,6 +38,7 @@ func New(
 		// oauthHandler   = handlers.NewOAuth(cfg, db)
 		chatHandler    = handlers.NewChatHandler(db)
 		messageHandler = handlers.NewMessageHandler(db)
+		inboxHandler   = handlers.NewInboxHandler(db)
 		tokenManager   = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
@@ -79,6 +80,11 @@ func New(
 	// Message API (protected)
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
+
+	// Inbox API (protected)
+	r.GET("/api/inbox", wrapWithAuth(inboxHandler.ListInboxMessages, authMiddleware))
+	r.GET("/api/inbox/:id", wrapWithAuth(inboxHandler.GetInboxMessage, authMiddleware))
+	r.PATCH("/api/inbox/:id/read", wrapWithAuth(inboxHandler.MarkAsRead, authMiddleware))
 
 	r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateTool, authMiddleware))
 	r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))
