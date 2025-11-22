@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -103,6 +104,21 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
     tool = _instantiate_tool(GoogleCalendarTools, variants, "google_calendar")
     if creds:
         tool.creds = creds
+
+    now = datetime.now(timezone.utc)
+
+    tool.add_instructions = True
+    tool.instructions = """You are operating the Google Calendar tool. 
+Treat current time as {now}.
+- Before creating/updating events, confirm the user’s timezone, date(s), and duration; ask if missing.
+- When reading/searching events, use current time as a reference and clarify the desired time range.
+- Check for conflicts: compare proposed slots with existing events, report overlaps, and suggest alternatives.
+- Capture key fields: title, start, end, timezone, attendees (email), description, location/meeting link, reminders.
+- After any operation, briefly confirm what was created/updated/found, when, and in which timezone.
+- Do not invent data and do not perform actions without explicit user permission.
+- If additional access is required or permissions are missing, say so and request reauthorization."""
+
+    logger.debug("[GC] instructions are: {tool.instructions}")
     
     return tool
 
