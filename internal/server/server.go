@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
@@ -15,6 +16,7 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 )
 
 func New(
@@ -22,17 +24,14 @@ func New(
 	cfg *config.Config,
 	db *storage.Storage,
 	imapDaemon *daemon.IMAPDaemon,
+	oauthConfigs map[string]*oauth2.Config,
+	oidcProviders map[string]*oidc.Provider,
 ) *http.Server {
 	var r = gin.New()
 	r.Use(
 		ginzap.Ginzap(logger, time.RFC3339, true),
 		ginzap.RecoveryWithZap(logger, true),
 	)
-
-	oauthConfigs, oidcProviders, err := handlers.BuildOAuthResources(logger, cfg)
-	if err != nil {
-		logger.Fatal("failed to initialize oauth providers", zap.Error(err))
-	}
 
 	// Инициализация обработчиков
 	var (

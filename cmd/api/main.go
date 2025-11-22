@@ -11,6 +11,7 @@ import (
 
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/daemon"
+	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/server"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -69,8 +70,13 @@ func main() {
 		logger.Fatal("failed to init llm client: %v", zap.Error(err))
 	}
 
+	oauthConfigs, oidcProviders, err := handlers.BuildOAuthResources(logger, cfg)
+	if err != nil {
+		logger.Fatal("failed to initialize oauth providers", zap.Error(err))
+	}
+
 	imapService := integrations.NewGmailIMAPService(logger, db, llmClient)
-	imapDaemon := daemon.NewIMAPDaemon(logger, db, imapService)
+	imapDaemon := daemon.NewIMAPDaemon(logger, db, imapService, oauthConfigs)
 
 	// Start daemon
 	go func() {
@@ -79,7 +85,7 @@ func main() {
 		}
 	}()
 
-	srv := server.New(logger, cfg, db, imapDaemon)
+	srv := server.New(logger, cfg, db, imapDaemon, oauthConfigs, oidcProviders)
 
 	logger.Info("Server is listening", zap.Int("port", cfg.Server.Port))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

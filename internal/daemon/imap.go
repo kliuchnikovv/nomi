@@ -13,12 +13,14 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 )
 
 type IMAPDaemon struct {
-	logger      *zap.Logger
-	storage     *storage.Storage
-	imapService *integrations.GmailIMAPService
+	logger       *zap.Logger
+	storage      *storage.Storage
+	imapService  *integrations.GmailIMAPService
+	oauthConfigs map[string]*oauth2.Config
 
 	mu          sync.RWMutex
 	connections map[uuid.UUID]*toolWatcher
@@ -30,12 +32,13 @@ type toolWatcher struct {
 	cancel context.CancelFunc
 }
 
-func NewIMAPDaemon(logger *zap.Logger, store *storage.Storage, imapService *integrations.GmailIMAPService) *IMAPDaemon {
+func NewIMAPDaemon(logger *zap.Logger, store *storage.Storage, imapService *integrations.GmailIMAPService, oauthConfigs map[string]*oauth2.Config) *IMAPDaemon {
 	return &IMAPDaemon{
-		logger:      logger.With(zap.String("component", "imap_daemon")),
-		storage:     store,
-		imapService: imapService,
-		connections: make(map[uuid.UUID]*toolWatcher),
+		logger:       logger.With(zap.String("component", "imap_daemon")),
+		storage:      store,
+		imapService:  imapService,
+		oauthConfigs: oauthConfigs,
+		connections:  make(map[uuid.UUID]*toolWatcher),
 	}
 }
 
@@ -145,9 +148,37 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 		return fmt.Errorf("failed to get oauth token: %w", err)
 	}
 
+	// Refresh token if needed
+	var token oauth2.Token
+	if err := json.Unmarshal(oauthToken.TokenEncrypted, &token); err != nil {
+		return fmt.Errorf("failed to unmarshal token: %w", err)
+	}
+
+	conf, ok := d.oauthConfigs["gmail"]
+	if !ok {
+		return fmt.Errorf("gmail oauth config not found")
+	}
+
+	tokenSource := conf.TokenSource(ctx, &token)
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		return fmt.Errorf("failed to refresh token: %w", err)
+	}
+
+	if newToken.AccessToken != token.AccessToken {
+		d.logger.Info("token refreshed", zap.String("tool_id", tool.ID.String()))
+		// Save new token
+		tokenBytes, _ := json.Marshal(newToken)
+		oauthToken.TokenEncrypted = tokenBytes
+		oauthToken.UpdatedAt = time.Now().UTC()
+		if err := d.storage.UpdateOAuthToken(ctx, oauthToken); err != nil {
+			d.logger.Error("failed to save refreshed token", zap.Error(err))
+		}
+	}
+
 	saslClient := &integrations.Xoauth2Client{
 		Username: oauthToken.AccountEmail,
-		Token:    params.Creds.Token,
+		Token:    newToken.AccessToken,
 	}
 
 	if err := c.Authenticate(saslClient); err != nil {
