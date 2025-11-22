@@ -46,7 +46,12 @@ func NewLLMClient(logger *zap.Logger, cfg *config.Config) (*LLMClient, error) {
 }
 
 func (c *LLMClient) Generate(ctx context.Context, prompt string) (string, error) {
-	conn, _, err := websocket.DefaultDialer.Dial(c.url.String(), http.Header{})
+	// Add session_id to avoid "invalid session_id: None" error
+	// For background processing (IMAP), we use a system session
+	headers := http.Header{}
+	headers.Add("Cookie", fmt.Sprintf("session_id=%s", "system-background-processing"))
+
+	conn, _, err := websocket.DefaultDialer.Dial(c.url.String(), headers)
 	if err != nil {
 		return "", fmt.Errorf("failed to dial LLM: %w", err)
 	}

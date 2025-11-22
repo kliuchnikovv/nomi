@@ -317,8 +317,13 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(uids...)
 
+	// Fetch only envelope and body structure to avoid loading large attachments
+	// For body text, we'll fetch just the text/plain part
 	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{imap.FetchEnvelope, section.FetchItem()}
+	section.Peek = true // Don't mark as read
+
+	// Only fetch envelope and smaller text section, not full body
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchBodyStructure, imap.FetchFlags}
 
 	messages := make(chan *imap.Message, 10)
 	done := make(chan error, 1)

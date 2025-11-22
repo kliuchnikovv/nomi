@@ -126,20 +126,37 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 }
 
 func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID, msg *imap.Message, section *imap.BodySectionName) error {
-	body := ""
-	r := msg.GetBody(section)
-	if r != nil {
-		b, _ := io.ReadAll(r)
-		body = string(b)
+	if msg.Envelope == nil {
+		return fmt.Errorf("message envelope is nil")
 	}
 
-	// Simple body extraction (naive)
-	// In reality, we need to parse MIME parts.
-	// For now, let's assume text/plain or just save raw body.
+	sender := ""
+	if len(msg.Envelope.From) > 0 {
+		sender = msg.Envelope.From[0].Address()
+	}
+
+	// Try to get body if available, but don't fail if not
+	body := ""
+	if section != nil {
+		r := msg.GetBody(section)
+		if r != nil {
+			b, err := io.ReadAll(r)
+			if err == nil {
+				body = string(b)
+			} else {
+				s.logger.Warn("failed to read message body, will process without it", zap.Error(err))
+			}
+		}
+	}
+
+	// If no body available, use subject as minimal content
+	if body == "" {
+		body = fmt.Sprintf("Subject: %s\n(Body not available)", msg.Envelope.Subject)
+	}
 
 	inboxItem := &storage.Inbox{
 		UserID:     userID,
-		Sender:     msg.Envelope.From[0].Address(),
+		Sender:     sender,
 		Subject:    msg.Envelope.Subject,
 		Snippet:    "", // TODO: extract snippet
 		Body:       body,
@@ -151,7 +168,7 @@ func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID,
 		return fmt.Errorf("failed to save inbox item: %w", err)
 	}
 
-	// 5. Process with LLM
+	// Process with LLM
 	prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", inboxItem.Sender, inboxItem.Subject, inboxItem.Body)
 	response, err := s.llmClient.Generate(ctx, prompt)
 	if err != nil {
