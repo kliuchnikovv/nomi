@@ -10,6 +10,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/daemon"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
+	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
@@ -276,13 +277,13 @@ func (h *ToolsHandler) SyncGmail(c *gin.Context) {
 	// Let's assume we can't easily get the main logger here without refactoring.
 	logger, _ := zap.NewProduction()
 
-	llmClient, err := integrations.NewLLMClient(logger, cfg, h.storage)
+	llmService, err := llm.NewService(logger, cfg, h.storage)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to init llm client: %v", err)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to init llm service: %v", err)})
 		return
 	}
 
-	service := integrations.NewGmailIMAPService(logger, h.storage, llmClient)
+	service := integrations.NewGmailIMAPService(logger, h.storage, llmService)
 	if err := service.Sync(ctx, user.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -9,21 +9,22 @@ import (
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
 
 type GmailIMAPService struct {
-	logger    *zap.Logger
-	storage   *storage.Storage
-	llmClient *LLMClient
+	logger     *zap.Logger
+	storage    *storage.Storage
+	llmService *llm.Service
 }
 
-func NewGmailIMAPService(logger *zap.Logger, store *storage.Storage, llmClient *LLMClient) *GmailIMAPService {
+func NewGmailIMAPService(logger *zap.Logger, store *storage.Storage, llmSvc *llm.Service) *GmailIMAPService {
 	return &GmailIMAPService{
-		logger:    logger.With(zap.String("component", "gmail_imap")),
-		storage:   store,
-		llmClient: llmClient,
+		logger:     logger.With(zap.String("component", "gmail_imap")),
+		storage:    store,
+		llmService: llmSvc,
 	}
 }
 
@@ -170,7 +171,7 @@ func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID,
 
 	// Process with LLM
 	prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", inboxItem.Sender, inboxItem.Subject, inboxItem.Body)
-	response, err := s.llmClient.Generate(ctx, userID, prompt)
+	response, err := s.llmService.GenerateSimple(ctx, userID, prompt)
 	if err != nil {
 		s.logger.Error("failed to generate llm response", zap.Error(err))
 		inboxItem.Status = "failed"

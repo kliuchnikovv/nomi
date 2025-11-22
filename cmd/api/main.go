@@ -13,6 +13,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/daemon"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
+	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/server"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
@@ -65,9 +66,9 @@ func main() {
 		logger.Fatal("failed to connect to database: %v", zap.Error(err))
 	}
 
-	llmClient, err := integrations.NewLLMClient(logger, cfg, db)
+	llmService, err := llm.NewService(logger, cfg, db)
 	if err != nil {
-		logger.Fatal("failed to init llm client: %v", zap.Error(err))
+		logger.Fatal("failed to init llm service: %v", zap.Error(err))
 	}
 
 	oauthConfigs, oidcProviders, err := handlers.BuildOAuthResources(logger, cfg)
@@ -75,7 +76,7 @@ func main() {
 		logger.Fatal("failed to initialize oauth providers", zap.Error(err))
 	}
 
-	imapService := integrations.NewGmailIMAPService(logger, db, llmClient)
+	imapService := integrations.NewGmailIMAPService(logger, db, llmService)
 	imapDaemon := daemon.NewIMAPDaemon(logger, db, imapService, oauthConfigs)
 
 	// Start daemon
