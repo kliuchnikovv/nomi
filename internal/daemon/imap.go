@@ -198,7 +198,32 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 	}
 
 	if err := c.Authenticate(saslClient); err != nil {
-		return fmt.Errorf("auth failed: %w", err)
+		d.logger.Warn("initial auth failed, trying force refresh", zap.Error(err))
+
+		// Force refresh by setting expiry to past
+		token.Expiry = time.Now().Add(-1 * time.Hour)
+		tokenSource := conf.TokenSource(ctx, &token)
+		refreshedToken, err := tokenSource.Token()
+		if err != nil {
+			return fmt.Errorf("failed to force refresh token: %w", err)
+		}
+
+		if refreshedToken.AccessToken != newToken.AccessToken {
+			d.logger.Info("token force refreshed", zap.String("tool_id", tool.ID.String()))
+			tokenBytes, _ := json.Marshal(refreshedToken)
+			oauthToken.TokenEncrypted = tokenBytes
+			oauthToken.UpdatedAt = time.Now().UTC()
+			if err := d.storage.UpdateOAuthToken(ctx, oauthToken); err != nil {
+				d.logger.Error("failed to save force refreshed token", zap.Error(err))
+			}
+
+			saslClient.Token = refreshedToken.AccessToken
+			if err := c.Authenticate(saslClient); err != nil {
+				return fmt.Errorf("auth failed after refresh: %w", err)
+			}
+		} else {
+			return fmt.Errorf("auth failed and token not refreshed: %w", err)
+		}
 	}
 
 	if _, err := c.Select("INBOX", false); err != nil {
