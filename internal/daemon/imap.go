@@ -154,9 +154,17 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 		return fmt.Errorf("failed to unmarshal token: %w", err)
 	}
 
-	conf, ok := d.oauthConfigs["gmail"]
+	// Map "gmail" provider to "google" config
+	configName := "gmail"
+	if _, ok := d.oauthConfigs["gmail"]; !ok {
+		if _, ok := d.oauthConfigs["google"]; ok {
+			configName = "google"
+		}
+	}
+
+	conf, ok := d.oauthConfigs[configName]
 	if !ok {
-		return fmt.Errorf("gmail oauth config not found")
+		return fmt.Errorf("oauth config not found for provider: %s (tried gmail and google)", configName)
 	}
 
 	tokenSource := conf.TokenSource(ctx, &token)
