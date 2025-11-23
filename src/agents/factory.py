@@ -8,6 +8,7 @@ from agno.models.base import Model
 from agno.models.google import Gemini
 
 from src.agents.genie import GenieAgent
+from src.agents.mailer import MailerAgent
 from src.tools.config import ToolConfigClient
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
@@ -63,7 +64,8 @@ class AgentFactory:
         self, 
         session_id: str, 
         tools_specs: Optional[List[ToolSpec]] = None,
-        model_name: Optional[str] = None
+        model_name: Optional[str] = None,
+        agent_type: Optional[str] = None
     ) -> Agent:
         # Use provided model or default
         model = self.build_model(model_name) if model_name else self._model
@@ -93,22 +95,34 @@ class AgentFactory:
         #     )]
 
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
-        logger.info("[WS] Building agent: session_id=%s model=%s tools_count=%d", session_id, model_name or "default", len(tools))
+        logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 
+                   session_id, model_name or "default", agent_type or "genie", len(tools))
 
         try:
-            agent = GenieAgent(
-                db=self._db,
-                model=model,
-                tools=tools,
-                debug_mode=self._debug_mode,
-            )
-            logger.info("[WS] Agent created successfully: session_id=%s", session_id)
+            if agent_type and agent_type.lower() == "mailer":
+                agent = MailerAgent(
+                    db=self._db,
+                    model=model,
+                    tools=tools,
+                    debug_mode=self._debug_mode,
+                )
+            else:
+                # Default to Genie
+                agent = GenieAgent(
+                    db=self._db,
+                    model=model,
+                    tools=tools,
+                    debug_mode=self._debug_mode,
+                )
+                
+            logger.info("[WS] Agent created successfully: session_id=%s type=%s", session_id, agent.name)
             return agent
         except Exception as e:
             logger.error(
-                "[WS] Failed to create agent: session_id=%s model=%s error=%s",
+                "[WS] Failed to create agent: session_id=%s model=%s agent_type=%s error=%s",
                 session_id,
                 model_name or "default",
+                agent_type or "genie",
                 e,
                 exc_info=True
             )

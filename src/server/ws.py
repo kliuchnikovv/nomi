@@ -44,8 +44,10 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         
         # Extract model from query parameters if provided
         model_from_query = websocket.query_params.get("model")
-        if model_from_query:
-            logger.info("[WS] Open: session_id=%s model=%s", session_id, model_from_query)
+        agent_type = websocket.query_params.get("agent")
+        
+        if model_from_query or agent_type:
+            logger.info("[WS] Open: session_id=%s model=%s agent=%s", session_id, model_from_query, agent_type)
         else:
             logger.info("[WS] Open: session_id=%s", session_id)
 
@@ -158,7 +160,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             agent = await agent_factory.build(
                 session_id, 
                 tools_specs=tools_specs,
-                model_name=current_model_name
+                model_name=current_model_name,
+                agent_type=agent_type
             )
         except Exception as exc:
             next_id = await _send_frame(
