@@ -152,7 +152,10 @@ func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID,
 
 	// If no body available, use subject as minimal content
 	if body == "" {
+		s.logger.Warn("body not available, using subject", zap.String("subject", msg.Envelope.Subject))
 		body = fmt.Sprintf("Subject: %s\n(Body not available)", msg.Envelope.Subject)
+	} else {
+		s.logger.Info("body fetched", zap.Int("length", len(body)))
 	}
 
 	inboxItem := &storage.Inbox{
@@ -170,6 +173,7 @@ func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID,
 	}
 
 	// Process with LLM
+	s.logger.Info("generating llm summary", zap.String("subject", inboxItem.Subject))
 	prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", inboxItem.Sender, inboxItem.Subject, inboxItem.Body)
 	response, err := s.llmService.GenerateSimple(ctx, userID, prompt)
 	if err != nil {
@@ -178,6 +182,7 @@ func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID,
 	} else {
 		inboxItem.Response = response
 		inboxItem.Status = "processed"
+		s.logger.Info("llm summary generated", zap.String("response_length", fmt.Sprintf("%d", len(response))))
 	}
 
 	if err := s.storage.DB.Save(inboxItem).Error; err != nil {

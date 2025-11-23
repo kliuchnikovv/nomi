@@ -153,11 +153,13 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 		return fmt.Errorf("no token found")
 	}
 
+	d.logger.Info("dialing imap server", zap.String("tool_id", tool.ID.String()))
 	c, err := client.DialTLS("imap.gmail.com:993", nil)
 	if err != nil {
 		return fmt.Errorf("failed to dial: %w", err)
 	}
 	defer c.Logout()
+	d.logger.Info("connected to imap server", zap.String("tool_id", tool.ID.String()))
 
 	// Authenticate
 	oauthToken, err := d.storage.GetOAuthTokenByUser(ctx, tool.UserID, "gmail")
@@ -214,6 +216,7 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 		Token:    newToken.AccessToken,
 	}
 
+	d.logger.Info("authenticating", zap.String("tool_id", tool.ID.String()))
 	if err := c.Authenticate(saslClient); err != nil {
 		d.logger.Warn("initial auth failed, trying force refresh", zap.Error(err))
 
@@ -243,6 +246,7 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 		}
 	}
 
+	d.logger.Info("selecting inbox", zap.String("tool_id", tool.ID.String()))
 	if _, err := c.Select("INBOX", false); err != nil {
 		return fmt.Errorf("failed to select inbox: %w", err)
 	}
@@ -255,7 +259,9 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 	stop := make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
+		d.logger.Info("idle command started", zap.String("tool_id", tool.ID.String()))
 		done <- c.Idle(stop, nil)
+		d.logger.Info("idle command finished", zap.String("tool_id", tool.ID.String()))
 	}()
 
 	d.logger.Info("idling...", zap.String("tool_id", tool.ID.String()))
