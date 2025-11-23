@@ -117,6 +117,12 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 			h.logger.Info("no model parameter provided by client")
 		}
 
+		// Forward agent parameter from client request to upstream LLM
+		if agentParam := c.Query("agent"); agentParam != "" {
+			values.Add("agent", agentParam)
+			h.logger.Info("forwarding agent parameter to LLM", zap.String("agent", agentParam))
+		}
+
 		// values.Add("chat_id", input.chatID.String())
 		query.RawQuery = values.Encode()
 

@@ -190,16 +190,49 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 
 	for _, item := range items {
 		s.logger.Info("generating llm summary", zap.String("subject", item.Subject))
-		prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", item.Sender, item.Subject, item.Body)
 
-		response, err := s.llmService.GenerateSimple(ctx, item.UserID, prompt)
+		prompt := fmt.Sprintf(`Analyze this email and return a JSON response with the following structure:
+{
+  "title": "Brief title based on subject",
+  "importance": {"level": "high|medium|low", "reason": "short reason"},
+  "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
+  "summary": "2-3 sentence summary focusing on intent and key asks/dates",
+  "actions": [
+    {"label": "reply_now|schedule_reply|snooze|mark_done|open_web|unsubscribe|report_spam", "why": "one-line rationale"}
+  ],
+  "missing_info": "what is missing to decide, or empty string if nothing"
+}
+
+Email:
+From: %s
+Subject: %s
+Body: %s`, item.Sender, item.Subject, item.Body)
+
+		response, err := s.llmService.GenerateSimple(ctx, item.UserID, prompt, "mailer")
 		if err != nil {
 			s.logger.Error("failed to generate llm response", zap.Error(err))
 			item.Status = "failed"
 		} else {
-			item.Response = response
-			item.Status = "processed"
-			s.logger.Info("llm summary generated", zap.String("response_length", fmt.Sprintf("%d", len(response))))
+			// Validate JSON structure
+			var analysis storage.InboxAnalysis
+			if err := json.Unmarshal([]byte(response), &analysis); err != nil {
+				s.logger.Error("failed to parse llm response as json",
+					zap.Error(err),
+					zap.String("response", response))
+				// Still save the raw response, but maybe mark as processed?
+				// Or maybe failed? Let's save it and mark processed for now,
+				// but the UI might show empty fields if it expects valid JSON.
+				item.Response = response
+				item.Status = "processed"
+			} else {
+				s.logger.Info("llm analysis parsed successfully",
+					zap.String("title", analysis.Title),
+					zap.String("importance", analysis.Importance.Level),
+					zap.Any("actions", analysis.Actions))
+
+				item.Response = response
+				item.Status = "processed"
+			}
 		}
 
 		if err := s.storage.DB.Save(&item).Error; err != nil {

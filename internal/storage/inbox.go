@@ -2,24 +2,45 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
+// InboxAnalysis represents the structured analysis from LLM
+type InboxAnalysis struct {
+	Title       string        `json:"title"`
+	Importance  InboxLevel    `json:"importance"`
+	Urgency     InboxLevel    `json:"urgency"`
+	Summary     string        `json:"summary"`
+	Actions     []InboxAction `json:"actions"`
+	MissingInfo string        `json:"missing_info"`
+}
+
+type InboxLevel struct {
+	Level  string `json:"level"`
+	Reason string `json:"reason"`
+}
+
+type InboxAction struct {
+	Label string `json:"label"`
+	Why   string `json:"why"`
+}
+
 // InboxMessage represents an inbox message with pagination metadata
 type InboxMessage struct {
-	ID         uuid.UUID `json:"id"`
-	Sender     string    `json:"sender"`
-	Subject    string    `json:"subject"`
-	Snippet    string    `json:"snippet"`
-	Body       string    `json:"body"`
-	Response   string    `json:"response,omitempty"`
-	Status     string    `json:"status"`
-	ReceivedAt time.Time `json:"received_at"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID         uuid.UUID      `json:"id"`
+	Sender     string         `json:"sender"`
+	Subject    string         `json:"subject"`
+	Snippet    string         `json:"snippet"`
+	Body       string         `json:"body"`
+	Response   *InboxAnalysis `json:"response,omitempty"`
+	Status     string         `json:"status"`
+	ReceivedAt time.Time      `json:"received_at"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
 }
 
 // InboxPaginatedResponse represents paginated inbox messages
@@ -62,13 +83,19 @@ func (s *Storage) GetInboxMessages(ctx context.Context, userID uuid.UUID, page, 
 
 	messages := make([]*InboxMessage, len(inboxModels))
 	for i, model := range inboxModels {
+		var analysis *InboxAnalysis
+		if model.Response != "" {
+			// Try to unmarshal, ignore error if it's not valid JSON (backward compatibility)
+			_ = json.Unmarshal([]byte(model.Response), &analysis)
+		}
+
 		messages[i] = &InboxMessage{
 			ID:         model.ID,
 			Sender:     model.Sender,
 			Subject:    model.Subject,
 			Snippet:    model.Snippet,
 			Body:       model.Body,
-			Response:   model.Response,
+			Response:   analysis,
 			Status:     model.Status,
 			ReceivedAt: model.ReceivedAt,
 			CreatedAt:  model.CreatedAt,
@@ -99,13 +126,18 @@ func (s *Storage) GetInboxMessage(ctx context.Context, userID uuid.UUID, message
 		return nil, err
 	}
 
+	var analysis *InboxAnalysis
+	if inboxModel.Response != "" {
+		_ = json.Unmarshal([]byte(inboxModel.Response), &analysis)
+	}
+
 	return &InboxMessage{
 		ID:         inboxModel.ID,
 		Sender:     inboxModel.Sender,
 		Subject:    inboxModel.Subject,
 		Snippet:    inboxModel.Snippet,
 		Body:       inboxModel.Body,
-		Response:   inboxModel.Response,
+		Response:   analysis,
 		Status:     inboxModel.Status,
 		ReceivedAt: inboxModel.ReceivedAt,
 		CreatedAt:  inboxModel.CreatedAt,

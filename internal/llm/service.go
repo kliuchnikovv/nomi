@@ -51,8 +51,15 @@ func NewService(logger *zap.Logger, cfg *config.Config, store *storage.Storage) 
 
 // GenerateSimple sends a prompt to LLM and returns the full response.
 // Used for background processing like IMAP.
-func (s *Service) GenerateSimple(ctx context.Context, userID uuid.UUID, prompt string) (string, error) {
-	conn, err := s.connect(ctx, userID)
+// GenerateSimple sends a prompt to LLM and returns the full response.
+// Used for background processing like IMAP.
+func (s *Service) GenerateSimple(
+	ctx context.Context,
+	userID uuid.UUID,
+	prompt string,
+	agent string,
+) (string, error) {
+	conn, err := s.connect(ctx, userID, agent)
 	if err != nil {
 		return "", err
 	}
@@ -103,7 +110,7 @@ type StreamChunk struct {
 
 // GenerateStream sends a prompt to LLM and returns a channel for streaming response.
 // Used for chat.
-func (s *Service) GenerateStream(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, prompt string) (<-chan StreamChunk, <-chan error) {
+func (s *Service) GenerateStream(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, prompt string, agent string) (<-chan StreamChunk, <-chan error) {
 	chunks := make(chan StreamChunk)
 	errs := make(chan error, 1)
 
@@ -111,7 +118,7 @@ func (s *Service) GenerateStream(ctx context.Context, userID uuid.UUID, chatID u
 		defer close(chunks)
 		defer close(errs)
 
-		conn, err := s.connect(ctx, userID)
+		conn, err := s.connect(ctx, userID, agent)
 		if err != nil {
 			errs <- err
 			return
@@ -163,12 +170,20 @@ func (s *Service) GenerateStream(ctx context.Context, userID uuid.UUID, chatID u
 }
 
 // connect establishes WebSocket connection and sends tools
-func (s *Service) connect(ctx context.Context, userID uuid.UUID) (*websocket.Conn, error) {
+func (s *Service) connect(ctx context.Context, userID uuid.UUID, agent string) (*websocket.Conn, error) {
 	// Add session_id to avoid "invalid session_id: None" error
 	headers := http.Header{}
 	headers.Add("Cookie", fmt.Sprintf("session_id=%s", "system-background-processing"))
 
-	conn, _, err := websocket.DefaultDialer.Dial(s.url.String(), headers)
+	// Add agent parameter if provided
+	u := *s.url
+	if agent != "" {
+		q := u.Query()
+		q.Set("agent", agent)
+		u.RawQuery = q.Encode()
+	}
+
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), headers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial LLM: %w", err)
 	}
