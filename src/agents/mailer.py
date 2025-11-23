@@ -21,7 +21,20 @@ Rules:
 - Keep suggestions concise and practical for fast triage.
 - If information is missing to decide, state what is missing before making a guess.
 """
-# expected_output=expected_output
+expected_output = """
+{
+  "title": "{email_subject}",
+  "importance": {"level": "high|medium|low", "reason": "short reason"},
+  "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
+  "summary": "2-3 sentence summary focusing on intent and key asks/dates",
+  "actions": [
+    {"label": "reply_now|schedule_reply|snooze|mark_done|open_web|unsubscribe|report_spam", "why": "one-line rationale"},
+    {"label": "reply_now|schedule_reply|snooze|mark_done|open_web|unsubscribe|report_spam", "why": "one-line rationale"},
+    {"label": "reply_now|schedule_reply|snooze|mark_done|open_web|unsubscribe|report_spam", "why": "one-line rationale"}
+  ],
+  "missing_info": "what is missing to decide, or empty string if nothing"
+}
+"""
 
 class MailerAgent(Agent):
     def __init__(
@@ -38,7 +51,7 @@ class MailerAgent(Agent):
             tools=tools,
             description=description,
             instructions=instructions,
-            # expected_output=expected_output,
+            expected_output=expected_output,
             add_history_to_context=True,
             add_datetime_to_context=True,
             debug_mode=debug_mode,
