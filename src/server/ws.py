@@ -139,63 +139,18 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             )
             # Продолжаем без инструментов
         
-        # Опционально ждем MODEL фрейм для выбора модели
-        logger.debug("[WS] Waiting for optional MODEL frame: session_id=%s", session_id)
-        try:
-            raw = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
-            logger.debug("[WS] Received raw data (MODEL wait): session_id=%s len=%d", session_id, len(raw))
-            data = json.loads(raw)
-            frame = Frame(**data)
-            logger.debug("[WS] Parsed frame (MODEL wait): session_id=%s op=%s", session_id, frame.op)
-            
-            if frame.op == Op.MODEL:
-                payload = frame.payload
-                if payload and isinstance(payload, dict):
-                    model_name = payload.get("model")
-                    if model_name:
-                        current_model_name = model_name
-                        logger.info(
-                            "[WS] Received model selection via frame: session_id=%s model=%s (overrides query param: %s)",
-                            session_id,
-                            current_model_name,
-                            model_from_query is not None,
-                        )
-                    else:
-                        logger.warning(
-                            "[WS] MODEL frame without model name: session_id=%s",
-                            session_id,
-                        )
-            else:
-                # Не MODEL фрейм - это нормально, используем модель из query param или по умолчанию
-                if current_model_name:
-                    logger.debug(
-                        "[WS] No MODEL frame received, using model from query param: session_id=%s model=%s",
-                        session_id,
-                        current_model_name,
-                    )
-                else:
-                    logger.debug(
-                        "[WS] No MODEL frame received, using default model: session_id=%s",
-                        session_id,
-                    )
-        except asyncio.TimeoutError:
-            # Таймаут - нормально, используем модель из query param или по умолчанию
-            if current_model_name:
-                logger.debug(
-                    "[WS] No MODEL frame within timeout, using model from query param: session_id=%s model=%s",
-                    session_id,
-                    current_model_name,
-                )
-            else:
-                logger.debug(
-                    "[WS] No MODEL frame within timeout, using default model: session_id=%s",
-                    session_id,
-                )
-        except Exception as exc:
-            logger.warning(
-                "[WS] Error waiting for MODEL frame: session_id=%s error=%s",
+        # Опционально ждем MODEL фрейм для выбора модели - УБРАНО по запросу
+        # Используем модель из query param или по умолчанию
+        if current_model_name:
+            logger.debug(
+                "[WS] Using model from query param: session_id=%s model=%s",
                 session_id,
-                exc,
+                current_model_name,
+            )
+        else:
+            logger.debug(
+                "[WS] Using default model: session_id=%s",
+                session_id,
             )
 
         try:
