@@ -354,15 +354,15 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 			zap.String("subject", subject),
 		)
 
-		if err := d.imapService.ProcessMessage(ctx, userID, msg, section); err != nil {
-			d.logger.Error("failed to process message",
+		if err := d.imapService.SaveMessage(ctx, userID, msg, section); err != nil {
+			d.logger.Error("failed to save message",
 				zap.String("user_id", userID.String()),
 				zap.String("from", sender),
 				zap.String("subject", subject),
 				zap.Error(err),
 			)
 		} else {
-			d.logger.Info("message processed successfully",
+			d.logger.Info("message saved successfully",
 				zap.String("user_id", userID.String()),
 				zap.String("from", sender),
 				zap.String("subject", subject),

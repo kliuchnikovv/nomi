@@ -114,8 +114,8 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	}()
 
 	for msg := range messages {
-		if err := s.ProcessMessage(ctx, userID, msg, section); err != nil {
-			s.logger.Error("failed to process message", zap.Error(err))
+		if err := s.SaveMessage(ctx, userID, msg, section); err != nil {
+			s.logger.Error("failed to save message", zap.Error(err))
 		}
 	}
 
@@ -126,7 +126,7 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	return nil
 }
 
-func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID, msg *imap.Message, section *imap.BodySectionName) error {
+func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, msg *imap.Message, section *imap.BodySectionName) error {
 	if msg.Envelope == nil {
 		return fmt.Errorf("message envelope is nil")
 	}
@@ -172,22 +172,41 @@ func (s *GmailIMAPService) ProcessMessage(ctx context.Context, userID uuid.UUID,
 		return fmt.Errorf("failed to save inbox item: %w", err)
 	}
 
-	// Process with LLM
-	s.logger.Info("generating llm summary", zap.String("subject", inboxItem.Subject))
-	prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", inboxItem.Sender, inboxItem.Subject, inboxItem.Body)
-	response, err := s.llmService.GenerateSimple(ctx, userID, prompt)
-	if err != nil {
-		s.logger.Error("failed to generate llm response", zap.Error(err))
-		inboxItem.Status = "failed"
-	} else {
-		inboxItem.Response = response
-		inboxItem.Status = "processed"
-		s.logger.Info("llm summary generated", zap.String("response_length", fmt.Sprintf("%d", len(response))))
+	s.logger.Info("message saved to inbox", zap.String("subject", inboxItem.Subject))
+	return nil
+}
+
+func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
+	var items []storage.Inbox
+	if err := s.storage.DB.Where("status = ?", "pending").Find(&items).Error; err != nil {
+		return fmt.Errorf("failed to fetch pending items: %w", err)
 	}
 
-	if err := s.storage.DB.Save(inboxItem).Error; err != nil {
-		return fmt.Errorf("failed to update inbox item: %w", err)
+	if len(items) == 0 {
+		return nil
 	}
+
+	s.logger.Info("processing pending items", zap.Int("count", len(items)))
+
+	for _, item := range items {
+		s.logger.Info("generating llm summary", zap.String("subject", item.Subject))
+		prompt := fmt.Sprintf("Analyze this email:\nFrom: %s\nSubject: %s\nBody: %s\n\nProvide a summary and suggested action.", item.Sender, item.Subject, item.Body)
+
+		response, err := s.llmService.GenerateSimple(ctx, item.UserID, prompt)
+		if err != nil {
+			s.logger.Error("failed to generate llm response", zap.Error(err))
+			item.Status = "failed"
+		} else {
+			item.Response = response
+			item.Status = "processed"
+			s.logger.Info("llm summary generated", zap.String("response_length", fmt.Sprintf("%d", len(response))))
+		}
+
+		if err := s.storage.DB.Save(&item).Error; err != nil {
+			s.logger.Error("failed to update inbox item", zap.Error(err))
+		}
+	}
+
 	return nil
 }
 

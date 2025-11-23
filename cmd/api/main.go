@@ -78,13 +78,16 @@ func main() {
 
 	imapService := integrations.NewGmailIMAPService(logger, db, llmService)
 	imapDaemon := daemon.NewIMAPDaemon(logger, db, imapService, oauthConfigs)
+	inboxDaemon := daemon.NewInboxDaemon(logger, db, imapService)
 
-	// Start daemon
+	// Start daemons
 	go func() {
 		if err := imapDaemon.Start(context.Background()); err != nil {
-			logger.Error("failed to start imap daemon", zap.Error(err))
+			logger.Error("imap daemon failed", zap.Error(err))
 		}
 	}()
+
+	go inboxDaemon.Start(context.Background())
 
 	srv := server.New(logger, cfg, db, imapDaemon, oauthConfigs, oidcProviders)
 
