@@ -87,12 +87,18 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		return
 	}
 
+	h.logger.Info("client connected to websocket", zap.String("user_id", user.ID.String()))
+
 	clientConn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
+		h.logger.Error("failed to upgrade websocket", zap.Error(err))
 		h.sendHTTPError(c, http.StatusServiceUnavailable, err)
 		return
 	}
-	defer clientConn.Close()
+	defer func() {
+		h.logger.Info("client websocket closed", zap.String("user_id", user.ID.String()))
+		clientConn.Close()
+	}()
 
 	var query = *h.llmURL
 
@@ -106,29 +112,22 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		// Forward model parameter from client request to upstream LLM
 		if modelParam := c.Query("model"); modelParam != "" {
 			values.Add("model", modelParam)
-			h.logger.Debug("forwarding model parameter to LLM", zap.String("model", modelParam))
+			h.logger.Info("forwarding model parameter to LLM", zap.String("model", modelParam))
+		} else {
+			h.logger.Info("no model parameter provided by client")
 		}
 
 		// values.Add("chat_id", input.chatID.String())
 		query.RawQuery = values.Encode()
 
+		h.logger.Info("dialing LLM service", zap.String("url", query.String()))
 		conn, _, err := websocket.DefaultDialer.Dial(query.String(), hdr)
 		if err != nil {
+			h.logger.Error("ws: upstream dial failed", zap.Error(err), zap.String("url", query.String()))
 			log.Printf("ws: upstream dial failed: %v, path is %s", err, query.String())
 			return nil, err
 		}
-		// if err := h.sendWSMessage(conn, streamer.Frame{
-		// 	ID:        0,
-		// 	Kind:      streamer.TokenKind,
-		// 	Operation: streamer.MessageOperation,
-		// 	Payload: streamer.Payload{
-		// 		Message: input.message,
-		// 	},
-		// 	Timestamp: time.Now().UTC(),
-		// }); err != nil {
-		// 	_ = conn.Close()
-		// 	return nil, err
-		// }
+		h.logger.Info("connected to LLM service")
 		return conn, nil
 	}
 
@@ -139,10 +138,21 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		Timestamp: time.Now().UTC(),
 	})
 
+	// Extract initial message from query params
+	initialMessage := c.Query("message")
+	if initialMessage == "" {
+		initialMessage = c.Query("q") // backward compatibility
+	}
+
+	if initialMessage != "" {
+		h.logger.Info("extracted initial message from query", zap.String("message", initialMessage))
+	}
+
 	streamer.New(
 		h.storage,
 		h.logger,
 		user.ID,
+		initialMessage,
 		// input.chatID,
 		connectModel,
 	).Stream(streamer.NewSocketReader(

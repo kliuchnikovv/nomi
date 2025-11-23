@@ -18,22 +18,23 @@ type Streamer struct {
 	userID uuid.UUID
 	// chatID uuid.UUID
 
-	connectModel func() (*websocket.Conn, error)
+	initialMessage string
+	connectModel   func() (*websocket.Conn, error)
 }
 
 func New(
 	storage *storage.Storage,
 	logger *zap.Logger,
 	userID uuid.UUID,
-	// chatID uuid.UUID,
+	initialMessage string,
 	connectModel func() (*websocket.Conn, error),
 ) *Streamer {
 	return &Streamer{
-		storage: storage,
-		logger:  logger,
-		userID:  userID,
-		// chatID:       chatID,
-		connectModel: connectModel,
+		storage:        storage,
+		logger:         logger,
+		userID:         userID,
+		initialMessage: initialMessage,
+		connectModel:   connectModel,
 	}
 }
 
@@ -104,6 +105,23 @@ func (streamer *Streamer) Stream(
 				streamer.logger.Info("sent initial tools to model", zap.Int("count", len(tools)))
 			}
 		}
+
+		// Send initial message if present
+		if streamer.initialMessage != "" {
+			msgFrame := Frame{
+				Kind:      TokenKind,
+				Operation: MessageOperation,
+				Timestamp: time.Now().UTC(),
+				Payload: Payload{
+					Message: streamer.initialMessage,
+				},
+			}
+			if err := modelReader.Write(ctx, msgFrame); err != nil {
+				streamer.logger.Error("failed to send initial message to model", zap.Error(err))
+			} else {
+				streamer.logger.Info("sent initial message to model", zap.String("message", streamer.initialMessage))
+			}
+		}
 	}
 
 	// Make channels mutable so we can nil them out when their source closes.
@@ -143,7 +161,7 @@ func (streamer *Streamer) Stream(
 		case frame, ok := <-modelFramesCh:
 			if !ok {
 				// Upstream (model) closed; mark model down and continue.
-				streamer.logger.Debug("model chan is closed; will reconnect on next client message")
+				streamer.logger.Info("model chan is closed; will reconnect on next client message")
 				return
 			}
 
@@ -170,6 +188,8 @@ func (streamer *Streamer) Stream(
 					clientAlive = false
 					clientFramesCh = nil
 					clientErrsCh = nil
+				} else {
+					// streamer.logger.Debug("forwarded frame from model to client", zap.String("op", string(frame.Operation)))
 				}
 			}
 		case frame, ok := <-clientFramesCh:
@@ -179,12 +199,12 @@ func (streamer *Streamer) Stream(
 				}
 
 				// Client closed — keep model alive until it finishes.
-				streamer.logger.Debug("client chan is closed; keeping model alive")
+				streamer.logger.Info("client chan is closed; keeping model alive")
 				if err := modelReader.Write(ctx, Frame{
 					Kind:      TokenKind,
 					Operation: DoneOperation,
 				}); err != nil {
-					streamer.logger.Error("failed to write to model", zap.Error(err))
+					streamer.logger.Error("failed to write done to model", zap.Error(err))
 					_ = model.Close()
 				}
 				clientAlive = false
@@ -192,6 +212,7 @@ func (streamer *Streamer) Stream(
 			}
 
 			resetTimer()
+			streamer.logger.Info("received frame from client", zap.String("op", string(frame.Operation)))
 
 			if frame.Operation == MessageOperation && frame.Payload.MessageID == storage.ZeroUUID {
 				streamer.logger.Info("got frame to upsert", zap.Any("frame", frame), zap.String("message_id", frame.Payload.MessageID.String()))
@@ -218,11 +239,13 @@ func (streamer *Streamer) Stream(
 					streamer.logger.Error("failed to write to model", zap.Error(err))
 					_ = model.Close()
 					return
+				} else {
+					streamer.logger.Info("forwarded frame from client to model", zap.String("op", string(frame.Operation)))
 				}
 			}
 		case err, ok := <-modelErrsCh:
 			if !ok {
-				streamer.logger.Debug("model err chan is closed; will reconnect on demand")
+				streamer.logger.Info("model err chan is closed; will reconnect on demand")
 				if model != nil {
 					_ = model.Close()
 					model = nil
@@ -230,7 +253,7 @@ func (streamer *Streamer) Stream(
 				modelErrsCh = nil
 				continue
 			}
-			streamer.logger.Error("model err", zap.Error(err))
+			streamer.logger.Error("model error received", zap.Error(err))
 			// On model error, mark model down and continue.
 			if model != nil {
 				_ = model.Close()
@@ -244,12 +267,12 @@ func (streamer *Streamer) Stream(
 					continue
 				}
 
-				streamer.logger.Debug("client err chan is closed; keeping model alive")
+				streamer.logger.Info("client err chan is closed; keeping model alive")
 				if err := modelReader.Write(ctx, Frame{
 					Kind:      TokenKind,
 					Operation: DoneOperation,
 				}); err != nil {
-					streamer.logger.Error("failed to write to model", zap.Error(err))
+					streamer.logger.Error("failed to write done to model", zap.Error(err))
 					_ = model.Close()
 				}
 				clientAlive = false
@@ -257,7 +280,7 @@ func (streamer *Streamer) Stream(
 				continue
 			}
 
-			streamer.logger.Error("client err", zap.Error(err))
+			streamer.logger.Error("client error received", zap.Error(err))
 			// Treat client error as disconnect; stop client path, keep model.
 			clientAlive = false
 			clientFramesCh = nil
