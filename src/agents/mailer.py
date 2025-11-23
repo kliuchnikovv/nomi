@@ -20,6 +20,7 @@ Rules:
 - Use only information present in the email; do not invent details.
 - Keep suggestions concise and practical for fast triage.
 - If information is missing to decide, state what is missing before making a guess.
+- Return ONLY raw JSON per expected_output, without markdown fences or extra text.
 """
 expected_output = """
 {
