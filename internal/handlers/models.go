@@ -15,6 +15,8 @@ type Model struct {
 	Provider          string `json:"provider"`
 	Description       string `json:"description"`
 	ContextWindow     int    `json:"context_window"`
+	MaxOutputTokens   int    `json:"max_output_tokens"`
+	RPMLimit          int    `json:"rpm_limit"`
 	SupportsStreaming bool   `json:"supports_streaming"`
 	SupportsTools     bool   `json:"supports_tools"`
 }
