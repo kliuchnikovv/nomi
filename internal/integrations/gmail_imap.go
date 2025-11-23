@@ -213,9 +213,20 @@ Body: %s`, item.Sender, item.Subject, item.Body)
 			s.logger.Error("failed to generate llm response", zap.Error(err))
 			item.Status = "failed"
 		} else {
+			// Strip markdown code blocks if present
+			cleanResponse := response
+			if len(cleanResponse) > 7 && cleanResponse[:7] == "```json" {
+				cleanResponse = cleanResponse[7:]
+			} else if len(cleanResponse) > 3 && cleanResponse[:3] == "```" {
+				cleanResponse = cleanResponse[3:]
+			}
+			if len(cleanResponse) > 3 && cleanResponse[len(cleanResponse)-3:] == "```" {
+				cleanResponse = cleanResponse[:len(cleanResponse)-3]
+			}
+
 			// Validate JSON structure
 			var analysis storage.InboxAnalysis
-			if err := json.Unmarshal([]byte(response), &analysis); err != nil {
+			if err := json.Unmarshal([]byte(cleanResponse), &analysis); err != nil {
 				s.logger.Error("failed to parse llm response as json",
 					zap.Error(err),
 					zap.String("response", response))
@@ -230,7 +241,8 @@ Body: %s`, item.Sender, item.Subject, item.Body)
 					zap.String("importance", analysis.Importance.Level),
 					zap.Any("actions", analysis.Actions))
 
-				item.Response = response
+				// Save the cleaned JSON response
+				item.Response = cleanResponse
 				item.Status = "processed"
 			}
 		}
