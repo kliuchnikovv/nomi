@@ -17,11 +17,13 @@ const (
 type Operation string
 
 const (
-	PingOperation    Operation = "ping"
-	ErrorOperation   Operation = "error"
-	MessageOperation Operation = "message"
-	DoneOperation    Operation = "done"
-	ToolsOperation   Operation = "tools"
+	PingOperation        Operation = "ping"
+	ErrorOperation       Operation = "error"
+	MessageOperation     Operation = "message"
+	DoneOperation        Operation = "done"
+	ToolsOperation       Operation = "tools"
+	SelectModelOperation Operation = "select_model"
+	ChangeModelOperation Operation = "change_model"
 
 	AckOperation   Operation = "ack"
 	NackOperation  Operation = "nack"
@@ -44,6 +46,7 @@ type Frame struct {
 type Payload struct {
 	MessageID   uuid.UUID `json:"message_id,omitempty"`
 	Message     string    `json:"message,omitempty"`
+	Model       string    `json:"model,omitempty"`
 	Reason      string    `json:"reason,omitempty"`
 	Index       uint      `json:"ix,omitempty"`
 	EndOfBuffer bool      `json:"eof,omitempty"`

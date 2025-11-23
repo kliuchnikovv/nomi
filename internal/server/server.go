@@ -44,6 +44,7 @@ func New(
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler  = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
 		toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon)
+		modelsHandler  = handlers.NewModelsHandler("configs/models.json")
 		oauthHandler   = func() *handlers.OAuthHandler {
 			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
 			if err != nil {
@@ -93,6 +94,9 @@ func New(
 	r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteTool, authMiddleware))
 	r.GET("/api/integrations", wrapWithAuth(toolsHandler.ListIntegrations, authMiddleware))
 	r.POST("/api/integrations/gmail/sync", wrapWithAuth(toolsHandler.SyncGmail, authMiddleware))
+
+	// Models API
+	r.GET("/api/models", modelsHandler.ListModels)
 
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
 	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)

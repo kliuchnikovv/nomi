@@ -95,7 +95,6 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	defer clientConn.Close()
 
 	var query = *h.llmURL
-	// query.RawQuery = input.q.Encode()
 
 	// Provide connector to (re)establish model connection with initial meta.
 	connectModel := func() (*websocket.Conn, error) {
@@ -103,6 +102,13 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		hdr.Add("Cookie", "session_id=123") //TODO:
 
 		values := query.Query()
+
+		// Forward model parameter from client request to upstream LLM
+		if modelParam := c.Query("model"); modelParam != "" {
+			values.Add("model", modelParam)
+			h.logger.Debug("forwarding model parameter to LLM", zap.String("model", modelParam))
+		}
+
 		// values.Add("chat_id", input.chatID.String())
 		query.RawQuery = values.Encode()
 
