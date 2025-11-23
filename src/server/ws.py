@@ -37,6 +37,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             await websocket.accept()
             await websocket.close(code=1008, reason=f"invalid session_id: {session_id}")
             logger.warning("[WS] Reject: missing session_id")
+            logger.info("[WS] Open: session_id=%s", session_id)
             return
 
         await websocket.accept()
@@ -55,11 +56,14 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         # Track current model - initialize from query param if provided
         current_model_name: Optional[str] = model_from_query
         
+        logger.debug("[WS] Waiting for TOOLS frame: session_id=%s", session_id)
         try:
             # Ждем первый фрейм с инструментами
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            logger.debug("[WS] Received raw data (TOOLS wait): session_id=%s len=%d", session_id, len(raw))
             data = json.loads(raw)
             frame = Frame(**data)
+            logger.debug("[WS] Parsed frame (TOOLS wait): session_id=%s op=%s", session_id, frame.op)
             
             if frame.op == Op.TOOLS:
                 # Получили инструменты от genie-api
@@ -136,10 +140,13 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             # Продолжаем без инструментов
         
         # Опционально ждем MODEL фрейм для выбора модели
+        logger.debug("[WS] Waiting for optional MODEL frame: session_id=%s", session_id)
         try:
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
+            logger.debug("[WS] Received raw data (MODEL wait): session_id=%s len=%d", session_id, len(raw))
             data = json.loads(raw)
             frame = Frame(**data)
+            logger.debug("[WS] Parsed frame (MODEL wait): session_id=%s op=%s", session_id, frame.op)
             
             if frame.op == Op.MODEL:
                 payload = frame.payload
@@ -217,6 +224,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
 
         # Track last time we received any client message
         last_activity = time.monotonic()
+        logger.debug("[WS] Entering main loop: session_id=%s", session_id)
         try:
             # Пример: таймауты чтения (idle close)
             while True:
@@ -224,9 +232,11 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     raw = await asyncio.wait_for(websocket.receive_text(), timeout=30)
                     # Any received frame counts as activity
                     last_activity = time.monotonic()
+                    logger.debug("[WS] Received raw data (Main loop): session_id=%s len=%d", session_id, len(raw))
                     try:
                         data = json.loads(raw)
                         frame = Frame(**data)
+                        logger.debug("[WS] Parsed frame (Main loop): session_id=%s op=%s", session_id, frame.op)
                         # basic invariant checks; report as bad_request on failure
                         frame.validate_invariants()
                     except Exception as ex:
@@ -608,7 +618,9 @@ async def _send_frame(
     websocket: WebSocket,
     frame: Frame,
 ) -> int:
-    await websocket.send_json(frame.marshal())
+    data = frame.marshal()
+    logger.debug("[WS] Sending frame: op=%s id=%d payload_len=%d", frame.op, frame.id, len(str(data.get("payload", ""))))
+    await websocket.send_json(data)
     return frame.id+1
 
 
@@ -756,10 +768,13 @@ async def _process_message(
         idx = 0
         sent_token_events = 0
         total_delta_len = 0
+        
+        logger.debug("[WS] Starting agent stream: session_id=%s", session_id)
 
         async for chunk in _run_agent_stream(agent, text or ""):
             if not chunk:
                 continue
+            # logger.debug("[WS] Stream chunk: len=%d", len(chunk))
             next_id = await _send_frame(
                 websocket=websocket,
                 frame=make_data(
@@ -777,7 +792,11 @@ async def _process_message(
             idx += 1
             sent_token_events += 1
             total_delta_len += len(chunk)
+        
+        logger.debug("[WS] Agent stream finished: session_id=%s tokens=%d", session_id, sent_token_events)
+            
     except Exception as e:
+        logger.error("[WS] Error in agent stream: session_id=%s error=%s", session_id, e, exc_info=True)
         next_id = await _send_error(websocket, next_id, e, session_id, chat_id)
         return await _send_done(websocket, next_id, message_id, "error", chat_id)
 
