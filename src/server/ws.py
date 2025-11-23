@@ -46,6 +46,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         
         # Ждем инструменты от genie-api при подключении (genie-api отправляет их автоматически)
         tools_specs: List[ToolSpec] = []
+        current_model_name: Optional[str] = None  # Track current model
+        
         try:
             # Ждем первый фрейм с инструментами
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
@@ -125,10 +127,55 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                 exc,
             )
             # Продолжаем без инструментов
+        
+        # Опционально ждем MODEL фрейм для выбора модели
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
+            data = json.loads(raw)
+            frame = Frame(**data)
+            
+            if frame.op == Op.MODEL:
+                payload = frame.payload
+                if payload and isinstance(payload, dict):
+                    model_name = payload.get("model")
+                    if model_name:
+                        current_model_name = model_name
+                        logger.info(
+                            "[WS] Received model selection: session_id=%s model=%s",
+                            session_id,
+                            current_model_name,
+                        )
+                    else:
+                        logger.warning(
+                            "[WS] MODEL frame without model name: session_id=%s",
+                            session_id,
+                        )
+            else:
+                # Не MODEL фрейм - это нормально, используем модель по умолчанию
+                logger.debug(
+                    "[WS] No MODEL frame received, using default model: session_id=%s",
+                    session_id,
+                )
+        except asyncio.TimeoutError:
+            # Таймаут - нормально, используем модель по умолчанию
+            logger.debug(
+                "[WS] No MODEL frame within timeout, using default model: session_id=%s",
+                session_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[WS] Error waiting for MODEL frame: session_id=%s error=%s",
+                session_id,
+                exc,
+            )
 
         try:
-            # Создаем агента с полученными инструментами
-            agent = await agent_factory.build(session_id, tools_specs=tools_specs)
+            # Создаем агента с полученными инструментами и моделью
+            agent = await agent_factory.build(
+                session_id, 
+                tools_specs=tools_specs,
+                model_name=current_model_name
+            )
         except Exception as exc:
             next_id = await _send_frame(
                 websocket=websocket,
@@ -246,6 +293,104 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     )
                     await websocket.close(code=1000, reason="Client says bye")
                     break
+                elif frame.op == Op.MODEL:
+                    # Handle model change request
+                    payload = frame.payload
+                    if payload and isinstance(payload, dict):
+                        new_model_name = payload.get("model")
+                        if new_model_name:
+                            try:
+                                # Rebuild agent with new model
+                                agent = await agent_factory.build(
+                                    session_id,
+                                    tools_specs=tools_specs,
+                                    model_name=new_model_name
+                                )
+                                current_model_name = new_model_name
+                                logger.info(
+                                    "[WS] Model changed: session_id=%s new_model=%s",
+                                    session_id,
+                                    new_model_name,
+                                )
+                                # Send ACK
+                                next_id = await _send_frame(
+                                    websocket=websocket,
+                                    frame=make_data(
+                                        id=next_id,
+                                        op=Op.ACK,
+                                        chat_id=frame.chat_id,
+                                        payload={"model": new_model_name}
+                                    ),
+                                )
+                            except ValueError as e:
+                                # Invalid model name
+                                logger.warning(
+                                    "[WS] Invalid model requested: session_id=%s model=%s error=%s",
+                                    session_id,
+                                    new_model_name,
+                                    e,
+                                )
+                                next_id = await _send_frame(
+                                    websocket=websocket,
+                                    frame=make_error(
+                                        id=next_id,
+                                        chat_id=frame.chat_id,
+                                        code="invalid_model",
+                                        message=f"Unsupported model: {new_model_name}",
+                                        http=400,
+                                    ),
+                                )
+                            except Exception as e:
+                                # Other errors during agent rebuild
+                                logger.error(
+                                    "[WS] Failed to change model: session_id=%s model=%s error=%s",
+                                    session_id,
+                                    new_model_name,
+                                    e,
+                                )
+                                next_id = await _send_frame(
+                                    websocket=websocket,
+                                    frame=make_error(
+                                        id=next_id,
+                                        chat_id=frame.chat_id,
+                                        code="model_change_failed",
+                                        message="Failed to change model",
+                                        http=500,
+                                        details={"error": str(e)},
+                                    ),
+                                )
+                        else:
+                            logger.warning(
+                                "[WS] MODEL frame without model name: session_id=%s",
+                                session_id,
+                            )
+                            next_id = await _send_frame(
+                                websocket=websocket,
+                                frame=make_error(
+                                    id=next_id,
+                                    chat_id=frame.chat_id,
+                                    code="bad_request",
+                                    message="MODEL frame requires 'model' field in payload",
+                                    http=400,
+                                ),
+                            )
+                    else:
+                        logger.warning(
+                            "[WS] MODEL frame with invalid payload: session_id=%s payload=%s",
+                            session_id,
+                            payload,
+                        )
+                        next_id = await _send_frame(
+                            websocket=websocket,
+                            frame=make_error(
+                                id=next_id,
+                                chat_id=frame.chat_id,
+                                code="bad_request",
+                                message="MODEL frame requires valid payload",
+                                http=400,
+                            ),
+                        )
+                    continue
                 elif frame.op != Op.MESSAGE:
                     logger.warning("[WS] Unexpected op: op=%s session_id=%s", frame.op, session_id)
                     continue
