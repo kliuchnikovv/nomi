@@ -127,12 +127,22 @@ func (d *IMAPDaemon) watch(ctx context.Context, tool storage.Tool) {
 		default:
 		}
 
+		d.logger.Info("connecting watcher...", zap.String("tool_id", tool.ID.String()))
 		if err := d.connectAndListen(ctx, tool); err != nil {
 			d.logger.Error("watcher error, retrying in 30s", zap.String("tool_id", tool.ID.String()), zap.Error(err))
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(30 * time.Second):
+				continue
+			}
+		} else {
+			d.logger.Info("watcher finished cleanly, restarting in 1s", zap.String("tool_id", tool.ID.String()))
+			// Prevent tight loop if connectAndListen returns nil immediately
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
 				continue
 			}
 		}
@@ -158,7 +168,27 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 	if err != nil {
 		return fmt.Errorf("failed to dial: %w", err)
 	}
-	defer c.Logout()
+	// defer c.Logout() - replaced with timeout-aware logout
+	defer func() {
+		d.logger.Info("closing connection", zap.String("tool_id", tool.ID.String()))
+
+		done := make(chan struct{})
+		go func() {
+			if err := c.Logout(); err != nil {
+				d.logger.Warn("logout error", zap.Error(err))
+			}
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			d.logger.Info("connection closed cleanly", zap.String("tool_id", tool.ID.String()))
+		case <-time.After(5 * time.Second):
+			d.logger.Warn("logout timed out, moving on", zap.String("tool_id", tool.ID.String()))
+			// We can't easily force close the client if it doesn't expose Close(),
+			// but we can unblock the daemon. The underlying connection will eventually timeout.
+		}
+	}()
 	d.logger.Info("connected to imap server", zap.String("tool_id", tool.ID.String()))
 
 	// Authenticate
