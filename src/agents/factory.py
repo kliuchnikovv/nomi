@@ -93,11 +93,23 @@ class AgentFactory:
         #     )]
 
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
-        logger.info("[WS] Building agent: session_id=%s model=%s", session_id, model_name or "default")
+        logger.info("[WS] Building agent: session_id=%s model=%s tools_count=%d", session_id, model_name or "default", len(tools))
 
-        return GenieAgent(
-            db=self._db,
-            model=model,
-            tools=tools,
-            debug_mode=self._debug_mode,
-        )
+        try:
+            agent = GenieAgent(
+                db=self._db,
+                model=model,
+                tools=tools,
+                debug_mode=self._debug_mode,
+            )
+            logger.info("[WS] Agent created successfully: session_id=%s", session_id)
+            return agent
+        except Exception as e:
+            logger.error(
+                "[WS] Failed to create agent: session_id=%s model=%s error=%s",
+                session_id,
+                model_name or "default",
+                e,
+                exc_info=True
+            )
+            raise
