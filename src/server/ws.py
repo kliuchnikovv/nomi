@@ -40,13 +40,20 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             return
 
         await websocket.accept()
-        logger.info("[WS] Open: session_id=%s", session_id)
+        
+        # Extract model from query parameters if provided
+        model_from_query = websocket.query_params.get("model")
+        if model_from_query:
+            logger.info("[WS] Open: session_id=%s model=%s", session_id, model_from_query)
+        else:
+            logger.info("[WS] Open: session_id=%s", session_id)
 
         next_id = 0
         
         # Ждем инструменты от genie-api при подключении (genie-api отправляет их автоматически)
         tools_specs: List[ToolSpec] = []
-        current_model_name: Optional[str] = None  # Track current model
+        # Track current model - initialize from query param if provided
+        current_model_name: Optional[str] = model_from_query
         
         try:
             # Ждем первый фрейм с инструментами
@@ -141,9 +148,10 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     if model_name:
                         current_model_name = model_name
                         logger.info(
-                            "[WS] Received model selection: session_id=%s model=%s",
+                            "[WS] Received model selection via frame: session_id=%s model=%s (overrides query param: %s)",
                             session_id,
                             current_model_name,
+                            model_from_query is not None,
                         )
                     else:
                         logger.warning(
@@ -151,17 +159,31 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                             session_id,
                         )
             else:
-                # Не MODEL фрейм - это нормально, используем модель по умолчанию
+                # Не MODEL фрейм - это нормально, используем модель из query param или по умолчанию
+                if current_model_name:
+                    logger.debug(
+                        "[WS] No MODEL frame received, using model from query param: session_id=%s model=%s",
+                        session_id,
+                        current_model_name,
+                    )
+                else:
+                    logger.debug(
+                        "[WS] No MODEL frame received, using default model: session_id=%s",
+                        session_id,
+                    )
+        except asyncio.TimeoutError:
+            # Таймаут - нормально, используем модель из query param или по умолчанию
+            if current_model_name:
                 logger.debug(
-                    "[WS] No MODEL frame received, using default model: session_id=%s",
+                    "[WS] No MODEL frame within timeout, using model from query param: session_id=%s model=%s",
+                    session_id,
+                    current_model_name,
+                )
+            else:
+                logger.debug(
+                    "[WS] No MODEL frame within timeout, using default model: session_id=%s",
                     session_id,
                 )
-        except asyncio.TimeoutError:
-            # Таймаут - нормально, используем модель по умолчанию
-            logger.debug(
-                "[WS] No MODEL frame within timeout, using default model: session_id=%s",
-                session_id,
-            )
         except Exception as exc:
             logger.warning(
                 "[WS] Error waiting for MODEL frame: session_id=%s error=%s",
