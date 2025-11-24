@@ -91,7 +91,7 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	// 4. Fetch UNSEEN messages
 	criteria := imap.NewSearchCriteria()
 	criteria.WithoutFlags = []string{imap.SeenFlag}
-	uids, err := c.Search(criteria)
+	uids, err := c.UidSearch(criteria)
 	if err != nil {
 		return fmt.Errorf("failed to search messages: %w", err)
 	}
@@ -105,12 +105,12 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	seqset.AddNum(uids...)
 
 	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{imap.FetchEnvelope, section.FetchItem()}
+	items := []imap.FetchItem{imap.FetchEnvelope, section.FetchItem(), imap.FetchUid}
 
 	messages := make(chan *imap.Message, 10)
 	done := make(chan error, 1)
 	go func() {
-		done <- c.Fetch(seqset, items, messages)
+		done <- c.UidFetch(seqset, items, messages)
 	}()
 
 	for msg := range messages {
@@ -158,8 +158,25 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 		s.logger.Info("body fetched", zap.Int("length", len(body)))
 	}
 
+	// Check for duplicates
+	var count int64
+	if err := s.storage.DB.Model(&storage.Inbox{}).
+		Where("user_id = ? AND message_id = ?", userID, msg.Envelope.MessageId).
+		Count(&count).Error; err != nil {
+		return fmt.Errorf("failed to check for duplicates: %w", err)
+	}
+
+	if count > 0 {
+		s.logger.Info("skipping duplicate message",
+			zap.String("message_id", msg.Envelope.MessageId),
+			zap.String("subject", msg.Envelope.Subject))
+		return nil
+	}
+
 	inboxItem := &storage.Inbox{
 		UserID:     userID,
+		MessageID:  msg.Envelope.MessageId,
+		UID:        msg.Uid,
 		Sender:     sender,
 		Subject:    msg.Envelope.Subject,
 		Snippet:    "", // TODO: extract snippet
@@ -188,10 +205,20 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 
 	s.logger.Info("processing pending items", zap.Int("count", len(items)))
 
+	// Group items by UserID to batch IMAP operations
+	itemsByUser := make(map[uuid.UUID][]storage.Inbox)
 	for _, item := range items {
-		s.logger.Info("generating llm summary", zap.String("subject", item.Subject))
+		itemsByUser[item.UserID] = append(itemsByUser[item.UserID], item)
+	}
 
-		prompt := fmt.Sprintf(`Analyze this email and return a JSON response with the following structure:
+	for userID, userItems := range itemsByUser {
+		var uidsToMarkRead []uint32
+
+		for i := range userItems {
+			item := &userItems[i] // Use pointer to modify item
+			s.logger.Info("generating llm summary", zap.String("subject", item.Subject))
+
+			prompt := fmt.Sprintf(`Analyze this email and return a JSON response with the following structure:
 {
   "title": "Brief title based on subject",
   "importance": {"level": "high|medium|low", "reason": "short reason"},
@@ -208,48 +235,135 @@ From: %s
 Subject: %s
 Body: %s`, item.Sender, item.Subject, item.Body)
 
-		response, err := s.llmService.GenerateSimple(ctx, item.UserID, prompt, "mailer")
-		if err != nil {
-			s.logger.Error("failed to generate llm response", zap.Error(err))
-			item.Status = "failed"
-		} else {
-			// Strip markdown code blocks if present
-			cleanResponse := response
-			if len(cleanResponse) > 7 && cleanResponse[:7] == "```json" {
-				cleanResponse = cleanResponse[7:]
-			} else if len(cleanResponse) > 3 && cleanResponse[:3] == "```" {
-				cleanResponse = cleanResponse[3:]
-			}
-			if len(cleanResponse) > 3 && cleanResponse[len(cleanResponse)-3:] == "```" {
-				cleanResponse = cleanResponse[:len(cleanResponse)-3]
-			}
-
-			// Validate JSON structure
-			var analysis storage.InboxAnalysis
-			if err := json.Unmarshal([]byte(cleanResponse), &analysis); err != nil {
-				s.logger.Error("failed to parse llm response as json",
-					zap.Error(err),
-					zap.String("response", response))
-				// Still save the raw response, but maybe mark as processed?
-				// Or maybe failed? Let's save it and mark processed for now,
-				// but the UI might show empty fields if it expects valid JSON.
-				item.Response = response
-				item.Status = "processed"
+			response, err := s.llmService.GenerateSimple(ctx, item.UserID, prompt, "mailer")
+			if err != nil {
+				s.logger.Error("failed to generate llm response", zap.Error(err))
+				item.Status = "failed"
 			} else {
-				s.logger.Info("llm analysis parsed successfully",
-					zap.String("title", analysis.Title),
-					zap.String("importance", analysis.Importance.Level),
-					zap.Any("actions", analysis.Actions))
+				// Strip markdown code blocks if present
+				cleanResponse := response
+				if len(cleanResponse) > 7 && cleanResponse[:7] == "```json" {
+					cleanResponse = cleanResponse[7:]
+				} else if len(cleanResponse) > 3 && cleanResponse[:3] == "```" {
+					cleanResponse = cleanResponse[3:]
+				}
+				if len(cleanResponse) > 3 && cleanResponse[len(cleanResponse)-3:] == "```" {
+					cleanResponse = cleanResponse[:len(cleanResponse)-3]
+				}
 
-				// Save the cleaned JSON response
-				item.Response = cleanResponse
-				item.Status = "processed"
+				// Validate JSON structure
+				var analysis storage.InboxAnalysis
+				if err := json.Unmarshal([]byte(cleanResponse), &analysis); err != nil {
+					s.logger.Error("failed to parse llm response as json",
+						zap.Error(err),
+						zap.String("response", response))
+					item.Response = response
+					item.Status = "processed"
+				} else {
+					s.logger.Info("llm analysis parsed successfully",
+						zap.String("title", analysis.Title),
+						zap.String("importance", analysis.Importance.Level),
+						zap.Any("actions", analysis.Actions))
+
+					// Save the cleaned JSON response
+					item.Response = cleanResponse
+					item.Status = "processed"
+
+					// If importance is low, add to list to mark as read
+					if analysis.Importance.Level == "low" && item.UID > 0 {
+						uidsToMarkRead = append(uidsToMarkRead, item.UID)
+					}
+				}
+			}
+
+			if err := s.storage.DB.Save(item).Error; err != nil {
+				s.logger.Error("failed to update inbox item", zap.Error(err))
 			}
 		}
 
-		if err := s.storage.DB.Save(&item).Error; err != nil {
-			s.logger.Error("failed to update inbox item", zap.Error(err))
+		// Batch mark as read for this user
+		if len(uidsToMarkRead) > 0 {
+			s.logger.Info("marking low priority messages as read",
+				zap.String("user_id", userID.String()),
+				zap.Int("count", len(uidsToMarkRead)))
+			if err := s.MarkMessagesAsRead(ctx, userID, uidsToMarkRead); err != nil {
+				s.logger.Error("failed to mark messages as read", zap.Error(err))
+			}
 		}
+	}
+
+	return nil
+}
+
+func (s *GmailIMAPService) MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, uids []uint32) error {
+	// 1. Get Gmail tool params
+	tools, err := s.storage.GetTools(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get tools: %w", err)
+	}
+
+	var gmailTool *storage.Tool
+	for _, t := range tools {
+		if t.Provider == "gmail" && t.Enabled {
+			gmailTool = &t
+			break
+		}
+	}
+
+	if gmailTool == nil {
+		return fmt.Errorf("gmail integration not found or disabled")
+	}
+
+	var params struct {
+		Creds struct {
+			Token string `json:"token"`
+		} `json:"creds"`
+	}
+	if err := json.Unmarshal([]byte(gmailTool.Params), &params); err != nil {
+		return fmt.Errorf("failed to parse gmail params: %w", err)
+	}
+
+	if params.Creds.Token == "" {
+		return fmt.Errorf("gmail access token not found")
+	}
+
+	// 2. Connect to IMAP
+	c, err := client.DialTLS("imap.gmail.com:993", nil)
+	if err != nil {
+		return fmt.Errorf("failed to dial imap: %w", err)
+	}
+	defer c.Logout()
+
+	// Authenticate using XOAUTH2
+	oauthToken, err := s.storage.GetOAuthTokenByUser(ctx, userID, "gmail")
+	if err != nil {
+		return fmt.Errorf("failed to get oauth token info: %w", err)
+	}
+
+	saslClient := &Xoauth2Client{
+		Username: oauthToken.AccountEmail,
+		Token:    params.Creds.Token,
+	}
+
+	if err := c.Authenticate(saslClient); err != nil {
+		return fmt.Errorf("imap authentication failed: %w", err)
+	}
+
+	// 3. Select Inbox
+	_, err = c.Select("INBOX", false)
+	if err != nil {
+		return fmt.Errorf("failed to select inbox: %w", err)
+	}
+
+	// 4. Mark messages as read
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(uids...)
+
+	item := imap.FormatFlagsOp(imap.AddFlags, true)
+	flags := []interface{}{imap.SeenFlag}
+
+	if err := c.UidStore(seqset, item, flags, nil); err != nil {
+		return fmt.Errorf("failed to mark messages as read: %w", err)
 	}
 
 	return nil
