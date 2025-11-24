@@ -14,7 +14,19 @@ instructions = """
 You receive a single email (plain text or snippet). Do the following:
 1) Classify importance (high/medium/low) and urgency (urgent/soon/can wait) with one-line reasons.
 2) Write a 2–3 sentence summary focused on sender intent and key asks/dates.
-3) Propose 3–5 action options with short labels and one-line rationales. Include things like: reply now, schedule a reply, snooze, mark as done, open in web view, unsubscribe/report spam when appropriate.
+3) Propose 3–5 action options. You MUST follow these rules for actions:
+    - ALWAYS include an "Open in Web" action with command "open_web".
+    - IF the email is NOT marked as read (or if you can't tell, assume it's unread), include a "Mark as Done" action with command "mark_done".
+    - IF the email contains an unsubscribe link or is clearly promotional/newsletter, include an "Unsubscribe" action with command "unsubscribe".
+    - You may include other actions like "Reply" (command "reply") or "Snooze" (command "snooze") if appropriate.
+
+For each action, provide:
+    - label: A short, human-readable label.
+    - why: A one-line rationale.
+    - command: The machine-readable command identifier.
+    - agent: "mailer".
+    - url: The URL for the action (REQUIRED for "open_web", null otherwise).
+    - prompt: A natural language prompt for the agent to execute the command (REQUIRED for "mark_done", "unsubscribe", "reply", "snooze", etc., null for "open_web").
 
 Rules:
 - Use only information present in the email; do not invent details.
@@ -29,9 +41,30 @@ expected_output = """
   "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
   "summary": "2-3 sentence summary focusing on intent and key asks/dates",
   "actions": [
-    {"label": "reply_now|schedule_reply|snooze|mark_done|open_web|unsubscribe|report_spam", "why": "one-line rationale"},
-    {"label": "reply_now|schedule_reply|snooze|mark_done|open_web|unsubscribe|report_spam", "why": "one-line rationale"},
-    {"label": "reply_now|schedule_reply|snooze|mark_done|open_web|unsubscribe|report_spam", "why": "one-line rationale"}
+    {
+      "label": "Open in Web",
+      "why": "View original message",
+      "command": "open_web",
+      "agent": "mailer",
+      "url": "https://mail.google.com/...",
+      "prompt": null
+    },
+    {
+      "label": "Mark as Done",
+      "why": "No further action needed",
+      "command": "mark_done",
+      "agent": "mailer",
+      "url": null,
+      "prompt": "Mark email '{email_subject}' as read"
+    },
+    {
+      "label": "Reply",
+      "why": "Urgent request",
+      "command": "reply",
+      "agent": "mailer",
+      "url": null,
+      "prompt": "Reply to '{sender}' regarding '{email_subject}'"
+    }
   ],
   "missing_info": "what is missing to decide, or empty string if nothing"
 }
