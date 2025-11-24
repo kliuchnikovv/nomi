@@ -2,8 +2,10 @@ package daemon
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -164,9 +166,21 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 	}
 
 	d.logger.Info("dialing imap server", zap.String("tool_id", tool.ID.String()))
-	c, err := client.DialTLS("imap.gmail.com:993", nil)
+
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	conn, err := tls.DialWithDialer(dialer, "tcp", "imap.gmail.com:993", nil)
 	if err != nil {
 		return fmt.Errorf("failed to dial: %w", err)
+	}
+
+	c, err := client.New(conn)
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("failed to create client: %w", err)
 	}
 	// defer c.Logout() - replaced with timeout-aware logout
 	defer func() {
