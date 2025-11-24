@@ -317,6 +317,17 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 			}
 		case err := <-done:
 			return err
+		case <-time.After(15 * time.Minute):
+			d.logger.Info("refreshing idle connection", zap.String("tool_id", tool.ID.String()))
+			close(stop)
+			// Wait for done or timeout
+			select {
+			case <-done:
+				return nil // Return nil to trigger reconnection in watch loop
+			case <-time.After(5 * time.Second):
+				d.logger.Warn("idle command close timed out", zap.String("tool_id", tool.ID.String()))
+				return nil
+			}
 		}
 	}
 }
