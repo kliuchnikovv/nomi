@@ -11,15 +11,22 @@ import (
 
 // Executor executes email actions
 type Executor struct {
-	logger  *zap.Logger
-	storage *storage.Storage
+	logger       *zap.Logger
+	storage      *storage.Storage
+	gmailService GmailService
+}
+
+// GmailService interface for IMAP operations
+type GmailService interface {
+	MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, uids []uint32) error
 }
 
 // NewExecutor creates a new action executor
-func NewExecutor(logger *zap.Logger, store *storage.Storage) *Executor {
+func NewExecutor(logger *zap.Logger, store *storage.Storage, gmailSvc GmailService) *Executor {
 	return &Executor{
-		logger:  logger.With(zap.String("component", "action_executor")),
-		storage: store,
+		logger:       logger.With(zap.String("component", "action_executor")),
+		storage:      store,
+		gmailService: gmailSvc,
 	}
 }
 
@@ -58,9 +65,38 @@ func (e *Executor) Execute(ctx context.Context, userID uuid.UUID, emailID uuid.U
 	}
 }
 
-// markAsRead marks the email as read
+// markAsRead marks the email as read both in DB and in Gmail via IMAP
 func (e *Executor) markAsRead(ctx context.Context, userID uuid.UUID, emailID uuid.UUID) error {
-	return e.storage.MarkAsRead(ctx, userID, emailID)
+	// 1. Mark as read in local database
+	if err := e.storage.MarkAsRead(ctx, userID, emailID); err != nil {
+		return fmt.Errorf("failed to mark as read in database: %w", err)
+	}
+
+	// 2. Get email UID to mark as read in Gmail
+	var inbox storage.Inbox
+	if err := e.storage.DB.WithContext(ctx).
+		Where("id = ? AND user_id = ?", emailID, userID).
+		First(&inbox).Error; err != nil {
+		e.logger.Warn("failed to get email UID for IMAP mark as read", zap.Error(err))
+		// Don't fail the whole operation if we can't mark in Gmail
+		return nil
+	}
+
+	// 3. Mark as read in Gmail via IMAP
+	if inbox.UID > 0 {
+		if err := e.gmailService.MarkMessagesAsRead(ctx, userID, []uint32{inbox.UID}); err != nil {
+			e.logger.Error("failed to mark as read in Gmail",
+				zap.Error(err),
+				zap.Uint32("uid", inbox.UID))
+			// Don't fail - we already marked in DB
+		} else {
+			e.logger.Info("marked as read in Gmail",
+				zap.Uint32("uid", inbox.UID),
+				zap.String("subject", inbox.Subject))
+		}
+	}
+
+	return nil
 }
 
 // archive archives the email (marks as archived)

@@ -84,17 +84,24 @@ func (b *Builder) findUnsubscribeURL(body string) string {
 		return ""
 	}
 
-	// Try multiple patterns
+	// Try multiple patterns - order matters, try most specific first
 	patterns := []string{
-		`(?i)href\s*=\s*"([^"]*unsubscribe[^"]*)\"`,
-		`(?i)href\s*=\s*'([^']*unsubscribe[^']*)'`,
-		`(?i)(https?://[^\s<>"]+unsubscribe[^\s<>"]*)`,
+		// Pattern 1: href="..." or href='...'
+		`(?i)href\s*=\s*["']([^"']*unsubscribe[^"']*)["']`,
+		// Pattern 2: Standalone URL with unsubscribe
+		`(?i)(https?://[^\s<>"']+unsubscribe[^\s<>"']*)`,
+		// Pattern 3: URL in angle brackets
+		`(?i)<(https?://[^>]*unsubscribe[^>]*)>`,
 	}
 
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		if matches := re.FindStringSubmatch(body); len(matches) >= 2 {
-			return matches[1]
+			url := matches[1]
+			// Clean up common artifacts
+			url = regexp.MustCompile(`[<>]`).ReplaceAllString(url, "")
+			b.logger.Debug("found unsubscribe URL", zap.String("url", url))
+			return url
 		}
 	}
 

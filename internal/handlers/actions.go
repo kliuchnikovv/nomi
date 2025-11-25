@@ -12,18 +12,20 @@ import (
 )
 
 type ActionsHandler struct {
-	storage    *storage.Storage
-	llmService *llm.Service
-	logger     *zap.Logger
-	executor   *actions.Executor
+	storage      *storage.Storage
+	llmService   *llm.Service
+	logger       *zap.Logger
+	executor     *actions.Executor
+	gmailService actions.GmailService
 }
 
-func NewActionsHandler(storage *storage.Storage, llmService *llm.Service, logger *zap.Logger) *ActionsHandler {
+func NewActionsHandler(storage *storage.Storage, llmService *llm.Service, logger *zap.Logger, gmailService actions.GmailService) *ActionsHandler {
 	return &ActionsHandler{
-		storage:    storage,
-		llmService: llmService,
-		logger:     logger.With(zap.String("component", "actions_handler")),
-		executor:   actions.NewExecutor(logger, storage),
+		storage:      storage,
+		llmService:   llmService,
+		logger:       logger.With(zap.String("component", "actions_handler")),
+		executor:     actions.NewExecutor(logger, storage, gmailService),
+		gmailService: gmailService,
 	}
 }
 

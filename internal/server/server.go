@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/daemon"
@@ -20,6 +22,11 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// GmailIMAPService interface for IMAP operations
+type GmailIMAPService interface {
+	MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, uids []uint32) error
+}
+
 func New(
 	logger *zap.Logger,
 	cfg *config.Config,
@@ -28,6 +35,7 @@ func New(
 	oauthConfigs map[string]*oauth2.Config,
 	oidcProviders map[string]*oidc.Provider,
 	llmService *llm.Service,
+	gmailIMAPService GmailIMAPService,
 ) *http.Server {
 	var r = gin.New()
 	r.Use(
@@ -41,7 +49,7 @@ func New(
 		chatHandler    = handlers.NewChatHandler(db)
 		messageHandler = handlers.NewMessageHandler(db)
 		inboxHandler   = handlers.NewInboxHandler(db)
-		actionsHandler = handlers.NewActionsHandler(db, llmService, logger)
+		actionsHandler = handlers.NewActionsHandler(db, llmService, logger, gmailIMAPService)
 		tokenManager   = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
