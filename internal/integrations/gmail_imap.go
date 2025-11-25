@@ -227,7 +227,17 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 			item := &userItems[i] // Use pointer to modify item
 			s.logger.Info("generating llm summary", zap.String("subject", item.Subject))
 
-			prompt := fmt.Sprintf(`From: %s\nSubject: %s\nBody: %s`, item.Sender, item.Subject, item.Body)
+			// Construct Gmail URL using Message-ID
+			gmailURL := ""
+			if item.MessageID != "" {
+				cleanMessageID := strings.Trim(item.MessageID, "<>")
+				gmailURL = fmt.Sprintf("https://mail.google.com/mail/u/0/#search/rfc822msgid:%s", cleanMessageID)
+			}
+
+			prompt := fmt.Sprintf(`From: %s
+Subject: %s
+Gmail URL: %s
+Body: %s`, item.Sender, item.Subject, gmailURL, item.Body)
 
 			response, err := s.llmService.GenerateSimple(ctx, item.UserID, prompt, "mailer")
 			if err != nil {
