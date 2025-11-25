@@ -25,8 +25,12 @@ type InboxLevel struct {
 }
 
 type InboxAction struct {
-	Label string `json:"label"`
-	Why   string `json:"why"`
+	Label   string  `json:"label"`
+	Why     string  `json:"why"`
+	Command string  `json:"command"`
+	Agent   string  `json:"agent"`
+	URL     *string `json:"url"`
+	Prompt  *string `json:"prompt"`
 }
 
 // InboxMessage represents an inbox message with pagination metadata

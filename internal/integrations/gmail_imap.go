@@ -233,10 +233,23 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
   "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
   "summary": "2-3 sentence summary focusing on intent and key asks/dates",
   "actions": [
-    {"label": "reply_now|schedule_reply|snooze|mark_done|open_web|unsubscribe|report_spam", "why": "one-line rationale"}
+    {
+      "label": "Action Label",
+      "why": "one-line rationale",
+      "command": "open_web|mark_done|unsubscribe|report_spam",
+      "agent": "mailer",
+      "url": "https://mail.google.com/... (only for open_web command)",
+      "prompt": "Prompt for LLM agent (only for complex actions like unsubscribe)"
+    }
   ],
   "missing_info": "what is missing to decide, or empty string if nothing"
 }
+
+For actions:
+- "open_web": provide the Gmail web URL in the "url" field
+- "mark_done": use command "mark_done", provide a prompt like "Mark email 'Subject' as read"
+- "unsubscribe": use command "unsubscribe", provide a prompt like "Unsubscribe from the X mailing list"
+- "report_spam": use command "report_spam", provide a prompt describing the spam action
 
 Email:
 From: %s
