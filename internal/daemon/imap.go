@@ -378,11 +378,11 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(uids...)
 
-	// Fetch envelope and partial body (first 40KB) to allow summary generation
-	// while avoiding "short write" errors on large emails
+	// Fetch envelope and body (using PEEK to avoid marking as read)
+	// Note: We don't use Partial here because it can cause "short write" errors
+	// with some IMAP servers. Instead, we'll truncate on the application side if needed.
 	section := &imap.BodySectionName{
-		Peek:    true,
-		Partial: []int{0, 40000}, // Fetch first 40KB
+		Peek: true,
 	}
 
 	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchBodyStructure, imap.FetchFlags, section.FetchItem()}

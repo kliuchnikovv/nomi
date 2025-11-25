@@ -141,9 +141,17 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 	if section != nil {
 		r := msg.GetBody(section)
 		if r != nil {
-			b, err := io.ReadAll(r)
+			// Read up to 50KB to avoid memory issues with huge emails
+			const maxBodySize = 50 * 1024
+			limitedReader := io.LimitReader(r, maxBodySize)
+			b, err := io.ReadAll(limitedReader)
 			if err == nil {
 				body = string(b)
+				if len(b) == maxBodySize {
+					s.logger.Info("email body truncated",
+						zap.Int("size", maxBodySize),
+						zap.String("subject", msg.Envelope.Subject))
+				}
 			} else {
 				s.logger.Warn("failed to read message body, will process without it", zap.Error(err))
 			}
