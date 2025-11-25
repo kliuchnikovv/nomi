@@ -352,15 +352,15 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 	criteria := imap.NewSearchCriteria()
 	criteria.WithoutFlags = []string{imap.SeenFlag}
 
-	d.logger.Debug("executing IMAP search", zap.String("user_id", userID.String()))
-	uids, err := c.Search(criteria)
+	d.logger.Info("executing IMAP UID search", zap.String("user_id", userID.String()))
+	uids, err := c.UidSearch(criteria)
 	if err != nil {
 		d.logger.Error("search failed", zap.Error(err), zap.String("user_id", userID.String()))
 		return err
 	}
 
 	if len(uids) == 0 {
-		d.logger.Debug("no new messages found", zap.String("user_id", userID.String()))
+		d.logger.Info("no new messages found", zap.String("user_id", userID.String()))
 		return nil
 	}
 
@@ -403,7 +403,7 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 	done := make(chan error, 1)
 	go func() {
 		d.logger.Debug("fetch goroutine started", zap.String("user_id", userID.String()))
-		err := c.Fetch(seqset, items, messages)
+		err := c.UidFetch(seqset, items, messages)
 		if err != nil {
 			d.logger.Error("fetch returned error", zap.Error(err), zap.String("user_id", userID.String()))
 		} else {
