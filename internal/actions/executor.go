@@ -40,10 +40,18 @@ func (e *Executor) Execute(ctx context.Context, userID uuid.UUID, emailID uuid.U
 	case "open_web":
 		// Frontend handles this - no backend action needed
 		return nil
-	case "reply":
-		// This would trigger LLM to generate a reply
-		// For now, just log it
-		e.logger.Info("reply action triggered", zap.String("prompt", *action.Prompt))
+	case "reply", "forward", "create_task", "add_to_calendar", "save_attachment", "custom":
+		// LLM-suggested actions with prompts
+		// These would trigger LLM or other services to execute
+		// For now, just log them
+		if action.Prompt != nil {
+			e.logger.Info("LLM action triggered",
+				zap.String("command", action.Command),
+				zap.String("prompt", *action.Prompt))
+		} else {
+			e.logger.Warn("LLM action without prompt",
+				zap.String("command", action.Command))
+		}
 		return nil
 	default:
 		return fmt.Errorf("unknown action command: %s", action.Command)

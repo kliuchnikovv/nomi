@@ -274,11 +274,19 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 			item := &userItems[i]
 			s.logger.Info("processing message", zap.String("subject", item.Subject))
 
-			// Call LLM to analyze importance, urgency, and summary
+			// Call LLM to analyze importance, urgency, summary, and suggest actions
 			prompt := fmt.Sprintf(`Analyze this email and provide:
 1. Importance level (high/medium/low) with reason
 2. Urgency level (urgent/soon/can_wait) with reason
 3. A 2-3 sentence summary
+4. Suggest 1-2 smart context-aware actions the user might want to take
+
+Examples of smart actions:
+- "Reply with availability" if someone asks for a meeting
+- "Add to calendar" if there's an event mentioned
+- "Create task" if there's a request or TODO
+- "Forward to team" if it's relevant to others
+- "Save attachment" if there are important files
 
 Email:
 From: %s
@@ -291,8 +299,18 @@ Respond ONLY with valid JSON in this format:
   "title": "%s",
   "importance": {"level": "high|medium|low", "reason": "short reason"},
   "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
-  "summary": "2-3 sentence summary"
-}`, item.Sender, item.Subject, item.Body, item.Subject)
+  "summary": "2-3 sentence summary",
+  "suggested_actions": [
+    {"label": "Action label", "command": "action_command", "why": "why this action makes sense", "prompt": "detailed prompt for executing this action"}
+  ]
+}
+
+Note: suggested_actions is optional. Only suggest actions if they make sense for this email. Each action should have:
+- label: Short, user-friendly action name
+- command: One of: reply, forward, create_task, add_to_calendar, save_attachment, or custom
+- why: Brief explanation of why this action is relevant
+- prompt: Detailed instruction for executing the action (what to say in reply, what task to create, etc.)
+`, item.Sender, item.Subject, item.Body, item.Subject)
 
 			llmResponse, err := s.llmService.GenerateSimple(ctx, userID, prompt, "mailer")
 			if err != nil {
@@ -320,16 +338,34 @@ Respond ONLY with valid JSON in this format:
 				}
 			}
 
-			// Build actions using ActionBuilder
-			actions := s.actionBuilder.BuildActions(item)
+			// Build base actions using ActionBuilder
+			baseActions := s.actionBuilder.BuildActions(item)
 
-			// Combine LLM analysis with generated actions
+			// Merge base actions with LLM-suggested actions
+			allActions := baseActions
+			if len(llmAnalysis.Actions) > 0 {
+				// LLM suggested some actions - add them after base actions
+				s.logger.Info("adding LLM-suggested actions",
+					zap.Int("count", len(llmAnalysis.Actions)),
+					zap.String("subject", item.Subject))
+
+				// Set agent to "mailer" for all LLM-suggested actions
+				for i := range llmAnalysis.Actions {
+					if llmAnalysis.Actions[i].Agent == "" {
+						llmAnalysis.Actions[i].Agent = "mailer"
+					}
+				}
+
+				allActions = append(allActions, llmAnalysis.Actions...)
+			}
+
+			// Combine LLM analysis with merged actions
 			analysis := storage.InboxAnalysis{
 				Title:       llmAnalysis.Title,
 				Importance:  llmAnalysis.Importance,
 				Urgency:     llmAnalysis.Urgency,
 				Summary:     llmAnalysis.Summary,
-				Actions:     actions,
+				Actions:     allActions,
 				MissingInfo: llmAnalysis.MissingInfo,
 			}
 
