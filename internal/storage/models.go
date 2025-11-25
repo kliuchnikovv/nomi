@@ -46,6 +46,7 @@ type Inbox struct {
 	UserID     uuid.UUID `gorm:"type:uuid;not null"`
 	MessageID  string    `gorm:"type:text"`
 	UID        uint32    `gorm:"type:integer"`
+	ThreadID   uint64    `gorm:"type:bigint"`
 	Sender     string    `gorm:"type:text;not null"`
 	Subject    string    `gorm:"type:text;not null"`
 	Snippet    string    `gorm:"type:text;not null"`

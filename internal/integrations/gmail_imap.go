@@ -106,7 +106,7 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	seqset.AddNum(uids...)
 
 	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{imap.FetchEnvelope, section.FetchItem(), imap.FetchUid}
+	items := []imap.FetchItem{imap.FetchEnvelope, section.FetchItem(), imap.FetchUid, "X-GM-THRID"}
 
 	messages := make(chan *imap.Message, 10)
 	done := make(chan error, 1)
@@ -182,10 +182,21 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 		return nil
 	}
 
+	// Extract Gmail Thread ID from X-GM-THRID
+	var threadID uint64
+	if msg.Items != nil {
+		if thridInterface, ok := msg.Items["X-GM-THRID"]; ok {
+			if thrid, ok := thridInterface.(uint64); ok {
+				threadID = thrid
+			}
+		}
+	}
+
 	inboxItem := &storage.Inbox{
 		UserID:     userID,
 		MessageID:  msg.Envelope.MessageId,
 		UID:        msg.Uid,
+		ThreadID:   threadID,
 		Sender:     sender,
 		Subject:    msg.Envelope.Subject,
 		Snippet:    "", // TODO: extract snippet
@@ -198,7 +209,9 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 		return fmt.Errorf("failed to save inbox item: %w", err)
 	}
 
-	s.logger.Info("message saved to inbox", zap.String("subject", inboxItem.Subject))
+	s.logger.Info("message saved to inbox",
+		zap.String("subject", inboxItem.Subject),
+		zap.Uint64("thread_id", threadID))
 	return nil
 }
 
@@ -227,11 +240,11 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 			item := &userItems[i] // Use pointer to modify item
 			s.logger.Info("generating llm summary", zap.String("subject", item.Subject))
 
-			// Construct Gmail URL using Message-ID
+			// Construct Gmail URL using Thread ID
+			// Format: https://mail.google.com/mail/u/0/#inbox/{thread_id_in_hex}
 			gmailURL := ""
-			if item.MessageID != "" {
-				cleanMessageID := strings.Trim(item.MessageID, "<>")
-				gmailURL = fmt.Sprintf("https://mail.google.com/mail/u/0/#search/rfc822msgid:%s", cleanMessageID)
+			if item.ThreadID > 0 {
+				gmailURL = fmt.Sprintf("https://mail.google.com/mail/u/0/#inbox/%x", item.ThreadID)
 			}
 
 			prompt := fmt.Sprintf(`From: %s
