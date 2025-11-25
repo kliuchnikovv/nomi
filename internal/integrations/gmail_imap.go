@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
@@ -226,35 +227,7 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 			item := &userItems[i] // Use pointer to modify item
 			s.logger.Info("generating llm summary", zap.String("subject", item.Subject))
 
-			prompt := fmt.Sprintf(`Analyze this email and return a JSON response with the following structure:
-{
-  "title": "Brief title based on subject",
-  "importance": {"level": "high|medium|low", "reason": "short reason"},
-  "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
-  "summary": "2-3 sentence summary focusing on intent and key asks/dates",
-  "actions": [
-    {
-      "label": "Action Label",
-      "why": "one-line rationale",
-      "command": "open_web|mark_done|unsubscribe|report_spam",
-      "agent": "mailer",
-      "url": "https://mail.google.com/... (only for open_web command)",
-      "prompt": "Prompt for LLM agent (only for complex actions like unsubscribe)"
-    }
-  ],
-  "missing_info": "what is missing to decide, or empty string if nothing"
-}
-
-For actions:
-- "open_web": provide the Gmail web URL in the "url" field
-- "mark_done": use command "mark_done", provide a prompt like "Mark email 'Subject' as read"
-- "unsubscribe": use command "unsubscribe", provide a prompt like "Unsubscribe from the X mailing list"
-- "report_spam": use command "report_spam", provide a prompt describing the spam action
-
-Email:
-From: %s
-Subject: %s
-Body: %s`, item.Sender, item.Subject, item.Body)
+			prompt := fmt.Sprintf(`From: %s\nSubject: %s\nBody: %s`, item.Sender, item.Subject, item.Body)
 
 			response, err := s.llmService.GenerateSimple(ctx, item.UserID, prompt, "mailer")
 			if err != nil {
@@ -287,7 +260,7 @@ Body: %s`, item.Sender, item.Subject, item.Body)
 						zap.Any("actions", analysis.Actions))
 
 					// Save the cleaned JSON response
-					item.Response = cleanResponse
+					item.Response = strings.Trim(cleanResponse, "\t\n ")
 					item.Status = "processed"
 
 					// If importance is low, add to list to mark as read
