@@ -89,7 +89,7 @@ func main() {
 
 	go inboxDaemon.Start(context.Background())
 
-	srv := server.New(logger, cfg, db, imapDaemon, oauthConfigs, oidcProviders)
+	srv := server.New(logger, cfg, db, imapDaemon, oauthConfigs, oidcProviders, llmService)
 
 	logger.Info("Server is listening", zap.Int("port", cfg.Server.Port))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -12,6 +12,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/daemon"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
+	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -26,6 +27,7 @@ func New(
 	imapDaemon *daemon.IMAPDaemon,
 	oauthConfigs map[string]*oauth2.Config,
 	oidcProviders map[string]*oidc.Provider,
+	llmService *llm.Service,
 ) *http.Server {
 	var r = gin.New()
 	r.Use(
@@ -39,6 +41,7 @@ func New(
 		chatHandler    = handlers.NewChatHandler(db)
 		messageHandler = handlers.NewMessageHandler(db)
 		inboxHandler   = handlers.NewInboxHandler(db)
+		actionsHandler = handlers.NewActionsHandler(db, llmService, logger)
 		tokenManager   = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
@@ -86,6 +89,7 @@ func New(
 	r.GET("/api/inbox", wrapWithAuth(inboxHandler.ListInboxMessages, authMiddleware))
 	r.GET("/api/inbox/:id", wrapWithAuth(inboxHandler.GetInboxMessage, authMiddleware))
 	r.PATCH("/api/inbox/:id/read", wrapWithAuth(inboxHandler.MarkAsRead, authMiddleware))
+	r.POST("/api/inbox/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
 
 	r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateTool, authMiddleware))
 	r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))

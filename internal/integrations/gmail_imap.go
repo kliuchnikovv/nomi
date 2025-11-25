@@ -5,27 +5,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/actions"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
 
 type GmailIMAPService struct {
-	logger     *zap.Logger
-	storage    *storage.Storage
-	llmService *llm.Service
+	logger        *zap.Logger
+	storage       *storage.Storage
+	llmService    *llm.Service
+	actionBuilder *actions.Builder
 }
 
 func NewGmailIMAPService(logger *zap.Logger, store *storage.Storage, llmSvc *llm.Service) *GmailIMAPService {
 	return &GmailIMAPService{
-		logger:     logger.With(zap.String("component", "gmail_imap")),
-		storage:    store,
-		llmService: llmSvc,
+		logger:        logger.With(zap.String("component", "gmail_imap")),
+		storage:       store,
+		llmService:    llmSvc,
+		actionBuilder: actions.NewBuilder(logger),
 	}
 }
 
@@ -269,60 +271,80 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 		var uidsToMarkRead []uint32
 
 		for i := range userItems {
-			item := &userItems[i] // Use pointer to modify item
-			s.logger.Info("generating llm summary", zap.String("subject", item.Subject))
+			item := &userItems[i]
+			s.logger.Info("processing message", zap.String("subject", item.Subject))
 
-			// Construct Gmail URL using Thread ID
-			// Format: https://mail.google.com/mail/u/0/#inbox/{thread_id_in_hex}
-			gmailURL := ""
-			if item.ThreadID > 0 {
-				gmailURL = fmt.Sprintf("https://mail.google.com/mail/u/0/#inbox/%x", item.ThreadID)
+			// Call LLM to analyze importance, urgency, and summary
+			prompt := fmt.Sprintf(`Analyze this email and provide:
+1. Importance level (high/medium/low) with reason
+2. Urgency level (urgent/soon/can_wait) with reason
+3. A 2-3 sentence summary
+
+Email:
+From: %s
+Subject: %s
+Body:
+%s
+
+Respond ONLY with valid JSON in this format:
+{
+  "title": "%s",
+  "importance": {"level": "high|medium|low", "reason": "short reason"},
+  "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
+  "summary": "2-3 sentence summary"
+}`, item.Sender, item.Subject, item.Body, item.Subject)
+
+			llmResponse, err := s.llmService.GenerateSimple(ctx, userID, prompt, "mailer")
+			if err != nil {
+				s.logger.Error("failed to get LLM analysis", zap.Error(err))
+				// Continue with empty analysis
+				llmResponse = fmt.Sprintf(`{"title": "%s", "importance": {"level": "medium", "reason": "Unable to analyze"}, "urgency": {"level": "can_wait", "reason": "Unable to analyze"}, "summary": "Email analysis unavailable"}`, item.Subject)
 			}
 
-			prompt := fmt.Sprintf(`From: %s
-Subject: %s
-Gmail URL: %s
-Body: %s`, item.Sender, item.Subject, gmailURL, item.Body)
+			// Parse LLM response
+			var llmAnalysis storage.InboxAnalysis
+			if err := json.Unmarshal([]byte(llmResponse), &llmAnalysis); err != nil {
+				s.logger.Error("failed to parse LLM response", zap.Error(err), zap.String("response", llmResponse))
+				// Use default values
+				llmAnalysis = storage.InboxAnalysis{
+					Title: item.Subject,
+					Importance: storage.InboxLevel{
+						Level:  "medium",
+						Reason: "Unable to parse analysis",
+					},
+					Urgency: storage.InboxLevel{
+						Level:  "can_wait",
+						Reason: "Unable to parse analysis",
+					},
+					Summary: "Email analysis unavailable",
+				}
+			}
 
-			response, err := s.llmService.GenerateSimple(ctx, item.UserID, prompt, "mailer")
+			// Build actions using ActionBuilder
+			actions := s.actionBuilder.BuildActions(item)
+
+			// Combine LLM analysis with generated actions
+			analysis := storage.InboxAnalysis{
+				Title:       llmAnalysis.Title,
+				Importance:  llmAnalysis.Importance,
+				Urgency:     llmAnalysis.Urgency,
+				Summary:     llmAnalysis.Summary,
+				Actions:     actions,
+				MissingInfo: llmAnalysis.MissingInfo,
+			}
+
+			jsonData, err := json.Marshal(analysis)
 			if err != nil {
-				s.logger.Error("failed to generate llm response", zap.Error(err))
-				item.Status = "failed"
+				s.logger.Error("failed to marshal analysis", zap.Error(err))
+				item.Response = ""
 			} else {
-				// Strip markdown code blocks if present
-				cleanResponse := response
-				if len(cleanResponse) > 7 && cleanResponse[:7] == "```json" {
-					cleanResponse = cleanResponse[7:]
-				} else if len(cleanResponse) > 3 && cleanResponse[:3] == "```" {
-					cleanResponse = cleanResponse[3:]
-				}
-				if len(cleanResponse) > 3 && cleanResponse[len(cleanResponse)-3:] == "```" {
-					cleanResponse = cleanResponse[:len(cleanResponse)-3]
-				}
+				item.Response = string(jsonData)
+			}
+			item.Status = "processed"
 
-				// Validate JSON structure
-				var analysis storage.InboxAnalysis
-				if err := json.Unmarshal([]byte(cleanResponse), &analysis); err != nil {
-					s.logger.Error("failed to parse llm response as json",
-						zap.Error(err),
-						zap.String("response", response))
-					item.Response = response
-					item.Status = "processed"
-				} else {
-					s.logger.Info("llm analysis parsed successfully",
-						zap.String("title", analysis.Title),
-						zap.String("importance", analysis.Importance.Level),
-						zap.Any("actions", analysis.Actions))
-
-					// Save the cleaned JSON response
-					item.Response = strings.Trim(cleanResponse, "\t\n ")
-					item.Status = "processed"
-
-					// If importance is low, add to list to mark as read
-					if analysis.Importance.Level == "low" && item.UID > 0 {
-						uidsToMarkRead = append(uidsToMarkRead, item.UID)
-					}
-				}
+			// Add UID to list for marking as read if low priority
+			if item.UID > 0 && llmAnalysis.Importance.Level == "low" {
+				uidsToMarkRead = append(uidsToMarkRead, item.UID)
 			}
 
 			if err := s.storage.DB.Save(item).Error; err != nil {
