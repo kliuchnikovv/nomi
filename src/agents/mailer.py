@@ -26,7 +26,7 @@ For each action, provide:
     - command: The machine-readable command identifier.
     - agent: "mailer".
     - url: The URL for the action (REQUIRED for "open_web", null otherwise).
-    - prompt: A natural language prompt for the agent to execute the command (REQUIRED for "mark_done", "unsubscribe", "reply", "snooze", etc., null for "open_web").
+    - prompt: A natural language prompt for the agent to execute the command (REQUIRED for "mark_done", "unsubscribe", "reply", etc., null for "open_web").
 
 Rules:
 - Use only information present in the email; do not invent details.
