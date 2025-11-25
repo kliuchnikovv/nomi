@@ -183,13 +183,45 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 	}
 
 	// Extract Gmail Thread ID from X-GM-THRID
+	// The Thread ID might be in msg.Items as a raw value
 	var threadID uint64
+	s.logger.Debug("message items", zap.Any("items", msg.Items), zap.Uint32("uid", msg.Uid))
+
 	if msg.Items != nil {
-		if thridInterface, ok := msg.Items["X-GM-THRID"]; ok {
-			if thrid, ok := thridInterface.(uint64); ok {
-				threadID = thrid
+		// Try to get X-GM-THRID from Items
+		for key, value := range msg.Items {
+			s.logger.Debug("item", zap.String("key", string(key)), zap.Any("value", value), zap.String("type", fmt.Sprintf("%T", value)))
+
+			if key == "X-GM-THRID" {
+				s.logger.Info("found X-GM-THRID", zap.Any("value", value), zap.String("type", fmt.Sprintf("%T", value)))
+
+				// Try different type assertions
+				switch v := value.(type) {
+				case uint64:
+					threadID = v
+				case uint32:
+					threadID = uint64(v)
+				case int64:
+					threadID = uint64(v)
+				case int:
+					threadID = uint64(v)
+				case string:
+					// Try parsing as string
+					if parsed, err := fmt.Sscanf(v, "%d", &threadID); err == nil && parsed == 1 {
+						s.logger.Info("parsed thread ID from string", zap.Uint64("thread_id", threadID))
+					}
+				default:
+					s.logger.Warn("unexpected X-GM-THRID type", zap.String("type", fmt.Sprintf("%T", v)))
+				}
+				break
 			}
 		}
+
+		if threadID == 0 {
+			s.logger.Warn("X-GM-THRID not found or zero")
+		}
+	} else {
+		s.logger.Warn("msg.Items is nil")
 	}
 
 	inboxItem := &storage.Inbox{
