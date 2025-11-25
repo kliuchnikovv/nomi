@@ -347,10 +347,15 @@ func (d *IMAPDaemon) connectAndListen(ctx context.Context, tool storage.Tool) er
 }
 
 func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, userID uuid.UUID) error {
+	d.logger.Info("starting fetchNewMessages", zap.String("user_id", userID.String()))
+
 	criteria := imap.NewSearchCriteria()
 	criteria.WithoutFlags = []string{imap.SeenFlag}
+
+	d.logger.Debug("executing IMAP search", zap.String("user_id", userID.String()))
 	uids, err := c.Search(criteria)
 	if err != nil {
+		d.logger.Error("search failed", zap.Error(err), zap.String("user_id", userID.String()))
 		return err
 	}
 
@@ -362,6 +367,7 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 	d.logger.Info("found new messages",
 		zap.String("user_id", userID.String()),
 		zap.Int("count", len(uids)),
+		zap.Uint32s("uids", uids),
 	)
 
 	// Limit to prevent overloading - process max 50 messages at a time
@@ -387,13 +393,33 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 
 	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchBodyStructure, imap.FetchFlags, section.FetchItem()}
 
+	d.logger.Info("starting IMAP fetch",
+		zap.String("user_id", userID.String()),
+		zap.Int("message_count", len(uids)),
+		zap.Uint32s("uids", uids),
+	)
+
 	messages := make(chan *imap.Message, 10)
 	done := make(chan error, 1)
 	go func() {
-		done <- c.Fetch(seqset, items, messages)
+		d.logger.Debug("fetch goroutine started", zap.String("user_id", userID.String()))
+		err := c.Fetch(seqset, items, messages)
+		if err != nil {
+			d.logger.Error("fetch returned error", zap.Error(err), zap.String("user_id", userID.String()))
+		} else {
+			d.logger.Debug("fetch completed successfully", zap.String("user_id", userID.String()))
+		}
+		done <- err
 	}()
 
+	processedCount := 0
 	for msg := range messages {
+		processedCount++
+		d.logger.Debug("processing message",
+			zap.String("user_id", userID.String()),
+			zap.Int("message_num", processedCount),
+			zap.Uint32("uid", msg.Uid),
+		)
 		subject := ""
 		sender := ""
 		if msg.Envelope != nil {
@@ -417,13 +443,27 @@ func (d *IMAPDaemon) fetchNewMessages(ctx context.Context, c *client.Client, use
 				zap.Error(err),
 			)
 		} else {
-			d.logger.Info("message saved successfully",
+			d.logger.Debug("message saved successfully",
 				zap.String("user_id", userID.String()),
 				zap.String("from", sender),
 				zap.String("subject", subject),
+				zap.Uint32("uid", msg.Uid),
 			)
 		}
 	}
 
-	return <-done
+	d.logger.Info("finished processing messages",
+		zap.String("user_id", userID.String()),
+		zap.Int("processed", processedCount),
+	)
+
+	fetchErr := <-done
+	if fetchErr != nil {
+		d.logger.Error("fetch operation failed",
+			zap.Error(fetchErr),
+			zap.String("user_id", userID.String()),
+			zap.Int("processed_before_error", processedCount),
+		)
+	}
+	return fetchErr
 }
