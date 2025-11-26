@@ -50,8 +50,10 @@ func (g *gmailBackend) Init(ctx context.Context, rt *Runtime, state map[string]i
 	g.done = make(chan struct{})
 	if cfg, ok := rt.OAuthConfigs["gmail"]; ok {
 		g.oauthConfig = cfg
+	} else if cfg, ok := rt.OAuthConfigs["google"]; ok {
+		g.oauthConfig = cfg
 	} else {
-		g.logger.Warn("gmail oauth config not found in runtime")
+		g.logger.Warn("gmail/google oauth config not found in runtime")
 	}
 
 	// Start auto-sync loop
