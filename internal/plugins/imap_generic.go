@@ -55,7 +55,7 @@ func (g *genericIMAPBackend) Init(ctx context.Context, rt *Runtime, state map[st
 }
 
 func (g *genericIMAPBackend) runSyncLoop() {
-	ticker := time.NewTicker(10 * time.Minute) // Less frequent than Gmail
+	ticker := time.NewTicker(2 * time.Minute) // Less frequent than Gmail
 	defer ticker.Stop()
 
 	for {

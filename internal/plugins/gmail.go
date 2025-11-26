@@ -63,7 +63,7 @@ func (g *gmailBackend) Init(ctx context.Context, rt *Runtime, state map[string]i
 }
 
 func (g *gmailBackend) runSyncLoop() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
