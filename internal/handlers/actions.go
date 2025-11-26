@@ -129,7 +129,17 @@ func (h *ActionsHandler) ExecuteAction(c *gin.Context) {
 
 	// If action was mark_as_read, update local DB too (plugin might do it, but good to ensure)
 	if req.Command == "mark_as_read" {
-		_ = h.storage.MarkAsRead(ctx, user.ID, messageID)
+		h.logger.Info("updating local DB after mark_as_read",
+			zap.String("message_id", messageID.String()),
+			zap.String("user_id", user.ID.String()))
+		if err := h.storage.MarkAsRead(ctx, user.ID, messageID); err != nil {
+			h.logger.Error("failed to update local DB for mark_as_read",
+				zap.Error(err),
+				zap.String("message_id", messageID.String()))
+		} else {
+			h.logger.Info("successfully updated local DB for mark_as_read",
+				zap.String("message_id", messageID.String()))
+		}
 	}
 
 	c.JSON(http.StatusOK, ExecuteActionResponse{

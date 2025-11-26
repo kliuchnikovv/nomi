@@ -372,8 +372,14 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 
 func (s *EmailSyncer) MarkAsRead(ctx context.Context, userID uuid.UUID, uids []uint32, c *client.Client) error {
 	if len(uids) == 0 {
+		s.logger.Info("no UIDs to mark as read")
 		return nil
 	}
+
+	s.logger.Info("marking messages as read on IMAP server",
+		zap.String("user_id", userID.String()),
+		zap.Int("count", len(uids)),
+		zap.Uint32s("uids", uids))
 
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(uids...)
@@ -382,8 +388,16 @@ func (s *EmailSyncer) MarkAsRead(ctx context.Context, userID uuid.UUID, uids []u
 	flags := []interface{}{imap.SeenFlag}
 
 	if err := c.UidStore(seqset, item, flags, nil); err != nil {
+		s.logger.Error("failed to mark messages as read on IMAP",
+			zap.Error(err),
+			zap.String("user_id", userID.String()),
+			zap.Uint32s("uids", uids))
 		return fmt.Errorf("failed to mark messages as read on IMAP: %w", err)
 	}
+
+	s.logger.Info("successfully marked messages as read on IMAP server",
+		zap.String("user_id", userID.String()),
+		zap.Int("count", len(uids)))
 
 	return nil
 }
