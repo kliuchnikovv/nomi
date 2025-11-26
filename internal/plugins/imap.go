@@ -2,9 +2,12 @@ package plugins
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
 // IMAPBackend describes a backend implementation that can be wrapped as an IMAP plugin.
@@ -55,6 +58,14 @@ func (p *imapPlugin) RegisterRoutes(router *gin.RouterGroup) {
 
 func (p *imapPlugin) Shutdown(ctx context.Context) error {
 	return p.backend.Shutdown(ctx)
+}
+
+// ExecuteAction forwards actions to the backend if it supports them.
+func (p *imapPlugin) ExecuteAction(ctx context.Context, userID uuid.UUID, action storage.InboxAction, message storage.Inbox) error {
+	if backend, ok := p.backend.(Actionable); ok {
+		return backend.ExecuteAction(ctx, userID, action, message)
+	}
+	return fmt.Errorf("plugin %s does not support actions", p.Info().Name)
 }
 
 func (p *imapPlugin) status(c *gin.Context) {
