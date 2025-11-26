@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
@@ -33,6 +34,34 @@ func NewEmailSyncer(logger *zap.Logger, store *storage.Storage, llmSvc *llm.Serv
 	}
 }
 
+func (s *EmailSyncer) cleanLLMResponse(resp string) string {
+	resp = strings.TrimSpace(resp)
+
+	// Remove markdown code fences (with or without language tags)
+	if strings.HasPrefix(resp, "```") {
+		trimmed := strings.TrimPrefix(resp, "```")
+		if newline := strings.Index(trimmed, "\n"); newline >= 0 {
+			trimmed = trimmed[newline+1:]
+		} else {
+			// No newline, drop the possible language tag and continue
+			trimmed = strings.TrimLeft(trimmed, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+		}
+		resp = trimmed
+	}
+	if strings.HasSuffix(resp, "```") {
+		resp = strings.TrimSuffix(resp, "```")
+	}
+
+	// If extra text wraps the JSON, keep only the JSON object/array portion
+	if start := strings.Index(resp, "{"); start >= 0 {
+		if end := strings.LastIndex(resp, "}"); end >= start {
+			resp = resp[start : end+1]
+		}
+	}
+
+	return strings.TrimSpace(resp)
+}
+
 func (s *EmailSyncer) Sync(ctx context.Context, userID uuid.UUID, c *client.Client) error {
 	// 1. Select Inbox
 	_, err := c.Select("INBOX", false)
@@ -57,7 +86,7 @@ func (s *EmailSyncer) Sync(ctx context.Context, userID uuid.UUID, c *client.Clie
 	seqset.AddNum(uids...)
 
 	section := &imap.BodySectionName{}
-	items := []imap.FetchItem{imap.FetchEnvelope, section.FetchItem(), imap.FetchUid, "X-GM-THRID"}
+	items := []imap.FetchItem{imap.FetchEnvelope, section.FetchItem(), imap.FetchUid, "X-GM-THRID", imap.FetchFlags, imap.FetchInternalDate}
 
 	messages := make(chan *imap.Message, 10)
 	done := make(chan error, 1)
@@ -89,8 +118,14 @@ func (s *EmailSyncer) Sync(ctx context.Context, userID uuid.UUID, c *client.Clie
 }
 
 func (s *EmailSyncer) saveMessage(ctx context.Context, userID uuid.UUID, msg *imap.Message, section *imap.BodySectionName) (*storage.Inbox, error) {
+	if msg == nil {
+		s.logger.Warn("skipping nil message from IMAP")
+		return nil, nil
+	}
+
 	if msg.Envelope == nil {
-		return nil, fmt.Errorf("message envelope is nil")
+		s.logger.Warn("skipping message with nil envelope", zap.Uint32("uid", msg.Uid))
+		return nil, nil
 	}
 
 	sender := ""
@@ -242,6 +277,9 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 			// Continue with empty analysis
 			llmResponse = fmt.Sprintf(`{"title": "%s", "importance": {"level": "medium", "reason": "Unable to analyze"}, "urgency": {"level": "can_wait", "reason": "Unable to analyze"}, "summary": "Email analysis unavailable"}`, item.Subject)
 		}
+
+		// Clean LLM response (strip markdown)
+		llmResponse = s.cleanLLMResponse(llmResponse)
 
 		// Parse LLM response
 		var llmAnalysis storage.InboxAnalysis
