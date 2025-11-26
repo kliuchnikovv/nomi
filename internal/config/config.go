@@ -37,6 +37,13 @@ type Config struct {
 		RefreshBeforeMinutes int    `yaml:"refresh_before_minutes"`
 		JWTSecret            string `yaml:"jwt_secret"`
 	} `yaml:"token"`
+
+	Plugins map[string]PluginState `yaml:"plugins"`
+}
+
+type PluginState struct {
+	Enabled bool                   `yaml:"enabled"`
+	State   map[string]interface{} `yaml:"state"`
 }
 
 func Load(path string) (*Config, error) {

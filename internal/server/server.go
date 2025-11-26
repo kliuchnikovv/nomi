@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/daemon"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
+	"github.com/kliuchnikovv/genie-api/internal/notifier"
+	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -27,6 +30,11 @@ type GmailIMAPService interface {
 	MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, uids []uint32) error
 }
 
+type Server struct {
+	httpServer    *http.Server
+	pluginManager *plugins.Manager
+}
+
 func New(
 	logger *zap.Logger,
 	cfg *config.Config,
@@ -36,12 +44,15 @@ func New(
 	oidcProviders map[string]*oidc.Provider,
 	llmService *llm.Service,
 	gmailIMAPService GmailIMAPService,
-) *http.Server {
+) *Server {
 	var r = gin.New()
 	r.Use(
 		ginzap.Ginzap(logger, time.RFC3339, true),
 		ginzap.RecoveryWithZap(logger, true),
 	)
+
+	// Initialize notifier first
+	n := notifier.New()
 
 	// Инициализация обработчиков
 	var (
@@ -64,6 +75,7 @@ func New(
 			return h
 		}()
 	)
+	_ = n // notifier will be used when needed
 
 	// existing handlers are standard http handlers; wrap them so they work
 	r.GET("/", gin.WrapF(http.HandlerFunc(handlers.HelloWorld)))
@@ -115,6 +127,26 @@ func New(
 	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
 	r.GET("/api/oauth/:provider", wrapWithAuth(toolsHandler.GetOAuthStatus, authMiddleware))
 
+	// Plugin system
+	pluginState := map[string]plugins.PluginState{}
+	for name, st := range cfg.Plugins {
+		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
+	}
+	runtime := plugins.NewRuntime(n)
+	manager := plugins.NewManager(runtime, pluginState)
+	if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
+		log.Printf("failed to register imap plugin: %v", err)
+	}
+	if err := manager.Register(plugins.NewGmailPlugin()); err != nil {
+		log.Printf("failed to register gmail plugin: %v", err)
+	}
+	if err := manager.Register(plugins.NewCalendarPlugin()); err != nil {
+		log.Printf("failed to register calendar plugin: %v", err)
+	}
+	pluginGroup := r.Group("/api/plugins")
+	pluginGroup.Use(authGinMiddleware(authMiddleware))
+	manager.Mount(pluginGroup)
+
 	// Serve Swagger UI (requires generated docs by swag). If generated
 	// docs package is not present, fall back to the local static files
 	// produced by `swag init` (docs/swagger.json + docs/swagger.html).
@@ -126,8 +158,36 @@ func New(
 	})
 	r.StaticFile("/docs/swagger.json", "docs/swagger.json")
 
-	return &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: r,
+	return &Server{
+		httpServer: &http.Server{
+			Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
+			Handler: r,
+		},
+		pluginManager: manager,
+	}
+}
+
+func (s *Server) ListenAndServe() error {
+	return s.httpServer.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.pluginManager != nil {
+		_ = s.pluginManager.Shutdown(ctx)
+	}
+	return s.httpServer.Shutdown(ctx)
+}
+
+func authGinMiddleware(authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		wrapped := authMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c.Request = r
+		}))
+		wrapped.ServeHTTP(c.Writer, c.Request)
+		if c.Writer.Written() {
+			c.Abort()
+			return
+		}
+		c.Next()
 	}
 }

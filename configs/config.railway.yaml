@@ -27,3 +27,18 @@ token:
 
 llm:
   base_url: ${LLM_BASE_URL}
+
+plugins:
+  imap:
+    enabled: false
+    state:
+      imap_host: ${IMAP_HOST}
+      imap_port: ${IMAP_PORT}
+      username: ${IMAP_USERNAME}
+  gmail:
+    enabled: true
+    state: {}
+  calendar:
+    enabled: false
+    state:
+      sync_window_days: 7

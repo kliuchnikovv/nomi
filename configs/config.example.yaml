@@ -26,3 +26,20 @@ token:
 
 llm:
   base_url: "http://localhost:9000"
+
+plugins:
+  imap:
+    enabled: false
+    state:
+      imap_host: "imap.example.com"
+      imap_port: 993
+      username: "user@example.com"
+  gmail:
+    enabled: true
+    state:
+      permissions:
+        - "gmail:read"
+  calendar:
+    enabled: false
+    state:
+      sync_window_days: 7
