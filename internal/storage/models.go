@@ -44,6 +44,7 @@ type Tool struct {
 type Inbox struct {
 	ID         uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
 	UserID     uuid.UUID `gorm:"type:uuid;not null"`
+	Source     string    `gorm:"type:varchar(50);not null;default:'gmail'"` // Plugin source: "gmail", "imap", etc.
 	MessageID  string    `gorm:"type:text"`
 	UID        uint32    `gorm:"type:integer"`
 	ThreadID   uint64    `gorm:"type:bigint"`

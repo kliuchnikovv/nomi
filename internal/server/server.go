@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -54,20 +53,34 @@ func New(
 	// Initialize notifier first
 	n := notifier.New()
 
+	// Plugin system initialization (Moved to top so handlers can use manager)
+	pluginState := map[string]plugins.PluginState{}
+	for name, st := range cfg.Plugins {
+		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
+	}
+	runtime := plugins.NewRuntime(n, db, logger, llmService)
+	manager := plugins.NewManager(runtime, pluginState)
+	if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
+		logger.Error("failed to register imap plugin", zap.Error(err))
+	}
+	if err := manager.Register(plugins.NewGmailPlugin()); err != nil {
+		logger.Error("failed to register gmail plugin", zap.Error(err))
+	}
+
 	// Инициализация обработчиков
 	var (
 		// oauthHandler   = handlers.NewOAuth(cfg, db)
 		chatHandler    = handlers.NewChatHandler(db)
 		messageHandler = handlers.NewMessageHandler(db)
-		inboxHandler   = handlers.NewInboxHandler(db)
-		actionsHandler = handlers.NewActionsHandler(db, llmService, logger, gmailIMAPService)
+		inboxHandler   = handlers.NewInboxHandler(db)                    // Re-enabled: universal inbox storage
+		actionsHandler = handlers.NewActionsHandler(db, logger, manager) // Re-enabled: using plugin manager
 		tokenManager   = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler  = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
-		toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon)
-		modelsHandler  = handlers.NewModelsHandler("configs/models.json")
-		oauthHandler   = func() *handlers.OAuthHandler {
+		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
+		modelsHandler = handlers.NewModelsHandler("configs/models.json")
+		oauthHandler  = func() *handlers.OAuthHandler {
 			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
 			if err != nil {
 				logger.Fatal("failed to initialize oauth handler", zap.Error(err))
@@ -105,44 +118,30 @@ func New(
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
 
-	// Inbox API (protected)
+	// Inbox API (protected) - Universal storage for all email plugins
 	r.GET("/api/inbox", wrapWithAuth(inboxHandler.ListInboxMessages, authMiddleware))
 	r.GET("/api/inbox/:id", wrapWithAuth(inboxHandler.GetInboxMessage, authMiddleware))
 	r.PATCH("/api/inbox/:id/read", wrapWithAuth(inboxHandler.MarkAsRead, authMiddleware))
+	// Actions API - Delegates to plugins
 	r.POST("/api/inbox/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
 
-	r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateTool, authMiddleware))
-	r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))
-	r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetTool, authMiddleware))
-	r.PUT("/api/tools/:id", wrapWithAuth(toolsHandler.UpdateTool, authMiddleware))
-	r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteTool, authMiddleware))
-	r.GET("/api/integrations", wrapWithAuth(toolsHandler.ListIntegrations, authMiddleware))
-	r.POST("/api/integrations/gmail/sync", wrapWithAuth(toolsHandler.SyncGmail, authMiddleware))
+	// r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateTool, authMiddleware))
+	// r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))
+	// r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetTool, authMiddleware))
+	// r.PUT("/api/tools/:id", wrapWithAuth(toolsHandler.UpdateTool, authMiddleware))
+	// r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteTool, authMiddleware))
+	// r.GET("/api/integrations", wrapWithAuth(toolsHandler.ListIntegrations, authMiddleware))
+	// r.POST("/api/integrations/gmail/sync", wrapWithAuth(toolsHandler.SyncGmail, authMiddleware))
 
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
 
+	// OAuth API
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
 	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)
 	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
-	r.GET("/api/oauth/:provider", wrapWithAuth(toolsHandler.GetOAuthStatus, authMiddleware))
+	// r.GET("/api/oauth/:provider", wrapWithAuth(toolsHandler.GetOAuthStatus, authMiddleware)) // OLD: commented out
 
-	// Plugin system
-	pluginState := map[string]plugins.PluginState{}
-	for name, st := range cfg.Plugins {
-		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
-	}
-	runtime := plugins.NewRuntime(n)
-	manager := plugins.NewManager(runtime, pluginState)
-	if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
-		log.Printf("failed to register imap plugin: %v", err)
-	}
-	if err := manager.Register(plugins.NewGmailPlugin()); err != nil {
-		log.Printf("failed to register gmail plugin: %v", err)
-	}
-	if err := manager.Register(plugins.NewCalendarPlugin()); err != nil {
-		log.Printf("failed to register calendar plugin: %v", err)
-	}
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
 	manager.Mount(pluginGroup)

@@ -36,6 +36,8 @@ type InboxAction struct {
 // InboxMessage represents an inbox message with pagination metadata
 type InboxMessage struct {
 	ID         uuid.UUID      `json:"id"`
+	UserID     uuid.UUID      `json:"-"` // Don't expose in API
+	Source     string         `json:"source"`
 	Sender     string         `json:"sender"`
 	Subject    string         `json:"subject"`
 	Snippet    string         `json:"snippet"`
@@ -95,6 +97,7 @@ func (s *Storage) GetInboxMessages(ctx context.Context, userID uuid.UUID, page, 
 
 		messages[i] = &InboxMessage{
 			ID:         model.ID,
+			Source:     model.Source,
 			Sender:     model.Sender,
 			Subject:    model.Subject,
 			Snippet:    model.Snippet,
@@ -137,6 +140,7 @@ func (s *Storage) GetInboxMessage(ctx context.Context, userID uuid.UUID, message
 
 	return &InboxMessage{
 		ID:         inboxModel.ID,
+		Source:     inboxModel.Source,
 		Sender:     inboxModel.Sender,
 		Subject:    inboxModel.Subject,
 		Snippet:    inboxModel.Snippet,

@@ -3,26 +3,38 @@ package plugins
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
+	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"go.uber.org/zap"
 )
 
 // Runtime exposes helpers that plugins can rely on to interact with the
 // application runtime: run routines, call models/agents and push events.
 type Runtime struct {
-	notifier *notifier.Notifier
+	notifier   *notifier.Notifier
+	Storage    *storage.Storage
+	Logger     *zap.Logger
+	LLMService *llm.Service
 
 	RoutineRunner func(ctx context.Context, plugin, routine string, payload interface{}) error
 	ModelCaller   func(ctx context.Context, model string, payload interface{}) (interface{}, error)
 	AgentCaller   func(ctx context.Context, agent string, payload interface{}) (interface{}, error)
 }
 
-func NewRuntime(n *notifier.Notifier) *Runtime {
-	return &Runtime{notifier: n}
+func NewRuntime(n *notifier.Notifier, s *storage.Storage, l *zap.Logger, llm *llm.Service) *Runtime {
+	return &Runtime{
+		notifier:   n,
+		Storage:    s,
+		Logger:     l,
+		LLMService: llm,
+	}
 }
 
 func (r *Runtime) RunRoutine(ctx context.Context, plugin, routine string, payload interface{}) error {
@@ -66,13 +78,18 @@ type PluginState struct {
 	State   map[string]interface{} `json:"state"`
 }
 
-// Plugin defines an extension that can register API routes and manage its own state.
+// Plugin is the interface that all plugins must implement.
 type Plugin interface {
 	Info() Info
 	DefaultState() map[string]interface{}
 	Init(ctx context.Context, rt *Runtime, state map[string]interface{}) error
 	RegisterRoutes(router *gin.RouterGroup)
 	Shutdown(ctx context.Context) error
+}
+
+// Actionable interface for plugins that can execute actions on messages
+type Actionable interface {
+	ExecuteAction(ctx context.Context, userID uuid.UUID, action storage.InboxAction, message storage.Inbox) error
 }
 
 type registeredPlugin struct {
@@ -130,6 +147,31 @@ func (m *Manager) Register(p Plugin) error {
 
 	m.plugins[info.Name] = rp
 	return nil
+}
+
+// ExecuteAction delegates the action execution to the appropriate plugin based on source
+func (m *Manager) ExecuteAction(ctx context.Context, userID uuid.UUID, source string, action storage.InboxAction, message storage.Inbox) error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Find plugin by source (assuming source matches plugin name)
+	plugin, exists := m.plugins[source]
+	if !exists {
+		return fmt.Errorf("plugin not found for source: %s", source)
+	}
+
+	// Check if plugin is enabled
+	if !plugin.enabled {
+		return fmt.Errorf("plugin %s is disabled", source)
+	}
+
+	// Check if plugin implements Actionable
+	actionable, ok := plugin.plugin.(Actionable)
+	if !ok {
+		return fmt.Errorf("plugin %s does not support actions", source)
+	}
+
+	return actionable.ExecuteAction(ctx, userID, action, message)
 }
 
 func (m *Manager) List() []PluginStateInfo {
