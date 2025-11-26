@@ -58,15 +58,6 @@ func (b *Builder) BuildActions(email *storage.Inbox) []storage.InboxAction {
 		Agent:   "mailer",
 	})
 
-	// 5. Reply (always available)
-	prompt := fmt.Sprintf("Reply to email from %s about '%s'", email.Sender, email.Subject)
-	actions = append(actions, storage.InboxAction{
-		Label:   "Reply",
-		Command: "reply",
-		Agent:   "mailer",
-		Prompt:  &prompt,
-	})
-
 	return actions
 }
 

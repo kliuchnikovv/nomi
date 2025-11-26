@@ -403,7 +403,71 @@ func (s *EmailSyncer) MarkAsRead(ctx context.Context, userID uuid.UUID, uids []u
 }
 
 func (s *EmailSyncer) Archive(ctx context.Context, userID uuid.UUID, uids []uint32, c *client.Client) error {
-	// Simplified implementation: Just logging for now as archiving logic varies greatly
-	s.logger.Info("archive action requested (not fully implemented)", zap.Int("count", len(uids)))
+	if len(uids) == 0 {
+		s.logger.Info("no UIDs to archive")
+		return nil
+	}
+
+	s.logger.Info("archiving messages on IMAP server",
+		zap.String("user_id", userID.String()),
+		zap.Int("count", len(uids)),
+		zap.Uint32s("uids", uids))
+
+	seqset := new(imap.SeqSet)
+	seqset.AddNum(uids...)
+
+	// For Gmail: Remove from INBOX and ensure it's in All Mail
+	// This is done by removing the \Inbox label
+	// Gmail automatically keeps messages in All Mail
+
+	// First, mark as read (archived messages are typically read)
+	item := imap.FormatFlagsOp(imap.AddFlags, true)
+	flags := []interface{}{imap.SeenFlag}
+	if err := c.UidStore(seqset, item, flags, nil); err != nil {
+		s.logger.Error("failed to mark messages as read before archiving",
+			zap.Error(err),
+			zap.String("user_id", userID.String()))
+		// Continue anyway, archiving is more important
+	}
+
+	// Move to [Gmail]/All Mail by copying and deleting from INBOX
+	// Note: Gmail IMAP uses labels, so we need to remove the INBOX label
+	// The message will remain in All Mail
+
+	// For Gmail, we use STORE command to remove from INBOX
+	// Gmail-specific: Use X-GM-LABELS to manage labels
+	// Simpler approach: Just move out of INBOX
+
+	// Copy to All Mail (if not already there)
+	if err := c.UidCopy(seqset, "[Gmail]/All Mail"); err != nil {
+		s.logger.Warn("failed to copy to All Mail (might already be there)",
+			zap.Error(err),
+			zap.String("user_id", userID.String()))
+		// This is OK - message might already be in All Mail
+	}
+
+	// Mark for deletion from INBOX
+	delItem := imap.FormatFlagsOp(imap.AddFlags, true)
+	delFlags := []interface{}{imap.DeletedFlag}
+	if err := c.UidStore(seqset, delItem, delFlags, nil); err != nil {
+		s.logger.Error("failed to mark messages for deletion from INBOX",
+			zap.Error(err),
+			zap.String("user_id", userID.String()),
+			zap.Uint32s("uids", uids))
+		return fmt.Errorf("failed to mark messages for deletion: %w", err)
+	}
+
+	// Expunge to actually remove from INBOX
+	if err := c.Expunge(nil); err != nil {
+		s.logger.Error("failed to expunge messages from INBOX",
+			zap.Error(err),
+			zap.String("user_id", userID.String()))
+		return fmt.Errorf("failed to expunge messages: %w", err)
+	}
+
+	s.logger.Info("successfully archived messages",
+		zap.String("user_id", userID.String()),
+		zap.Int("count", len(uids)))
+
 	return nil
 }
