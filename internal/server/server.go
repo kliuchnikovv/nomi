@@ -107,7 +107,7 @@ func New(
 	r.GET("/api/integrations", wrapWithAuth(toolsHandler.ListIntegrations, authMiddleware))
 	r.POST("/api/integrations/gmail/sync", wrapWithAuth(toolsHandler.SyncGmail, authMiddleware))
 
-	// Models API
+	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
 
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
