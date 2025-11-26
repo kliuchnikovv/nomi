@@ -73,7 +73,8 @@ func (b *Builder) BuildActions(email *storage.Inbox) []storage.InboxAction {
 // buildGmailURL constructs the Gmail web URL from thread ID
 func (b *Builder) buildGmailURL(email *storage.Inbox) string {
 	if email.ThreadID > 0 {
-		return fmt.Sprintf("https://mail.google.com/mail/u/0/#inbox/%x", email.ThreadID)
+		// Use mobile-compatible Gmail URL format
+		return fmt.Sprintf("https://mail.google.com/mail/mu/mp/952/#cv/priority/%%5Esmartlabel_personal/%x", email.ThreadID)
 	}
 	return ""
 }
