@@ -58,7 +58,7 @@ func New(
 	for name, st := range cfg.Plugins {
 		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
 	}
-	runtime := plugins.NewRuntime(n, db, logger, llmService)
+	runtime := plugins.NewRuntime(n, db, logger, llmService, oauthConfigs)
 	manager := plugins.NewManager(runtime, pluginState)
 	if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
 		logger.Error("failed to register imap plugin", zap.Error(err))

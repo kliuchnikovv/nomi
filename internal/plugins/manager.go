@@ -13,6 +13,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 )
 
 // Runtime exposes helpers that plugins can rely on to interact with the
@@ -26,14 +27,16 @@ type Runtime struct {
 	RoutineRunner func(ctx context.Context, plugin, routine string, payload interface{}) error
 	ModelCaller   func(ctx context.Context, model string, payload interface{}) (interface{}, error)
 	AgentCaller   func(ctx context.Context, agent string, payload interface{}) (interface{}, error)
+	OAuthConfigs  map[string]*oauth2.Config
 }
 
-func NewRuntime(n *notifier.Notifier, s *storage.Storage, l *zap.Logger, llm *llm.Service) *Runtime {
+func NewRuntime(n *notifier.Notifier, s *storage.Storage, l *zap.Logger, llm *llm.Service, oauthConfigs map[string]*oauth2.Config) *Runtime {
 	return &Runtime{
-		notifier:   n,
-		Storage:    s,
-		Logger:     l,
-		LLMService: llm,
+		notifier:     n,
+		Storage:      s,
+		Logger:       l,
+		LLMService:   llm,
+		OAuthConfigs: oauthConfigs,
 	}
 }
 

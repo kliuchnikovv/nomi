@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 )
 
 // NewGmailPlugin returns a Gmail-specific IMAP plugin implementation.
@@ -19,10 +20,11 @@ func NewGmailPlugin() Plugin {
 }
 
 type gmailBackend struct {
-	syncer  *EmailSyncer
-	storage *storage.Storage
-	logger  *zap.Logger
-	done    chan struct{}
+	syncer      *EmailSyncer
+	storage     *storage.Storage
+	logger      *zap.Logger
+	done        chan struct{}
+	oauthConfig *oauth2.Config
 }
 
 func (g *gmailBackend) Info() Info {
@@ -46,6 +48,11 @@ func (g *gmailBackend) Init(ctx context.Context, rt *Runtime, state map[string]i
 	g.logger = rt.Logger.With(zap.String("plugin", "gmail"))
 	g.syncer = NewEmailSyncer(rt.Logger, rt.Storage, rt.LLMService, "gmail")
 	g.done = make(chan struct{})
+	if cfg, ok := rt.OAuthConfigs["gmail"]; ok {
+		g.oauthConfig = cfg
+	} else {
+		g.logger.Warn("gmail oauth config not found in runtime")
+	}
 
 	// Start auto-sync loop
 	go g.runSyncLoop()
@@ -122,36 +129,58 @@ func (g *gmailBackend) syncHandler(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "sync completed"})
 }
 
-func (g *gmailBackend) Sync(ctx context.Context, userID uuid.UUID) error {
-	// 1. Get Gmail tool params
-	tools, err := g.storage.GetTools(ctx, userID)
-	if err != nil {
-		return fmt.Errorf("failed to get tools: %w", err)
+func (g *gmailBackend) getValidToken(ctx context.Context, userID uuid.UUID) (string, string, error) {
+	if g.oauthConfig == nil {
+		return "", "", fmt.Errorf("gmail oauth config not available")
 	}
 
-	var gmailTool *storage.Tool
-	for _, t := range tools {
-		if t.Provider == "gmail" && t.Enabled {
-			gmailTool = &t
-			break
+	// Fetch token from DB
+	oauthToken, err := g.storage.GetOAuthTokenByUser(ctx, userID, "gmail")
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get oauth token info: %w", err)
+	}
+
+	// Unmarshal token
+	var token oauth2.Token
+	if err := json.Unmarshal(oauthToken.TokenEncrypted, &token); err != nil {
+		return "", "", fmt.Errorf("failed to unmarshal token: %w", err)
+	}
+
+	// Check if token needs refresh
+	tokenSource := g.oauthConfig.TokenSource(ctx, &token)
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to refresh token: %w", err)
+	}
+
+	// If token changed, update DB
+	if newToken.AccessToken != token.AccessToken {
+		g.logger.Info("refreshing gmail access token", zap.String("user_id", userID.String()))
+
+		tokenBytes, err := json.Marshal(newToken)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to marshal new token: %w", err)
+		}
+
+		oauthToken.TokenEncrypted = tokenBytes
+		oauthToken.UpdatedAt = time.Now().UTC()
+		// We should also update expiry in a structured way if we had columns for it,
+		// but we store everything in JSON blob so it's fine.
+
+		if err := g.storage.UpdateOAuthToken(ctx, oauthToken); err != nil {
+			g.logger.Error("failed to update refreshed token in db", zap.Error(err))
+			// Continue anyway since we have a valid token in memory
 		}
 	}
 
-	if gmailTool == nil {
-		return fmt.Errorf("gmail integration not found or disabled")
-	}
+	return oauthToken.AccountEmail, newToken.AccessToken, nil
+}
 
-	var params struct {
-		Creds struct {
-			Token string `json:"token"`
-		} `json:"creds"`
-	}
-	if err := json.Unmarshal([]byte(gmailTool.Params), &params); err != nil {
-		return fmt.Errorf("failed to parse gmail params: %w", err)
-	}
-
-	if params.Creds.Token == "" {
-		return fmt.Errorf("gmail access token not found")
+func (g *gmailBackend) Sync(ctx context.Context, userID uuid.UUID) error {
+	// 1. Get valid token (handles refresh)
+	email, accessToken, err := g.getValidToken(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("authentication failed: %w", err)
 	}
 
 	// 2. Connect to IMAP
@@ -162,14 +191,9 @@ func (g *gmailBackend) Sync(ctx context.Context, userID uuid.UUID) error {
 	defer c.Logout()
 
 	// Authenticate using XOAUTH2
-	oauthToken, err := g.storage.GetOAuthTokenByUser(ctx, userID, "gmail")
-	if err != nil {
-		return fmt.Errorf("failed to get oauth token info: %w", err)
-	}
-
 	saslClient := &Xoauth2Client{
-		Username: oauthToken.AccountEmail,
-		Token:    params.Creds.Token,
+		Username: email,
+		Token:    accessToken,
 	}
 
 	if err := c.Authenticate(saslClient); err != nil {
@@ -181,36 +205,10 @@ func (g *gmailBackend) Sync(ctx context.Context, userID uuid.UUID) error {
 }
 
 func (g *gmailBackend) ExecuteAction(ctx context.Context, userID uuid.UUID, action storage.InboxAction, message storage.Inbox) error {
-	// 1. Get Gmail tool params (reuse logic from Sync)
-	// TODO: Refactor credential fetching into a helper method to avoid duplication
-	tools, err := g.storage.GetTools(ctx, userID)
+	// 1. Get valid token (handles refresh)
+	email, accessToken, err := g.getValidToken(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("failed to get tools: %w", err)
-	}
-
-	var gmailTool *storage.Tool
-	for _, t := range tools {
-		if t.Provider == "gmail" && t.Enabled {
-			gmailTool = &t
-			break
-		}
-	}
-
-	if gmailTool == nil {
-		return fmt.Errorf("gmail integration not found or disabled")
-	}
-
-	var params struct {
-		Creds struct {
-			Token string `json:"token"`
-		} `json:"creds"`
-	}
-	if err := json.Unmarshal([]byte(gmailTool.Params), &params); err != nil {
-		return fmt.Errorf("failed to parse gmail params: %w", err)
-	}
-
-	if params.Creds.Token == "" {
-		return fmt.Errorf("gmail access token not found")
+		return fmt.Errorf("authentication failed: %w", err)
 	}
 
 	// 2. Connect to IMAP
@@ -221,14 +219,9 @@ func (g *gmailBackend) ExecuteAction(ctx context.Context, userID uuid.UUID, acti
 	defer c.Logout()
 
 	// Authenticate using XOAUTH2
-	oauthToken, err := g.storage.GetOAuthTokenByUser(ctx, userID, "gmail")
-	if err != nil {
-		return fmt.Errorf("failed to get oauth token info: %w", err)
-	}
-
 	saslClient := &Xoauth2Client{
-		Username: oauthToken.AccountEmail,
-		Token:    params.Creds.Token,
+		Username: email,
+		Token:    accessToken,
 	}
 
 	if err := c.Authenticate(saslClient); err != nil {
