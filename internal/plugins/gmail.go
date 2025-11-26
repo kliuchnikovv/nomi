@@ -60,13 +60,23 @@ func (g *gmailBackend) runSyncLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			// Find all users with enabled Gmail integration and sync
-			// This is a simplification - in real world we'd iterate users efficiently
-			// For now, we rely on manual sync or per-user trigger if we had a user list
-			// But since we don't have a list of all users easily here without querying DB,
-			// let's just log that auto-sync would happen here.
-			// TODO: Implement proper multi-user auto-sync iteration
-			g.logger.Info("auto-sync triggered (not implemented for all users yet)")
+			ctx := context.Background()
+			tools, err := g.storage.GetToolsByProvider(ctx, "gmail")
+			if err != nil {
+				g.logger.Error("failed to get gmail tools for auto-sync", zap.Error(err))
+				continue
+			}
+
+			g.logger.Info("auto-sync triggered", zap.Int("users_count", len(tools)))
+
+			for _, tool := range tools {
+				g.logger.Info("syncing user", zap.String("user_id", tool.UserID.String()))
+				if err := g.Sync(ctx, tool.UserID); err != nil {
+					g.logger.Error("auto-sync failed for user",
+						zap.String("user_id", tool.UserID.String()),
+						zap.Error(err))
+				}
+			}
 		case <-g.done:
 			return
 		}

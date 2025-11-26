@@ -61,7 +61,43 @@ func (g *genericIMAPBackend) runSyncLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			g.logger.Info("auto-sync triggered (not implemented for all users yet)")
+			ctx := context.Background()
+			tools, err := g.storage.GetToolsByProvider(ctx, "imap")
+			if err != nil {
+				g.logger.Error("failed to get imap tools for auto-sync", zap.Error(err))
+				continue
+			}
+
+			g.logger.Info("auto-sync triggered", zap.Int("users_count", len(tools)))
+
+			for _, tool := range tools {
+				// Parse params to get credentials
+				var params struct {
+					Host     string `json:"host"`
+					Port     int    `json:"port"`
+					Username string `json:"username"`
+					Password string `json:"password"`
+				}
+				if err := json.Unmarshal([]byte(tool.Params), &params); err != nil {
+					g.logger.Error("failed to parse imap params for user",
+						zap.String("user_id", tool.UserID.String()),
+						zap.Error(err))
+					continue
+				}
+
+				if params.Host == "" || params.Username == "" || params.Password == "" {
+					g.logger.Warn("skipping user with incomplete imap credentials",
+						zap.String("user_id", tool.UserID.String()))
+					continue
+				}
+
+				g.logger.Info("syncing user", zap.String("user_id", tool.UserID.String()))
+				if err := g.Sync(ctx, tool.UserID, params.Host, params.Port, params.Username, params.Password); err != nil {
+					g.logger.Error("auto-sync failed for user",
+						zap.String("user_id", tool.UserID.String()),
+						zap.Error(err))
+				}
+			}
 		case <-g.done:
 			return
 		}

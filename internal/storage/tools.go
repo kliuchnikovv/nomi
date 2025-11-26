@@ -99,3 +99,15 @@ func (s *Storage) DeleteTool(ctx context.Context, userID, toolID uuid.UUID) erro
 
 	return nil
 }
+
+func (s *Storage) GetToolsByProvider(ctx context.Context, provider string) ([]Tool, error) {
+	var result []Tool
+
+	if err := s.DB.WithContext(ctx).
+		Where("provider = ? AND enabled = ?", provider, true).
+		Find(&result).Error; err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
