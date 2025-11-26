@@ -11,6 +11,7 @@ import { Alert, Platform, ToastAndroid } from 'react-native';
 import { useAuth } from '../auth/context.tsx';
 import { apiClient } from '../../apiClient.ts'
 import {Chat, MainContextType} from "./models";
+import { API_URL } from '../../config.ts';
 
 export const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -37,7 +38,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     );
 
 
-    const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app';
+    // const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app';
 
     // Create a new chat if activeChatID is empty on initial load
     useEffect(() => {
@@ -69,7 +70,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
     async function getChats() {
         try {
-            const data = await apiClient.get<[Chat]>(`${API_URL}/api/chats`)
+            console.log(`${API_URL}/chats`)
+            const data = await apiClient.get<[Chat]>(`${API_URL}/chats`)
             if (!data) {
                 return;
             }
@@ -89,7 +91,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     //     if (!chatId || chatId === emptyChatID) return;
     //     try {
     //         const data =  await apiClient.get<[Message]>(
-    //             `${API_URL}/api/chats/${chatId}/messages`
+    //             `${API_URL}/chats/${chatId}/messages`
     //         )
     //         if (!data) {
     //             return;
@@ -180,7 +182,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     async function deleteChat(chatId: string) {
         try {
             await apiClient.delete<void>(
-                `${API_URL}/api/chats/${chatId}`
+                `${API_URL}/chats/${chatId}`
             )
 
             if (activeChatID === chatId) {

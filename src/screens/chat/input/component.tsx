@@ -3,11 +3,14 @@ import {
     Send,
     MicrophoneSpeakingSolid,
     MicrophoneMuteSolid,
+    Plus,
 } from 'iconoir-react-native';
 import { oneDark } from '../../../themes/oneDark.ts';
 
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import { styles } from './styles.tsx';
+import { useChat } from '../context';
+import ModelSelector from './ModelSelector';
 
 type Props = {
     onSend: (text: string) => void;
@@ -16,6 +19,9 @@ type Props = {
 export default function ChatInput(props: Props) {
     const [value, setValue] = useState('');
     const [recording, setRecording] = useState(false);
+    const [modelSelectorVisible, setModelSelectorVisible] = useState(false);
+
+    const { selectedModel, setSelectedModel, availableModels } = useChat();
 
     const handleSend = useCallback(() => {
         const text = (value ?? '').trim();
@@ -70,6 +76,21 @@ export default function ChatInput(props: Props) {
                     )}
                 </Pressable>
                 <Pressable
+                    onPress={() => setModelSelectorVisible(true)}
+                    style={({ pressed }) => [
+                        styles.iconBtn,
+                        pressed && {
+                            backgroundColor: 'rgba(171, 178, 191, 0.1)',
+                        },
+                    ]}
+                >
+                    <Plus
+                        width={28}
+                        height={28}
+                        color={oneDark.icon}
+                    />
+                </Pressable>
+                <Pressable
                     onPress={handleSend}
                     style={({ pressed }) => [
                         styles.sendBtn,
@@ -87,6 +108,14 @@ export default function ChatInput(props: Props) {
                     />
                 </Pressable>
             </View>
+            <ModelSelector
+                visible={modelSelectorVisible}
+                onClose={() => setModelSelectorVisible(false)}
+                models={availableModels}
+                selectedModel={selectedModel}
+                onSelectModel={setSelectedModel}
+                loading={availableModels.length === 0}
+            />
         </View>
     );
 }

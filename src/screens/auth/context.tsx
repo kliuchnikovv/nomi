@@ -1,9 +1,10 @@
-import React, {createContext, useContext, useEffect, useMemo, useState} from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import {apiClient, setupApiClient} from '../../apiClient';
-import {AuthContextType, User, alertError} from "./models";
+import { apiClient, setupApiClient } from '../../apiClient';
+import { API_URL } from '../../config';
+import { AuthContextType, User, alertError } from "./models";
 
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -16,14 +17,13 @@ export function useAuth() {
     return context;
 }
 
-export function AuthProvider({children}: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
     const [refreshTokenValue, setRefreshTokenValue] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // TODO: do it from config
-    const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app/api';
+    // API base URL is defined in src/config.ts
 
     const isAuthenticated = useMemo(() => !!token, [token]);
 
@@ -47,9 +47,9 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
                 console.error("Failed to load auth data", e);
             } finally {
                 setIsLoading(false);
-                // Ensure apiClient is set up after initial load
+                // Initialize apiClient with tokens loaded from storage to avoid race conditions
                 setupApiClient({
-                    getToken: () => currentToken, // Use the token loaded from storage
+                    getToken: () => currentToken,
                     refreshToken: () => refreshToken(),
                     logout: () => logout(),
                 });
@@ -67,6 +67,13 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         setUser(userData);
         setToken(tokenData);
         setRefreshTokenValue(refreshTokenData);
+
+        // Immediately rebind apiClient with the freshest token to avoid one-request gap
+        setupApiClient({
+            getToken: () => tokenData,
+            refreshToken: () => refreshToken(),
+            logout: () => logout(),
+        });
 
         if (userData) {
             await AsyncStorage.setItem('user', JSON.stringify(userData));
@@ -152,7 +159,7 @@ export function AuthProvider({children}: { children: React.ReactNode }) {
         try {
             const response = await fetch(`${API_URL}/auth/refresh`, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     refresh_token: currentRefreshToken,
                 }),

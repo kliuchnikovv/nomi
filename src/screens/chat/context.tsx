@@ -8,9 +8,11 @@ import React, {
     useState,
     useCallback,
 } from 'react';
-import { ChatContextType, Props } from './models';
+import { ChatContextType, Props, Model } from './models';
 import { useAuth } from '../auth/context.tsx';
 import { ChatSocket } from '../../socket';
+import { API_URL } from '../../config.ts';
+import { modelsApi } from '../../apiClient';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -33,11 +35,15 @@ export function ChatProvider({
     const socketRef = useRef<ChatSocket | null>(null); // Declare socketRef
 
     const [currentMessageID, setCurrentMessageID] = useState<string | null>(null);
-    const [ assistantWorking, setAssistantWorking ] = useState<boolean>(false);
+    const [assistantWorking, setAssistantWorking] = useState<boolean>(false);
+
+    // Model selection state
+    const [selectedModel, setSelectedModel] = useState<string | null>('gemini-2.0-flash-exp');
+    const [availableModels, setAvailableModels] = useState<Model[]>([]);
 
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
-    const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app';
+    // const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app';
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
@@ -47,6 +53,21 @@ export function ChatProvider({
             getMessages(activeChatID);
         }
     }, [activeChatID]); // Dependency on activeChatID
+
+    // Fetch available models on mount
+    useEffect(() => {
+        const fetchModels = async () => {
+            try {
+                const models = await modelsApi.getModels();
+                if (models) {
+                    setAvailableModels(models);
+                }
+            } catch (error) {
+                console.error('Failed to fetch models:', error);
+            }
+        };
+        fetchModels();
+    }, []);
 
     useEffect(() => {
         console.log('WebSocket useEffect: activeChatID:', activeChatID);
@@ -149,7 +170,7 @@ export function ChatProvider({
     async function getMessages(chatID: string) {
         try {
             const data = await apiClient.get<Message[]>(
-                `${API_URL}/api/chats/${chatID}/messages`,
+                `${API_URL}/chats/${chatID}/messages`,
             );
             if (!data) {
                 return;
@@ -170,7 +191,7 @@ export function ChatProvider({
 
         try {
             const created = await apiClient.post<{ id: string }>(
-                `${API_URL}/api/chats`,
+                `${API_URL}/chats`,
                 {
                     "title": title,
                     "model": emptyChatID
@@ -199,7 +220,7 @@ export function ChatProvider({
 
         try {
             const created = await apiClient.post<{ id: string }>(
-                `${API_URL}/api/chats/${chatID}/messages`,
+                `${API_URL}/chats/${chatID}/messages`,
                 {
                     chat_id: chatID,
                     role: 'user',
@@ -237,6 +258,7 @@ export function ChatProvider({
             () => tkn,
             () => chatID,
             () => currentMessageID,
+            () => selectedModel,
         )
 
         sock.setHandlers({
@@ -308,6 +330,9 @@ export function ChatProvider({
         getMessages,
         sendMessage, // Now uses the WebSocket version
         assistantWorking,
+        selectedModel,
+        setSelectedModel,
+        availableModels,
     };
 
     return (

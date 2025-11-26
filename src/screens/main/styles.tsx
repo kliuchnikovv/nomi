@@ -6,17 +6,22 @@ export const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         backgroundColor: oneDark.background,
+        overflow: 'hidden',
     },
     sidebarWrap: {
         overflow: 'hidden',
+        zIndex: 10,
     },
     divider: {
         width: StyleSheet.hairlineWidth,
         backgroundColor: 'rgba(171, 178, 191, 0.12)',
     },
     content: {
-        width: '100%',
-        flexShrink: 0,
+        // Width will be set dynamically to screen width
+    },
+    rightSidebarWrap: {
+        overflow: 'hidden',
+        zIndex: 10,
     },
     header: {
         height: 48,
@@ -52,5 +57,22 @@ export const styles = StyleSheet.create({
         top: 0,
         bottom: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    },
+    badge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: '#E06C75',
+        borderRadius: 8,
+        minWidth: 16,
+        height: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+    },
+    badgeText: {
+        color: '#FFFFFF',
+        fontSize: 10,
+        fontWeight: '600',
     },
 });

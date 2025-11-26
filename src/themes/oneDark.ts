@@ -21,4 +21,9 @@ export const oneDark = {
   // TODO: replace
   blue: oneDarkPalette.blue,
   gutterGrey: oneDarkPalette.gutterGrey,
+
+  // Additional colors
+  border: oneDarkPalette.gutterGrey,
+  accent: oneDarkPalette.blue,
+  textSecondary: oneDarkPalette.commentGrey,
 };

@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { oneDarkPalette } from '../../themes/oneDark.ts';
+import { oneDark, oneDarkPalette } from '../../themes/oneDark.ts';
 
 export const styles = StyleSheet.create({
     root: {
@@ -48,7 +48,13 @@ export const styles = StyleSheet.create({
         marginTop: 4,
     },
     logoutBtn: {
-        backgroundColor: '#ff4d4f',
+        backgroundColor: oneDarkPalette.red,
+        paddingVertical: 10,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    connectorsBtn: {
+        backgroundColor: oneDarkPalette.blue,
         paddingVertical: 10,
         borderRadius: 8,
         alignItems: 'center',

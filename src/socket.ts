@@ -10,6 +10,7 @@ type Handlers = {
     onUnauthorized?: () => Promise<boolean> | boolean; // return true if token refreshed
     onMeta?: (meta: Frame) => void;
     onPing?: (ping: Frame) => Promise<boolean> | boolean;
+    onTools?: (frame: Frame) => void; // For tools list
 };
 
 export class ChatSocket {
@@ -18,6 +19,7 @@ export class ChatSocket {
     private readonly getToken: () => string | null;
     private readonly getChatId: () => string | null;
     private readonly getMessageId: () => string | null;
+    private readonly getModel: () => string | null;
     private handlers: Handlers = {};
     private outbox: any[] = [];
     private idleTimer: any = null;
@@ -28,11 +30,13 @@ export class ChatSocket {
         getToken: () => string | null,
         getChatId: () => string | null,
         getMessageId: () => string | null,
+        getModel: () => string | null,
     ) {
         this.rootUrl = rootUrl;
         this.getToken = getToken;
         this.getChatId = getChatId;
         this.getMessageId = getMessageId;
+        this.getModel = getModel;
     }
 
     setHandlers(h: Handlers) {
@@ -67,7 +71,7 @@ export class ChatSocket {
         // messageId is per-message and should not be required to open a long-lived socket
         // const messageId = this.getMessageId();
         if (!token) {
-            console.log("WS open blocked: missing token",token);
+            console.log("WS open blocked: missing token", token);
             return;
         }
 
@@ -84,6 +88,10 @@ export class ChatSocket {
         // if (messageId) qs.set('messageId', messageId);
         // if (initialQ) qs.set('q', initialQ);
         if (initialSessionId) qs.set('sessionId', initialSessionId);
+
+        // Add model parameter if selected
+        const model = this.getModel();
+        if (model) qs.set('model', model);
 
         const httpUrl = `${this.rootUrl}/chat/ws?${qs.toString()}`;
         const wsUrl = httpUrl.startsWith('https://')
