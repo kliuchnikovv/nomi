@@ -12,7 +12,7 @@ import { ChatContextType, Props, Model } from './models';
 import { useAuth } from '../auth/context.tsx';
 import { ChatSocket } from '../../socket';
 import { API_URL } from '../../config.ts';
-import { modelsApi } from '../../apiClient';
+import { modelsApi, sidebarApi } from '../../apiClient';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -32,7 +32,28 @@ export function ChatProvider({
     setActiveChatID,
 }: Props) {
     const [messages, setMessages] = useState<Message[]>([]);
+    const [externalTitle, setExternalTitle] = useState<string | null>(null);
     const socketRef = useRef<ChatSocket | null>(null); // Declare socketRef
+    const seededChatRef = useRef<string | null>(null);
+    const [pluginThreadMeta, setPluginThreadMeta] = useState<{ provider: string; chatId: string | number } | null>(null);
+    const mapPluginMessage = useCallback((msg: any, provider: string, fallbackRole: 'assistant' | 'user' = 'assistant'): Message => {
+        const roleFromMsg = msg.role
+            || (msg.sender && msg.sender !== provider ? 'user' : undefined)
+            || (msg.metadata?.from === 'user' ? 'user' : undefined)
+            || fallbackRole;
+        const normalizedRole = roleFromMsg === 'daemon' ? 'assistant' : roleFromMsg;
+        return {
+            id: msg.id || `plugin-${Date.now()}`,
+            chat_id: String(pluginThreadMeta?.chatId ?? msg.thread_id ?? msg.chat_id ?? ''),
+            sender: msg.sender || provider,
+            role: normalizedRole,
+            text: msg.summary || msg.content || msg.title || '',
+            created_at: msg.received_at ? new Date(msg.received_at).getTime() : Date.now(),
+            actions: msg.actions,
+            importance: msg.importance,
+            metadata: { ...(msg.metadata || {}), originalRole: msg.role || roleFromMsg, title: msg.title },
+        };
+    }, [pluginThreadMeta?.chatId]);
 
     const [currentMessageID, setCurrentMessageID] = useState<string | null>(null);
     const [assistantWorking, setAssistantWorking] = useState<boolean>(false);
@@ -47,12 +68,26 @@ export function ChatProvider({
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
-        if (activeChatID === emptyChatID) {
-            setMessages([]);
-        } else {
-            getMessages(activeChatID);
+        // In plugin mode we keep activeChatID as placeholder; skip resetting state
+        if (pluginThreadMeta && activeChatID === emptyChatID) {
+            return;
         }
-    }, [activeChatID]); // Dependency on activeChatID
+        // If this chat was just seeded, skip fetching to preserve seed messages
+        if (seededChatRef.current && seededChatRef.current === activeChatID) {
+            seededChatRef.current = null;
+            return;
+        }
+        // Leaving plugin thread when user selects a real chat
+        if (pluginThreadMeta) {
+            setPluginThreadMeta(null);
+        }
+        setExternalTitle(null);
+        if (!activeChatID || activeChatID === emptyChatID) {
+            setMessages([]);
+            return;
+        }
+        getMessages(activeChatID);
+    }, [activeChatID, getMessages, pluginThreadMeta]); // Dependency on activeChatID
 
     // Fetch available models on mount
     useEffect(() => {
@@ -87,8 +122,8 @@ export function ChatProvider({
             return;
         }
 
-        // Не открываем сокет, пока у нас placeholder chat_id
-        if (!activeChatID || activeChatID === emptyChatID) {
+        // Не открываем сокет, пока у нас placeholder chat_id или в режиме плагина
+        if (!activeChatID || activeChatID === emptyChatID || pluginThreadMeta) {
             // console.warn('WebSocket useEffect: Skipping WS init until real chat_id is set');
             socketRef.current?.close();
             socketRef.current = null;
@@ -112,6 +147,33 @@ export function ChatProvider({
     const sendStreamingMessage = useCallback(
         async (text: string) => {
             if (!text.trim() || !user?.id) return;
+
+            if (pluginThreadMeta) {
+                const timestamp = Date.now();
+                const newUserMessage: Message = {
+                    id: `plugin-user-${timestamp}`,
+                    chat_id: String(pluginThreadMeta.chatId),
+                    sender: user.id,
+                    role: 'user',
+                    text: text.trim(),
+                    created_at: timestamp,
+                };
+                setMessages(prev => [...prev, newUserMessage]);
+                try {
+                    const sent = await sidebarApi.sendChatMessage(
+                        pluginThreadMeta.provider,
+                        pluginThreadMeta.chatId,
+                        { content: text.trim() },
+                    );
+                    if (sent) {
+                        setMessages(prev => [...prev, mapPluginMessage(sent, pluginThreadMeta.provider, 'user')]);
+                    }
+                    await refreshPluginThread();
+                } catch (err) {
+                    console.error('Failed to send plugin message', err);
+                }
+                return;
+            }
 
             // Если чата ещё нет, создаём его через REST и монтируем id
             let chatIdToUse = activeChatID;
@@ -163,11 +225,51 @@ export function ChatProvider({
             socketRef.current!.sendMessage(text.trim(), sessionId, messageID);
             console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
         },
-        [activeChatID, user?.id, refreshToken, socketRef.current],
+        [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread],
     ); // Dependencies for sendStreamingMessage
 
+    const executeMessageAction = useCallback(async (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => {
+        if (!pluginThreadMeta) return;
+        try {
+            await sidebarApi.executeMessageAction(pluginThreadMeta.provider, messageId, {
+                command: action.command,
+                url: action.url,
+                prompt: action.prompt,
+                agent: action.agent,
+            });
+            await refreshPluginThread();
+        } catch (err) {
+            console.error('Failed to execute plugin action', err);
+        }
+    }, [pluginThreadMeta, refreshPluginThread]);
+    const refreshPluginThread = useCallback(async () => {
+        if (!pluginThreadMeta) return;
+        try {
+            const resp = await sidebarApi.getChatMessages(pluginThreadMeta.provider, pluginThreadMeta.chatId);
+            const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, pluginThreadMeta.provider));
+            setMessages(converted);
+        } catch (err) {
+            console.error('Failed to refresh plugin thread', err);
+        }
+    }, [pluginThreadMeta, mapPluginMessage]);
+
+    const startPluginThread = useCallback(async ({ provider, chatId, title }: { provider: string; chatId: string | number; title?: string | null }) => {
+        setPluginThreadMeta({ provider, chatId });
+        setExternalTitle(title || null);
+        setAssistantWorking(false);
+        setMessages([]);
+        setActiveChatID(emptyChatID);
+        try {
+            const resp = await sidebarApi.getChatMessages(provider, chatId);
+            const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, provider));
+            setMessages(converted);
+        } catch (err) {
+            console.error('Failed to load plugin chat on start', err);
+        }
+    }, [setActiveChatID, mapPluginMessage]);
+
     // Keep getMessages for initial load and manual refresh if needed
-    async function getMessages(chatID: string) {
+    const getMessages = useCallback(async (chatID: string) => {
         try {
             const data = await apiClient.get<Message[]>(
                 `${API_URL}/chats/${chatID}/messages`,
@@ -184,7 +286,7 @@ export function ChatProvider({
                 error,
             );
         }
-    }
+    }, []);
 
     async function createChat(title: string) {
         let chatID: string;
@@ -329,7 +431,12 @@ export function ChatProvider({
         messages,
         getMessages,
         sendMessage, // Now uses the WebSocket version
+        executeMessageAction,
         assistantWorking,
+        externalTitle,
+        startPluginThread,
+        isPluginThread: !!pluginThreadMeta,
+        pluginThreadMeta,
         selectedModel,
         setSelectedModel,
         availableModels,

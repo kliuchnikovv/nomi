@@ -4,12 +4,13 @@ import React, {
     ReactNode,
     useState,
     useEffect,
+    useRef,
 } from 'react';
 import { Linking } from 'react-native';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 
-import { ConnectorContextType, Tool, Integration, CONNECTORS } from './models';
-import { integrationsApi } from '../../../apiClient.ts';
+import { ConnectorContextType, Tool, Integration } from './models';
+import { pluginsApi } from '../../../apiClient.ts';
 import { OAUTH_CALLBACK_URL } from '../../../config.ts';
 
 const ConnectorsContext = createContext<ConnectorContextType | undefined>(undefined);
@@ -25,28 +26,82 @@ export function useConnectors() {
 export function ConnectorsProvider({ children }: { children: ReactNode }) {
     const [tools, setTools] = useState<Tool[]>([])
     const [configs, setConfigs] = useState<Integration[]>([])
+    const [pendingProvider, setPendingProvider] = useState<string | null>(null);
+    const [authStatus, setAuthStatus] = useState<string | null>(null);
+    const lastHandledUrl = useRef<string | null>(null);
 
     useEffect(() => {
-        getTools();
         getIntegrations();
-    }, []);
+    }, [getIntegrations]);
 
     async function getTools() {
-        const response = await integrationsApi.getTools();
-        const normalizedTools: Tool[] = (response || []).map((t: any) => ({
-            id: t.ID || t.id,
-            name: t.Name || t.name,
-            provider: t.Provider || t.provider,
-            enabled: t.Enabled !== undefined ? t.Enabled : t.enabled,
-            created_at: t.CreatedAt || t.created_at,
-        }));
-        setTools(normalizedTools);
+        // For backward compatibility: tools mirror the plugins list
+        await getIntegrations();
     }
 
-    async function getIntegrations() {
-        const response = await integrationsApi.getIntegrations();
-        setConfigs(response || []);
-    }
+    const getIntegrations = React.useCallback(async () => {
+        try {
+            const response = await pluginsApi.list();
+            const normalized: Integration[] = (response || []).map(p => ({
+                id: p.name,
+                name: (p.info && (p.info.title || p.info.name)) || p.name,
+                provider: p.name,
+                connected: !!p.enabled,
+                info: p.info,
+                state: p.state,
+            }));
+            setConfigs(normalized);
+            setTools(normalized.map(p => ({
+                id: p.id,
+                name: p.name,
+                provider: p.provider,
+                enabled: p.connected,
+                info: p.info,
+                state: p.state,
+            })));
+        } catch (e) {
+            console.warn('Failed to load plugins', e);
+            setConfigs([]);
+            setTools([]);
+        }
+    }, []);
+
+    const handleOAuthUrl = React.useCallback(async (url: string) => {
+        if (!url || !url.startsWith(OAUTH_CALLBACK_URL)) return;
+        if (lastHandledUrl.current === url) return;
+        lastHandledUrl.current = url;
+        try {
+            const parsed = new URL(url);
+            const provider = parsed.searchParams.get('provider');
+            const status = parsed.searchParams.get('status');
+            const email = parsed.searchParams.get('email');
+            if (provider && pendingProvider && provider !== pendingProvider) {
+                return;
+            }
+            if (status === 'ok' && provider) {
+                setAuthStatus(`Connected ${provider}${email ? ` (${email})` : ''}`);
+                await pluginsApi.enablePlugin(provider).catch(err => console.warn('Failed to enable plugin after OAuth', err));
+            } else {
+                setAuthStatus(`OAuth failed${provider ? ` for ${provider}` : ''}`);
+            }
+        } finally {
+            setPendingProvider(null);
+            await getIntegrations();
+        }
+    }, [pendingProvider, getIntegrations]);
+
+    useEffect(() => {
+        const subscription = Linking.addEventListener('url', ({ url }) => handleOAuthUrl(url));
+        Linking.getInitialURL().then(initialUrl => {
+            if (initialUrl) {
+                handleOAuthUrl(initialUrl);
+            }
+        }).catch(() => {});
+
+        return () => {
+            subscription.remove();
+        };
+    }, [handleOAuthUrl]);
 
     async function openOAuthFlow(authUrl: string) {
         console.log('Opening OAuth flow', authUrl);
@@ -54,61 +109,34 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             const isAvailable = await InAppBrowser.isAvailable();
             console.log('InAppBrowser available:', isAvailable);
             if (isAvailable) {
-                let result;
-                try {
-                    result = await InAppBrowser.openAuth(
-                        authUrl,
-                        OAUTH_CALLBACK_URL,
-                        {
-                            ephemeralWebSession: false,
-                            dismissButtonStyle: 'cancel',
-                            showTitle: false,
-                            enableDefaultShare: false,
-                        },
-                    );
-                } catch (error: any) {
-                    console.warn('First attempt to open InAppBrowser failed', error);
-                    if (error.message && error.message.includes('Another InAppBrowser is already being presented')) {
-                        console.log('Closing existing InAppBrowser and retrying...');
-                        await InAppBrowser.close();
-                        result = await InAppBrowser.openAuth(
-                            authUrl,
-                            OAUTH_CALLBACK_URL,
-                            {
-                                ephemeralWebSession: false,
-                                dismissButtonStyle: 'cancel',
-                                showTitle: false,
-                                enableDefaultShare: false,
-                            },
-                        );
-                    } else {
-                        throw error;
-                    }
-                }
-
-                console.log('InAppBrowser result:', result);
+                const result = await InAppBrowser.openAuth(authUrl, OAUTH_CALLBACK_URL, {
+                    ephemeralWebSession: false,
+                    dismissButtonStyle: 'close',
+                    showTitle: false,
+                    enableDefaultShare: false,
+                });
                 if (result.type === 'success' && result.url) {
-                    // OAuth callback handled via Linking listener
-                    return;
+                    await handleOAuthUrl(result.url);
                 }
                 if (result.type === 'cancel') {
-                    console.log('Auth cancelled');
-                    return;
+                    setAuthStatus('OAuth flow cancelled');
+                    setPendingProvider(null);
                 }
+                return;
             }
         } catch (e) {
             console.warn('Failed to open OAuth flow in InAppBrowser', e);
             console.log('Falling back to Linking.openURL');
             try {
                 await Linking.openURL(authUrl);
-            } catch (e) {
-                console.warn('Failed to open OAuth URL', e);
+            } catch (err) {
+                console.warn('Failed to open OAuth URL', err);
             }
         }
     }
 
     async function toggleTool(configID: string, enabled: boolean) {
-        const integration = configs.find(c => c.id === configID);
+        const integration = configs.find(c => c.id === configID || c.provider === configID);
         if (!integration) {
             console.warn(`Integration not found for ID: ${configID}`);
             return;
@@ -117,63 +145,35 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         if (enabled) {
             // Connect
             try {
-                const response = await integrationsApi.connectIntegration(integration.provider);
-                if (response?.auth_url) {
-                    await openOAuthFlow(response.auth_url);
+                if (['gmail', 'calendar'].includes(integration.provider)) {
+                    try {
+                        setPendingProvider(integration.provider);
+                        const redirectUrl = await pluginsApi.startOAuthLogin(integration.provider);
+                        if (redirectUrl) {
+                            await openOAuthFlow(redirectUrl);
+                        }
+                    } catch (authError) {
+                        console.warn('Failed to start OAuth login', authError);
+                        setPendingProvider(null);
+                        setAuthStatus('Failed to start OAuth login');
+                        return;
+                    }
+                } else {
+                    await pluginsApi.enablePlugin(integration.provider);
+                    await getIntegrations();
                 }
-                // After flow, we expect a redirect back.
-                // Ideally we should refresh tools/integrations after coming back.
-                // For now, we can just refresh.
-                getIntegrations();
-                getTools();
             } catch (e) {
                 console.warn('Failed to connect integration', e);
             }
         } else {
-            // Disconnect
-            // Find the tool corresponding to this integration
-            // Assuming tool.id is what we need to delete.
-            // But wait, toggleTool receives configID (integration ID).
-            // We need to find the tool that corresponds to this integration.
-            // The new API returns tools. Is there a link?
-            // The user prompt says: "List User Tools... Returns the list of tools actually configured".
-            // "Delete Tool... DELETE /tools/{id}".
-            // We need to know which tool corresponds to the integration.
-            // In the new model, Tool has `provider`. Integration has `provider`.
-            // So we can match by provider.
             console.log('Disconnecting integration', integration);
             console.log('Available tools', tools);
 
-            let tool = tools.find(t => t.provider === integration.provider);
-
-            if (!tool) {
-                // Try to find by name
-                tool = tools.find(t => t.name === integration.name);
-            }
-
-            if (!tool) {
-                // Try to find by mapping via CONNECTORS
-                // Find connector that matches integration (by name or provider)
-                const connector = CONNECTORS.find(c =>
-                    c.name === integration.name ||
-                    c.toolKey === integration.provider ||
-                    c.id === integration.provider
-                );
-                if (connector) {
-                    tool = tools.find(t => t.provider === connector.toolKey);
-                }
-            }
-
-            if (tool) {
-                try {
-                    await integrationsApi.deleteTool(tool.id);
-                    await getTools();
-                    await getIntegrations();
-                } catch (e) {
-                    console.warn('Failed to delete tool', e);
-                }
-            } else {
-                console.warn('Tool not found for integration', integration.id);
+            try {
+                await pluginsApi.disablePlugin(integration.provider);
+                await getIntegrations();
+            } catch (e) {
+                console.warn('Failed to disable plugin', e);
             }
         }
     }

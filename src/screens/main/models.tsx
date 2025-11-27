@@ -28,6 +28,8 @@ export type Message = {
     role:       string
     text:       string
     created_at: number
+    actions?: any[]
+    metadata?: Record<string, any>
 }
 
 export type Frame = {

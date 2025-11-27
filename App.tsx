@@ -7,6 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ChatLayout from './src/screens/main/screen.tsx';
 import {
     SafeAreaProvider,
@@ -22,16 +23,18 @@ function App() {
     const isDarkMode = useColorScheme() === 'dark';
 
     return (
-        <SafeAreaProvider>
-            <AuthProvider>
-                <StatusBar
-                    barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-                />
-                <MainProvider>
-                    <AppContent />
-                </MainProvider>
-            </AuthProvider>
-        </SafeAreaProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <SafeAreaProvider>
+                <AuthProvider>
+                    <StatusBar
+                        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+                    />
+                    <MainProvider>
+                        <AppContent />
+                    </MainProvider>
+                </AuthProvider>
+            </SafeAreaProvider>
+        </GestureHandlerRootView>
     );
 }
 

@@ -116,4 +116,55 @@ export const styles = StyleSheet.create({
         color: 'rgba(171, 178, 191, 0.5)',
         fontSize: 14,
     },
+    syncRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        gap: 12,
+    },
+    syncTextBlock: {
+        flex: 1,
+        gap: 2,
+        paddingRight: 8,
+    },
+    syncButton: {
+        backgroundColor: oneDarkPalette.white,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 10,
+    },
+    syncButtonDisabled: {
+        opacity: 0.8,
+    },
+    syncButtonText: {
+        color: oneDarkPalette.black,
+        fontWeight: '700',
+    },
+    inputGroup: {
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        gap: 4,
+    },
+    inputLabel: {
+        color: 'rgba(171, 178, 191, 0.8)',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    syncInput: {
+        backgroundColor: '#262a31',
+        color: oneDarkPalette.white,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(171, 178, 191, 0.15)',
+    },
+    syncStatus: {
+        color: 'rgba(171, 178, 191, 0.85)',
+        fontSize: 12,
+        paddingHorizontal: 14,
+        paddingBottom: 10,
+    },
 });

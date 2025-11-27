@@ -1,4 +1,5 @@
 import { API_URL } from './config';
+import { SidebarChatsResponse, SidebarChatMessagesResponse, SidebarResponse } from './screens/rightsidebar/models';
 
 // Хранилище для функций из AuthContext. Изначально пустое.
 const authStore = {
@@ -32,15 +33,7 @@ async function request<T>(
         },
     };
 
-    let response = await call(endpoint, customOptions);
-    if (response.status === 401 && !endpoint.includes('/auth/')) {
-        const refreshed = await authStore.refreshToken();
-        if (refreshed) {
-            response = await call(endpoint, customOptions);
-        } else {
-            authStore.logout();
-        }
-    }
+    const response = await call(endpoint, customOptions);
     if (response.status === 204) {
         return null;
     }
@@ -72,12 +65,31 @@ async function call(endpoint: string, options: RequestInit = {}) {
     if (newToken) {
         headers.Authorization = `Bearer ${newToken}`;
     }
-    options.headers = headers;
-
-    console.log(`token is ${newToken}`)
-    const response = await fetch(endpoint, options);
+    const requestOptions: RequestInit = { ...options, headers };
+    let response = await fetch(endpoint, requestOptions);
+    if (response.status === 401 && !endpoint.includes('/auth/')) {
+        const refreshed = await authStore.refreshToken();
+        if (refreshed) {
+            const retryToken = authStore.getToken();
+            const retryHeaders = { ...headers };
+            if (retryToken) {
+                retryHeaders.Authorization = `Bearer ${retryToken}`;
+            }
+            response = await fetch(endpoint, { ...requestOptions, headers: retryHeaders });
+        } else {
+            authStore.logout();
+        }
+    }
 
     return response
+}
+
+async function startOAuthLogin(provider: string): Promise<string> {
+    const response = await apiClient.post<{ auth_url: string }>(`${API_URL}/oauth/${provider}/login`, {});
+    if (response?.auth_url) {
+        return response.auth_url;
+    }
+    throw new Error('No auth_url returned from OAuth login');
 }
 
 export const apiClient = {
@@ -88,12 +100,16 @@ export const apiClient = {
     delete: <T>(endpoint: string, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'DELETE' }),
 };
 
-export const integrationsApi = {
-    getIntegrations: () => apiClient.get<any[]>(`${API_URL}/integrations`),
-    getTools: () => apiClient.get<any[]>(`${API_URL}/tools`),
-    connectIntegration: (provider: string) => apiClient.post<{ auth_url: string }>(`${API_URL}/oauth/${provider}/login`, {}),
-    deleteTool: (id: string) => apiClient.delete<void>(`${API_URL}/tools/${id}`),
-    syncGmail: () => apiClient.post<{ status: string }>(`${API_URL}/integrations/gmail/sync`, {}),
+export const pluginsApi = {
+    list: () => apiClient.get<Array<{ name: string; info?: Record<string, any>; state?: Record<string, any>; enabled: boolean }>>(`${API_URL}/plugins`),
+    enablePlugin: (name: string) => apiClient.post<void>(`${API_URL}/plugins/${name}/enable`, {}),
+    disablePlugin: (name: string) => apiClient.post<void>(`${API_URL}/plugins/${name}/disable`, {}),
+    getPluginState: (name: string) => apiClient.get<{ enabled: boolean; state: Record<string, any> }>(`${API_URL}/plugins/${name}/state`),
+    updatePluginState: (name: string, state: Record<string, any>) => apiClient.put<void>(`${API_URL}/plugins/${name}/state`, state),
+    startOAuthLogin,
+    syncGmail: () => apiClient.post<{ message: string }>(`${API_URL}/plugins/gmail/sync`, {}),
+    syncImap: (config: { host: string; username: string; password: string }) =>
+        apiClient.post<{ status: string }>(`${API_URL}/plugins/imap/sync`, config),
 };
 
 export const inboxApi = {
@@ -114,6 +130,17 @@ export const inboxApi = {
             message: string;
             result?: string;
         }>(`${API_URL}/inbox/${messageId}/actions`, action),
+};
+
+export const sidebarApi = {
+    getSidebar: () => apiClient.get<SidebarResponse>(`${API_URL}/sidebar`),
+    getChats: (provider: string) => apiClient.get<SidebarChatsResponse>(`${API_URL}/sidebar/${provider}/chats`),
+    getChatMessages: (provider: string, chatId: string | number) =>
+        apiClient.get<SidebarChatMessagesResponse>(`${API_URL}/sidebar/${provider}/chats/${chatId}`),
+    sendChatMessage: (provider: string, chatId: string | number, body: any) =>
+        apiClient.post(`${API_URL}/sidebar/${provider}/chats/${chatId}/messages`, body),
+    executeMessageAction: (provider: string, messageId: string, body: any) =>
+        apiClient.post(`${API_URL}/sidebar/${provider}/messages/${messageId}/actions`, body),
 };
 
 export const modelsApi = {

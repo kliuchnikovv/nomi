@@ -23,7 +23,12 @@ export interface ChatContextType {
     messages: Message[];
     getMessages: (chatId: string) => void;
     sendMessage: (text: string) => void;
+    executeMessageAction: (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => Promise<void>;
     assistantWorking: boolean;
+    externalTitle?: string | null;
+    startPluginThread: (args: { provider: string; chatId: string | number; title?: string | null }) => Promise<void>;
+    isPluginThread: boolean;
+    pluginThreadMeta?: { provider: string; chatId: string | number } | null;
     selectedModel: string | null;
     setSelectedModel: (model: string) => void;
     availableModels: Model[];

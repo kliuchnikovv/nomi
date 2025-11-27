@@ -1,139 +1,198 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { inboxApi } from '../../apiClient';
-import { InboxAction, InboxMessage, InboxPaginatedResponse } from './models';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { inboxApi, sidebarApi } from '../../apiClient';
+import { InboxAction, InboxMessage, InboxPaginatedResponse, Plugin, PluginChat, PluginChatMessage, SidebarChat, SidebarItem } from './models';
 
-interface InboxContextType {
-    messages: InboxMessage[];
+interface PluginChatsContextType {
+    plugins: Plugin[];
     loading: boolean;
     error: string | null;
-    page: number;
-    totalPages: number;
-    totalCount: number;
-    loadInbox: () => Promise<void>;
-    markAsRead: (id: string) => Promise<void>;
-    executeAction: (messageId: string, action: InboxAction) => Promise<void>;
-    loadMore: () => Promise<void>;
+    selectedChatId: string | null;
+    selectedChatMessages: PluginChatMessage[];
+    chatLoading: boolean;
+    chatError: string | null;
+    selectChat: (chat: PluginChat) => Promise<{ provider: string; chatId: string | number; messages: PluginChatMessage[] } | null>;
+    setSelectedChatId: (chatId: string | null) => void; // legacy, use selectChat
     refresh: () => Promise<void>;
 }
 
-const InboxContext = createContext<InboxContextType | undefined>(undefined);
+const PluginChatsContext = createContext<PluginChatsContextType | undefined>(undefined);
 
-export const useInbox = () => {
-    const context = useContext(InboxContext);
+export const usePluginChats = () => {
+    const context = useContext(PluginChatsContext);
     if (!context) {
-        throw new Error('useInbox must be used within InboxProvider');
+        throw new Error('usePluginChats must be used within PluginChatsProvider');
     }
     return context;
 };
 
-export const InboxProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [messages, setMessages] = useState<InboxMessage[]>([]);
+// Для обратной совместимости
+export const useInbox = () => {
+    const context = useContext(PluginChatsContext);
+    if (!context) {
+        throw new Error('useInbox must be used within PluginChatsProvider');
+    }
+    // Вычисляем общее количество непрочитанных чатов
+    const unreadCount = useMemo(() => {
+        return context.plugins.reduce((total, plugin) => {
+            return total + plugin.chats.reduce((sum, chat) => sum + chat.unreadCount, 0);
+        }, 0);
+    }, [context.plugins]);
+    
+    // Возвращаем совместимый интерфейс
+    return {
+        messages: [] as InboxMessage[],
+        loading: context.loading,
+        error: context.error,
+        page: 1,
+        totalPages: 1,
+        totalCount: 0,
+        unreadCount,
+        loadInbox: async () => {},
+        markAsRead: async () => {},
+        executeAction: async () => {},
+        loadMore: async () => {},
+        refresh: context.refresh,
+    };
+};
+
+export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [plugins, setPlugins] = useState<Plugin[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalCount, setTotalCount] = useState(0);
+    const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+    const [selectedChatMessages, setSelectedChatMessages] = useState<PluginChatMessage[]>([]);
+    const [chatLoading, setChatLoading] = useState(false);
+    const [chatError, setChatError] = useState<string | null>(null);
 
-    const loadInbox = async (pageNum: number = 1) => {
+    const mapChats = (integrationId: string, provider: string, chats: SidebarChat[]): PluginChat[] => {
+        return chats.map(chat => ({
+            id: String(chat.chat_id),
+            pluginId: integrationId,
+            title: chat.title,
+            lastMessage: chat.count ? `${chat.count} messages` : undefined,
+            lastMessageAt: chat.last_received ? new Date(chat.last_received).getTime() : undefined,
+            unreadCount: 0,
+            metadata: {
+                provider,
+                integrationId,
+                chatId: chat.chat_id,
+                messagesCount: chat.count,
+            },
+        }));
+    };
+
+    const mapProviders = async (items: SidebarItem[]): Promise<Plugin[]> => {
+        const pluginsWithChats = await Promise.all(items.map(async item => {
+            try {
+                const chatsResponse = await sidebarApi.getChats(item.provider);
+                const chats = chatsResponse?.chats ? mapChats(item.integration_id, item.provider, chatsResponse.chats) : [];
+
+                return {
+                    id: item.integration_id,
+                    provider: item.provider,
+                    name: item.name || item.provider,
+                    chats,
+                } satisfies Plugin;
+            } catch (err) {
+                console.error(`Failed to load chats for provider ${item.provider}:`, err);
+                return {
+                    id: item.integration_id,
+                    provider: item.provider,
+                    name: item.name || item.provider,
+                    chats: [],
+                } satisfies Plugin;
+            }
+        }));
+
+        return pluginsWithChats;
+    };
+
+    const loadPlugins = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
-            const response = await inboxApi.getInbox(pageNum, 20);
-
-            if (response) {
-                const data = response as InboxPaginatedResponse;
-                if (pageNum === 1) {
-                    setMessages(data.messages);
-                } else {
-                    setMessages(prev => [...prev, ...data.messages]);
-                }
-                setPage(data.page);
-                setTotalPages(data.total_pages);
-                setTotalCount(data.total_count);
-            }
+            const sidebarData = await sidebarApi.getSidebar();
+            const items = sidebarData?.items || [];
+            const loadedPlugins = await mapProviders(items);
+            setPlugins(loadedPlugins);
         } catch (err) {
-            console.error('Failed to load inbox:', err);
-            setError(err instanceof Error ? err.message : 'Failed to load inbox');
+            console.error('Failed to load plugin chats:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load plugin chats');
         } finally {
             setLoading(false);
         }
-    };
-
-    const markAsRead = async (id: string) => {
-        try {
-            await inboxApi.markAsRead(id);
-            // Update local state to mark as read
-            setMessages(prev =>
-                prev.map(msg =>
-                    msg.id === id ? { ...msg, status: 'read' } : msg
-                )
-            );
-        } catch (err) {
-            console.error('Failed to mark as read:', err);
-            throw err;
-        }
-    };
-
-    const executeAction = async (messageId: string, action: InboxAction) => {
-        try {
-            await inboxApi.executeAction(messageId, {
-                command: action.command,
-                agent: action.agent,
-                url: action.url,
-                prompt: action.prompt,
-            });
-
-            // Update local state based on action type
-            if (action.command === 'mark_as_read') {
-                setMessages(prev =>
-                    prev.map(msg =>
-                        msg.id === messageId ? { ...msg, status: 'read' } : msg
-                    )
-                );
-            } else if (action.command === 'archive') {
-                setMessages(prev =>
-                    prev.map(msg =>
-                        msg.id === messageId ? { ...msg, status: 'archived' } : msg
-                    )
-                );
-            }
-        } catch (err) {
-            console.error('Failed to execute action:', err);
-            throw err;
-        }
-    };
-
-    const loadMore = async () => {
-        if (page < totalPages && !loading) {
-            await loadInbox(page + 1);
-        }
-    };
-
-    const refresh = async () => {
-        await loadInbox(1);
-    };
-
-    useEffect(() => {
-        loadInbox(1);
     }, []);
 
+    const refresh = useCallback(async () => {
+        await loadPlugins();
+    }, [loadPlugins]);
+
+    const selectChat = useCallback(async (chat: PluginChat) => {
+        setSelectedChatId(chat.id);
+        setChatLoading(true);
+        setChatError(null);
+        try {
+            const provider = chat.metadata?.provider || plugins.find(p => p.id === chat.pluginId)?.provider;
+            if (!provider) {
+                throw new Error('Provider not found for chat');
+            }
+            const chatId = chat.metadata?.chatId ?? chat.id;
+            const chatResponse = await sidebarApi.getChatMessages(provider, chatId);
+            const messages = chatResponse?.messages || [];
+            setSelectedChatMessages(messages);
+            return { provider, chatId, messages };
+        } catch (err) {
+            console.error('Failed to load chat messages:', err);
+            setChatError(err instanceof Error ? err.message : 'Failed to load chat messages');
+            setSelectedChatMessages([]);
+            return null;
+        } finally {
+            setChatLoading(false);
+        }
+    }, [plugins]);
+
+    useEffect(() => {
+        loadPlugins();
+
+        // Auto-refresh every 60 seconds
+        const intervalId = setInterval(() => {
+            loadPlugins();
+        }, 60000); // 60 seconds
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, [loadPlugins]);
+
+    const value = useMemo(() => ({
+        plugins,
+        loading,
+        error,
+        selectedChatId,
+        selectedChatMessages,
+        chatLoading,
+        chatError,
+        selectChat,
+        setSelectedChatId,
+        refresh,
+    }), [
+        plugins,
+        loading,
+        error,
+        selectedChatId,
+        selectedChatMessages,
+        chatLoading,
+        chatError,
+        selectChat,
+        refresh,
+    ]);
+
     return (
-        <InboxContext.Provider
-            value={{
-                messages,
-                loading,
-                error,
-                page,
-                totalPages,
-                totalCount,
-                loadInbox,
-                markAsRead,
-                executeAction,
-                loadMore,
-                refresh,
-            }}
-        >
+        <PluginChatsContext.Provider value={value}>
             {children}
-        </InboxContext.Provider>
+        </PluginChatsContext.Provider>
     );
 };
+
+// Для обратной совместимости
+export const InboxProvider = PluginChatsProvider;

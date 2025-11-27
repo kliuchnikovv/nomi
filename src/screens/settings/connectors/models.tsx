@@ -64,6 +64,8 @@ export type Integration = {
     name: string;
     provider: string;
     connected: boolean;
+    info?: Record<string, any>;
+    state?: Record<string, any>;
 };
 
 export type Tool = {
@@ -71,7 +73,9 @@ export type Tool = {
     name: string;
     provider: string;
     enabled: boolean;
-    created_at: string;
+    created_at?: string;
+    info?: Record<string, any>;
+    state?: Record<string, any>;
 };
 
 export type OAuthStatus = {
@@ -84,59 +88,27 @@ export type OAuthStatus = {
 // TODO: replace with tool-configs
 export const CONNECTORS: Connector[] = [
     {
-        id: 'github',
-        name: 'GitHub',
-        toolKey: 'github',
-        oauthProvider: 'github',
-        color: '#24292e',
-        glyph: 'github',
-    },
-    {
-        id: 'slack',
-        name: 'Slack',
-        toolKey: 'slack',
-        oauthProvider: 'slack',
-        color: '#611f69',
-        glyph: 'slack',
-    },
-    {
         id: 'gmail',
         name: 'Gmail',
         toolKey: 'gmail',
-        oauthProvider: 'google',
+        oauthProvider: 'gmail',
         color: oneDarkPalette.red,
         glyph: 'gmail',
     },
     {
-        id: 'google_calendar',
+        id: 'calendar',
         name: 'Google Calendar',
-        toolKey: 'google_calendar',
-        oauthProvider: 'google',
+        toolKey: 'calendar',
+        oauthProvider: 'calendar',
         color: oneDarkPalette.blue,
         glyph: 'calendar-month',
-    },
-    {
-        id: 'google_contacts',
-        name: 'Google Contacts',
-        toolKey: 'google_contacts',
-        oauthProvider: 'google',
-        color: '#1a73e8',
-        glyph: 'account',
-    },
-    {
-        id: 'google_drive',
-        name: 'Google Drive',
-        toolKey: 'google_drive',
-        oauthProvider: 'google',
-        color: '#188038',
-        glyph: 'google-drive',
     },
 ];
 
 export interface ConnectorContextType {
     tools: Tool[];
     integrations: Integration[];
-    getTools: () => void;
-    getIntegrations: () => void;
+    getTools: () => Promise<void>;
+    getIntegrations: () => Promise<void>;
     toggleTool: (configID: string, enabled: boolean) => Promise<void>;
 }

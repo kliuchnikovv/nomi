@@ -1,13 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-    Animated,
     Pressable,
     Text,
     useWindowDimensions,
     View,
 } from 'react-native';
 
+import Animated, {
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
+} from 'react-native-reanimated';
 import { Menu, Mail } from 'iconoir-react-native';
 import { styles } from './styles'
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,10 +24,74 @@ import RightSidebar from '../rightsidebar/screen';
 import ChatScreen from '../chat/screen';
 import SettingsModal from '../settings/screen';
 import { emptyChatID, useMain } from './context';
-import { ChatProvider } from '../chat/context.tsx';
-import { InboxProvider } from '../rightsidebar/context';
+import { ChatProvider, useChat } from '../chat/context.tsx';
+import { InboxProvider, useInbox } from '../rightsidebar/context';
 
-export default function MainScreen() {
+function HeaderTitle({ activeChatTitle }: { activeChatTitle?: string | null }) {
+    const { externalTitle } = useChat();
+    return (
+        <Text style={styles.headerTitle} numberOfLines={1}>
+            {externalTitle || activeChatTitle || 'Chat'}
+        </Text>
+    );
+}
+
+function HeaderShell({
+    isNarrow,
+    getChats,
+    setSidebarOpen,
+    setRightSidebarOpen,
+}: {
+    isNarrow: boolean;
+    getChats: () => void;
+    setSidebarOpen: (v: boolean) => void;
+    setRightSidebarOpen: (v: boolean) => void;
+}) {
+    const { unreadCount } = useInbox();
+    const { externalTitle, isPluginThread } = useChat();
+    const headerStyle = [
+        styles.header,
+        isPluginThread ? { backgroundColor: 'rgba(224,108,117,0.12)' } : { backgroundColor: 'rgba(97,175,239,0.08)' },
+    ];
+    return (
+        <View style={headerStyle}>
+            {isNarrow && (
+                <Pressable
+                    onPress={() => {
+                        getChats();
+                        setSidebarOpen(true)
+                    }}
+                    style={styles.headerBtn}
+                    accessibilityLabel="Open Sidebar"
+                >
+                    <Menu width={28} height={28} color={'#ABB2BF'} />
+                </Pressable>
+            )}
+            <HeaderTitle activeChatTitle={externalTitle} />
+            {isNarrow && (
+                <Pressable
+                    onPress={() => setRightSidebarOpen(true)}
+                    style={styles.headerBtn}
+                    accessibilityLabel="Open Inbox"
+                >
+                    <View>
+                        <Mail width={28} height={28} color={'#ABB2BF'} />
+                        {unreadCount > 0 && (
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </Pressable>
+            )}
+            {!isNarrow && <View style={{ width: 36 }} />}
+        </View>
+    );
+}
+
+function MainScreenContent() {
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
     const {
@@ -35,24 +104,20 @@ export default function MainScreen() {
         getChats,
     } = useMain();
 
+    const { unreadCount } = useInbox();
+
     const [settingsOpen, setSettingsOpen] = useState(false);
     const isNarrow = width < 768;
     const [sidebarOpen, setSidebarOpen] = useState(!isNarrow);
     const [rightSidebarOpen, setRightSidebarOpen] = useState(!isNarrow);
     const sidebarWidth = 320;
     const rightSidebarWidth = 320;
-    const anim = useRef(
-        new Animated.Value(!isNarrow ? sidebarWidth : 0),
-    ).current;
-    const rightAnim = useRef(
-        new Animated.Value(!isNarrow ? rightSidebarWidth : 0),
-    ).current;
-
-
-    useEffect(() => {
-        console.log('MainScreen mounted');
-        return () => console.log('MainScreen unmounted');
-    }, []);
+    
+    // Используем Reanimated shared values для интерактивной анимации
+    const leftSidebarTranslateX = useSharedValue(sidebarOpen ? 0 : -sidebarWidth);
+    const rightSidebarTranslateX = useSharedValue(rightSidebarOpen ? 0 : rightSidebarWidth);
+    const leftSidebarWidth = useSharedValue(sidebarOpen ? sidebarWidth : 0);
+    const rightSidebarWidthAnimated = useSharedValue(rightSidebarOpen ? rightSidebarWidth : 0);
 
     useEffect(() => {
         // If screen becomes narrow, default to collapsed; if wide, open.
@@ -61,20 +126,26 @@ export default function MainScreen() {
     }, [isNarrow]);
 
     useEffect(() => {
-        Animated.timing(anim, {
-            toValue: sidebarOpen ? sidebarWidth : 0,
-            duration: 180,
-            useNativeDriver: false,
-        }).start();
-    }, [sidebarOpen, anim]);
+        // Анимируем левую панель при изменении состояния
+        if (sidebarOpen) {
+            leftSidebarTranslateX.value = withSpring(0, { damping: 20, stiffness: 90 });
+            leftSidebarWidth.value = withTiming(sidebarWidth, { duration: 180 });
+        } else {
+            leftSidebarTranslateX.value = withSpring(-sidebarWidth, { damping: 20, stiffness: 90 });
+            leftSidebarWidth.value = withTiming(0, { duration: 180 });
+        }
+    }, [sidebarOpen, leftSidebarTranslateX, leftSidebarWidth, sidebarWidth]);
 
     useEffect(() => {
-        Animated.timing(rightAnim, {
-            toValue: rightSidebarOpen ? rightSidebarWidth : 0,
-            duration: 180,
-            useNativeDriver: false,
-        }).start();
-    }, [rightSidebarOpen, rightAnim]);
+        // Анимируем правую панель при изменении состояния
+        if (rightSidebarOpen) {
+            rightSidebarTranslateX.value = withSpring(0, { damping: 20, stiffness: 90 });
+            rightSidebarWidthAnimated.value = withTiming(rightSidebarWidth, { duration: 180 });
+        } else {
+            rightSidebarTranslateX.value = withSpring(rightSidebarWidth, { damping: 20, stiffness: 90 });
+            rightSidebarWidthAnimated.value = withTiming(0, { duration: 180 });
+        }
+    }, [rightSidebarOpen, rightSidebarTranslateX, rightSidebarWidthAnimated, rightSidebarWidth]);
 
 
 
@@ -84,13 +155,47 @@ export default function MainScreen() {
         ), [chats],
     );
 
+    // Анимированные стили для панелей
+    const leftSidebarAnimatedStyle = useAnimatedStyle(() => {
+        return {
+            transform: [{ translateX: leftSidebarTranslateX.value }],
+            width: leftSidebarWidth.value,
+        };
+    });
+
+    const rightSidebarAnimatedStyle = useAnimatedStyle(() => {
+        return {
+            transform: [{ translateX: rightSidebarTranslateX.value }],
+            width: rightSidebarWidthAnimated.value,
+        };
+    });
+
+    // Анимированные стили для backdrop
+    const leftBackdropStyle = useAnimatedStyle(() => {
+        return {
+            left: leftSidebarWidth.value,
+            top: -insets.top,
+            bottom: -insets.bottom,
+            opacity: leftSidebarWidth.value > 0 ? 1 : 0,
+        };
+    });
+
+    const rightBackdropStyle = useAnimatedStyle(() => {
+        return {
+            right: rightSidebarWidthAnimated.value,
+            top: -insets.top,
+            bottom: -insets.bottom,
+            opacity: rightSidebarWidthAnimated.value > 0 ? 1 : 0,
+        };
+    });
+
     return (
         <View style={styles.root}>
             {/* Sidebar */}
             <Animated.View style={[
                 styles.sidebarWrap,
-                { width: anim },
-                isNarrow && sidebarOpen && {
+                leftSidebarAnimatedStyle,
+                isNarrow && {
                     position: 'absolute',
                     left: 0,
                     top: 0,
@@ -98,23 +203,27 @@ export default function MainScreen() {
                 }
             ]}>
                 <Sidebar
-                    width={sidebarWidth}
-                    chats={sortedChats}
-                    activeChatID={activeChatID}
-                    onSelect={id => {
-                        setActiveChatID(id);
-                        if (isNarrow) setSidebarOpen(false);
-                    }}
-                    onNewChat={() => {
-                        createNewChat();
-                        if (isNarrow) setSidebarOpen(false);
-                    }}
-                    onChatDelete={deleteChat}
-                    onOpenSettings={() => setSettingsOpen(true)}
-                    onCollapse={() => setSidebarOpen(false)}
-                />
+                width={sidebarWidth}
+                chats={sortedChats}
+                activeChatID={activeChatID}
+                onSelect={id => {
+                    setActiveChatID(id);
+                    if (isNarrow) setSidebarOpen(false);
+                }}
+                onNewChat={() => {
+                    createNewChat();
+                    if (isNarrow) setSidebarOpen(false);
+                }}
+                onChatDelete={deleteChat}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onCollapse={() => setSidebarOpen(false)}
+            />
             </Animated.View>
-            {(!isNarrow || sidebarOpen) && <View style={styles.divider} />}
+        {!isNarrow && <View style={styles.divider} />}
+        <ChatProvider
+            activeChatID={activeChatID ? activeChatID : emptyChatID}
+            setActiveChatID={setActiveChatID}
+        >
             <View
                 style={[
                     styles.content,
@@ -125,89 +234,56 @@ export default function MainScreen() {
                         : { flex: 1 }
                 ]}
             >
-                <View style={styles.header}>
-                    {isNarrow && (
-                        <Pressable
-                            onPress={() => {
-                                getChats();
-                                setSidebarOpen(true)
-                            }}
-                            style={styles.headerBtn}
-                            accessibilityLabel="Open Sidebar"
-                        >
-                            <Menu width={28} height={28} color={'#ABB2BF'} />
-                        </Pressable>
-                    )}
-                    <Text style={styles.headerTitle} numberOfLines={1}>
-                        {activeChat?.title || 'Chat'}
-                    </Text>
-                    {isNarrow && (
-                        <Pressable
-                            onPress={() => setRightSidebarOpen(true)}
-                            style={styles.headerBtn}
-                            accessibilityLabel="Open Inbox"
-                        >
-                            <Mail width={28} height={28} color={'#ABB2BF'} />
-                        </Pressable>
-                    )}
-                    {!isNarrow && <View style={{ width: 36 }} />}
-                </View>
-                <ChatProvider
-                    activeChatID={activeChatID ? activeChatID : emptyChatID}
-                    setActiveChatID={setActiveChatID}
-                >
-                    <ChatScreen />
-                </ChatProvider>
+                <HeaderShell
+                    isNarrow={isNarrow}
+                    getChats={getChats}
+                    setSidebarOpen={setSidebarOpen}
+                    setRightSidebarOpen={setRightSidebarOpen}
+                />
+                <ChatScreen />
             </View>
-            {(!isNarrow || rightSidebarOpen) && <View style={styles.divider} />}
+            {!isNarrow && <View style={styles.divider} />}
             <Animated.View style={[
                 styles.rightSidebarWrap,
-                { width: rightAnim },
-                isNarrow && rightSidebarOpen && {
+                rightSidebarAnimatedStyle,
+                isNarrow && {
                     position: 'absolute',
                     right: 0,
                     top: 0,
                     bottom: 0,
                 }
             ]}>
-                <InboxProvider>
-                    <RightSidebar width={rightSidebarWidth} isOpen={rightSidebarOpen} />
-                </InboxProvider>
+                <RightSidebar
+                    width={rightSidebarWidth}
+                    isOpen={rightSidebarOpen}
+                    onClose={() => setRightSidebarOpen(false)}
+                />
             </Animated.View>
-            {
-                isNarrow && sidebarOpen && (
-                    <AnimatedPressable
-                        style={[
-                            styles.backdrop,
-                            {
-                                left: anim,
-                                top: -insets.top, // захватывает зону статусбара
-                                bottom: -insets.bottom,
-                            },
-                        ]}
-                        onPress={() => setSidebarOpen(false)}
-                    />
-                )
-            }
-            {
-                isNarrow && rightSidebarOpen && (
-                    <AnimatedPressable
-                        style={[
-                            styles.backdrop,
-                            {
-                                right: rightAnim,
-                                top: -insets.top,
-                                bottom: -insets.bottom,
-                            },
-                        ]}
-                        onPress={() => setRightSidebarOpen(false)}
-                    />
-                )
-            }
-            <SettingsModal
-                visible={settingsOpen}
-                onClose={() => setSettingsOpen(false)}
+        </ChatProvider>
+        {isNarrow && (
+            <AnimatedPressable
+                style={[styles.backdrop, leftBackdropStyle]}
+                onPress={() => setSidebarOpen(false)}
             />
-        </View >
+        )}
+        {isNarrow && (
+            <AnimatedPressable
+                style={[styles.backdrop, rightBackdropStyle]}
+                onPress={() => setRightSidebarOpen(false)}
+            />
+        )}
+        <SettingsModal
+            visible={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+        />
+        </View>
+    );
+}
+
+export default function MainScreen() {
+    return (
+        <InboxProvider>
+            <MainScreenContent />
+        </InboxProvider>
     );
 }

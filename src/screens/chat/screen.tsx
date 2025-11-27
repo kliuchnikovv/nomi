@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 import {
     FlatList,
@@ -9,7 +9,9 @@ import {
     Linking,
     Pressable,
     ToastAndroid,
+    Text,
 } from 'react-native';
+import InAppBrowser from 'react-native-inappbrowser-reborn';
 
 import { styles } from './styles';
 
@@ -20,7 +22,7 @@ import { ActionSheetIOS, Share } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 
 export default function ChatScreen() {
-    const { messages, sendMessage, assistantWorking } = useChat();
+    const { messages, sendMessage, assistantWorking, executeMessageAction, isPluginThread } = useChat();
 
     const flatRef = useRef<FlatList>(null);
     const blink = useRef(new Animated.Value(1)).current;
@@ -113,6 +115,27 @@ export default function ChatScreen() {
         }
     };
 
+    const handleActionPress = useCallback(async (action: any, messageId: string) => {
+        if (action?.command === 'open_web' && action.url) {
+            try {
+                const isAvailable = await InAppBrowser.isAvailable();
+                if (isAvailable) {
+                    await InAppBrowser.open(action.url, {
+                        showTitle: true,
+                        dismissButtonStyle: 'close',
+                        enableDefaultShare: false,
+                    });
+                } else {
+                    await Linking.openURL(action.url);
+                }
+            } catch (err) {
+                console.warn('Failed to open url', err);
+                Linking.openURL(action.url).catch(() => {});
+            }
+        }
+        await executeMessageAction(action, messageId);
+    }, [executeMessageAction]);
+
     return (
         <KeyboardAvoidingView
             style={styles.root}
@@ -148,14 +171,21 @@ export default function ChatScreen() {
                               Math.min(shownChars, item.text.length),
                           )
                         : item.text;
+                    const isDaemon = item.metadata?.originalRole === 'daemon';
+                    const daemonHeaderText = isDaemon
+                        ? (item.metadata?.header || item.metadata?.title || 'Daemon')
+                        : null;
                     return (
                         <View
                             style={
                                 item.role === 'user'
                                     ? [styles.bubble, styles.bubbleUser]
-                                    : styles.assistantContainer
+                                    : [styles.assistantContainer, isDaemon && styles.daemonContainer]
                             }
                         >
+                            {daemonHeaderText && (
+                                <Text style={styles.daemonHeader}>{daemonHeaderText}</Text>
+                            )}
                             <Pressable
                                 onLongPress={() => onLongPressMsg(item.text)}
                                 delayLongPress={250}
@@ -176,6 +206,33 @@ export default function ChatScreen() {
                                     {displayedText || ''}
                                 </Markdown>
                             </Pressable>
+                            {isPluginThread && item.importance && (
+                                <View style={styles.importanceBadge}>
+                                    <Text style={styles.importanceText}>{item.importance}</Text>
+                                </View>
+                            )}
+                            {isPluginThread && item.actions && item.actions.length > 0 && (
+                                <View style={{ marginTop: 6 }}>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                        {item.actions.map((action: any) => (
+                                            <Pressable
+                                                key={`${action.command}-${action.url || ''}-${action.prompt || ''}`}
+                                                onPress={() => handleActionPress(action, item.id)}
+                                                style={({ pressed }) => [
+                                                    styles.actionButton,
+                                                    { width: '48%' },
+                                                    pressed && { opacity: 0.8 },
+                                                ]}
+                                            >
+                                                <Text style={styles.actionLabel}>{action.label || action.command}</Text>
+                                                {action.why ? (
+                                                    <Text style={styles.actionWhy}>{action.why}</Text>
+                                                ) : null}
+                                            </Pressable>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
                         </View>
                     );
                 }}
