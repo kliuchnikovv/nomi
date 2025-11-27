@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
+	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
@@ -25,6 +25,8 @@ type StoragePort interface {
 	InboxExistsByMessageID(ctx context.Context, userID uuid.UUID, messageID string) (bool, error)
 	CreateInbox(ctx context.Context, inbox *storage.Inbox) error
 	UpdateInbox(ctx context.Context, inbox *storage.Inbox) error
+	FindPluginChatByExternalID(ctx context.Context, userID uuid.UUID, provider string, externalID string) (*storage.PluginChat, error)
+	CreatePluginChat(ctx context.Context, chat *storage.PluginChat) (*storage.PluginChat, error)
 	FindChatByTitleAndModel(ctx context.Context, userID uuid.UUID, title string, modelID uuid.UUID) (*storage.Chat, error)
 	CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error)
 }

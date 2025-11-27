@@ -52,6 +52,14 @@ func (s *StorageAdapter) UpdateInbox(ctx context.Context, inbox *storage.Inbox) 
 	return s.store.DB.WithContext(ctx).Save(inbox).Error
 }
 
+func (s *StorageAdapter) FindPluginChatByExternalID(ctx context.Context, userID uuid.UUID, provider string, externalID string) (*storage.PluginChat, error) {
+	return s.store.FindPluginChatByExternalID(ctx, userID, provider, externalID)
+}
+
+func (s *StorageAdapter) CreatePluginChat(ctx context.Context, chat *storage.PluginChat) (*storage.PluginChat, error) {
+	return s.store.CreatePluginChat(ctx, chat)
+}
+
 func (s *StorageAdapter) FindChatByTitleAndModel(ctx context.Context, userID uuid.UUID, title string, modelID uuid.UUID) (*storage.Chat, error) {
 	var chatModel storage.Chat
 	if err := s.store.DB.WithContext(ctx).
