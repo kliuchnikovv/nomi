@@ -21,7 +21,7 @@ func NewGmailPlugin() Plugin {
 
 type gmailBackend struct {
 	syncer      *EmailSyncer
-	storage     *storage.Storage
+	storage     StoragePort
 	logger      *zap.Logger
 	done        chan struct{}
 	oauthConfig *oauth2.Config
@@ -70,7 +70,7 @@ func (g *gmailBackend) runSyncLoop() {
 		select {
 		case <-ticker.C:
 			ctx := context.Background()
-			tools, err := g.storage.GetToolsByProvider(ctx, "gmail")
+			tools, err := g.storage.GetIntegrationsByProvider(ctx, "gmail")
 			if err != nil {
 				g.logger.Error("failed to get gmail tools for auto-sync", zap.Error(err))
 				continue

@@ -20,7 +20,7 @@ func NewGenericIMAPPlugin() Plugin {
 
 type genericIMAPBackend struct {
 	syncer  *EmailSyncer
-	storage *storage.Storage
+	storage StoragePort
 	logger  *zap.Logger
 	done    chan struct{}
 }
@@ -62,7 +62,7 @@ func (g *genericIMAPBackend) runSyncLoop() {
 		select {
 		case <-ticker.C:
 			ctx := context.Background()
-			tools, err := g.storage.GetToolsByProvider(ctx, "imap")
+			tools, err := g.storage.GetIntegrationsByProvider(ctx, "imap")
 			if err != nil {
 				g.logger.Error("failed to get imap tools for auto-sync", zap.Error(err))
 				continue
@@ -133,7 +133,7 @@ func (g *genericIMAPBackend) syncHandler(c *gin.Context) {
 	// or we'd need to implement a way to store per-user plugin config.
 	//
 	// Given the constraints and existing code, let's look at how Gmail does it:
-	// Gmail uses `storage.GetTools` to find the tool config.
+	// Gmail uses `storage.GetIntegrations` to find the tool config.
 	// We should probably do the same for IMAP if we treat it as a tool.
 	//
 	// Let's try to find an "imap" tool for the user.
@@ -147,7 +147,7 @@ func (g *genericIMAPBackend) syncHandler(c *gin.Context) {
 
 	if err := c.BindJSON(&req); err != nil {
 		// If not provided in request, try to find in Tools
-		tools, err := g.storage.GetTools(c.Request.Context(), user.ID)
+		tools, err := g.storage.GetIntegrations(c.Request.Context(), user.ID)
 		if err == nil {
 			for _, t := range tools {
 				if t.Provider == "imap" && t.Enabled {
@@ -207,12 +207,12 @@ func (g *genericIMAPBackend) ExecuteAction(ctx context.Context, userID uuid.UUID
 	// or fail if not found.
 
 	// Let's try to find "imap" tool
-	tools, err := g.storage.GetTools(ctx, userID)
+	tools, err := g.storage.GetIntegrations(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to get tools: %w", err)
 	}
 
-	var imapTool *storage.Tool
+	var imapTool *storage.Integration
 	for _, t := range tools {
 		if t.Provider == "imap" && t.Enabled {
 			imapTool = &t

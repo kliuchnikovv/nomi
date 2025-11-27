@@ -9,20 +9,38 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
 
+// Interfaces to decouple plugins from core implementations.
+type StoragePort interface {
+	GetIntegrations(ctx context.Context, userID uuid.UUID) ([]storage.Integration, error)
+	GetIntegrationsByProvider(ctx context.Context, provider string) ([]storage.Integration, error)
+	GetOAuthTokenByUser(ctx context.Context, userID uuid.UUID, provider string) (*storage.OAuthToken, error)
+	UpdateOAuthToken(ctx context.Context, token *storage.OAuthToken) error
+	InboxExistsByMessageID(ctx context.Context, userID uuid.UUID, messageID string) (bool, error)
+	CreateInbox(ctx context.Context, inbox *storage.Inbox) error
+	UpdateInbox(ctx context.Context, inbox *storage.Inbox) error
+}
+
+type LLMPort interface {
+	GenerateSimple(ctx context.Context, userID uuid.UUID, prompt string, agent string) (string, error)
+}
+
+type NotifierPort interface {
+	Publish(chatID uuid.UUID, ev notifier.Event)
+}
+
 // Runtime exposes helpers that plugins can rely on to interact with the
 // application runtime: run routines, call models/agents and push events.
 type Runtime struct {
-	notifier   *notifier.Notifier
-	Storage    *storage.Storage
+	notifier   NotifierPort
+	Storage    StoragePort
 	Logger     *zap.Logger
-	LLMService *llm.Service
+	LLMService LLMPort
 
 	RoutineRunner func(ctx context.Context, plugin, routine string, payload interface{}) error
 	ModelCaller   func(ctx context.Context, model string, payload interface{}) (interface{}, error)
@@ -30,7 +48,7 @@ type Runtime struct {
 	OAuthConfigs  map[string]*oauth2.Config
 }
 
-func NewRuntime(n *notifier.Notifier, s *storage.Storage, l *zap.Logger, llm *llm.Service, oauthConfigs map[string]*oauth2.Config) *Runtime {
+func NewRuntime(n NotifierPort, s StoragePort, l *zap.Logger, llm LLMPort, oauthConfigs map[string]*oauth2.Config) *Runtime {
 	return &Runtime{
 		notifier:     n,
 		Storage:      s,

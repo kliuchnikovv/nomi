@@ -33,7 +33,14 @@ func (h *InboxHandler) ListInboxMessages(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 
-	response, err := h.storage.GetInboxMessages(ctx, user.ID, page, limit)
+	var integrationID *uuid.UUID
+	if integrationParam := c.Query("integration_id"); integrationParam != "" {
+		if id, err := uuid.Parse(integrationParam); err == nil {
+			integrationID = &id
+		}
+	}
+
+	response, err := h.storage.GetInboxMessages(ctx, user.ID, integrationID, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

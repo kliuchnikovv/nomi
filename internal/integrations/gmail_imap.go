@@ -33,12 +33,12 @@ func NewGmailIMAPService(logger *zap.Logger, store *storage.Storage, llmSvc *llm
 
 func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	// 1. Get Gmail tool params
-	tools, err := s.storage.GetTools(ctx, userID)
+	tools, err := s.storage.GetIntegrations(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("failed to get tools: %w", err)
+		return fmt.Errorf("failed to get integrations: %w", err)
 	}
 
-	var gmailTool *storage.Tool
+	var gmailTool *storage.Integration
 	for _, t := range tools {
 		if t.Provider == "gmail" && t.Enabled {
 			gmailTool = &t
@@ -117,7 +117,7 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	}()
 
 	for msg := range messages {
-		if err := s.SaveMessage(ctx, userID, msg, section); err != nil {
+		if err := s.SaveMessage(ctx, userID, *gmailTool, msg, section); err != nil {
 			s.logger.Error("failed to save message", zap.Error(err))
 		}
 	}
@@ -129,7 +129,7 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 	return nil
 }
 
-func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, msg *imap.Message, section *imap.BodySectionName) error {
+func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, integration storage.Integration, msg *imap.Message, section *imap.BodySectionName) error {
 	if msg.Envelope == nil {
 		return fmt.Errorf("message envelope is nil")
 	}
@@ -170,9 +170,14 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 	}
 
 	// Check for duplicates
+	// We need to query JSON metadata for MessageID. This is slow but acceptable for now.
+	// Or we can rely on unique constraint if we had one.
+	// For now, let's skip duplicate check or implement it via raw SQL if needed.
+	// Actually, let's just check if we have this message ID in metadata.
+	// Since Metadata is text, we can use LIKE.
 	var count int64
 	if err := s.storage.DB.Model(&storage.Inbox{}).
-		Where("user_id = ? AND message_id = ?", userID, msg.Envelope.MessageId).
+		Where("user_id = ? AND metadata LIKE ?", userID, "%"+msg.Envelope.MessageId+"%").
 		Count(&count).Error; err != nil {
 		return fmt.Errorf("failed to check for duplicates: %w", err)
 	}
@@ -185,19 +190,10 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 	}
 
 	// Extract Gmail Thread ID from X-GM-THRID
-	// The Thread ID might be in msg.Items as a raw value
 	var threadID uint64
-	s.logger.Debug("message items", zap.Any("items", msg.Items), zap.Uint32("uid", msg.Uid))
-
 	if msg.Items != nil {
-		// Try to get X-GM-THRID from Items
 		for key, value := range msg.Items {
-			s.logger.Debug("item", zap.String("key", string(key)), zap.Any("value", value), zap.String("type", fmt.Sprintf("%T", value)))
-
 			if key == "X-GM-THRID" {
-				s.logger.Info("found X-GM-THRID", zap.Any("value", value), zap.String("type", fmt.Sprintf("%T", value)))
-
-				// Try different type assertions
 				switch v := value.(type) {
 				case uint64:
 					threadID = v
@@ -208,35 +204,39 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 				case int:
 					threadID = uint64(v)
 				case string:
-					// Try parsing as string
 					if parsed, err := fmt.Sscanf(v, "%d", &threadID); err == nil && parsed == 1 {
 						s.logger.Info("parsed thread ID from string", zap.Uint64("thread_id", threadID))
 					}
-				default:
-					s.logger.Warn("unexpected X-GM-THRID type", zap.String("type", fmt.Sprintf("%T", v)))
 				}
 				break
 			}
 		}
-
-		if threadID == 0 {
-			s.logger.Warn("X-GM-THRID not found or zero")
-		}
-	} else {
-		s.logger.Warn("msg.Items is nil")
 	}
 
+	metadata := map[string]interface{}{
+		"message_id": msg.Envelope.MessageId,
+		"uid":        msg.Uid,
+		"thread_id":  threadID,
+		"sender":     sender,
+		"source":     "gmail",
+	}
+	metadata["thread_id"] = threadID
+	metadataBytes, _ := json.Marshal(metadata)
+
 	inboxItem := &storage.Inbox{
-		UserID:     userID,
-		MessageID:  msg.Envelope.MessageId,
-		UID:        msg.Uid,
-		ThreadID:   threadID,
-		Sender:     sender,
-		Subject:    msg.Envelope.Subject,
-		Snippet:    "", // TODO: extract snippet
-		Body:       body,
-		Status:     "pending",
-		ReceivedAt: msg.Envelope.Date,
+		UserID:        userID,
+		IntegrationID: integration.ID,
+		Source:        integration.Provider,
+		MessageID:     msg.Envelope.MessageId,
+		UID:           msg.Uid,
+		ThreadID:      threadID,
+		Sender:        sender,
+		Role:          "user",
+		Header:        msg.Envelope.Subject,
+		Content:       body,
+		Status:        "pending",
+		Metadata:      metadataBytes,
+		ReceivedAt:    msg.Envelope.Date,
 	}
 
 	if err := s.storage.DB.Create(inboxItem).Error; err != nil {
@@ -244,7 +244,7 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, ms
 	}
 
 	s.logger.Info("message saved to inbox",
-		zap.String("subject", inboxItem.Subject),
+		zap.String("subject", inboxItem.Header),
 		zap.Uint64("thread_id", threadID))
 	return nil
 }
@@ -261,7 +261,6 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 
 	s.logger.Info("processing pending items", zap.Int("count", len(items)))
 
-	// Group items by UserID to batch IMAP operations
 	itemsByUser := make(map[uuid.UUID][]storage.Inbox)
 	for _, item := range items {
 		itemsByUser[item.UserID] = append(itemsByUser[item.UserID], item)
@@ -272,14 +271,12 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 
 		for i := range userItems {
 			item := &userItems[i]
-			s.logger.Info("processing message", zap.String("subject", item.Subject))
+			s.logger.Info("processing message", zap.String("subject", item.Header))
 
-			// Call LLM to analyze importance, urgency, summary, and suggest actions
 			prompt := fmt.Sprintf(`Analyze this email and provide:
 1. Importance level (high/medium/low) with reason
-2. Urgency level (urgent/soon/can_wait) with reason
-3. A 2-3 sentence summary
-4. Suggest 1-2 smart context-aware actions the user might want to take
+2. A 2-3 sentence summary
+3. Suggest 1-2 smart context-aware actions the user might want to take
 
 Examples of smart actions:
 - "Reply with availability" if someone asks for a meeting
@@ -298,58 +295,44 @@ Respond ONLY with valid JSON in this format:
 {
   "title": "%s",
   "importance": {"level": "high|medium|low", "reason": "short reason"},
-  "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
   "summary": "2-3 sentence summary",
   "suggested_actions": [
     {"label": "Action label", "command": "action_command", "why": "why this action makes sense", "prompt": "detailed prompt for executing this action"}
   ]
-}
-
-Note: suggested_actions is optional. Only suggest actions if they make sense for this email. Each action should have:
-- label: Short, user-friendly action name
-- command: One of: reply, forward, create_task, add_to_calendar, save_attachment, or custom
-- why: Brief explanation of why this action is relevant
-- prompt: Detailed instruction for executing the action (what to say in reply, what task to create, etc.)
-`, item.Sender, item.Subject, item.Body, item.Subject)
+}`, item.Sender, item.Header, item.Content, item.Header)
 
 			llmResponse, err := s.llmService.GenerateSimple(ctx, userID, prompt, "mailer")
 			if err != nil {
 				s.logger.Error("failed to get LLM analysis", zap.Error(err))
-				// Continue with empty analysis
-				llmResponse = fmt.Sprintf(`{"title": "%s", "importance": {"level": "medium", "reason": "Unable to analyze"}, "urgency": {"level": "can_wait", "reason": "Unable to analyze"}, "summary": "Email analysis unavailable"}`, item.Subject)
+				llmResponse = fmt.Sprintf(`{"title": "%s", "importance": {"level": "medium", "reason": "Unable to analyze"}, "summary": "Email analysis unavailable"}`, item.Header)
 			}
 
-			// Parse LLM response
-			var llmAnalysis storage.InboxAnalysis
+			var llmAnalysis struct {
+				Title      string `json:"title"`
+				Importance struct {
+					Level  string `json:"level"`
+					Reason string `json:"reason"`
+				} `json:"importance"`
+				Summary string                `json:"summary"`
+				Actions []storage.InboxAction `json:"suggested_actions"`
+				Missing string                `json:"missing_info"`
+			}
+
 			if err := json.Unmarshal([]byte(llmResponse), &llmAnalysis); err != nil {
 				s.logger.Error("failed to parse LLM response", zap.Error(err), zap.String("response", llmResponse))
-				// Use default values
-				llmAnalysis = storage.InboxAnalysis{
-					Title: item.Subject,
-					Importance: storage.InboxLevel{
-						Level:  "medium",
-						Reason: "Unable to parse analysis",
-					},
-					Urgency: storage.InboxLevel{
-						Level:  "can_wait",
-						Reason: "Unable to parse analysis",
-					},
-					Summary: "Email analysis unavailable",
-				}
+				llmAnalysis.Title = item.Header
+				llmAnalysis.Importance.Level = "medium"
+				llmAnalysis.Importance.Reason = "Unable to parse analysis"
+				llmAnalysis.Summary = "Email analysis unavailable"
 			}
 
-			// Build base actions using ActionBuilder
 			baseActions := s.actionBuilder.BuildActions(item)
-
-			// Merge base actions with LLM-suggested actions
 			allActions := baseActions
 			if len(llmAnalysis.Actions) > 0 {
-				// LLM suggested some actions - add them after base actions
 				s.logger.Info("adding LLM-suggested actions",
 					zap.Int("count", len(llmAnalysis.Actions)),
-					zap.String("subject", item.Subject))
+					zap.String("subject", item.Header))
 
-				// Set agent to "mailer" for all LLM-suggested actions
 				for i := range llmAnalysis.Actions {
 					if llmAnalysis.Actions[i].Agent == "" {
 						llmAnalysis.Actions[i].Agent = "mailer"
@@ -359,26 +342,17 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 				allActions = append(allActions, llmAnalysis.Actions...)
 			}
 
-			// Combine LLM analysis with merged actions
-			analysis := storage.InboxAnalysis{
-				Title:       llmAnalysis.Title,
-				Importance:  llmAnalysis.Importance,
-				Urgency:     llmAnalysis.Urgency,
-				Summary:     llmAnalysis.Summary,
-				Actions:     allActions,
-				MissingInfo: llmAnalysis.MissingInfo,
+			actionsData, err := json.Marshal(allActions)
+			if err != nil {
+				s.logger.Error("failed to marshal actions", zap.Error(err))
 			}
 
-			jsonData, err := json.Marshal(analysis)
-			if err != nil {
-				s.logger.Error("failed to marshal analysis", zap.Error(err))
-				item.Response = ""
-			} else {
-				item.Response = string(jsonData)
-			}
+			item.Header = llmAnalysis.Title
+			item.Summary = llmAnalysis.Summary
+			item.Importance = llmAnalysis.Importance.Level
+			item.Actions = actionsData
 			item.Status = "processed"
 
-			// Add UID to list for marking as read if low priority
 			if item.UID > 0 && llmAnalysis.Importance.Level == "low" {
 				uidsToMarkRead = append(uidsToMarkRead, item.UID)
 			}
@@ -388,7 +362,6 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 			}
 		}
 
-		// Batch mark as read for this user
 		if len(uidsToMarkRead) > 0 {
 			s.logger.Info("marking low priority messages as read",
 				zap.String("user_id", userID.String()),
@@ -404,12 +377,12 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 
 func (s *GmailIMAPService) MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, uids []uint32) error {
 	// 1. Get Gmail tool params
-	tools, err := s.storage.GetTools(ctx, userID)
+	tools, err := s.storage.GetIntegrations(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("failed to get tools: %w", err)
+		return fmt.Errorf("failed to get integrations: %w", err)
 	}
 
-	var gmailTool *storage.Tool
+	var gmailTool *storage.Integration
 	for _, t := range tools {
 		if t.Provider == "gmail" && t.Enabled {
 			gmailTool = &t

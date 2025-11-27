@@ -189,7 +189,7 @@ func (s *Service) connect(ctx context.Context, userID uuid.UUID, agent string) (
 	}
 
 	// Send tools first
-	tools, err := s.storage.GetTools(ctx, userID)
+	tools, err := s.storage.GetIntegrations(ctx, userID)
 	if err != nil {
 		s.logger.Warn("failed to fetch tools for LLM", zap.Error(err))
 	} else if len(tools) > 0 {
@@ -203,7 +203,7 @@ func (s *Service) connect(ctx context.Context, userID uuid.UUID, agent string) (
 }
 
 // sendTools sends tools frame to LLM
-func (s *Service) sendTools(conn *websocket.Conn, tools []storage.Tool) error {
+func (s *Service) sendTools(conn *websocket.Conn, tools []storage.Integration) error {
 	toolsPayload := make([]map[string]interface{}, 0, len(tools))
 	for _, tool := range tools {
 		toolsPayload = append(toolsPayload, map[string]interface{}{

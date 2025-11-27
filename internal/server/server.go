@@ -58,7 +58,13 @@ func New(
 	for name, st := range cfg.Plugins {
 		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
 	}
-	runtime := plugins.NewRuntime(n, db, logger, llmService, oauthConfigs)
+	runtime := plugins.NewRuntime(
+		plugins.NewNotifierAdapter(n),
+		plugins.NewStorageAdapter(db),
+		logger,
+		plugins.NewLLMAdapter(llmService),
+		oauthConfigs,
+	)
 	manager := plugins.NewManager(runtime, pluginState)
 	if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
 		logger.Error("failed to register imap plugin", zap.Error(err))
@@ -125,11 +131,11 @@ func New(
 	// Actions API - Delegates to plugins
 	r.POST("/api/inbox/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
 
-	// r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateTool, authMiddleware))
+	// r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateIntegration, authMiddleware))
 	// r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))
-	// r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetTool, authMiddleware))
-	// r.PUT("/api/tools/:id", wrapWithAuth(toolsHandler.UpdateTool, authMiddleware))
-	// r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteTool, authMiddleware))
+	// r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetIntegration, authMiddleware))
+	// r.PUT("/api/tools/:id", wrapWithAuth(toolsHandler.UpdateIntegration, authMiddleware))
+	// r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteIntegration, authMiddleware))
 	// r.GET("/api/integrations", wrapWithAuth(toolsHandler.ListIntegrations, authMiddleware))
 	// r.POST("/api/integrations/gmail/sync", wrapWithAuth(toolsHandler.SyncGmail, authMiddleware))
 

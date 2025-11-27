@@ -70,23 +70,23 @@ func (streamer *Streamer) Stream(
 	_ = dialModel()
 	clientFrames, clientErrs := client.Read(ctx)
 
-	// Send tools to model immediately upon connection
+	// Send integrations to model immediately upon connection
 	if modelReader != nil {
-		tools, err := streamer.storage.GetTools(ctx, streamer.userID)
+		tools, err := streamer.storage.GetIntegrations(ctx, streamer.userID)
 		if err != nil {
-			streamer.logger.Error("failed to fetch tools for initial send", zap.Error(err))
+			streamer.logger.Error("failed to fetch integrations for initial send", zap.Error(err))
 		} else {
-			// Convert tools to response format
+			// Convert integrations to response format
 			toolsPayload := make([]map[string]interface{}, 0, len(tools))
-			for _, tool := range tools {
+			for _, integration := range tools {
 				toolsPayload = append(toolsPayload, map[string]interface{}{
-					"name":    tool.Name,
-					"enabled": tool.Enabled,
-					"params":  tool.Params,
+					"name":    integration.Name,
+					"enabled": integration.Enabled,
+					"params":  integration.Params,
 				})
 			}
 
-			// Send tools to model (AgnoProject) immediately
+			// Send integrations to model (AgnoProject) immediately
 			toolsFrame := Frame{
 				ID:        0,
 				ChatID:    uuid.Nil,

@@ -35,7 +35,7 @@ func (b *Builder) BuildActions(email *storage.Inbox) []storage.InboxAction {
 	}
 
 	// 2. Unsubscribe (if link found)
-	if url := b.findUnsubscribeURL(email.Body); url != "" {
+	if url := b.findUnsubscribeURL(email.Content); url != "" {
 		actions = append(actions, storage.InboxAction{
 			Label:   "Unsubscribe",
 			Command: "unsubscribe",

@@ -160,12 +160,12 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 		return "", fmt.Errorf("failed to marshal tool params: %w", err)
 	}
 
-	tools, err := c.storage.GetTools(ctx, user.ID)
+	tools, err := c.storage.GetIntegrations(ctx, user.ID)
 	if err != nil {
 		return "", fmt.Errorf("failed to list tools: %w", err)
 	}
 
-	var existingTool *storage.Tool
+	var existingTool *storage.Integration
 	for _, t := range tools {
 		if t.Provider == ProviderCalendar {
 			existingTool = &t
@@ -176,18 +176,18 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 	if existingTool != nil {
 		existingTool.Params = string(paramsJSON)
 		existingTool.Name = "Google Calendar"
-		if _, err := c.storage.UpdateTool(ctx, user.ID, existingTool); err != nil {
+		if _, err := c.storage.UpdateIntegration(ctx, user.ID, existingTool); err != nil {
 			return "", fmt.Errorf("failed to update tool: %w", err)
 		}
 	} else {
-		newTool := &storage.Tool{
+		newTool := &storage.Integration{
 			UserID:   user.ID,
 			Name:     "Google Calendar",
 			Provider: ProviderCalendar,
 			Params:   string(paramsJSON),
 			Enabled:  true,
 		}
-		if _, err := c.storage.CreateTool(ctx, user.ID, newTool); err != nil {
+		if _, err := c.storage.CreateIntegration(ctx, user.ID, newTool); err != nil {
 			return "", fmt.Errorf("failed to create tool: %w", err)
 		}
 	}

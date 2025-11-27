@@ -9,21 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// InboxAnalysis represents the structured analysis from LLM
-type InboxAnalysis struct {
-	Title       string        `json:"title"`
-	Importance  InboxLevel    `json:"importance"`
-	Urgency     InboxLevel    `json:"urgency"`
-	Summary     string        `json:"summary"`
-	Actions     []InboxAction `json:"actions"`
-	MissingInfo string        `json:"missing_info"`
-}
-
-type InboxLevel struct {
-	Level  string `json:"level"`
-	Reason string `json:"reason"`
-}
-
+// InboxAction represents a suggested action for an integration message
+// These are used for email-style integrations but can be reused by others.
 type InboxAction struct {
 	Label   string  `json:"label"`
 	Why     string  `json:"why"`
@@ -33,20 +20,24 @@ type InboxAction struct {
 	Prompt  *string `json:"prompt"`
 }
 
-// InboxMessage represents an inbox message with pagination metadata
+// InboxMessage represents a chat-style message coming from an integration
+// with structured LLM analysis fields.
 type InboxMessage struct {
-	ID         uuid.UUID      `json:"id"`
-	UserID     uuid.UUID      `json:"-"` // Don't expose in API
-	Source     string         `json:"source"`
-	Sender     string         `json:"sender"`
-	Subject    string         `json:"subject"`
-	Snippet    string         `json:"snippet"`
-	Body       string         `json:"body"`
-	Response   *InboxAnalysis `json:"response,omitempty"`
-	Status     string         `json:"status"`
-	ReceivedAt time.Time      `json:"received_at"`
-	CreatedAt  time.Time      `json:"created_at"`
-	UpdatedAt  time.Time      `json:"updated_at"`
+	ID            uuid.UUID              `json:"id"`
+	IntegrationID uuid.UUID              `json:"integration_id"`
+	UserID        uuid.UUID              `json:"-"` // Don't expose in API
+	Source        string                 `json:"source"`
+	Role          string                 `json:"role"`
+	Header        string                 `json:"header"`
+	Content       string                 `json:"content"`
+	Summary       string                 `json:"summary,omitempty"`
+	Importance    string                 `json:"importance,omitempty"`
+	Actions       []InboxAction          `json:"actions,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Status        string                 `json:"status"`
+	ReceivedAt    time.Time              `json:"received_at"`
+	CreatedAt     time.Time              `json:"created_at"`
+	UpdatedAt     time.Time              `json:"updated_at"`
 }
 
 // InboxPaginatedResponse represents paginated inbox messages
@@ -59,27 +50,27 @@ type InboxPaginatedResponse struct {
 }
 
 // GetInboxMessages retrieves paginated inbox messages for a user
-func (s *Storage) GetInboxMessages(ctx context.Context, userID uuid.UUID, page, limit int) (*InboxPaginatedResponse, error) {
-	// Default pagination values
+func (s *Storage) GetInboxMessages(ctx context.Context, userID uuid.UUID, integrationID *uuid.UUID, page, limit int) (*InboxPaginatedResponse, error) {
 	if page < 1 {
 		page = 1
 	}
 	if limit < 1 || limit > 100 {
-		limit = 20 // default limit
+		limit = 20
+	}
+
+	query := s.DB.WithContext(ctx).Model(&Inbox{}).Where("user_id = ?", userID)
+	if integrationID != nil {
+		query = query.Where("integration_id = ?", *integrationID)
 	}
 
 	var totalCount int64
-	if err := s.DB.WithContext(ctx).
-		Model(&Inbox{}).
-		Where("user_id = ?", userID).
-		Count(&totalCount).Error; err != nil {
+	if err := query.Count(&totalCount).Error; err != nil {
 		return nil, err
 	}
 
 	offset := (page - 1) * limit
 	var inboxModels []Inbox
-	if err := s.DB.WithContext(ctx).
-		Where("user_id = ?", userID).
+	if err := query.
 		Order("received_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -89,24 +80,31 @@ func (s *Storage) GetInboxMessages(ctx context.Context, userID uuid.UUID, page, 
 
 	messages := make([]*InboxMessage, len(inboxModels))
 	for i, model := range inboxModels {
-		var analysis *InboxAnalysis
-		if model.Response != "" {
-			// Try to unmarshal, ignore error if it's not valid JSON (backward compatibility)
-			_ = json.Unmarshal([]byte(model.Response), &analysis)
+		var actions []InboxAction
+		if len(model.Actions) > 0 {
+			_ = json.Unmarshal(model.Actions, &actions)
+		}
+
+		var metadata map[string]interface{}
+		if len(model.Metadata) > 0 {
+			_ = json.Unmarshal(model.Metadata, &metadata)
 		}
 
 		messages[i] = &InboxMessage{
-			ID:         model.ID,
-			Source:     model.Source,
-			Sender:     model.Sender,
-			Subject:    model.Subject,
-			Snippet:    model.Snippet,
-			Body:       model.Body,
-			Response:   analysis,
-			Status:     model.Status,
-			ReceivedAt: model.ReceivedAt,
-			CreatedAt:  model.CreatedAt,
-			UpdatedAt:  model.UpdatedAt,
+			ID:            model.ID,
+			IntegrationID: model.IntegrationID,
+			Source:        model.Source,
+			Role:          model.Role,
+			Header:        model.Header,
+			Content:       model.Content,
+			Summary:       model.Summary,
+			Importance:    model.Importance,
+			Actions:       actions,
+			Metadata:      metadata,
+			Status:        model.Status,
+			ReceivedAt:    model.ReceivedAt,
+			CreatedAt:     model.CreatedAt,
+			UpdatedAt:     model.UpdatedAt,
 		}
 	}
 
@@ -133,28 +131,36 @@ func (s *Storage) GetInboxMessage(ctx context.Context, userID uuid.UUID, message
 		return nil, err
 	}
 
-	var analysis *InboxAnalysis
-	if inboxModel.Response != "" {
-		_ = json.Unmarshal([]byte(inboxModel.Response), &analysis)
+	var actions []InboxAction
+	if len(inboxModel.Actions) > 0 {
+		_ = json.Unmarshal(inboxModel.Actions, &actions)
+	}
+
+	var metadata map[string]interface{}
+	if len(inboxModel.Metadata) > 0 {
+		_ = json.Unmarshal(inboxModel.Metadata, &metadata)
 	}
 
 	return &InboxMessage{
-		ID:         inboxModel.ID,
-		Source:     inboxModel.Source,
-		Sender:     inboxModel.Sender,
-		Subject:    inboxModel.Subject,
-		Snippet:    inboxModel.Snippet,
-		Body:       inboxModel.Body,
-		Response:   analysis,
-		Status:     inboxModel.Status,
-		ReceivedAt: inboxModel.ReceivedAt,
-		CreatedAt:  inboxModel.CreatedAt,
-		UpdatedAt:  inboxModel.UpdatedAt,
+		ID:            inboxModel.ID,
+		IntegrationID: inboxModel.IntegrationID,
+		Source:        inboxModel.Source,
+		Role:          inboxModel.Role,
+		Header:        inboxModel.Header,
+		Content:       inboxModel.Content,
+		Summary:       inboxModel.Summary,
+		Importance:    inboxModel.Importance,
+		Actions:       actions,
+		Metadata:      metadata,
+		Status:        inboxModel.Status,
+		ReceivedAt:    inboxModel.ReceivedAt,
+		CreatedAt:     inboxModel.CreatedAt,
+		UpdatedAt:     inboxModel.UpdatedAt,
 	}, nil
 }
 
 // MarkAsRead updates the inbox message status to "read"
-func (s *Storage) MarkAsRead(ctx context.Context, userID uuid.UUID, messageID uuid.UUID) error {
+func (s *Storage) MarkAsRead(ctx context.Context, userID, messageID uuid.UUID) error {
 	result := s.DB.WithContext(ctx).
 		Model(&Inbox{}).
 		Where("id = ? AND user_id = ?", messageID, userID).
