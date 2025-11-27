@@ -118,41 +118,24 @@ func (h *SidebarHandler) ListChats(c *gin.Context) {
 		return
 	}
 
-	var rows []storage.Inbox
-	if err := h.storage.DB.WithContext(ctx).
-		Where("user_id = ? AND source = ?", user.ID, provider).
-		Order("received_at DESC").
-		Find(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
+	chats, err := h.storage.ListPluginChatsWithStats(ctx, user.ID, provider)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load chats"})
 		return
 	}
 
-	chats := make(map[string]SidebarChat)
-	for _, msg := range rows {
-		key := chatKey(msg)
-		if key == "" {
-			continue
-		}
-		if existing, ok := chats[key]; ok {
-			if msg.ReceivedAt.After(existing.LastReceived) {
-				existing.LastReceived = msg.ReceivedAt
-				existing.Title = msg.Header
-			}
-			existing.Count++
-			chats[key] = existing
-		} else {
-			chats[key] = SidebarChat{
-				ChatID:       key,
-				Title:        msg.Header,
-				LastReceived: msg.ReceivedAt,
-				Count:        1,
-			}
-		}
-	}
-
 	resp := make([]SidebarChat, 0, len(chats))
-	for _, v := range chats {
-		resp = append(resp, v)
+	for _, chat := range chats {
+		var last time.Time
+		if chat.LastReceived != nil {
+			last = *chat.LastReceived
+		}
+		resp = append(resp, SidebarChat{
+			ChatID:       chat.ID.String(),
+			Title:        firstNonEmpty(chat.LastTitle, chat.Title),
+			LastReceived: last,
+			Count:        int(chat.Count),
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"provider": provider, "chats": resp})
@@ -174,19 +157,27 @@ func (h *SidebarHandler) GetChat(c *gin.Context) {
 		return
 	}
 
-	var rows []storage.Inbox
-	query := h.storage.DB.WithContext(ctx).Where("user_id = ? AND source = ?", user.ID, provider)
-
-	if tid, err := parseThreadID(chatID); err == nil {
-		query = query.Where("thread_id = ?", tid)
-	} else if msgID, err := uuid.Parse(chatID); err == nil {
-		query = query.Where("id = ?", msgID)
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "chat_id must be thread_id or message uuid"})
+	chatUUID, err := uuid.Parse(chatID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "chat_id must be UUID"})
 		return
 	}
 
-	if err := query.Order("received_at ASC").Find(&rows).Error; err != nil {
+	chatModel, err := h.storage.GetPluginChat(ctx, user.ID, chatUUID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
+		return
+	}
+	if chatModel.Provider != provider {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider mismatch"})
+		return
+	}
+
+	var rows []storage.Inbox
+	if err := h.storage.DB.WithContext(ctx).
+		Where("user_id = ? AND source = ? AND metadata->>'chat_id' = ?", user.ID, provider, chatUUID.String()).
+		Order("received_at ASC").
+		Find(&rows).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load chat messages"})
 		return
 	}
@@ -230,4 +221,13 @@ func parseThreadID(s string) (uint64, error) {
 	var tid uint64
 	_, err := fmt.Sscanf(s, "%d", &tid)
 	return tid, err
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

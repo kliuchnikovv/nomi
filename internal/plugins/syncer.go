@@ -225,7 +225,12 @@ func (s *EmailSyncer) saveMessage(ctx context.Context, userID uuid.UUID, integra
 		"source":     integration.Provider,
 	}
 
-	chatID, err := s.ensureChat(ctx, userID, integration, sender)
+	externalID := sender
+	if threadID != 0 {
+		externalID = fmt.Sprintf("%d", threadID)
+	}
+
+	chatID, err := s.ensureChat(ctx, userID, integration, sender, externalID)
 	if err != nil {
 		s.logger.Warn("failed to ensure chat for sender", zap.Error(err), zap.String("sender", sender))
 	} else {
@@ -270,7 +275,14 @@ func (s *EmailSyncer) processMessages(ctx context.Context, userID uuid.UUID, ite
 		s.logger.Info("analyzing message", zap.String("subject", item.Header))
 
 		// Ensure chat exists for sender so downstream UI can thread messages
-		if _, err := s.ensureChat(ctx, userID, storage.Integration{ID: item.IntegrationID, Provider: item.Source, Name: item.Source}, item.Sender); err != nil {
+		externalID := item.Sender
+		if item.ThreadID != 0 {
+			externalID = fmt.Sprintf("%d", item.ThreadID)
+		}
+		if externalID == "" {
+			externalID = item.MessageID
+		}
+		if _, err := s.ensureChat(ctx, userID, storage.Integration{ID: item.IntegrationID, Provider: item.Source, Name: item.Source}, item.Sender, externalID); err != nil {
 			s.logger.Warn("failed to ensure chat for sender", zap.Error(err), zap.String("sender", item.Sender))
 		}
 
@@ -517,22 +529,28 @@ func (s *EmailSyncer) Archive(ctx context.Context, userID uuid.UUID, uids []uint
 	return nil
 }
 
-// ensureChat creates or reuses a chat per sender and integration model.
-func (s *EmailSyncer) ensureChat(ctx context.Context, userID uuid.UUID, integration storage.Integration, sender string) (uuid.UUID, error) {
+// ensureChat creates or reuses a plugin chat per external thread/message id.
+func (s *EmailSyncer) ensureChat(ctx context.Context, userID uuid.UUID, integration storage.Integration, sender string, externalID string) (uuid.UUID, error) {
+	if externalID == "" {
+		externalID = sender
+	}
 	title := sender
 	if title == "" {
 		title = integration.Name
 	}
-	if existing, err := s.storage.FindChatByTitleAndModel(ctx, userID, title, integration.ID); err == nil {
+	if existing, err := s.storage.FindPluginChatByExternalID(ctx, userID, integration.Provider, externalID); err == nil {
 		return existing.ID, nil
 	}
 
-	chatModel := &chat.Chat{
-		ID:    uuid.New(),
-		Model: integration.ID,
-		Title: title,
+	pluginChat := &storage.PluginChat{
+		ID:            uuid.New(),
+		UserID:        userID,
+		Provider:      integration.Provider,
+		IntegrationID: integration.ID,
+		ExternalID:    externalID,
+		Title:         title,
 	}
-	created, err := s.storage.CreateChat(ctx, userID, chatModel)
+	created, err := s.storage.CreatePluginChat(ctx, pluginChat)
 	if err != nil {
 		return uuid.Nil, err
 	}
