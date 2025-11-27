@@ -1,109 +1,102 @@
 package server
 
 import (
-    "fmt"
-    "net/http"
+	"context"
+	"fmt"
+	"net/http"
+	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
+	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/daemon"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
+	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
+	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 )
 
-// wrap converts a standard http.HandlerFunc into a gin.HandlerFunc and
-// populates mux URL vars from gin path params so existing handlers that
-// rely on mux.Vars() continue to work.
-func wrap(h http.HandlerFunc) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		vars := map[string]string{}
-		for _, p := range c.Params {
-			vars[p.Key] = p.Value
-		}
-		req := mux.SetURLVars(c.Request, vars)
-		h(c.Writer, req)
+// GmailIMAPService interface for IMAP operations
+type GmailIMAPService interface {
+	MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, uids []uint32) error
+}
+
+type Server struct {
+	httpServer    *http.Server
+	pluginManager *plugins.Manager
+}
+
+func New(
+	logger *zap.Logger,
+	cfg *config.Config,
+	db *storage.Storage,
+	imapDaemon *daemon.IMAPDaemon,
+	oauthConfigs map[string]*oauth2.Config,
+	oidcProviders map[string]*oidc.Provider,
+	llmService *llm.Service,
+	gmailIMAPService GmailIMAPService,
+) *Server {
+	var r = gin.New()
+	r.Use(
+		ginzap.Ginzap(logger, time.RFC3339, true),
+		ginzap.RecoveryWithZap(logger, true),
+	)
+
+	// Initialize notifier first
+	n := notifier.New()
+
+	// Plugin system initialization (Moved to top so handlers can use manager)
+	pluginState := map[string]plugins.PluginState{}
+	for name, st := range cfg.Plugins {
+		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
 	}
-}
-
-// wrapWithAuth оборачивает gin.HandlerFunc в middleware авторизации
-func wrapWithAuth(h gin.HandlerFunc, authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		wrapped := gin.WrapH(authMiddleware.RequireAuth(
-			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Восстанавливаем gin.Context из http.Request
-				c.Request = r
-				h(c)
-			}),
-		))
-		wrapped(c)
+	runtime := plugins.NewRuntime(n, db, logger, llmService, oauthConfigs)
+	manager := plugins.NewManager(runtime, pluginState)
+	if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
+		logger.Error("failed to register imap plugin", zap.Error(err))
 	}
-}
-
-// wrapWithAuthHttp оборачивает http.HandlerFunc в middleware авторизации
-func wrapWithAuthHttp(h http.HandlerFunc, authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
-	return gin.WrapH(authMiddleware.RequireAuth(h))
-}
-
-// chatEventsAdapter adapts notifier.Notifier to the interface expected by
-// handlers.MessageHandler.Events via gin context.
-type chatEventsAdapter struct {
-	c *gin.Context
-	n *notifier.Notifier
-}
-
-type mapEvent = map[string]interface{}
-
-func (a chatEventsAdapter) Subscribe(chatID uuid.UUID) chan mapEvent {
-	src := a.n.Subscribe(chatID)
-	out := make(chan mapEvent, 8)
-	go func() {
-		for ev := range src {
-			if m, ok := ev.Payload.(map[string]interface{}); ok {
-				out <- m
-			}
-		}
-		close(out)
-	}()
-	a.c.Set("_rawChatSub", src)
-	return out
-}
-
-func (a chatEventsAdapter) Unsubscribe(chatID uuid.UUID, ch chan mapEvent) {
-	if v, exists := a.c.Get("_rawChatSub"); exists {
-		if raw, ok := v.(chan notifier.Event); ok {
-			a.n.Unsubscribe(chatID, raw)
-		}
+	if err := manager.Register(plugins.NewGmailPlugin()); err != nil {
+		logger.Error("failed to register gmail plugin", zap.Error(err))
 	}
-	close(ch)
-}
-
-func New(cfg *config.Config, db *storage.Storage) *http.Server {
-	r := gin.New()
-	r.Use(gin.Logger(), gin.Recovery())
 
 	// Инициализация обработчиков
-	tokenManager := auth.NewTokenManager(cfg.Token.JWTSecret)
-	authMiddleware := auth.NewAuthMiddleware(tokenManager, db)
-	authHandler := handlers.NewAuthHandler(db, tokenManager)
-	oauthHandler := handlers.NewOAuth(cfg, db)
-    streamHandler := handlers.NewStreamHandler(cfg.LLM.BaseURL, db)
-	chatHandler := handlers.NewChatHandler(db)
-	// Shared notifier for SSE
-	n := notifier.New()
-	messageHandler := handlers.NewMessageHandler(db).WithNotifier(func(chatID uuid.UUID, ev interface{}) {
-		// publish as-is; clients interpret payload
-		n.Publish(chatID, notifier.Event{Type: "message", Payload: ev})
-	})
-    // gRPC processor removed; using WS proxy to Python
+	var (
+		// oauthHandler   = handlers.NewOAuth(cfg, db)
+		chatHandler    = handlers.NewChatHandler(db)
+		messageHandler = handlers.NewMessageHandler(db)
+		inboxHandler   = handlers.NewInboxHandler(db)                    // Re-enabled: universal inbox storage
+		actionsHandler = handlers.NewActionsHandler(db, logger, manager) // Re-enabled: using plugin manager
+		tokenManager   = auth.NewTokenManager(cfg.Token.JWTSecret)
+		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
+		authHandler    = handlers.NewAuthHandler(db, tokenManager)
+		streamHandler  = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
+		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
+		modelsHandler = handlers.NewModelsHandler("configs/models.json")
+		oauthHandler  = func() *handlers.OAuthHandler {
+			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
+			if err != nil {
+				logger.Fatal("failed to initialize oauth handler", zap.Error(err))
+			}
+			return h
+		}()
+	)
+	_ = n // notifier will be used when needed
+
+	// existing handlers are standard http handlers; wrap them so they work
+	r.GET("/", gin.WrapF(http.HandlerFunc(handlers.HelloWorld)))
 
 	// Auth API
 	r.POST("/api/auth/register", wrap(http.HandlerFunc(authHandler.Register)))
 	r.POST("/api/auth/login", wrap(http.HandlerFunc(authHandler.Login)))
+	// r.POST("/api/auth/logout", wrapWithAuth(authHandler.Logout, authMiddleware))
 	r.POST("/api/auth/refresh", wrap(http.HandlerFunc(authHandler.Refresh)))
 	r.GET("/api/auth/me", gin.WrapH(
 		authMiddleware.RequireAuth(
@@ -111,46 +104,47 @@ func New(cfg *config.Config, db *storage.Storage) *http.Server {
 		),
 	))
 
-	// existing handlers are standard http handlers; wrap them so they work
-	r.GET("/", gin.WrapF(http.HandlerFunc(handlers.HelloWorld)))
-
 	// Chat API (protected)
-	// r.POST("/api/chats", wrapWithAuth(chatHandler.CreateChat, authMiddleware))
+	r.POST("/api/chats", wrapWithAuth(chatHandler.CreateChat, authMiddleware))
 	r.GET("/api/chats", wrapWithAuth(chatHandler.ListChats, authMiddleware))
 	r.GET("/api/chats/:id", wrapWithAuth(chatHandler.GetChat, authMiddleware))
 	r.PUT("/api/chats/:id", wrapWithAuth(chatHandler.UpdateChat, authMiddleware))
 	r.DELETE("/api/chats/:id", wrapWithAuth(chatHandler.DeleteChat, authMiddleware))
 
-    // Chat streaming API (WebSocket only)
-    r.GET("/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
+	// Chat streaming API (WebSocket only)
+	r.GET("/api/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
 
 	// Message API (protected)
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
-	// SSE events stream per chat
-	r.GET("/api/chats/:id/events", func(c *gin.Context) {
-		c.Set("chatEventsSub", chatEventsAdapter{c: c, n: n})
-		wrapWithAuth(messageHandler.Events, authMiddleware)(c)
-	})
 
-	// oauth flows (public endpoints)
-	r.POST("/oauth/:provider/login", wrap(http.HandlerFunc(oauthHandler.Redirect)))
-	r.GET("/oauth/:provider/callback", wrap(http.HandlerFunc(oauthHandler.Callback)))
+	// Inbox API (protected) - Universal storage for all email plugins
+	r.GET("/api/inbox", wrapWithAuth(inboxHandler.ListInboxMessages, authMiddleware))
+	r.GET("/api/inbox/:id", wrapWithAuth(inboxHandler.GetInboxMessage, authMiddleware))
+	r.PATCH("/api/inbox/:id/read", wrapWithAuth(inboxHandler.MarkAsRead, authMiddleware))
+	// Actions API - Delegates to plugins
+	r.POST("/api/inbox/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
 
-	// Token management API (protected)
-	r.GET("/api/token/:profile/:provider", wrapWithAuthHttp(oauthHandler.GetToken, authMiddleware))
-	r.PUT("/api/token/:profile/:provider", wrapWithAuthHttp(oauthHandler.UpdateToken, authMiddleware))
-	r.DELETE("/api/token/:profile/:provider", wrapWithAuthHttp(oauthHandler.Disconnect, authMiddleware))
-	r.POST("/api/logs", wrapWithAuthHttp(oauthHandler.LogUsage, authMiddleware))
-	r.PUT("/api/permissions/:profile/:provider", wrapWithAuthHttp(oauthHandler.UpdatePermissions, authMiddleware))
+	// r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateTool, authMiddleware))
+	// r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))
+	// r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetTool, authMiddleware))
+	// r.PUT("/api/tools/:id", wrapWithAuth(toolsHandler.UpdateTool, authMiddleware))
+	// r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteTool, authMiddleware))
+	// r.GET("/api/integrations", wrapWithAuth(toolsHandler.ListIntegrations, authMiddleware))
+	// r.POST("/api/integrations/gmail/sync", wrapWithAuth(toolsHandler.SyncGmail, authMiddleware))
 
-	// Additional Google-specific endpoints required by Swagger (protected)
-	r.GET("/api/status/:profile/google", wrapWithAuthHttp(oauthHandler.StatusGoogle, authMiddleware))
-	r.GET("/api/permissions/:profile/google", wrapWithAuthHttp(oauthHandler.GetPermissionsGoogle, authMiddleware))
-	r.GET("/api/logs", wrapWithAuthHttp(oauthHandler.ListLogs, authMiddleware))
-	r.POST("/api/disconnect/:profile/google", wrapWithAuthHttp(oauthHandler.DisconnectGooglePost, authMiddleware))
-	r.POST("/api/oauth/google/login", wrapWithAuthHttp(oauthHandler.OAuthGoogleLogin, authMiddleware))
-	r.POST("/api/oauth/google/reauthorize", wrapWithAuthHttp(oauthHandler.OAuthGoogleReauthorize, authMiddleware))
+	// Models API.
+	r.GET("/api/models", modelsHandler.ListModels)
+
+	// OAuth API
+	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
+	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)
+	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
+	// r.GET("/api/oauth/:provider", wrapWithAuth(toolsHandler.GetOAuthStatus, authMiddleware)) // OLD: commented out
+
+	pluginGroup := r.Group("/api/plugins")
+	pluginGroup.Use(authGinMiddleware(authMiddleware))
+	manager.Mount(pluginGroup)
 
 	// Serve Swagger UI (requires generated docs by swag). If generated
 	// docs package is not present, fall back to the local static files
@@ -163,8 +157,36 @@ func New(cfg *config.Config, db *storage.Storage) *http.Server {
 	})
 	r.StaticFile("/docs/swagger.json", "docs/swagger.json")
 
-	return &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: r,
+	return &Server{
+		httpServer: &http.Server{
+			Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
+			Handler: r,
+		},
+		pluginManager: manager,
+	}
+}
+
+func (s *Server) ListenAndServe() error {
+	return s.httpServer.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.pluginManager != nil {
+		_ = s.pluginManager.Shutdown(ctx)
+	}
+	return s.httpServer.Shutdown(ctx)
+}
+
+func authGinMiddleware(authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		wrapped := authMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c.Request = r
+		}))
+		wrapped.ServeHTTP(c.Writer, c.Request)
+		if c.Writer.Written() {
+			c.Abort()
+			return
+		}
+		c.Next()
 	}
 }
