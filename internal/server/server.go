@@ -67,7 +67,7 @@ func New(
 		// oauthHandler   = handlers.NewOAuth(cfg, db)
 		chatHandler    = handlers.NewChatHandler(db)
 		messageHandler = handlers.NewMessageHandler(db)
-		sidebarHandler = handlers.NewSidebarHandler(db)
+		sidebarHandler = handlers.NewSidebarHandler(db, llmService)
 		actionsHandler = handlers.NewActionsHandler(db, logger, manager) // Delegates to plugins
 		tokenManager   = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
