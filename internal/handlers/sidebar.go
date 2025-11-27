@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -204,7 +205,87 @@ func (h *SidebarHandler) GetChat(c *gin.Context) {
 
 // PostChatMessage is a placeholder to send a message into a plugin chat.
 func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "sending messages to plugins is not implemented yet"})
+	ctx := c.Request.Context()
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	provider := c.Param("provider")
+	chatID := c.Param("chat_id")
+	if provider == "" || chatID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider and chat_id are required"})
+		return
+	}
+
+	chatUUID, err := uuid.Parse(chatID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "chat_id must be UUID"})
+		return
+	}
+
+	pluginChat, err := h.storage.GetPluginChat(ctx, user.ID, chatUUID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "chat not found"})
+		return
+	}
+	if pluginChat.Provider != provider {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider mismatch"})
+		return
+	}
+
+	var req struct {
+		Content string `json:"content"`
+		Title   string `json:"title"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content is required"})
+		return
+	}
+
+	threadID := parseThreadFromExternal(pluginChat.ExternalID)
+	now := time.Now().UTC()
+	msgID := uuid.NewString()
+
+	metadata := map[string]interface{}{
+		"chat_id":     pluginChat.ID.String(),
+		"external_id": pluginChat.ExternalID,
+	}
+	metadataBytes, _ := json.Marshal(metadata)
+
+	inboxItem := &storage.Inbox{
+		ID:            uuid.New(),
+		UserID:        user.ID,
+		IntegrationID: pluginChat.IntegrationID,
+		Source:        provider,
+		MessageID:     msgID,
+		ThreadID:      threadID,
+		Sender:        user.Email,
+		Role:          "user",
+		Header:        firstNonEmpty(req.Title, pluginChat.Title),
+		Content:       req.Content,
+		Status:        "sent",
+		Metadata:      metadataBytes,
+		ReceivedAt:    now,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := h.storage.DB.WithContext(ctx).Create(inboxItem).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save message"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, SidebarChatMessage{
+		ID:         inboxItem.ID,
+		ThreadID:   inboxItem.ThreadID,
+		Title:      inboxItem.Header,
+		Summary:    inboxItem.Summary,
+		Content:    inboxItem.Content,
+		Status:     inboxItem.Status,
+		ReceivedAt: inboxItem.ReceivedAt,
+	})
 }
 
 func chatKey(msg storage.Inbox) string {
@@ -230,4 +311,15 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func parseThreadFromExternal(s string) uint64 {
+	if s == "" {
+		return 0
+	}
+	var tid uint64
+	if _, err := fmt.Sscanf(s, "%d", &tid); err == nil {
+		return tid
+	}
+	return 0
 }
