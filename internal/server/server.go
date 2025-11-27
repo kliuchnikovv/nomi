@@ -18,8 +18,6 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
@@ -151,17 +149,6 @@ func New(
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
 	manager.Mount(pluginGroup)
-
-	// Serve Swagger UI (requires generated docs by swag). If generated
-	// docs package is not present, fall back to the local static files
-	// produced by `swag init` (docs/swagger.json + docs/swagger.html).
-	// Place gin-swagger under /docs/swagger/* to avoid route conflicts with
-	// static files served at /docs and /docs/swagger.json.
-	r.GET("/docs/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	r.GET("/docs", func(c *gin.Context) {
-		c.File("docs/swagger.html")
-	})
-	r.StaticFile("/docs/swagger.json", "docs/swagger.json")
 
 	return &Server{
 		httpServer: &http.Server{
