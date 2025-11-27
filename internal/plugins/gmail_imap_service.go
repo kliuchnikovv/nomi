@@ -1,4 +1,4 @@
-package integrations
+package plugins
 
 import (
 	"context"
@@ -10,11 +10,13 @@ import (
 	"github.com/emersion/go-imap/client"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/actions"
+	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
 
+// GmailIMAPService is a legacy syncer used by the IMAP daemon.
 type GmailIMAPService struct {
 	logger        *zap.Logger
 	storage       *storage.Storage
@@ -32,7 +34,6 @@ func NewGmailIMAPService(logger *zap.Logger, store *storage.Storage, llmSvc *llm
 }
 
 func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
-	// 1. Get Gmail tool params
 	tools, err := s.storage.GetIntegrations(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to get integrations: %w", err)
@@ -63,14 +64,12 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 		return fmt.Errorf("gmail access token not found")
 	}
 
-	// 2. Connect to IMAP
 	c, err := client.DialTLS("imap.gmail.com:993", nil)
 	if err != nil {
 		return fmt.Errorf("failed to dial imap: %w", err)
 	}
 	defer c.Logout()
 
-	// Authenticate using XOAUTH2
 	oauthToken, err := s.storage.GetOAuthTokenByUser(ctx, userID, "gmail")
 	if err != nil {
 		return fmt.Errorf("failed to get oauth token info: %w", err)
@@ -85,13 +84,10 @@ func (s *GmailIMAPService) Sync(ctx context.Context, userID uuid.UUID) error {
 		return fmt.Errorf("imap authentication failed: %w", err)
 	}
 
-	// 3. Select Inbox
-	_, err = c.Select("INBOX", false)
-	if err != nil {
+	if _, err := c.Select("INBOX", false); err != nil {
 		return fmt.Errorf("failed to select inbox: %w", err)
 	}
 
-	// 4. Fetch UNSEEN messages
 	criteria := imap.NewSearchCriteria()
 	criteria.WithoutFlags = []string{imap.SeenFlag}
 	uids, err := c.UidSearch(criteria)
@@ -139,12 +135,10 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, in
 		sender = msg.Envelope.From[0].Address()
 	}
 
-	// Try to get body if available, but don't fail if not
 	body := ""
 	if section != nil {
 		r := msg.GetBody(section)
 		if r != nil {
-			// Read up to 50KB to avoid memory issues with huge emails
 			const maxBodySize = 50 * 1024
 			limitedReader := io.LimitReader(r, maxBodySize)
 			b, err := io.ReadAll(limitedReader)
@@ -161,7 +155,6 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, in
 		}
 	}
 
-	// If no body available, use subject as minimal content
 	if body == "" {
 		s.logger.Warn("body not available, using subject", zap.String("subject", msg.Envelope.Subject))
 		body = fmt.Sprintf("Subject: %s\n(Body not available)", msg.Envelope.Subject)
@@ -169,12 +162,6 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, in
 		s.logger.Info("body fetched", zap.Int("length", len(body)))
 	}
 
-	// Check for duplicates
-	// We need to query JSON metadata for MessageID. This is slow but acceptable for now.
-	// Or we can rely on unique constraint if we had one.
-	// For now, let's skip duplicate check or implement it via raw SQL if needed.
-	// Actually, let's just check if we have this message ID in metadata.
-	// Since Metadata is text, we can use LIKE.
 	var count int64
 	if err := s.storage.DB.Model(&storage.Inbox{}).
 		Where("user_id = ? AND metadata LIKE ?", userID, "%"+msg.Envelope.MessageId+"%").
@@ -189,7 +176,6 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, in
 		return nil
 	}
 
-	// Extract Gmail Thread ID from X-GM-THRID
 	var threadID uint64
 	if msg.Items != nil {
 		for key, value := range msg.Items {
@@ -220,7 +206,12 @@ func (s *GmailIMAPService) SaveMessage(ctx context.Context, userID uuid.UUID, in
 		"sender":     sender,
 		"source":     "gmail",
 	}
-	metadata["thread_id"] = threadID
+
+	if chatID, err := s.ensureChat(ctx, userID, integration, sender); err == nil {
+		metadata["chat_id"] = chatID.String()
+	} else {
+		s.logger.Warn("failed to ensure chat for sender", zap.Error(err), zap.String("sender", sender))
+	}
 	metadataBytes, _ := json.Marshal(metadata)
 
 	inboxItem := &storage.Inbox{
@@ -278,13 +269,6 @@ func (s *GmailIMAPService) ProcessPendingItems(ctx context.Context) error {
 2. A 2-3 sentence summary
 3. Suggest 1-2 smart context-aware actions the user might want to take
 
-Examples of smart actions:
-- "Reply with availability" if someone asks for a meeting
-- "Add to calendar" if there's an event mentioned
-- "Create task" if there's a request or TODO
-- "Forward to team" if it's relevant to others
-- "Save attachment" if there are important files
-
 Email:
 From: %s
 Subject: %s
@@ -315,7 +299,6 @@ Respond ONLY with valid JSON in this format:
 				} `json:"importance"`
 				Summary string                `json:"summary"`
 				Actions []storage.InboxAction `json:"suggested_actions"`
-				Missing string                `json:"missing_info"`
 			}
 
 			if err := json.Unmarshal([]byte(llmResponse), &llmAnalysis); err != nil {
@@ -376,7 +359,6 @@ Respond ONLY with valid JSON in this format:
 }
 
 func (s *GmailIMAPService) MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, uids []uint32) error {
-	// 1. Get Gmail tool params
 	tools, err := s.storage.GetIntegrations(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to get integrations: %w", err)
@@ -407,14 +389,12 @@ func (s *GmailIMAPService) MarkMessagesAsRead(ctx context.Context, userID uuid.U
 		return fmt.Errorf("gmail access token not found")
 	}
 
-	// 2. Connect to IMAP
 	c, err := client.DialTLS("imap.gmail.com:993", nil)
 	if err != nil {
 		return fmt.Errorf("failed to dial imap: %w", err)
 	}
 	defer c.Logout()
 
-	// Authenticate using XOAUTH2
 	oauthToken, err := s.storage.GetOAuthTokenByUser(ctx, userID, "gmail")
 	if err != nil {
 		return fmt.Errorf("failed to get oauth token info: %w", err)
@@ -429,13 +409,10 @@ func (s *GmailIMAPService) MarkMessagesAsRead(ctx context.Context, userID uuid.U
 		return fmt.Errorf("imap authentication failed: %w", err)
 	}
 
-	// 3. Select Inbox
-	_, err = c.Select("INBOX", false)
-	if err != nil {
+	if _, err := c.Select("INBOX", false); err != nil {
 		return fmt.Errorf("failed to select inbox: %w", err)
 	}
 
-	// 4. Mark messages as read
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(uids...)
 
@@ -449,18 +426,29 @@ func (s *GmailIMAPService) MarkMessagesAsRead(ctx context.Context, userID uuid.U
 	return nil
 }
 
-// Xoauth2Client implements sasl.Client for XOAUTH2
-type Xoauth2Client struct {
-	Username string
-	Token    string
-}
+func (s *GmailIMAPService) ensureChat(ctx context.Context, userID uuid.UUID, integration storage.Integration, sender string) (uuid.UUID, error) {
+	title := sender
+	if title == "" {
+		title = integration.Name
+	}
 
-func (a *Xoauth2Client) Start() (mech string, ir []byte, err error) {
-	mech = "XOAUTH2"
-	ir = []byte("user=" + a.Username + "\x01auth=Bearer " + a.Token + "\x01\x01")
-	return
-}
+	var chatModel storage.Chat
+	err := s.storage.DB.WithContext(ctx).
+		Where("user_id = ? AND title = ? AND model = ?", userID, title, integration.ID).
+		First(&chatModel).Error
+	if err == nil {
+		return chatModel.ID, nil
+	}
 
-func (a *Xoauth2Client) Next(challenge []byte) (response []byte, err error) {
-	return []byte{}, nil
+	newChat := &chat.Chat{
+		ID:    uuid.New(),
+		Model: integration.ID,
+		Title: title,
+	}
+
+	created, err := s.storage.CreateChat(ctx, userID, newChat)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return created.ID, nil
 }

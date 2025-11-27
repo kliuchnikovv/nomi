@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -49,6 +50,20 @@ func (s *StorageAdapter) CreateInbox(ctx context.Context, inbox *storage.Inbox) 
 
 func (s *StorageAdapter) UpdateInbox(ctx context.Context, inbox *storage.Inbox) error {
 	return s.store.DB.WithContext(ctx).Save(inbox).Error
+}
+
+func (s *StorageAdapter) FindChatByTitleAndModel(ctx context.Context, userID uuid.UUID, title string, modelID uuid.UUID) (*storage.Chat, error) {
+	var chatModel storage.Chat
+	if err := s.store.DB.WithContext(ctx).
+		Where("user_id = ? AND title = ? AND model = ?", userID, title, modelID).
+		First(&chatModel).Error; err != nil {
+		return nil, err
+	}
+	return &chatModel, nil
+}
+
+func (s *StorageAdapter) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
+	return s.store.CreateChat(ctx, userID, c)
 }
 
 // LLMAdapter exposes only the surface plugins need.

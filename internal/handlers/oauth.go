@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/integrations"
+	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/lib/pq"
 	"go.uber.org/zap"
@@ -30,8 +30,8 @@ type OAuthHandler struct {
 	storage             *storage.Storage
 	oauthConfigs        map[string]*oauth2.Config
 	oidcProviders       map[string]*oidc.Provider
-	gmailIntegration    *integrations.GmailIntegration
-	calendarIntegration *integrations.CalendarIntegration
+	gmailIntegration    *plugins.GmailIntegration
+	calendarIntegration *plugins.CalendarIntegration
 	sessionTTL          time.Duration
 }
 
@@ -50,12 +50,12 @@ func NewOAuthHandler(
 		}
 	}
 
-	gmailIntegration, err := integrations.NewGmailIntegration(logger, cfg, storage)
+	gmailIntegration, err := plugins.NewGmailIntegration(logger, cfg, storage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init gmail integration: %w", err)
 	}
 
-	calendarIntegration, err := integrations.NewCalendarIntegration(logger, cfg, storage)
+	calendarIntegration, err := plugins.NewCalendarIntegration(logger, cfg, storage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init calendar integration: %w", err)
 	}
@@ -80,7 +80,7 @@ func (h *OAuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	if providerName != integrations.ProviderGmail && providerName != integrations.ProviderCalendar {
+	if providerName != plugins.ProviderGmail && providerName != plugins.ProviderCalendar {
 		if _, err := h.providerConfig(providerName); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -128,9 +128,9 @@ func (h *OAuthHandler) Redirect(c *gin.Context) {
 	}
 
 	var authURL string
-	if providerName == integrations.ProviderGmail {
+	if providerName == plugins.ProviderGmail {
 		authURL = h.gmailIntegration.GetAuthURL(session.State)
-	} else if providerName == integrations.ProviderCalendar {
+	} else if providerName == plugins.ProviderCalendar {
 		authURL = h.calendarIntegration.GetAuthURL(session.State)
 	} else {
 		oauthCfg, err := h.providerConfig(providerName)
@@ -155,7 +155,7 @@ func (h *OAuthHandler) Redirect(c *gin.Context) {
 func (h *OAuthHandler) Callback(c *gin.Context) {
 	ctx := c.Request.Context()
 	providerName := c.Param("provider")
-	if providerName != integrations.ProviderGmail && providerName != integrations.ProviderCalendar {
+	if providerName != plugins.ProviderGmail && providerName != plugins.ProviderCalendar {
 		if _, err := h.providerConfig(providerName); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -205,7 +205,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 	}
 
 	var email string
-	if providerName == integrations.ProviderGmail {
+	if providerName == plugins.ProviderGmail {
 		user, err := h.storage.GetUserByID(ctx, session.UserID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
@@ -216,7 +216,7 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-	} else if providerName == integrations.ProviderCalendar {
+	} else if providerName == plugins.ProviderCalendar {
 		user, err := h.storage.GetUserByID(ctx, session.UserID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})

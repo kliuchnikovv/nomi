@@ -9,10 +9,8 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/daemon"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
@@ -21,11 +19,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
-
-// GmailIMAPService interface for IMAP operations
-type GmailIMAPService interface {
-	MarkMessagesAsRead(ctx context.Context, userID uuid.UUID, uids []uint32) error
-}
 
 type Server struct {
 	httpServer    *http.Server
@@ -36,11 +29,9 @@ func New(
 	logger *zap.Logger,
 	cfg *config.Config,
 	db *storage.Storage,
-	imapDaemon *daemon.IMAPDaemon,
 	oauthConfigs map[string]*oauth2.Config,
 	oidcProviders map[string]*oidc.Provider,
 	llmService *llm.Service,
-	gmailIMAPService GmailIMAPService,
 ) *Server {
 	var r = gin.New()
 	r.Use(
@@ -76,8 +67,8 @@ func New(
 		// oauthHandler   = handlers.NewOAuth(cfg, db)
 		chatHandler    = handlers.NewChatHandler(db)
 		messageHandler = handlers.NewMessageHandler(db)
-		inboxHandler   = handlers.NewInboxHandler(db)                    // Re-enabled: universal inbox storage
-		actionsHandler = handlers.NewActionsHandler(db, logger, manager) // Re-enabled: using plugin manager
+		sidebarHandler = handlers.NewSidebarHandler(db)
+		actionsHandler = handlers.NewActionsHandler(db, logger, manager) // Delegates to plugins
 		tokenManager   = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler    = handlers.NewAuthHandler(db, tokenManager)
@@ -122,20 +113,13 @@ func New(
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
 
-	// Inbox API (protected) - Universal storage for all email plugins
-	r.GET("/api/inbox", wrapWithAuth(inboxHandler.ListInboxMessages, authMiddleware))
-	r.GET("/api/inbox/:id", wrapWithAuth(inboxHandler.GetInboxMessage, authMiddleware))
-	r.PATCH("/api/inbox/:id/read", wrapWithAuth(inboxHandler.MarkAsRead, authMiddleware))
+	// Sidebar API - grouped inbox by plugin/integration
+	r.GET("/api/sidebar", wrapWithAuth(sidebarHandler.ListSidebar, authMiddleware))
+	r.GET("/api/sidebar/:provider/chats", wrapWithAuth(sidebarHandler.ListChats, authMiddleware))
+	r.GET("/api/sidebar/:provider/chats/:chat_id", wrapWithAuth(sidebarHandler.GetChat, authMiddleware))
+	r.POST("/api/sidebar/:provider/chats/:chat_id/messages", wrapWithAuth(sidebarHandler.PostChatMessage, authMiddleware))
 	// Actions API - Delegates to plugins
-	r.POST("/api/inbox/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
-
-	// r.POST("/api/tools", wrapWithAuth(toolsHandler.CreateIntegration, authMiddleware))
-	// r.GET("/api/tools", wrapWithAuth(toolsHandler.ListTools, authMiddleware))
-	// r.GET("/api/tools/:id", wrapWithAuth(toolsHandler.GetIntegration, authMiddleware))
-	// r.PUT("/api/tools/:id", wrapWithAuth(toolsHandler.UpdateIntegration, authMiddleware))
-	// r.DELETE("/api/tools/:id", wrapWithAuth(toolsHandler.DeleteIntegration, authMiddleware))
-	// r.GET("/api/integrations", wrapWithAuth(toolsHandler.ListIntegrations, authMiddleware))
-	// r.POST("/api/integrations/gmail/sync", wrapWithAuth(toolsHandler.SyncGmail, authMiddleware))
+	r.POST("/api/sidebar/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware)) // sidebar-friendly
 
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
@@ -144,7 +128,6 @@ func New(
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
 	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)
 	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
-	// r.GET("/api/oauth/:provider", wrapWithAuth(toolsHandler.GetOAuthStatus, authMiddleware)) // OLD: commented out
 
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
