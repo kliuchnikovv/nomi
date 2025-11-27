@@ -48,14 +48,15 @@ type SidebarChat struct {
 }
 
 type SidebarChatMessage struct {
-	ID         uuid.UUID `json:"id"`
-	ThreadID   uint64    `json:"thread_id"`
-	Title      string    `json:"title"`
-	Role       string    `json:"role"`
-	Summary    string    `json:"summary,omitempty"`
-	Content    string    `json:"content,omitempty"`
-	Status     string    `json:"status"`
-	ReceivedAt time.Time `json:"received_at"`
+	ID         uuid.UUID             `json:"id"`
+	ThreadID   uint64                `json:"thread_id"`
+	Title      string                `json:"title"`
+	Role       string                `json:"role"`
+	Summary    string                `json:"summary,omitempty"`
+	Content    string                `json:"content,omitempty"`
+	Actions    []storage.InboxAction `json:"actions,omitempty"`
+	Status     string                `json:"status"`
+	ReceivedAt time.Time             `json:"received_at"`
 }
 
 // ListSidebar aggregates all inbox messages grouped by integration for sidebar consumption.
@@ -188,6 +189,10 @@ func (h *SidebarHandler) GetChat(c *gin.Context) {
 
 	result := make([]SidebarChatMessage, len(rows))
 	for i, msg := range rows {
+		var actions []storage.InboxAction
+		if len(msg.Actions) > 0 {
+			_ = json.Unmarshal(msg.Actions, &actions)
+		}
 		result[i] = SidebarChatMessage{
 			ID:         msg.ID,
 			ThreadID:   msg.ThreadID,
@@ -195,6 +200,7 @@ func (h *SidebarHandler) GetChat(c *gin.Context) {
 			Role:       msg.Role,
 			Summary:    msg.Summary,
 			Content:    msg.Content,
+			Actions:    actions,
 			Status:     msg.Status,
 			ReceivedAt: msg.ReceivedAt,
 		}
@@ -288,6 +294,7 @@ func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
 		Role:       inboxItem.Role,
 		Summary:    inboxItem.Summary,
 		Content:    inboxItem.Content,
+		Actions:    []storage.InboxAction{},
 		Status:     inboxItem.Status,
 		ReceivedAt: inboxItem.ReceivedAt,
 	}
@@ -297,6 +304,15 @@ func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
 	if h.llm != nil {
 		reply, err := h.llm.GenerateSimple(ctx, user.ID, req.Content, "plugin_chat")
 		if err == nil && reply != "" {
+			replyMetadata := map[string]interface{}{
+				"chat_id":       pluginChat.ID.String(),
+				"external_id":   pluginChat.ExternalID,
+				"reply_to_id":   msgID,
+				"provider_msg":  pluginChat.ExternalID,
+				"provider_chat": pluginChat.ExternalID,
+			}
+			replyMetaBytes, _ := json.Marshal(replyMetadata)
+
 			replyInbox := &storage.Inbox{
 				ID:            uuid.New(),
 				UserID:        user.ID,
@@ -309,7 +325,7 @@ func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
 				Header:        firstNonEmpty(req.Title, pluginChat.Title),
 				Content:       reply,
 				Status:        "processed",
-				Metadata:      metadataBytes,
+				Metadata:      replyMetaBytes,
 				ReceivedAt:    now,
 				CreatedAt:     now,
 				UpdatedAt:     now,
@@ -322,6 +338,7 @@ func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
 					Role:       replyInbox.Role,
 					Summary:    replyInbox.Summary,
 					Content:    replyInbox.Content,
+					Actions:    []storage.InboxAction{},
 					Status:     replyInbox.Status,
 					ReceivedAt: replyInbox.ReceivedAt,
 				}
