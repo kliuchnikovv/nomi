@@ -11,6 +11,7 @@ import (
 	"github.com/emersion/go-imap/client"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/actions"
+	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
@@ -223,6 +224,14 @@ func (s *EmailSyncer) saveMessage(ctx context.Context, userID uuid.UUID, integra
 		"sender":     sender,
 		"source":     integration.Provider,
 	}
+
+	chatID, err := s.ensureChat(ctx, userID, integration, sender)
+	if err != nil {
+		s.logger.Warn("failed to ensure chat for sender", zap.Error(err), zap.String("sender", sender))
+	} else {
+		metadata["chat_id"] = chatID.String()
+	}
+
 	metadataBytes, _ := json.Marshal(metadata)
 
 	inboxItem := &storage.Inbox{
@@ -259,6 +268,11 @@ func (s *EmailSyncer) processMessages(ctx context.Context, userID uuid.UUID, ite
 	for i := range items {
 		item := &items[i]
 		s.logger.Info("analyzing message", zap.String("subject", item.Header))
+
+		// Ensure chat exists for sender so downstream UI can thread messages
+		if _, err := s.ensureChat(ctx, userID, storage.Integration{ID: item.IntegrationID, Provider: item.Source, Name: item.Source}, item.Sender); err != nil {
+			s.logger.Warn("failed to ensure chat for sender", zap.Error(err), zap.String("sender", item.Sender))
+		}
 
 		// Call LLM to analyze importance, urgency, summary, and suggest actions
 		prompt := fmt.Sprintf(`Analyze this email and provide:
@@ -501,4 +515,26 @@ func (s *EmailSyncer) Archive(ctx context.Context, userID uuid.UUID, uids []uint
 		zap.Int("count", len(uids)))
 
 	return nil
+}
+
+// ensureChat creates or reuses a chat per sender and integration model.
+func (s *EmailSyncer) ensureChat(ctx context.Context, userID uuid.UUID, integration storage.Integration, sender string) (uuid.UUID, error) {
+	title := sender
+	if title == "" {
+		title = integration.Name
+	}
+	if existing, err := s.storage.FindChatByTitleAndModel(ctx, userID, title, integration.ID); err == nil {
+		return existing.ID, nil
+	}
+
+	chatModel := &chat.Chat{
+		ID:    uuid.New(),
+		Model: integration.ID,
+		Title: title,
+	}
+	created, err := s.storage.CreateChat(ctx, userID, chatModel)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return created.ID, nil
 }

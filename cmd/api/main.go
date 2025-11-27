@@ -13,9 +13,7 @@ import (
 	"time"
 
 	"github.com/kliuchnikovv/genie-api/internal/config"
-	// "github.com/kliuchnikovv/genie-api/internal/daemon" // OLD: commented out, using plugin system
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
-	// "github.com/kliuchnikovv/genie-api/internal/integrations" // OLD: commented out, using plugin system
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/server"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -79,22 +77,7 @@ func main() {
 		logger.Fatal("failed to initialize oauth providers", zap.Error(err))
 	}
 
-	// OLD: Commented out - now using plugin system
-	// imapService := integrations.NewGmailIMAPService(logger, db, llmService)
-	// imapDaemon := daemon.NewIMAPDaemon(logger, db, imapService, oauthConfigs)
-	// inboxDaemon := daemon.NewInboxDaemon(logger, db, imapService)
-
-	// // Start daemons
-	// go func() {
-	// 	if err := imapDaemon.Start(context.Background()); err != nil {
-	// 		logger.Error("imap daemon failed", zap.Error(err))
-	// 	}
-	// }()
-
-	// go inboxDaemon.Start(context.Background())
-
-	// OLD: Pass nil for old daemon/service parameters
-	srv := server.New(logger, cfg, db, nil, oauthConfigs, oidcProviders, llmService, nil)
+	srv := server.New(logger, cfg, db, oauthConfigs, oidcProviders, llmService)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

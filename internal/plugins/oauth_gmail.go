@@ -1,4 +1,4 @@
-package integrations
+package plugins
 
 import (
 	"context"
@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	ProviderCalendar = "calendar"
+	ProviderGmail = "gmail"
 )
 
-type CalendarIntegration struct {
+// GmailIntegration handles OAuth for Gmail and persists tokens/integration config.
+type GmailIntegration struct {
 	cfg          *config.Config
 	storage      *storage.Storage
 	logger       *zap.Logger
@@ -29,38 +30,34 @@ type CalendarIntegration struct {
 	oidcProvider *oidc.Provider
 }
 
-func NewCalendarIntegration(
+func NewGmailIntegration(
 	logger *zap.Logger,
 	cfg *config.Config,
 	store *storage.Storage,
-) (*CalendarIntegration, error) {
-	// Setup OAuth2 Config
-	// We reuse the "google" provider config because it shares the same Client ID/Secret
+) (*GmailIntegration, error) {
 	providerCfg, ok := cfg.OAuth2.Providers["google"]
 	if !ok {
 		return nil, fmt.Errorf("google provider config not found")
 	}
 
 	scopes := []string{oidc.ScopeOpenID, "email", "profile"}
-	// Add Calendar specific scopes
-	scopes = append(scopes, providers.GetGoogleScope("calendar:read")...)
-	scopes = append(scopes, providers.GetGoogleScope("calendar:write")...)
+	scopes = append(scopes, providers.GetGoogleScope("gmail:read")...)
+	scopes = append(scopes, providers.GetGoogleScope("gmail:write")...)
 
 	oauthConfig := &oauth2.Config{
 		ClientID:     providerCfg.ClientID,
 		ClientSecret: providerCfg.ClientSecret,
-		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderCalendar),
+		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderGmail),
 		Scopes:       scopes,
 		Endpoint:     google.Endpoint,
 	}
 
-	// Setup OIDC Provider
 	provider, err := oidc.NewProvider(context.Background(), "https://accounts.google.com")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create google oidc provider: %w", err)
 	}
 
-	return &CalendarIntegration{
+	return &GmailIntegration{
 		cfg:          cfg,
 		storage:      store,
 		logger:       logger,
@@ -69,8 +66,8 @@ func NewCalendarIntegration(
 	}, nil
 }
 
-func (c *CalendarIntegration) GetAuthURL(state string) string {
-	return c.oauthConfig.AuthCodeURL(
+func (g *GmailIntegration) GetAuthURL(state string) string {
+	return g.oauthConfig.AuthCodeURL(
 		state,
 		oauth2.AccessTypeOffline,
 		oauth2.ApprovalForce,
@@ -79,20 +76,18 @@ func (c *CalendarIntegration) GetAuthURL(state string) string {
 	)
 }
 
-func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, user *storage.User) (string, error) {
-	// 1. Exchange code for token
-	token, err := c.oauthConfig.Exchange(ctx, code)
+func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user *storage.User) (string, error) {
+	token, err := g.oauthConfig.Exchange(ctx, code)
 	if err != nil {
 		return "", fmt.Errorf("token exchange failed: %w", err)
 	}
 
-	// 2. Verify ID Token
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok {
 		return "", errors.New("id_token missing")
 	}
 
-	verifier := c.oidcProvider.Verifier(&oidc.Config{ClientID: c.oauthConfig.ClientID})
+	verifier := g.oidcProvider.Verifier(&oidc.Config{ClientID: g.oauthConfig.ClientID})
 	idToken, err := verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		return "", fmt.Errorf("failed to verify id_token: %w", err)
@@ -106,7 +101,6 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 		return "", fmt.Errorf("failed to read claims: %w", err)
 	}
 
-	// 3. Save Token
 	tokenBytes, err := json.Marshal(token)
 	if err != nil {
 		return "", fmt.Errorf("failed to encode token: %w", err)
@@ -115,21 +109,21 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 	newToken := &storage.OAuthToken{
 		UserID:         user.ID,
 		ProfileID:      user.ID.String(),
-		Provider:       ProviderCalendar,
+		Provider:       ProviderGmail,
 		AccountEmail:   claims.Email,
 		ExternalUserID: claims.Sub,
-		Scopes:         pq.StringArray(c.oauthConfig.Scopes),
+		Scopes:         pq.StringArray(g.oauthConfig.Scopes),
 		TokenEncrypted: tokenBytes,
 		Version:        1,
 	}
 
-	existing, err := c.storage.GetOAuthTokenByUser(ctx, user.ID, ProviderCalendar)
+	existing, err := g.storage.GetOAuthTokenByUser(ctx, user.ID, ProviderGmail)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", fmt.Errorf("failed to check existing token: %w", err)
 	}
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		if err := c.storage.SaveOAuthToken(ctx, newToken); err != nil {
+		if err := g.storage.SaveOAuthToken(ctx, newToken); err != nil {
 			return "", fmt.Errorf("failed to save token: %w", err)
 		}
 	} else {
@@ -138,36 +132,35 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 		existing.TokenEncrypted = newToken.TokenEncrypted
 		existing.Scopes = newToken.Scopes
 		existing.ProfileID = newToken.ProfileID
-		if err := c.storage.UpdateOAuthToken(ctx, existing); err != nil {
+		if err := g.storage.UpdateOAuthToken(ctx, existing); err != nil {
 			return "", fmt.Errorf("failed to update token: %w", err)
 		}
 	}
 
-	// 4. Create or Update Tool
 	params := map[string]any{
 		"creds": map[string]any{
 			"token":         token.AccessToken,
 			"refresh_token": token.RefreshToken,
 			"token_type":    token.TokenType,
 			"expiry":        token.Expiry,
-			"client_id":     c.oauthConfig.ClientID,
-			"client_secret": c.oauthConfig.ClientSecret,
-			"token_uri":     c.oauthConfig.Endpoint.TokenURL,
+			"client_id":     g.oauthConfig.ClientID,
+			"client_secret": g.oauthConfig.ClientSecret,
+			"token_uri":     g.oauthConfig.Endpoint.TokenURL,
 		},
 	}
 	paramsJSON, err := json.Marshal(params)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal tool params: %w", err)
+		return "", fmt.Errorf("failed to marshal integration params: %w", err)
 	}
 
-	tools, err := c.storage.GetIntegrations(ctx, user.ID)
+	tools, err := g.storage.GetIntegrations(ctx, user.ID)
 	if err != nil {
-		return "", fmt.Errorf("failed to list tools: %w", err)
+		return "", fmt.Errorf("failed to list integrations: %w", err)
 	}
 
 	var existingTool *storage.Integration
 	for _, t := range tools {
-		if t.Provider == ProviderCalendar {
+		if t.Provider == ProviderGmail {
 			existingTool = &t
 			break
 		}
@@ -175,20 +168,20 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 
 	if existingTool != nil {
 		existingTool.Params = string(paramsJSON)
-		existingTool.Name = "Google Calendar"
-		if _, err := c.storage.UpdateIntegration(ctx, user.ID, existingTool); err != nil {
-			return "", fmt.Errorf("failed to update tool: %w", err)
+		existingTool.Name = "Gmail"
+		if _, err := g.storage.UpdateIntegration(ctx, user.ID, existingTool); err != nil {
+			return "", fmt.Errorf("failed to update integration: %w", err)
 		}
 	} else {
 		newTool := &storage.Integration{
 			UserID:   user.ID,
-			Name:     "Google Calendar",
-			Provider: ProviderCalendar,
+			Name:     "Gmail",
+			Provider: ProviderGmail,
 			Params:   string(paramsJSON),
 			Enabled:  true,
 		}
-		if _, err := c.storage.CreateIntegration(ctx, user.ID, newTool); err != nil {
-			return "", fmt.Errorf("failed to create tool: %w", err)
+		if _, err := g.storage.CreateIntegration(ctx, user.ID, newTool); err != nil {
+			return "", fmt.Errorf("failed to create integration: %w", err)
 		}
 	}
 
