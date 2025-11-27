@@ -8,16 +8,18 @@ import (
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
 // SidebarHandler exposes sidebar-specific aggregations grouped by plugin/integration.
 type SidebarHandler struct {
 	storage *storage.Storage
+	llm     *llm.Service
 }
 
-func NewSidebarHandler(storage *storage.Storage) *SidebarHandler {
-	return &SidebarHandler{storage: storage}
+func NewSidebarHandler(storage *storage.Storage, llmService *llm.Service) *SidebarHandler {
+	return &SidebarHandler{storage: storage, llm: llmService}
 }
 
 type SidebarMessage struct {
@@ -49,6 +51,7 @@ type SidebarChatMessage struct {
 	ID         uuid.UUID `json:"id"`
 	ThreadID   uint64    `json:"thread_id"`
 	Title      string    `json:"title"`
+	Role       string    `json:"role"`
 	Summary    string    `json:"summary,omitempty"`
 	Content    string    `json:"content,omitempty"`
 	Status     string    `json:"status"`
@@ -189,6 +192,7 @@ func (h *SidebarHandler) GetChat(c *gin.Context) {
 			ID:         msg.ID,
 			ThreadID:   msg.ThreadID,
 			Title:      msg.Header,
+			Role:       msg.Role,
 			Summary:    msg.Summary,
 			Content:    msg.Content,
 			Status:     msg.Status,
@@ -277,15 +281,63 @@ func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, SidebarChatMessage{
+	responsePayload := SidebarChatMessage{
 		ID:         inboxItem.ID,
 		ThreadID:   inboxItem.ThreadID,
 		Title:      inboxItem.Header,
+		Role:       inboxItem.Role,
 		Summary:    inboxItem.Summary,
 		Content:    inboxItem.Content,
 		Status:     inboxItem.Status,
 		ReceivedAt: inboxItem.ReceivedAt,
-	})
+	}
+
+	// Generate assistant reply using LLM (best-effort).
+	var replyPayload *SidebarChatMessage
+	if h.llm != nil {
+		reply, err := h.llm.GenerateSimple(ctx, user.ID, req.Content, "plugin_chat")
+		if err == nil && reply != "" {
+			replyInbox := &storage.Inbox{
+				ID:            uuid.New(),
+				UserID:        user.ID,
+				IntegrationID: pluginChat.IntegrationID,
+				Source:        provider,
+				MessageID:     "assistant-" + uuid.NewString(),
+				ThreadID:      threadID,
+				Sender:        provider,
+				Role:          "assistant",
+				Header:        firstNonEmpty(req.Title, pluginChat.Title),
+				Content:       reply,
+				Status:        "processed",
+				Metadata:      metadataBytes,
+				ReceivedAt:    now,
+				CreatedAt:     now,
+				UpdatedAt:     now,
+			}
+			if err := h.storage.DB.WithContext(ctx).Create(replyInbox).Error; err == nil {
+				replyPayload = &SidebarChatMessage{
+					ID:         replyInbox.ID,
+					ThreadID:   replyInbox.ThreadID,
+					Title:      replyInbox.Header,
+					Role:       replyInbox.Role,
+					Summary:    replyInbox.Summary,
+					Content:    replyInbox.Content,
+					Status:     replyInbox.Status,
+					ReceivedAt: replyInbox.ReceivedAt,
+				}
+			}
+		}
+	}
+
+	if replyPayload != nil {
+		c.JSON(http.StatusCreated, gin.H{
+			"message": responsePayload,
+			"reply":   replyPayload,
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, responsePayload)
 }
 
 func chatKey(msg storage.Inbox) string {
