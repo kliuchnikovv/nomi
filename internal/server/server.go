@@ -119,7 +119,7 @@ func New(
 	r.GET("/api/sidebar/:provider/chats/:chat_id", wrapWithAuth(sidebarHandler.GetChat, authMiddleware))
 	r.POST("/api/sidebar/:provider/chats/:chat_id/messages", wrapWithAuth(sidebarHandler.PostChatMessage, authMiddleware))
 	// Actions API - Delegates to plugins
-	r.POST("/api/sidebar/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware)) // sidebar-friendly
+	r.POST("/api/sidebar/:provider/messages/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
 
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
