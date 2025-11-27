@@ -321,7 +321,7 @@ func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
 				MessageID:     "assistant-" + uuid.NewString(),
 				ThreadID:      threadID,
 				Sender:        provider,
-				Role:          "assistant",
+				Role:          "daemon", // reply from background/model
 				Header:        firstNonEmpty(req.Title, pluginChat.Title),
 				Content:       reply,
 				Status:        "processed",
