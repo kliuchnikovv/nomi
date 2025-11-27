@@ -92,7 +92,7 @@ func (e *Executor) markAsRead(ctx context.Context, userID uuid.UUID, emailID uui
 		} else {
 			e.logger.Info("marked as read in Gmail",
 				zap.Uint32("uid", inbox.UID),
-				zap.String("subject", inbox.Subject))
+				zap.String("subject", inbox.Header))
 		}
 	}
 

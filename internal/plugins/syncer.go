@@ -11,20 +11,19 @@ import (
 	"github.com/emersion/go-imap/client"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/actions"
-	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
 
 type EmailSyncer struct {
 	logger        *zap.Logger
-	storage       *storage.Storage
-	llmService    *llm.Service
+	storage       StoragePort
+	llmService    LLMPort
 	actionBuilder *actions.Builder
 	source        string
 }
 
-func NewEmailSyncer(logger *zap.Logger, store *storage.Storage, llmSvc *llm.Service, source string) *EmailSyncer {
+func NewEmailSyncer(logger *zap.Logger, store StoragePort, llmSvc LLMPort, source string) *EmailSyncer {
 	return &EmailSyncer{
 		logger:        logger.With(zap.String("component", "email_syncer"), zap.String("source", source)),
 		storage:       store,
@@ -63,9 +62,13 @@ func (s *EmailSyncer) cleanLLMResponse(resp string) string {
 }
 
 func (s *EmailSyncer) Sync(ctx context.Context, userID uuid.UUID, c *client.Client) error {
-	// 1. Select Inbox
-	_, err := c.Select("INBOX", false)
+	integration, err := s.getIntegration(ctx, userID)
 	if err != nil {
+		return err
+	}
+
+	// 1. Select Inbox
+	if _, err := c.Select("INBOX", false); err != nil {
 		return fmt.Errorf("failed to select inbox: %w", err)
 	}
 
@@ -96,7 +99,7 @@ func (s *EmailSyncer) Sync(ctx context.Context, userID uuid.UUID, c *client.Clie
 
 	var newMessages []storage.Inbox
 	for msg := range messages {
-		if item, err := s.saveMessage(ctx, userID, msg, section); err != nil {
+		if item, err := s.saveMessage(ctx, userID, *integration, msg, section); err != nil {
 			s.logger.Error("failed to save message", zap.Error(err))
 		} else if item != nil {
 			newMessages = append(newMessages, *item)
@@ -117,7 +120,22 @@ func (s *EmailSyncer) Sync(ctx context.Context, userID uuid.UUID, c *client.Clie
 	return nil
 }
 
-func (s *EmailSyncer) saveMessage(ctx context.Context, userID uuid.UUID, msg *imap.Message, section *imap.BodySectionName) (*storage.Inbox, error) {
+func (s *EmailSyncer) getIntegration(ctx context.Context, userID uuid.UUID) (*storage.Integration, error) {
+	integrations, err := s.storage.GetIntegrations(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get integrations: %w", err)
+	}
+
+	for i := range integrations {
+		if integrations[i].Provider == s.source && integrations[i].Enabled {
+			return &integrations[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("%s integration not found or disabled", s.source)
+}
+
+func (s *EmailSyncer) saveMessage(ctx context.Context, userID uuid.UUID, integration storage.Integration, msg *imap.Message, section *imap.BodySectionName) (*storage.Inbox, error) {
 	if msg == nil {
 		s.logger.Warn("skipping nil message from IMAP")
 		return nil, nil
@@ -162,14 +180,12 @@ func (s *EmailSyncer) saveMessage(ctx context.Context, userID uuid.UUID, msg *im
 	}
 
 	// Check for duplicates
-	var count int64
-	if err := s.storage.DB.Model(&storage.Inbox{}).
-		Where("user_id = ? AND message_id = ?", userID, msg.Envelope.MessageId).
-		Count(&count).Error; err != nil {
+	exists, err := s.storage.InboxExistsByMessageID(ctx, userID, msg.Envelope.MessageId)
+	if err != nil {
 		return nil, fmt.Errorf("failed to check for duplicates: %w", err)
 	}
 
-	if count > 0 {
+	if exists {
 		s.logger.Info("skipping duplicate message",
 			zap.String("message_id", msg.Envelope.MessageId),
 			zap.String("subject", msg.Envelope.Subject))
@@ -200,26 +216,37 @@ func (s *EmailSyncer) saveMessage(ctx context.Context, userID uuid.UUID, msg *im
 		}
 	}
 
+	metadata := map[string]interface{}{
+		"message_id": msg.Envelope.MessageId,
+		"uid":        msg.Uid,
+		"thread_id":  threadID,
+		"sender":     sender,
+		"source":     integration.Provider,
+	}
+	metadataBytes, _ := json.Marshal(metadata)
+
 	inboxItem := &storage.Inbox{
-		UserID:     userID,
-		Source:     s.source,
-		MessageID:  msg.Envelope.MessageId,
-		UID:        msg.Uid,
-		ThreadID:   threadID,
-		Sender:     sender,
-		Subject:    msg.Envelope.Subject,
-		Snippet:    "", // TODO: extract snippet
-		Body:       body,
-		Status:     "pending",
-		ReceivedAt: msg.Envelope.Date,
+		UserID:        userID,
+		IntegrationID: integration.ID,
+		Source:        integration.Provider,
+		MessageID:     msg.Envelope.MessageId,
+		UID:           msg.Uid,
+		ThreadID:      threadID,
+		Sender:        sender,
+		Role:          "user",
+		Header:        msg.Envelope.Subject,
+		Content:       body,
+		Status:        "pending",
+		Metadata:      metadataBytes,
+		ReceivedAt:    msg.Envelope.Date,
 	}
 
-	if err := s.storage.DB.Create(inboxItem).Error; err != nil {
+	if err := s.storage.CreateInbox(ctx, inboxItem); err != nil {
 		return nil, fmt.Errorf("failed to save inbox item: %w", err)
 	}
 
 	s.logger.Info("message saved to inbox",
-		zap.String("subject", inboxItem.Subject),
+		zap.String("subject", inboxItem.Header),
 		zap.Uint64("thread_id", threadID))
 	return inboxItem, nil
 }
@@ -231,7 +258,7 @@ func (s *EmailSyncer) processMessages(ctx context.Context, userID uuid.UUID, ite
 
 	for i := range items {
 		item := &items[i]
-		s.logger.Info("analyzing message", zap.String("subject", item.Subject))
+		s.logger.Info("analyzing message", zap.String("subject", item.Header))
 
 		// Call LLM to analyze importance, urgency, summary, and suggest actions
 		prompt := fmt.Sprintf(`Analyze this email and provide:
@@ -269,35 +296,46 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 - command: One of: reply, forward, create_task, add_to_calendar, save_attachment, or custom
 - why: Brief explanation of why this action is relevant
 - prompt: Detailed instruction for executing the action (what to say in reply, what task to create, etc.)
-`, item.Sender, item.Subject, item.Body, item.Subject)
+`, item.Sender, item.Header, item.Content, item.Header)
 
 		llmResponse, err := s.llmService.GenerateSimple(ctx, userID, prompt, "mailer")
 		if err != nil {
 			s.logger.Error("failed to get LLM analysis", zap.Error(err))
 			// Continue with empty analysis
-			llmResponse = fmt.Sprintf(`{"title": "%s", "importance": {"level": "medium", "reason": "Unable to analyze"}, "urgency": {"level": "can_wait", "reason": "Unable to analyze"}, "summary": "Email analysis unavailable"}`, item.Subject)
+			llmResponse = fmt.Sprintf(`{"title": "%s", "importance": {"level": "medium", "reason": "Unable to analyze"}, "urgency": {"level": "can_wait", "reason": "Unable to analyze"}, "summary": "Email analysis unavailable"}`, item.Header)
 		}
 
 		// Clean LLM response (strip markdown)
 		llmResponse = s.cleanLLMResponse(llmResponse)
 
 		// Parse LLM response
-		var llmAnalysis storage.InboxAnalysis
+		var llmAnalysis struct {
+			Title      string `json:"title"`
+			Importance struct {
+				Level  string `json:"level"`
+				Reason string `json:"reason"`
+			} `json:"importance"`
+			Urgency struct {
+				Level  string `json:"level"`
+				Reason string `json:"reason"`
+			} `json:"urgency"`
+			Summary string                `json:"summary"`
+			Actions []storage.InboxAction `json:"suggested_actions"`
+			Missing string                `json:"missing_info"`
+		}
 		if err := json.Unmarshal([]byte(llmResponse), &llmAnalysis); err != nil {
 			s.logger.Error("failed to parse LLM response", zap.Error(err), zap.String("response", llmResponse))
 			// Use default values
-			llmAnalysis = storage.InboxAnalysis{
-				Title: item.Subject,
-				Importance: storage.InboxLevel{
-					Level:  "medium",
-					Reason: "Unable to parse analysis",
-				},
-				Urgency: storage.InboxLevel{
-					Level:  "can_wait",
-					Reason: "Unable to parse analysis",
-				},
-				Summary: "Email analysis unavailable",
-			}
+			llmAnalysis.Title = item.Header
+			llmAnalysis.Importance.Level = "medium"
+			llmAnalysis.Importance.Reason = "Unable to parse analysis"
+			llmAnalysis.Urgency.Level = "can_wait"
+			llmAnalysis.Urgency.Reason = "Unable to parse analysis"
+			llmAnalysis.Summary = "Email analysis unavailable"
+		}
+
+		if llmAnalysis.Title == "" {
+			llmAnalysis.Title = item.Header
 		}
 
 		// Build base actions using ActionBuilder
@@ -309,7 +347,7 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 			// LLM suggested some actions - add them after base actions
 			s.logger.Info("adding LLM-suggested actions",
 				zap.Int("count", len(llmAnalysis.Actions)),
-				zap.String("subject", item.Subject))
+				zap.String("subject", item.Header))
 
 			// Set agent to "mailer" for all LLM-suggested actions
 			for i := range llmAnalysis.Actions {
@@ -321,23 +359,16 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 			allActions = append(allActions, llmAnalysis.Actions...)
 		}
 
-		// Combine LLM analysis with merged actions
-		analysis := storage.InboxAnalysis{
-			Title:       llmAnalysis.Title,
-			Importance:  llmAnalysis.Importance,
-			Urgency:     llmAnalysis.Urgency,
-			Summary:     llmAnalysis.Summary,
-			Actions:     allActions,
-			MissingInfo: llmAnalysis.MissingInfo,
-		}
-
-		jsonData, err := json.Marshal(analysis)
+		actionsData, err := json.Marshal(allActions)
 		if err != nil {
 			s.logger.Error("failed to marshal analysis", zap.Error(err))
-			item.Response = ""
 		} else {
-			item.Response = string(jsonData)
+			item.Actions = actionsData
 		}
+
+		item.Header = llmAnalysis.Title
+		item.Summary = llmAnalysis.Summary
+		item.Importance = llmAnalysis.Importance.Level
 		item.Status = "processed"
 
 		// Add UID to list for marking as read if low priority
@@ -345,7 +376,7 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 			uidsToMarkRead = append(uidsToMarkRead, item.UID)
 		}
 
-		if err := s.storage.DB.Save(item).Error; err != nil {
+		if err := s.storage.UpdateInbox(ctx, item); err != nil {
 			s.logger.Error("failed to update inbox item", zap.Error(err))
 		}
 	}

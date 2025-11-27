@@ -159,12 +159,12 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 		return "", fmt.Errorf("failed to marshal tool params: %w", err)
 	}
 
-	tools, err := g.storage.GetTools(ctx, user.ID)
+	tools, err := g.storage.GetIntegrations(ctx, user.ID)
 	if err != nil {
 		return "", fmt.Errorf("failed to list tools: %w", err)
 	}
 
-	var existingTool *storage.Tool
+	var existingTool *storage.Integration
 	for _, t := range tools {
 		if t.Provider == ProviderGmail {
 			existingTool = &t
@@ -175,18 +175,18 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 	if existingTool != nil {
 		existingTool.Params = string(paramsJSON)
 		existingTool.Name = "Gmail" // Ensure name is set/updated
-		if _, err := g.storage.UpdateTool(ctx, user.ID, existingTool); err != nil {
+		if _, err := g.storage.UpdateIntegration(ctx, user.ID, existingTool); err != nil {
 			return "", fmt.Errorf("failed to update tool: %w", err)
 		}
 	} else {
-		newTool := &storage.Tool{
+		newTool := &storage.Integration{
 			UserID:   user.ID,
 			Name:     "Gmail",
 			Provider: ProviderGmail,
 			Params:   string(paramsJSON),
 			Enabled:  true,
 		}
-		if _, err := g.storage.CreateTool(ctx, user.ID, newTool); err != nil {
+		if _, err := g.storage.CreateIntegration(ctx, user.ID, newTool); err != nil {
 			return "", fmt.Errorf("failed to create tool: %w", err)
 		}
 	}
