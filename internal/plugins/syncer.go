@@ -404,6 +404,41 @@ Note: suggested_actions is optional. Only suggest actions if they make sense for
 		if err := s.storage.UpdateInbox(ctx, item); err != nil {
 			s.logger.Error("failed to update inbox item", zap.Error(err))
 		}
+
+		// Persist daemon response as a separate message so UI can show model reply.
+		if llmAnalysis.Summary != "" {
+			var meta map[string]interface{}
+			if len(item.Metadata) > 0 {
+				_ = json.Unmarshal(item.Metadata, &meta)
+			}
+			daemonMeta := map[string]interface{}{
+				"chat_id":     meta["chat_id"],
+				"external_id": meta["external_id"],
+				"reply_to_id": item.MessageID,
+			}
+			daemonMetaBytes, _ := json.Marshal(daemonMeta)
+
+			daemonMsg := &storage.Inbox{
+				ID:            uuid.New(),
+				UserID:        userID,
+				IntegrationID: item.IntegrationID,
+				Source:        item.Source,
+				MessageID:     "daemon-" + uuid.NewString(),
+				ThreadID:      item.ThreadID,
+				Sender:        item.Source,
+				Role:          "daemon",
+				Header:        item.Header,
+				Content:       llmAnalysis.Summary,
+				Status:        "processed",
+				Metadata:      daemonMetaBytes,
+				ReceivedAt:    time.Now().UTC(),
+				CreatedAt:     time.Now().UTC(),
+				UpdatedAt:     time.Now().UTC(),
+			}
+			if err := s.storage.CreateInbox(ctx, daemonMsg); err != nil {
+				s.logger.Warn("failed to save daemon reply", zap.Error(err))
+			}
+		}
 	}
 
 	// Batch mark as read for this user
