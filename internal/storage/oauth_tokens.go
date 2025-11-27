@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 
 type OAuthToken struct {
 	ID             uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	UserID         uuid.UUID      `gorm:"type:uuid;index"`
 	ProfileID      string         `gorm:"index;type:text"`
 	Provider       string         `gorm:"type:text"`
 	AccountEmail   string         `gorm:"type:text"`
@@ -26,29 +28,34 @@ func (OAuthToken) TableName() string {
 	return "oauth_tokens"
 }
 
-func (s *Storage) SaveOAuthToken(token *OAuthToken) error {
+func (s *Storage) SaveOAuthToken(ctx context.Context, token *OAuthToken) error {
+	now := time.Now().UTC()
 	if token.ID == uuid.Nil {
 		token.ID = uuid.New()
+		token.CreatedAt = now
 	}
-	return s.DB.Create(token).Error
+	token.UpdatedAt = now
+	return s.DB.WithContext(ctx).Create(token).Error
 }
 
-// GetOAuthTokenByProfileProvider finds the latest token for profile+provider
-func (s *Storage) GetOAuthTokenByProfileProvider(profileID, provider string) (*OAuthToken, error) {
-	var t OAuthToken
-	if err := s.DB.Where("profile_id = ? AND provider = ? AND deleted_at IS NULL", profileID, provider).First(&t).Error; err != nil {
+func (s *Storage) UpdateOAuthToken(ctx context.Context, token *OAuthToken) error {
+	token.UpdatedAt = time.Now().UTC()
+	token.Version++
+	return s.DB.WithContext(ctx).Save(token).Error
+}
+
+func (s *Storage) GetOAuthTokenByUser(ctx context.Context, userID uuid.UUID, provider string) (*OAuthToken, error) {
+	var token OAuthToken
+	if err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND provider = ? AND deleted_at IS NULL", userID, provider).
+		First(&token).Error; err != nil {
 		return nil, err
 	}
-	return &t, nil
+	return &token, nil
 }
 
-// UpdateOAuthToken updates the token record (save merged fields)
-func (s *Storage) UpdateOAuthToken(token *OAuthToken) error {
-	token.UpdatedAt = time.Now()
-	return s.DB.Save(token).Error
-}
-
-// DeleteOAuthTokenByProfileProvider deletes (soft-delete) token by profile and provider
-func (s *Storage) DeleteOAuthTokenByProfileProvider(profileID, provider string) error {
-	return s.DB.Where("profile_id = ? AND provider = ?", profileID, provider).Delete(&OAuthToken{}).Error
+func (s *Storage) DeleteOAuthTokenByProfileProvider(ctx context.Context, profileID, provider string) error {
+	return s.DB.WithContext(ctx).
+		Where("profile_id = ? AND provider = ?", profileID, provider).
+		Delete(&OAuthToken{}).Error
 }

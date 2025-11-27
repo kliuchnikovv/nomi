@@ -2,715 +2,354 @@ package handlers
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"strconv"
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/providers"
+	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/lib/pq"
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
+	"gorm.io/gorm"
 )
 
-const oauthStateCookieName = "oauthstate"
+const (
+	oauthSessionCookieName = "oauth_sid"
+)
 
-type OAuth struct {
-	configs   map[string]*oauth2.Config
-	providers map[string]*oidc.Provider
-	db        *storage.Storage
-	cfg       *config.Config
+type OAuthHandler struct {
+	cfg                 *config.Config
+	storage             *storage.Storage
+	oauthConfigs        map[string]*oauth2.Config
+	oidcProviders       map[string]*oidc.Provider
+	gmailIntegration    *integrations.GmailIntegration
+	calendarIntegration *integrations.CalendarIntegration
+	sessionTTL          time.Duration
 }
 
-// PermissionsRequest represents a request to update token scopes
-type PermissionsRequest struct {
-	Scopes []string `json:"scopes"`
-}
-
-// ScopeInfo represents a single scope with human-friendly info
-type ScopeInfo struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Level string `json:"level"` // read_only|modify
-}
-
-// GoogleStatusResponse represents connection status for Google
-type GoogleStatusResponse struct {
-	State        string      `json:"state"`
-	AccountEmail string      `json:"account_email"`
-	Scopes       []ScopeInfo `json:"scopes"`
-}
-
-// PermissionEntry represents a permission for the permissions API
-type PermissionEntry struct {
-	Category    string `json:"category"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Allowed     bool   `json:"allowed"`
-}
-
-// LogEntry is a single formatted log entry
-type LogEntry struct {
-	Summary   string `json:"summary"`
-	Details   string `json:"details"`
-	Timestamp string `json:"timestamp"`
-	Impact    string `json:"impact"`
-}
-
-// LogsListResponse represents the response for GET /api/logs
-type LogsListResponse struct {
-	Entries []LogEntry `json:"entries"`
-}
-
-// PermissionChoice represents a permission decision for OAuth initiation
-type PermissionChoice struct {
-	Category string  `json:"category"`
-	Allowed  bool    `json:"allowed"`
-	Level    *string `json:"level"` // read|write|null
-}
-
-// GoogleLoginRequest is the request body for Google OAuth login
-type GoogleLoginRequest struct {
-	Permissions []PermissionChoice `json:"permissions"`
-	Scopes      []string           `json:"scopes"`
-}
-
-// GoogleReauthorizeRequest is the request body for reauthorize
-type GoogleReauthorizeRequest struct {
-	Permissions []PermissionChoice `json:"permissions"`
-}
-
-// GoogleAuthResponse is the response with authorization URL
-type GoogleAuthResponse struct {
-	AuthURL string                `json:"auth_url"`
-	Status  *GoogleStatusResponse `json:"status,omitempty"`
-}
-
-// OAuthLoginRequest is a generic login body for /oauth/{provider}/login
-type OAuthLoginRequest struct {
-	ProfileID string   `json:"profile_id"`
-	Scopes    []string `json:"scopes"`
-}
-
-// AuthURLResponse is a simple response with an auth URL
-type AuthURLResponse struct {
-	AuthURL string `json:"auth_url"`
-}
-
-// MessageResponse is a simple message payload
-type MessageResponse struct {
-	Message string `json:"message"`
-}
-
-func NewOAuth(cfg *config.Config, db *storage.Storage) *OAuth {
-	configs := make(map[string]*oauth2.Config)
-	providers := make(map[string]*oidc.Provider)
-	for providerName, providerCfg := range cfg.OAuth2.Providers {
-		provider, err := oidc.NewProvider(context.Background(), providerCfg.IssuerURL)
+func NewOAuthHandler(
+	logger *zap.Logger,
+	cfg *config.Config,
+	storage *storage.Storage,
+	oauthConfigs map[string]*oauth2.Config,
+	oidcProviders map[string]*oidc.Provider,
+) (*OAuthHandler, error) {
+	var err error
+	if oauthConfigs == nil || oidcProviders == nil {
+		oauthConfigs, oidcProviders, err = BuildOAuthResources(logger, cfg)
 		if err != nil {
-			panic(err)
-		}
-		providers[providerName] = provider
-		configs[providerName] = &oauth2.Config{
-			ClientID:     providerCfg.ClientID,
-			ClientSecret: providerCfg.ClientSecret,
-			RedirectURL:  providerCfg.RedirectURL,
-			Scopes:       providerCfg.Scopes,
-			Endpoint:     provider.Endpoint(),
+			return nil, err
 		}
 	}
-	return &OAuth{configs: configs, providers: providers, db: db, cfg: cfg}
+
+	gmailIntegration, err := integrations.NewGmailIntegration(logger, cfg, storage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init gmail integration: %w", err)
+	}
+
+	calendarIntegration, err := integrations.NewCalendarIntegration(logger, cfg, storage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init calendar integration: %w", err)
+	}
+
+	return &OAuthHandler{
+		cfg:                 cfg,
+		storage:             storage,
+		oauthConfigs:        oauthConfigs,
+		oidcProviders:       oidcProviders,
+		gmailIntegration:    gmailIntegration,
+		calendarIntegration: calendarIntegration,
+		sessionTTL:          5 * time.Minute,
+	}, nil
 }
 
-// @Summary Get OAuth token
-// @Description GetToken returns the token for a given profile+provider. If the token is
-// expired or will expire within the configured refresh window, it attempts to
-// refresh the token using the provider config and persists the refreshed token.
-// @Tags oauth
-// @Param profile path string true "Profile ID"
-// @Param provider path string true "Provider"
-// @Success 200 {object} map[string]interface{}
-// @Failure 404 {object} map[string]string
-// @Router /api/api/token/{profile}/{provider} [get]
-func (o *OAuth) GetToken(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	profileID := vars["profile"]
-	providerName := vars["provider"]
-
-	tokenModel, err := o.db.GetOAuthTokenByProfileProvider(profileID, providerName)
+func (h *OAuthHandler) Login(c *gin.Context) {
+	providerName := c.Param("provider")
+	ctx := c.Request.Context()
+	user, err := userFromCtx(ctx)
 	if err != nil {
-		http.Error(w, "token not found", http.StatusNotFound)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	var t oauth2.Token
-	if err := json.Unmarshal(tokenModel.TokenEncrypted, &t); err != nil {
-		http.Error(w, "failed to unmarshal token", http.StatusInternalServerError)
-		return
-	}
-
-	// decide whether to refresh
-	refreshWindow := time.Duration(15) * time.Minute
-	if o.cfg != nil && o.cfg.Token.RefreshBeforeMinutes > 0 {
-		refreshWindow = time.Duration(o.cfg.Token.RefreshBeforeMinutes) * time.Minute
-	}
-
-	now := time.Now()
-	needRefresh := t.Expiry.IsZero() || t.Expiry.Before(now.Add(refreshWindow))
-
-	if needRefresh {
-		cfg, ok := o.configs[providerName]
-		if !ok {
-			http.Error(w, "unknown oauth provider", http.StatusBadRequest)
+	if providerName != integrations.ProviderGmail && providerName != integrations.ProviderCalendar {
+		if _, err := h.providerConfig(providerName); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+	}
 
-		ts := cfg.TokenSource(context.Background(), &t)
-		newToken, err := ts.Token()
+	session := &storage.OAuthSession{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		Provider:  providerName,
+		State:     uuid.NewString(),
+		ExpiresAt: time.Now().UTC().Add(h.sessionTTL),
+	}
+	if err := h.storage.CreateOAuthSession(ctx, session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create oauth session"})
+		return
+	}
+
+	redirectURL := fmt.Sprintf("%s/api/oauth/%s/redirect?sid=%s", h.cfg.OAuth2.CallbackBase, providerName, session.ID.String())
+	c.JSON(http.StatusOK, gin.H{"auth_url": redirectURL})
+}
+
+func (h *OAuthHandler) Redirect(c *gin.Context) {
+	ctx := c.Request.Context()
+	providerName := c.Param("provider")
+	sidParam := c.Query("sid")
+	sid, err := uuid.Parse(sidParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session id"})
+		return
+	}
+
+	session, err := h.storage.GetOAuthSession(ctx, sid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid oauth session"})
+		return
+	}
+	if session.Provider != providerName {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider mismatch"})
+		return
+	}
+	if time.Now().After(session.ExpiresAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "oauth session expired"})
+		return
+	}
+
+	var authURL string
+	if providerName == integrations.ProviderGmail {
+		authURL = h.gmailIntegration.GetAuthURL(session.State)
+	} else if providerName == integrations.ProviderCalendar {
+		authURL = h.calendarIntegration.GetAuthURL(session.State)
+	} else {
+		oauthCfg, err := h.providerConfig(providerName)
 		if err != nil {
-			http.Error(w, "failed to refresh token: "+err.Error(), http.StatusInternalServerError)
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		b, err := json.Marshal(newToken)
+		authURL = oauthCfg.AuthCodeURL(
+			session.State,
+			oauth2.AccessTypeOffline,
+			oauth2.ApprovalForce,
+			oauth2.SetAuthURLParam("prompt", "consent"),
+			oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+		)
+	}
+
+	setOAuthSessionCookie(c, session.ID.String(), int(h.sessionTTL.Seconds()))
+	c.Redirect(http.StatusFound, authURL)
+}
+
+func (h *OAuthHandler) Callback(c *gin.Context) {
+	ctx := c.Request.Context()
+	providerName := c.Param("provider")
+	if providerName != integrations.ProviderGmail && providerName != integrations.ProviderCalendar {
+		if _, err := h.providerConfig(providerName); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	state := c.Query("state")
+	if state == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing state"})
+		return
+	}
+
+	sidCookie, err := c.Cookie(oauthSessionCookieName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session cookie missing"})
+		return
+	}
+
+	sid, err := uuid.Parse(sidCookie)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session cookie"})
+		return
+	}
+
+	session, err := h.storage.GetOAuthSession(ctx, sid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "oauth session not found"})
+		return
+	}
+	if session.Provider != providerName {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "provider mismatch"})
+		return
+	}
+	if time.Now().After(session.ExpiresAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "oauth session expired"})
+		return
+	}
+	if session.State != state {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid state"})
+		return
+	}
+
+	code := c.Query("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code parameter is required"})
+		return
+	}
+
+	var email string
+	if providerName == integrations.ProviderGmail {
+		user, err := h.storage.GetUserByID(ctx, session.UserID)
 		if err != nil {
-			http.Error(w, "failed to marshal refreshed token", http.StatusInternalServerError)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
 			return
 		}
-
-		tokenModel.TokenEncrypted = b
-		tokenModel.UpdatedAt = time.Now()
-		if err := o.db.UpdateOAuthToken(tokenModel); err != nil {
-			http.Error(w, "failed to persist refreshed token", http.StatusInternalServerError)
+		email, err = h.gmailIntegration.HandleCallback(ctx, code, user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
-		t = *newToken
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(t)
-}
-
-// Disconnect removes stored token (soft delete) for profile+provider
-func (o *OAuth) Disconnect(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	profileID := vars["profile"]
-	providerName := vars["provider"]
-
-	if err := o.db.DeleteOAuthTokenByProfileProvider(profileID, providerName); err != nil {
-		http.Error(w, "failed to delete token", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// @Summary Log integration usage
-// @Description Record an integration usage log entry
-// @Tags logs
-// @Accept json
-// @Param log body storage.IntegrationLog true "Integration log entry"
-// @Success 204
-// @Failure 400 {object} map[string]string
-// @Router /api/api/logs [post]
-// LogUsage accepts a usage log entry and persists it.
-func (o *OAuth) LogUsage(w http.ResponseWriter, r *http.Request) {
-	var lg storage.IntegrationLog
-	if err := json.NewDecoder(r.Body).Decode(&lg); err != nil {
-		http.Error(w, "invalid log body", http.StatusBadRequest)
-		return
-	}
-	if lg.Timestamp.IsZero() {
-		lg.Timestamp = time.Now()
-	}
-	if err := o.db.SaveIntegrationLog(&lg); err != nil {
-		http.Error(w, "failed to save log", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// @Summary Update token permissions (scopes)
-// @Description Update scopes for a stored token (permissions)
-// @Tags oauth
-// @Accept json
-// @Param profile path string true "Profile ID"
-// @Param provider path string true "Provider"
-// @Param body body PermissionsRequest true "Scopes to set"
-// @Success 204
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Router /api/api/permissions/{profile}/{provider} [put]
-// UpdatePermissions updates the scopes for a stored token and persists it.
-func (o *OAuth) UpdatePermissions(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	profileID := vars["profile"]
-	providerName := vars["provider"]
-
-	var body struct {
-		Scopes []string `json:"scopes"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-
-	tokenModel, err := o.db.GetOAuthTokenByProfileProvider(profileID, providerName)
-	if err != nil {
-		http.Error(w, "token not found", http.StatusNotFound)
-		return
-	}
-	tokenModel.Scopes = pq.StringArray(body.Scopes)
-	if err := o.db.UpdateOAuthToken(tokenModel); err != nil {
-		http.Error(w, "failed to update scopes", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// @Summary Update OAuth token
-// @Description UpdateToken replaces/stores token JSON for given profile+provider. The
-// client should POST/PUT an oauth2.Token JSON body.
-// @Tags oauth
-// @Param profile path string true "Profile ID"
-// @Param provider path string true "Provider"
-// @Accept json
-// @Success 204
-// @Failure 400 {object} map[string]string
-// @Router /api/api/token/{profile}/{provider} [put]
-func (o *OAuth) UpdateToken(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	profileID := vars["profile"]
-	providerName := vars["provider"]
-
-	var t oauth2.Token
-	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
-		http.Error(w, "invalid token body", http.StatusBadRequest)
-		return
-	}
-
-	b, err := json.Marshal(&t)
-	if err != nil {
-		http.Error(w, "failed to marshal token", http.StatusInternalServerError)
-		return
-	}
-
-	// try to find existing
-	tokenModel, err := o.db.GetOAuthTokenByProfileProvider(profileID, providerName)
-	if err != nil {
-		// create new
-		tokenModel = &storage.OAuthToken{
-			ProfileID:      profileID,
-			Provider:       providerName,
-			AccountEmail:   "",
-			ExternalUserID: "",
-			Scopes:         nil,
-			TokenEncrypted: b,
+	} else if providerName == integrations.ProviderCalendar {
+		user, err := h.storage.GetUserByID(ctx, session.UserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
+			return
 		}
-		if err := o.db.SaveOAuthToken(tokenModel); err != nil {
-			http.Error(w, "failed to save token", http.StatusInternalServerError)
+		email, err = h.calendarIntegration.HandleCallback(ctx, code, user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 	} else {
-		tokenModel.TokenEncrypted = b
-		if err := o.db.UpdateOAuthToken(tokenModel); err != nil {
-			http.Error(w, "failed to update token", http.StatusInternalServerError)
+		oauthCfg, err := h.providerConfig(providerName)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-	}
 
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// StatusGoogle returns the connection status and scopes for Google
-// StatusGoogle
-// @Summary Get Google connection status
-// @Description Returns connection state, account email and scope list
-// @Tags oauth
-// @Param profile path string true "Profile ID"
-// @Produce json
-// @Success 200 {object} GoogleStatusResponse
-// @Router /api/api/status/{profile}/google [get]
-func (o *OAuth) StatusGoogle(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	profileID := vars["profile"]
-
-	tokenModel, err := o.db.GetOAuthTokenByProfileProvider(profileID, "google")
-	resp := GoogleStatusResponse{}
-	if err != nil || tokenModel == nil {
-		resp.State = "disconnected"
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	resp.State = "connected"
-	resp.AccountEmail = tokenModel.AccountEmail
-	for _, s := range tokenModel.Scopes {
-		level := "modify"
-		if strings.Contains(strings.ToLower(s), "readonly") {
-			level = "read_only"
+		token, err := oauthCfg.Exchange(context.Background(), code)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "token exchange failed", "error": err.Error()})
+			return
 		}
-		resp.Scopes = append(resp.Scopes, ScopeInfo{ID: s, Name: s, Level: level})
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
 
-// GetPermissionsGoogle returns categorized permission info for Google
-// @Summary List Google permissions
-// @Description Returns permissions per category for the Google integration
-// @Tags oauth
-// @Param profile path string true "Profile ID"
-// @Produce json
-// @Success 200 {array} PermissionEntry
-// @Router /api/api/permissions/{profile}/google [get]
-func (o *OAuth) GetPermissionsGoogle(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	profileID := vars["profile"]
-	tokenModel, _ := o.db.GetOAuthTokenByProfileProvider(profileID, "google")
-	scopes := map[string]bool{}
-	if tokenModel != nil {
-		for _, s := range tokenModel.Scopes {
-			scopes[s] = true
+		oidcProvider, err := h.oidcProvider(providerName)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
-	}
-
-	// Simple mapping by category keywords
-	var list []PermissionEntry
-	list = append(list, PermissionEntry{Category: "gmail", Title: "Gmail access", Description: "Read/modify Gmail data", Allowed: hasAny(scopes, "gmail")})
-	list = append(list, PermissionEntry{Category: "calendar", Title: "Calendar access", Description: "Read/modify Calendar events", Allowed: hasAny(scopes, "calendar")})
-	list = append(list, PermissionEntry{Category: "drive", Title: "Drive access", Description: "Read/modify Drive files", Allowed: hasAny(scopes, "drive")})
-	list = append(list, PermissionEntry{Category: "sheets", Title: "Sheets access", Description: "Read/modify Sheets", Allowed: hasAny(scopes, "sheets")})
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(list)
-}
-
-func hasAny(sc map[string]bool, substr string) bool {
-	for k := range sc {
-		if strings.Contains(strings.ToLower(k), substr) {
-			return true
+		rawIDToken, ok := token.Extra("id_token").(string)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "id_token missing"})
+			return
 		}
-	}
-	return false
-}
 
-// ListLogs returns integration logs filtered by profile, provider and limit
-// @Summary List integration logs
-// @Tags logs
-// @Produce json
-// @Param profile query string false "Profile ID"
-// @Param provider query string false "Provider (default: google)"
-// @Param limit query int false "Max entries (default: 50)"
-// @Success 200 {object} LogsListResponse
-// @Router /api/api/logs [get]
-func (o *OAuth) ListLogs(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	profile := q.Get("profile")
-	provider := q.Get("provider")
-	if provider == "" {
-		provider = "google"
-	}
-	limit := 50
-	if v := q.Get("limit"); v != "" {
-		if n, err := fmt.Sscanf(v, "%d", &limit); n == 1 && err == nil {
-			// ok
+		verifier := oidcProvider.Verifier(&oidc.Config{ClientID: oauthCfg.ClientID})
+		idToken, err := verifier.Verify(context.Background(), rawIDToken)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify id_token"})
+			return
+		}
+
+		var claims struct {
+			Email string `json:"email"`
+			Sub   string `json:"sub"`
+		}
+		if err := idToken.Claims(&claims); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read claims"})
+			return
+		}
+		email = claims.Email
+
+		user, err := h.storage.GetUserByID(ctx, session.UserID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
+			return
+		}
+
+		tokenBytes, err := json.Marshal(token)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode token"})
+			return
+		}
+
+		newToken := &storage.OAuthToken{
+			UserID:         user.ID,
+			ProfileID:      user.ID.String(),
+			Provider:       providerName,
+			AccountEmail:   claims.Email,
+			ExternalUserID: claims.Sub,
+			Scopes:         pq.StringArray(oauthCfg.Scopes),
+			TokenEncrypted: tokenBytes,
+			Version:        1,
+		}
+
+		existing, err := h.storage.GetOAuthTokenByUser(ctx, user.ID, providerName)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := h.storage.SaveOAuthToken(ctx, newToken); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save token"})
+				return
+			}
 		} else {
-			// fallback to Atoi for robustness
-			if n2, err2 := strconv.Atoi(v); err2 == nil {
-				limit = n2
+			existing.AccountEmail = newToken.AccountEmail
+			existing.ExternalUserID = newToken.ExternalUserID
+			existing.TokenEncrypted = newToken.TokenEncrypted
+			existing.Scopes = newToken.Scopes
+			existing.ProfileID = newToken.ProfileID
+			if err := h.storage.UpdateOAuthToken(ctx, existing); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token"})
+				return
 			}
 		}
 	}
 
-	logs, err := o.db.ListIntegrationLogs(profile, provider, limit)
-	if err != nil {
-		http.Error(w, "failed to list logs", http.StatusInternalServerError)
-		return
+	if err := h.storage.DeleteOAuthSession(ctx, session.ID); err != nil {
+		// log but continue
 	}
-	var resp LogsListResponse
-	for _, lg := range logs {
-		details := string(lg.Details)
-		impact := "info"
-		if strings.Contains(strings.ToLower(lg.Action), "error") {
-			impact = "error"
-		}
-		resp.Entries = append(resp.Entries, LogEntry{
-			Summary:   lg.Action,
-			Details:   details,
-			Timestamp: lg.Timestamp.UTC().Format(time.RFC3339),
-			Impact:    impact,
-		})
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+
+	setOAuthSessionCookie(c, "", -1)
+
+	deepLink := fmt.Sprintf("genie://oauth/callback?provider=%s&status=ok&email=%s", providerName, url.QueryEscape(email))
+	c.Redirect(http.StatusFound, deepLink)
 }
 
-// DisconnectGooglePost provides POST variant for disconnect
-// @Summary Disconnect Google
-// @Tags oauth
-// @Param profile path string true "Profile ID"
-// @Success 204
-// @Router /api/api/disconnect/{profile}/google [post]
-func (o *OAuth) DisconnectGooglePost(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	profileID := vars["profile"]
-	if err := o.db.DeleteOAuthTokenByProfileProvider(profileID, "google"); err != nil {
-		http.Error(w, "failed to delete token", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// OAuthGoogleLogin starts oauth flow; accepts permissions and scopes
-// @Summary Start Google OAuth login
-// @Tags oauth
-// @Accept json
-// @Produce json
-// @Param profile query string true "Profile ID"
-// @Param body body GoogleLoginRequest false "Requested permissions and scopes"
-// @Success 200 {object} GoogleAuthResponse
-// @Router /api/api/oauth/google/login [post]
-func (o *OAuth) OAuthGoogleLogin(w http.ResponseWriter, r *http.Request) {
-	provider := "google"
-	cfg, ok := o.configs[provider]
+func (h *OAuthHandler) providerConfig(name string) (*oauth2.Config, error) {
+	cfg, ok := h.oauthConfigs[name]
 	if !ok {
-		http.Error(w, "unknown oauth provider", http.StatusBadRequest)
-		return
+		return nil, fmt.Errorf("unknown provider %s", name)
 	}
-	// parse body
-	var body GoogleLoginRequest
-	_ = json.NewDecoder(r.Body).Decode(&body)
-
-	var scopes []string
-	for _, s := range body.Scopes {
-		scopes = append(scopes, providers.GetGoogleScope(s)...)
-	}
-
-	if len(scopes) > 0 {
-		cookie := http.Cookie{Name: "oauth_scopes", Value: strings.Join(scopes, " "), MaxAge: 3600}
-		http.SetCookie(w, &cookie)
-	}
-
-	resp := GoogleAuthResponse{
-		AuthURL: cfg.AuthCodeURL(
-			generateStateOauthCookie(w),
-			oauth2.SetAuthURLParam("scope", strings.Join(scopes, " ")),
-			oauth2.SetAuthURLParam("prompt", "consent"),
-			oauth2.SetAuthURLParam("access_type", "offline"),
-			oauth2.SetAuthURLParam("include_granted_scopes", "true"),
-		),
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	return cfg, nil
 }
 
-// OAuthGoogleReauthorize is similar to login but returns only auth_url
-// @Summary Reauthorize Google OAuth
-// @Tags oauth
-// @Accept json
-// @Produce json
-// @Param profile query string true "Profile ID"
-// @Param body body GoogleReauthorizeRequest false "Requested permissions"
-// @Success 200 {object} GoogleAuthResponse
-// @Router /api/api/oauth/google/reauthorize [post]
-func (o *OAuth) OAuthGoogleReauthorize(w http.ResponseWriter, r *http.Request) {
-	provider := "google"
-	cfg, ok := o.configs[provider]
+func (h *OAuthHandler) oidcProvider(name string) (*oidc.Provider, error) {
+	provider, ok := h.oidcProviders[name]
 	if !ok {
-		http.Error(w, "unknown oauth provider", http.StatusBadRequest)
-		return
+		return nil, fmt.Errorf("unknown provider %s", name)
 	}
-	var body GoogleReauthorizeRequest
-	_ = json.NewDecoder(r.Body).Decode(&body)
-
-	authURL := cfg.AuthCodeURL(
-		generateStateOauthCookie(w),
-		oauth2.SetAuthURLParam("prompt", "consent"),
-		oauth2.SetAuthURLParam("access_type", "offline"),
-		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
-	)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(GoogleAuthResponse{AuthURL: authURL})
+	return provider, nil
 }
 
-// Redirect starts a generic OAuth flow
-// @Summary Start OAuth login (generic)
-// @Description Returns provider authorization URL based on requested scopes
-// @Tags oauth
-// @Accept json
-// @Produce json
-// @Param provider path string true "Provider"
-// @Param body body OAuthLoginRequest false "Requested scopes"
-// @Success 200 {object} AuthURLResponse
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /api/oauth/{provider}/login [post]
-func (o *OAuth) Redirect(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	provider := vars["provider"]
-	log.Printf("Redirecting to %s for authentication", provider)
-
-	cfg, ok := o.configs[provider]
-	if !ok {
-		http.Error(w, "unknown oauth provider", http.StatusBadRequest)
-		return
-	}
-
-	var redirectBody OAuthLoginRequest
-	_ = json.NewDecoder(r.Body).Decode(&redirectBody)
-
-	var scopes = make([]string, 0, len(redirectBody.Scopes))
-	for _, scope := range redirectBody.Scopes {
-		scopes = append(scopes,
-			// TODO: method may be different for non-google
-			providers.GetGoogleScope(scope)...,
-		)
-	}
-
-	if len(scopes) > 0 {
-		// store requested scopes in a cookie so Callback can read them
-		cookie := http.Cookie{
-			Name: "oauth_scopes",
-			// TODO: delimiter may be different for non-google
-			Value:  strings.Join(scopes, " "),
-			MaxAge: 3600,
-		}
-		http.SetCookie(w, &cookie)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthURLResponse{
-		AuthURL: cfg.AuthCodeURL(
-			generateStateOauthCookie(w),
-			oauth2.SetAuthURLParam("scope", strings.Join(scopes, " ")), // <-- важно
-			oauth2.SetAuthURLParam("prompt", "consent"),                // для форс-ре-консента
-			oauth2.SetAuthURLParam("access_type", "offline"),           // для refresh_token (Google)
-			oauth2.SetAuthURLParam("include_granted_scopes", "true"),
-		),
+func setOAuthSessionCookie(c *gin.Context, value string, maxAge int) {
+	secure := c.Request.TLS != nil
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     oauthSessionCookieName,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   maxAge,
+		Secure:   secure,
+		SameSite: http.SameSiteNoneMode,
 	})
-}
-
-// Callback handles generic OAuth callback for a provider
-// @Summary OAuth callback
-// @Description Exchanges code for token, verifies ID token and persists token
-// @Tags oauth
-// @Produce json
-// @Param provider path string true "Provider"
-// @Success 200 {object} MessageResponse
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /api/oauth/{provider}/callback [get]
-func (o *OAuth) Callback(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	providerName := vars["provider"]
-	log.Printf("Callback received from %s", providerName)
-
-	cfg, ok := o.configs[providerName]
-	if !ok {
-		http.Error(w, "unknown oauth provider", http.StatusBadRequest)
-		return
-	}
-
-	provider, ok := o.providers[providerName]
-	if !ok {
-		http.Error(w, "unknown oauth provider", http.StatusBadRequest)
-		return
-	}
-
-	log.Printf("raw query: %s", r.URL.RawQuery)
-	if err := r.ParseForm(); err == nil {
-		log.Printf("form: %v", r.Form)
-	}
-
-	state, err := r.Cookie(oauthStateCookieName)
-	if err != nil || r.FormValue("state") != state.Value {
-		http.Error(w, "invalid oauth state", http.StatusBadRequest)
-		return
-	}
-
-	code := r.FormValue("code")
-	token, err := cfg.Exchange(context.Background(), code)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to exchange token: %s", err.Error()), http.StatusInternalServerError)
-		return
-	}
-
-	idToken, ok := token.Extra("id_token").(string)
-	if !ok {
-		http.Error(w, "no id_token field in oauth2 token", http.StatusInternalServerError)
-		return
-	}
-
-	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
-	parsedIDToken, err := verifier.Verify(context.Background(), idToken)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to verify ID token: %s", err.Error()), http.StatusInternalServerError)
-		return
-	}
-
-	var claims struct {
-		Email   string `json:"email"`
-		Profile string `json:"profile"`
-		Sub     string `json:"sub"`
-	}
-	if err := parsedIDToken.Claims(&claims); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// In a real application, you would have a proper profile management system.
-	// For now, we will just generate a random UUID as the profile ID.
-	profileID, _ := uuid.NewRandom()
-
-	// Determine scopes requested by client (via cookie set during Redirect)
-	var scopes []string
-	if sc, err := r.Cookie("oauth_scopes"); err == nil && sc.Value != "" {
-		scopes = strings.Split(sc.Value, " ")
-	} else {
-		scopes = cfg.Scopes
-	}
-
-	encryptedToken, err := json.Marshal(token)
-	if err != nil {
-		http.Error(w, "failed to marshal token", http.StatusInternalServerError)
-		return
-	}
-
-	oauthToken := &storage.OAuthToken{
-		ProfileID:      profileID.String(),
-		Provider:       providerName,
-		AccountEmail:   claims.Email,
-		ExternalUserID: claims.Sub,
-		Scopes:         pq.StringArray(scopes),
-		TokenEncrypted: encryptedToken,
-	}
-
-	if err := o.db.SaveOAuthToken(oauthToken); err != nil {
-		http.Error(w, fmt.Sprintf("failed to save token: %s", err.Error()), http.StatusInternalServerError)
-		return
-	}
-
-	log.Printf("User authenticated: %s", claims.Email)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(MessageResponse{Message: "Google account connected successfully."})
-}
-
-func generateStateOauthCookie(w http.ResponseWriter) string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	state := base64.URLEncoding.EncodeToString(b)
-	cookie := http.Cookie{Name: oauthStateCookieName, Value: state, MaxAge: 3600}
-	http.SetCookie(w, &cookie)
-	return state
 }

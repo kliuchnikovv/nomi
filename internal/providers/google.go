@@ -15,10 +15,12 @@ var googleScopeMapping = map[string][]string{
 	},
 	"gmail:read": {
 		"https://www.googleapis.com/auth/gmail.readonly",
+		"https://mail.google.com/", // Required for IMAP access
 	},
 	"gmail:write": {
 		"https://www.googleapis.com/auth/gmail.modify",
 		"https://www.googleapis.com/auth/gmail.readonly",
+		"https://mail.google.com/", // Required for IMAP access
 	},
 	"drive:read": {
 		"https://www.googleapis.com/auth/drive.readonly",

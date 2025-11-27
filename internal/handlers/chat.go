@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -19,21 +20,37 @@ func NewChatHandler(storage *storage.Storage) *ChatHandler {
 	}
 }
 
-// func (h *ChatHandler) CreateChat(c *gin.Context) {
-// 	var newChat chat.Chat
-// 	if err := c.ShouldBindJSON(&newChat); err != nil {
-// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-// 		return
-// 	}
+func (h *ChatHandler) CreateChat(c *gin.Context) {
+	var ctx = c.Request.Context()
 
-// 	createdChat, err := h.storage.CreateChat(ctx, userID, &newChat)
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-// 		return
-// 	}
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
 
-// 	c.JSON(http.StatusCreated, createdChat)
-// }
+	var newChat chat.Chat
+	if err := c.ShouldBindJSON(&newChat); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	chat, err := h.storage.CreateChat(ctx, user.ID, &chat.Chat{
+		ID:         uuid.New(),
+		Model:      newChat.Model,
+		Title:      newChat.Title,
+		CreatedAt:  time.Now().UTC(),
+		UpdatedAt:  time.Now().UTC(),
+		ArchivedAt: nil,
+		DeletedAt:  nil,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, chat)
+}
 
 func (h *ChatHandler) GetChat(c *gin.Context) {
 	var ctx = c.Request.Context()

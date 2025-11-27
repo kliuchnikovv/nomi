@@ -21,13 +21,40 @@ type Chat struct {
 
 // Message представляет сообщение в базе данных
 type Message struct {
-    ID        uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-    ChatID    uuid.UUID `gorm:"type:uuid;not null"`
-    UserID    uuid.UUID `gorm:"type:uuid;not null"`
-    Role      string    `gorm:"type:varchar(20);not null"`
-    Text      string    `gorm:"type:text;not null"`
-    CreatedAt time.Time `gorm:"not null"`
-    UpdatedAt time.Time `gorm:"not null"`
+	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ChatID    uuid.UUID `gorm:"type:uuid;not null"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null"`
+	Role      string    `gorm:"type:varchar(20);not null"`
+	Text      string    `gorm:"type:text;not null"`
+	CreatedAt time.Time `gorm:"not null"`
+	UpdatedAt time.Time `gorm:"not null"`
 }
 
-// ChatSession mapping removed: streaming uses explicit chatId
+type Tool struct {
+	ID        uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null"`
+	Name      string    `gorm:"type:text;not null"`
+	Provider  string    `gorm:"type:text;not null"`
+	Params    string    `gorm:"type:text;not null"`
+	Enabled   bool      `gorm:"default:true;not null"`
+	CreatedAt time.Time `gorm:"not null"`
+	UpdatedAt time.Time `gorm:"not null"`
+}
+
+type Inbox struct {
+	ID         uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID     uuid.UUID `gorm:"type:uuid;not null"`
+	Source     string    `gorm:"type:varchar(50);not null;default:'gmail'"` // Plugin source: "gmail", "imap", etc.
+	MessageID  string    `gorm:"type:text"`
+	UID        uint32    `gorm:"type:integer"`
+	ThreadID   uint64    `gorm:"type:bigint"`
+	Sender     string    `gorm:"type:text;not null"`
+	Subject    string    `gorm:"type:text;not null"`
+	Snippet    string    `gorm:"type:text;not null"`
+	Body       string    `gorm:"type:text;not null"`
+	Response   string    `gorm:"type:text"`
+	Status     string    `gorm:"type:varchar(20);default:'pending';not null"`
+	ReceivedAt time.Time `gorm:"not null"`
+	CreatedAt  time.Time `gorm:"not null"`
+	UpdatedAt  time.Time `gorm:"not null"`
+}
