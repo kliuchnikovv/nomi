@@ -24,6 +24,7 @@ type StreamInput struct {
 	q       url.Values // TODO: backward comp - remove
 	user    *storage.User
 	message string
+	source  string
 }
 
 type StreamHandler struct {
@@ -159,6 +160,7 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		h.logger,
 		user.ID,
 		initialMessage,
+		c.Query("source"),
 		// input.chatID,
 		connectModel,
 	).Stream(streamer.NewSocketReader(
@@ -296,7 +298,8 @@ func (h *StreamHandler) validate(c *gin.Context) (*StreamInput, int, error) {
 	return &StreamInput{
 		// chatID:  chatID,
 		// q:       qv,
-		user: user,
+		user:   user,
+		source: c.Query("source"),
 		// message: message.Text,
 	}, 0, nil
 }

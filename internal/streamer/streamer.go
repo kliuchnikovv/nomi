@@ -18,6 +18,7 @@ type Streamer struct {
 	userID uuid.UUID
 	// chatID uuid.UUID
 
+	source         string
 	initialMessage string
 	connectModel   func() (*websocket.Conn, error)
 }
@@ -27,6 +28,7 @@ func New(
 	logger *zap.Logger,
 	userID uuid.UUID,
 	initialMessage string,
+	source string,
 	connectModel func() (*websocket.Conn, error),
 ) *Streamer {
 	return &Streamer{
@@ -34,6 +36,7 @@ func New(
 		logger:         logger,
 		userID:         userID,
 		initialMessage: initialMessage,
+		source:         source,
 		connectModel:   connectModel,
 	}
 }
@@ -169,15 +172,28 @@ func (streamer *Streamer) Stream(
 
 			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
 				streamer.logger.Info("upserting message", zap.Any("frame", frame), zap.String("message_id", frame.Payload.MessageID.String()))
-				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
-					ID:        frame.Payload.MessageID,
-					ChatID:    frame.ChatID,
-					Sender:    storage.ZeroUUID,
-					Role:      chat.RoleAssistant,
-					Text:      frame.Payload.Message,
-					CreatedAt: time.Now().UTC(),
-				}); err != nil {
-					streamer.logger.Error("failed to upsert message", zap.Error(err))
+				if streamer.source == "inbox" {
+					if err := streamer.storage.UpsertInboxMessage(ctx, streamer.userID, &storage.InboxMessage{
+						ID:            frame.Payload.MessageID,
+						IntegrationID: frame.ChatID,
+						Role:          "assistant",
+						Content:       frame.Payload.Message,
+						Source:        streamer.source,
+						Status:        "read",
+					}); err != nil {
+						streamer.logger.Error("failed to upsert inbox message", zap.Error(err))
+					}
+				} else {
+					if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
+						ID:        frame.Payload.MessageID,
+						ChatID:    frame.ChatID,
+						Sender:    storage.ZeroUUID,
+						Role:      chat.RoleAssistant,
+						Text:      frame.Payload.Message,
+						CreatedAt: time.Now().UTC(),
+					}); err != nil {
+						streamer.logger.Error("failed to upsert message", zap.Error(err))
+					}
 				}
 			}
 
@@ -216,15 +232,28 @@ func (streamer *Streamer) Stream(
 
 			if frame.Operation == MessageOperation && frame.Payload.MessageID == storage.ZeroUUID {
 				streamer.logger.Info("got frame to upsert", zap.Any("frame", frame), zap.String("message_id", frame.Payload.MessageID.String()))
-				if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
-					ID:        uuid.New(),
-					ChatID:    frame.ChatID,
-					Sender:    streamer.userID,
-					Role:      chat.RoleUser,
-					Text:      frame.Payload.Message,
-					CreatedAt: time.Now().UTC(),
-				}); err != nil {
-					streamer.logger.Error("failed to upsert message", zap.Error(err))
+				if streamer.source == "inbox" {
+					if err := streamer.storage.UpsertInboxMessage(ctx, streamer.userID, &storage.InboxMessage{
+						ID:            uuid.New(),
+						IntegrationID: frame.ChatID,
+						Role:          "user",
+						Content:       frame.Payload.Message,
+						Source:        streamer.source,
+						Status:        "read",
+					}); err != nil {
+						streamer.logger.Error("failed to upsert inbox message", zap.Error(err))
+					}
+				} else {
+					if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
+						ID:        uuid.New(),
+						ChatID:    frame.ChatID,
+						Sender:    streamer.userID,
+						Role:      chat.RoleUser,
+						Text:      frame.Payload.Message,
+						CreatedAt: time.Now().UTC(),
+					}); err != nil {
+						streamer.logger.Error("failed to upsert message", zap.Error(err))
+					}
 				}
 			}
 
