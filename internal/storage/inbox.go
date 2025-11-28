@@ -179,3 +179,50 @@ func (s *Storage) MarkAsRead(ctx context.Context, userID, messageID uuid.UUID) e
 
 	return nil
 }
+
+// UpsertInboxMessage creates or updates an inbox message
+func (s *Storage) UpsertInboxMessage(ctx context.Context, userID uuid.UUID, m *InboxMessage) error {
+	var inboxModel Inbox
+	err := s.DB.WithContext(ctx).
+		Where("id = ? AND user_id = ?", m.ID, userID).
+		First(&inboxModel).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// Create new
+			inboxModel = Inbox{
+				ID:            m.ID,
+				UserID:        userID,
+				IntegrationID: m.IntegrationID,
+				Source:        "chat", // Default for WS chat
+				Role:          m.Role,
+				Content:       m.Content,
+				Header:        m.Header,
+				Status:        "read", // Chat messages are read by default
+				ReceivedAt:    time.Now(),
+				CreatedAt:     time.Now(),
+				UpdatedAt:     time.Now(),
+			}
+			if m.Source != "" {
+				inboxModel.Source = m.Source
+			}
+			if m.Status != "" {
+				inboxModel.Status = m.Status
+			}
+
+			return s.DB.WithContext(ctx).Create(&inboxModel).Error
+		}
+		return err
+	}
+
+	// Update existing
+	updates := map[string]interface{}{
+		"content":    inboxModel.Content + m.Content, // Append content for streaming
+		"updated_at": time.Now(),
+	}
+
+	return s.DB.WithContext(ctx).
+		Model(&Inbox{}).
+		Where("id = ?", m.ID).
+		Updates(updates).Error
+}
