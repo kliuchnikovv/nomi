@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -68,10 +69,20 @@ func (s *Storage) GetPluginChat(ctx context.Context, userID uuid.UUID, chatID uu
 }
 
 // ListPluginChatsWithStats returns chats for provider/user with counts and last received timestamp.
-func (s *Storage) ListPluginChatsWithStats(ctx context.Context, userID uuid.UUID, provider string) ([]PluginChatWithStats, error) {
-	var chats []PluginChat
+func (s *Storage) ListPluginChatsWithStats(ctx context.Context, userID uuid.UUID, provider string, integrationID *uuid.UUID) ([]PluginChatWithStats, error) {
+	var (
+		chats []PluginChat
+	)
+
+	chatWhere := []string{"user_id = ?", "provider = ?"}
+	chatArgs := []interface{}{userID, provider}
+	if integrationID != nil && *integrationID != uuid.Nil {
+		chatWhere = append(chatWhere, "integration_id = ?")
+		chatArgs = append(chatArgs, *integrationID)
+	}
+
 	if err := s.DB.WithContext(ctx).
-		Where("user_id = ? AND provider = ?", userID, provider).
+		Where(strings.Join(chatWhere, " AND "), chatArgs...).
 		Order("updated_at DESC").
 		Find(&chats).Error; err != nil {
 		return nil, err
@@ -84,14 +95,22 @@ func (s *Storage) ListPluginChatsWithStats(ctx context.Context, userID uuid.UUID
 		Count        int64
 	}
 	var agg []aggRow
+
+	inboxWhere := []string{"user_id = ?", "source = ?", "metadata->>'chat_id' IS NOT NULL"}
+	inboxArgs := []interface{}{userID, provider}
+	if integrationID != nil && *integrationID != uuid.Nil {
+		inboxWhere = append(inboxWhere, "integration_id = ?")
+		inboxArgs = append(inboxArgs, *integrationID)
+	}
+
 	if err := s.DB.
 		WithContext(ctx).
 		Raw(`SELECT metadata->>'chat_id' AS chat_id,
 				MAX(received_at) AS last_received,
 				COUNT(*) AS count
 			FROM inboxes
-			WHERE user_id = ? AND source = ? AND metadata->>'chat_id' IS NOT NULL
-			GROUP BY metadata->>'chat_id'`, userID, provider).
+			WHERE `+strings.Join(inboxWhere, " AND ")+`
+			GROUP BY metadata->>'chat_id'`, inboxArgs...).
 		Scan(&agg).Error; err != nil {
 		return nil, err
 	}
@@ -107,14 +126,22 @@ func (s *Storage) ListPluginChatsWithStats(ctx context.Context, userID uuid.UUID
 		Summary string
 	}
 	var lastMessages []lastMsg
+
+	lastWhere := []string{"user_id = ?", "source = ?", "metadata->>'chat_id' IS NOT NULL"}
+	lastArgs := []interface{}{userID, provider}
+	if integrationID != nil && *integrationID != uuid.Nil {
+		lastWhere = append(lastWhere, "integration_id = ?")
+		lastArgs = append(lastArgs, *integrationID)
+	}
+
 	if err := s.DB.WithContext(ctx).
 		Raw(`SELECT DISTINCT ON (metadata->>'chat_id')
 				metadata->>'chat_id' AS chat_id,
 				header,
 				summary
 			FROM inboxes
-			WHERE user_id = ? AND source = ? AND metadata->>'chat_id' IS NOT NULL
-			ORDER BY metadata->>'chat_id', received_at DESC`, userID, provider).
+			WHERE `+strings.Join(lastWhere, " AND ")+`
+			ORDER BY metadata->>'chat_id', received_at DESC`, lastArgs...).
 		Scan(&lastMessages).Error; err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
