@@ -66,7 +66,15 @@ func (s *EmailSyncer) Sync(ctx context.Context, userID uuid.UUID, c *client.Clie
 	if err != nil {
 		return err
 	}
+	return s.sync(ctx, userID, *integration, c)
+}
 
+// SyncWithIntegration runs sync for a specific integration (useful when a user has multiple accounts for the same provider).
+func (s *EmailSyncer) SyncWithIntegration(ctx context.Context, userID uuid.UUID, integration storage.Integration, c *client.Client) error {
+	return s.sync(ctx, userID, integration, c)
+}
+
+func (s *EmailSyncer) sync(ctx context.Context, userID uuid.UUID, integration storage.Integration, c *client.Client) error {
 	// 1. Select Inbox
 	if _, err := c.Select("INBOX", false); err != nil {
 		return fmt.Errorf("failed to select inbox: %w", err)
@@ -99,7 +107,7 @@ func (s *EmailSyncer) Sync(ctx context.Context, userID uuid.UUID, c *client.Clie
 
 	var newMessages []storage.Inbox
 	for msg := range messages {
-		if item, err := s.saveMessage(ctx, userID, *integration, msg, section); err != nil {
+		if item, err := s.saveMessage(ctx, userID, integration, msg, section); err != nil {
 			s.logger.Error("failed to save message", zap.Error(err))
 		} else if item != nil {
 			newMessages = append(newMessages, *item)

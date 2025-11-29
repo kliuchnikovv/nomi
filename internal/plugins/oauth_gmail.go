@@ -117,7 +117,7 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 		Version:        1,
 	}
 
-	existing, err := g.storage.GetOAuthTokenByUser(ctx, user.ID, ProviderGmail)
+	existing, err := g.storage.GetOAuthTokenByUserAndEmail(ctx, user.ID, ProviderGmail, claims.Email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", fmt.Errorf("failed to check existing token: %w", err)
 	}
@@ -138,6 +138,7 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 	}
 
 	params := map[string]any{
+		"account_email": claims.Email,
 		"creds": map[string]any{
 			"token":         token.AccessToken,
 			"refresh_token": token.RefreshToken,
@@ -160,7 +161,8 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 
 	var existingTool *storage.Integration
 	for _, t := range tools {
-		if t.Provider == ProviderGmail {
+		accountEmail, _ := extractGmailAccountEmail(t.Params)
+		if t.Provider == ProviderGmail && accountEmail == claims.Email {
 			existingTool = &t
 			break
 		}
@@ -168,14 +170,14 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 
 	if existingTool != nil {
 		existingTool.Params = string(paramsJSON)
-		existingTool.Name = "Gmail"
+		existingTool.Name = fmt.Sprintf("Gmail (%s)", claims.Email)
 		if _, err := g.storage.UpdateIntegration(ctx, user.ID, existingTool); err != nil {
 			return "", fmt.Errorf("failed to update integration: %w", err)
 		}
 	} else {
 		newTool := &storage.Integration{
 			UserID:   user.ID,
-			Name:     "Gmail",
+			Name:     fmt.Sprintf("Gmail (%s)", claims.Email),
 			Provider: ProviderGmail,
 			Params:   string(paramsJSON),
 			Enabled:  true,
@@ -186,4 +188,17 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 	}
 
 	return claims.Email, nil
+}
+
+func extractGmailAccountEmail(params string) (string, error) {
+	if params == "" {
+		return "", fmt.Errorf("params empty")
+	}
+	var parsed struct {
+		AccountEmail string `json:"account_email"`
+	}
+	if err := json.Unmarshal([]byte(params), &parsed); err != nil {
+		return "", err
+	}
+	return parsed.AccountEmail, nil
 }

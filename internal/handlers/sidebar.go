@@ -86,10 +86,10 @@ func (h *SidebarHandler) ListSidebar(c *gin.Context) {
 		return
 	}
 
-	// Group messages by provider (plugin)
-	byProvider := make(map[string][]SidebarMessage)
+	// Group messages by integration (account)
+	byIntegration := make(map[uuid.UUID][]SidebarMessage)
 	for _, msg := range inboxes {
-		byProvider[msg.Source] = append(byProvider[msg.Source], SidebarMessage{
+		byIntegration[msg.IntegrationID] = append(byIntegration[msg.IntegrationID], SidebarMessage{
 			ID:       msg.ID,
 			ThreadID: msg.ThreadID,
 			Title:    msg.Header,
@@ -104,7 +104,7 @@ func (h *SidebarHandler) ListSidebar(c *gin.Context) {
 			IntegrationID: integ.ID,
 			Name:          integ.Name,
 			Provider:      integ.Provider,
-			Entries:       byProvider[integ.Provider],
+			Entries:       byIntegration[integ.ID],
 		})
 	}
 

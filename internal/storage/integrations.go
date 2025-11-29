@@ -111,3 +111,16 @@ func (s *Storage) GetIntegrationsByProvider(ctx context.Context, provider string
 
 	return result, nil
 }
+
+// GetIntegrationsByUserProvider returns enabled integrations for a user and provider.
+func (s *Storage) GetIntegrationsByUserProvider(ctx context.Context, userID uuid.UUID, provider string) ([]Integration, error) {
+	var result []Integration
+
+	if err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND provider = ? AND enabled = ?", userID, provider, true).
+		Find(&result).Error; err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
