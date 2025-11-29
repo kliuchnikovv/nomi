@@ -21,7 +21,7 @@ export default function ChatInput(props: Props) {
     const [recording, setRecording] = useState(false);
     const [modelSelectorVisible, setModelSelectorVisible] = useState(false);
 
-    const { selectedModel, setSelectedModel, availableModels } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand } = useChat();
 
     const handleSend = useCallback(() => {
         const text = (value ?? '').trim();
@@ -115,6 +115,10 @@ export default function ChatInput(props: Props) {
                 selectedModel={selectedModel}
                 onSelectModel={setSelectedModel}
                 loading={availableModels.length === 0}
+                chatMode={chatMode}
+                onModeChange={setChatMode}
+                teamCommand={teamCommand}
+                onChangeTeamCommand={setTeamCommand}
             />
         </View>
     );

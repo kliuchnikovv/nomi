@@ -4,7 +4,6 @@ import {
     ScrollView,
     Switch,
     Text,
-    TextInput,
     View,
 } from 'react-native';
 import { styles } from './styles.tsx';
@@ -18,25 +17,27 @@ import { pluginsApi } from '../../../apiClient.ts';
 
 
 export default function ConnectorScreenDialog({ onClose }: Props) {
-    const { integrations } = useConnectors();
+    const { integrations, startOAuth, deleteIntegration } = useConnectors();
     const [gmailSyncing, setGmailSyncing] = React.useState(false);
     const [gmailMessage, setGmailMessage] = React.useState<string | null>(null);
-    const [imapSyncing, setImapSyncing] = React.useState(false);
-    const [imapMessage, setImapMessage] = React.useState<string | null>(null);
-    const [imapConfig, setImapConfig] = React.useState({ host: '', username: '', password: '' });
-    const gmailIntegration = React.useMemo(
-        () => integrations.find(p => p.provider === 'gmail'),
+    const gmailIntegrations = React.useMemo(
+        () => integrations.filter(p => p.provider === 'gmail'),
         [integrations],
     );
+    const otherIntegrations = React.useMemo(
+        () => integrations.filter(p => p.provider !== 'gmail' && p.provider !== 'imap'),
+        [integrations],
+    );
+    const hasConnectedGmail = gmailIntegrations.some(p => p.connected);
 
     const handleGmailSync = async () => {
         setGmailMessage(null);
-        if (!gmailIntegration) {
+        if (gmailIntegrations.length === 0) {
             setGmailMessage('Gmail plugin is not available');
             return;
         }
-        if (!gmailIntegration.connected) {
-            setGmailMessage('Enable Gmail plugin first');
+        if (!hasConnectedGmail) {
+            setGmailMessage('Connect Gmail first');
             return;
         }
         setGmailSyncing(true);
@@ -50,26 +51,9 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
         }
     };
 
-    const handleImapSync = async () => {
-        setImapMessage(null);
-        if (!imapConfig.host || !imapConfig.username || !imapConfig.password) {
-            setImapMessage('Please provide host, username, and password');
-            return;
-        }
-        setImapSyncing(true);
-        try {
-            const response = await pluginsApi.syncImap(imapConfig);
-            setImapMessage(response?.status ? `Status: ${response.status}` : 'Sync triggered');
-        } catch (error) {
-            setImapMessage(error instanceof Error ? error.message : 'Failed to sync IMAP');
-        } finally {
-            setImapSyncing(false);
-        }
-    };
-
     // Получаем enabled tools и disabled tools отдельно
-    const enabledTools = integrations.filter(t => t.connected);
-    const disabledTools = integrations.filter(t => !t.connected);
+    const enabledTools = otherIntegrations.filter(t => t.connected);
+    const disabledTools = otherIntegrations.filter(t => !t.connected);
 
     const getConnectorDetails = (provider: string) => {
         return CONNECTORS.find(c =>
@@ -79,7 +63,24 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
         );
     };
 
-    const hasImapPlugin = integrations.some(p => p.provider === 'imap');
+    const getIntegrationStatus = (integration: (typeof integrations)[number]) => {
+        return integration.state?.email
+            || integration.state?.account_email
+            || (integration.state as any)?.params?.account_email
+            || integration.params?.account_email
+            || (integration.info as any)?.account_email
+            || null;
+    };
+
+    const handleAddGmailAccount = async () => {
+        setGmailMessage(null);
+        try {
+            await startOAuth('gmail');
+        } catch (err) {
+            console.warn('Failed to start Gmail OAuth', err);
+            setGmailMessage(err instanceof Error ? err.message : 'Failed to start Gmail OAuth');
+        }
+    };
 
     return (
         <View style={styles.overlay} pointerEvents="box-none">
@@ -90,9 +91,48 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                 >
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionTitle}>Gmail accounts</Text>
+                        <Pressable
+                            style={styles.addAccountButton}
+                            onPress={handleAddGmailAccount}
+                            accessibilityLabel="Add Gmail account"
+                        >
+                            <Text style={styles.addAccountButtonText}>Add account</Text>
+                        </Pressable>
+                    </View>
+                    <View style={styles.card}>
+                        {gmailIntegrations.map((integration, i) => {
+                            const details = getConnectorDetails(integration.provider);
+                            return (
+                                <View key={integration.id}>
+                                    <Item
+                                        name={integration.name}
+                                        enabled={!!integration.connected}
+                                        glyph={details?.glyph || 'application'}
+                                        color={details?.color || oneDarkPalette.blue}
+                                        configID={integration.id}
+                                        statusText={getIntegrationStatus(integration)}
+                                        onDelete={() => deleteIntegration(integration.id)}
+                                    />
+                                    {i < gmailIntegrations.length - 1 && (
+                                        <View style={styles.divider} />
+                                    )}
+                                </View>
+                            );
+                        })}
+                        {gmailIntegrations.length === 0 && (
+                            <View style={styles.emptyRow}>
+                                <Text style={styles.emptyText}>
+                                    No Gmail accounts connected yet
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+
                     {enabledTools.length > 0 && (
                         <>
-                            <Text style={styles.sectionTitle}>Включено</Text>
+                            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Включено</Text>
                             <View style={styles.card}>
                                 {enabledTools.map((integration, i) => {
                                     const details = getConnectorDetails(integration.provider);
@@ -104,7 +144,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                 glyph={details?.glyph || 'application'}
                                                 color={details?.color || oneDarkPalette.blue}
                                                 configID={integration.id}
-                                                statusText={integration.state?.email || integration.state?.account_email}
+                                                statusText={getIntegrationStatus(integration)}
                                             />
                                             {i < enabledTools.length - 1 && (
                                                 <View style={styles.divider} />
@@ -132,7 +172,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                 glyph={details?.glyph || 'application'}
                                                 color={details?.color || oneDarkPalette.blue}
                                                 configID={integration.id}
-                                                statusText={integration.state?.email || integration.state?.account_email}
+                                                statusText={getIntegrationStatus(integration)}
                                             />
                                             {i < disabledTools.length - 1 && (
                                                 <View style={styles.divider} />
@@ -144,14 +184,14 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                         </>
                     )}
 
-                    {gmailIntegration && (
+                    {gmailIntegrations.length > 0 && (
                         <>
                             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Inbox plugins</Text>
                             <View style={styles.card}>
                                 <View style={styles.syncRow}>
                                     <View style={styles.syncTextBlock}>
                                         <Text style={styles.rowTitle}>Gmail</Text>
-                                        <Text style={styles.statusText}>Trigger a Gmail inbox sync</Text>
+                                        <Text style={styles.statusText}>Sync all connected Gmail inboxes</Text>
                                     </View>
                                     <Pressable
                                         style={[styles.syncButton, gmailSyncing && styles.syncButtonDisabled]}
@@ -172,63 +212,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                         </>
                     )}
 
-                    {hasImapPlugin && (
-                        <View style={[styles.card, { marginTop: 12 }]}>
-                            <View style={styles.syncTextBlock}>
-                                <Text style={styles.rowTitle}>Generic IMAP</Text>
-                                <Text style={styles.statusText}>Provide credentials to sync via IMAP</Text>
-                            </View>
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Host</Text>
-                                <TextInput
-                                    placeholder="imap.example.com"
-                                    placeholderTextColor="rgba(171, 178, 191, 0.5)"
-                                    style={styles.syncInput}
-                                    value={imapConfig.host}
-                                    onChangeText={text => setImapConfig(prev => ({ ...prev, host: text }))}
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Username</Text>
-                                <TextInput
-                                    placeholder="user@example.com"
-                                    placeholderTextColor="rgba(171, 178, 191, 0.5)"
-                                    style={styles.syncInput}
-                                    value={imapConfig.username}
-                                    onChangeText={text => setImapConfig(prev => ({ ...prev, username: text }))}
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Password</Text>
-                                <TextInput
-                                    placeholder="••••••••"
-                                    placeholderTextColor="rgba(171, 178, 191, 0.5)"
-                                    style={styles.syncInput}
-                                    value={imapConfig.password}
-                                    onChangeText={text => setImapConfig(prev => ({ ...prev, password: text }))}
-                                    secureTextEntry
-                                />
-                            </View>
-                            <Pressable
-                                style={[styles.syncButton, imapSyncing && styles.syncButtonDisabled]}
-                                onPress={handleImapSync}
-                                disabled={imapSyncing}
-                            >
-                                {imapSyncing ? (
-                                    <ActivityIndicator size="small" color={oneDarkPalette.black} />
-                                ) : (
-                                    <Text style={styles.syncButtonText}>Sync IMAP</Text>
-                                )}
-                            </Pressable>
-                            {imapMessage && (
-                                <Text style={styles.syncStatus}>{imapMessage}</Text>
-                            )}
-                        </View>
-                    )}
-
-                    {enabledTools.length === 0 && disabledTools.length === 0 && (
+                    {enabledTools.length === 0 && disabledTools.length === 0 && gmailIntegrations.length === 0 && (
                         <View style={styles.emptyRow}>
                             <Text style={styles.emptyText}>
                                 Нет доступных интеграций
@@ -242,13 +226,14 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
 }
 
 
-const Item = ({ name, enabled, color, glyph, configID, statusText }: {
+const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
     name: string;
     enabled: boolean;
     glyph: string;
     color: string;
     configID: string;
     statusText?: string | null;
+    onDelete?: () => void;
 }) => {
     const { toggleTool } = useConnectors();
     const [isLoading, setIsLoading] = React.useState(false);
@@ -296,11 +281,20 @@ const Item = ({ name, enabled, color, glyph, configID, statusText }: {
                     />
                 )}
             </View>
-            <NavArrowRight
-                width={22}
-                height={22}
-                color={'rgba(171, 178, 191, 0.8)'}
-            />
+            {onDelete ? (
+                <Pressable
+                    onPress={onDelete}
+                    style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.7 : 1 })}
+                >
+                    <Icon name="trash-can-outline" size={20} color="rgba(171, 178, 191, 0.8)" />
+                </Pressable>
+            ) : (
+                <NavArrowRight
+                    width={22}
+                    height={22}
+                    color={'rgba(171, 178, 191, 0.8)'}
+                />
+            )}
         </View>
     );
 };

@@ -45,7 +45,7 @@ export function ChatProvider({
     const [externalTitle, setExternalTitle] = useState<string | null>(null);
     const socketRef = useRef<ChatSocket | null>(null); // Declare socketRef
     const seededChatRef = useRef<string | null>(null);
-    const [pluginThreadMeta, setPluginThreadMeta] = useState<{ provider: string; chatId: string | number } | null>(null);
+    const [pluginThreadMeta, setPluginThreadMeta] = useState<{ provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null>(null);
     const mapPluginMessage = useCallback((msg: any, provider: string, fallbackRole: 'assistant' | 'user' = 'assistant'): Message => {
         const roleFromMsg = msg.role
             || (msg.sender && msg.sender !== provider ? 'user' : undefined)
@@ -61,12 +61,20 @@ export function ChatProvider({
             created_at: msg.received_at ? new Date(msg.received_at).getTime() : Date.now(),
             actions: msg.actions,
             importance: msg.importance,
-            metadata: { ...(msg.metadata || {}), originalRole: msg.role || roleFromMsg, title: msg.title },
+            metadata: {
+                ...(msg.metadata || {}),
+                originalRole: msg.role || roleFromMsg,
+                title: msg.title,
+                integrationId: msg.integration_id || pluginThreadMeta?.integrationId,
+                integrationName: pluginThreadMeta?.integrationName,
+            },
         };
-    }, [pluginThreadMeta?.chatId]);
+    }, [pluginThreadMeta?.chatId, pluginThreadMeta?.integrationId, pluginThreadMeta?.integrationName]);
 
     const [currentMessageID, setCurrentMessageID] = useState<string | null>(null);
     const [assistantWorking, setAssistantWorking] = useState<boolean>(false);
+    const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
+    const [teamCommand, setTeamCommand] = useState<any>(null);
 
     // Model selection state
     const [selectedModel, setSelectedModel] = useState<string | null>('gemini-2.0-flash-exp');
@@ -176,7 +184,11 @@ export function ChatProvider({
     const refreshPluginThread = useCallback(async () => {
         if (!pluginThreadMeta) return;
         try {
-            const resp = await sidebarApi.getChatMessages(pluginThreadMeta.provider, pluginThreadMeta.chatId);
+            const resp = await sidebarApi.getChatMessages(
+                pluginThreadMeta.provider,
+                pluginThreadMeta.chatId,
+                pluginThreadMeta.integrationId,
+            );
             const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, pluginThreadMeta.provider));
             setMessages(converted);
         } catch (err) {
@@ -282,20 +294,22 @@ export function ChatProvider({
     }, [pluginThreadMeta, refreshPluginThread]);
 
 
-    const startPluginThread = useCallback(async ({ provider, chatId, title }: { provider: string; chatId: string | number; title?: string | null }) => {
-        setPluginThreadMeta({ provider, chatId });
+    const startPluginThread = useCallback(async ({ provider, chatId, title, integrationId, integrationName }: { provider: string; chatId: string | number; title?: string | null; integrationId?: string; integrationName?: string | null }) => {
+        setPluginThreadMeta({ provider, chatId, integrationId, integrationName });
+        setChatMode('agent');
+        setTeamCommand(null);
         setExternalTitle(title || null);
         setAssistantWorking(false);
         setMessages([]);
         setActiveChatID(emptyChatID);
         try {
-            const resp = await sidebarApi.getChatMessages(provider, chatId);
+            const resp = await sidebarApi.getChatMessages(provider, chatId, integrationId);
             const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, provider));
             setMessages(converted);
         } catch (err) {
             console.error('Failed to load plugin chat on start', err);
         }
-    }, [setActiveChatID, mapPluginMessage]);
+    }, [setActiveChatID, mapPluginMessage, setChatMode, setTeamCommand]);
 
 
 
@@ -373,6 +387,8 @@ export function ChatProvider({
             () => currentMessageID,
             () => selectedModel,
             () => pluginThreadMeta ? 'inbox' : 'chat',
+            () => chatMode,
+            () => teamCommand,
         )
 
         sock.setHandlers({
@@ -458,6 +474,10 @@ export function ChatProvider({
         selectedModel,
         setSelectedModel,
         availableModels,
+        chatMode,
+        setChatMode,
+        teamCommand,
+        setTeamCommand,
     };
 
     return (

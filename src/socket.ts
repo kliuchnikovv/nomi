@@ -21,10 +21,13 @@ export class ChatSocket {
     private readonly getMessageId: () => string | null;
     private readonly getModel: () => string | null;
     private readonly getContext: () => string | null;
+    private readonly getMode?: () => 'agent' | 'team' | null | undefined;
+    private readonly getCommand?: () => any;
     private handlers: Handlers = {};
     private outbox: any[] = [];
     private idleTimer: any = null;
     private idleTimeoutMs = 5 * 60 * 1000; // 5 minutes
+    private sentCommandFrame = false;
 
     constructor(
         rootUrl: string,
@@ -33,6 +36,8 @@ export class ChatSocket {
         getMessageId: () => string | null,
         getModel: () => string | null,
         getContext: () => string | null,
+        getMode?: () => 'agent' | 'team' | null | undefined,
+        getCommand?: () => any,
     ) {
         this.rootUrl = rootUrl;
         this.getToken = getToken;
@@ -40,6 +45,8 @@ export class ChatSocket {
         this.getMessageId = getMessageId;
         this.getModel = getModel;
         this.getContext = getContext;
+        this.getMode = getMode;
+        this.getCommand = getCommand;
     }
 
     setHandlers(h: Handlers) {
@@ -100,6 +107,19 @@ export class ChatSocket {
         const context = this.getContext();
         if (context) qs.set('source', context);
 
+        const mode = this.getMode?.() || 'agent';
+        if (mode) qs.set('mode', mode);
+
+        const command = this.getCommand?.();
+        if (command) {
+            try {
+                const serialized = typeof command === 'string' ? command : JSON.stringify(command);
+                qs.set('command', serialized);
+            } catch (err) {
+                console.warn('Failed to serialize command for query', err);
+            }
+        }
+
         const httpUrl = `${this.rootUrl}/chat/ws?${qs.toString()}`;
         const wsUrl = httpUrl.startsWith('https://')
             ? httpUrl.replace('https://', 'wss://')
@@ -122,6 +142,8 @@ export class ChatSocket {
 
             ws.onopen = () => {
                 this.touchActivity();
+                this.sentCommandFrame = false;
+                this.enqueueCommandFrame();
                 const queue = this.outbox;
                 this.outbox = [];
                 for (const msg of queue) {
@@ -245,6 +267,8 @@ export class ChatSocket {
         // const messageID = this.getMessageId();
         if (!chatID) return;
 
+        this.enqueueCommandFrame(chatID);
+
         const msg = {
             id: 0,
             kind: 'data',
@@ -278,6 +302,28 @@ export class ChatSocket {
         }
     }
 
+    private enqueueCommandFrame(chatID?: string | null) {
+        const mode = this.getMode?.() || 'agent';
+        const command = this.getCommand?.();
+        if (!command || mode !== 'team') return;
+        if (this.sentCommandFrame) return;
+
+        const payloadValue = command;
+        const frame = {
+            id: 0,
+            kind: 'meta',
+            op: 'tools',
+            chat_id: chatID || this.getChatId(),
+            payload: {
+                command: payloadValue,
+                team: payloadValue,
+                team_desc: payloadValue,
+            },
+        };
+        this.sentCommandFrame = true;
+        this.outbox.unshift(frame);
+    }
+
     close() {
         try {
             this.ws?.close();
@@ -285,6 +331,7 @@ export class ChatSocket {
 
         this.ws = null;
         this.outbox = [];
+        this.sentCommandFrame = false;
 
         if (this.idleTimer) {
             try {

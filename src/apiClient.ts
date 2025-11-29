@@ -101,15 +101,57 @@ export const apiClient = {
 };
 
 export const pluginsApi = {
-    list: () => apiClient.get<Array<{ name: string; info?: Record<string, any>; state?: Record<string, any>; enabled: boolean }>>(`${API_URL}/plugins`),
-    enablePlugin: (name: string) => apiClient.post<void>(`${API_URL}/plugins/${name}/enable`, {}),
-    disablePlugin: (name: string) => apiClient.post<void>(`${API_URL}/plugins/${name}/disable`, {}),
+    list: () => apiClient.get<Array<{
+        name: string;
+        info?: Record<string, any>;
+        state?: Record<string, any>;
+        enabled: boolean;
+        provider?: string;
+        integration_id?: string;
+        id?: string;
+        params?: Record<string, any>;
+    }>>(`${API_URL}/plugins`),
+    enablePlugin: (name: string, integrationId?: string) =>
+        apiClient.post<void>(
+            `${API_URL}/plugins/${name}/enable`,
+            integrationId ? { integration_id: integrationId } : {},
+        ),
+    disablePlugin: (name: string, integrationId?: string) =>
+        apiClient.post<void>(
+            `${API_URL}/plugins/${name}/disable`,
+            integrationId ? { integration_id: integrationId } : {},
+        ),
     getPluginState: (name: string) => apiClient.get<{ enabled: boolean; state: Record<string, any> }>(`${API_URL}/plugins/${name}/state`),
     updatePluginState: (name: string, state: Record<string, any>) => apiClient.put<void>(`${API_URL}/plugins/${name}/state`, state),
     startOAuthLogin,
     syncGmail: () => apiClient.post<{ message: string }>(`${API_URL}/plugins/gmail/sync`, {}),
     syncImap: (config: { host: string; username: string; password: string }) =>
         apiClient.post<{ status: string }>(`${API_URL}/plugins/imap/sync`, config),
+};
+
+export const integrationsApi = {
+    list: () => apiClient.get<{
+        items?: Array<{
+            id: string;
+            name: string;
+            provider: string;
+            enabled: boolean;
+            state?: Record<string, any>;
+            params?: Record<string, any>;
+            info?: Record<string, any>;
+        }>;
+    } | Array<{
+        id: string;
+        name: string;
+        provider: string;
+        enabled: boolean;
+        state?: Record<string, any>;
+        params?: Record<string, any>;
+        info?: Record<string, any>;
+    }>>(`${API_URL}/integrations`),
+    update: (id: string, body: { name?: string; enabled?: boolean }) =>
+        apiClient.patch<void>(`${API_URL}/integrations/${id}`, body),
+    delete: (id: string) => apiClient.delete<void>(`${API_URL}/integrations/${id}`),
 };
 
 export const inboxApi = {
@@ -134,9 +176,14 @@ export const inboxApi = {
 
 export const sidebarApi = {
     getSidebar: () => apiClient.get<SidebarResponse>(`${API_URL}/sidebar`),
-    getChats: (provider: string) => apiClient.get<SidebarChatsResponse>(`${API_URL}/sidebar/${provider}/chats`),
-    getChatMessages: (provider: string, chatId: string | number) =>
-        apiClient.get<SidebarChatMessagesResponse>(`${API_URL}/sidebar/${provider}/chats/${chatId}`),
+    getChats: (provider: string, integrationId?: string) =>
+        apiClient.get<SidebarChatsResponse>(
+            `${API_URL}/sidebar/${provider}/chats${integrationId ? `?integration_id=${integrationId}` : ''}`,
+        ),
+    getChatMessages: (provider: string, chatId: string | number, integrationId?: string) =>
+        apiClient.get<SidebarChatMessagesResponse>(
+            `${API_URL}/sidebar/${provider}/chats/${chatId}${integrationId ? `?integration_id=${integrationId}` : ''}`,
+        ),
     sendChatMessage: (provider: string, chatId: string | number, body: any) =>
         apiClient.post(`${API_URL}/sidebar/${provider}/chats/${chatId}/messages`, body),
     executeMessageAction: (provider: string, messageId: string, body: any) =>
@@ -148,4 +195,11 @@ export const modelsApi = {
         const response = await apiClient.get<{ models: any[] }>(`${API_URL}/models`);
         return response?.models || [];
     },
+};
+
+export const pluginChatsApi = {
+    renameChat: (chatId: string | number, title: string) =>
+        apiClient.patch<void>(`${API_URL}/plugin_chats/${chatId}`, { title }),
+    deleteChat: (chatId: string | number) =>
+        apiClient.delete<void>(`${API_URL}/plugin_chats/${chatId}`),
 };

@@ -74,7 +74,7 @@ export default function MessageScreen(props: Props) {
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                         {props.actions.map((action: Action) => (
                             <ActionScreen
-                                key={`${action.command}-${action.url || ''}`}
+                                key={`${action.command}-${action.url || ''}-${action.label || ''}-${action.prompt || ''}`}
                                 action={action}
                                 onActionPress={props.onActionPress}
                                 messageID={props.message.id}

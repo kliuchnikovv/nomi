@@ -17,7 +17,21 @@ type Props = {
     selectedModel: string | null;
     onSelectModel: (modelId: string) => void;
     loading?: boolean;
+    chatMode: 'agent' | 'team';
+    onModeChange: (mode: 'agent' | 'team') => void;
+    teamCommand: any;
+    onChangeTeamCommand: (cmd: any) => void;
 };
+
+const buildDefaultTeamCommand = (modelId: string | null) => ({
+    name: 'Default Team',
+    model: modelId || 'gemini-1.5-pro',
+    participants: [
+        { type: 'mailer' },
+        { type: 'rag', model: modelId || 'gemini-1.5-pro' },
+        { type: 'memoriser' },
+    ],
+});
 
 export default function ModelSelector({
     visible,
@@ -26,11 +40,36 @@ export default function ModelSelector({
     selectedModel,
     onSelectModel,
     loading = false,
+    chatMode,
+    onModeChange,
+    teamCommand,
+    onChangeTeamCommand,
 }: Props) {
     const handleSelect = (modelId: string) => {
         onSelectModel(modelId);
+        if (chatMode === 'team') {
+            onChangeTeamCommand(buildDefaultTeamCommand(modelId));
+        }
         onClose();
     };
+
+    const switchToMode = (mode: 'agent' | 'team') => {
+        if (mode === 'team') {
+            onChangeTeamCommand(buildDefaultTeamCommand(selectedModel));
+        } else {
+            onChangeTeamCommand(null);
+        }
+        onModeChange(mode);
+    };
+
+    const defaultTeamJson = React.useMemo(() => {
+        const cmd = teamCommand || buildDefaultTeamCommand(selectedModel);
+        try {
+            return JSON.stringify(cmd, null, 2);
+        } catch {
+            return '';
+        }
+    }, [teamCommand, selectedModel]);
 
     return (
         <Modal
@@ -66,13 +105,72 @@ export default function ModelSelector({
                             fontSize: 18,
                             fontWeight: '600',
                             color: oneDark.text,
-                            marginBottom: 16,
+                            marginBottom: 12,
                         }}
                     >
-                        Select Model
+                        Выбор режима
                     </Text>
 
-                    {loading ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                        {(['agent', 'team'] as const).map(mode => (
+                            <Pressable
+                                key={mode}
+                                onPress={() => switchToMode(mode)}
+                                style={({ pressed }) => ({
+                                    paddingVertical: 8,
+                                    paddingHorizontal: 12,
+                                    borderRadius: 10,
+                                    backgroundColor:
+                                        chatMode === mode
+                                            ? oneDark.accent
+                                            : pressed
+                                                ? oneDark.border
+                                                : 'transparent',
+                                    borderWidth: 1,
+                                    borderColor:
+                                        chatMode === mode
+                                            ? oneDark.accent
+                                            : oneDark.border,
+                                })}
+                            >
+                                <Text
+                                    style={{
+                                        color: chatMode === mode ? oneDark.background : oneDark.text,
+                                        fontWeight: '700',
+                                    }}
+                                >
+                                    {mode === 'agent' ? 'Агент' : 'Команда'}
+                                </Text>
+                            </Pressable>
+                        ))}
+                    </View>
+
+                    {chatMode === 'team' ? (
+                        <View>
+                            <Text style={{ color: oneDark.textSecondary, fontSize: 13, marginBottom: 6 }}>
+                                Используется команда по умолчанию с полным составом. Меняется модель — обновляется команда.
+                            </Text>
+                            <View
+                                style={{
+                                    backgroundColor: oneDark.background,
+                                    borderRadius: 10,
+                                    padding: 12,
+                                    borderWidth: 1,
+                                    borderColor: oneDark.border,
+                                }}
+                            >
+                                <Text
+                                    style={{
+                                        color: oneDark.textSecondary,
+                                        fontSize: 12,
+                                        fontFamily: 'Menlo',
+                                    }}
+                                >
+                                    {defaultTeamJson}
+                                </Text>
+                            </View>
+                        </View>
+                    ) : loading ? (
                         <View style={{ padding: 40, alignItems: 'center' }}>
                             <ActivityIndicator size="large" color={oneDark.accent} />
                         </View>

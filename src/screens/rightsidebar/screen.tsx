@@ -192,11 +192,14 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
     };
 
     const handleChatSelect = async (chat: PluginChat) => {
+        const plugin = plugins.find(p => p.id === chat.pluginId);
         const result = await selectChat(chat);
         if (result) {
             await startPluginThread({
                 provider: result.provider,
                 chatId: result.chatId,
+                integrationId: result.integrationId || chat.pluginId,
+                integrationName: plugin?.name,
                 title: chat.title,
             });
         }

@@ -53,6 +53,13 @@ export const styles = StyleSheet.create({
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: 'rgba(171, 178, 191, 0.08)',
     },
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+        gap: 8,
+    },
     row: {
         minHeight: 56,
         paddingHorizontal: 14,
@@ -115,6 +122,16 @@ export const styles = StyleSheet.create({
     emptyText: {
         color: 'rgba(171, 178, 191, 0.5)',
         fontSize: 14,
+    },
+    addAccountButton: {
+        backgroundColor: '#3a7bf6',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+    },
+    addAccountButtonText: {
+        color: oneDarkPalette.white,
+        fontWeight: '700',
     },
     syncRow: {
         flexDirection: 'row',

@@ -220,11 +220,13 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 8,
         flex: 1,
+        minWidth: 0,
     },
     pluginName: {
         color: oneDarkPalette.white,
         fontSize: 13,
         fontWeight: '600',
+        flexShrink: 1,
     },
     unreadBadge: {
         minWidth: 18,

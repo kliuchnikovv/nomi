@@ -66,6 +66,7 @@ export type Integration = {
     connected: boolean;
     info?: Record<string, any>;
     state?: Record<string, any>;
+    params?: Record<string, any>;
 };
 
 export type Tool = {
@@ -95,14 +96,7 @@ export const CONNECTORS: Connector[] = [
         color: oneDarkPalette.red,
         glyph: 'gmail',
     },
-    {
-        id: 'calendar',
-        name: 'Google Calendar',
-        toolKey: 'calendar',
-        oauthProvider: 'calendar',
-        color: oneDarkPalette.blue,
-        glyph: 'calendar-month',
-    },
+    // Calendar hidden for now
 ];
 
 export interface ConnectorContextType {
@@ -111,4 +105,6 @@ export interface ConnectorContextType {
     getTools: () => Promise<void>;
     getIntegrations: () => Promise<void>;
     toggleTool: (configID: string, enabled: boolean) => Promise<void>;
+    startOAuth: (provider: string) => Promise<void>;
+    deleteIntegration: (id: string) => Promise<void>;
 }
