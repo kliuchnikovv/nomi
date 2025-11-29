@@ -404,9 +404,13 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             logger.info("[WS] Disconnected: session_id=%s", session_id)
         except Exception as e:
             # Аварийное закрытие
+            logger.exception("[WS] Fatal error: session_id=%s", session_id)
+            try:
+                await _send_error(websocket, next_id, e, session_id, chat_id=None)
+            except Exception:
+                pass
             with contextlib.suppress(Exception):
                 await websocket.close(code=1011, reason="Server error")
-            logger.exception("[WS] Fatal error: session_id=%s", session_id)
             raise
 
     return r
@@ -495,8 +499,12 @@ def _classify_error(exc: Exception) -> Tuple[int, str, str]:
     if "503" in s or "unavailable" in s.lower():
         return 503, "upstream_unavailable", "Service is temporally unavailable. Try later."
     if "timeout" in s.lower():
-        return 504, "upstream_timeout", "Время ожидания истекло. Повторите запрос."
-    return 500, "internal_error", "Internal Server Error. We're on our way to fix it."
+        return 504, "upstream_timeout", "Request timed out. Please try again."
+    if "context_length_exceeded" in s:
+        return 400, "context_length_exceeded", "Context length exceeded."
+    
+    # Generic fallback
+    return 500, "internal_error", f"Internal Server Error: {s}"
 #
 #
 # # --- WS helpers ---
@@ -557,7 +565,7 @@ async def _send_error(
     next_id: int,
     e: Exception,
     session_id: str,
-    chat_id: str,
+    chat_id: Optional[str],
 ) -> int:
     http_status, status_text, user_msg = _classify_error(e)
     logger.error("[WS] Agent failed: sessionId=%s status=%s detail=%s", session_id, status_text, e)

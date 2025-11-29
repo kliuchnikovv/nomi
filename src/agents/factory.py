@@ -8,6 +8,8 @@ from agno.models.base import Model
 from agno.models.google import Gemini
 
 from src.agents.genie import GenieAgent
+from src.agents.rag import RagAgent
+from src.agents.memoriser import MemoriserAgent
 from src.agents.mailer import MailerAgent
 from src.tools.config import ToolConfigClient
 from src.tools.factory import build as build_tools, ToolsConfig
@@ -61,18 +63,23 @@ class AgentFactory:
         raise ValueError(f"Unsupported model: {model_name}")
 
     async def build(
-        self, 
-        session_id: str, 
+        self,
+        session_id: str,
         tools_specs: Optional[List[ToolSpec]] = None,
         model_name: Optional[str] = None,
-        agent_type: Optional[str] = None
+        agent_type: Optional[str] = None,
+        command_desc: Optional[dict] = None,
     ) -> Agent:
         # Use provided model or default
+        # If command_desc has model, use it if model_name is not provided
+        if not model_name and command_desc and command_desc.get("model"):
+            model_name = command_desc["model"]
+
         model = self.build_model(model_name) if model_name else self._model
         
         tools: List[Toolkit] = []
         
-        logger.debug("[WS] tools: %s", [t.name for t in tools_specs ])
+        logger.debug("[WS] tools: %s", [t.name for t in tools_specs] if tools_specs else [])
         if tools_specs:
             # Строим инструменты из полученных спецификаций
             config = ToolsConfig()
@@ -99,8 +106,24 @@ class AgentFactory:
                    session_id, model_name or "default", agent_type or "genie", len(tools))
 
         try:
+            if command_desc and command_desc.get('type'):
+                agent_type = command_desc['type']
             if agent_type and agent_type.lower() == "mailer":
                 agent = MailerAgent(
+                    db=self._db,
+                    model=model,
+                    tools=tools,
+                    debug_mode=self._debug_mode,
+                )
+            elif agent_type and agent_type.lower() == "rag":
+                agent = RagAgent(
+                    db=self._db,
+                    model=model,
+                    tools=tools,
+                    debug_mode=self._debug_mode,
+                )
+            elif agent_type and agent_type.lower() == "memoriser":
+                agent = MemoriserAgent(
                     db=self._db,
                     model=model,
                     tools=tools,
@@ -114,7 +137,7 @@ class AgentFactory:
                     tools=tools,
                     debug_mode=self._debug_mode,
                 )
-                
+
             logger.info("[WS] Agent created successfully: session_id=%s type=%s", session_id, agent.name)
             return agent
         except Exception as e:
