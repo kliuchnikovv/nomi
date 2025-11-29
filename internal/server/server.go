@@ -71,6 +71,7 @@ func New(
 		actionsHandler      = handlers.NewActionsHandler(db, logger, manager) // Delegates to plugins
 		integrationsHandler = handlers.NewIntegrationsHandler(db)
 		pluginChatsHandler  = handlers.NewPluginChatsHandler(db)
+		inboxHandler        = handlers.NewInboxHandler(db)
 		tokenManager        = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler         = handlers.NewAuthHandler(db, tokenManager)
@@ -122,6 +123,9 @@ func New(
 	r.POST("/api/sidebar/:provider/chats/:chat_id/messages", wrapWithAuth(sidebarHandler.PostChatMessage, authMiddleware))
 	// Actions API - Delegates to plugins
 	r.POST("/api/sidebar/:provider/messages/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
+
+	// Inbox (chat -> thread -> message) API
+	r.GET("/api/inbox", wrapWithAuth(inboxHandler.ListInbox, authMiddleware))
 
 	// Plugin chats API
 	r.GET("/api/plugin_chats", wrapWithAuth(pluginChatsHandler.ListPluginChats, authMiddleware))
