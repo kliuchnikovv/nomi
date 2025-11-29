@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"encoding/json"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
@@ -27,6 +28,7 @@ type SidebarMessage struct {
 	ThreadID uint64    `json:"thread_id"`
 	Title    string    `json:"title"`
 	Preview  string    `json:"preview,omitempty"`
+	Sender   string    `json:"sender,omitempty"`
 }
 
 type SidebarIntegration struct {
@@ -92,6 +94,7 @@ func (h *SidebarHandler) ListSidebar(c *gin.Context) {
 			ThreadID: msg.ThreadID,
 			Title:    msg.Header,
 			Preview:  msg.Summary,
+			Sender:   msg.Sender,
 		})
 	}
 
