@@ -80,7 +80,7 @@ func (g *gmailBackend) runSyncLoop() {
 
 			for _, tool := range tools {
 				g.logger.Info("syncing user", zap.String("user_id", tool.UserID.String()))
-				if err := g.Sync(ctx, tool.UserID); err != nil {
+				if err := g.Sync(ctx, tool); err != nil {
 					g.logger.Error("auto-sync failed for user",
 						zap.String("user_id", tool.UserID.String()),
 						zap.Error(err))
@@ -122,23 +122,61 @@ func (g *gmailBackend) syncHandler(c *gin.Context) {
 		return
 	}
 
-	if err := g.Sync(c.Request.Context(), user.ID); err != nil {
-		g.logger.Error("sync failed", zap.Error(err))
-		c.JSON(500, gin.H{"error": err.Error()})
+	integrations, err := g.storage.GetIntegrationsByUserProvider(c.Request.Context(), user.ID, ProviderGmail)
+	if err != nil {
+		g.logger.Error("failed to list gmail integrations", zap.Error(err))
+		c.JSON(500, gin.H{"error": "failed to list gmail integrations"})
+		return
+	}
+	if len(integrations) == 0 {
+		c.JSON(404, gin.H{"error": "no gmail integrations found"})
 		return
 	}
 
-	c.JSON(200, gin.H{"message": "sync completed"})
+	for _, integ := range integrations {
+		if err := g.Sync(c.Request.Context(), integ); err != nil {
+			g.logger.Error("sync failed", zap.Error(err), zap.String("integration_id", integ.ID.String()))
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(200, gin.H{"message": "sync completed", "count": len(integrations)})
 }
 
-func (g *gmailBackend) getValidToken(ctx context.Context, userID uuid.UUID) (string, string, error) {
+type gmailIntegrationParams struct {
+	AccountEmail string `json:"account_email"`
+	Creds        struct {
+		Token        string    `json:"token"`
+		RefreshToken string    `json:"refresh_token"`
+		TokenType    string    `json:"token_type"`
+		Expiry       time.Time `json:"expiry"`
+		ClientID     string    `json:"client_id"`
+		ClientSecret string    `json:"client_secret"`
+		TokenURI     string    `json:"token_uri"`
+	} `json:"creds"`
+}
+
+func (g *gmailBackend) getValidToken(ctx context.Context, integration storage.Integration) (string, string, error) {
 	if g.oauthConfig == nil {
 		return "", "", fmt.Errorf("gmail oauth config not available")
 	}
 
+	params, err := parseGmailParams(integration.Params)
+	if err != nil || params.AccountEmail == "" {
+		g.logger.Warn("gmail integration params missing account email, falling back to default token lookup",
+			zap.String("integration_id", integration.ID.String()),
+			zap.Error(err))
+	}
+
 	// Fetch token from DB
-	oauthToken, err := g.storage.GetOAuthTokenByUser(ctx, userID, "gmail")
-	if err != nil {
+	var oauthToken *storage.OAuthToken
+	if params != nil && params.AccountEmail != "" {
+		oauthToken, err = g.storage.GetOAuthTokenByUserAndEmail(ctx, integration.UserID, "gmail", params.AccountEmail)
+	} else {
+		oauthToken, err = g.storage.GetOAuthTokenByUser(ctx, integration.UserID, "gmail")
+	}
+	if err != nil || oauthToken == nil {
 		return "", "", fmt.Errorf("failed to get oauth token info: %w", err)
 	}
 
@@ -157,7 +195,7 @@ func (g *gmailBackend) getValidToken(ctx context.Context, userID uuid.UUID) (str
 
 	// If token changed, update DB
 	if newToken.AccessToken != token.AccessToken {
-		g.logger.Info("refreshing gmail access token", zap.String("user_id", userID.String()))
+		g.logger.Info("refreshing gmail access token", zap.String("user_id", integration.UserID.String()), zap.String("account_email", oauthToken.AccountEmail))
 
 		tokenBytes, err := json.Marshal(newToken)
 		if err != nil {
@@ -178,9 +216,9 @@ func (g *gmailBackend) getValidToken(ctx context.Context, userID uuid.UUID) (str
 	return oauthToken.AccountEmail, newToken.AccessToken, nil
 }
 
-func (g *gmailBackend) Sync(ctx context.Context, userID uuid.UUID) error {
+func (g *gmailBackend) Sync(ctx context.Context, integration storage.Integration) error {
 	// 1. Get valid token (handles refresh)
-	email, accessToken, err := g.getValidToken(ctx, userID)
+	email, accessToken, err := g.getValidToken(ctx, integration)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
@@ -203,12 +241,29 @@ func (g *gmailBackend) Sync(ctx context.Context, userID uuid.UUID) error {
 	}
 
 	// 3. Delegate to Syncer
-	return g.syncer.Sync(ctx, userID, c)
+	return g.syncer.SyncWithIntegration(ctx, integration.UserID, integration, c)
 }
 
 func (g *gmailBackend) ExecuteAction(ctx context.Context, userID uuid.UUID, action storage.InboxAction, message storage.Inbox) error {
 	// 1. Get valid token (handles refresh)
-	email, accessToken, err := g.getValidToken(ctx, userID)
+	integrations, err := g.storage.GetIntegrations(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to list integrations: %w", err)
+	}
+
+	var sourceIntegration *storage.Integration
+	for i := range integrations {
+		if integrations[i].ID == message.IntegrationID {
+			sourceIntegration = &integrations[i]
+			break
+		}
+	}
+
+	if sourceIntegration == nil {
+		return fmt.Errorf("integration not found for message")
+	}
+
+	email, accessToken, err := g.getValidToken(ctx, *sourceIntegration)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
@@ -244,6 +299,17 @@ func (g *gmailBackend) ExecuteAction(ctx context.Context, userID uuid.UUID, acti
 	default:
 		return fmt.Errorf("unsupported action: %s", action.Command)
 	}
+}
+
+func parseGmailParams(params string) (*gmailIntegrationParams, error) {
+	if params == "" {
+		return nil, fmt.Errorf("gmail integration params are empty")
+	}
+	var parsed gmailIntegrationParams
+	if err := json.Unmarshal([]byte(params), &parsed); err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func (g *gmailBackend) Status(ctx context.Context, state map[string]interface{}) (map[string]interface{}, error) {

@@ -54,6 +54,28 @@ func (s *Storage) GetOAuthTokenByUser(ctx context.Context, userID uuid.UUID, pro
 	return &token, nil
 }
 
+// GetOAuthTokenByUserAndEmail returns a token for a specific account email (for multi-account setups).
+func (s *Storage) GetOAuthTokenByUserAndEmail(ctx context.Context, userID uuid.UUID, provider, accountEmail string) (*OAuthToken, error) {
+	var token OAuthToken
+	if err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND provider = ? AND account_email = ? AND deleted_at IS NULL", userID, provider, accountEmail).
+		First(&token).Error; err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
+// ListOAuthTokensByUser returns all tokens for a given provider for a user.
+func (s *Storage) ListOAuthTokensByUser(ctx context.Context, userID uuid.UUID, provider string) ([]OAuthToken, error) {
+	var tokens []OAuthToken
+	if err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND provider = ? AND deleted_at IS NULL", userID, provider).
+		Find(&tokens).Error; err != nil {
+		return nil, err
+	}
+	return tokens, nil
+}
+
 func (s *Storage) DeleteOAuthTokenByProfileProvider(ctx context.Context, profileID, provider string) error {
 	return s.DB.WithContext(ctx).
 		Where("profile_id = ? AND provider = ?", profileID, provider).

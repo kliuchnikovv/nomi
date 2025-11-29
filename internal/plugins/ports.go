@@ -27,8 +27,20 @@ func (s *StorageAdapter) GetIntegrationsByProvider(ctx context.Context, provider
 	return s.store.GetIntegrationsByProvider(ctx, provider)
 }
 
+func (s *StorageAdapter) GetIntegrationsByUserProvider(ctx context.Context, userID uuid.UUID, provider string) ([]storage.Integration, error) {
+	return s.store.GetIntegrationsByUserProvider(ctx, userID, provider)
+}
+
 func (s *StorageAdapter) GetOAuthTokenByUser(ctx context.Context, userID uuid.UUID, provider string) (*storage.OAuthToken, error) {
 	return s.store.GetOAuthTokenByUser(ctx, userID, provider)
+}
+
+func (s *StorageAdapter) GetOAuthTokenByUserAndEmail(ctx context.Context, userID uuid.UUID, provider, email string) (*storage.OAuthToken, error) {
+	return s.store.GetOAuthTokenByUserAndEmail(ctx, userID, provider, email)
+}
+
+func (s *StorageAdapter) ListOAuthTokensByUser(ctx context.Context, userID uuid.UUID, provider string) ([]storage.OAuthToken, error) {
+	return s.store.ListOAuthTokensByUser(ctx, userID, provider)
 }
 
 func (s *StorageAdapter) UpdateOAuthToken(ctx context.Context, token *storage.OAuthToken) error {

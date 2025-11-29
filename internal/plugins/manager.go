@@ -20,7 +20,10 @@ import (
 type StoragePort interface {
 	GetIntegrations(ctx context.Context, userID uuid.UUID) ([]storage.Integration, error)
 	GetIntegrationsByProvider(ctx context.Context, provider string) ([]storage.Integration, error)
+	GetIntegrationsByUserProvider(ctx context.Context, userID uuid.UUID, provider string) ([]storage.Integration, error)
 	GetOAuthTokenByUser(ctx context.Context, userID uuid.UUID, provider string) (*storage.OAuthToken, error)
+	GetOAuthTokenByUserAndEmail(ctx context.Context, userID uuid.UUID, provider, email string) (*storage.OAuthToken, error)
+	ListOAuthTokensByUser(ctx context.Context, userID uuid.UUID, provider string) ([]storage.OAuthToken, error)
 	UpdateOAuthToken(ctx context.Context, token *storage.OAuthToken) error
 	InboxExistsByMessageID(ctx context.Context, userID uuid.UUID, messageID string) (bool, error)
 	CreateInbox(ctx context.Context, inbox *storage.Inbox) error
