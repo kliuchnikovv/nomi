@@ -274,6 +274,7 @@ func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
 	metadata := map[string]interface{}{
 		"chat_id":     pluginChat.ID.String(),
 		"external_id": pluginChat.ExternalID,
+		"thread_id":   threadID,
 	}
 	metadataBytes, _ := json.Marshal(metadata)
 
@@ -323,6 +324,7 @@ func (h *SidebarHandler) PostChatMessage(c *gin.Context) {
 				"reply_to_id":   msgID,
 				"provider_msg":  pluginChat.ExternalID,
 				"provider_chat": pluginChat.ExternalID,
+				"thread_id":     threadID,
 			}
 			replyMetaBytes, _ := json.Marshal(replyMetadata)
 
