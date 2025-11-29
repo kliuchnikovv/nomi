@@ -126,7 +126,17 @@ func (h *SidebarHandler) ListChats(c *gin.Context) {
 		return
 	}
 
-	chats, err := h.storage.ListPluginChatsWithStats(ctx, user.ID, provider)
+	var integrationFilter *uuid.UUID
+	if integIDStr := c.Query("integration_id"); integIDStr != "" {
+		if integID, err := uuid.Parse(integIDStr); err == nil {
+			integrationFilter = &integID
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid integration_id"})
+			return
+		}
+	}
+
+	chats, err := h.storage.ListPluginChatsWithStats(ctx, user.ID, provider, integrationFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load chats"})
 		return
