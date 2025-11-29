@@ -8,6 +8,8 @@ from agno.tools import Toolkit
 from agno.tools.gmail import GmailTools
 from agno.tools.googlecalendar import GoogleCalendarTools
 from google.oauth2.credentials import Credentials
+from src.tools.memory_writer import MemoryWriter
+from src.tools.rag_tool import RagTool
 
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
@@ -123,9 +125,21 @@ Treat current time as {now}.
     return tool
 
 
+def _build_rag(_: Dict[str, Any]) -> Toolkit:
+    # Placeholder builder; params are ignored for now
+    return RagTool()
+
+
+def _build_memory_writer(_: Dict[str, Any]) -> Toolkit:
+    # Placeholder builder; params are ignored for now
+    return MemoryWriter()
+
+
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Gmail": _build_gmail,
     "Google Calendar": _build_google_calendar,
+    "rag": _build_rag,
+    "memory_writer": _build_memory_writer,
 }
 
 
