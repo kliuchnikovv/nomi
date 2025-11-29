@@ -65,14 +65,15 @@ func New(
 	// Инициализация обработчиков
 	var (
 		// oauthHandler   = handlers.NewOAuth(cfg, db)
-		chatHandler    = handlers.NewChatHandler(db)
-		messageHandler = handlers.NewMessageHandler(db)
-		sidebarHandler = handlers.NewSidebarHandler(db, llmService)
-		actionsHandler = handlers.NewActionsHandler(db, logger, manager) // Delegates to plugins
-		tokenManager   = auth.NewTokenManager(cfg.Token.JWTSecret)
-		authMiddleware = auth.NewAuthMiddleware(tokenManager, db)
-		authHandler    = handlers.NewAuthHandler(db, tokenManager)
-		streamHandler  = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
+		chatHandler         = handlers.NewChatHandler(db)
+		messageHandler      = handlers.NewMessageHandler(db)
+		sidebarHandler      = handlers.NewSidebarHandler(db, llmService)
+		actionsHandler      = handlers.NewActionsHandler(db, logger, manager) // Delegates to plugins
+		integrationsHandler = handlers.NewIntegrationsHandler(db)
+		tokenManager        = auth.NewTokenManager(cfg.Token.JWTSecret)
+		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
+		authHandler         = handlers.NewAuthHandler(db, tokenManager)
+		streamHandler       = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
 		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
 		modelsHandler = handlers.NewModelsHandler("configs/models.json")
 		oauthHandler  = func() *handlers.OAuthHandler {
@@ -120,6 +121,11 @@ func New(
 	r.POST("/api/sidebar/:provider/chats/:chat_id/messages", wrapWithAuth(sidebarHandler.PostChatMessage, authMiddleware))
 	// Actions API - Delegates to plugins
 	r.POST("/api/sidebar/:provider/messages/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
+
+	// Integrations API
+	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
+	r.PATCH("/api/integrations/:id", wrapWithAuth(integrationsHandler.UpdateIntegration, authMiddleware))
+	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
 
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
