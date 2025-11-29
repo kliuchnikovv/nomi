@@ -20,6 +20,7 @@ type Streamer struct {
 
 	source         string
 	initialMessage string
+	commandPayload interface{}
 	connectModel   func() (*websocket.Conn, error)
 }
 
@@ -29,6 +30,7 @@ func New(
 	userID uuid.UUID,
 	initialMessage string,
 	source string,
+	commandPayload interface{},
 	connectModel func() (*websocket.Conn, error),
 ) *Streamer {
 	return &Streamer{
@@ -37,6 +39,7 @@ func New(
 		userID:         userID,
 		initialMessage: initialMessage,
 		source:         source,
+		commandPayload: commandPayload,
 		connectModel:   connectModel,
 	}
 }
@@ -97,9 +100,16 @@ func (streamer *Streamer) Stream(
 				Operation: ToolsOperation,
 				Timestamp: time.Now().UTC(),
 				Payload: Payload{
-					Tools: map[string]interface{}{
-						"tools": toolsPayload,
-					},
+					Tools: func() map[string]interface{} {
+						payload := map[string]interface{}{
+							"tools": toolsPayload,
+						}
+						if streamer.commandPayload != nil {
+							payload["command"] = streamer.commandPayload
+							payload["team"] = streamer.commandPayload
+						}
+						return payload
+					}(),
 				},
 			}
 			if err := modelReader.Write(ctx, toolsFrame); err != nil {

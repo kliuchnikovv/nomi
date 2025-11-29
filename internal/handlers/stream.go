@@ -102,6 +102,23 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	}()
 
 	var query = *h.llmURL
+	commandParam := c.Query("command")
+	if commandParam == "" {
+		commandParam = c.Query("team")
+	}
+	if commandParam == "" {
+		commandParam = c.Query("team_desc")
+	}
+	modeParam := c.Query("mode")
+	var commandPayload interface{}
+	if commandParam != "" {
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(commandParam), &parsed); err == nil {
+			commandPayload = parsed
+		} else {
+			commandPayload = commandParam
+		}
+	}
 
 	// Provide connector to (re)establish model connection with initial meta.
 	connectModel := func() (*websocket.Conn, error) {
@@ -122,6 +139,16 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		if agentParam := c.Query("agent"); agentParam != "" {
 			values.Add("agent", agentParam)
 			h.logger.Info("forwarding agent parameter to LLM", zap.String("agent", agentParam))
+		}
+
+		// Forward team/command parameters to support team mode
+		if modeParam != "" {
+			values.Add("mode", modeParam)
+			h.logger.Info("forwarding mode parameter to LLM", zap.String("mode", modeParam))
+		}
+		if commandParam != "" {
+			values.Add("command", commandParam)
+			h.logger.Info("forwarding command parameter to LLM")
 		}
 
 		// values.Add("chat_id", input.chatID.String())
@@ -161,6 +188,7 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		user.ID,
 		initialMessage,
 		c.Query("source"),
+		commandPayload,
 		// input.chatID,
 		connectModel,
 	).Stream(streamer.NewSocketReader(
