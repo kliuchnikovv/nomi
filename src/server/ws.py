@@ -12,6 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Cookie
 from src.agents.factory import AgentFactory
 from src.server.models import Frame, Op
 from src.server.utils import make_meta, make_error, make_done, make_data
+from src.teams import TeamFactory
 from src.tools.config import ToolConfigClient
 from src.tools.models import ToolSpec
 
@@ -42,14 +43,28 @@ def router(agent_factory: AgentFactory) -> APIRouter:
 
         await websocket.accept()
         
+        def _parse_json_param(raw: Optional[str]) -> Optional[dict]:
+            if not raw:
+                return None
+            try:
+                return json.loads(raw)
+            except Exception:
+                logger.warning("[WS] Failed to parse json param: session_id=%s value=%s", session_id, raw)
+                return None
+
         # Extract model from query parameters if provided
         model_from_query = websocket.query_params.get("model")
         agent_type = websocket.query_params.get("agent")
+        build_mode = (websocket.query_params.get("mode") or "agent").lower()
+        is_team_mode = build_mode == "team"
+        command_desc: Optional[dict] = _parse_json_param(
+            websocket.query_params.get("command") or websocket.query_params.get("team") or websocket.query_params.get("team_desc")
+        )
         
         if model_from_query or agent_type:
-            logger.info("[WS] Open: session_id=%s model=%s agent=%s", session_id, model_from_query, agent_type)
+            logger.info("[WS] Open: session_id=%s model=%s agent=%s mode=%s", session_id, model_from_query, agent_type, build_mode)
         else:
-            logger.info("[WS] Open: session_id=%s", session_id)
+            logger.info("[WS] Open: session_id=%s mode=%s", session_id, build_mode)
 
         next_id = 0
         
@@ -112,6 +127,21 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                         tool_dict,
                                     )
                                     continue
+                    
+                    # Опционально принимаем описание команды/агента из payload
+                    cmd_obj = payload.get("command") if isinstance(payload, dict) else None
+                    if cmd_obj is None and isinstance(payload, dict):
+                        cmd_obj = payload.get("team")
+
+                    if cmd_obj:
+                        if isinstance(cmd_obj, str):
+                            try:
+                                cmd_obj = json.loads(cmd_obj)
+                            except json.JSONDecodeError:
+                                logger.warning("[WS] Failed to parse command payload: session_id=%s", session_id)
+                                cmd_obj = None
+                        if isinstance(cmd_obj, dict):
+                            command_desc = cmd_obj
                 
                 tool_names = [t.name for t in tools_specs]
                 logger.info(
@@ -150,19 +180,50 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                 current_model_name,
             )
         else:
+            if command_desc and isinstance(command_desc, dict) and command_desc.get("model"):
+                current_model_name = command_desc.get("model")
             logger.debug(
                 "[WS] Using default model: session_id=%s",
                 session_id,
             )
 
+        team_factory: Optional[TeamFactory] = None
+
         try:
-            # Создаем агента с полученными инструментами и моделью
-            agent = await agent_factory.build(
-                session_id, 
-                tools_specs=tools_specs,
-                model_name=current_model_name,
-                agent_type=agent_type
-            )
+            if is_team_mode:
+                team_factory = TeamFactory(
+                    agent_factory=agent_factory,
+                    db=agent_factory._db,
+                    model=agent_factory.build_model(current_model_name) if current_model_name else agent_factory._model,
+                    debug_mode=agent_factory._debug_mode,
+                )
+                if not command_desc:
+                    next_id = await _send_frame(
+                        websocket=websocket,
+                        frame=make_error(
+                            id=next_id,
+                            chat_id=None,
+                            code="team_desc_missing",
+                            message="Team mode requires command description.",
+                            http=400,
+                        ),
+                    )
+                    await websocket.close(code=1008, reason="Missing team description")
+                    return
+
+                agent = await team_factory.build(
+                    command_desc=command_desc,
+                    session_id=session_id,
+                )
+            else:
+                # Создаем агента с полученными инструментами и моделью
+                agent = await agent_factory.build(
+                    session_id, 
+                    tools_specs=tools_specs,
+                    model_name=current_model_name,
+                    agent_type=agent_type,
+                    command_desc=command_desc,
+                )
         except Exception as exc:
             next_id = await _send_frame(
                 websocket=websocket,
@@ -290,17 +351,47 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                         new_model_name = payload.get("model")
                         if new_model_name:
                             try:
-                                # Rebuild agent with new model
-                                agent = await agent_factory.build(
-                                    session_id,
-                                    tools_specs=tools_specs,
-                                    model_name=new_model_name
-                                )
+                                if is_team_mode:
+                                    if not command_desc:
+                                        logger.warning("[WS] Team mode missing command_desc on model change: session_id=%s", session_id)
+                                        next_id = await _send_frame(
+                                            websocket=websocket,
+                                            frame=make_error(
+                                                id=next_id,
+                                                chat_id=frame.chat_id,
+                                                code="team_desc_missing",
+                                                message="Team mode requires command description.",
+                                                http=400,
+                                            ),
+                                        )
+                                        continue
+
+                                    updated_desc = dict(command_desc)
+                                    updated_desc["model"] = new_model_name
+                                    team_factory = TeamFactory(
+                                        agent_factory=agent_factory,
+                                        db=agent_factory._db,
+                                        model=agent_factory.build_model(new_model_name),
+                                        debug_mode=agent_factory._debug_mode,
+                                    )
+                                    agent = await team_factory.build(
+                                        command_desc=updated_desc,
+                                        session_id=session_id,
+                                    )
+                                    command_desc = updated_desc
+                                else:
+                                    # Rebuild agent with new model
+                                    agent = await agent_factory.build(
+                                        session_id,
+                                        tools_specs=tools_specs,
+                                        model_name=new_model_name
+                                    )
                                 current_model_name = new_model_name
                                 logger.info(
-                                    "[WS] Model changed: session_id=%s new_model=%s",
+                                    "[WS] Model changed: session_id=%s new_model=%s mode=%s",
                                     session_id,
                                     new_model_name,
+                                    build_mode,
                                 )
                                 # Send ACK
                                 next_id = await _send_frame(
