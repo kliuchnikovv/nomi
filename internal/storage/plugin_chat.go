@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -66,6 +67,41 @@ func (s *Storage) GetPluginChat(ctx context.Context, userID uuid.UUID, chatID uu
 		return nil, err
 	}
 	return &chat, nil
+}
+
+// UpdatePluginChatTitle updates the title of a plugin chat for the user.
+func (s *Storage) UpdatePluginChatTitle(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, title string) (*PluginChat, error) {
+	if title == "" {
+		return nil, fmt.Errorf("title cannot be empty")
+	}
+	result := s.DB.WithContext(ctx).
+		Model(&PluginChat{}).
+		Where("id = ? AND user_id = ?", chatID, userID).
+		Updates(map[string]interface{}{
+			"title":      title,
+			"updated_at": time.Now(),
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return s.GetPluginChat(ctx, userID, chatID)
+}
+
+// DeletePluginChat removes a plugin chat for the user.
+func (s *Storage) DeletePluginChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {
+	result := s.DB.WithContext(ctx).
+		Where("id = ? AND user_id = ?", chatID, userID).
+		Delete(&PluginChat{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // ListPluginChatsWithStats returns chats for provider/user with counts and last received timestamp.
