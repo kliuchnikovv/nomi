@@ -1,25 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-
 import {
     FlatList,
     KeyboardAvoidingView,
     Platform,
     View,
     Animated,
-    Linking,
-    Pressable,
-    ToastAndroid,
-    Text,
 } from 'react-native';
-import InAppBrowser from 'react-native-inappbrowser-reborn';
-
 import { styles } from './styles';
-
-import Markdown from 'react-native-markdown-display';
 import ChatInput from './input/component';
 import { useChat } from './context';
-import { ActionSheetIOS, Share } from 'react-native';
-import Clipboard from '@react-native-clipboard/clipboard';
+import MessageScreen from './message/screen';
+import { Action } from './message/models.tsx';
 
 export default function ChatScreen() {
     const { messages, sendMessage, assistantWorking, executeMessageAction, isPluginThread } = useChat();
@@ -93,47 +84,8 @@ export default function ChatScreen() {
         };
     }, [messages, lastAssistantIndex, assistantWorking]);
 
-    const copyMsg = (text: string) => {
-        Clipboard.setString(text || '');
-        if (Platform.OS === 'android') {
-            ToastAndroid.show('Скопировано', ToastAndroid.SHORT);
-        }
-    };
-
-    const onLongPressMsg = (text: string) => {
-        if (Platform.OS === 'ios') {
-            ActionSheetIOS.showActionSheetWithOptions(
-                {
-                    options: ['Копировать', 'Отмена'],
-                    cancelButtonIndex: 1,
-                    userInterfaceStyle: 'dark',
-                },
-                idx => idx === 0 && copyMsg(text),
-            );
-        } else {
-            copyMsg(text);
-        }
-    };
-
-    const handleActionPress = useCallback(async (action: any, messageId: string) => {
-        if (action?.command === 'open_web' && action.url) {
-            try {
-                const isAvailable = await InAppBrowser.isAvailable();
-                if (isAvailable) {
-                    await InAppBrowser.open(action.url, {
-                        showTitle: true,
-                        dismissButtonStyle: 'close',
-                        enableDefaultShare: false,
-                    });
-                } else {
-                    await Linking.openURL(action.url);
-                }
-            } catch (err) {
-                console.warn('Failed to open url', err);
-                Linking.openURL(action.url).catch(() => {});
-            }
-        }
-        await executeMessageAction(action, messageId);
+    const handleActionPress = useCallback(async (action: Action) => {
+        await executeMessageAction(action, action.message_id);
     }, [executeMessageAction]);
 
     return (
@@ -149,7 +101,7 @@ export default function ChatScreen() {
                     styles.listContent,
                     { paddingBottom: inputBarHeight + 12 },
                 ]}
-                contentInset={{ bottom: inputBarHeight }}
+                // contentInset={{ bottom: inputBarHeight }}
                 scrollIndicatorInsets={{ bottom: inputBarHeight }}
                 keyboardShouldPersistTaps="handled"
                 data={messages ?? []}
@@ -164,76 +116,29 @@ export default function ChatScreen() {
                     const isLastAssistant =
                         index === (messages?.length ?? 0) - 1 &&
                         item.role === 'assistant';
-                    const showTyping = isLastAssistant;
-                    const displayedText = showTyping
-                        ? item.text.slice(
-                              0,
-                              Math.min(shownChars, item.text.length),
-                          )
-                        : item.text;
+                    const showTyping = isLastAssistant && assistantWorking;
+
+                    // Create a display message with typing effect if needed
+                    const displayMessage = showTyping
+                        ? {
+                            ...item,
+                            text: item.text.slice(0, Math.min(shownChars, item.text.length)),
+                        }
+                        : item;
+
                     const isDaemon = item.metadata?.originalRole === 'daemon';
                     const daemonHeaderText = isDaemon
                         ? (item.metadata?.header || item.metadata?.title || 'Daemon')
                         : null;
+
                     return (
-                        <View
-                            style={
-                                item.role === 'user'
-                                    ? [styles.bubble, styles.bubbleUser]
-                                    : [styles.assistantContainer, isDaemon && styles.daemonContainer]
-                            }
-                        >
-                            {daemonHeaderText && (
-                                <Text style={styles.daemonHeader}>{daemonHeaderText}</Text>
-                            )}
-                            <Pressable
-                                onLongPress={() => onLongPressMsg(item.text)}
-                                delayLongPress={250}
-                                style={({ pressed }) => [
-                                    item.role === 'user'
-                                        ? [styles.bubble, styles.bubbleUser]
-                                        : styles.assistantContainer,
-                                    pressed && { opacity: 0.75 },
-                                ]}
-                            >
-                                <Markdown
-                                    style={styles.markdownStyles}
-                                    onLinkPress={url => {
-                                        Linking.openURL(url).catch(() => {});
-                                        return false;
-                                    }}
-                                >
-                                    {displayedText || ''}
-                                </Markdown>
-                            </Pressable>
-                            {isPluginThread && item.importance && (
-                                <View style={styles.importanceBadge}>
-                                    <Text style={styles.importanceText}>{item.importance}</Text>
-                                </View>
-                            )}
-                            {isPluginThread && item.actions && item.actions.length > 0 && (
-                                <View style={{ marginTop: 6 }}>
-                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                                        {item.actions.map((action: any) => (
-                                            <Pressable
-                                                key={`${action.command}-${action.url || ''}-${action.prompt || ''}`}
-                                                onPress={() => handleActionPress(action, item.id)}
-                                                style={({ pressed }) => [
-                                                    styles.actionButton,
-                                                    { width: '48%' },
-                                                    pressed && { opacity: 0.8 },
-                                                ]}
-                                            >
-                                                <Text style={styles.actionLabel}>{action.label || action.command}</Text>
-                                                {action.why ? (
-                                                    <Text style={styles.actionWhy}>{action.why}</Text>
-                                                ) : null}
-                                            </Pressable>
-                                        ))}
-                                    </View>
-                                </View>
-                            )}
-                        </View>
+                        <MessageScreen
+                            message={displayMessage}
+                            actions={isPluginThread ? item.actions || null : null}
+                            header={daemonHeaderText}
+                            importance={isPluginThread ? item.importance : undefined}
+                            onActionPress={handleActionPress}
+                        />
                     );
                 }}
             />

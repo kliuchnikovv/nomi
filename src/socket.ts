@@ -20,6 +20,7 @@ export class ChatSocket {
     private readonly getChatId: () => string | null;
     private readonly getMessageId: () => string | null;
     private readonly getModel: () => string | null;
+    private readonly getContext: () => string | null;
     private handlers: Handlers = {};
     private outbox: any[] = [];
     private idleTimer: any = null;
@@ -31,12 +32,14 @@ export class ChatSocket {
         getChatId: () => string | null,
         getMessageId: () => string | null,
         getModel: () => string | null,
+        getContext: () => string | null,
     ) {
         this.rootUrl = rootUrl;
         this.getToken = getToken;
         this.getChatId = getChatId;
         this.getMessageId = getMessageId;
         this.getModel = getModel;
+        this.getContext = getContext;
     }
 
     setHandlers(h: Handlers) {
@@ -92,6 +95,10 @@ export class ChatSocket {
         // Add model parameter if selected
         const model = this.getModel();
         if (model) qs.set('model', model);
+
+        // Add context parameter
+        const context = this.getContext();
+        if (context) qs.set('source', context);
 
         const httpUrl = `${this.rootUrl}/chat/ws?${qs.toString()}`;
         const wsUrl = httpUrl.startsWith('https://')

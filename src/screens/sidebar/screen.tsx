@@ -31,7 +31,10 @@ export default function Sidebar({
     onChatDelete,
     onOpenSettings,
 }: Props) {
+    const [highlightedChatID, setHighlightedChatID] = React.useState<string | null>(null);
+
     const openMenu = (chat_id: string) => {
+        setHighlightedChatID(chat_id);
         ActionSheetIOS.showActionSheetWithOptions(
             {
                 options: ['Rename', 'Delete', 'Cancel'],
@@ -40,6 +43,7 @@ export default function Sidebar({
                 userInterfaceStyle: 'dark',
             },
             (i) => {
+                setHighlightedChatID(null);
                 // if (i === 0) onRename();
                 if (i === 1) onChatDelete(chat_id);
             }
@@ -63,6 +67,7 @@ export default function Sidebar({
                         style={[
                             styles.chatItem,
                             item.id === activeChatID && styles.chatItemActive,
+                            item.id === highlightedChatID && styles.chatItemHighlighted,
                         ]}
                         onLongPress={() => openMenu(item.id)}
                     >

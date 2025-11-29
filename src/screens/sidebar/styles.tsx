@@ -52,6 +52,9 @@ export const styles = StyleSheet.create({
     chatItemActive: {
         backgroundColor: oneDark.gutterGrey,
     },
+    chatItemHighlighted: {
+        backgroundColor: 'rgba(171, 178, 191, 0.2)',
+    },
     chatTitle: {
         color: oneDarkPalette.white,
         fontSize: 14,

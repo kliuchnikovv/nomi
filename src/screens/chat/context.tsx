@@ -10,9 +10,19 @@ import React, {
 } from 'react';
 import { ChatContextType, Props, Model } from './models';
 import { useAuth } from '../auth/context.tsx';
+import { alertError } from '../auth/models.tsx';
 import { ChatSocket } from '../../socket';
 import { API_URL } from '../../config.ts';
 import { modelsApi, sidebarApi } from '../../apiClient';
+
+function generateUUID() {
+    // RFC4122 version 4 compliant enough for client-side ids
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -65,6 +75,26 @@ export function ChatProvider({
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
     // const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app';
+
+    // Keep getMessages for initial load and manual refresh if needed
+    const getMessages = useCallback(async (chatID: string) => {
+        try {
+            const data = await apiClient.get<Message[]>(
+                `${API_URL}/chats/${chatID}/messages`,
+            );
+            if (!data) {
+                return;
+            }
+
+            setMessages(data);
+        } catch (error) {
+            // alertError(`Failed to fetch messages for chat: ${error}`);
+            console.error(
+                `Failed to fetch messages for chat ${chatID}:`,
+                error,
+            );
+        }
+    }, []);
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
@@ -123,7 +153,7 @@ export function ChatProvider({
         }
 
         // Не открываем сокет, пока у нас placeholder chat_id или в режиме плагина
-        if (!activeChatID || activeChatID === emptyChatID || pluginThreadMeta) {
+        if ((!activeChatID || activeChatID === emptyChatID) && !pluginThreadMeta) {
             // console.warn('WebSocket useEffect: Skipping WS init until real chat_id is set');
             socketRef.current?.close();
             socketRef.current = null;
@@ -143,89 +173,97 @@ export function ChatProvider({
             socketRef.current = null;
         };
     }, [activeChatID, token, refreshToken, API_URL]); // Dependencies for WebSocket lifecycle
+    const refreshPluginThread = useCallback(async () => {
+        if (!pluginThreadMeta) return;
+        try {
+            const resp = await sidebarApi.getChatMessages(pluginThreadMeta.provider, pluginThreadMeta.chatId);
+            const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, pluginThreadMeta.provider));
+            setMessages(converted);
+        } catch (err) {
+            console.error('Failed to refresh plugin thread', err);
+        }
+    }, [pluginThreadMeta, mapPluginMessage]);
 
     const sendStreamingMessage = useCallback(
         async (text: string) => {
             if (!text.trim() || !user?.id) return;
 
+            let chatIdToUse = activeChatID;
+            let messageID: string | undefined;
+            const timestamp = Date.now();
+
             if (pluginThreadMeta) {
-                const timestamp = Date.now();
+                chatIdToUse = String(pluginThreadMeta.chatId);
+                messageID = generateUUID();
+
                 const newUserMessage: Message = {
-                    id: `plugin-user-${timestamp}`,
-                    chat_id: String(pluginThreadMeta.chatId),
+                    id: messageID,
+                    chat_id: chatIdToUse,
                     sender: user.id,
                     role: 'user',
                     text: text.trim(),
                     created_at: timestamp,
                 };
                 setMessages(prev => [...prev, newUserMessage]);
-                try {
-                    const sent = await sidebarApi.sendChatMessage(
-                        pluginThreadMeta.provider,
-                        pluginThreadMeta.chatId,
-                        { content: text.trim() },
-                    );
-                    if (sent) {
-                        setMessages(prev => [...prev, mapPluginMessage(sent, pluginThreadMeta.provider, 'user')]);
-                    }
-                    await refreshPluginThread();
-                } catch (err) {
-                    console.error('Failed to send plugin message', err);
+                // We do not call sidebarApi.sendChatMessage anymore.
+                // We rely on WebSocket to handle the message.
+            } else {
+                // Если чата ещё нет, создаём его через REST и монтируем id
+                if (!chatIdToUse || chatIdToUse === emptyChatID) {
+                    chatIdToUse = await createChat(text) || activeChatID;
                 }
-                return;
+
+                if (!chatIdToUse) {
+                    console.error('Failed to resolve chat id before sending message');
+                    return;
+                }
+
+                messageID = await createMessage(text, chatIdToUse);
+                if (!messageID) {
+                    console.error('Failed to create message before sending via WebSocket');
+                    return;
+                }
+                setCurrentMessageID(messageID!);
+
+                const userMessage: Message = {
+                    id: messageID!,
+                    chat_id: chatIdToUse!,
+                    sender: user.id,
+                    role: 'user',
+                    text: text.trim(),
+                    created_at: timestamp,
+                };
+
+                setMessages(prevMessages => [
+                    ...prevMessages,
+                    userMessage,
+                ]);
             }
 
-            // Если чата ещё нет, создаём его через REST и монтируем id
-            let chatIdToUse = activeChatID;
-            if (!chatIdToUse || chatIdToUse === emptyChatID) {
-                chatIdToUse = await createChat(text) || activeChatID;
-            }
-
-            let messageID = await createMessage(text, chatIdToUse);
-            setCurrentMessageID(messageID!);
-
-            // const tempUserMessageId = `user-${Date.now()}`;
-            // const tempAssistantMessageId = `asst-${Date.now()}`;
-            //
-            const userMessage: Message = {
-                id: messageID!,
-                chat_id: chatIdToUse!,
-                sender: user.id,
-                role: 'user',
-                text: text.trim(),
-                created_at: Date.now(),
-            };
-
-            // const assistantMessage: Message = {
-            //     id: tempAssistantMessageId,
-            //     chat_id: chatIdToUse!,
-            //     sender: 'assistant',
-            //     role: 'assistant',
-            //     text: '', // Start with empty text for streaming
-            //     created_at: Date.now(),
-            // };
-            //
-            setMessages(prevMessages => [
-                ...prevMessages,
-                userMessage,
-                // assistantMessage,
-            ]);
-
-            const sessionId = `sess_${Date.now()}`;
+            const sessionId = `sess_${timestamp}`;
             console.log(
                 'sendStreamingMessage: socketRef.current:',
                 socketRef.current,
             ); // Add this log
             if (!socketRef.current) {
-                socketRef.current = newWebSocket(token!, activeChatID);
+                if (!chatIdToUse || !messageID) {
+                    console.error('Missing chatId or messageId when initializing WebSocket');
+                    return;
+                }
+                socketRef.current = newWebSocket(token!, chatIdToUse);
             }
 
             setAssistantWorking(true);
             // Теперь точно есть socketRef; sendMessage положит в outbox и откроет WS
+            if (!chatIdToUse || !messageID) {
+                console.error('Missing chatId or messageId before sending message via WebSocket');
+                setAssistantWorking(false);
+                return;
+            }
             socketRef.current!.sendMessage(text.trim(), sessionId, messageID);
             console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
         },
-        [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread],
+        [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token],
     ); // Dependencies for sendStreamingMessage
 
     const executeMessageAction = useCallback(async (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => {
@@ -242,16 +280,7 @@ export function ChatProvider({
             console.error('Failed to execute plugin action', err);
         }
     }, [pluginThreadMeta, refreshPluginThread]);
-    const refreshPluginThread = useCallback(async () => {
-        if (!pluginThreadMeta) return;
-        try {
-            const resp = await sidebarApi.getChatMessages(pluginThreadMeta.provider, pluginThreadMeta.chatId);
-            const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, pluginThreadMeta.provider));
-            setMessages(converted);
-        } catch (err) {
-            console.error('Failed to refresh plugin thread', err);
-        }
-    }, [pluginThreadMeta, mapPluginMessage]);
+
 
     const startPluginThread = useCallback(async ({ provider, chatId, title }: { provider: string; chatId: string | number; title?: string | null }) => {
         setPluginThreadMeta({ provider, chatId });
@@ -268,25 +297,7 @@ export function ChatProvider({
         }
     }, [setActiveChatID, mapPluginMessage]);
 
-    // Keep getMessages for initial load and manual refresh if needed
-    const getMessages = useCallback(async (chatID: string) => {
-        try {
-            const data = await apiClient.get<Message[]>(
-                `${API_URL}/chats/${chatID}/messages`,
-            );
-            if (!data) {
-                return;
-            }
 
-            setMessages(data);
-        } catch (error) {
-            // alertError(`Failed to fetch messages for chat: ${error}`);
-            console.error(
-                `Failed to fetch messages for chat ${chatID}:`,
-                error,
-            );
-        }
-    }, []);
 
     async function createChat(title: string) {
         let chatID: string;
@@ -358,9 +369,10 @@ export function ChatProvider({
         const sock = new ChatSocket(
             API_URL,
             () => tkn,
-            () => chatID,
+            () => pluginThreadMeta ? String(pluginThreadMeta.chatId) : chatID,
             () => currentMessageID,
             () => selectedModel,
+            () => pluginThreadMeta ? 'inbox' : 'chat',
         )
 
         sock.setHandlers({
@@ -381,7 +393,13 @@ export function ChatProvider({
             },
             onError: (err: any) => {
                 console.error('WebSocket error:', err);
-                // alertError(`WebSocket error: ${err?.error?.message || err}`);
+                setAssistantWorking(false);
+                const message =
+                    err?.error?.message ||
+                    err?.payload?.message ||
+                    (typeof err === 'string' ? err : null) ||
+                    'WebSocket error';
+                alertError(message);
             },
             onUnauthorized: async () => {
                 return await refreshToken();

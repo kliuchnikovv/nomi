@@ -11,34 +11,35 @@ export interface MainContextType {
 }
 
 export type Chat = {
-    id:          string
-    model:       string
-    title:       string
-    created_at:  number
-    updated_at:  number
-    archived_at: number    | null
-    deleted_at:  number    | null
-    messages:    Message[]
+    id: string
+    model: string
+    title: string
+    created_at: number
+    updated_at: number
+    archived_at: number | null
+    deleted_at: number | null
+    messages: Message[]
 }
 
 export type Message = {
-    id:         string
-    chat_id:    string
-    sender:     string
-    role:       string
-    text:       string
+    id: string
+    chat_id: string
+    sender: string
+    role: string
+    text: string
     created_at: number
     actions?: any[]
+    importance?: string
     metadata?: Record<string, any>
 }
 
 export type Frame = {
-    id:        number
-    chat_id:   string
+    id: number
+    chat_id: string
     timestamp: number
-    channel:   string
-    kind:      string
-    op:        string
-    payload:   any
-    error:     any
+    channel: string
+    kind: string
+    op: string
+    payload: any
+    error: any
 }

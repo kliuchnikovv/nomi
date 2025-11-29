@@ -223,7 +223,7 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
         return (
             <View style={[styles.root, { width }]}>
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Plugin Chats</Text>
+                    <Text style={styles.sectionTitle}>Inbox Chats</Text>
                 </View>
                 <View style={styles.emptyState}>
                     <Text style={styles.emptyText}>Error: {error}</Text>
@@ -240,7 +240,7 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
     return (
         <View style={[styles.root, { width }]}>
             <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Plugin Chats</Text>
+                <Text style={styles.sectionTitle}>Inbox Chats</Text>
             </View>
             {loading && plugins.length === 0 ? (
                 <View style={styles.emptyState}>
@@ -248,7 +248,7 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
                 </View>
             ) : plugins.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>No plugin chats</Text>
+                    <Text style={styles.emptyText}>No inbox chats</Text>
                 </View>
             ) : (
                 <FlatList

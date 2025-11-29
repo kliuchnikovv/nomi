@@ -26,6 +26,16 @@ import SettingsModal from '../settings/screen';
 import { emptyChatID, useMain } from './context';
 import { ChatProvider, useChat } from '../chat/context.tsx';
 import { InboxProvider, useInbox } from '../rightsidebar/context';
+import { oneDarkPalette } from '../../themes/oneDark.ts';
+
+const withAlpha = (hex: string, alpha: number) => {
+    const h = hex.replace('#', '');
+    const bigint = parseInt(h, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 function HeaderTitle({ activeChatTitle }: { activeChatTitle?: string | null }) {
     const { externalTitle } = useChat();
@@ -51,7 +61,9 @@ function HeaderShell({
     const { externalTitle, isPluginThread } = useChat();
     const headerStyle = [
         styles.header,
-        isPluginThread ? { backgroundColor: 'rgba(224,108,117,0.12)' } : { backgroundColor: 'rgba(97,175,239,0.08)' },
+        isPluginThread
+            ? { backgroundColor: withAlpha(oneDarkPalette.red, 0.12) }
+            : { backgroundColor: withAlpha(oneDarkPalette.blue, 0.08) },
     ];
     return (
         <View style={headerStyle}>
@@ -118,6 +130,8 @@ function MainScreenContent() {
     const rightSidebarTranslateX = useSharedValue(rightSidebarOpen ? 0 : rightSidebarWidth);
     const leftSidebarWidth = useSharedValue(sidebarOpen ? sidebarWidth : 0);
     const rightSidebarWidthAnimated = useSharedValue(rightSidebarOpen ? rightSidebarWidth : 0);
+    const leftBackdropOpacity = useSharedValue(sidebarOpen ? 1 : 0);
+    const rightBackdropOpacity = useSharedValue(rightSidebarOpen ? 1 : 0);
 
     useEffect(() => {
         // If screen becomes narrow, default to collapsed; if wide, open.
@@ -126,26 +140,31 @@ function MainScreenContent() {
     }, [isNarrow]);
 
     useEffect(() => {
-        // Анимируем левую панель при изменении состояния
+        const duration = 220;
         if (sidebarOpen) {
-            leftSidebarTranslateX.value = withSpring(0, { damping: 20, stiffness: 90 });
-            leftSidebarWidth.value = withTiming(sidebarWidth, { duration: 180 });
+            leftSidebarTranslateX.value = withTiming(0, { duration });
+            leftSidebarWidth.value = withTiming(sidebarWidth, { duration });
+            leftBackdropOpacity.value = withTiming(1, { duration });
         } else {
-            leftSidebarTranslateX.value = withSpring(-sidebarWidth, { damping: 20, stiffness: 90 });
-            leftSidebarWidth.value = withTiming(0, { duration: 180 });
+            leftSidebarTranslateX.value = withTiming(-sidebarWidth, { duration });
+            leftSidebarWidth.value = withTiming(0, { duration });
+            leftBackdropOpacity.value = withTiming(0, { duration });
         }
-    }, [sidebarOpen, leftSidebarTranslateX, leftSidebarWidth, sidebarWidth]);
+    }, [sidebarOpen, leftSidebarTranslateX, leftSidebarWidth, sidebarWidth, leftBackdropOpacity]);
 
     useEffect(() => {
         // Анимируем правую панель при изменении состояния
+        const duration = 220;
         if (rightSidebarOpen) {
-            rightSidebarTranslateX.value = withSpring(0, { damping: 20, stiffness: 90 });
-            rightSidebarWidthAnimated.value = withTiming(rightSidebarWidth, { duration: 180 });
+            rightSidebarTranslateX.value = withTiming(0, { duration });
+            rightSidebarWidthAnimated.value = withTiming(rightSidebarWidth, { duration });
+            rightBackdropOpacity.value = withTiming(1, { duration });
         } else {
-            rightSidebarTranslateX.value = withSpring(rightSidebarWidth, { damping: 20, stiffness: 90 });
-            rightSidebarWidthAnimated.value = withTiming(0, { duration: 180 });
+            rightSidebarTranslateX.value = withTiming(rightSidebarWidth, { duration });
+            rightSidebarWidthAnimated.value = withTiming(0, { duration });
+            rightBackdropOpacity.value = withTiming(0, { duration });
         }
-    }, [rightSidebarOpen, rightSidebarTranslateX, rightSidebarWidthAnimated, rightSidebarWidth]);
+    }, [rightSidebarOpen, rightSidebarTranslateX, rightSidebarWidthAnimated, rightSidebarWidth, rightBackdropOpacity]);
 
 
 
@@ -176,7 +195,7 @@ function MainScreenContent() {
             left: leftSidebarWidth.value,
             top: -insets.top,
             bottom: -insets.bottom,
-            opacity: leftSidebarWidth.value > 0 ? 1 : 0,
+            opacity: leftBackdropOpacity.value,
         };
     });
 
@@ -185,7 +204,7 @@ function MainScreenContent() {
             right: rightSidebarWidthAnimated.value,
             top: -insets.top,
             bottom: -insets.bottom,
-            opacity: rightSidebarWidthAnimated.value > 0 ? 1 : 0,
+            opacity: rightBackdropOpacity.value,
         };
     });
 
