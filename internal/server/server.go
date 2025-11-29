@@ -70,6 +70,7 @@ func New(
 		sidebarHandler      = handlers.NewSidebarHandler(db, llmService)
 		actionsHandler      = handlers.NewActionsHandler(db, logger, manager) // Delegates to plugins
 		integrationsHandler = handlers.NewIntegrationsHandler(db)
+		pluginChatsHandler  = handlers.NewPluginChatsHandler(db)
 		tokenManager        = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler         = handlers.NewAuthHandler(db, tokenManager)
@@ -121,6 +122,11 @@ func New(
 	r.POST("/api/sidebar/:provider/chats/:chat_id/messages", wrapWithAuth(sidebarHandler.PostChatMessage, authMiddleware))
 	// Actions API - Delegates to plugins
 	r.POST("/api/sidebar/:provider/messages/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
+
+	// Plugin chats API
+	r.GET("/api/plugin_chats", wrapWithAuth(pluginChatsHandler.ListPluginChats, authMiddleware))
+	r.PATCH("/api/plugin_chats/:id", wrapWithAuth(pluginChatsHandler.UpdatePluginChat, authMiddleware))
+	r.DELETE("/api/plugin_chats/:id", wrapWithAuth(pluginChatsHandler.DeletePluginChat, authMiddleware))
 
 	// Integrations API
 	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
