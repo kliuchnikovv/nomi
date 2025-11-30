@@ -540,9 +540,16 @@ async def _run_agent_stream(agent: Agent, text: str):
 
     # Call agent entrypoints
     result = None
-    run = getattr(agent, "run", None)
-    if run is not None:
-        result = await _invoke_with_stream(run)
+    
+    # Try async run first (required for async tools)
+    arun = getattr(agent, "arun", None)
+    if arun is not None:
+        result = await _invoke_with_stream(arun)
+        
+    if result is None:
+        run = getattr(agent, "run", None)
+        if run is not None:
+            result = await _invoke_with_stream(run)
     if result is None:
         for m in ("generate", "respond", "chat"):
             fn = getattr(agent, m, None)
