@@ -6,7 +6,7 @@ import time
 import uuid
 
 from agno.agent import Agent
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Cookie
 
 from src.agents.factory import AgentFactory
