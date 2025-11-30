@@ -82,6 +82,18 @@ func (streamer *Streamer) Stream(
 	_ = dialModel()
 	clientFrames, clientErrs := client.Read(ctx)
 
+	// Resolve chatID once so we can attach it to outgoing frames.
+	resolveChatID := func() uuid.UUID {
+		if streamer.historyChatID != nil {
+			return *streamer.historyChatID
+		}
+		if len(streamer.chatHistory) > 0 {
+			return streamer.chatHistory[0].ChatID
+		}
+		return uuid.Nil
+	}
+	chatID := resolveChatID()
+
 	// Send integrations to model immediately upon connection
 	if modelReader != nil {
 		tools, err := streamer.storage.GetIntegrations(ctx, streamer.userID)
@@ -101,7 +113,7 @@ func (streamer *Streamer) Stream(
 			// Send integrations to model (AgnoProject) immediately
 			toolsFrame := Frame{
 				ID:        0,
-				ChatID:    uuid.Nil,
+				ChatID:    chatID,
 				Kind:      TokenKind,
 				Operation: ToolsOperation,
 				Timestamp: time.Now().UTC(),
@@ -137,12 +149,6 @@ func (streamer *Streamer) Stream(
 			}
 
 			// Log exactly what we're about to push to Agno to verify hand-off path.
-			chatID := uuid.Nil
-			if streamer.historyChatID != nil {
-				chatID = *streamer.historyChatID
-			} else if len(streamer.chatHistory) > 0 {
-				chatID = streamer.chatHistory[0].ChatID
-			}
 			streamer.logger.Info("forwarding chat history to model over websocket",
 				zap.String("chat_id", chatID.String()),
 				zap.Int("messages_count", len(historyMessages)),
@@ -151,7 +157,7 @@ func (streamer *Streamer) Stream(
 
 			historyFrame := Frame{
 				ID:        0,
-				ChatID:    uuid.Nil,
+				ChatID:    chatID,
 				Kind:      TokenKind,
 				Operation: HistoryOperation,
 				Timestamp: time.Now().UTC(),
@@ -177,6 +183,7 @@ func (streamer *Streamer) Stream(
 				Kind:      TokenKind,
 				Operation: MessageOperation,
 				Timestamp: time.Now().UTC(),
+				ChatID:    chatID,
 				Payload: Payload{
 					Message: streamer.initialMessage,
 				},
