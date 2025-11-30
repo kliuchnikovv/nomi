@@ -524,7 +524,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
 
     return r
 
-async def _run_agent_stream(agent: Agent, text: str):
+async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] = None):
     """Async generator yielding text chunks from the agent.
 
     Tries to use stream=True where supported; handles async/sync iterators
@@ -549,8 +549,8 @@ async def _run_agent_stream(agent: Agent, text: str):
     async def _invoke_with_stream(fn):
         try:
             if asyncio.iscoroutinefunction(fn):
-                return await fn(text, stream=True)
-            return fn(text, stream=True)
+                return await fn(text, stream=True, session_id=session_id)
+            return fn(text, stream=True, session_id=session_id)
         except TypeError:
             if asyncio.iscoroutinefunction(fn):
                 return await fn(text)
@@ -856,8 +856,13 @@ async def _process_message(
         # Inject context for tools
         agent.chat_id = chat_id
         agent.user_id = session_id
+        # Ensure agent storage uses this session key for history
+        try:
+            agent.session_id = session_id  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
-        async for chunk in _run_agent_stream(agent, text or ""):
+        async for chunk in _run_agent_stream(agent, text or "", session_id=session_id):
             if not chunk:
                 continue
             # logger.debug("[WS] Stream chunk: len=%d", len(chunk))
