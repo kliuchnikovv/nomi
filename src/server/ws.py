@@ -835,6 +835,10 @@ async def _process_message(
         
         logger.debug("[WS] Starting agent stream: session_id=%s", session_id)
 
+        # Inject context for tools
+        agent.chat_id = chat_id
+        agent.user_id = session_id
+
         async for chunk in _run_agent_stream(agent, text or ""):
             if not chunk:
                 continue
