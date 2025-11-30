@@ -331,6 +331,22 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             logger.exception("[WS] Agent init failed: session_id=%s", session_id)
             return
 
+        # Attach chat history to agent so downstream run() can add it to context.
+        try:
+            agent.chat_history = chat_history  # type: ignore[attr-defined]
+            agent.history = chat_history       # compat if agent uses different attribute
+            logger.info(
+                "[WS] Applied chat history to agent: session_id=%s count=%d",
+                session_id,
+                len(chat_history),
+            )
+        except Exception as exc:
+            logger.warning(
+                "[WS] Failed to attach history to agent: session_id=%s error=%s",
+                session_id,
+                exc,
+            )
+
         # Track last time we received any client message
         last_activity = time.monotonic()
         logger.debug("[WS] Entering main loop: session_id=%s", session_id)
@@ -579,6 +595,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     session_id=session_id,
                     chat_id=frame.chat_id or "",
                     user_message_id=frame.message_id or "",
+                    chat_history=chat_history,
                 )
         except WebSocketDisconnect:
             # Клиент отвалился — нормальный сценарий
@@ -894,6 +911,7 @@ async def _process_message(
     session_id: str,
     chat_id: str,
     user_message_id: str,
+    chat_history: Optional[List[Dict[str, str]]] = None,
 ) -> int:
     message_id = str(uuid.uuid4())
 
@@ -928,6 +946,14 @@ async def _process_message(
         # Inject context for tools
         agent.chat_id = chat_id
         agent.user_id = session_id
+
+        # If agent exposes a way to seed history, set it before running.
+        try:
+            if chat_history is not None:
+                agent.chat_history = chat_history  # type: ignore[attr-defined]
+                agent.history = chat_history       # compat if agent uses different attribute
+        except Exception:
+            pass
 
         async for chunk in _run_agent_stream(agent, text or ""):
             if not chunk:
