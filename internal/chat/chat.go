@@ -8,7 +8,7 @@ import (
 
 type Chat struct {
 	ID         uuid.UUID  `json:"id"`
-	Model      uuid.UUID  `json:"model"`
+	Model      string     `json:"model"`
 	Title      string     `json:"title"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
@@ -25,10 +25,10 @@ const (
 )
 
 type Message struct {
-    ID     uuid.UUID `json:"id"`
-    ChatID uuid.UUID `json:"chat_id"`
-    Sender uuid.UUID `json:"sender"`
-    Role   Role      `json:"role"`
-    Text   string    `json:"text"`
-    CreatedAt time.Time `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	ChatID    uuid.UUID `json:"chat_id"`
+	Sender    uuid.UUID `json:"sender"`
+	Role      Role      `json:"role"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
 }

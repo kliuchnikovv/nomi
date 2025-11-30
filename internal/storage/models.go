@@ -12,7 +12,7 @@ import (
 type Chat struct {
 	ID         uuid.UUID  `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
 	UserID     uuid.UUID  `gorm:"type:uuid;not null"`
-	Model      uuid.UUID  `gorm:"type:uuid;not null"`
+	Model      string     `gorm:"type:text;not null"`
 	Title      string     `gorm:"not null"`
 	CreatedAt  time.Time  `gorm:"not null"`
 	UpdatedAt  time.Time  `gorm:"not null"`
