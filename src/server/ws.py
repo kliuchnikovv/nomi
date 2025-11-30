@@ -19,6 +19,15 @@ from src.tools.models import ToolSpec
 logger = logging.getLogger(__name__)
 
 
+def _truncate(text: Optional[str], limit: int = 200) -> str:
+    if text is None:
+        return ""
+    text = str(text)
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}...(truncated)"
+
+
 def router(agent_factory: AgentFactory) -> APIRouter:
     r = APIRouter()
 
@@ -205,6 +214,19 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     "[WS] Received chat history: session_id=%s count=%d",
                     session_id,
                     len(chat_history),
+                )
+                # Surface a concise snapshot in INFO to verify payload content end-to-end.
+                history_sample = [
+                    {
+                        "role": msg.get("role"),
+                        "content": _truncate(msg.get("content"), limit=160),
+                    }
+                    for msg in chat_history[:5]
+                ]
+                logger.info(
+                    "[WS] History sample: session_id=%s sample=%s",
+                    session_id,
+                    history_sample,
                 )
                 logger.debug("[WS] History details: session_id=%s history=%s", session_id, chat_history)
             else:
