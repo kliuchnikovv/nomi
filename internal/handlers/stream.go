@@ -187,6 +187,10 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	var chatHistory []*chat.Message
 	var historyChatID *uuid.UUID
 	chatIDStr := c.Query("chat_id")
+	if chatIDStr == "" {
+		// Support alternate camelCase param from frontend
+		chatIDStr = c.Query("chatId")
+	}
 	if chatIDStr != "" {
 		chatHistory = make([]*chat.Message, 0)
 		chatID, err := uuid.Parse(chatIDStr)
@@ -202,6 +206,9 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		} else {
 			h.logger.Warn("invalid chat_id format", zap.String("chat_id", chatIDStr))
 		}
+	} else {
+		h.logger.Warn("chat_id not provided for websocket request; history will be empty",
+			zap.String("path", c.Request.URL.Path))
 	}
 
 	streamer.New(
