@@ -955,7 +955,24 @@ async def _process_message(
         except Exception:
             pass
 
-        async for chunk in _run_agent_stream(agent, text or ""):
+        # Build enriched prompt with prior messages so model sees the context even if agent
+        # doesn't use chat_history internally.
+        enriched_text = text or ""
+        if chat_history:
+            history_lines = []
+            for msg in chat_history:
+                role = msg.get("role") or "user"
+                content = msg.get("content") or ""
+                history_lines.append(f"{role}: {content}")
+            history_block = "\n".join(history_lines)
+            enriched_text = f"Previous conversation:\\n{history_block}\\n\\nLatest user message:\\n{enriched_text}"
+            logger.info(
+                "[WS] Injecting history into prompt: session_id=%s count=%d",
+                session_id,
+                len(chat_history),
+            )
+
+        async for chunk in _run_agent_stream(agent, enriched_text):
             if not chunk:
                 continue
             # logger.debug("[WS] Stream chunk: len=%d", len(chunk))
