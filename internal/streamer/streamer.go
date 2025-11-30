@@ -21,6 +21,7 @@ type Streamer struct {
 	source         string
 	initialMessage string
 	commandPayload interface{}
+	chatHistory    []*chat.Message
 	connectModel   func() (*websocket.Conn, error)
 }
 
@@ -31,6 +32,7 @@ func New(
 	initialMessage string,
 	source string,
 	commandPayload interface{},
+	chatHistory []*chat.Message,
 	connectModel func() (*websocket.Conn, error),
 ) *Streamer {
 	return &Streamer{
@@ -40,6 +42,7 @@ func New(
 		initialMessage: initialMessage,
 		source:         source,
 		commandPayload: commandPayload,
+		chatHistory:    chatHistory,
 		connectModel:   connectModel,
 	}
 }
@@ -116,6 +119,36 @@ func (streamer *Streamer) Stream(
 				streamer.logger.Error("failed to send initial tools frame to model", zap.Error(err))
 			} else {
 				streamer.logger.Info("sent initial tools to model", zap.Int("count", len(tools)))
+			}
+		}
+
+		// Send chat history to model if available
+		if len(streamer.chatHistory) > 0 {
+			// Format history as array of messages with role and content
+			historyMessages := make([]map[string]interface{}, 0, len(streamer.chatHistory))
+			for _, msg := range streamer.chatHistory {
+				historyMessages = append(historyMessages, map[string]interface{}{
+					"role":    string(msg.Role),
+					"content": msg.Text,
+				})
+			}
+
+			historyFrame := Frame{
+				ID:        0,
+				ChatID:    uuid.Nil,
+				Kind:      TokenKind,
+				Operation: HistoryOperation,
+				Timestamp: time.Now().UTC(),
+				Payload: Payload{
+					History: map[string]interface{}{
+						"messages": historyMessages,
+					},
+				},
+			}
+			if err := modelReader.Write(ctx, historyFrame); err != nil {
+				streamer.logger.Error("failed to send history frame to model", zap.Error(err))
+			} else {
+				streamer.logger.Info("sent chat history to model", zap.Int("count", len(streamer.chatHistory)))
 			}
 		}
 
