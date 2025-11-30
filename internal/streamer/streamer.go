@@ -22,6 +22,7 @@ type Streamer struct {
 	initialMessage string
 	commandPayload interface{}
 	chatHistory    []*chat.Message
+	historyChatID  *uuid.UUID
 	connectModel   func() (*websocket.Conn, error)
 }
 
@@ -33,6 +34,7 @@ func New(
 	source string,
 	commandPayload interface{},
 	chatHistory []*chat.Message,
+	historyChatID *uuid.UUID,
 	connectModel func() (*websocket.Conn, error),
 ) *Streamer {
 	return &Streamer{
@@ -43,6 +45,7 @@ func New(
 		source:         source,
 		commandPayload: commandPayload,
 		chatHistory:    chatHistory,
+		historyChatID:  historyChatID,
 		connectModel:   connectModel,
 	}
 }
@@ -123,7 +126,7 @@ func (streamer *Streamer) Stream(
 		}
 
 		// Send chat history to model if available
-		if len(streamer.chatHistory) > 0 {
+		if streamer.chatHistory != nil || streamer.historyChatID != nil {
 			// Format history as array of messages with role and content
 			historyMessages := make([]map[string]interface{}, 0, len(streamer.chatHistory))
 			for _, msg := range streamer.chatHistory {
@@ -134,8 +137,14 @@ func (streamer *Streamer) Stream(
 			}
 
 			// Log exactly what we're about to push to Agno to verify hand-off path.
+			chatID := uuid.Nil
+			if streamer.historyChatID != nil {
+				chatID = *streamer.historyChatID
+			} else if len(streamer.chatHistory) > 0 {
+				chatID = streamer.chatHistory[0].ChatID
+			}
 			streamer.logger.Info("forwarding chat history to model over websocket",
-				zap.String("chat_id", streamer.chatHistory[0].ChatID.String()),
+				zap.String("chat_id", chatID.String()),
 				zap.Int("messages_count", len(historyMessages)),
 				zap.Any("history_payload", historyMessages),
 			)
@@ -155,7 +164,10 @@ func (streamer *Streamer) Stream(
 			if err := modelReader.Write(ctx, historyFrame); err != nil {
 				streamer.logger.Error("failed to send history frame to model", zap.Error(err))
 			} else {
-				streamer.logger.Info("sent chat history to model", zap.Int("count", len(streamer.chatHistory)))
+				streamer.logger.Info("sent chat history to model",
+					zap.Int("count", len(streamer.chatHistory)),
+					zap.Bool("empty_history", len(streamer.chatHistory) == 0),
+				)
 			}
 		}
 
