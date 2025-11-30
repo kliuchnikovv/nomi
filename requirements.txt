@@ -16,3 +16,6 @@ cryptography
 itsdangerous
 uvicorn
 psycopg2
+lightrag
+chromadb-client
+google-generativeai
