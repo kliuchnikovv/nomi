@@ -20,8 +20,6 @@ go.work
 
 # Go debug bins
 __debug*
-api
-genie
 
 # Config
 configs/config.yaml
