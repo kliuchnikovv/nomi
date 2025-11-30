@@ -185,10 +185,13 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 
 	// Load chat history if chat_id is provided
 	var chatHistory []*chat.Message
+	var historyChatID *uuid.UUID
 	chatIDStr := c.Query("chat_id")
 	if chatIDStr != "" {
+		chatHistory = make([]*chat.Message, 0)
 		chatID, err := uuid.Parse(chatIDStr)
 		if err == nil {
+			historyChatID = &chatID
 			history, err := h.storage.GetMessages(ctx, user.ID, chatID)
 			if err != nil {
 				h.logger.Warn("failed to load chat history", zap.Error(err), zap.String("chat_id", chatIDStr))
@@ -209,6 +212,7 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		c.Query("source"),
 		commandPayload,
 		chatHistory,
+		historyChatID,
 		// input.chatID,
 		connectModel,
 	).Stream(streamer.NewSocketReader(
