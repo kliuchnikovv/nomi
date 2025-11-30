@@ -434,7 +434,7 @@ func (s *GmailIMAPService) ensureChat(ctx context.Context, userID uuid.UUID, int
 
 	var chatModel storage.Chat
 	err := s.storage.DB.WithContext(ctx).
-		Where("user_id = ? AND title = ? AND model = ?", userID, title, integration.ID).
+		Where("user_id = ? AND title = ? AND model = ?", userID, title, integration.ID.String()).
 		First(&chatModel).Error
 	if err == nil {
 		return chatModel.ID, nil
@@ -442,7 +442,7 @@ func (s *GmailIMAPService) ensureChat(ctx context.Context, userID uuid.UUID, int
 
 	newChat := &chat.Chat{
 		ID:    uuid.New(),
-		Model: integration.ID,
+		Model: integration.ID.String(),
 		Title: title,
 	}
 
