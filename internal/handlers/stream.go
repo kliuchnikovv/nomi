@@ -124,7 +124,9 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	// Provide connector to (re)establish model connection with initial meta.
 	connectModel := func() (*websocket.Conn, error) {
 		hdr := http.Header{}
-		hdr.Add("Cookie", "session_id=123") //TODO:
+		// Use chat_id as session_id so Agno's memory is keyed by chat.
+		sessionCookie := fmt.Sprintf("session_id=%s", sessionID)
+		hdr.Add("Cookie", sessionCookie)
 
 		values := query.Query()
 
@@ -153,6 +155,9 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		}
 
 		// values.Add("chat_id", input.chatID.String())
+		if sessionID != "" {
+			values.Add("chat_id", sessionID)
+		}
 		query.RawQuery = values.Encode()
 
 		h.logger.Info("dialing LLM service", zap.String("url", query.String()))
@@ -183,32 +188,24 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		h.logger.Info("extracted initial message from query", zap.String("message", initialMessage))
 	}
 
-	// Load chat history if chat_id is provided
+	// Use chat_id as session_id for Agno memory; no history frame anymore.
 	var chatHistory []*chat.Message
 	var historyChatID *uuid.UUID
+	var sessionID string
 	chatIDStr := c.Query("chat_id")
 	if chatIDStr == "" {
-		// Support alternate camelCase param from frontend
-		chatIDStr = c.Query("chatId")
+		chatIDStr = c.Query("chatId") // alternate casing from frontend
 	}
 	if chatIDStr != "" {
-		chatHistory = make([]*chat.Message, 0)
-		chatID, err := uuid.Parse(chatIDStr)
-		if err == nil {
+		if chatID, err := uuid.Parse(chatIDStr); err == nil {
 			historyChatID = &chatID
-			history, err := h.storage.GetMessages(ctx, user.ID, chatID)
-			if err != nil {
-				h.logger.Warn("failed to load chat history", zap.Error(err), zap.String("chat_id", chatIDStr))
-			} else {
-				chatHistory = history
-				h.logger.Info("loaded chat history", zap.String("chat_id", chatIDStr), zap.Int("count", len(history)))
-			}
+			sessionID = chatID.String()
 		} else {
 			h.logger.Warn("invalid chat_id format", zap.String("chat_id", chatIDStr))
 		}
-	} else {
-		h.logger.Warn("chat_id not provided for websocket request; history will be empty",
-			zap.String("path", c.Request.URL.Path))
+	}
+	if sessionID == "" {
+		sessionID = user.ID.String()
 	}
 
 	streamer.New(

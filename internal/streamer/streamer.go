@@ -137,44 +137,6 @@ func (streamer *Streamer) Stream(
 			}
 		}
 
-		// Send chat history to model (even if empty) so Agno always gets HISTORY before MESSAGE.
-		historyMessages := make([]map[string]interface{}, 0, len(streamer.chatHistory))
-		for _, msg := range streamer.chatHistory {
-			historyMessages = append(historyMessages, map[string]interface{}{
-				"role":    string(msg.Role),
-				"content": msg.Text,
-			})
-		}
-
-		// Log exactly what we're about to push to Agno to verify hand-off path.
-		streamer.logger.Info("forwarding chat history to model over websocket",
-			zap.String("chat_id", chatID.String()),
-			zap.Int("messages_count", len(historyMessages)),
-			zap.Bool("empty_history", len(historyMessages) == 0),
-			zap.Any("history_payload", historyMessages),
-		)
-
-		historyFrame := Frame{
-			ID:        0,
-			ChatID:    chatID,
-			Kind:      TokenKind,
-			Operation: HistoryOperation,
-			Timestamp: time.Now().UTC(),
-			Payload: Payload{
-				History: map[string]interface{}{
-					"messages": historyMessages,
-				},
-			},
-		}
-		if err := modelReader.Write(ctx, historyFrame); err != nil {
-			streamer.logger.Error("failed to send history frame to model", zap.Error(err))
-		} else {
-			streamer.logger.Info("sent chat history to model",
-				zap.Int("count", len(streamer.chatHistory)),
-				zap.Bool("empty_history", len(streamer.chatHistory) == 0),
-			)
-		}
-
 		// Send initial message if present
 		if streamer.initialMessage != "" {
 			msgFrame := Frame{
