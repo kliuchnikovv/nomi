@@ -14,6 +14,7 @@ from src.agents.mailer import MailerAgent
 from src.tools.config import ToolConfigClient
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
+from src.tools.chat_history import ChatHistoryTool
 from agno.tools.gmail import GmailTools
 from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools import Toolkit
@@ -100,6 +101,9 @@ class AgentFactory:
         #     ), GoogleCalendarTools(
         #         access_token=""
         #     )]
+        
+        # Automatically add ChatHistoryTool to all agents
+        tools.append(ChatHistoryTool())
 
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 
