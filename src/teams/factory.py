@@ -2,7 +2,6 @@ from typing import Optional, List, Any
 from agno.team import Team
 from agno.models.base import Model
 from agno.db.postgres import PostgresDb
-from src.tools.chat_history import ChatHistoryTool
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,5 +40,4 @@ class TeamFactory:
             model=team_model,
             members=members,
             debug_mode=self.debug_mode,
-            tools=[ChatHistoryTool()],
         )

@@ -895,7 +895,6 @@ async def _process_message(
         # Inject context for tools
         agent.chat_id = chat_id
         agent.user_id = session_id
-        agent.chat_history = chat_history
 
         async for chunk in _run_agent_stream(agent, text or ""):
             if not chunk:
