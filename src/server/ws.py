@@ -66,6 +66,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         agent_type = websocket.query_params.get("agent")
         build_mode = (websocket.query_params.get("mode") or "agent").lower()
         is_team_mode = build_mode == "team"
+        chat_id_param = websocket.query_params.get("chat_id")
         command_desc: Optional[dict] = _parse_json_param(
             websocket.query_params.get("command") or websocket.query_params.get("team") or websocket.query_params.get("team_desc")
         )
@@ -74,6 +75,14 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             logger.info("[WS] Open: session_id=%s model=%s agent=%s mode=%s", session_id, model_from_query, agent_type, build_mode)
         else:
             logger.info("[WS] Open: session_id=%s mode=%s", session_id, build_mode)
+        logger.debug(
+            "[WS] Query params: session_id=%s chat_id=%s model=%s agent=%s mode=%s",
+            session_id,
+            chat_id_param,
+            model_from_query,
+            agent_type,
+            build_mode,
+        )
 
         next_id = 0
         
@@ -230,10 +239,12 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                 )
                 logger.debug("[WS] History details: session_id=%s history=%s", session_id, chat_history)
             else:
-                logger.debug(
-                    "[WS] No HISTORY frame received (got %s instead), continuing without history: session_id=%s",
+                payload_preview = _truncate(frame.payload.get("message") if isinstance(frame.payload, dict) else None, limit=120)
+                logger.info(
+                    "[WS] No HISTORY frame received (got %s first), continuing without history: session_id=%s payload_preview=%s",
                     frame.op,
                     session_id,
+                    payload_preview,
                 )
                 # Это не HISTORY фрейм, возможно это первое сообщение - игнорируем
         except asyncio.TimeoutError:
