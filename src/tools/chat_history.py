@@ -2,32 +2,34 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 from agno.tools import Toolkit
+from agno.agent import Agent
 
 class ChatHistoryTool(Toolkit):
     name = "chat_history"
     description = "Retrieves chat history from the database"
 
-    def __init__(self):
+    def __init__(self, agent: Agent):
         super().__init__(name=self.name)
+        self.agent = agent
         self.register(self.get_chat_history)
 
-    async def get_chat_history(self, chat_id: Optional[str] = None, user_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
+    async def get_chat_history(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Retrieves the message history for a specific chat.
         
         Args:
-            chat_id: The ID of the chat to retrieve. If not provided, tries to use the current chat ID from context.
+            limit: The maximum number of messages to return. Defaults to 10.
             user_id: The ID of the user requesting the history. If not provided, tries to use the current user ID from context.
             limit: The maximum number of messages to return. Defaults to 10.
         """
         # Ensure db is available
-        if not hasattr(self, "agent") or not self.agent.db:
+        if not hasattr(self.agent, "db") or not self.agent.db:
              return [{"error": "Database connection not available"}]
 
         # Fallback to context if not provided
-        if chat_id is None and hasattr(self.agent, "chat_id"):
+        if hasattr(self.agent, "chat_id"):
             chat_id = self.agent.chat_id
-        if user_id is None and hasattr(self.agent, "user_id"):
+        if hasattr(self.agent, "user_id"):
             user_id = self.agent.user_id
 
         if not chat_id or not user_id:
