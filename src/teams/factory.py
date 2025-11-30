@@ -35,9 +35,19 @@ class TeamFactory:
         # Better to expose build_model in agent_factory or pass it.
         team_model = self.agent_factory.build_model(team_model_name) if team_model_name else self.model
         
-        return Team(
+        team = Team(
             name=command_desc.get("name", "DynamicTeam"),
             model=team_model,
             members=members,
+            db=self.db,
+            add_history_to_context=True,
+            num_history_runs=5,
+            add_team_history_to_members=True,
+            num_team_history_runs=5,
             debug_mode=self.debug_mode,
         )
+        try:
+            team.session_id = session_id  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        return team
