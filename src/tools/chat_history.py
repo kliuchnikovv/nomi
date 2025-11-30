@@ -2,15 +2,13 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 from agno.tools import Toolkit
-from agno.agent import Agent
 
 class ChatHistoryTool(Toolkit):
     name = "chat_history"
     description = "Retrieves chat history from the database"
 
-    def __init__(self, agent: Agent):
+    def __init__(self):
         super().__init__(name=self.name)
-        self.agent = agent
         self.register(self.get_chat_history)
 
     async def get_chat_history(self, limit: int = 10) -> List[Dict[str, Any]]:
@@ -22,7 +20,9 @@ class ChatHistoryTool(Toolkit):
             user_id: The ID of the user requesting the history. If not provided, tries to use the current user ID from context.
             limit: The maximum number of messages to return. Defaults to 10.
         """
-        # Ensure db is available
+        # Ensure agent and db are available
+        if not hasattr(self, "agent") or not self.agent:
+             return [{"error": "Agent not available"}]
         if not hasattr(self.agent, "db") or not self.agent.db:
              return [{"error": "Database connection not available"}]
 
