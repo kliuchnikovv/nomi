@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 
+	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/kliuchnikovv/genie-api/internal/streamer"
 )
@@ -182,6 +183,24 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		h.logger.Info("extracted initial message from query", zap.String("message", initialMessage))
 	}
 
+	// Load chat history if chat_id is provided
+	var chatHistory []*chat.Message
+	chatIDStr := c.Query("chat_id")
+	if chatIDStr != "" {
+		chatID, err := uuid.Parse(chatIDStr)
+		if err == nil {
+			history, err := h.storage.GetMessages(ctx, user.ID, chatID)
+			if err != nil {
+				h.logger.Warn("failed to load chat history", zap.Error(err), zap.String("chat_id", chatIDStr))
+			} else {
+				chatHistory = history
+				h.logger.Info("loaded chat history", zap.String("chat_id", chatIDStr), zap.Int("count", len(history)))
+			}
+		} else {
+			h.logger.Warn("invalid chat_id format", zap.String("chat_id", chatIDStr))
+		}
+	}
+
 	streamer.New(
 		h.storage,
 		h.logger,
@@ -189,6 +208,7 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		initialMessage,
 		c.Query("source"),
 		commandPayload,
+		chatHistory,
 		// input.chatID,
 		connectModel,
 	).Stream(streamer.NewSocketReader(

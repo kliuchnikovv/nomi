@@ -22,6 +22,7 @@ const (
 	MessageOperation     Operation = "message"
 	DoneOperation        Operation = "done"
 	ToolsOperation       Operation = "tools"
+	HistoryOperation     Operation = "history"
 	SelectModelOperation Operation = "select_model"
 	ChangeModelOperation Operation = "change_model"
 
@@ -56,6 +57,7 @@ type Payload struct {
 	CompletionTokens uint        `json:"completion_tokens,omitempty"`
 	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
 	Tools            interface{} `json:"tools,omitempty"`
+	History          interface{} `json:"history,omitempty"`
 }
 
 type ErrorInfo struct {
