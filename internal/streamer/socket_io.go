@@ -18,6 +18,13 @@ type Socket struct {
 	logger *zap.Logger
 }
 
+func truncate(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	return s[:limit] + "...(truncated)"
+}
+
 func NewSocketReader(
 	conn Conn,
 	logger *zap.Logger,
@@ -52,6 +59,17 @@ func (reader *Socket) Write(
 	ctx context.Context,
 	frame Frame,
 ) error {
+	msgPreview := ""
+	if frame.Payload.Message != "" {
+		msgPreview = truncate(frame.Payload.Message, 160)
+	}
+	reader.logger.Info("ws write",
+		zap.String("op", string(frame.Operation)),
+		zap.String("kind", string(frame.Kind)),
+		zap.String("chat_id", frame.ChatID.String()),
+		zap.String("message_preview", msgPreview),
+	)
+
 	b, err := json.Marshal(frame)
 	if err != nil {
 		return err
