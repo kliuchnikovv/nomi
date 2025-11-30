@@ -19,7 +19,6 @@ class Op(str, Enum):
     ERROR = "error"
     DONE = "done"
     TOOLS = "tools"
-    HISTORY = "history"
     MODEL = "model"
 
 class StreamInfo(BaseModel):

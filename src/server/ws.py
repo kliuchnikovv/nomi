@@ -6,7 +6,7 @@ import time
 import uuid
 
 from agno.agent import Agent
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Cookie
 
 from src.agents.factory import AgentFactory
@@ -189,78 +189,6 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             )
             # Продолжаем без инструментов
         
-        # Опционально ждем HISTORY фрейм для истории чата
-        chat_history: List[Dict[str, str]] = []
-        logger.debug("[WS] Waiting for optional HISTORY frame: session_id=%s", session_id)
-        try:
-            # Ждем следующий фрейм (может быть HISTORY или MESSAGE)
-            raw = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
-            logger.debug("[WS] Received raw data (HISTORY wait): session_id=%s len=%d", session_id, len(raw))
-            data = json.loads(raw)
-            frame = Frame(**data)
-            logger.debug("[WS] Parsed frame (HISTORY wait): session_id=%s op=%s", session_id, frame.op)
-            
-            if frame.op == Op.HISTORY:
-                # Получили историю чата от genie-api
-                payload = frame.payload
-                logger.debug("[WS] History payload raw: session_id=%s payload=%s", session_id, payload)
-                if payload:
-                    if not isinstance(payload, dict):
-                        payload = payload if hasattr(payload, '__dict__') else {}
-                    
-                    history_obj = payload.get("history") if isinstance(payload, dict) else None
-                    if history_obj and isinstance(history_obj, dict):
-                        messages = history_obj.get("messages", [])
-                        if isinstance(messages, list):
-                            for msg in messages:
-                                if isinstance(msg, dict) and "role" in msg and "content" in msg:
-                                    chat_history.append({
-                                        "role": msg["role"],
-                                        "content": msg["content"],
-                                    })
-                
-                logger.info(
-                    "[WS] Received chat history: session_id=%s count=%d",
-                    session_id,
-                    len(chat_history),
-                )
-                # Surface a concise snapshot in INFO to verify payload content end-to-end.
-                history_sample = [
-                    {
-                        "role": msg.get("role"),
-                        "content": _truncate(msg.get("content"), limit=160),
-                    }
-                    for msg in chat_history[:5]
-                ]
-                logger.info(
-                    "[WS] History sample: session_id=%s sample=%s",
-                    session_id,
-                    history_sample,
-                )
-                logger.debug("[WS] History details: session_id=%s history=%s", session_id, chat_history)
-            else:
-                payload_preview = _truncate(frame.payload.get("message") if isinstance(frame.payload, dict) else None, limit=120)
-                logger.info(
-                    "[WS] No HISTORY frame received (got %s first), continuing without history: session_id=%s payload_preview=%s",
-                    frame.op,
-                    session_id,
-                    payload_preview,
-                )
-                # Это не HISTORY фрейм, возможно это первое сообщение - игнорируем
-        except asyncio.TimeoutError:
-            logger.debug(
-                "[WS] No HISTORY frame received (timeout), continuing without history: session_id=%s",
-                session_id,
-            )
-            # Продолжаем без истории
-        except Exception as exc:
-            logger.warning(
-                "[WS] Failed to receive history: session_id=%s error=%s",
-                session_id,
-                exc,
-            )
-            # Продолжаем без истории
-        
         # Опционально ждем MODEL фрейм для выбора модели - УБРАНО по запросу
         # Используем модель из query param или по умолчанию
         if current_model_name:
@@ -330,22 +258,6 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                 await websocket.close(code=1011, reason="Agent init failed")
             logger.exception("[WS] Agent init failed: session_id=%s", session_id)
             return
-
-        # Attach chat history to agent so downstream run() can add it to context.
-        try:
-            agent.chat_history = chat_history  # type: ignore[attr-defined]
-            agent.history = chat_history       # compat if agent uses different attribute
-            logger.info(
-                "[WS] Applied chat history to agent: session_id=%s count=%d",
-                session_id,
-                len(chat_history),
-            )
-        except Exception as exc:
-            logger.warning(
-                "[WS] Failed to attach history to agent: session_id=%s error=%s",
-                session_id,
-                exc,
-            )
 
         # Track last time we received any client message
         last_activity = time.monotonic()
@@ -595,7 +507,6 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     session_id=session_id,
                     chat_id=frame.chat_id or "",
                     user_message_id=frame.message_id or "",
-                    chat_history=chat_history,
                 )
         except WebSocketDisconnect:
             # Клиент отвалился — нормальный сценарий
@@ -911,7 +822,6 @@ async def _process_message(
     session_id: str,
     chat_id: str,
     user_message_id: str,
-    chat_history: Optional[List[Dict[str, str]]] = None,
 ) -> int:
     message_id = str(uuid.uuid4())
 
@@ -947,32 +857,7 @@ async def _process_message(
         agent.chat_id = chat_id
         agent.user_id = session_id
 
-        # If agent exposes a way to seed history, set it before running.
-        try:
-            if chat_history is not None:
-                agent.chat_history = chat_history  # type: ignore[attr-defined]
-                agent.history = chat_history       # compat if agent uses different attribute
-        except Exception:
-            pass
-
-        # Build enriched prompt with prior messages so model sees the context even if agent
-        # doesn't use chat_history internally.
-        enriched_text = text or ""
-        if chat_history:
-            history_lines = []
-            for msg in chat_history:
-                role = msg.get("role") or "user"
-                content = msg.get("content") or ""
-                history_lines.append(f"{role}: {content}")
-            history_block = "\n".join(history_lines)
-            enriched_text = f"Previous conversation:\\n{history_block}\\n\\nLatest user message:\\n{enriched_text}"
-            logger.info(
-                "[WS] Injecting history into prompt: session_id=%s count=%d",
-                session_id,
-                len(chat_history),
-            )
-
-        async for chunk in _run_agent_stream(agent, enriched_text):
+        async for chunk in _run_agent_stream(agent, text or ""):
             if not chunk:
                 continue
             # logger.debug("[WS] Stream chunk: len=%d", len(chunk))
