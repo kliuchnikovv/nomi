@@ -121,6 +121,26 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		}
 	}
 
+	// Use chat_id as session_id for Agno memory; no history frame anymore.
+	var chatHistory []*chat.Message
+	var historyChatID *uuid.UUID
+	var sessionID string
+	chatIDStr := c.Query("chat_id")
+	if chatIDStr == "" {
+		chatIDStr = c.Query("chatId") // alternate casing from frontend
+	}
+	if chatIDStr != "" {
+		if chatID, err := uuid.Parse(chatIDStr); err == nil {
+			historyChatID = &chatID
+			sessionID = chatID.String()
+		} else {
+			h.logger.Warn("invalid chat_id format", zap.String("chat_id", chatIDStr))
+		}
+	}
+	if sessionID == "" {
+		sessionID = user.ID.String()
+	}
+
 	// Provide connector to (re)establish model connection with initial meta.
 	connectModel := func() (*websocket.Conn, error) {
 		hdr := http.Header{}
@@ -186,26 +206,6 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 
 	if initialMessage != "" {
 		h.logger.Info("extracted initial message from query", zap.String("message", initialMessage))
-	}
-
-	// Use chat_id as session_id for Agno memory; no history frame anymore.
-	var chatHistory []*chat.Message
-	var historyChatID *uuid.UUID
-	var sessionID string
-	chatIDStr := c.Query("chat_id")
-	if chatIDStr == "" {
-		chatIDStr = c.Query("chatId") // alternate casing from frontend
-	}
-	if chatIDStr != "" {
-		if chatID, err := uuid.Parse(chatIDStr); err == nil {
-			historyChatID = &chatID
-			sessionID = chatID.String()
-		} else {
-			h.logger.Warn("invalid chat_id format", zap.String("chat_id", chatIDStr))
-		}
-	}
-	if sessionID == "" {
-		sessionID = user.ID.String()
 	}
 
 	streamer.New(
