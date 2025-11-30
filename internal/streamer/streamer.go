@@ -133,6 +133,13 @@ func (streamer *Streamer) Stream(
 				})
 			}
 
+			// Log exactly what we're about to push to Agno to verify hand-off path.
+			streamer.logger.Info("forwarding chat history to model over websocket",
+				zap.String("chat_id", streamer.chatHistory[0].ChatID.String()),
+				zap.Int("messages_count", len(historyMessages)),
+				zap.Any("history_payload", historyMessages),
+			)
+
 			historyFrame := Frame{
 				ID:        0,
 				ChatID:    uuid.Nil,
