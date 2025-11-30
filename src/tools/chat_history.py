@@ -30,9 +30,9 @@ class ChatHistoryTool(Toolkit):
         except ValueError:
             return [{"error": "Invalid UUID format for chat_id or user_id"}]
 
-        # Check if user has access to this chat (is a sender of at least one message)
-        # We assume the user_id matches the sender field in the messages table for user messages.
-        check_query = "SELECT 1 FROM messages WHERE chat_id = $1 AND sender = $2 LIMIT 1"
+        # Check if user has access to this chat (is the owner of the chat)
+        # Based on the Chat struct: UserID is the owner.
+        check_query = "SELECT 1 FROM chats WHERE id = $1 AND user_id = $2 LIMIT 1"
         try:
             # We try 'fetch' first, as it is common for asyncpg wrappers
             if hasattr(self.agent.db, "fetch"):
@@ -41,14 +41,13 @@ class ChatHistoryTool(Toolkit):
                 access = await self.agent.db.read(check_query, chat_uuid, user_uuid)
             else:
                 # Fallback: try execute and see if it returns something iterable
-                # This is risky but we have no other option without knowing the API
                 access = await self.agent.db.execute(check_query, chat_uuid, user_uuid)
             
             if not access:
-                return [{"error": "Access denied: User has no messages in this chat or chat does not exist"}]
+                return [{"error": "Access denied: User is not the owner of this chat or chat does not exist"}]
 
             query = """
-                SELECT id, chat_id, sender, role, text, created_at
+                SELECT id, chat_id, user_id, role, text, created_at
                 FROM messages
                 WHERE chat_id = $1
                 ORDER BY created_at ASC
