@@ -171,6 +171,63 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             )
             # Продолжаем без инструментов
         
+        # Опционально ждем HISTORY фрейм для истории чата
+        chat_history: List[Dict[str, str]] = []
+        logger.debug("[WS] Waiting for optional HISTORY frame: session_id=%s", session_id)
+        try:
+            # Ждем следующий фрейм (может быть HISTORY или MESSAGE)
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
+            logger.debug("[WS] Received raw data (HISTORY wait): session_id=%s len=%d", session_id, len(raw))
+            data = json.loads(raw)
+            frame = Frame(**data)
+            logger.debug("[WS] Parsed frame (HISTORY wait): session_id=%s op=%s", session_id, frame.op)
+            
+            if frame.op == Op.HISTORY:
+                # Получили историю чата от genie-api
+                payload = frame.payload
+                logger.debug("[WS] History payload raw: session_id=%s payload=%s", session_id, payload)
+                if payload:
+                    if not isinstance(payload, dict):
+                        payload = payload if hasattr(payload, '__dict__') else {}
+                    
+                    history_obj = payload.get("history") if isinstance(payload, dict) else None
+                    if history_obj and isinstance(history_obj, dict):
+                        messages = history_obj.get("messages", [])
+                        if isinstance(messages, list):
+                            for msg in messages:
+                                if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                                    chat_history.append({
+                                        "role": msg["role"],
+                                        "content": msg["content"],
+                                    })
+                
+                logger.info(
+                    "[WS] Received chat history: session_id=%s count=%d",
+                    session_id,
+                    len(chat_history),
+                )
+                logger.debug("[WS] History details: session_id=%s history=%s", session_id, chat_history)
+            else:
+                logger.debug(
+                    "[WS] No HISTORY frame received (got %s instead), continuing without history: session_id=%s",
+                    frame.op,
+                    session_id,
+                )
+                # Это не HISTORY фрейм, возможно это первое сообщение - игнорируем
+        except asyncio.TimeoutError:
+            logger.debug(
+                "[WS] No HISTORY frame received (timeout), continuing without history: session_id=%s",
+                session_id,
+            )
+            # Продолжаем без истории
+        except Exception as exc:
+            logger.warning(
+                "[WS] Failed to receive history: session_id=%s error=%s",
+                session_id,
+                exc,
+            )
+            # Продолжаем без истории
+        
         # Опционально ждем MODEL фрейм для выбора модели - УБРАНО по запросу
         # Используем модель из query param или по умолчанию
         if current_model_name:
@@ -838,6 +895,7 @@ async def _process_message(
         # Inject context for tools
         agent.chat_id = chat_id
         agent.user_id = session_id
+        agent.chat_history = chat_history
 
         async for chunk in _run_agent_stream(agent, text or ""):
             if not chunk:
