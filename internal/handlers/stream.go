@@ -140,6 +140,10 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	if sessionID == "" {
 		sessionID = user.ID.String()
 	}
+	if modeParam == "team" {
+		sessionID = fmt.Sprintf("%s-team", sessionID)
+		h.logger.Debug("using team-scoped session_id", zap.String("session_id", sessionID))
+	}
 
 	// Provide connector to (re)establish model connection with initial meta.
 	connectModel := func() (*websocket.Conn, error) {
