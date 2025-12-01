@@ -2,6 +2,7 @@ from typing import Optional, List, Any
 from agno.team import Team
 from agno.models.base import Model
 from agno.db.postgres import PostgresDb
+from agno.tools import Toolkit, Function
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,12 @@ class TeamFactory:
         self.db = db
         self.model = model
         self.debug_mode = debug_mode
+
+    @staticmethod
+    def _attach_tool_context(team: Team, tools: List[Toolkit | Function | dict]) -> None:
+        for tool in tools:
+            if isinstance(tool, ChatHistoryTool):
+                tool.agent = team
 
     async def build(self, command_desc: dict, session_id: str) -> Team:
         logger.info("[WS] Building Team from command description")
@@ -37,11 +44,12 @@ class TeamFactory:
         # Better to expose build_model in agent_factory or pass it.
         team_model = self.agent_factory.build_model(team_model_name) if team_model_name else self.model
         
+        tools: List[Toolkit | Function | dict] = [ChatHistoryTool()]
         team = Team(
             name=command_desc.get("name", "DynamicTeam"),
             model=team_model,
             members=members,
-            tools=[ChatHistoryTool()],
+            tools=tools,
             db=self.db,
             add_history_to_context=True,
             num_history_runs=5,
@@ -49,6 +57,7 @@ class TeamFactory:
             num_team_history_runs=5,
             debug_mode=self.debug_mode,
         )
+        self._attach_tool_context(team, tools)
         try:
             team.session_id = session_id  # type: ignore[attr-defined]
         except Exception:

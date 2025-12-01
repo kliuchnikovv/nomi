@@ -37,6 +37,12 @@ class AgentFactory:
         self._config_client = config_client
         self._debug_mode = debug_mode
 
+    def _attach_tool_context(self, agent: Agent, tools: List[Toolkit]) -> None:
+        """Ensure internal tools (chat history) know their owning agent."""
+        for tool in tools:
+            if isinstance(tool, ChatHistoryTool):
+                tool.agent = agent
+
     @property
     def config_client(self) -> ToolConfigClient:
         """Доступ к ToolConfigClient для запроса инструментов."""
@@ -142,6 +148,7 @@ class AgentFactory:
                     debug_mode=self._debug_mode,
                 )
 
+            self._attach_tool_context(agent, tools)
             logger.info("[WS] Agent created successfully: session_id=%s type=%s", session_id, agent.name)
             return agent
         except Exception as e:
