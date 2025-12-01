@@ -79,7 +79,7 @@ class AgentFactory:
 
         model = self.build_model(model_name) if model_name else self._model
         
-        tools: List[Toolkit] = [ChatHistoryTool()]
+        tools: List[Toolkit] = []
         
         logger.debug("[WS] tools: %s", [t.name for t in tools_specs] if tools_specs else [])
         if tools_specs:
