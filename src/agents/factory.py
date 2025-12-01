@@ -102,6 +102,8 @@ class AgentFactory:
         #     ), GoogleCalendarTools(
         #         access_token=""
         #     )]
+
+        tools.append(ChatHistoryTool())
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 

@@ -11,8 +11,6 @@ from google.oauth2.credentials import Credentials
 from src.tools.memory_writer import MemoryWriter
 from src.tools.rag_tool import RagTool
 
-from src.tools.chat_history import ChatHistoryTool
-
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 logger = logging.getLogger(__name__)
@@ -151,7 +149,7 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
 
 
 async def build(config: ToolsConfig) -> List[Toolkit]:
-    tools: List[Toolkit] = [ChatHistoryTool()]
+    tools: List[Toolkit] = []
     for item in config:
         builder = TOOL_BUILDERS.get(item.name)
         if not builder:
