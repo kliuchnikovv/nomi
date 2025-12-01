@@ -19,6 +19,8 @@ from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools import Toolkit
 from google.oauth2.credentials import Credentials
 
+from src.tools.chat_history import ChatHistoryTool
+
 logger = logging.getLogger(__name__)
 
 class AgentFactory:
@@ -77,7 +79,7 @@ class AgentFactory:
 
         model = self.build_model(model_name) if model_name else self._model
         
-        tools: List[Toolkit] = []
+        tools: List[Toolkit] = [ChatHistoryTool()]
         
         logger.debug("[WS] tools: %s", [t.name for t in tools_specs] if tools_specs else [])
         if tools_specs:
