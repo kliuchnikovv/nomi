@@ -6,6 +6,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from src.tools.chat_history import ChatHistoryTool
+
 class TeamFactory:
     def __init__(self, agent_factory: Any, db: PostgresDb | None, model: Model, debug_mode: bool = False):
         self.agent_factory = agent_factory
@@ -39,6 +41,7 @@ class TeamFactory:
             name=command_desc.get("name", "DynamicTeam"),
             model=team_model,
             members=members,
+            tools=[ChatHistoryTool()],
             db=self.db,
             add_history_to_context=True,
             num_history_runs=5,
