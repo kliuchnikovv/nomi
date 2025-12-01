@@ -31,12 +31,12 @@ export const styles = StyleSheet.create({
     bubble: {
         padding: 5,
         borderRadius: 12,
-        maxWidth: '85%',
+        maxWidth: '90%',
     },
     bubbleUser: {
         alignSelf: 'flex-end',
-        backgroundColor: oneDarkPalette.commentGrey,
-        minWidth: 60,
+        backgroundColor: oneDark.blue,
+        minWidth: 80,
     },
     bubbleAssistant: {
         alignSelf: 'flex-start',

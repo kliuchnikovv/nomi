@@ -57,14 +57,16 @@ const PluginSection = ({
     plugin,
     expandedPlugins,
     onTogglePlugin,
-    selectedChatId,
-    onChatSelect,
+    expandedChats,
+    onToggleChat,
+    onThreadSelect,
 }: {
     plugin: Plugin;
     expandedPlugins: Set<string>;
     onTogglePlugin: (pluginId: string) => void;
-    selectedChatId: string | null;
-    onChatSelect?: (chat: PluginChat) => void;
+    expandedChats: Set<string>;
+    onToggleChat: (chatId: string) => void;
+    onThreadSelect: (chat: PluginChat, thread: any) => void;
 }) => {
     const isExpanded = expandedPlugins.has(plugin.id);
     const iconMeta = getPluginIcon(plugin.provider);
@@ -108,14 +110,52 @@ const PluginSection = ({
             </Pressable>
             {isExpanded && (
                 <View style={styles.chatsList}>
-                    {plugin.chats.map((chat) => (
-                        <ChatItem
-                            key={chat.id}
-                            chat={chat}
-                            isSelected={selectedChatId === chat.id}
-                            onPress={() => onChatSelect?.(chat)}
-                        />
-                    ))}
+                    {plugin.chats.map((chat) => {
+                        const threads = (chat.metadata as any)?.threads || [];
+                        const chatExpanded = expandedChats.has(chat.id);
+                        return (
+                            <View key={chat.id} style={{ marginBottom: 4 }}>
+                                <ChatItem
+                                    chat={chat}
+                                    isSelected={chatExpanded}
+                                    onPress={() => onToggleChat(chat.id)}
+                                />
+                                {chatExpanded && threads.length > 0 && (
+                                    <View style={{ paddingLeft: 28, gap: 6 }}>
+                                        {threads.map((thread: any) => (
+                                            <Pressable
+                                                key={thread.thread_id}
+                                                style={({ pressed }) => [
+                                                    styles.chatItem,
+                                                    pressed && { opacity: 0.8 },
+                                                    { backgroundColor: 'rgba(97, 175, 239, 0.05)' },
+                                                ]}
+                                                onPress={() => onThreadSelect(chat, thread)}
+                                            >
+                                                <Text style={styles.chatTitle} numberOfLines={1}>
+                                                    {thread.title || 'Thread'}
+                                                </Text>
+                                                <View style={styles.chatFooter}>
+                                                    {thread.last_received && (
+                                                        <Text style={styles.chatTimestamp}>
+                                                            {formatTimestamp(new Date(thread.last_received).getTime())}
+                                                        </Text>
+                                                    )}
+                                                    {thread.count > 0 && (
+                                                        <View style={styles.chatUnreadBadge}>
+                                                            <Text style={styles.chatUnreadBadgeText}>
+                                                                {thread.count}
+                                                            </Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                            </Pressable>
+                                        ))}
+                                    </View>
+                                )}
+                            </View>
+                        );
+                    })}
                 </View>
             )}
         </View>
@@ -175,9 +215,10 @@ const ChatItem = ({
 };
 
 export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: Props) {
-    const { plugins, loading, error, selectedChatId, selectChat, refresh } = usePluginChats();
+    const { plugins, loading, error, selectChat, refresh } = usePluginChats();
     const { startPluginThread } = useChat();
     const [expandedPlugins, setExpandedPlugins] = useState<Set<string>>(new Set());
+    const [expandedChats, setExpandedChats] = useState<Set<string>>(new Set());
 
     const togglePlugin = (pluginId: string) => {
         setExpandedPlugins(prev => {
@@ -191,18 +232,26 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
         });
     };
 
-    const handleChatSelect = async (chat: PluginChat) => {
+    const toggleChat = (chatId: string) => {
+        setExpandedChats(prev => {
+            const next = new Set(prev);
+            if (next.has(chatId)) next.delete(chatId);
+            else next.add(chatId);
+            return next;
+        });
+    };
+
+    const handleThreadSelect = async (chat: PluginChat, thread: any) => {
         const plugin = plugins.find(p => p.id === chat.pluginId);
-        const result = await selectChat(chat);
-        if (result) {
-            await startPluginThread({
-                provider: result.provider,
-                chatId: result.chatId,
-                integrationId: result.integrationId || chat.pluginId,
-                integrationName: plugin?.name,
-                title: chat.title,
-            });
-        }
+        const messages = thread.messages || [];
+        await startPluginThread({
+            provider: chat.metadata?.provider || plugin?.provider || 'inbox',
+            chatId: thread.thread_id || thread.id,
+            integrationId: chat.metadata?.integrationId || chat.pluginId,
+            integrationName: plugin?.name,
+            title: thread.title || chat.title,
+            messages,
+        });
         onChatSelect?.(chat);
         if (onClose) {
             onClose();
@@ -263,8 +312,9 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
                             plugin={plugin}
                             expandedPlugins={expandedPlugins}
                             onTogglePlugin={togglePlugin}
-                            selectedChatId={selectedChatId}
-                            onChatSelect={handleChatSelect}
+                            expandedChats={expandedChats}
+                            onToggleChat={toggleChat}
+                            onThreadSelect={handleThreadSelect}
                         />
                     )}
                 />

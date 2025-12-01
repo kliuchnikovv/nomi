@@ -5,7 +5,8 @@ export const styles = StyleSheet.create({
     root: {
         flex: 1,
         flexDirection: 'row',
-        backgroundColor: oneDark.background,
+        // backgroundColor: oneDark.background,
+        backgroundColor:'#0C0C10',
         overflow: 'hidden',
     },
     sidebarWrap: {
@@ -17,7 +18,8 @@ export const styles = StyleSheet.create({
         backgroundColor: 'rgba(171, 178, 191, 0.12)',
     },
     content: {
-        // Width will be set dynamically to screen width
+        // Ensure chat area expands when sidebars are hidden
+        flex: 1,
     },
     rightSidebarWrap: {
         overflow: 'hidden',

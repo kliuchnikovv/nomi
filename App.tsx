@@ -19,40 +19,50 @@ import { MainProvider } from './src/screens/main/context';
 import { AuthScreen } from './src/screens/auth/screen.tsx';
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
 
+import { KeyboardProvider } from 'react-native-keyboard-controller';
+
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
-            <SafeAreaProvider>
-                <AuthProvider>
-                    <StatusBar
-                        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-                    />
-                    <MainProvider>
-                        <AppContent />
-                    </MainProvider>
-                </AuthProvider>
-            </SafeAreaProvider>
+            <KeyboardProvider>
+                <SafeAreaProvider>
+                    <AuthProvider>
+                        <StatusBar
+                            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+                        />
+                        <MainProvider>
+                            <AppContent />
+                        </MainProvider>
+                    </AuthProvider>
+                </SafeAreaProvider>
+            </KeyboardProvider>
         </GestureHandlerRootView>
     );
 }
 
 function AppContent() {
     const insets = useSafeAreaInsets();
-    const { isAuthenticated, isLoading } = useAuth();
+    // COMMENTED OUT: Authentication check - will restore later
+    // const { isAuthenticated, isLoading } = useAuth();
     const paddingStyle = useMemo(
         () => ({ paddingTop: insets.top, paddingBottom: insets.bottom }),
         [insets.top, insets.bottom],
     );
 
-    if (isLoading) {
-        return <View style={styles.container} />;
-    }
+    // COMMENTED OUT: Loading state
+    // if (isLoading) {
+    //     return <View style={styles.container} />;
+    // }
 
+    // SIMPLIFIED: Always show ChatLayout for now
     return (
         <View style={[styles.container, paddingStyle]}>
+            <ChatLayout />
+            {/* COMMENTED OUT: Auth screen conditional
             {isAuthenticated ? <ChatLayout /> : <AuthScreen />}
+            */}
         </View>
     );
 }
@@ -60,7 +70,7 @@ function AppContent() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#282c34',
+        backgroundColor: '#111118',
     },
 });
 

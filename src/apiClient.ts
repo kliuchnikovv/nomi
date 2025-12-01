@@ -155,8 +155,14 @@ export const integrationsApi = {
 };
 
 export const inboxApi = {
-    getInbox: (page: number = 1, limit: number = 20) =>
-        apiClient.get<any>(`${API_URL}/inbox?page=${page}&limit=${limit}`),
+    getInbox: ({ page = 1, limit = 20, provider, integrationId }: { page?: number; limit?: number; provider?: string; integrationId?: string }) => {
+        const params = new URLSearchParams();
+        params.set('page', String(page));
+        params.set('limit', String(limit));
+        if (provider) params.set('provider', provider);
+        if (integrationId) params.set('integration_id', integrationId);
+        return apiClient.get<any>(`${API_URL}/inbox?${params.toString()}`);
+    },
     getInboxMessage: (id: string) =>
         apiClient.get<any>(`${API_URL}/inbox/${id}`),
     markAsRead: (id: string) =>

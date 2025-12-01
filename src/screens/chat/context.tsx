@@ -67,6 +67,7 @@ export function ChatProvider({
                 title: msg.title,
                 integrationId: msg.integration_id || pluginThreadMeta?.integrationId,
                 integrationName: pluginThreadMeta?.integrationName,
+                threadId: msg.thread_id,
             },
         };
     }, [pluginThreadMeta?.chatId, pluginThreadMeta?.integrationId, pluginThreadMeta?.integrationName]);
@@ -75,6 +76,18 @@ export function ChatProvider({
     const [assistantWorking, setAssistantWorking] = useState<boolean>(false);
     const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
     const [teamCommand, setTeamCommand] = useState<any>(null);
+    const buildTeamCommand = useCallback((modelId: string | null) => {
+        const model = modelId || 'gemini-1.5-pro';
+        return {
+            name: 'Default Team',
+            model,
+            participants: [
+                { type: 'mailer', model },
+                { type: 'rag', model },
+                { type: 'memoriser', model },
+            ],
+        };
+    }, []);
 
     // Model selection state
     const [selectedModel, setSelectedModel] = useState<string | null>('gemini-2.0-flash-exp');
@@ -141,6 +154,17 @@ export function ChatProvider({
         };
         fetchModels();
     }, []);
+
+    useEffect(() => {
+        if (chatMode !== 'team') return;
+        setTeamCommand(prev => {
+            const next = buildTeamCommand(selectedModel);
+            try {
+                if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+            } catch { /* ignore */ }
+            return next;
+        });
+    }, [chatMode, selectedModel, buildTeamCommand]);
 
     useEffect(() => {
         console.log('WebSocket useEffect: activeChatID:', activeChatID);
@@ -294,7 +318,7 @@ export function ChatProvider({
     }, [pluginThreadMeta, refreshPluginThread]);
 
 
-    const startPluginThread = useCallback(async ({ provider, chatId, title, integrationId, integrationName }: { provider: string; chatId: string | number; title?: string | null; integrationId?: string; integrationName?: string | null }) => {
+    const startPluginThread = useCallback(async ({ provider, chatId, title, integrationId, integrationName, messages: preloadedMessages }: { provider: string; chatId: string | number; title?: string | null; integrationId?: string; integrationName?: string | null; messages?: any[] }) => {
         setPluginThreadMeta({ provider, chatId, integrationId, integrationName });
         setChatMode('agent');
         setTeamCommand(null);
@@ -303,8 +327,14 @@ export function ChatProvider({
         setMessages([]);
         setActiveChatID(emptyChatID);
         try {
-            const resp = await sidebarApi.getChatMessages(provider, chatId, integrationId);
-            const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, provider));
+            let incomingMessages: any[] = [];
+            if (preloadedMessages && Array.isArray(preloadedMessages)) {
+                incomingMessages = preloadedMessages;
+            } else {
+                const resp = await sidebarApi.getChatMessages(provider, chatId, integrationId);
+                incomingMessages = resp?.messages || [];
+            }
+            const converted = (incomingMessages || []).map(msg => mapPluginMessage(msg, provider));
             setMessages(converted);
         } catch (err) {
             console.error('Failed to load plugin chat on start', err);

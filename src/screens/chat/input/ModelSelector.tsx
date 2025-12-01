@@ -23,15 +23,18 @@ type Props = {
     onChangeTeamCommand: (cmd: any) => void;
 };
 
-const buildDefaultTeamCommand = (modelId: string | null) => ({
-    name: 'Default Team',
-    model: modelId || 'gemini-1.5-pro',
-    participants: [
-        { type: 'mailer' },
-        { type: 'rag', model: modelId || 'gemini-1.5-pro' },
-        { type: 'memoriser' },
-    ],
-});
+const buildDefaultTeamCommand = (modelId: string | null) => {
+    const model = modelId || 'gemini-1.5-pro';
+    return {
+        name: 'Default Team',
+        model,
+        participants: [
+            { type: 'mailer', model },
+            { type: 'rag', model },
+            { type: 'memoriser', model },
+        ],
+    };
+};
 
 export default function ModelSelector({
     visible,

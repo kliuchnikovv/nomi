@@ -104,113 +104,117 @@ function HeaderShell({
 }
 
 function MainScreenContent() {
-    const insets = useSafeAreaInsets();
-    const { width } = useWindowDimensions();
-    const {
-        chats,
-        activeChatID,
-        activeChat,
-        createNewChat,
-        deleteChat,
-        setActiveChatID,
-        getChats,
-    } = useMain();
+    // COMMENTED OUT: Sidebar and navigation logic - will restore later
+    // const insets = useSafeAreaInsets();
+    // const { width } = useWindowDimensions();
+    // const {
+    //     chats,
+    //     activeChatID,
+    //     activeChat,
+    //     createNewChat,
+    //     deleteChat,
+    //     setActiveChatID,
+    //     getChats,
+    // } = useMain();
 
-    const { unreadCount } = useInbox();
+    // const { unreadCount } = useInbox();
 
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    const isNarrow = width < 768;
-    const [sidebarOpen, setSidebarOpen] = useState(!isNarrow);
-    const [rightSidebarOpen, setRightSidebarOpen] = useState(!isNarrow);
-    const sidebarWidth = 320;
-    const rightSidebarWidth = 320;
-    
-    // Используем Reanimated shared values для интерактивной анимации
-    const leftSidebarTranslateX = useSharedValue(sidebarOpen ? 0 : -sidebarWidth);
-    const rightSidebarTranslateX = useSharedValue(rightSidebarOpen ? 0 : rightSidebarWidth);
-    const leftSidebarWidth = useSharedValue(sidebarOpen ? sidebarWidth : 0);
-    const rightSidebarWidthAnimated = useSharedValue(rightSidebarOpen ? rightSidebarWidth : 0);
-    const leftBackdropOpacity = useSharedValue(sidebarOpen ? 1 : 0);
-    const rightBackdropOpacity = useSharedValue(rightSidebarOpen ? 1 : 0);
+    // const [settingsOpen, setSettingsOpen] = useState(false);
+    // const isNarrow = width < 768;
+    // const [sidebarOpen, setSidebarOpen] = useState(!isNarrow);
+    // const [rightSidebarOpen, setRightSidebarOpen] = useState(!isNarrow);
+    // const sidebarWidth = 320;
+    // const rightSidebarWidth = 320;
 
-    useEffect(() => {
-        // If screen becomes narrow, default to collapsed; if wide, open.
-        setSidebarOpen(!isNarrow);
-        setRightSidebarOpen(!isNarrow);
-    }, [isNarrow]);
+    // // Используем Reanimated shared values для интерактивной анимации
+    // const leftSidebarTranslateX = useSharedValue(sidebarOpen ? 0 : -sidebarWidth);
+    // const rightSidebarTranslateX = useSharedValue(rightSidebarOpen ? 0 : rightSidebarWidth);
+    // const leftSidebarWidth = useSharedValue(sidebarOpen ? sidebarWidth : 0);
+    // const rightSidebarWidthAnimated = useSharedValue(rightSidebarOpen ? rightSidebarWidth : 0);
+    // const leftBackdropOpacity = useSharedValue(sidebarOpen ? 1 : 0);
+    // const rightBackdropOpacity = useSharedValue(rightSidebarOpen ? 1 : 0);
 
-    useEffect(() => {
-        const duration = 220;
-        if (sidebarOpen) {
-            leftSidebarTranslateX.value = withTiming(0, { duration });
-            leftSidebarWidth.value = withTiming(sidebarWidth, { duration });
-            leftBackdropOpacity.value = withTiming(1, { duration });
-        } else {
-            leftSidebarTranslateX.value = withTiming(-sidebarWidth, { duration });
-            leftSidebarWidth.value = withTiming(0, { duration });
-            leftBackdropOpacity.value = withTiming(0, { duration });
-        }
-    }, [sidebarOpen, leftSidebarTranslateX, leftSidebarWidth, sidebarWidth, leftBackdropOpacity]);
+    // useEffect(() => {
+    //     // If screen becomes narrow, default to collapsed; if wide, open.
+    //     setSidebarOpen(!isNarrow);
+    //     setRightSidebarOpen(!isNarrow);
+    // }, [isNarrow]);
 
-    useEffect(() => {
-        // Анимируем правую панель при изменении состояния
-        const duration = 220;
-        if (rightSidebarOpen) {
-            rightSidebarTranslateX.value = withTiming(0, { duration });
-            rightSidebarWidthAnimated.value = withTiming(rightSidebarWidth, { duration });
-            rightBackdropOpacity.value = withTiming(1, { duration });
-        } else {
-            rightSidebarTranslateX.value = withTiming(rightSidebarWidth, { duration });
-            rightSidebarWidthAnimated.value = withTiming(0, { duration });
-            rightBackdropOpacity.value = withTiming(0, { duration });
-        }
-    }, [rightSidebarOpen, rightSidebarTranslateX, rightSidebarWidthAnimated, rightSidebarWidth, rightBackdropOpacity]);
+    // useEffect(() => {
+    //     const duration = 220;
+    //     if (sidebarOpen) {
+    //         leftSidebarTranslateX.value = withTiming(0, { duration });
+    //         leftSidebarWidth.value = withTiming(sidebarWidth, { duration });
+    //         leftBackdropOpacity.value = withTiming(1, { duration });
+    //     } else {
+    //         leftSidebarTranslateX.value = withTiming(-sidebarWidth, { duration });
+    //         leftSidebarWidth.value = withTiming(0, { duration });
+    //         leftBackdropOpacity.value = withTiming(0, { duration });
+    //     }
+    // }, [sidebarOpen, leftSidebarTranslateX, leftSidebarWidth, sidebarWidth, leftBackdropOpacity]);
+
+    // useEffect(() => {
+    //     // Анимируем правую панель при изменении состояния
+    //     const duration = 220;
+    //     if (rightSidebarOpen) {
+    //         rightSidebarTranslateX.value = withTiming(0, { duration });
+    //         rightSidebarWidthAnimated.value = withTiming(rightSidebarWidth, { duration });
+    //         rightBackdropOpacity.value = withTiming(1, { duration });
+    //     } else {
+    //         rightSidebarTranslateX.value = withTiming(rightSidebarWidth, { duration });
+    //         rightSidebarWidthAnimated.value = withTiming(0, { duration });
+    //         rightBackdropOpacity.value = withTiming(0, { duration });
+    //     }
+    // }, [rightSidebarOpen, rightSidebarTranslateX, rightSidebarWidthAnimated, rightSidebarWidth, rightBackdropOpacity]);
 
 
 
-    const sortedChats = useMemo(
-        () => [...chats].sort((a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        ), [chats],
-    );
+    // const sortedChats = useMemo(
+    //     () => [...chats].sort((a, b) =>
+    //         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    //     ), [chats],
+    // );
 
-    // Анимированные стили для панелей
-    const leftSidebarAnimatedStyle = useAnimatedStyle(() => {
-        return {
-            transform: [{ translateX: leftSidebarTranslateX.value }],
-            width: leftSidebarWidth.value,
-        };
-    });
+    // // Анимированные стили для панелей
+    // const leftSidebarAnimatedStyle = useAnimatedStyle(() => {
+    //     return {
+    //         transform: [{ translateX: leftSidebarTranslateX.value }],
+    //         width: leftSidebarWidth.value,
+    //     };
+    // });
 
-    const rightSidebarAnimatedStyle = useAnimatedStyle(() => {
-        return {
-            transform: [{ translateX: rightSidebarTranslateX.value }],
-            width: rightSidebarWidthAnimated.value,
-        };
-    });
+    // const rightSidebarAnimatedStyle = useAnimatedStyle(() => {
+    //     return {
+    //         transform: [{ translateX: rightSidebarTranslateX.value }],
+    //         width: rightSidebarWidthAnimated.value,
+    //     };
+    // });
 
-    // Анимированные стили для backdrop
-    const leftBackdropStyle = useAnimatedStyle(() => {
-        return {
-            left: leftSidebarWidth.value,
-            top: -insets.top,
-            bottom: -insets.bottom,
-            opacity: leftBackdropOpacity.value,
-        };
-    });
+    // // Анимированные стили для backdrop
+    // const leftBackdropStyle = useAnimatedStyle(() => {
+    //     return {
+    //         left: leftSidebarWidth.value,
+    //         top: -insets.top,
+    //         bottom: -insets.bottom,
+    //         opacity: leftBackdropOpacity.value,
+    //     };
+    // });
 
-    const rightBackdropStyle = useAnimatedStyle(() => {
-        return {
-            right: rightSidebarWidthAnimated.value,
-            top: -insets.top,
-            bottom: -insets.bottom,
-            opacity: rightBackdropOpacity.value,
-        };
-    });
+    // const rightBackdropStyle = useAnimatedStyle(() => {
+    //     return {
+    //         right: rightSidebarWidthAnimated.value,
+    //         top: -insets.top,
+    //         bottom: -insets.bottom,
+    //         opacity: rightBackdropOpacity.value,
+    //     };
+    // });
+
+    // SIMPLIFIED: Just show chat screen for now
+    const { activeChatID, setActiveChatID } = useMain();
 
     return (
         <View style={styles.root}>
-            {/* Sidebar */}
+            {/* COMMENTED OUT: Left Sidebar
             <Animated.View style={[
                 styles.sidebarWrap,
                 leftSidebarAnimatedStyle,
@@ -238,29 +242,24 @@ function MainScreenContent() {
                 onCollapse={() => setSidebarOpen(false)}
             />
             </Animated.View>
-        {!isNarrow && <View style={styles.divider} />}
-        <ChatProvider
-            activeChatID={activeChatID ? activeChatID : emptyChatID}
-            setActiveChatID={setActiveChatID}
-        >
-            <View
-                style={[
-                    styles.content,
-                    isNarrow
-                        ? {
-                            width,
-                        }
-                        : { flex: 1 }
-                ]}
+            {!isNarrow && <View style={styles.divider} />}
+            */}
+            <ChatProvider
+                activeChatID={activeChatID ? activeChatID : emptyChatID}
+                setActiveChatID={setActiveChatID}
             >
+                <View style={styles.content}>
+                    {/* COMMENTED OUT: Header with menu buttons
                 <HeaderShell
                     isNarrow={isNarrow}
                     getChats={getChats}
                     setSidebarOpen={setSidebarOpen}
                     setRightSidebarOpen={setRightSidebarOpen}
                 />
-                <ChatScreen />
-            </View>
+                */}
+                    <ChatScreen />
+                </View>
+                {/* COMMENTED OUT: Right Sidebar
             {!isNarrow && <View style={styles.divider} />}
             <Animated.View style={[
                 styles.rightSidebarWrap,
@@ -278,7 +277,9 @@ function MainScreenContent() {
                     onClose={() => setRightSidebarOpen(false)}
                 />
             </Animated.View>
-        </ChatProvider>
+            */}
+            </ChatProvider>
+            {/* COMMENTED OUT: Backdrop overlays
         {isNarrow && (
             <AnimatedPressable
                 style={[styles.backdrop, leftBackdropStyle]}
@@ -291,18 +292,25 @@ function MainScreenContent() {
                 onPress={() => setRightSidebarOpen(false)}
             />
         )}
+        */}
+            {/* COMMENTED OUT: Settings modal
         <SettingsModal
             visible={settingsOpen}
             onClose={() => setSettingsOpen(false)}
         />
+        */}
         </View>
     );
 }
 
 export default function MainScreen() {
-    return (
-        <InboxProvider>
-            <MainScreenContent />
-        </InboxProvider>
-    );
+    // COMMENTED OUT: InboxProvider - will restore with right sidebar
+    // return (
+    //     <InboxProvider>
+    //         <MainScreenContent />
+    //     </InboxProvider>
+    // );
+
+    // SIMPLIFIED: Direct render without InboxProvider
+    return <MainScreenContent />;
 }

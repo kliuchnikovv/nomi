@@ -9,6 +9,12 @@ export const oneDarkPalette = {
   white: '#abb2bf',
   gutterGrey: '#4b5263',
   commentGrey: '#5c6370',
+  // Additional colors for chat UI
+  background: '#282c34',
+  foreground: '#abb2bf',
+  currentLine: '#2c323c',
+  selection: '#3e4451',
+  comment: '#5c6370',
 };
 
 export const oneDark = {

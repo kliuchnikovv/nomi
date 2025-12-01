@@ -77,8 +77,18 @@ export function MainProvider({ children }: { children: ReactNode }) {
             }
 
             setChats(data);
-            if (data.length > 0 && !activeChatID) {
-                setActiveChatID(data[data.length-1].id);
+            if (data.length > 0) {
+                setActiveChatID(prev => {
+                    const fallbackChatID = data[data.length - 1].id;
+                    if (!prev || prev === emptyChatID) {
+                        return fallbackChatID;
+                    }
+
+                    const stillExists = data.some(chat => chat.id === prev);
+                    return stillExists ? prev : fallbackChatID;
+                });
+            } else {
+                setActiveChatID(emptyChatID);
             }
         } catch (error) {
             alertError(`Can't get chats: ${error}`)

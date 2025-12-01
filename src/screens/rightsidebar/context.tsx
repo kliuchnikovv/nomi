@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
-import { sidebarApi } from '../../apiClient';
-import { InboxMessage, Plugin, PluginChat, PluginChatMessage, SidebarChat, SidebarItem, SidebarEntry } from './models';
+import { inboxApi, integrationsApi } from '../../apiClient';
+import { InboxMessage, Plugin, PluginChat, PluginChatMessage } from './models';
 
 interface PluginChatsContextType {
     plugins: Plugin[];
@@ -10,7 +10,7 @@ interface PluginChatsContextType {
     selectedChatMessages: PluginChatMessage[];
     chatLoading: boolean;
     chatError: string | null;
-    selectChat: (chat: PluginChat) => Promise<{ provider: string; chatId: string | number; messages: PluginChatMessage[]; integrationId?: string } | null>;
+    selectChat: (chat: PluginChat) => Promise<{ provider: string; chatId: string | number; messages: PluginChatMessage[]; integrationId?: string; title?: string | null } | null>;
     setSelectedChatId: (chatId: string | null) => void; // legacy, use selectChat
     refresh: () => Promise<void>;
 }
@@ -64,84 +64,90 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [chatLoading, setChatLoading] = useState(false);
     const [chatError, setChatError] = useState<string | null>(null);
 
-    const mapChats = (integrationId: string, provider: string, chats: SidebarChat[], options?: { integrationName?: string; entryMap?: Map<string, SidebarEntry> }): PluginChat[] => {
-        return chats.map(chat => {
-            const entry = options?.entryMap?.get(String(chat.chat_id));
-            return {
-                id: `${integrationId}:${chat.chat_id}`,
-                pluginId: integrationId,
-                title: entry?.title || chat.title,
-                lastMessage: entry?.preview || (chat.count ? `${chat.count} messages` : undefined),
-                lastMessageAt: chat.last_received ? new Date(chat.last_received).getTime() : undefined,
-                unreadCount: 0,
-                metadata: {
-                    provider,
-                    integrationId,
-                    chatId: chat.chat_id,
-                    messagesCount: chat.count,
-                    integrationName: options?.integrationName,
-                    preview: entry?.preview,
-                },
-            };
-        });
-    };
+    const mapInboxItemsToPlugins = async (): Promise<Plugin[]> => {
+        try {
+            const integrationsResponse = await integrationsApi.list();
+            const integrations = Array.isArray(integrationsResponse)
+                ? integrationsResponse
+                : (integrationsResponse?.items || []);
 
-    const mapProviders = async (items: SidebarItem[]): Promise<Plugin[]> => {
-        const pluginsWithChats = await Promise.all(items.map(async (item, idx) => {
-            // Force a unique and stable id per integration to keep expand/collapse scoped
-            const integrationId = item.integration_id
-                ? String(item.integration_id)
-                : (item as any).id
-                    ? String((item as any).id)
-                    : `${item.provider}-${idx}`;
-            const entryMap = new Map<string, SidebarEntry>();
-            (item.entries || []).forEach(entry => {
-                entryMap.set(String(entry.thread_id ?? entry.id), entry);
+            const parsedIntegrations = integrations.map((p: any) => {
+                let params: Record<string, any> | undefined;
+                if (typeof p?.params === 'object') params = p.params;
+                else if (p?.params) {
+                    try { params = JSON.parse(String(p.params)); } catch { params = undefined; }
+                }
+                return {
+                    id: String(p.id),
+                    name: p.name || params?.account_email || p.provider || 'Integration',
+                    provider: p.provider || 'unknown',
+                    params,
+                };
             });
-            try {
-                const chatsResponse = await sidebarApi.getChats(item.provider, integrationId);
-                const chatsList = chatsResponse?.chats && chatsResponse.chats.length > 0
-                    ? chatsResponse.chats
-                    : Array.from(entryMap.values()).map(entry => ({
-                        chat_id: entry.thread_id ?? entry.id,
-                        title: entry.title,
-                        last_received: undefined,
-                        count: undefined,
-                    }));
-                const chats = chatsList ? mapChats(integrationId, item.provider, chatsList, { integrationName: item.name, entryMap }) : [];
 
-                return {
-                    id: integrationId,
-                    provider: item.provider,
-                    name: item.name || item.provider,
-                    chats,
-                } satisfies Plugin;
-            } catch (err) {
-                console.error(`Failed to load chats for provider ${item.provider}:`, err);
-                return {
-                    id: integrationId,
-                    provider: item.provider,
-                    name: item.name || item.provider,
-                    chats: entryMap.size > 0
-                        ? mapChats(integrationId, item.provider, Array.from(entryMap.values()).map(entry => ({
-                            chat_id: entry.thread_id ?? entry.id,
-                            title: entry.title,
-                        })), { integrationName: item.name, entryMap })
-                        : [],
-                } satisfies Plugin;
+            const plugins: Plugin[] = [];
+
+            for (const integ of parsedIntegrations) {
+                try {
+                    const inbox = await inboxApi.getInbox({
+                        provider: integ.provider,
+                        integrationId: integ.id,
+                    });
+                    const items = inbox?.items || [];
+                    const chats: PluginChat[] = [];
+
+                    items.forEach((chatItem: any, chatIdx: number) => {
+                        const chatId = chatItem.chat_id ?? `chat-${chatIdx}`;
+                        const threads = chatItem.threads || [];
+                        chats.push({
+                            id: `${integ.id}:${chatId}`,
+                            pluginId: integ.id,
+                            title: chatItem.sender || `Chat ${chatId}`,
+                            lastMessage: chatItem.count ? `${chatItem.count} messages` : undefined,
+                            lastMessageAt: chatItem.last_received ? new Date(chatItem.last_received).getTime() : undefined,
+                            unreadCount: 0,
+                            metadata: {
+                                provider: integ.provider,
+                                integrationId: integ.id,
+                                chatId,
+                                threads: threads.map((thread: any, idx: number) => ({
+                                    ...thread,
+                                    thread_id: thread.thread_id ?? `${chatId}-thread-${idx}`,
+                                    messages: thread.messages || [],
+                                })),
+                            },
+                        });
+                    });
+
+                    plugins.push({
+                        id: integ.id,
+                        provider: integ.provider,
+                        name: integ.name,
+                        chats,
+                    });
+                } catch (err) {
+                    console.error(`Failed to load inbox for integration ${integ.id}`, err);
+                    plugins.push({
+                        id: integ.id,
+                        provider: integ.provider,
+                        name: integ.name,
+                        chats: [],
+                    });
+                }
             }
-        }));
 
-        return pluginsWithChats;
+            return plugins;
+        } catch (err) {
+            console.error('Failed to load integrations for inbox', err);
+            return [];
+        }
     };
 
     const loadPlugins = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
-            const sidebarData = await sidebarApi.getSidebar();
-            const items = sidebarData?.items || [];
-            const loadedPlugins = await mapProviders(items);
+            const loadedPlugins = await mapInboxItemsToPlugins();
             setPlugins(loadedPlugins);
         } catch (err) {
             console.error('Failed to load plugin chats:', err);
@@ -160,16 +166,13 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setChatLoading(true);
         setChatError(null);
         try {
+            // Inbox data already contains messages; just return them
             const provider = chat.metadata?.provider || plugins.find(p => p.id === chat.pluginId)?.provider;
-            if (!provider) {
-                throw new Error('Provider not found for chat');
-            }
-            const chatId = chat.metadata?.chatId ?? chat.id;
             const integrationId = chat.metadata?.integrationId || chat.pluginId;
-            const chatResponse = await sidebarApi.getChatMessages(provider, chatId, integrationId);
-            const messages = chatResponse?.messages || [];
+            const messages = (chat.metadata as any)?.messages || [];
+            const chatId = chat.metadata?.threadId || chat.metadata?.chatId || chat.id;
             setSelectedChatMessages(messages);
-            return { provider, chatId, messages, integrationId };
+            return { provider: provider || 'inbox', chatId, messages, integrationId, title: chat.title };
         } catch (err) {
             console.error('Failed to load chat messages:', err);
             setChatError(err instanceof Error ? err.message : 'Failed to load chat messages');

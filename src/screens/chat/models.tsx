@@ -1,5 +1,6 @@
 import { Chat, Message } from '../main/models';
 import { ReactNode } from 'react';
+import { PluginChatMessage } from '../rightsidebar/models';
 
 export type Props = {
     children: ReactNode;
@@ -26,7 +27,14 @@ export interface ChatContextType {
     executeMessageAction: (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => Promise<void>;
     assistantWorking: boolean;
     externalTitle?: string | null;
-    startPluginThread: (args: { provider: string; chatId: string | number; title?: string | null; integrationId?: string; integrationName?: string | null }) => Promise<void>;
+    startPluginThread: (args: {
+        provider: string;
+        chatId: string | number;
+        title?: string | null;
+        integrationId?: string;
+        integrationName?: string | null;
+        messages?: PluginChatMessage[];
+    }) => Promise<void>;
     isPluginThread: boolean;
     pluginThreadMeta?: { provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null;
     selectedModel: string | null;
