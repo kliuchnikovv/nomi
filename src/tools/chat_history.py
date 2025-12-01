@@ -1,5 +1,6 @@
 import logging
-from typing import List, Optional, Dict, Any
+from inspect import isawaitable
+from typing import List, Optional, Dict, Any, Iterable, Tuple
 from uuid import UUID
 from agno.tools import Toolkit
 
@@ -12,6 +13,29 @@ class ChatHistoryTool(Toolkit):
     def __init__(self):
         super().__init__(name=self.name)
         self.register(self.get_chat_history)
+
+    async def _call_db(
+        self,
+        query: str,
+        params: Tuple[Any, ...],
+        prefer: Optional[Iterable[str]] = None,
+    ) -> Any:
+        """Invoke whichever DB method is available (fetch/read/query/execute)."""
+        db = getattr(self.agent, "db", None)
+        if not db:
+            raise AttributeError("Database connection not available")
+
+        method_order = list(prefer or ("fetch", "read", "query", "fetch_all", "run", "execute", "write"))
+        for method_name in method_order:
+            method = getattr(db, method_name, None)
+            if not callable(method):
+                continue
+            result = method(query, *params)
+            return await result if isawaitable(result) else result
+
+        raise AttributeError(
+            f"Database object {type(db).__name__} lacks supported query methods ({', '.join(method_order)})"
+        )
 
     async def get_chat_history(self, limit: int = 10, search_query: Optional[str] = None) -> List[Dict[str, Any]]:
         """
@@ -56,14 +80,11 @@ class ChatHistoryTool(Toolkit):
         # We check if there are any messages from this user in this chat
         check_query = "SELECT 1 FROM messages WHERE chat_id = $1 AND sender = $2 LIMIT 1"
         try:
-            # We try 'fetch' first, as it is common for asyncpg wrappers
-            if hasattr(self.agent.db, "fetch"):
-                access = await self.agent.db.fetch(check_query, chat_uuid, user_uuid)
-            elif hasattr(self.agent.db, "read"):
-                access = await self.agent.db.read(check_query, chat_uuid, user_uuid)
-            else:
-                # Fallback: try execute and see if it returns something iterable
-                access = await self.agent.db.execute(check_query, chat_uuid, user_uuid)
+            access = await self._call_db(
+                check_query,
+                (chat_uuid, user_uuid),
+                prefer=("fetch", "read", "query", "fetch_all"),
+            )
             
             if not access:
                 logger.warning("chat_history access denied: chat_id=%s user_id=%s", chat_uuid, user_uuid)
@@ -78,12 +99,11 @@ class ChatHistoryTool(Toolkit):
                 LIMIT $2
             """
             
-            if hasattr(self.agent.db, "fetch"):
-                rows = await self.agent.db.fetch(query, chat_uuid, limit, search_query)
-            elif hasattr(self.agent.db, "read"):
-                rows = await self.agent.db.read(query, chat_uuid, limit, search_query)
-            else:
-                rows = await self.agent.db.execute(query, chat_uuid, limit, search_query)
+            rows = await self._call_db(
+                query,
+                (chat_uuid, limit, search_query),
+                prefer=("fetch", "read", "query", "fetch_all"),
+            )
 
             # Convert rows to dicts if they are not already
             results = []
