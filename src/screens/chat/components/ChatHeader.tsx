@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Menu } from 'iconoir-react-native';
-import { styles } from '../styles';
-import { palette } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createStyles } from '../styles';
+import { useTheme } from '../../../context/ThemeContext';
 
 interface ChatHeaderProps {
     title: string;
@@ -12,11 +13,26 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ title, subtitle, onMenuPress, showMenu = true }: ChatHeaderProps) {
+    const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     return (
-        <View style={styles.header}>
+        <View style={[
+            styles.header,
+            {
+                paddingTop: insets.top,
+                height: 60 + insets.top,
+                backgroundColor: `${theme.accent}1F`, // Match input field background
+                borderBottomLeftRadius: 24,
+                borderBottomRightRadius: 24,
+                borderBottomWidth: 1,
+                borderBottomColor: `${theme.accent}40`, // Match input field border
+            }
+        ]}>
             {showMenu && (
                 <TouchableOpacity style={styles.menuButton} onPress={onMenuPress}>
-                    <Menu width={22} height={22} color={palette.textPrimary} strokeWidth={2} />
+                    <Menu width={22} height={22} color={theme.textPrimary} strokeWidth={2} />
                 </TouchableOpacity>
             )}
             <View style={styles.headerAvatar}>

@@ -12,6 +12,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { styles } from './styles.tsx';
 import { Props, CONNECTORS, Connector, Tool, Integration } from './models.tsx';
 import { useConnectors } from './context.tsx';
+import { tokyoNightPalette } from '../../../themes/tokyoNight';
 
 export default function ConnectorsDialog({ visible, onClose }: Props) {
     const { tools, integrations, toggleTool } = useConnectors();
@@ -59,7 +60,7 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
         return (
             <View style={styles.row}>
                 <View style={[styles.iconBubble, { backgroundColor: c.color }]}>
-                    <Icon name={c.glyph} size={20} color="#fff" />
+                    <Icon name={c.glyph} size={20} color={tokyoNightPalette.bg} />
                 </View>
                 <View style={styles.titleBlock}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
@@ -73,16 +74,16 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
                 </View>
                 <View style={styles.switchWrap}>
                     {isLoading ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={tokyoNightPalette.bg} />
                     ) : (
                         <Switch
                             value={isConnected}
                             onValueChange={value => handleToggle(integration.id, value)}
                             trackColor={{
-                                true: '#61afef',
-                                false: 'rgba(171, 178, 191, 0.3)',
+                                true: tokyoNightPalette.blue,
+                                false: 'rgba(192, 202, 245, 0.3)',
                             }}
-                            thumbColor="#fff"
+                            thumbColor={tokyoNightPalette.bg}
                         />
                     )}
                 </View>

@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { oneDarkPalette } from '../../../themes/oneDark.ts';
+import { tokyoNight, tokyoNightPalette } from '../../../themes/tokyoNight';
 
 export const styles = StyleSheet.create({
     overlay: {
@@ -14,44 +14,44 @@ export const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.45)',
     },
     sheet: {
-        backgroundColor: '#2b2f36',
+        backgroundColor: tokyoNight.surface,
         borderRadius: 12,
         padding: 16,
         width: '100%',
         maxWidth: 480,
         borderWidth: StyleSheet.hairlineWidth,
-        borderColor: 'rgba(171, 178, 191, 0.06)',
+        borderColor: tokyoNight.border,
     },
     dialogTitle: {
-        color: oneDarkPalette.white,
+        color: tokyoNight.text,
         fontSize: 17,
         fontWeight: '700',
         marginBottom: 8,
     },
     callbackInfo: {
-        color: 'rgba(171, 178, 191, 0.8)',
+        color: tokyoNight.fadedText,
         fontSize: 12,
         marginBottom: 8,
     },
     scrollContent: { paddingTop: 4, paddingBottom: 6 },
     sectionTitle: {
-        color: 'rgba(171, 178, 191, 0.8)',
+        color: tokyoNight.fadedText,
         fontSize: 14,
         fontWeight: '700',
         marginBottom: 10,
     },
     loadingText: {
-        color: 'rgba(171, 178, 191, 0.6)',
+        color: tokyoNight.fadedText,
         fontSize: 12,
         textAlign: 'center',
         marginTop: 8,
     },
     card: {
-        backgroundColor: '#30343b',
+        backgroundColor: 'rgba(192, 202, 245, 0.03)',
         paddingVertical: 8,
         borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
-        borderColor: 'rgba(171, 178, 191, 0.08)',
+        borderColor: 'rgba(192, 202, 245, 0.08)',
     },
     sectionHeaderRow: {
         flexDirection: 'row',
@@ -68,21 +68,21 @@ export const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     connectBtn: {
-        backgroundColor: '#3a7bf6',
+        backgroundColor: tokyoNight.accent,
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 999,
         marginRight: 10,
     },
     connectBtnPressed: { opacity: 0.85 },
-    connectText: { color: '#fff', fontWeight: '700' },
-    connectedText: { color: 'rgba(171, 178, 191, 0.9)', marginRight: 10 },
+    connectText: { color: tokyoNightPalette.bg, fontWeight: '700' },
+    connectedText: { color: tokyoNight.text, marginRight: 10 },
     rowPressed: {
-        backgroundColor: 'rgba(171, 178, 191, 0.06)',
+        backgroundColor: 'rgba(192, 202, 245, 0.06)',
     },
     divider: {
         height: StyleSheet.hairlineWidth,
-        backgroundColor: 'rgba(171, 178, 191, 0.12)',
+        backgroundColor: tokyoNight.border,
         marginLeft: 64,
     },
     iconBubble: {
@@ -94,11 +94,11 @@ export const styles = StyleSheet.create({
         marginRight: 12,
     },
     iconText: {
-        color: '#fff',
+        color: tokyoNightPalette.bg,
         fontSize: 18,
     },
     rowTitle: {
-        color: oneDarkPalette.white,
+        color: tokyoNight.text,
         fontSize: 16,
         flex: 1,
     },
@@ -110,7 +110,7 @@ export const styles = StyleSheet.create({
         marginLeft: 4,
     },
     statusText: {
-        color: 'rgba(171, 178, 191, 0.6)',
+        color: tokyoNight.fadedText,
         fontSize: 11,
         marginTop: 2,
     },
@@ -120,17 +120,17 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     emptyText: {
-        color: 'rgba(171, 178, 191, 0.5)',
+        color: tokyoNight.fadedText,
         fontSize: 14,
     },
     addAccountButton: {
-        backgroundColor: '#3a7bf6',
+        backgroundColor: tokyoNight.accent,
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 12,
     },
     addAccountButtonText: {
-        color: oneDarkPalette.white,
+        color: tokyoNightPalette.bg,
         fontWeight: '700',
     },
     syncRow: {
@@ -147,7 +147,7 @@ export const styles = StyleSheet.create({
         paddingRight: 8,
     },
     syncButton: {
-        backgroundColor: oneDarkPalette.white,
+        backgroundColor: tokyoNight.text,
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 10,
@@ -156,7 +156,7 @@ export const styles = StyleSheet.create({
         opacity: 0.8,
     },
     syncButtonText: {
-        color: oneDarkPalette.black,
+        color: tokyoNightPalette.bg,
         fontWeight: '700',
     },
     inputGroup: {
@@ -165,21 +165,21 @@ export const styles = StyleSheet.create({
         gap: 4,
     },
     inputLabel: {
-        color: 'rgba(171, 178, 191, 0.8)',
+        color: tokyoNight.fadedText,
         fontSize: 12,
         fontWeight: '600',
     },
     syncInput: {
-        backgroundColor: '#262a31',
-        color: oneDarkPalette.white,
+        backgroundColor: 'rgba(192, 202, 245, 0.06)',
+        color: tokyoNight.text,
         borderRadius: 10,
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderWidth: StyleSheet.hairlineWidth,
-        borderColor: 'rgba(171, 178, 191, 0.15)',
+        borderColor: tokyoNight.border,
     },
     syncStatus: {
-        color: 'rgba(171, 178, 191, 0.85)',
+        color: tokyoNight.fadedText,
         fontSize: 12,
         paddingHorizontal: 14,
         paddingBottom: 10,

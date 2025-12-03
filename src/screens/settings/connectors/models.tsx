@@ -1,5 +1,5 @@
 import React from 'react';
-import { oneDarkPalette } from '../../../themes/oneDark.ts';
+import { tokyoNightPalette } from '../../../themes/tokyoNight.ts';
 import { Chat } from '../../main/models.tsx';
 
 function deepEqual(a: any, b: any): boolean {
@@ -93,7 +93,7 @@ export const CONNECTORS: Connector[] = [
         name: 'Gmail',
         toolKey: 'gmail',
         oauthProvider: 'gmail',
-        color: oneDarkPalette.red,
+        color: tokyoNightPalette.red,
         glyph: 'gmail',
     },
     // Calendar hidden for now

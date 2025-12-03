@@ -10,7 +10,7 @@ import React, {
 import { Alert, Platform, ToastAndroid } from 'react-native';
 import { useAuth } from '../auth/context.tsx';
 import { apiClient } from '../../apiClient.ts'
-import {Chat, MainContextType} from "./models";
+import { Chat, GetChatsOptions, MainContextType } from "./models";
 import { API_URL } from '../../config.ts';
 
 export const emptyChatID = '00000000-0000-0000-0000-000000000000';
@@ -68,7 +68,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setActiveChatID(newChatId);
     }
 
-    async function getChats() {
+    async function getChats(options: GetChatsOptions = {}) {
+        const { preserveActiveChat } = options;
         try {
             console.log(`${API_URL}/chats`)
             const data = await apiClient.get<[Chat]>(`${API_URL}/chats`)
@@ -77,19 +78,32 @@ export function MainProvider({ children }: { children: ReactNode }) {
             }
 
             setChats(data);
-            if (data.length > 0) {
+            if (data.length === 0) {
                 setActiveChatID(prev => {
-                    const fallbackChatID = data[data.length - 1].id;
-                    if (!prev || prev === emptyChatID) {
-                        return fallbackChatID;
+                    if (preserveActiveChat && prev) {
+                        return prev;
                     }
-
-                    const stillExists = data.some(chat => chat.id === prev);
-                    return stillExists ? prev : fallbackChatID;
+                    return emptyChatID;
                 });
-            } else {
-                setActiveChatID(emptyChatID);
+                return;
             }
+
+            const fallbackChatID = data[data.length - 1].id;
+            setActiveChatID(prev => {
+                const stillExists = prev ? data.some(chat => chat.id === prev) : false;
+
+                if (preserveActiveChat && prev) {
+                    if (prev === emptyChatID || stillExists) {
+                        return prev;
+                    }
+                }
+
+                if (!prev || prev === emptyChatID) {
+                    return fallbackChatID;
+                }
+
+                return stillExists ? prev : fallbackChatID;
+            });
         } catch (error) {
             alertError(`Can't get chats: ${error}`)
             console.error(`Can't get chats: ${error}`);
@@ -126,7 +140,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     //
     //     // Do not send if a message is already in flight
     //     if (pendingAssistantMessageIdRef.current) {
-    //         alertError('Пожалуйста, подождите ответа на предыдущее сообщение');
+    //         alertError('Please wait for the previous message to be answered');
     //         return;
     //     }
     //
@@ -202,7 +216,20 @@ export function MainProvider({ children }: { children: ReactNode }) {
             await getChats();
         } catch (error) {
             // alertError(`Can't delete chat: ${error}`)
-            console.error('Failed to delete main:', error);
+            console.error('Failed to delete chat:', error);
+        }
+    }
+
+    async function renameChat(chatId: string, newTitle: string) {
+        try {
+            await apiClient.put<void>(
+                `${API_URL}/chats/${chatId}`,
+                { title: newTitle }
+            );
+            await getChats({ preserveActiveChat: true });
+        } catch (error) {
+            alertError(`Failed to rename chat: ${error}`);
+            console.error('Failed to rename chat:', error);
         }
     }
 
@@ -232,6 +259,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
         activeChat,
         getChats,
         createNewChat,
+        renameChat,
         deleteChat,
         setActiveChatID,
     };
@@ -250,7 +278,7 @@ function alertError(message: string) {
         Alert.alert('Ошибка', message);
     } catch {
         if (Platform.OS === 'android') {
-            try { ToastAndroid.show(message, ToastAndroid.LONG); } catch {}
+            try { ToastAndroid.show(message, ToastAndroid.LONG); } catch { }
         }
     }
 }

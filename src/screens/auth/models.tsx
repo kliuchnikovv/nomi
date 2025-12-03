@@ -17,6 +17,7 @@ export interface AuthContextType {
     register: (email: string, password: string, name: string) => Promise<void>;
     logout: () => Promise<void>;
     refreshToken: () => Promise<boolean>;
+    signInWithGoogle: () => Promise<void>;
 }
 
 export function alertError(message: string) {

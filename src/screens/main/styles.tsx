@@ -1,29 +1,38 @@
 import { StyleSheet } from 'react-native';
-import { oneDark } from '../../themes/oneDark.ts';
+import { tokyoNight, tokyoNightPalette } from '../../themes/tokyoNight';
 
 export const styles = StyleSheet.create({
     root: {
         flex: 1,
+        backgroundColor: tokyoNight.background,
         flexDirection: 'row',
-        // backgroundColor: oneDark.background,
-        backgroundColor:'#0C0C10',
         overflow: 'hidden',
     },
     sidebarWrap: {
+        width: 320,
+        backgroundColor: tokyoNightPalette.bg,
+        borderRightWidth: 1,
+        borderRightColor: tokyoNight.border,
+        zIndex: 2,
         overflow: 'hidden',
-        zIndex: 10,
     },
     divider: {
-        width: StyleSheet.hairlineWidth,
-        backgroundColor: 'rgba(171, 178, 191, 0.12)',
+        width: 1,
+        backgroundColor: tokyoNight.border,
     },
     content: {
         // Ensure chat area expands when sidebars are hidden
         flex: 1,
+        backgroundColor: tokyoNight.background,
+        position: 'relative',
     },
     rightSidebarWrap: {
+        width: 320,
+        backgroundColor: tokyoNightPalette.bg,
+        borderLeftWidth: 1,
+        borderLeftColor: tokyoNight.border,
+        zIndex: 2,
         overflow: 'hidden',
-        zIndex: 10,
     },
     header: {
         height: 48,
@@ -32,7 +41,7 @@ export const styles = StyleSheet.create({
         gap: 8,
         paddingHorizontal: 12,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: 'rgba(171, 178, 191, 0.1)',
+        borderBottomColor: 'rgba(192, 202, 245, 0.1)',
     },
     headerBtn: {
         width: 36,
@@ -42,12 +51,12 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     headerIcon: {
-        color: oneDark.blue,
+        color: tokyoNight.blue,
         fontSize: 18,
     },
     headerTitle: {
         flex: 1,
-        color: oneDark.text,
+        color: tokyoNight.text,
         fontSize: 16,
         fontWeight: '600',
         textAlign: 'center',
@@ -64,7 +73,7 @@ export const styles = StyleSheet.create({
         position: 'absolute',
         top: -4,
         right: -4,
-        backgroundColor: '#E06C75',
+        backgroundColor: tokyoNightPalette.red,
         borderRadius: 8,
         minWidth: 16,
         height: 16,
@@ -73,7 +82,7 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 4,
     },
     badgeText: {
-        color: '#FFFFFF',
+        color: tokyoNightPalette.bg,
         fontSize: 10,
         fontWeight: '600',
     },

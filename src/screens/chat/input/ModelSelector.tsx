@@ -7,7 +7,7 @@ import {
     FlatList,
     ActivityIndicator,
 } from 'react-native';
-import { oneDark } from '../../../themes/oneDark';
+import { theme } from '../../../themes';
 import { Model } from '../models';
 
 type Props = {
@@ -21,6 +21,7 @@ type Props = {
     onModeChange: (mode: 'agent' | 'team') => void;
     teamCommand: any;
     onChangeTeamCommand: (cmd: any) => void;
+    hasChatStarted?: boolean;
 };
 
 const buildDefaultTeamCommand = (modelId: string | null) => {
@@ -47,8 +48,12 @@ export default function ModelSelector({
     onModeChange,
     teamCommand,
     onChangeTeamCommand,
+    hasChatStarted = false,
 }: Props) {
     const handleSelect = (modelId: string) => {
+        if (hasChatStarted) {
+            return; // Don't allow model change after chat started
+        }
         onSelectModel(modelId);
         if (chatMode === 'team') {
             onChangeTeamCommand(buildDefaultTeamCommand(modelId));
@@ -92,14 +97,14 @@ export default function ModelSelector({
             >
                 <Pressable
                     style={{
-                        backgroundColor: oneDark.background,
+                        backgroundColor: theme.surface,
                         borderRadius: 12,
                         padding: 20,
                         width: '80%',
                         maxWidth: 400,
                         maxHeight: '70%',
                         borderWidth: 1,
-                        borderColor: oneDark.border,
+                        borderColor: theme.border,
                     }}
                     onPress={(e) => e.stopPropagation()}
                 >
@@ -107,75 +112,31 @@ export default function ModelSelector({
                         style={{
                             fontSize: 18,
                             fontWeight: '600',
-                            color: oneDark.text,
+                            color: theme.textPrimary,
                             marginBottom: 12,
                         }}
                     >
-                        Выбор режима
+                        Select Mode
                     </Text>
 
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                        {(['agent', 'team'] as const).map(mode => (
-                            <Pressable
-                                key={mode}
-                                onPress={() => switchToMode(mode)}
-                                style={({ pressed }) => ({
-                                    paddingVertical: 8,
-                                    paddingHorizontal: 12,
-                                    borderRadius: 10,
-                                    backgroundColor:
-                                        chatMode === mode
-                                            ? oneDark.accent
-                                            : pressed
-                                                ? oneDark.border
-                                                : 'transparent',
-                                    borderWidth: 1,
-                                    borderColor:
-                                        chatMode === mode
-                                            ? oneDark.accent
-                                            : oneDark.border,
-                                })}
-                            >
-                                <Text
-                                    style={{
-                                        color: chatMode === mode ? oneDark.background : oneDark.text,
-                                        fontWeight: '700',
-                                    }}
-                                >
-                                    {mode === 'agent' ? 'Агент' : 'Команда'}
-                                </Text>
-                            </Pressable>
-                        ))}
-                    </View>
-
-                    {chatMode === 'team' ? (
-                        <View>
-                            <Text style={{ color: oneDark.textSecondary, fontSize: 13, marginBottom: 6 }}>
-                                Используется команда по умолчанию с полным составом. Меняется модель — обновляется команда.
+                    {hasChatStarted && (
+                        <View style={{
+                            backgroundColor: `${theme.accent}1F`,
+                            borderRadius: 8,
+                            padding: 12,
+                            marginBottom: 12,
+                            borderWidth: 1,
+                            borderColor: `${theme.accent}40`,
+                        }}>
+                            <Text style={{ color: theme.textSecondary, fontSize: 13, textAlign: 'center' }}>
+                                Model selection is disabled after chat starts
                             </Text>
-                            <View
-                                style={{
-                                    backgroundColor: oneDark.background,
-                                    borderRadius: 10,
-                                    padding: 12,
-                                    borderWidth: 1,
-                                    borderColor: oneDark.border,
-                                }}
-                            >
-                                <Text
-                                    style={{
-                                        color: oneDark.textSecondary,
-                                        fontSize: 12,
-                                        fontFamily: 'Menlo',
-                                    }}
-                                >
-                                    {defaultTeamJson}
-                                </Text>
-                            </View>
                         </View>
-                    ) : loading ? (
+                    )}
+
+                    {loading ? (
                         <View style={{ padding: 40, alignItems: 'center' }}>
-                            <ActivityIndicator size="large" color={oneDark.accent} />
+                            <ActivityIndicator size="large" color={theme.accent} />
                         </View>
                     ) : (
                         <FlatList
@@ -184,28 +145,30 @@ export default function ModelSelector({
                             renderItem={({ item }) => (
                                 <Pressable
                                     onPress={() => handleSelect(item.id)}
+                                    disabled={hasChatStarted}
                                     style={({ pressed }) => ({
                                         padding: 12,
                                         borderRadius: 8,
                                         marginBottom: 8,
                                         backgroundColor:
                                             item.id === selectedModel
-                                                ? oneDark.accent + '20'
+                                                ? theme.accent + '20'
                                                 : pressed
-                                                    ? oneDark.border
+                                                    ? theme.border
                                                     : 'transparent',
                                         borderWidth: 1,
                                         borderColor:
                                             item.id === selectedModel
-                                                ? oneDark.accent
-                                                : oneDark.border,
+                                                ? theme.accent
+                                                : theme.border,
+                                        opacity: hasChatStarted ? 0.5 : 1,
                                     })}
                                 >
                                     <Text
                                         style={{
                                             fontSize: 16,
                                             fontWeight: item.id === selectedModel ? '600' : '400',
-                                            color: oneDark.text,
+                                            color: theme.text,
                                             marginBottom: 4,
                                         }}
                                     >
@@ -215,7 +178,7 @@ export default function ModelSelector({
                                         <Text
                                             style={{
                                                 fontSize: 12,
-                                                color: oneDark.textSecondary,
+                                                color: theme.textSecondary,
                                             }}
                                         >
                                             {item.description}
@@ -232,11 +195,11 @@ export default function ModelSelector({
                             marginTop: 16,
                             padding: 12,
                             borderRadius: 8,
-                            backgroundColor: pressed ? oneDark.border : 'transparent',
+                            backgroundColor: pressed ? theme.border : 'transparent',
                             alignItems: 'center',
                         })}
                     >
-                        <Text style={{ color: oneDark.textSecondary, fontSize: 16 }}>
+                        <Text style={{ color: theme.textSecondary, fontSize: 16 }}>
                             Cancel
                         </Text>
                     </Pressable>

@@ -12,7 +12,7 @@ import { Props, CONNECTORS } from './models.tsx';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { NavArrowRight } from 'iconoir-react-native';
 import { useConnectors } from './context.tsx';
-import { oneDarkPalette } from '../../../themes/oneDark.ts';
+import { tokyoNightPalette } from '../../../themes/tokyoNight.ts';
 import { pluginsApi } from '../../../apiClient.ts';
 
 
@@ -110,7 +110,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                         name={integration.name}
                                         enabled={!!integration.connected}
                                         glyph={details?.glyph || 'application'}
-                                        color={details?.color || oneDarkPalette.blue}
+                                        color={details?.color || tokyoNightPalette.blue}
                                         configID={integration.id}
                                         statusText={getIntegrationStatus(integration)}
                                         onDelete={() => deleteIntegration(integration.id)}
@@ -132,7 +132,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
 
                     {enabledTools.length > 0 && (
                         <>
-                            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Включено</Text>
+                            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Enabled</Text>
                             <View style={styles.card}>
                                 {enabledTools.map((integration, i) => {
                                     const details = getConnectorDetails(integration.provider);
@@ -142,7 +142,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                 name={integration.name}
                                                 enabled={true}
                                                 glyph={details?.glyph || 'application'}
-                                                color={details?.color || oneDarkPalette.blue}
+                                                color={details?.color || tokyoNightPalette.blue}
                                                 configID={integration.id}
                                                 statusText={getIntegrationStatus(integration)}
                                             />
@@ -170,7 +170,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                 name={integration.name}
                                                 enabled={false}
                                                 glyph={details?.glyph || 'application'}
-                                                color={details?.color || oneDarkPalette.blue}
+                                                color={details?.color || tokyoNightPalette.blue}
                                                 configID={integration.id}
                                                 statusText={getIntegrationStatus(integration)}
                                             />
@@ -199,7 +199,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                         disabled={gmailSyncing}
                                     >
                                         {gmailSyncing ? (
-                                            <ActivityIndicator size="small" color={oneDarkPalette.black} />
+                                            <ActivityIndicator size="small" color={tokyoNightPalette.black} />
                                         ) : (
                                             <Text style={styles.syncButtonText}>Sync now</Text>
                                         )}
@@ -274,8 +274,8 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
                         value={enabled}
                         onValueChange={handleToggle}
                         trackColor={{
-                            true: '#61afef',
-                            false: 'rgba(171, 178, 191, 0.3)',
+                            true: tokyoNightPalette.blue,
+                            false: 'rgba(192, 202, 245, 0.3)',
                         }}
                         thumbColor="#fff"
                     />
@@ -286,13 +286,13 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
                     onPress={onDelete}
                     style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.7 : 1 })}
                 >
-                    <Icon name="trash-can-outline" size={20} color="rgba(171, 178, 191, 0.8)" />
+                    <Icon name="trash-can-outline" size={20} color="rgba(192, 202, 245, 0.8)" />
                 </Pressable>
             ) : (
                 <NavArrowRight
                     width={22}
                     height={22}
-                    color={'rgba(171, 178, 191, 0.8)'}
+                    color={'rgba(192, 202, 245, 0.8)'}
                 />
             )}
         </View>

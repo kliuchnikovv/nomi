@@ -1,13 +1,16 @@
+export type GetChatsOptions = {
+    preserveActiveChat?: boolean;
+};
+
 export interface MainContextType {
     chats: Chat[];
     activeChatID: string | null;
     activeChat: Chat | null;
-    getChats: () => void;
-    getMessages: (chatId: string) => void;
-    sendMessage: (text: string) => void;
+    getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
+    renameChat: (chatId: string, newTitle: string) => Promise<void>;
     deleteChat: (chatId: string) => void;
-    setActiveChatID: (id: string) => void;
+    setActiveChatID: (id: string | null) => void;
 }
 
 export type Chat = {

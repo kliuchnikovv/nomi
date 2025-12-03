@@ -8,7 +8,7 @@ import {
   Platform,
   KeyboardAvoidingView,
 } from 'react-native';
-import { oneDarkPalette } from '../themes/oneDark';
+import { tokyoNight, tokyoNightPalette } from '../themes/tokyoNight';
 
 export type DialogAction = {
   label: string;
@@ -99,13 +99,13 @@ const variantToStyle = StyleSheet.create({
   default: {
     backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(171, 178, 191, 0.18)',
+    borderColor: 'rgba(192, 202, 245, 0.18)',
   },
   primary: {
-    backgroundColor: oneDarkPalette.blue,
+    backgroundColor: tokyoNightPalette.blue,
   },
   danger: {
-    backgroundColor: oneDarkPalette.red,
+    backgroundColor: tokyoNightPalette.red,
   },
 });
 
@@ -113,24 +113,24 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
   dialog: {
-    backgroundColor: '#2b2f36',
+    backgroundColor: tokyoNight.surface,
     borderRadius: 12,
     padding: 16,
     width: '100%',
     maxWidth: 480,
     alignSelf: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(171, 178, 191, 0.06)',
+    borderColor: tokyoNight.border,
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
-  title: { color: oneDarkPalette.white, fontSize: 17, fontWeight: '700', marginBottom: 8 },
+  title: { color: tokyoNight.text, fontSize: 17, fontWeight: '700', marginBottom: 8 },
   content: {},
   actions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 16 },
   actionBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginLeft: 8 },
-  actionText: { color: 'rgba(171, 178, 191, 0.9)', fontSize: 14, fontWeight: '600' },
+  actionText: { color: tokyoNight.fadedText, fontSize: 14, fontWeight: '600' },
   filledText: { color: '#fff', fontWeight: '600' },
 });

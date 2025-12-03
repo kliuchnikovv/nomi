@@ -6,6 +6,7 @@ import {
     Text,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Chat } from '../main/models';
 import { Settings } from 'iconoir-react-native';
@@ -31,6 +32,7 @@ export default function Sidebar({
     onChatDelete,
     onOpenSettings,
 }: Props) {
+    const insets = useSafeAreaInsets();
     const [highlightedChatID, setHighlightedChatID] = React.useState<string | null>(null);
 
     const openMenu = (chat_id: string) => {
@@ -52,9 +54,9 @@ export default function Sidebar({
 
     return (
         <View style={[styles.root, { width }]}>
-            <View style={styles.topBar}>
+            <View style={[styles.topBar, { paddingTop: insets.top }]}>
                 <Pressable style={styles.newChatBtn} onPress={onNewChat}>
-                    <Text style={styles.newChatText}>＋ Новый чат</Text>
+                    <Text style={styles.newChatText}>＋ New Chat</Text>
                 </Pressable>
             </View>
             <FlatList
@@ -78,7 +80,7 @@ export default function Sidebar({
                             ]}
                             numberOfLines={1}
                         >
-                            {item.title || 'Без названия'}
+                            {item.title || 'Untitled'}
                         </Text>
                         <Text style={styles.chatSubtitle} numberOfLines={1}>
                             {new Date(item.created_at).toLocaleString()}
@@ -86,7 +88,7 @@ export default function Sidebar({
                     </Pressable>
                 )}
             />
-            <View style={styles.bottomBar}>
+            <View style={[styles.bottomBar, { paddingBottom: insets.bottom }]}>
                 <Pressable style={styles.settingsBtn} onPress={onOpenSettings}>
                     <Settings
                         width={28}

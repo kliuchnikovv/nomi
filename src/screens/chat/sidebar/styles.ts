@@ -1,12 +1,14 @@
 import { StyleSheet } from 'react-native';
-import { palette } from '../theme';
+import { ThemeColors } from '../../../themes/types';
 
-export const styles = StyleSheet.create({
+export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
     container: {
         height: '100%',
-        backgroundColor: palette.surface,
+        backgroundColor: theme.surface,
         borderRightWidth: StyleSheet.hairlineWidth,
-        borderRightColor: palette.border,
+        borderRightColor: theme.border,
+        borderTopRightRadius: 24,
+        borderBottomRightRadius: 24,
         paddingTop: 12,
         paddingBottom: 12,
         paddingHorizontal: 12,
@@ -21,9 +23,11 @@ export const styles = StyleSheet.create({
     },
     overlayCard: {
         height: '100%',
-        backgroundColor: palette.surface,
+        backgroundColor: theme.surface,
         borderRightWidth: StyleSheet.hairlineWidth,
-        borderRightColor: palette.border,
+        borderRightColor: theme.border,
+        borderTopRightRadius: 24,
+        borderBottomRightRadius: 24,
         paddingTop: 16,
         paddingBottom: 16,
         paddingHorizontal: 12,
@@ -39,7 +43,7 @@ export const styles = StyleSheet.create({
         marginBottom: 12,
     },
     title: {
-        color: palette.textPrimary,
+        color: theme.textPrimary,
         fontSize: 16,
         fontWeight: '700',
     },
@@ -47,10 +51,10 @@ export const styles = StyleSheet.create({
         borderRadius: 12,
         paddingHorizontal: 12,
         paddingVertical: 8,
-        backgroundColor: palette.accent,
+        backgroundColor: theme.accent,
     },
     newChatText: {
-        color: palette.background,
+        color: theme.background,
         fontWeight: '700',
         fontSize: 13,
     },
@@ -66,18 +70,44 @@ export const styles = StyleSheet.create({
         borderRadius: 12,
     },
     itemActive: {
-        backgroundColor: palette.surfaceHighlight,
+        backgroundColor: theme.surfaceHighlight,
         borderWidth: StyleSheet.hairlineWidth,
-        borderColor: palette.border,
+        borderColor: theme.border,
+    },
+    itemHighlighted: {
+        backgroundColor: `${theme.accent}15`,
     },
     itemTitle: {
-        color: palette.textPrimary,
+        color: theme.textPrimary,
         fontWeight: '600',
         fontSize: 14,
     },
     itemSubtitle: {
-        color: palette.textSecondary,
+        color: theme.textSecondary,
         fontSize: 12,
         marginTop: 4,
+    },
+    footer: {
+        marginTop: 'auto',
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: theme.border,
+    },
+    settingsButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 12,
+        backgroundColor: 'transparent',
+    },
+    settingsButtonPressed: {
+        backgroundColor: theme.surfaceHighlight,
+    },
+    settingsText: {
+        color: theme.textPrimary,
+        fontSize: 14,
+        fontWeight: '600',
+        marginLeft: 12,
     },
 });

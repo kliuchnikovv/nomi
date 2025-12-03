@@ -9,6 +9,8 @@ import ChatScreen from '../chat/screen.tsx';
 import { ChatProvider } from '../chat/context.tsx';
 import { ConnectorsProvider } from './connectors/context.tsx';
 import ConnectorScreenDialog from './connectors/screen.tsx';
+import { useTheme } from '../../context/ThemeContext.tsx';
+import { ThemeName } from '../../themes';
 
 type Props = {
     visible: boolean;
@@ -17,6 +19,7 @@ type Props = {
 
 export default function SettingsModal({ visible, onClose }: Props) {
     const { logout, user } = useAuth();
+    const { themeName, setTheme } = useTheme();
     const insets = useSafeAreaInsets();
     const paddingStyle = useMemo(
         () => ({ paddingTop: insets.top, paddingBottom: insets.bottom }),
@@ -34,6 +37,11 @@ export default function SettingsModal({ visible, onClose }: Props) {
         console.log('SettingsModal onClose called');
         onClose();
     };
+
+    const themesList: { label: string; value: ThemeName }[] = [
+        { label: 'Tokyo Night', value: 'tokyoNight' },
+        { label: 'One Dark', value: 'oneDark' },
+    ];
 
     return (
         <>
@@ -59,6 +67,27 @@ export default function SettingsModal({ visible, onClose }: Props) {
                                 </Text>
                             </View>
                         )}
+
+                        <View style={[styles.row, { marginBottom: 16, flexDirection: 'column', alignItems: 'flex-start' }]}>
+                            <Text style={[styles.label, { marginBottom: 8 }]}>Theme</Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                {themesList.map((t) => (
+                                    <Pressable
+                                        key={t.value}
+                                        onPress={() => setTheme(t.value)}
+                                        style={[
+                                            styles.connectorsBtn,
+                                            { backgroundColor: themeName === t.value ? '#7aa2f7' : '#24283b', paddingHorizontal: 12, paddingVertical: 6, minWidth: 'auto' }
+                                        ]}
+                                    >
+                                        <Text style={[styles.logoutText, { color: themeName === t.value ? '#1a1b26' : '#c0caf5' }]}>
+                                            {t.label}
+                                        </Text>
+                                    </Pressable>
+                                ))}
+                            </View>
+                        </View>
+
                         <View>
                             <Pressable
                                 onPress={() => {
@@ -68,7 +97,10 @@ export default function SettingsModal({ visible, onClose }: Props) {
                                         `onPress finished - ${connectorsOpen}`,
                                     );
                                 }}
-                                style={styles.connectorsBtn}
+                                style={({ pressed }) => [
+                                    styles.connectorsBtn,
+                                    pressed && { opacity: 0.8 },
+                                ]}
                             >
                                 <Text style={styles.logoutText}>
                                     Connectors
@@ -84,7 +116,10 @@ export default function SettingsModal({ visible, onClose }: Props) {
                                 } catch { }
                                 onClose();
                             }}
-                            style={styles.logoutBtn}
+                            style={({ pressed }) => [
+                                styles.logoutBtn,
+                                pressed && { opacity: 0.8 },
+                            ]}
                         >
                             <Text style={styles.logoutText}>Logout</Text>
                         </Pressable>

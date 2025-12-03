@@ -1,36 +1,65 @@
-import React, { useCallback } from 'react';
-import { Linking, Text, TouchableOpacity, View } from 'react-native';
-import { Bubble, Composer, InputToolbar, Message, MessageText, Send } from 'react-native-gifted-chat';
+import React, { useCallback, useMemo } from 'react';
+import { Linking, View, Text, ActionSheetIOS } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
+import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
-import { Microphone, Plus, Sparks } from 'iconoir-react-native';
-import { markdownStyles, palette } from '../theme';
-import { styles } from '../styles';
+import { createChatTheme, createMarkdownStyles } from '../theme';
+import { ThemeColors } from '../../../themes/types';
+import ChatInput from '../input/component';
 
 interface GiftedChatRenderersParams {
     assistantContainerMaxWidth: string;
     assistantWorking: boolean;
     bottomInset: number;
+    styles: any;
+    theme: ThemeColors;
+    onSend: (text: string) => void;
 }
 
 export function useGiftedChatRenderers({
     assistantContainerMaxWidth,
     assistantWorking,
     bottomInset,
+    styles,
+    theme,
+    onSend,
 }: GiftedChatRenderersParams) {
+    const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(chatTheme), [chatTheme]);
+
+    const handleLongPress = useCallback((context: any, message: any) => {
+        const messageText = message?.text || '';
+        if (!messageText) return;
+
+        ActionSheetIOS.showActionSheetWithOptions(
+            {
+                options: ['Copy', 'Cancel'],
+                cancelButtonIndex: 1,
+                userInterfaceStyle: 'dark',
+            },
+            (buttonIndex) => {
+                if (buttonIndex === 0) {
+                    Clipboard.setString(messageText);
+                }
+            }
+        );
+    }, []);
+
     const renderBubble = useCallback((props: any) => {
         return (
             <Bubble
                 {...props}
+                onLongPress={handleLongPress}
                 wrapperStyle={{
                     right: {
-                        backgroundColor: palette.userBubble,
+                        backgroundColor: chatTheme.userBubble,
                         borderRadius: 18,
                         borderBottomRightRadius: 6,
                         padding: 4,
                         marginBottom: 0,
                     },
                     left: {
-                        backgroundColor: palette.background,
+                        backgroundColor: chatTheme.background,
                         borderRadius: 18,
                         padding: 4,
                         paddingLeft: 10,
@@ -39,52 +68,39 @@ export function useGiftedChatRenderers({
                 }}
                 textStyle={{
                     right: {
-                        color: palette.textPrimary,
+                        color: chatTheme.textPrimary,
                         fontSize: 16,
-                        lineHeight: 22,
+                        lineHeight: 20,
                     },
                     left: {
-                        color: palette.textPrimary,
+                        color: chatTheme.textPrimary,
                         fontSize: 16,
-                        lineHeight: 22,
+                        lineHeight: 20,
                     },
                 }}
                 timeTextStyle={{
-                    right: { color: palette.textSecondary },
-                    left: { color: palette.textSecondary },
+                    right: { color: chatTheme.textSecondary },
+                    left: { color: chatTheme.textSecondary },
+                }}
+                containerToNextStyle={{
+                    right: { marginBottom: 4 },
+                    left: { marginBottom: 4 },
+                }}
+                containerToPreviousStyle={{
+                    right: { marginBottom: 4 },
+                    left: { marginBottom: 4 },
                 }}
             />
         );
-    }, []);
+    }, [chatTheme, handleLongPress]);
 
     const renderInputToolbar = useCallback((props: any) => {
+        // We ignore props from GiftedChat for the input and use our custom ChatInput
+        // We might need to handle bottomInset here if ChatInput doesn't
         return (
-            <InputToolbar
-                {...props}
-                containerStyle={styles.inputToolbarContainer}
-                primaryStyle={[
-                    styles.inputToolbarPrimary,
-                    { paddingBottom: Math.max(bottomInset, 20) },
-                ]}
-                renderActions={() => (
-                    <TouchableOpacity style={styles.actionButton}>
-                        <Plus width={24} height={24} color="#E8EAED" strokeWidth={2} />
-                    </TouchableOpacity>
-                )}
-            />
+            <ChatInput onSend={onSend} />
         );
-    }, [bottomInset]);
-
-    const renderComposer = useCallback((props: any) => {
-        return (
-            <Composer
-                {...props}
-                textInputStyle={styles.textInput}
-                placeholder="Ask Gemini"
-                placeholderTextColor="#9AA0A6"
-            />
-        );
-    }, []);
+    }, [onSend]);
 
     const renderMessage = useCallback((props: any) => {
         return (
@@ -107,42 +123,14 @@ export function useGiftedChatRenderers({
             <Markdown
                 style={markdownStyles as any}
                 onLinkPress={url => {
-                    Linking.openURL(url).catch(() => {});
+                    Linking.openURL(url).catch(() => { });
                     return false;
                 }}
             >
                 {props.currentMessage?.text || ''}
             </Markdown>
         );
-    }, []);
-
-    const renderSend = useCallback((props: any) => {
-        const hasText = props.text && props.text.trim().length > 0;
-
-        if (hasText) {
-            return (
-                <Send
-                    {...props}
-                    containerStyle={styles.sendContainer}
-                >
-                    <View style={styles.sendButton}>
-                        <View style={styles.arrowUp} />
-                    </View>
-                </Send>
-            );
-        }
-
-        return (
-            <View style={styles.rightIconsContainer}>
-                <TouchableOpacity style={styles.iconButton}>
-                    <Microphone width={24} height={24} color={palette.textPrimary} strokeWidth={2} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.iconButton}>
-                    <Sparks width={24} height={24} color={palette.textPrimary} strokeWidth={2} />
-                </TouchableOpacity>
-            </View>
-        );
-    }, []);
+    }, [markdownStyles]);
 
     const renderFooter = useCallback(() => {
         if (!assistantWorking) {
@@ -155,15 +143,13 @@ export function useGiftedChatRenderers({
                 <Text style={styles.footerText}>Assistant is thinking…</Text>
             </View>
         );
-    }, [assistantWorking]);
+    }, [assistantWorking, styles]);
 
     return {
         renderBubble,
-        renderComposer,
         renderFooter,
         renderInputToolbar,
         renderMessage,
         renderMessageText,
-        renderSend,
     };
 }

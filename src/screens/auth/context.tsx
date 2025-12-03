@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import { apiClient, setupApiClient } from '../../apiClient';
 import { API_URL } from '../../config';
@@ -57,6 +58,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         loadAuthData();
+    }, []);
+
+    // Configure Google Sign-In
+    useEffect(() => {
+        GoogleSignin.configure({
+            webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com', // TODO: Replace with actual web client ID
+            iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', // TODO: Replace with actual iOS client ID
+            offlineAccess: true,
+        });
     }, []);
 
     async function setAuthData(
@@ -181,6 +191,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    async function signInWithGoogle() {
+        try {
+            await GoogleSignin.hasPlayServices();
+            const userInfo = await GoogleSignin.signIn();
+
+            // Exchange Google token with backend
+            const data = await apiClient.post<any>(`${API_URL}/auth/google`, {
+                id_token: userInfo.data?.idToken,
+            });
+
+            await setAuthData(data.user, data.token, data.refresh_token);
+        } catch (error: any) {
+            if (error.code === 'SIGN_IN_CANCELLED') {
+                console.log('User cancelled Google Sign-In');
+            } else if (error.code === 'IN_PROGRESS') {
+                console.log('Google Sign-In already in progress');
+            } else if (error.code === 'PLAY_SERVICES_NOT_AVAILABLE') {
+                alertError('Google Play Services not available');
+            } else {
+                alertError(`Error signing in with Google: ${error.message || error}`);
+                console.error('Google Sign-In error:', error);
+            }
+        }
+    }
+
     const value: AuthContextType = {
         user,
         token,
@@ -190,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         refreshToken,
+        signInWithGoogle,
     };
 
     return (

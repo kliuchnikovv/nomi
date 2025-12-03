@@ -26,7 +26,8 @@ import SettingsModal from '../settings/screen';
 import { emptyChatID, useMain } from './context';
 import { ChatProvider, useChat } from '../chat/context.tsx';
 import { InboxProvider, useInbox } from '../rightsidebar/context';
-import { oneDarkPalette } from '../../themes/oneDark.ts';
+import { palette } from '../../themes';
+import type { GetChatsOptions } from './models';
 
 const withAlpha = (hex: string, alpha: number) => {
     const h = hex.replace('#', '');
@@ -53,7 +54,7 @@ function HeaderShell({
     setRightSidebarOpen,
 }: {
     isNarrow: boolean;
-    getChats: () => void;
+    getChats: (options?: GetChatsOptions) => void;
     setSidebarOpen: (v: boolean) => void;
     setRightSidebarOpen: (v: boolean) => void;
 }) {
@@ -62,15 +63,15 @@ function HeaderShell({
     const headerStyle = [
         styles.header,
         isPluginThread
-            ? { backgroundColor: withAlpha(oneDarkPalette.red, 0.12) }
-            : { backgroundColor: withAlpha(oneDarkPalette.blue, 0.08) },
+            ? { backgroundColor: withAlpha(palette.red, 0.12) }
+            : { backgroundColor: withAlpha(palette.blue, 0.08) },
     ];
     return (
         <View style={headerStyle}>
             {isNarrow && (
                 <Pressable
                     onPress={() => {
-                        getChats();
+                        getChats({ preserveActiveChat: true });
                         setSidebarOpen(true)
                     }}
                     style={styles.headerBtn}
@@ -211,6 +212,7 @@ function MainScreenContent() {
 
     // SIMPLIFIED: Just show chat screen for now
     const { activeChatID, setActiveChatID } = useMain();
+    const [settingsOpen, setSettingsOpen] = useState(false);
 
     return (
         <View style={styles.root}>
@@ -257,7 +259,7 @@ function MainScreenContent() {
                     setRightSidebarOpen={setRightSidebarOpen}
                 />
                 */}
-                    <ChatScreen />
+                    <ChatScreen onSettingsPress={() => setSettingsOpen(true)} />
                 </View>
                 {/* COMMENTED OUT: Right Sidebar
             {!isNarrow && <View style={styles.divider} />}
@@ -293,12 +295,10 @@ function MainScreenContent() {
             />
         )}
         */}
-            {/* COMMENTED OUT: Settings modal
-        <SettingsModal
-            visible={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
-        />
-        */}
+            <SettingsModal
+                visible={settingsOpen}
+                onClose={() => setSettingsOpen(false)}
+            />
         </View>
     );
 }

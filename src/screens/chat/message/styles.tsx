@@ -1,6 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { oneDark, oneDarkPalette } from '../../../themes/oneDark.ts';
-import { redBright } from 'colorette';
+import { palette, theme } from '../../../themes';
 
 const withAlpha = (hex: string, alpha: number) => {
     const h = hex.replace('#', '');
@@ -12,87 +11,98 @@ const withAlpha = (hex: string, alpha: number) => {
 };
 
 const tokens = {
-    userBubble: oneDark.gutterGrey,
-    actionBg: withAlpha(oneDarkPalette.blue, 0.12),
-    actionBorder: withAlpha(oneDarkPalette.blue, 0.3),
-    actionLabel: oneDark.text,
-    actionWhy: withAlpha(oneDarkPalette.white, 0.7),
-    importanceBg: withAlpha(oneDarkPalette.red, 0.15),
-    importanceText: oneDarkPalette.red,
-    daemonBorder: withAlpha(oneDarkPalette.red, 0.4),
-    daemonHeader: oneDarkPalette.red,
+    userBubble: palette.gutterGrey,
+    actionBg: withAlpha(palette.blue, 0.12),
+    actionBorder: withAlpha(palette.blue, 0.3),
+    actionLabel: theme.text,
+    actionWhy: withAlpha(palette.white, 0.7),
+    importanceBg: withAlpha(palette.red, 0.15),
+    importanceText: palette.red,
+    daemonBorder: withAlpha(palette.red, 0.4),
+    daemonHeader: palette.red,
 };
 
 export const styles = StyleSheet.create({
-    assistantContainer: {
-        alignSelf: 'stretch',
-        // no background, no padding — text only
+    container: {
+        flexDirection: 'row',
+        marginVertical: 4,
+        paddingHorizontal: 16,
+    },
+    avatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        marginRight: 8,
+        backgroundColor: theme.surfaceHighlight,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     bubble: {
-        padding: 5,
-        borderRadius: 12,
-        maxWidth: '90%',
+        maxWidth: '80%',
+        padding: 12,
+        borderRadius: 16,
     },
-    bubbleUser: {
+    userBubble: {
+        backgroundColor: theme.surfaceHighlight,
         alignSelf: 'flex-end',
-        backgroundColor: oneDark.blue,
-        minWidth: 80,
+        borderBottomRightRadius: 4,
     },
-    bubbleAssistant: {
+    assistantBubble: {
+        backgroundColor: theme.surfaceHighlight,
         alignSelf: 'flex-start',
-        // backgroundColor: 'rgba(171, 178, 191, 0.06)',
+        borderBottomLeftRadius: 4,
     },
-    bubbleDaemon: {
-        alignSelf: 'flex-start',
-        backgroundColor: withAlpha(oneDarkPalette.red, 0.08),
-        maxWidth: '85%',
+    text: {
+        fontSize: 16,
+        lineHeight: 24,
     },
-    daemonContainer: {
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: withAlpha(oneDarkPalette.red, 0.4),
-        borderRadius: 10,
-        padding: 6,
+    userText: {
+        color: palette.bg,
     },
-    daemonHeader: {
-        color: tokens.daemonHeader,
+    assistantText: {
+        color: theme.textPrimary,
+    },
+    time: {
         fontSize: 11,
-        fontWeight: '700',
-        marginBottom: 4,
-        textTransform: 'uppercase',
+        marginTop: 4,
+        alignSelf: 'flex-end',
     },
-    markdownStyles: {
+    userTime: {
+        color: 'rgba(255, 255, 255, 0.7)',
+    },
+    assistantTime: {
+        color: theme.textSecondary,
+    },
+    markdown: {
         body: {
-            color: oneDark.text,
+            color: theme.textPrimary,
             fontSize: 16,
-            lineHeight: 22,
-        },
-        code_inline: {
-            backgroundColor: oneDark.background,
-            paddingHorizontal: 4,
-            paddingVertical: 2,
-            borderRadius: 4
-        },
-        code_block: {
-            backgroundColor: 'rgba(171,178,191,0.12)',
-            padding: 8,
-            borderRadius: 6
-        },
-        fence: {
-            backgroundColor: 'rgba(171,178,191,0.12)',
-            padding: 8,
-            borderRadius: 6
+            lineHeight: 24,
         },
         link: {
-            color: '#61afef'
+            color: theme.accent,
         },
-        list_item: {
-            flexDirection: 'row'
+        code_inline: {
+            backgroundColor: 'rgba(192, 202, 245, 0.1)',
+            paddingHorizontal: 4,
+            paddingVertical: 2,
+            borderRadius: 4,
+            fontFamily: 'Menlo',
+            fontSize: 14,
+        },
+        code_block: {
+            backgroundColor: 'rgba(192, 202, 245, 0.05)',
+            padding: 12,
+            borderRadius: 8,
+            marginVertical: 8,
+            fontFamily: 'Menlo',
+            fontSize: 14,
         },
         blockquote: {
             borderLeftWidth: 3,
             borderLeftColor: '#4b5263',
             paddingLeft: 8,
-            color: oneDark.text
+            color: theme.textPrimary,
         },
         heading1: {
             fontSize: 22,

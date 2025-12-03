@@ -1,36 +1,42 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Platform, KeyboardAvoidingView } from 'react-native';
-import { GiftedChat } from 'react-native-gifted-chat';
+import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
 import { useChat } from './context';
 import { useAuth } from '../auth/context';
 import { useMain } from '../main/context';
 import { ASSISTANT_BUBBLE_WIDTH_RATIO } from './theme';
-import { styles } from './styles';
+import { createStyles } from './styles';
 import { useGiftedMessages } from './hooks/useGiftedMessages';
 import { useGiftedChatRenderers } from './hooks/useGiftedChatRenderers';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatSidebar } from './sidebar/screen';
+import { useTheme } from '../../context/ThemeContext';
 
-export default function ChatScreen() {
+export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () => void }) {
     const {
         messages,
         sendMessage,
         assistantWorking,
         externalTitle,
+        isPluginThread,
+        pluginThreadMeta,
     } = useChat();
     const { user } = useAuth();
+    const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
-    const { chats, activeChatID, setActiveChatID, getChats, createNewChat } = useMain();
+    const { chats, activeChatID, setActiveChatID, getChats, createNewChat, renameChat, deleteChat } = useMain();
     const [sidebarVisible, setSidebarVisible] = useState(false);
+
+    const styles = useMemo(() => createStyles(theme), [theme]);
 
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
 
     const giftedMessages = useGiftedMessages(messages, user?.id);
 
-    const handleSend = useCallback((newMessages = []) => {
+    const handleSend = useCallback((newMessages: IMessage[] = []) => {
         if (newMessages.length > 0 && newMessages[0].text) {
             sendMessage(newMessages[0].text.trim());
         }
@@ -59,16 +65,17 @@ export default function ChatScreen() {
 
     const {
         renderBubble,
-        renderComposer,
         renderFooter,
         renderInputToolbar,
         renderMessage,
         renderMessageText,
-        renderSend,
     } = useGiftedChatRenderers({
         assistantContainerMaxWidth,
         assistantWorking,
         bottomInset: insets.bottom,
+        styles,
+        theme,
+        onSend: sendMessage,
     });
 
     const isWide = windowWidth >= 1024;
@@ -81,7 +88,7 @@ export default function ChatScreen() {
     }, [getChats, isWide]);
 
     const handleOpenMenu = useCallback(() => {
-        getChats();
+        getChats({ preserveActiveChat: true });
         setSidebarVisible(true);
     }, [getChats]);
 
@@ -113,6 +120,9 @@ export default function ChatScreen() {
                         activeChatID={activeChatID}
                         onSelectChat={handleSelectChat}
                         onNewChat={handleNewChat}
+                        onSettingsPress={onSettingsPress}
+                        onChatDelete={deleteChat}
+                        onChatRename={renameChat}
                     />
                 )}
 
@@ -136,8 +146,6 @@ export default function ChatScreen() {
                             renderBubble={renderBubble}
                             renderMessageText={renderMessageText}
                             renderInputToolbar={renderInputToolbar}
-                            renderComposer={renderComposer}
-                            renderSend={renderSend}
                             isTyping={assistantWorking}
                             renderFooter={renderFooter}
                             // @ts-ignore
@@ -166,6 +174,9 @@ export default function ChatScreen() {
                     onClose={handleCloseMenu}
                     onSelectChat={handleSelectChat}
                     onNewChat={handleNewChat}
+                    onSettingsPress={onSettingsPress}
+                    onChatDelete={deleteChat}
+                    onChatRename={renameChat}
                 />
             )}
         </View>

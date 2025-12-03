@@ -9,4 +9,7 @@ export interface ChatSidebarProps {
     onClose?: () => void;
     onSelectChat: (chatId: string) => void;
     onNewChat: () => void;
+    onSettingsPress?: () => void;
+    onChatDelete?: (chatId: string) => void;
+    onChatRename?: (chatId: string, newTitle: string) => void;
 }

@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native';
-import { oneDark, oneDarkPalette } from '../../themes/oneDark.ts';
+import { theme } from '../../themes';
 
 export const styles = StyleSheet.create({
     root: {
-        backgroundColor: oneDarkPalette.black,
+        backgroundColor: theme.background,
         flex: 1,
         justifyContent: 'space-between',
     },
@@ -11,7 +11,7 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: 'rgba(171, 178, 191, 0.1)',
+        borderBottomColor: 'rgba(192, 202, 245, 0.08)',
     },
     topBarRow: {
         flexDirection: 'row',
@@ -24,20 +24,20 @@ export const styles = StyleSheet.create({
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(171, 178, 191, 0.06)',
+        backgroundColor: 'rgba(192, 202, 245, 0.06)',
     },
     collapseIcon: {
-        color: oneDarkPalette.white,
+        color: theme.text,
         fontSize: 18,
     },
     newChatBtn: {
         paddingVertical: 10,
         paddingHorizontal: 12,
-        backgroundColor: 'rgba(97, 175, 239, 0.15)',
+        backgroundColor: 'rgba(122, 162, 247, 0.15)',
         borderRadius: 8,
     },
     newChatText: {
-        color: oneDark.blue,
+        color: theme.accent,
         fontSize: 14,
     },
     listContent: {
@@ -50,27 +50,27 @@ export const styles = StyleSheet.create({
         backgroundColor: 'transparent',
     },
     chatItemActive: {
-        backgroundColor: oneDark.gutterGrey,
+        backgroundColor: theme.surfaceHighlight,
     },
     chatItemHighlighted: {
-        backgroundColor: 'rgba(171, 178, 191, 0.2)',
+        backgroundColor: 'rgba(192, 202, 245, 0.12)',
     },
     chatTitle: {
-        color: oneDarkPalette.white,
+        color: theme.textPrimary,
         fontSize: 14,
         fontWeight: '600',
     },
     chatTitleActive: {
-        color: oneDarkPalette.blue,
+        color: theme.accent,
     },
     chatSubtitle: {
-        color: 'rgba(171, 178, 191, 0.7)',
+        color: theme.fadedText,
         fontSize: 12,
         marginTop: 2,
     },
     bottomBar: {
         borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: 'rgba(171, 178, 191, 0.1)',
+        borderTopColor: 'rgba(192, 202, 245, 0.08)',
         padding: 8,
     },
     settingsBtn: {
@@ -82,13 +82,13 @@ export const styles = StyleSheet.create({
     },
     settingsIcon: {
         fontSize: 16,
-        color: oneDark.blue,
+        color: theme.accent,
     },
     settingsText: {
-        color: oneDarkPalette.white,
+        color: theme.text,
         fontSize: 14,
     },
     settingsColor: {
-        color: oneDarkPalette.gutterGrey,
+        color: theme.textSecondary,
     }
 });

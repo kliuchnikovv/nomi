@@ -20,6 +20,7 @@ import { AuthScreen } from './src/screens/auth/screen.tsx';
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
 
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -28,14 +29,16 @@ function App() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
                 <SafeAreaProvider>
-                    <AuthProvider>
-                        <StatusBar
-                            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-                        />
-                        <MainProvider>
-                            <AppContent />
-                        </MainProvider>
-                    </AuthProvider>
+                    <ThemeProvider>
+                        <AuthProvider>
+                            <StatusBar
+                                barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+                            />
+                            <MainProvider>
+                                <AppContent />
+                            </MainProvider>
+                        </AuthProvider>
+                    </ThemeProvider>
                 </SafeAreaProvider>
             </KeyboardProvider>
         </GestureHandlerRootView>
@@ -44,34 +47,23 @@ function App() {
 
 function AppContent() {
     const insets = useSafeAreaInsets();
-    // COMMENTED OUT: Authentication check - will restore later
-    // const { isAuthenticated, isLoading } = useAuth();
-    const paddingStyle = useMemo(
-        () => ({ paddingTop: insets.top, paddingBottom: insets.bottom }),
-        [insets.top, insets.bottom],
-    );
+    const { isAuthenticated, isLoading } = useAuth();
+    const { theme } = useTheme();
 
-    // COMMENTED OUT: Loading state
-    // if (isLoading) {
-    //     return <View style={styles.container} />;
-    // }
+    const containerStyle = useMemo(() => ({
+        flex: 1,
+        backgroundColor: theme.background,
+    }), [theme.background]);
 
-    // SIMPLIFIED: Always show ChatLayout for now
+    if (isLoading) {
+        return <View style={containerStyle} />;
+    }
+
     return (
-        <View style={[styles.container, paddingStyle]}>
-            <ChatLayout />
-            {/* COMMENTED OUT: Auth screen conditional
+        <View style={containerStyle}>
             {isAuthenticated ? <ChatLayout /> : <AuthScreen />}
-            */}
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#111118',
-    },
-});
 
 export default App;

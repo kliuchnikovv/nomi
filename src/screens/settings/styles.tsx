@@ -1,10 +1,10 @@
 import { StyleSheet } from 'react-native';
-import { oneDark, oneDarkPalette } from '../../themes/oneDark.ts';
+import { tokyoNight, tokyoNightPalette } from '../../themes/tokyoNight';
 
 export const styles = StyleSheet.create({
     root: {
         flex: 1,
-        backgroundColor: oneDarkPalette.black,
+        backgroundColor: tokyoNight.background,
     },
     header: {
         flexDirection: 'row',
@@ -13,10 +13,10 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: 'rgba(171, 178, 191, 0.06)',
+        borderBottomColor: 'rgba(192, 202, 245, 0.06)',
     },
     title: {
-        color: oneDarkPalette.white,
+        color: tokyoNight.text,
         fontSize: 16,
         fontWeight: '700',
     },
@@ -25,7 +25,7 @@ export const styles = StyleSheet.create({
         paddingVertical: 4,
     },
     closeText: {
-        color: 'rgba(171, 178, 191, 0.8)',
+        color: tokyoNight.fadedText,
         fontSize: 14,
     },
     body: {
@@ -39,29 +39,29 @@ export const styles = StyleSheet.create({
         marginBottom: 8,
     },
     label: {
-        color: 'rgba(171, 178, 191, 0.7)',
+        color: tokyoNight.fadedText,
         fontSize: 13,
     },
     value: {
-        color: oneDarkPalette.white,
+        color: tokyoNight.text,
         fontSize: 15,
         marginTop: 4,
     },
     logoutBtn: {
-        backgroundColor: oneDarkPalette.red,
-        paddingVertical: 10,
-        borderRadius: 8,
+        backgroundColor: tokyoNightPalette.red,
+        paddingVertical: 14,
+        borderRadius: 16,
         alignItems: 'center',
     },
     connectorsBtn: {
-        backgroundColor: oneDarkPalette.blue,
-        paddingVertical: 10,
-        borderRadius: 8,
+        backgroundColor: tokyoNight.blue,
+        paddingVertical: 14,
+        borderRadius: 16,
         alignItems: 'center',
     },
     logoutText: {
         color: '#fff',
-        fontSize: 15,
+        fontSize: 16,
         fontWeight: '600',
     },
 });

@@ -1,4 +1,4 @@
-import { Chat, Message } from '../main/models';
+import { Chat, GetChatsOptions, Message } from '../main/models';
 import { ReactNode } from 'react';
 import { PluginChatMessage } from '../rightsidebar/models';
 
@@ -12,12 +12,10 @@ export interface MainContextType {
     chats: Chat[];
     activeChatID: string | null;
     activeChat: Chat | null;
-    getChats: () => void;
-    getMessages: (chatId: string) => void;
-    sendMessage: (text: string) => void;
+    getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
     deleteChat: (chatId: string) => void;
-    setActiveChatID: (id: string) => void;
+    setActiveChatID: (id: string | null) => void;
 }
 
 export interface ChatContextType {

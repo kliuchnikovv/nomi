@@ -10,7 +10,7 @@ import { NavArrowDown, NavArrowRight, Mail, Calendar } from 'iconoir-react-nativ
 import { styles } from './styles.tsx';
 import { usePluginChats } from './context';
 import { useChat } from '../chat/context';
-import { oneDarkPalette } from '../../themes/oneDark.ts';
+import { tokyoNight, tokyoNightPalette } from '../../themes/tokyoNight.ts';
 import { Plugin, PluginChat } from './models';
 
 type Props = {
@@ -21,16 +21,16 @@ type Props = {
 };
 
 const pluginIconMap: Record<string, { IconComponent: any; color: string }> = {
-    inbox: { IconComponent: Mail, color: '#61AFEF' },
-    gmail: { IconComponent: Mail, color: '#EA4335' },
-    imap: { IconComponent: Mail, color: '#61AFEF' },
-    calendar: { IconComponent: Calendar, color: '#E06C75' },
+    inbox: { IconComponent: Mail, color: tokyoNightPalette.blue },
+    gmail: { IconComponent: Mail, color: tokyoNightPalette.red },
+    imap: { IconComponent: Mail, color: tokyoNightPalette.cyan },
+    calendar: { IconComponent: Calendar, color: tokyoNightPalette.orange },
 };
 
 const getPluginIcon = (provider: string) => {
     return pluginIconMap[provider] || {
         IconComponent: Mail,
-        color: oneDarkPalette.commentGrey,
+        color: tokyoNightPalette.commentGrey,
     };
 };
 
@@ -97,13 +97,13 @@ const PluginSection = ({
                         <NavArrowDown
                             width={16}
                             height={16}
-                            color={oneDarkPalette.gutterGrey}
+                            color={tokyoNightPalette.gutterGrey}
                         />
                     ) : (
                         <NavArrowRight
                             width={16}
                             height={16}
-                            color={oneDarkPalette.gutterGrey}
+                            color={tokyoNightPalette.gutterGrey}
                         />
                     )}
                 </View>
@@ -128,7 +128,7 @@ const PluginSection = ({
                                                 style={({ pressed }) => [
                                                     styles.chatItem,
                                                     pressed && { opacity: 0.8 },
-                                                    { backgroundColor: 'rgba(97, 175, 239, 0.05)' },
+                                                    { backgroundColor: 'rgba(122, 162, 247, 0.05)' },
                                                 ]}
                                                 onPress={() => onThreadSelect(chat, thread)}
                                             >
@@ -296,7 +296,7 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
             </View>
             {loading && plugins.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <ActivityIndicator size="large" color="#61AFEF" />
+                    <ActivityIndicator size="large" color={tokyoNightPalette.blue} />
                 </View>
             ) : plugins.length === 0 ? (
                 <View style={styles.emptyState}>
