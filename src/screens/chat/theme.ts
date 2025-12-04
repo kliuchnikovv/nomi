@@ -10,7 +10,7 @@ export const createChatTheme = (theme: ThemeColors) => ({
     textSecondary: theme.textSecondary,
     accent: theme.accent,
     accentAlt: themePalette.cyan,
-    userBubble: theme.accent,
+    userBubble: theme.surface,
     assistantBubble: theme.surfaceHighlight,
     surfaceHighlight: theme.surfaceHighlight,
 });

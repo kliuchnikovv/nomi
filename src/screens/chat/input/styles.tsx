@@ -54,6 +54,9 @@ export const createStyles = (theme: ThemeColors) => StyleSheet.create({
     iconBtnActive: {
         backgroundColor: 'rgba(192, 202, 245, 0.1)',
     },
+    stopBtn: {
+        backgroundColor: theme.attention,
+    },
     iconBtnDisabled: {
         opacity: 0.5,
     },

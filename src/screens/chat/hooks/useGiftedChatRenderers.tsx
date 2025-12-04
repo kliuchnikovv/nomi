@@ -28,8 +28,12 @@ export function useGiftedChatRenderers({
     const markdownStyles = useMemo(() => createMarkdownStyles(chatTheme), [chatTheme]);
 
     const handleLongPress = useCallback((context: any, message: any) => {
+        console.log('handleLongPress called', { context, message });
         const messageText = message?.text || '';
-        if (!messageText) return;
+        if (!messageText) {
+            console.log('No message text');
+            return;
+        }
 
         ActionSheetIOS.showActionSheetWithOptions(
             {
@@ -40,6 +44,7 @@ export function useGiftedChatRenderers({
             (buttonIndex) => {
                 if (buttonIndex === 0) {
                     Clipboard.setString(messageText);
+                    console.log('Copied to clipboard:', messageText.substring(0, 50));
                 }
             }
         );
@@ -49,7 +54,6 @@ export function useGiftedChatRenderers({
         return (
             <Bubble
                 {...props}
-                onLongPress={handleLongPress}
                 wrapperStyle={{
                     right: {
                         backgroundColor: chatTheme.userBubble,
@@ -92,7 +96,7 @@ export function useGiftedChatRenderers({
                 }}
             />
         );
-    }, [chatTheme, handleLongPress]);
+    }, [chatTheme]);
 
     const renderInputToolbar = useCallback((props: any) => {
         // We ignore props from GiftedChat for the input and use our custom ChatInput
