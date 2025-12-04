@@ -13,6 +13,10 @@ export const createChatTheme = (theme: ThemeColors) => ({
     userBubble: theme.surface,
     assistantBubble: theme.surfaceHighlight,
     surfaceHighlight: theme.surfaceHighlight,
+    errorBackground: 'rgba(224, 108, 117, 0.15)',
+    errorText: themePalette.red,
+    errorButtonBackground: themePalette.red,
+    errorButtonText: '#FFFFFF',
 });
 
 export const ASSISTANT_BUBBLE_WIDTH_RATIO = 0.95;

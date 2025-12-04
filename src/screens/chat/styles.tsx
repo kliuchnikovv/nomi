@@ -75,7 +75,7 @@ export const createStyles = (theme: ThemeColors) => {
             color: theme.accent,
         },
         messagesContainer: {
-            paddingBottom: 20,
+            paddingBottom: 0,
             backgroundColor: theme.background,
         },
         inputToolbarContainer: {

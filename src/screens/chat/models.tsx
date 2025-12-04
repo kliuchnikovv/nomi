@@ -42,6 +42,9 @@ export interface ChatContextType {
     setChatMode: (mode: 'agent' | 'team') => void;
     teamCommand: any;
     setTeamCommand: (command: any) => void;
+    error: string | null;
+    setError: (error: string | null) => void;
+    retryLastMessage: () => void;
 }
 
 export interface Model {

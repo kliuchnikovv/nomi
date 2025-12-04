@@ -7,6 +7,15 @@ import { createSidebarStyles } from './styles';
 import { createChatTheme } from '../theme';
 import { useTheme } from '../../../context/ThemeContext';
 
+const pad = (value: number) => value.toString().padStart(2, '0');
+
+const formatDateTime = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}, ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+
 type SidebarStyles = ReturnType<typeof createSidebarStyles>;
 type SidebarChatTheme = ReturnType<typeof createChatTheme>;
 
@@ -88,7 +97,7 @@ function ChatList({
                     {item.title || 'Untitled'}
                 </Text>
                 <Text style={styles.itemSubtitle} numberOfLines={1}>
-                    {new Date(item.updated_at || item.created_at).toLocaleString()}
+                    {formatDateTime(item.updated_at || item.created_at)}
                 </Text>
             </Pressable>
         );

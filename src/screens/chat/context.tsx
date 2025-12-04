@@ -93,6 +93,10 @@ export function ChatProvider({
     const [selectedModel, setSelectedModel] = useState<string | null>('gemini-2.0-flash-exp');
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
 
+    // Error state management
+    const [error, setError] = useState<string | null>(null);
+    const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
+
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
     // const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app';
@@ -157,7 +161,7 @@ export function ChatProvider({
 
     useEffect(() => {
         if (chatMode !== 'team') return;
-        setTeamCommand(prev => {
+        setTeamCommand((prev: any) => {
             const next = buildTeamCommand(selectedModel);
             try {
                 if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
@@ -224,6 +228,10 @@ export function ChatProvider({
         async (text: string) => {
             if (!text.trim() || !user?.id) return;
 
+            // Clear error when sending a new message
+            setError(null);
+            setLastFailedMessage(text.trim());
+
             let chatIdToUse = activeChatID;
             let messageID: string | undefined;
             const timestamp = Date.now();
@@ -251,12 +259,14 @@ export function ChatProvider({
 
                 if (!chatIdToUse) {
                     console.error('Failed to resolve chat id before sending message');
+                    setError('Не удалось создать чат');
                     return;
                 }
 
                 messageID = await createMessage(text, chatIdToUse);
                 if (!messageID) {
                     console.error('Failed to create message before sending via WebSocket');
+                    setError('Не удалось создать сообщение');
                     return;
                 }
                 setCurrentMessageID(messageID!);
@@ -284,6 +294,7 @@ export function ChatProvider({
             if (!socketRef.current) {
                 if (!chatIdToUse || !messageID) {
                     console.error('Missing chatId or messageId when initializing WebSocket');
+                    setError('Ошибка инициализации соединения');
                     return;
                 }
                 socketRef.current = newWebSocket(token!, chatIdToUse);
@@ -294,6 +305,7 @@ export function ChatProvider({
             if (!chatIdToUse || !messageID) {
                 console.error('Missing chatId or messageId before sending message via WebSocket');
                 setAssistantWorking(false);
+                setError('Ошибка отправки сообщения');
                 return;
             }
             socketRef.current!.sendMessage(text.trim(), sessionId, messageID);
@@ -444,7 +456,8 @@ export function ChatProvider({
                     err?.error?.message ||
                     err?.payload?.message ||
                     (typeof err === 'string' ? err : null) ||
-                    'WebSocket error';
+                    'Ошибка соединения';
+                setError(message);
                 alertError(message);
             },
             onUnauthorized: async () => {
@@ -491,6 +504,13 @@ export function ChatProvider({
         return newMessages;
     }
 
+    const retryLastMessage = useCallback(() => {
+        if (lastFailedMessage) {
+            setError(null);
+            sendStreamingMessage(lastFailedMessage);
+        }
+    }, [lastFailedMessage, sendStreamingMessage]);
+
     const value: ChatContextType = {
         messages,
         getMessages,
@@ -508,6 +528,9 @@ export function ChatProvider({
         setChatMode,
         teamCommand,
         setTeamCommand,
+        error,
+        setError,
+        retryLastMessage,
     };
 
     return (

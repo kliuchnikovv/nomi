@@ -2,15 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/context.tsx';
-import { styles } from './styles.tsx';
-import ConnectorsDialog from './connectors/connectors.tsx';
-import { emptyChatID } from '../main/context.tsx';
-import ChatScreen from '../chat/screen.tsx';
-import { ChatProvider } from '../chat/context.tsx';
+import { createStyles } from './styles.tsx';
 import { ConnectorsProvider } from './connectors/context.tsx';
 import ConnectorScreenDialog from './connectors/screen.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
-import { ThemeName } from '../../themes';
+import { ThemeName, themes } from '../../themes';
 
 type Props = {
     visible: boolean;
@@ -19,7 +15,7 @@ type Props = {
 
 export default function SettingsModal({ visible, onClose }: Props) {
     const { logout, user } = useAuth();
-    const { themeName, setTheme } = useTheme();
+    const { themeName, setTheme, theme } = useTheme();
     const insets = useSafeAreaInsets();
     const paddingStyle = useMemo(
         () => ({ paddingTop: insets.top, paddingBottom: insets.bottom }),
@@ -27,6 +23,11 @@ export default function SettingsModal({ visible, onClose }: Props) {
     );
 
     const [connectorsOpen, setConnectorsOpen] = useState(false);
+    const [themeExpanded, setThemeExpanded] = useState(false);
+
+    // Get current theme palette
+    const palette = themes[themeName].palette;
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
 
     React.useEffect(() => {
         console.log('SettingsModal mounted');
@@ -41,6 +42,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
     const themesList: { label: string; value: ThemeName }[] = [
         { label: 'Tokyo Night', value: 'tokyoNight' },
         { label: 'One Dark', value: 'oneDark' },
+        { label: 'Light (Visual Studio)', value: 'visualStudioLight' },
     ];
 
     return (
@@ -68,24 +70,47 @@ export default function SettingsModal({ visible, onClose }: Props) {
                             </View>
                         )}
 
-                        <View style={[styles.row, { marginBottom: 16, flexDirection: 'column', alignItems: 'flex-start' }]}>
-                            <Text style={[styles.label, { marginBottom: 8 }]}>Theme</Text>
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                                {themesList.map((t) => (
-                                    <Pressable
-                                        key={t.value}
-                                        onPress={() => setTheme(t.value)}
-                                        style={[
-                                            styles.connectorsBtn,
-                                            { backgroundColor: themeName === t.value ? '#7aa2f7' : '#24283b', paddingHorizontal: 12, paddingVertical: 6, minWidth: 'auto' }
-                                        ]}
-                                    >
-                                        <Text style={[styles.logoutText, { color: themeName === t.value ? '#1a1b26' : '#c0caf5' }]}>
-                                            {t.label}
-                                        </Text>
-                                    </Pressable>
-                                ))}
-                            </View>
+                        <View style={{ marginBottom: 16 }}>
+                            <Pressable
+                                onPress={() => setThemeExpanded(!themeExpanded)}
+                                style={styles.themeHeader}
+                            >
+                                <View>
+                                    <Text style={styles.label}>Theme</Text>
+                                    <Text style={styles.themeCurrentValue}>
+                                        {themesList.find(t => t.value === themeName)?.label}
+                                    </Text>
+                                </View>
+                                <Text style={styles.chevron}>
+                                    {themeExpanded ? '▼' : '▶'}
+                                </Text>
+                            </Pressable>
+                            {themeExpanded && (
+                                <View style={{ marginTop: 12 }}>
+                                    {themesList.map((t) => (
+                                        <Pressable
+                                            key={t.value}
+                                            onPress={() => {
+                                                setTheme(t.value);
+                                                setThemeExpanded(false);
+                                            }}
+                                            style={[
+                                                styles.themeOption,
+                                                themeName === t.value
+                                                    ? styles.themeOptionSelected
+                                                    : styles.themeOptionUnselected,
+                                            ]}
+                                        >
+                                            <Text style={styles.themeOptionText}>
+                                                {t.label}
+                                            </Text>
+                                            {themeName === t.value && (
+                                                <Text style={styles.themeCheckmark}>✓</Text>
+                                            )}
+                                        </Pressable>
+                                    ))}
+                                </View>
+                            )}
                         </View>
 
                         <View>

@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    Send,
-    MicrophoneSpeakingSolid,
-    MicrophoneMuteSolid,
+    ArrowUp,
+    Microphone,
     Plus,
     XmarkCircle,
+    CursorPointer,
 } from 'iconoir-react-native';
 
-import { Keyboard, Pressable, TextInput, View } from 'react-native';
+import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from './styles.tsx';
 import { useChat } from '../context';
@@ -23,6 +23,7 @@ type Props = {
 export default function ChatInput(props: Props) {
     const [value, setValue] = useState('');
     const [modelSelectorVisible, setModelSelectorVisible] = useState(false);
+    const [voiceLanguage, setVoiceLanguage] = useState('auto');
 
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
@@ -42,11 +43,11 @@ export default function ChatInput(props: Props) {
 
     const toggleRecord = useCallback(async () => {
         if (voiceRecorder.state === 'idle') {
-            await voiceRecorder.startRecording();
+            await voiceRecorder.startRecording(voiceLanguage === 'auto' ? undefined : voiceLanguage);
         } else if (voiceRecorder.state === 'recording') {
             await voiceRecorder.stopRecording();
         }
-    }, [voiceRecorder]);
+    }, [voiceRecorder, voiceLanguage]);
 
     // When transcription is complete, insert it into the input
     useEffect(() => {
@@ -59,30 +60,66 @@ export default function ChatInput(props: Props) {
     const isRecording = voiceRecorder.state === 'recording';
     const isProcessing = voiceRecorder.state === 'processing';
 
+    const showModelPicker = useCallback(() => {
+        const options = [
+            ...availableModels.map(m => m.name),
+            'Cancel'
+        ];
+
+        ActionSheetIOS.showActionSheetWithOptions(
+            {
+                options,
+                cancelButtonIndex: options.length - 1,
+                userInterfaceStyle: 'dark',
+                title: 'Select Model',
+            },
+            (buttonIndex) => {
+                if (buttonIndex < availableModels.length) {
+                    setSelectedModel(availableModels[buttonIndex].id);
+                }
+            }
+        );
+    }, [availableModels, setSelectedModel]);
+
+    const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+    const selectedModelName = useMemo(() => {
+        const explicit = availableModels.find(m => m.id === selectedModel)?.name;
+        if (explicit) return explicit;
+        if (availableModels.length > 0) {
+            return availableModels[0].name || 'Auto context';
+        }
+        return 'Auto context';
+    }, [availableModels, selectedModel]);
+    const isMicDisabled = (value?.length ?? 0) > 0 || isProcessing;
+    const isSendDisabled = (value?.length ?? 0) === 0;
+
+    useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener(
+            'keyboardDidShow',
+            () => {
+                setKeyboardVisible(true);
+            }
+        );
+        const keyboardDidHideListener = Keyboard.addListener(
+            'keyboardDidHide',
+            () => {
+                setKeyboardVisible(false);
+            }
+        );
+
+        return () => {
+            keyboardDidHideListener.remove();
+            keyboardDidShowListener.remove();
+        };
+    }, []);
+
     return (
         <View style={styles.container}>
             <View style={[
                 styles.inputWrapper,
-                { paddingBottom: Math.max(insets.bottom, 12) + 12 }
+                { paddingBottom: isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) }
             ]}>
-                {!isRecording && !isProcessing && (
-                    <Pressable
-                        onPress={() => setModelSelectorVisible(true)}
-                        style={({ pressed }) => [
-                            styles.iconBtn,
-                            pressed && {
-                                backgroundColor: 'rgba(192, 202, 245, 0.1)',
-                            },
-                        ]}
-                    >
-                        <Plus
-                            width={28}
-                            height={28}
-                            color={theme.icon}
-                        />
-                    </Pressable>
-                )}
-
+                {/* Top row: Input field or waveform */}
                 {isRecording ? (
                     <AudioWaveform
                         audioLevels={voiceRecorder.audioLevels}
@@ -102,58 +139,123 @@ export default function ChatInput(props: Props) {
                         returnKeyType="send"
                         onSubmitEditing={handleSend}
                         editable={!isProcessing}
+                        onBlur={() => Keyboard.dismiss()}
                     />
                 )}
 
-                <Pressable
-                    onPress={toggleRecord}
-                    disabled={(value?.length ?? 0) > 0 || isProcessing}
-                    style={[
-                        styles.iconBtn,
-                        isRecording && styles.stopBtn,
-                        ((value?.length ?? 0) > 0 || isProcessing) && styles.iconBtnDisabled,
-                    ]}
-                >
-                    {isRecording ? (
-                        <XmarkCircle
-                            width={28}
-                            height={28}
-                            color="#ffffff"
-                        />
-                    ) : isProcessing ? (
-                        <MicrophoneSpeakingSolid
-                            width={28}
-                            height={28}
-                            color={theme.icon}
-                        />
-                    ) : (
-                        <MicrophoneMuteSolid
-                            width={28}
-                            height={28}
-                            color={theme.icon}
-                        />
-                    )}
-                </Pressable>
+                {/* Bottom row: Buttons */}
+                <View style={styles.buttonRow}>
+                    <View style={styles.leftActions}>
+                        {isRecording ? (
+                            <Pressable
+                                onPress={voiceRecorder.cancelRecording}
+                                style={({ pressed }) => [
+                                    styles.iconBtn,
+                                    styles.cancelBtn,
+                                    pressed && styles.iconBtnPressed,
+                                ]}
+                            >
+                                <XmarkCircle
+                                    width={24}
+                                    height={24}
+                                    color="#ffffff"
+                                />
+                            </Pressable>
+                        ) : (
+                            !isProcessing && (
+                                <>
+                                    <Pressable
+                                        onPress={() => setModelSelectorVisible(true)}
+                                        style={({ pressed }) => [
+                                            styles.iconBtn,
+                                            pressed && styles.iconBtnPressed,
+                                        ]}
+                                    >
+                                        <Plus
+                                            width={24}
+                                            height={24}
+                                            color={theme.icon}
+                                        />
+                                    </Pressable>
 
-                {!isRecording && !isProcessing && (
-                    <Pressable
-                        onPress={handleSend}
-                        style={({ pressed }) => [
-                            styles.sendBtn,
-                            pressed && {
-                                backgroundColor: 'rgba(192, 202, 245, 0.1)',
-                            },
-                        ]}
-                        disabled={(value?.length ?? 0) === 0}
-                    >
-                        <Send
-                            width={28}
-                            height={28}
-                            color={theme.icon}
-                            style={styles.sendBtn}
-                        />
-                    </Pressable>
-                )}
+                                    <Pressable
+                                        onPress={showModelPicker}
+                                        style={({ pressed }) => [
+                                            styles.modelButton,
+                                            pressed && styles.modelButtonPressed,
+                                        ]}
+                                    >
+                                        <View style={styles.modelButtonIcon}>
+                                            <CursorPointer
+                                                width={16}
+                                                height={16}
+                                                color="#ffffff"
+                                            />
+                                        </View>
+                                        <Text style={styles.modelButtonText}>
+                                            {selectedModelName}
+                                        </Text>
+                                    </Pressable>
+                                </>
+                            )
+                        )}
+                    </View>
+
+                    <View style={styles.rightActions}>
+                        {isRecording && (
+                            <Pressable
+                                onPress={toggleRecord}
+                                style={({ pressed }) => [
+                                    styles.sendBtn,
+                                    pressed && styles.sendBtnPressed,
+                                ]}
+                            >
+                                <Microphone
+                                    width={24}
+                                    height={24}
+                                    color={theme.icon}
+                                />
+                            </Pressable>
+                        )}
+                        {!isRecording && (
+                            <>
+                                <Pressable
+                                    onPress={toggleRecord}
+                                    disabled={isMicDisabled}
+                                    style={({ pressed }) => [
+                                        styles.iconBtn,
+                                        isMicDisabled && styles.iconBtnDisabled,
+                                        pressed && !isMicDisabled && styles.iconBtnPressed,
+                                    ]}
+                                >
+                                    <Microphone
+                                        width={24}
+                                        height={24}
+                                        color={theme.icon}
+                                    />
+                                </Pressable>
+
+                                {!isProcessing && (
+                                    <Pressable
+                                        onPress={handleSend}
+                                        style={({ pressed }) => [
+                                            styles.sendBtn,
+                                            isSendDisabled && styles.iconBtnDisabled,
+                                            pressed && !isSendDisabled && styles.sendBtnPressed,
+                                        ]}
+                                        disabled={isSendDisabled}
+                                    >
+                                        <ArrowUp
+                                            width={24}
+                                            height={24}
+                                            color={theme.icon}
+                                        />
+                                    </Pressable>
+                                )}
+                            </>
+                        )}
+                    </View>
+                </View>
             </View>
             <ModelSelector
                 visible={modelSelectorVisible}
@@ -167,6 +269,8 @@ export default function ChatInput(props: Props) {
                 teamCommand={teamCommand}
                 onChangeTeamCommand={setTeamCommand}
                 hasChatStarted={messages.length > 0}
+                voiceLanguage={voiceLanguage}
+                onSelectVoiceLanguage={setVoiceLanguage}
             />
         </View>
     );

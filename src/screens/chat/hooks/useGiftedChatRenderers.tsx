@@ -6,6 +6,7 @@ import Markdown from 'react-native-markdown-display';
 import { createChatTheme, createMarkdownStyles } from '../theme';
 import { ThemeColors } from '../../../themes/types';
 import ChatInput from '../input/component';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface GiftedChatRenderersParams {
     assistantContainerMaxWidth: string;
@@ -14,6 +15,9 @@ interface GiftedChatRenderersParams {
     styles: any;
     theme: ThemeColors;
     onSend: (text: string) => void;
+    error: string | null;
+    onRetry: () => void;
+    onDismissError: () => void;
 }
 
 export function useGiftedChatRenderers({
@@ -23,6 +27,9 @@ export function useGiftedChatRenderers({
     styles,
     theme,
     onSend,
+    error,
+    onRetry,
+    onDismissError,
 }: GiftedChatRenderersParams) {
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const markdownStyles = useMemo(() => createMarkdownStyles(chatTheme), [chatTheme]);
@@ -54,6 +61,7 @@ export function useGiftedChatRenderers({
         return (
             <Bubble
                 {...props}
+                onLongPress={handleLongPress}
                 wrapperStyle={{
                     right: {
                         backgroundColor: chatTheme.userBubble,
@@ -83,8 +91,8 @@ export function useGiftedChatRenderers({
                     },
                 }}
                 timeTextStyle={{
-                    right: { color: chatTheme.textSecondary },
-                    left: { color: chatTheme.textSecondary },
+                    right: { color: 'rgba(255, 255, 255, 0.6)' },
+                    left: { color: 'rgba(255, 255, 255, 0.6)' },
                 }}
                 containerToNextStyle={{
                     right: { marginBottom: 4 },
@@ -96,15 +104,23 @@ export function useGiftedChatRenderers({
                 }}
             />
         );
-    }, [chatTheme]);
+    }, [chatTheme, handleLongPress]);
 
     const renderInputToolbar = useCallback((props: any) => {
         // We ignore props from GiftedChat for the input and use our custom ChatInput
         // We might need to handle bottomInset here if ChatInput doesn't
         return (
-            <ChatInput onSend={onSend} />
+            <View>
+                <ErrorBanner
+                    error={error}
+                    onRetry={onRetry}
+                    onDismiss={onDismissError}
+                    theme={chatTheme}
+                />
+                <ChatInput onSend={onSend} />
+            </View>
         );
-    }, [onSend]);
+    }, [onSend, error, onRetry, onDismissError, chatTheme]);
 
     const renderMessage = useCallback((props: any) => {
         return (
@@ -155,5 +171,6 @@ export function useGiftedChatRenderers({
         renderInputToolbar,
         renderMessage,
         renderMessageText,
+        onLongPressMessage: handleLongPress,
     };
 }

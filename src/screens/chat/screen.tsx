@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
 import { useChat } from './context';
 import { useAuth } from '../auth/context';
 import { useMain } from '../main/context';
-import { ASSISTANT_BUBBLE_WIDTH_RATIO } from './theme';
+import { ASSISTANT_BUBBLE_WIDTH_RATIO, createChatTheme } from './theme';
 import { createStyles } from './styles';
 import { useGiftedMessages } from './hooks/useGiftedMessages';
 import { useGiftedChatRenderers } from './hooks/useGiftedChatRenderers';
@@ -22,9 +22,13 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         externalTitle,
         isPluginThread,
         pluginThreadMeta,
+        error,
+        setError,
+        retryLastMessage,
     } = useChat();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
     const { chats, activeChatID, setActiveChatID, getChats, createNewChat, renameChat, deleteChat } = useMain();
@@ -63,12 +67,17 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         [chats, getTimestamp],
     );
 
+    const handleDismissError = useCallback(() => {
+        setError(null);
+    }, [setError]);
+
     const {
         renderBubble,
         renderFooter,
         renderInputToolbar,
         renderMessage,
         renderMessageText,
+        onLongPressMessage,
     } = useGiftedChatRenderers({
         assistantContainerMaxWidth,
         assistantWorking,
@@ -76,6 +85,9 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         styles,
         theme,
         onSend: sendMessage,
+        error,
+        onRetry: retryLastMessage,
+        onDismissError: handleDismissError,
     });
 
     const isWide = windowWidth >= 1024;
@@ -88,6 +100,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     }, [getChats, isWide]);
 
     const handleOpenMenu = useCallback(() => {
+        Keyboard.dismiss();
         getChats({ preserveActiveChat: true });
         setSidebarVisible(true);
     }, [getChats]);
@@ -136,7 +149,6 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                     <KeyboardAvoidingView
                         style={{ flex: 1 }}
                         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                        keyboardVerticalOffset={insets.bottom}
                     >
                         <GiftedChat
                             messages={giftedMessages}
@@ -150,7 +162,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                             renderFooter={renderFooter}
                             // @ts-ignore
                             inverted={true}
-                            minInputToolbarHeight={80}
+                            minInputToolbarHeight={60}
                             maxComposerHeight={100}
                             renderAvatar={null}
                             messagesContainerStyle={styles.messagesContainer}
@@ -159,6 +171,8 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                             alwaysShowSend
                             isAlignedTop={false}
                             isScrollToBottomEnabled={true}
+                            timeFormat="HH:mm"
+                            onLongPress={onLongPressMessage}
                         />
                     </KeyboardAvoidingView>
                 </View>
