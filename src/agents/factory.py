@@ -39,9 +39,12 @@ class AgentFactory:
 
     def _attach_tool_context(self, agent: Agent, tools: List[Toolkit]) -> None:
         """Ensure internal tools (chat history) know their owning agent."""
+        logger.debug("[WS] Attaching tool context to agent: %s", agent.name if hasattr(agent, 'name') else type(agent).__name__)
         for tool in tools:
             if isinstance(tool, ChatHistoryTool):
                 tool.agent = agent
+                logger.info("[WS] ✅ ChatHistoryTool context attached to agent: %s", type(agent).__name__)
+                logger.debug("[WS]    Agent has db: %s", hasattr(agent, 'db') and agent.db is not None)
 
     @property
     def config_client(self) -> ToolConfigClient:
@@ -110,6 +113,7 @@ class AgentFactory:
         #     )]
 
         tools.append(ChatHistoryTool())
+        logger.info("[WS] ChatHistoryTool added to agent tools")
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 

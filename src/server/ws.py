@@ -854,13 +854,21 @@ async def _process_message(
         logger.debug("[WS] Starting agent stream: session_id=%s", session_id)
 
         # Inject context for tools
+        logger.info("[WS] 🔧 Injecting context into agent for ChatHistoryTool")
+        logger.info("[WS]    chat_id: %s", chat_id)
+        logger.info("[WS]    user_id (session_id): %s", session_id)
         agent.chat_id = chat_id
         agent.user_id = session_id
+        logger.debug("[WS]    Context injected successfully")
+        logger.debug("[WS]    Verifying: agent.chat_id=%s, agent.user_id=%s", 
+                    getattr(agent, 'chat_id', None), 
+                    getattr(agent, 'user_id', None))
         # Ensure agent storage uses this session key for history
         try:
             agent.session_id = session_id  # type: ignore[attr-defined]
-        except Exception:
-            pass
+            logger.debug("[WS]    session_id also set on agent")
+        except Exception as e:
+            logger.debug("[WS]    Could not set session_id on agent: %s", e)
 
         async for chunk in _run_agent_stream(agent, text or "", session_id=session_id):
             if not chunk:
