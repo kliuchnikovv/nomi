@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, FlatList, Pressable, Text, View, ActionSheetIOS, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { FlatList, Pressable, Text, View, ActionSheetIOS, Alert } from 'react-native';
+import Animated, { interpolate, SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { Settings } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatSidebarProps } from './models';
 import { createSidebarStyles } from './styles';
 import { createChatTheme } from '../theme';
 import { useTheme } from '../../../context/ThemeContext';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 
 const pad = (value: number) => value.toString().padStart(2, '0');
 
@@ -37,12 +39,7 @@ function ChatList({
     const [highlightedChatID, setHighlightedChatID] = useState<string | null>(null);
 
     const openChatMenu = (chatId: string, chatTitle: string) => {
-        console.log('openChatMenu called', { chatId, chatTitle, hasDelete: !!onChatDelete, hasRename: !!onChatRename });
-
-        if (!onChatDelete && !onChatRename) {
-            console.warn('No chat actions available');
-            return;
-        }
+        if (!onChatDelete && !onChatRename) return;
 
         setHighlightedChatID(chatId);
         ActionSheetIOS.showActionSheetWithOptions(
@@ -137,10 +134,14 @@ function ChatList({
     );
 }
 
+interface ChatSidebarReanimatedProps extends ChatSidebarProps {
+    sidebarTranslateX?: SharedValue<number>;
+    dragGesture?: ReturnType<typeof Gesture.Pan>;
+}
+
 export function ChatSidebar({
     variant,
     width,
-    visible = true,
     chats,
     activeChatID,
     onClose,
@@ -149,62 +150,12 @@ export function ChatSidebar({
     onSettingsPress,
     onChatDelete,
     onChatRename,
-}: ChatSidebarProps) {
+    sidebarTranslateX,
+    dragGesture
+}: ChatSidebarReanimatedProps) {
     const { theme } = useTheme();
     const styles = useMemo(() => createSidebarStyles(theme), [theme]);
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
-    const animation = useRef(new Animated.Value(0)).current;
-    const [shouldRender, setShouldRender] = useState(variant === 'inline' || visible);
-
-    useEffect(() => {
-        if (variant === 'inline') {
-            animation.setValue(1);
-            setShouldRender(true);
-            return;
-        }
-
-        if (visible) {
-            setShouldRender(true);
-        }
-
-        const driver = visible
-            ? Animated.spring(animation, {
-                toValue: 1,
-                useNativeDriver: true,
-                tension: 190,
-                friction: 20,
-            })
-            : Animated.timing(animation, {
-                toValue: 0,
-                duration: 220,
-                useNativeDriver: true,
-            });
-
-        driver.start(({ finished }) => {
-            if (!visible && finished) {
-                setShouldRender(false);
-            }
-        });
-    }, [animation, variant, visible]);
-
-    const translateX = useMemo(() => animation.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-width * 0.4, 0],
-    }), [animation, width]);
-
-    const cardOpacity = useMemo(() => animation.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 1],
-    }), [animation]);
-
-    const backdropOpacity = useMemo(() => animation.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 0.5],
-    }), [animation]);
-
-    if (!shouldRender) {
-        return null;
-    }
 
     if (variant === 'inline') {
         return (
@@ -224,42 +175,90 @@ export function ChatSidebar({
         );
     }
 
+    // Overlay variant using Reanimated
+    // If sidebarTranslateX is not provided, we should probably fallback or return null,
+    // but in this refactor it is expected to be provided by parent.
+    if (!sidebarTranslateX) {
+        return null;
+    }
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: sidebarTranslateX.value }],
+    }));
+
+    const backdropStyle = useAnimatedStyle(() => {
+        // Map translateX from [-width, 0] to opacity [0, 0.5]
+        const opacity = interpolate(
+            sidebarTranslateX.value,
+            [-width, 0],
+            [0, 0.5],
+            'clamp'
+        );
+        return { opacity };
+    });
+
+    const containerStyle = useAnimatedStyle(() => {
+         // Hide container when fully closed to allow touches to pass through
+         // Assuming -width is closed state.
+         return {
+             zIndex: sidebarTranslateX.value <= -width + 1 ? -1 : 100,
+         };
+    });
+
     return (
-        <View style={styles.overlayRoot} pointerEvents="box-none">
-            <Pressable style={styles.overlayBackdrop} onPress={onClose}>
-                <Animated.View style={[styles.overlayBackdrop, { opacity: backdropOpacity }]} />
-            </Pressable>
-            <Animated.View
-                style={[
-                    {
-                        width,
-                        opacity: cardOpacity,
-                        transform: [{ translateX }],
-                    },
-                    styles.overlayCard,
-                ]}
-            >
-                <ChatList
-                    chats={chats}
-                    activeChatID={activeChatID}
-                    onSelectChat={id => {
-                        onSelectChat(id);
-                        onClose?.();
-                    }}
-                    onNewChat={() => {
-                        onNewChat();
-                        onClose?.();
-                    }}
-                    onSettingsPress={() => {
-                        onSettingsPress?.();
-                        onClose?.();
-                    }}
-                    onChatDelete={onChatDelete}
-                    onChatRename={onChatRename}
-                    styles={styles}
-                    chatTheme={chatTheme}
-                />
-            </Animated.View>
-        </View>
+        <Animated.View style={[styles.overlayRoot, containerStyle]} pointerEvents="box-none">
+             <Animated.View style={[styles.overlayBackdrop, backdropStyle]}>
+                 <Pressable style={{ flex: 1 }} onPress={onClose} />
+             </Animated.View>
+             {dragGesture ? (
+                 <GestureDetector gesture={dragGesture}>
+                    <Animated.View style={[styles.overlayCard, { width }, animatedStyle]}>
+                        <ChatList
+                            chats={chats}
+                            activeChatID={activeChatID}
+                            onSelectChat={(id) => {
+                                onSelectChat(id);
+                                onClose?.();
+                            }}
+                            onNewChat={() => {
+                                onNewChat();
+                                onClose?.();
+                            }}
+                            onSettingsPress={() => {
+                                onSettingsPress?.();
+                                onClose?.();
+                            }}
+                            onChatDelete={onChatDelete}
+                            onChatRename={onChatRename}
+                            styles={styles}
+                            chatTheme={chatTheme}
+                        />
+                    </Animated.View>
+                 </GestureDetector>
+             ) : (
+                <Animated.View style={[styles.overlayCard, { width }, animatedStyle]}>
+                    <ChatList
+                        chats={chats}
+                        activeChatID={activeChatID}
+                        onSelectChat={(id) => {
+                            onSelectChat(id);
+                            onClose?.();
+                        }}
+                        onNewChat={() => {
+                            onNewChat();
+                            onClose?.();
+                        }}
+                        onSettingsPress={() => {
+                            onSettingsPress?.();
+                            onClose?.();
+                        }}
+                        onChatDelete={onChatDelete}
+                        onChatRename={onChatRename}
+                        styles={styles}
+                        chatTheme={chatTheme}
+                    />
+                </Animated.View>
+             )}
+        </Animated.View>
     );
 }
