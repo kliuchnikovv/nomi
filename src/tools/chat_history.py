@@ -67,18 +67,38 @@ class ChatHistoryTool(Toolkit):
             logger.error("      ❌ Database query failed: %s", e)
             raise
 
-    async def get_chat_history(self, limit: int = 10, search_query: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_chat_history(
+        self, 
+        limit: int = 10, 
+        search_query: Optional[str] = None,
+        sender_role: Optional[str] = None,
+        from_timestamp: Optional[int] = None,
+        to_timestamp: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Retrieves the message history for a specific chat.
         
         Args:
             limit: The maximum number of messages to return. Defaults to 10.
             search_query: Optional text to filter messages by content.
+            sender_role: Optional role to filter by ('user' or 'assistant').
+            from_timestamp: Optional start timestamp (Unix timestamp in seconds).
+            to_timestamp: Optional end timestamp (Unix timestamp in seconds).
         """
         logger.info("=" * 80)
         logger.info("🔍 ChatHistoryTool.get_chat_history CALLED")
-        logger.info("   Parameters: limit=%s, search_query=%s", limit, search_query)
+        logger.info("   Parameters:")
+        logger.info("      limit=%s", limit)
+        logger.info("      search_query=%s", search_query)
+        logger.info("      sender_role=%s", sender_role)
+        logger.info("      from_timestamp=%s", from_timestamp)
+        logger.info("      to_timestamp=%s", to_timestamp)
         logger.info("=" * 80)
+        
+        # Validate sender_role if provided
+        if sender_role and sender_role not in ['user', 'assistant']:
+            logger.warning("❌ Invalid sender_role: %s (must be 'user' or 'assistant')", sender_role)
+            return [{"error": f"Invalid sender_role: {sender_role}. Must be 'user' or 'assistant'"}]
         
         # Ensure agent and db are available
         logger.debug("Step 1: Checking agent context availability")
@@ -126,14 +146,17 @@ class ChatHistoryTool(Toolkit):
         logger.info("   user_uuid: %s", user_uuid)
         logger.info("   limit: %s", limit)
         logger.info("   search_query: %s", search_query)
+        logger.info("   sender_role: %s", sender_role)
+        logger.info("   from_timestamp: %s", from_timestamp)
+        logger.info("   to_timestamp: %s", to_timestamp)
         logger.info("-" * 80)
 
         # Check if user has access to this chat (is the owner of the chat)
         # We check if there are any messages from this user in this chat
         logger.debug("Step 4: Checking user access to chat")
-        check_query = "SELECT 1 FROM messages WHERE chat_id = $1 AND sender = $2 LIMIT 1"
+        check_query = "SELECT 1 FROM messages WHERE chat_id = $1 AND user_id = $2 LIMIT 1"
         logger.debug("   Access check query: %s", check_query)
-        logger.debug("   Query params: chat_id=%s, sender=%s", chat_uuid, user_uuid)
+        logger.debug("   Query params: chat_id=%s, user_id=%s", chat_uuid, user_uuid)
         
         try:
             access = await self._call_db(
@@ -149,21 +172,53 @@ class ChatHistoryTool(Toolkit):
                 return [{"error": "Access denied: User has no messages in this chat or chat does not exist"}]
             logger.info("✅ Access granted: User has messages in this chat")
 
-            logger.debug("Step 5: Fetching message history")
-            query = """
-                SELECT id, chat_id, sender, role, text, created_at
+            logger.debug("Step 5: Building query with filters")
+            
+            # Build dynamic query based on filters
+            query_conditions = ["chat_id = $1"]
+            query_params = [chat_uuid]
+            param_index = 2
+            
+            # Add search filter
+            if search_query:
+                query_conditions.append(f"text ILIKE '%' || ${param_index} || '%'")
+                query_params.append(search_query)
+                param_index += 1
+            
+            # Add sender role filter
+            if sender_role:
+                query_conditions.append(f"role = ${param_index}")
+                query_params.append(sender_role)
+                param_index += 1
+            
+            # Add time window filters
+            if from_timestamp:
+                query_conditions.append(f"created_at >= ${param_index}")
+                query_params.append(from_timestamp)
+                param_index += 1
+            
+            if to_timestamp:
+                query_conditions.append(f"created_at <= ${param_index}")
+                query_params.append(to_timestamp)
+                param_index += 1
+            
+            # Construct final query
+            where_clause = " AND ".join(query_conditions)
+            query = f"""
+                SELECT id, chat_id, user_id, role, text, created_at
                 FROM messages
-                WHERE chat_id = $1
-                AND ($3::text IS NULL OR text ILIKE '%' || $3 || '%')
+                WHERE {where_clause}
                 ORDER BY created_at ASC
-                LIMIT $2
+                LIMIT ${param_index}
             """
+            query_params.append(limit)
+            
             logger.debug("   History query: %s", query.strip())
-            logger.debug("   Query params: chat_id=%s, limit=%s, search=%s", chat_uuid, limit, search_query)
+            logger.debug("   Query params: %s", query_params)
             
             rows = await self._call_db(
                 query,
-                (chat_uuid, limit, search_query),
+                tuple(query_params),
                 prefer=("fetch", "read", "query", "fetch_all"),
             )
             logger.info("   Raw rows fetched: %s rows (type: %s)", len(rows) if rows else 0, type(rows).__name__)
@@ -193,9 +248,10 @@ class ChatHistoryTool(Toolkit):
             logger.info("=" * 80)
             logger.info("✅ chat_history COMPLETED SUCCESSFULLY")
             logger.info("   Returned %d message(s)", len(results))
-            logger.info("   chat_id: %s", chat_uuid)
-            logger.info("   user_id: %s", user_uuid)
-            logger.info("   search_query: %s", search_query)
+            logger.info("   Filters applied:")
+            logger.info("      search_query: %s", search_query if search_query else "None")
+            logger.info("      sender_role: %s", sender_role if sender_role else "None")
+            logger.info("      time_window: %s to %s", from_timestamp if from_timestamp else "None", to_timestamp if to_timestamp else "None")
             if results:
                 logger.info("   First message preview: %s", str(results[0])[:100])
             logger.info("=" * 80)
