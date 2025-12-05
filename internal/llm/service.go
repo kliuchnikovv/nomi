@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/google/uuid"
 )
 
 // Service теперь отвечает за коммуникацию с AgnoProject RAG-сервисом.
@@ -63,4 +65,10 @@ func (s *Service) GenerateResponse(ctx context.Context, userQuery string) (strin
 	}
 
 	return responseBody.Answer, nil
+}
+
+// GenerateSimple is a simplified wrapper around GenerateResponse for plugin compatibility.
+// The userID and agent parameters are currently unused but kept for interface compatibility.
+func (s *Service) GenerateSimple(ctx context.Context, userID uuid.UUID, prompt string, agent string) (string, error) {
+	return s.GenerateResponse(ctx, prompt)
 }
