@@ -20,7 +20,10 @@ class ChatHistoryTool(Toolkit):
         params: Tuple[Any, ...],
         prefer: Optional[Iterable[str]] = None,
     ) -> Any:
-        """Invoke whichever DB method is available (fetch/read/query/execute)."""
+        """Execute a database query using PostgresDb's SQLAlchemy session."""
+        from sqlalchemy.sql.expression import text
+        from sqlalchemy import bindparam
+        
         logger.debug("   📞 _call_db called")
         logger.debug("      Query: %s", query.strip()[:100])
         logger.debug("      Params: %s", params)
@@ -31,31 +34,38 @@ class ChatHistoryTool(Toolkit):
             raise AttributeError("Database connection not available")
         
         logger.debug("      Database type: %s", type(db).__name__)
-
-        method_order = list(prefer or ("fetch", "read", "query", "fetch_all", "run", "execute", "write"))
-        logger.debug("      Method preference order: %s", method_order)
+        logger.info("      ✅ Using PostgresDb.Session() with SQLAlchemy")
         
-        # Log available methods
-        available_methods = [m for m in method_order if hasattr(db, m) and callable(getattr(db, m))]
-        logger.debug("      Available methods: %s", available_methods)
-        
-        for method_name in method_order:
-            method = getattr(db, method_name, None)
-            if not callable(method):
-                logger.debug("      ⏭️  Skipping %s (not available)", method_name)
-                continue
-            
-            logger.info("      ✅ Using database method: %s", method_name)
-            result = method(query, *params)
-            final_result = await result if isawaitable(result) else result
-            logger.debug("      Result type: %s", type(final_result).__name__)
-            logger.debug("      Result length: %s", len(final_result) if hasattr(final_result, '__len__') else 'N/A')
-            return final_result
-
-        logger.error("      ❌ No suitable database method found")
-        raise AttributeError(
-            f"Database object {type(db).__name__} lacks supported query methods ({', '.join(method_order)})"
-        )
+        try:
+            # PostgresDb uses SQLAlchemy, so we need to use Session() context manager
+            with db.Session() as sess:
+                # Convert PostgreSQL positional parameters ($1, $2, etc.) to named parameters
+                # SQLAlchemy text() works better with named parameters
+                converted_query = query
+                param_dict = {}
+                
+                for i, param_value in enumerate(params, start=1):
+                    placeholder = f"${i}"
+                    param_name = f"param_{i}"
+                    converted_query = converted_query.replace(placeholder, f":{param_name}")
+                    param_dict[param_name] = param_value
+                
+                logger.debug("      Converted query: %s", converted_query.strip()[:100])
+                logger.debug("      Param dict: %s", param_dict)
+                
+                # Execute query with named parameters
+                stmt = text(converted_query)
+                result = sess.execute(stmt, param_dict)
+                rows = result.fetchall()
+                
+                logger.debug("      Result type: %s", type(rows).__name__)
+                logger.debug("      Result length: %s", len(rows) if rows else 0)
+                
+                return rows
+                
+        except Exception as e:
+            logger.error("      ❌ Database query failed: %s", e)
+            raise
 
     async def get_chat_history(self, limit: int = 10, search_query: Optional[str] = None) -> List[Dict[str, Any]]:
         """
