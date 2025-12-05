@@ -8,7 +8,12 @@ logger = logging.getLogger(__name__)
 
 class ChatHistoryTool(Toolkit):
     name = "chat_history"
-    description = "Retrieves chat history from the database"
+    description = (
+        "Retrieves message history from the current chat. "
+        "Use this to recall previous messages, search conversation history, "
+        "or filter messages by role (user/assistant) or time period. "
+        "Always available for the current chat context."
+    )
 
     def __init__(self):
         super().__init__(name=self.name)
@@ -76,14 +81,34 @@ class ChatHistoryTool(Toolkit):
         to_timestamp: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Retrieves the message history for a specific chat.
+        Retrieves message history for the current chat with optional filtering.
         
         Args:
-            limit: The maximum number of messages to return. Defaults to 10.
-            search_query: Optional text to filter messages by content.
-            sender_role: Optional role to filter by ('user' or 'assistant').
-            from_timestamp: Optional start timestamp (Unix timestamp in seconds).
-            to_timestamp: Optional end timestamp (Unix timestamp in seconds).
+            limit: Maximum number of messages to return (default: 10, max recommended: 50)
+            search_query: Search for messages containing this text (case-insensitive)
+            sender_role: Filter by message sender - 'user' for user messages, 'assistant' for AI responses
+            from_timestamp: Show messages after this Unix timestamp (seconds since epoch)
+            to_timestamp: Show messages before this Unix timestamp (seconds since epoch)
+            
+        Returns:
+            List of message dictionaries with keys: id, chat_id, user_id, role, text, created_at
+            Returns [{"error": "..."}] if an error occurs
+            
+        Examples:
+            # Get last 5 messages
+            get_chat_history(limit=5)
+            
+            # Search for messages about Python
+            get_chat_history(search_query="Python")
+            
+            # Get only user messages
+            get_chat_history(sender_role="user")
+            
+            # Get messages from last hour
+            get_chat_history(from_timestamp=int(time.time()) - 3600)
+            
+            # Combine filters
+            get_chat_history(sender_role="assistant", search_query="database", limit=3)
         """
         logger.info("=" * 80)
         logger.info("🔍 ChatHistoryTool.get_chat_history CALLED")
@@ -94,6 +119,12 @@ class ChatHistoryTool(Toolkit):
         logger.info("      from_timestamp=%s", from_timestamp)
         logger.info("      to_timestamp=%s", to_timestamp)
         logger.info("=" * 80)
+        
+        # Log to console as well for visibility
+        print(f"\n{'='*80}")
+        print(f"🔧 ChatHistoryTool INVOKED")
+        print(f"   limit={limit}, search_query={search_query}, sender_role={sender_role}")
+        print(f"{'='*80}\n")
         
         # Validate sender_role if provided
         if sender_role and sender_role not in ['user', 'assistant']:
@@ -255,6 +286,12 @@ class ChatHistoryTool(Toolkit):
             if results:
                 logger.info("   First message preview: %s", str(results[0])[:100])
             logger.info("=" * 80)
+            
+            # Console output for visibility
+            print(f"\n{'='*80}")
+            print(f"✅ ChatHistoryTool COMPLETED: {len(results)} messages returned")
+            print(f"{'='*80}\n")
+            
             return results
 
         except Exception as e:
