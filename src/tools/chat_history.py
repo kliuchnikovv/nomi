@@ -7,12 +7,21 @@ from agno.tools import Toolkit
 logger = logging.getLogger(__name__)
 
 class ChatHistoryTool(Toolkit):
-    name = "chat_history"
+    name = "get_chat_history"
     description = (
-        "Retrieves message history from the current chat. "
-        "Use this to recall previous messages, search conversation history, "
-        "or filter messages by role (user/assistant) or time period. "
-        "Always available for the current chat context."
+        "Retrieves and searches through the message history of the current conversation. "
+        "IMPORTANT: Use this tool proactively when:\n"
+        "1. The user asks about previous messages or conversation history\n"
+        "2. The user references something unclear (e.g., 'that thing we discussed', 'the file I mentioned')\n"
+        "3. You need context from earlier in the conversation to answer accurately\n"
+        "4. The user asks questions like 'what did we talk about?', 'show me our conversation', 'find messages about X'\n\n"
+        "WORKFLOW: When user references are unclear:\n"
+        "1. First, use this tool to search the chat history for relevant context\n"
+        "2. If found in history, use that information to answer\n"
+        "3. If NOT found in history, then ask the user for clarification\n\n"
+        "NOTE: Messages are returned in reverse chronological order (newest first). "
+        "When context is ambiguous, prefer information from more recent messages.\n\n"
+        "This tool can filter by sender role (user/assistant), search text, or time period."
     )
 
     def __init__(self):
@@ -239,7 +248,7 @@ class ChatHistoryTool(Toolkit):
                 SELECT id, chat_id, user_id, role, text, created_at
                 FROM messages
                 WHERE {where_clause}
-                ORDER BY created_at ASC
+                ORDER BY created_at DESC
                 LIMIT ${param_index}
             """
             query_params.append(limit)
