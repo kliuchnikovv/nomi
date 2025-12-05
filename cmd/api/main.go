@@ -67,10 +67,7 @@ func main() {
 		logger.Fatal("failed to connect to database: %v", zap.Error(err))
 	}
 
-	llmService, err := llm.NewService(logger, cfg, db)
-	if err != nil {
-		logger.Fatal("failed to init llm service: %v", zap.Error(err))
-	}
+	llmService := llm.NewService(cfg.LLM.BaseURL)
 
 	oauthConfigs, oidcProviders, err := handlers.BuildOAuthResources(logger, cfg)
 	if err != nil {
