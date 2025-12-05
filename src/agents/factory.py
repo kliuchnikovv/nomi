@@ -19,7 +19,7 @@ from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools import Toolkit
 from google.oauth2.credentials import Credentials
 
-from src.tools.chat_history import ChatHistoryTool
+# from src.tools.chat_history import ChatHistoryTool  # Disabled: history is now passed directly
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +37,7 @@ class AgentFactory:
         self._config_client = config_client
         self._debug_mode = debug_mode
 
-    def _attach_tool_context(self, agent: Agent, tools: List[Toolkit]) -> None:
-        """Ensure internal tools (chat history) know their owning agent."""
-        logger.debug("[WS] Attaching tool context to agent: %s", agent.name if hasattr(agent, 'name') else type(agent).__name__)
-        for tool in tools:
-            if isinstance(tool, ChatHistoryTool):
-                tool.agent = agent
-                logger.info("[WS] ✅ ChatHistoryTool context attached to agent: %s", type(agent).__name__)
-                logger.debug("[WS]    Agent has db: %s", hasattr(agent, 'db') and agent.db is not None)
+    # _attach_tool_context removed - ChatHistoryTool is disabled
 
     @property
     def config_client(self) -> ToolConfigClient:
@@ -112,8 +105,9 @@ class AgentFactory:
         #         access_token=""
         #     )]
 
-        tools.append(ChatHistoryTool())
-        logger.info("[WS] ChatHistoryTool added to agent tools")
+        # ChatHistoryTool disabled - history is now passed directly to the model
+        # tools.append(ChatHistoryTool())
+        # logger.info("[WS] ChatHistoryTool added to agent tools")
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 
@@ -152,7 +146,8 @@ class AgentFactory:
                     debug_mode=self._debug_mode,
                 )
 
-            self._attach_tool_context(agent, tools)
+            # _attach_tool_context removed - ChatHistoryTool is disabled
+            # self._attach_tool_context(agent, tools)
             logger.info("[WS] Agent created successfully: session_id=%s type=%s", session_id, agent.name)
             return agent
         except Exception as e:

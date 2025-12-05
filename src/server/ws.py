@@ -189,6 +189,52 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             )
             # Продолжаем без инструментов
         
+        # Ожидаем HISTORY фрейм (опционально)
+        chat_history = []
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
+            logger.debug("[WS] Received raw data (HISTORY wait): session_id=%s len=%d", session_id, len(raw))
+            data = json.loads(raw)
+            frame = Frame(**data)
+            logger.debug("[WS] Parsed frame (HISTORY wait): session_id=%s op=%s", session_id, frame.op)
+            
+            if frame.op == Op.HISTORY:
+                payload = frame.payload
+                logger.debug("[WS] History payload raw: session_id=%s payload=%s", session_id, payload)
+                if payload and isinstance(payload, dict):
+                    history_data = payload.get("history", [])
+                    if isinstance(history_data, list):
+                        for msg in history_data:
+                            if isinstance(msg, dict):
+                                chat_history.append({
+                                    "role": msg.get("role", "user"),
+                                    "content": msg.get("text", "")
+                                })
+                        logger.info(
+                            "[WS] Received chat history: session_id=%s count=%d",
+                            session_id,
+                            len(chat_history),
+                        )
+            else:
+                # Не HISTORY фрейм - это нормально, история опциональна
+                logger.debug(
+                    "[WS] No HISTORY frame received (got %s instead), continuing without history: session_id=%s",
+                    frame.op,
+                    session_id,
+                )
+        except asyncio.TimeoutError:
+            # Таймаут - история не была отправлена, это нормально
+            logger.debug(
+                "[WS] No HISTORY frame received (timeout), continuing without history: session_id=%s",
+                session_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[WS] Failed to receive history: session_id=%s error=%s",
+                session_id,
+                exc,
+            )
+        
         # Опционально ждем MODEL фрейм для выбора модели - УБРАНО по запросу
         # Используем модель из query param или по умолчанию
         if current_model_name:
@@ -507,6 +553,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     session_id=session_id,
                     chat_id=frame.chat_id or "",
                     user_message_id=frame.message_id or "",
+                    chat_history=chat_history,
                 )
         except WebSocketDisconnect:
             # Клиент отвалился — нормальный сценарий
@@ -524,7 +571,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
 
     return r
 
-async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] = None):
+async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] = None, chat_history: Optional[list] = None):
     """Async generator yielding text chunks from the agent.
 
     Tries to use stream=True where supported; handles async/sync iterators
@@ -548,10 +595,18 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
 
     async def _invoke_with_stream(fn):
         try:
+            # Prepare kwargs
+            kwargs = {"stream": True}
+            if session_id:
+                kwargs["session_id"] = session_id
+            if chat_history:
+                kwargs["messages"] = chat_history
+            
             if asyncio.iscoroutinefunction(fn):
-                return await fn(text, stream=True, session_id=session_id)
-            return fn(text, stream=True, session_id=session_id)
+                return await fn(text, **kwargs)
+            return fn(text, **kwargs)
         except TypeError:
+            # Fallback without stream or messages
             if asyncio.iscoroutinefunction(fn):
                 return await fn(text)
             return fn(text)
@@ -822,6 +877,7 @@ async def _process_message(
     session_id: str,
     chat_id: str,
     user_message_id: str,
+    chat_history: Optional[list] = None,
 ) -> int:
     message_id = str(uuid.uuid4())
 
@@ -852,25 +908,14 @@ async def _process_message(
         total_delta_len = 0
         
         logger.debug("[WS] Starting agent stream: session_id=%s", session_id)
+        
+        # Log chat history if provided
+        if chat_history:
+            logger.info("[WS] 📜 Using chat history: session_id=%s count=%d", session_id, len(chat_history))
+        else:
+            logger.debug("[WS] No chat history provided: session_id=%s", session_id)
 
-        # Inject context for tools
-        logger.info("[WS] 🔧 Injecting context into agent for ChatHistoryTool")
-        logger.info("[WS]    chat_id: %s", chat_id)
-        logger.info("[WS]    user_id (session_id): %s", session_id)
-        agent.chat_id = chat_id
-        agent.user_id = session_id
-        logger.debug("[WS]    Context injected successfully")
-        logger.debug("[WS]    Verifying: agent.chat_id=%s, agent.user_id=%s", 
-                    getattr(agent, 'chat_id', None), 
-                    getattr(agent, 'user_id', None))
-        # Ensure agent storage uses this session key for history
-        try:
-            agent.session_id = session_id  # type: ignore[attr-defined]
-            logger.debug("[WS]    session_id also set on agent")
-        except Exception as e:
-            logger.debug("[WS]    Could not set session_id on agent: %s", e)
-
-        async for chunk in _run_agent_stream(agent, text or "", session_id=session_id):
+        async for chunk in _run_agent_stream(agent, text or "", session_id=session_id, chat_history=chat_history):
             if not chunk:
                 continue
             # logger.debug("[WS] Stream chunk: len=%d", len(chunk))
