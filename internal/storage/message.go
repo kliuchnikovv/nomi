@@ -65,13 +65,19 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 	}, nil
 }
 
-func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) ([]*chat.Message, error) {
-	var messages []Message
-	if err := s.DB.WithContext(ctx).
+func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, limit ...int) ([]*chat.Message, error) {
+	query := s.DB.WithContext(ctx).
 		Joins("JOIN chats ON messages.chat_id = chats.id").
 		Where("messages.chat_id = ? AND chats.user_id = ?", chatID, userID).
-		Order("messages.created_at ASC").
-		Find(&messages).Error; err != nil {
+		Order("messages.created_at ASC")
+
+	// Apply limit if provided
+	if len(limit) > 0 && limit[0] > 0 {
+		query = query.Limit(limit[0])
+	}
+
+	var messages []Message
+	if err := query.Find(&messages).Error; err != nil {
 		return nil, err
 	}
 

@@ -22,6 +22,7 @@ const (
 	MessageOperation     Operation = "message"
 	DoneOperation        Operation = "done"
 	ToolsOperation       Operation = "tools"
+	HistoryOperation     Operation = "history"
 	SelectModelOperation Operation = "select_model"
 	ChangeModelOperation Operation = "change_model"
 

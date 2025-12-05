@@ -137,6 +137,34 @@ func (streamer *Streamer) Stream(
 			}
 		}
 
+		// Send chat history to model if available
+		if len(streamer.chatHistory) > 0 {
+			// Convert chat history to simple format for model
+			historyData := make([]map[string]interface{}, 0, len(streamer.chatHistory))
+			for _, msg := range streamer.chatHistory {
+				historyData = append(historyData, map[string]interface{}{
+					"role": string(msg.Role),
+					"text": msg.Text,
+				})
+			}
+
+			historyFrame := Frame{
+				ID:        1,
+				ChatID:    chatID,
+				Kind:      TokenKind,
+				Operation: HistoryOperation,
+				Timestamp: time.Now().UTC(),
+				Payload: Payload{
+					History: historyData,
+				},
+			}
+			if err := modelReader.Write(ctx, historyFrame); err != nil {
+				streamer.logger.Error("failed to send history to model", zap.Error(err))
+			} else {
+				streamer.logger.Info("sent chat history to model", zap.Int("count", len(streamer.chatHistory)))
+			}
+		}
+
 		// Send initial message if present
 		if streamer.initialMessage != "" {
 			msgFrame := Frame{

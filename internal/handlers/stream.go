@@ -145,6 +145,17 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		h.logger.Debug("using team-scoped session_id", zap.String("session_id", sessionID))
 	}
 
+	// Load chat history from database if chat_id is provided
+	if historyChatID != nil {
+		messages, err := h.storage.GetMessages(ctx, user.ID, *historyChatID, 50) // Load last 50 messages
+		if err != nil {
+			h.logger.Warn("failed to load chat history", zap.Error(err), zap.String("chat_id", historyChatID.String()))
+		} else {
+			chatHistory = messages
+			h.logger.Info("loaded chat history", zap.Int("count", len(chatHistory)), zap.String("chat_id", historyChatID.String()))
+		}
+	}
+
 	// Provide connector to (re)establish model connection with initial meta.
 	connectModel := func() (*websocket.Conn, error) {
 		hdr := http.Header{}
