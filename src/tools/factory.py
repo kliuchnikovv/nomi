@@ -150,7 +150,11 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
 
 async def build(config: ToolsConfig) -> List[Toolkit]:
     tools: List[Toolkit] = []
+    logger.debug("[Tools] Building tools from config with %d entries", len(config.entries))
+    logger.debug("[Tools] Registered builders: %s", list(TOOL_BUILDERS.keys()))
+    
     for item in config:
+        logger.debug("[Tools] Processing tool item: %s", item.name)
         # Try exact match first
         builder = TOOL_BUILDERS.get(item.name)
         
