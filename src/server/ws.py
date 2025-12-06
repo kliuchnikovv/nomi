@@ -181,6 +181,9 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                 session_id,
             )
             # Продолжаем без инструментов
+        except WebSocketDisconnect:
+            logger.info("[WS] Client disconnected (waiting for tools): session_id=%s", session_id)
+            return
         except Exception as exc:
             logger.warning(
                 "[WS] Failed to receive tools: session_id=%s error=%s",
@@ -228,6 +231,9 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                 "[WS] No HISTORY frame received (timeout), continuing without history: session_id=%s",
                 session_id,
             )
+        except WebSocketDisconnect:
+            logger.info("[WS] Client disconnected (waiting for history): session_id=%s", session_id)
+            return
         except Exception as exc:
             logger.warning(
                 "[WS] Failed to receive history: session_id=%s error=%s",
