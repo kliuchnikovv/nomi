@@ -194,6 +194,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         
         # Ожидаем HISTORY фрейм (опционально)
         chat_history = []
+        pending_frame: Optional[Frame] = None  # Store any non-HISTORY frame for processing later
         try:
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
             logger.debug("[WS] Received raw data (HISTORY wait): session_id=%s len=%d", session_id, len(raw))
@@ -219,12 +220,13 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                             len(chat_history),
                         )
             else:
-                # Не HISTORY фрейм - это нормально, история опциональна
+                # Не HISTORY фрейм - сохраняем для обработки в основном цикле
                 logger.debug(
-                    "[WS] No HISTORY frame received (got %s instead), continuing without history: session_id=%s",
+                    "[WS] No HISTORY frame received (got %s instead), saving for processing: session_id=%s",
                     frame.op,
                     session_id,
                 )
+                pending_frame = frame
         except asyncio.TimeoutError:
             # Таймаут - история не была отправлена, это нормально
             logger.debug(
@@ -317,74 +319,80 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         try:
             # Пример: таймауты чтения (idle close)
             while True:
-                try:
-                    raw = await asyncio.wait_for(websocket.receive_text(), timeout=30)
-                    # Any received frame counts as activity
-                    last_activity = time.monotonic()
-                    logger.debug("[WS] Received raw data (Main loop): session_id=%s len=%d", session_id, len(raw))
+                # Check if we have a pending frame from HISTORY wait phase
+                if pending_frame is not None:
+                    frame = pending_frame
+                    pending_frame = None  # Clear it so we don't process it again
+                    logger.debug("[WS] Processing pending frame: session_id=%s op=%s", session_id, frame.op)
+                else:
                     try:
-                        data = json.loads(raw)
-                        frame = Frame(**data)
-                        logger.debug("[WS] Parsed frame (Main loop): session_id=%s op=%s", session_id, frame.op)
-                        # basic invariant checks; report as bad_request on failure
-                        frame.validate_invariants()
-                    except Exception as ex:
-                        # Некорректный входящий фрейм — сообщаем клиенту и продолжаем
-                        logger.warning(
-                            "[WS] Bad frame: session_id=%s err=%s raw_len=%d",
-                            session_id,
-                            ex,
-                            len(raw or ""),
-                        )
+                        raw = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                        # Any received frame counts as activity
+                        last_activity = time.monotonic()
+                        logger.debug("[WS] Received raw data (Main loop): session_id=%s len=%d", session_id, len(raw))
+                        try:
+                            data = json.loads(raw)
+                            frame = Frame(**data)
+                            logger.debug("[WS] Parsed frame (Main loop): session_id=%s op=%s", session_id, frame.op)
+                            # basic invariant checks; report as bad_request on failure
+                            frame.validate_invariants()
+                        except Exception as ex:
+                            # Некорректный входящий фрейм — сообщаем клиенту и продолжаем
+                            logger.warning(
+                                "[WS] Bad frame: session_id=%s err=%s raw_len=%d",
+                                session_id,
+                                ex,
+                                len(raw or ""),
+                            )
+                            next_id = await _send_frame(
+                                websocket=websocket,
+                                frame=make_error(
+                                    id=next_id,
+                                    code="bad_request",
+                                    chat_id=None,
+                                    message="Invalid frame payload",
+                                    http=400,
+                                ),
+                            )
+                            continue
+                    except asyncio.TimeoutError:
+                        # No incoming messages within read timeout window
+                        idle_for = time.monotonic() - last_activity
+                        if idle_for >= 180:
+                            # Close idle connection after 3 minutes without client messages
+                            logger.info(
+                                "[WS] Idle timeout: closing session_id=%s idle_for=%.1fs",
+                                session_id,
+                                idle_for,
+                            )
+                            try:
+                                next_id = await _send_frame(
+                                    websocket=websocket,
+                                    frame=make_done(
+                                        id=next_id,
+                                        chat_id=None,
+                                        payload={
+                                            "message": "done",
+                                            "reason": "idle_timeout",
+                                        },
+                                    ),
+                                )
+                            finally:
+                                with contextlib.suppress(Exception):
+                                    await websocket.close(code=1000, reason="idle timeout")
+                            break
+                        # Otherwise send keepalive ping
+                        logger.debug("[WS] Keepalive ping: session_id=%s", session_id)
                         next_id = await _send_frame(
                             websocket=websocket,
-                            frame=make_error(
+                            frame=make_data(
                                 id=next_id,
-                                code="bad_request",
+                                op=Op.PING,
                                 chat_id=None,
-                                message="Invalid frame payload",
-                                http=400,
+                                payload={},
                             ),
                         )
                         continue
-                except asyncio.TimeoutError:
-                    # No incoming messages within read timeout window
-                    idle_for = time.monotonic() - last_activity
-                    if idle_for >= 180:
-                        # Close idle connection after 3 minutes without client messages
-                        logger.info(
-                            "[WS] Idle timeout: closing session_id=%s idle_for=%.1fs",
-                            session_id,
-                            idle_for,
-                        )
-                        try:
-                            next_id = await _send_frame(
-                                websocket=websocket,
-                                frame=make_done(
-                                    id=next_id,
-                                    chat_id=None,
-                                    payload={
-                                        "message": "done",
-                                        "reason": "idle_timeout",
-                                    },
-                                ),
-                            )
-                        finally:
-                            with contextlib.suppress(Exception):
-                                await websocket.close(code=1000, reason="idle timeout")
-                        break
-                    # Otherwise send keepalive ping
-                    logger.debug("[WS] Keepalive ping: session_id=%s", session_id)
-                    next_id = await _send_frame(
-                        websocket=websocket,
-                        frame=make_data(
-                            id=next_id,
-                            op=Op.PING,
-                            chat_id=None,
-                            payload={},
-                        ),
-                    )
-                    continue
 
                 if frame.op == Op.PING:
                     logger.debug("[WS] Received ping: session_id=%s", session_id)
