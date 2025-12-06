@@ -51,6 +51,5 @@ class MailerAgent(Agent):
             add_history_to_context=True,  # Required for Agno to use messages parameter
             add_datetime_to_context=True,
             debug_mode=debug_mode,
-            show_tool_calls=True,  # Enable tool call tracking
             stream=True
         )
