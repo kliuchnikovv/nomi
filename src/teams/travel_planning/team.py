@@ -47,7 +47,7 @@ class TravelPlanning(Team):
             debug_mode=debug_mode,
             description=description,
             instructions=instructions,
-            add_history_to_context=False,  # Disabled: history is passed via HISTORY frame
+            add_history_to_context=True,  # Required for Agno to use messages parameter
             expected_output=expected_output,
             members=[
                 TravelPlanningAgent(

@@ -615,12 +615,18 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                 kwargs["session_id"] = session_id
             if chat_history:
                 kwargs["messages"] = chat_history
+                logger.debug("[WS] 📜 Passing chat_history to agent: count=%d first_msg=%s", 
+                           len(chat_history), 
+                           chat_history[0] if chat_history else None)
+            
+            logger.debug("[WS] Agent kwargs: %s", {k: v if k != "messages" else f"<{len(v)} messages>" for k, v in kwargs.items()})
             
             if asyncio.iscoroutinefunction(fn):
                 return await fn(text, **kwargs)
             return fn(text, **kwargs)
-        except TypeError:
+        except TypeError as e:
             # Fallback without stream or messages
+            logger.warning("[WS] TypeError calling agent, falling back: %s", e)
             if asyncio.iscoroutinefunction(fn):
                 return await fn(text)
             return fn(text)
