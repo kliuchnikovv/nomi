@@ -8,10 +8,10 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
-type contextKey string
+type ContextKey string
 
 const (
-	UserContextKey contextKey = "user"
+	UserContextKey ContextKey = "user"
 )
 
 type AuthMiddleware struct {
