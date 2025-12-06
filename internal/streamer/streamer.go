@@ -362,12 +362,19 @@ func (streamer *Streamer) Stream(
 						streamer.logger.Error("failed to upsert inbox message", zap.Error(err))
 					}
 				} else {
+					// Save user's model choice
+					userModel := frame.Payload.Model
+					if userModel != "" {
+						streamer.logger.Info("user selected model", zap.String("model", userModel))
+					}
+
 					if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
 						ID:        uuid.New(),
 						ChatID:    frame.ChatID,
 						Sender:    streamer.userID,
 						Role:      chat.RoleUser,
 						Text:      frame.Payload.Message,
+						Model:     userModel,
 						CreatedAt: time.Now().UTC(),
 					}); err != nil {
 						streamer.logger.Error("failed to upsert message", zap.Error(err))
