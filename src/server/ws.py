@@ -673,6 +673,15 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
     # Async iterator → stream
     if hasattr(result, "__aiter__"):
         async for ev in result:  # type: ignore
+            # Check if ev is RunOutput (has tools or tool_calls) and save it
+            # We save it to agent.run_response so we can access it later
+            if hasattr(ev, 'tools') and ev.tools:
+                 agent.run_response = ev
+                 logger.debug("[WS] Captured RunOutput with tools in stream")
+            elif hasattr(ev, 'tool_calls') and ev.tool_calls: # Legacy/Other models
+                 agent.run_response = ev
+                 logger.debug("[WS] Captured RunOutput with tool_calls in stream")
+            
             chunk = _to_text(ev)
             if chunk:
                 yield chunk
@@ -981,6 +990,28 @@ async def _process_message(
         
         # Try to extract tool calls from agent's run_response
         try:
+            logger.debug("[WS] Checking agent attributes...")
+            # logger.debug("[WS] Agent dir: %s", dir(agent))
+            
+            if hasattr(agent, 'memory'):
+                logger.debug("[WS] Agent memory runs: %s", len(agent.memory.runs) if agent.memory and agent.memory.runs else "None")
+                if agent.memory and agent.memory.runs:
+                    last_run = agent.memory.runs[-1]
+                    # logger.debug("[WS] Last run from memory: %s", last_run)
+                    if hasattr(last_run, 'tools') and last_run.tools:
+                         tools_list = last_run.tools
+                         logger.info("[WS] 🔧 Captured tools from agent.memory.runs[-1].tools: count=%d", len(tools_list))
+                         
+                         serializable_tool_calls = []
+                         for tc in tools_list:
+                            # Map ToolExecution to standard format
+                            tool_call_dict = {
+                                "name": getattr(tc, 'tool_name', 'unknown'),
+                                "arguments": getattr(tc, 'tool_args', {})
+                            }
+                            serializable_tool_calls.append(tool_call_dict)
+                         tool_calls_list = serializable_tool_calls
+
             logger.debug("[WS] Checking agent.run_response...")
             if hasattr(agent, 'run_response'):
                 run_response = agent.run_response
