@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
+	"github.com/kliuchnikovv/genie-api/internal/chat" // Added for logging
 	"gorm.io/gorm"
+	// Added for OnConflict clause
 )
 
 var ZeroUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
