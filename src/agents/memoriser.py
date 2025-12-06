@@ -28,6 +28,5 @@ class MemoriserAgent(Agent):
             add_history_to_context=False,
             add_datetime_to_context=False,
             debug_mode=debug_mode,
-            show_tool_calls=True,  # Enable tool call tracking
             stream=False,
         )
