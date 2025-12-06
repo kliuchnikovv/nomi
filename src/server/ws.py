@@ -695,9 +695,12 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                  agent.run_response = ev
                  # logger.debug("[WS] Captured RunOutput with tool_calls in stream")
             
-            chunk = _to_text(ev)
-            if chunk:
-                yield chunk
+            # Only yield text from Content events to avoid duplication (RunCompletedEvent has full text)
+            # and system messages (ToolCallCompletedEvent has status text)
+            if "RunContentEvent" in str(type(ev)):
+                chunk = _to_text(ev)
+                if chunk:
+                    yield chunk
         return
 
     # Sync iterator → stream
