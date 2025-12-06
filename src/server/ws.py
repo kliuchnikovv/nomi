@@ -568,6 +568,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     chat_id=frame.chat_id or "",
                     user_message_id=frame.message_id or "",
                     chat_history=chat_history,
+                    current_model_name=current_model_name,
                 )
         except WebSocketDisconnect:
             # Клиент отвалился — нормальный сценарий
@@ -898,16 +899,18 @@ async def _process_message(
     chat_id: str,
     user_message_id: str,
     chat_history: Optional[list] = None,
+    current_model_name: Optional[str] = None,
 ) -> int:
     message_id = str(uuid.uuid4())
 
     # Signal message start
     logger.info(
-        "[WS] Start message: sessionId=%s message_id=%s text_len=%d user_message_id=%s",
+        "[WS] Start message: sessionId=%s message_id=%s text_len=%d user_message_id=%s model=%s",
         session_id,
         message_id,
         len(text or ""),
         user_message_id,
+        current_model_name,
     )
     next_id = await _send_frame(
         websocket=websocket,
@@ -922,6 +925,8 @@ async def _process_message(
     )
 
     started = time.monotonic()
+    tool_calls_list = []
+    
     try:
         idx = 0
         sent_token_events = 0
@@ -958,6 +963,48 @@ async def _process_message(
             total_delta_len += len(chunk)
         
         logger.debug("[WS] Agent stream finished: session_id=%s tokens=%d", session_id, sent_token_events)
+        
+        # Try to extract tool calls from agent's run_response
+        try:
+            if hasattr(agent, 'run_response') and agent.run_response:
+                run_response = agent.run_response
+                
+                # Check for tool_calls in various possible locations
+                if hasattr(run_response, 'tool_calls') and run_response.tool_calls:
+                    tool_calls_list = run_response.tool_calls
+                    logger.info("[WS] 🔧 Captured tool calls from run_response.tool_calls: count=%d", len(tool_calls_list))
+                elif hasattr(run_response, 'messages') and run_response.messages:
+                    # Check last message for tool calls
+                    for msg in reversed(run_response.messages):
+                        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                            tool_calls_list = msg.tool_calls
+                            logger.info("[WS] 🔧 Captured tool calls from message: count=%d", len(tool_calls_list))
+                            break
+                
+                # Convert tool calls to serializable format
+                if tool_calls_list:
+                    serializable_tool_calls = []
+                    for tc in tool_calls_list:
+                        tool_call_dict = {
+                            "name": getattr(tc, 'function', {}).get('name') if hasattr(tc, 'function') else getattr(tc, 'name', 'unknown'),
+                        }
+                        
+                        # Try to get arguments
+                        if hasattr(tc, 'function') and hasattr(tc.function, 'arguments'):
+                            try:
+                                import json as json_lib
+                                tool_call_dict["arguments"] = json_lib.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+                            except:
+                                tool_call_dict["arguments"] = str(tc.function.arguments)
+                        elif hasattr(tc, 'arguments'):
+                            tool_call_dict["arguments"] = tc.arguments
+                        
+                        serializable_tool_calls.append(tool_call_dict)
+                    
+                    tool_calls_list = serializable_tool_calls
+                    logger.debug("[WS] Serialized tool calls: %s", tool_calls_list)
+        except Exception as e:
+            logger.warning("[WS] Failed to extract tool calls: session_id=%s error=%s", session_id, e, exc_info=True)
             
     except Exception as e:
         logger.error("[WS] Error in agent stream: session_id=%s error=%s", session_id, e, exc_info=True)
@@ -1004,6 +1051,30 @@ async def _process_message(
         total_delta_len,
         int(elapsed * 1000),
     )
+
+    # Send tool calls and model metadata before done frame
+    metadata_payload = {}
+    if tool_calls_list:
+        metadata_payload["tool_calls"] = tool_calls_list
+        logger.info("[WS] 🔧 Sending tool calls: count=%d", len(tool_calls_list))
+    if current_model_name:
+        metadata_payload["model"] = current_model_name
+        logger.info("[WS] 📊 Sending model: %s", current_model_name)
+    
+    if metadata_payload:
+        next_id = await _send_frame(
+            websocket=websocket,
+            frame=make_meta(
+                id=next_id,
+                op=Op.MESSAGE,
+                chat_id=chat_id,
+                payload={
+                    "type": "metadata",
+                    "message_id": message_id,
+                    **metadata_payload
+                }
+            )
+        )
 
     # Done
     next_id = await _send_done(websocket, next_id, message_id, "stop", chat_id)
