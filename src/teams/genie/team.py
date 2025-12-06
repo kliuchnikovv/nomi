@@ -47,7 +47,7 @@ class GenieTeam(Team):
             debug_mode=debug_mode,
             description=description,
             instructions=instructions,
-            add_history_to_context=True,
+            add_history_to_context=False,  # Disabled: history is passed via HISTORY frame
             expected_output=expected_output,
             members=[
                 GenieAgent(
