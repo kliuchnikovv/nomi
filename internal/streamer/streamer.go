@@ -349,7 +349,11 @@ func (streamer *Streamer) Stream(
 			streamer.logger.Info("received frame from client", zap.String("op", string(frame.Operation)))
 
 			if frame.Operation == MessageOperation && frame.Payload.MessageID == storage.ZeroUUID {
-				streamer.logger.Info("got frame to upsert", zap.Any("frame", frame), zap.String("message_id", frame.Payload.MessageID.String()))
+				streamer.logger.Info("got frame to upsert",
+					zap.Any("frame", frame),
+					zap.String("message_id", frame.Payload.MessageID.String()),
+					zap.String("model_from_payload", frame.Payload.Model))
+
 				if streamer.source == "inbox" {
 					if err := streamer.storage.UpsertInboxMessage(ctx, streamer.userID, &storage.InboxMessage{
 						ID:            uuid.New(),
@@ -364,9 +368,9 @@ func (streamer *Streamer) Stream(
 				} else {
 					// Save user's model choice
 					userModel := frame.Payload.Model
-					if userModel != "" {
-						streamer.logger.Info("user selected model", zap.String("model", userModel))
-					}
+					streamer.logger.Info("saving user message with model",
+						zap.String("model", userModel),
+						zap.String("message", frame.Payload.Message))
 
 					if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
 						ID:        uuid.New(),
@@ -378,6 +382,9 @@ func (streamer *Streamer) Stream(
 						CreatedAt: time.Now().UTC(),
 					}); err != nil {
 						streamer.logger.Error("failed to upsert message", zap.Error(err))
+					} else {
+						streamer.logger.Info("successfully saved user message",
+							zap.String("model", userModel))
 					}
 				}
 			}
