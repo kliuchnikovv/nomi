@@ -151,8 +151,20 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
 async def build(config: ToolsConfig) -> List[Toolkit]:
     tools: List[Toolkit] = []
     for item in config:
+        # Try exact match first
         builder = TOOL_BUILDERS.get(item.name)
+        
+        # If no exact match, try prefix match (e.g., "Gmail (email)" matches "Gmail")
         if not builder:
+            for registered_name, registered_builder in TOOL_BUILDERS.items():
+                if item.name.startswith(registered_name):
+                    builder = registered_builder
+                    logger.debug(f"[Tools] Matched '{item.name}' to builder '{registered_name}'")
+                    break
+        
+        if not builder:
+            logger.warning(f"[Tools] No builder found for tool: {item.name}")
             continue
+            
         tools.append(builder(item.params))
     return tools
