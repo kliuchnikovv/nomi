@@ -459,6 +459,12 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                     command_desc = updated_desc
                                 else:
                                     # Rebuild agent with new model
+                                    logger.info(
+                                        "[WS] Rebuilding agent with model change: session_id=%s new_model=%s tools_count=%d",
+                                        session_id,
+                                        new_model_name,
+                                        len(tools_specs) if tools_specs else 0,
+                                    )
                                     agent = await agent_factory.build(
                                         session_id,
                                         tools_specs=tools_specs,
