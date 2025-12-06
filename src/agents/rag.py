@@ -53,14 +53,14 @@ class RagAgent(Agent):
             search_knowledge=bool(knowledge),
             read_chat_history=True,
             description="RAG‑based agent that can retrieve context and generate answers.",
-            add_history_to_context=True,  # Required for Agno to use messages parameter
+            # add_history_to_context=True,  # Required for Agno to use messages parameter
             add_datetime_to_context=True,
             debug_mode=debug_mode,
             read_tool_call_history=True,  # Enable reading tool call history
-            store_tool_messages=True,  # Store tool call results
-            update_knowledge=True,
+            # store_tool_messages=True,  # Store tool call results
+            # update_knowledge=True,
             send_media_to_model=True,
             store_media=True,
-            store_history_messages=True,
+            # store_history_messages=True,
             stream=True,
         )

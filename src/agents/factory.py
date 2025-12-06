@@ -19,7 +19,6 @@ from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools import Toolkit
 from google.oauth2.credentials import Credentials
 
-# from src.tools.chat_history import ChatHistoryTool  # Disabled: history is now passed directly
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +36,6 @@ class AgentFactory:
         self._config_client = config_client
         self._debug_mode = debug_mode
 
-    # _attach_tool_context removed - ChatHistoryTool is disabled
 
     @property
     def config_client(self) -> ToolConfigClient:
@@ -94,20 +92,6 @@ class AgentFactory:
                 else:
                     logger.debug("[WS] tool not appended: not enabled")
             tools = await build_tools(config)
-        # else:
-        #     # Fallback к старым инструментам если не получили спецификации
-        #     tools = [GmailTools(
-        #         creds=Credentials(
-        #             token=None,
-        #             refresh_token="1//049lHvWs1nUl4CgYIARAAGAQSNwF-L9IrlhRoF0I4oyko8cWyyHUA1M2ixcwD0me_vaRRtAo04uFxopWDmQro8q57XmNS5JKBEGo"
-        #         )
-        #     ), GoogleCalendarTools(
-        #         access_token=""
-        #     )]
-
-        # ChatHistoryTool disabled - history is now passed directly to the model
-        # tools.append(ChatHistoryTool())
-        # logger.info("[WS] ChatHistoryTool added to agent tools")
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 
