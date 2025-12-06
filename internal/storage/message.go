@@ -164,14 +164,42 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 	message, err := s.GetMessage(ctx, userID, m.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Message doesn't exist, create it
 			if _, err = s.CreateMessage(ctx, userID, m); err != nil {
-				return fmt.Errorf("failed to upsert message: %w", err)
+				return fmt.Errorf("failed to create message in upsert: %w", err)
 			}
 			return nil
 		}
-
-		return fmt.Errorf("failed to upsert message: %w", err)
+		return fmt.Errorf("failed to get message in upsert: %w", err)
 	}
 
-	return s.UpdateMessageText(ctx, userID, m.ID, message.Text+m.Text)
+	// Message exists, update all fields
+	updates := map[string]interface{}{
+		"text":       message.Text + m.Text,
+		"updated_at": time.Now().UTC(),
+	}
+
+	// Update model if provided
+	if m.Model != "" {
+		updates["model"] = m.Model
+	}
+
+	// Update tool_calls if provided
+	if m.ToolCalls != nil {
+		toolCallsJSON, err := json.Marshal(m.ToolCalls)
+		if err == nil {
+			updates["tool_calls"] = toolCallsJSON
+		}
+	}
+
+	result := s.DB.WithContext(ctx).
+		Model(&Message{}).
+		Where("id = ? AND user_id = ?", m.ID, userID).
+		Updates(updates)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update message in upsert: %w", result.Error)
+	}
+
+	return nil
 }
