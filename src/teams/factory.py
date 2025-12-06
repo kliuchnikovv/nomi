@@ -48,7 +48,7 @@ class TeamFactory:
             members=members,
             tools=tools,
             db=self.db,
-            add_history_to_context=False,  # Disabled: history is passed via HISTORY frame
+            add_history_to_context=True,  # Required for Agno to use messages parameter
             num_history_runs=5,
             add_team_history_to_members=True,
             num_team_history_runs=5,

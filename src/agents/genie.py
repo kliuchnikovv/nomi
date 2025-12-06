@@ -27,7 +27,7 @@ class GenieAgent(Agent):
             description="You are helpful personal assistant.",
             # instructions=instruction,
             # expected_output=expected_output,
-            add_history_to_context=False,  # Disabled: history is passed via HISTORY frame
+            add_history_to_context=True,  # Required for Agno to use messages parameter
             add_datetime_to_context=True,
             debug_mode=debug_mode,
             stream=True
