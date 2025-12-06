@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -29,18 +30,42 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		UpdatedAt: time.Now(),
 	}
 
+	// Handle ToolCalls if provided
+	if m.ToolCalls != nil {
+		toolCallsJSON, err := json.Marshal(m.ToolCalls)
+		if err == nil {
+			messageModel.ToolCalls = toolCallsJSON
+		}
+	}
+
+	// Handle Model if provided
+	if m.Model != "" {
+		messageModel.Model = m.Model
+	}
+
 	if err := s.DB.WithContext(ctx).Create(messageModel).Error; err != nil {
 		return nil, err
 	}
 
-	return &chat.Message{
+	result := &chat.Message{
 		ID:        messageModel.ID,
 		ChatID:    messageModel.ChatID,
 		Role:      chat.Role(messageModel.Role),
 		Text:      messageModel.Text,
 		Sender:    messageModel.UserID,
+		Model:     messageModel.Model,
 		CreatedAt: messageModel.CreatedAt,
-	}, nil
+	}
+
+	// Unmarshal ToolCalls if present
+	if len(messageModel.ToolCalls) > 0 {
+		var toolCalls interface{}
+		if err := json.Unmarshal(messageModel.ToolCalls, &toolCalls); err == nil {
+			result.ToolCalls = toolCalls
+		}
+	}
+
+	return result, nil
 }
 
 func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uuid.UUID) (*chat.Message, error) {
@@ -55,14 +80,25 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 		return nil, err
 	}
 
-	return &chat.Message{
+	result := &chat.Message{
 		ID:        message.ID,
 		ChatID:    message.ChatID,
 		Role:      chat.Role(message.Role),
 		Text:      message.Text,
 		Sender:    message.UserID,
+		Model:     message.Model,
 		CreatedAt: message.CreatedAt,
-	}, nil
+	}
+
+	// Unmarshal ToolCalls if present
+	if len(message.ToolCalls) > 0 {
+		var toolCalls interface{}
+		if err := json.Unmarshal(message.ToolCalls, &toolCalls); err == nil {
+			result.ToolCalls = toolCalls
+		}
+	}
+
+	return result, nil
 }
 
 func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, limit ...int) ([]*chat.Message, error) {
@@ -83,14 +119,25 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 
 	result := make([]*chat.Message, len(messages))
 	for i, msg := range messages {
-		result[i] = &chat.Message{
+		m := &chat.Message{
 			ID:        msg.ID,
 			ChatID:    msg.ChatID,
 			Role:      chat.Role(msg.Role),
 			Text:      msg.Text,
 			Sender:    msg.UserID,
+			Model:     msg.Model,
 			CreatedAt: msg.CreatedAt,
 		}
+
+		// Unmarshal ToolCalls if present
+		if len(msg.ToolCalls) > 0 {
+			var toolCalls interface{}
+			if err := json.Unmarshal(msg.ToolCalls, &toolCalls); err == nil {
+				m.ToolCalls = toolCalls
+			}
+		}
+
+		result[i] = m
 	}
 	return result, nil
 }

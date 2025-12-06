@@ -121,7 +121,7 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		}
 	}
 
-	// Use chat_id as session_id for Agno memory; no history frame anymore.
+	// Use chat_id as session_id for Agno memory
 	var chatHistory []*chat.Message
 	var historyChatID *uuid.UUID
 	var sessionID string
@@ -137,8 +137,12 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 			h.logger.Warn("invalid chat_id format", zap.String("chat_id", chatIDStr))
 		}
 	}
+	// CRITICAL: Never fall back to user.ID to prevent cross-chat memory leakage
+	// If no chat_id, generate a new UUID for this session
 	if sessionID == "" {
-		sessionID = user.ID.String()
+		newSessionID := uuid.New()
+		sessionID = newSessionID.String()
+		h.logger.Info("no chat_id provided, generated new session_id", zap.String("session_id", sessionID))
 	}
 	if modeParam == "team" {
 		sessionID = fmt.Sprintf("%s-team", sessionID)
