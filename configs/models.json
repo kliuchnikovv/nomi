@@ -23,17 +23,6 @@
       "supports_tools": true
     },
     {
-      "id": "gemini-2.5-flash-preview",
-      "name": "Gemini 2.5 Flash Preview",
-      "provider": "google",
-      "description": "Preview version of Gemini 2.5 Flash",
-      "context_window": 250000,
-      "max_output_tokens": 250,
-      "rpm_limit": 10,
-      "supports_streaming": true,
-      "supports_tools": true
-    },
-    {
       "id": "gemini-2.5-flash-lite",
       "name": "Gemini 2.5 Flash-Lite",
       "provider": "google",
