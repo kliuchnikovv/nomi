@@ -7,7 +7,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# from src.tools.chat_history import ChatHistoryTool  # Disabled: history is now passed directly
 
 class TeamFactory:
     def __init__(self, agent_factory: Any, db: PostgresDb | None, model: Model, debug_mode: bool = False):
@@ -15,8 +14,6 @@ class TeamFactory:
         self.db = db
         self.model = model
         self.debug_mode = debug_mode
-
-    # _attach_tool_context removed - ChatHistoryTool is disabled
 
     async def build(self, command_desc: dict, session_id: str) -> Team:
         logger.info("[WS] Building Team from command description")
@@ -40,7 +37,6 @@ class TeamFactory:
         # Better to expose build_model in agent_factory or pass it.
         team_model = self.agent_factory.build_model(team_model_name) if team_model_name else self.model
         
-        # ChatHistoryTool disabled - history is now passed directly to the model
         tools: List[Toolkit | Function | dict] = []
         team = Team(
             name=command_desc.get("name", "DynamicTeam"),
@@ -54,8 +50,6 @@ class TeamFactory:
             num_team_history_runs=5,
             debug_mode=self.debug_mode,
         )
-        # _attach_tool_context removed - ChatHistoryTool is disabled
-        # self._attach_tool_context(team, tools)
         try:
             team.session_id = session_id  # type: ignore[attr-defined]
         except Exception:
