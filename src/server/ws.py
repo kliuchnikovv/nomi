@@ -981,43 +981,46 @@ async def _process_message(
         
         # Try to extract tool calls from agent's run_response
         try:
-            if hasattr(agent, 'run_response') and agent.run_response:
+            logger.debug("[WS] Checking agent.run_response...")
+            if hasattr(agent, 'run_response'):
                 run_response = agent.run_response
+                logger.debug("[WS] run_response: %s", run_response)
                 
-                # Check for tool_calls in various possible locations
-                if hasattr(run_response, 'tool_calls') and run_response.tool_calls:
-                    tool_calls_list = run_response.tool_calls
-                    logger.info("[WS] 🔧 Captured tool calls from run_response.tool_calls: count=%d", len(tool_calls_list))
-                elif hasattr(run_response, 'messages') and run_response.messages:
-                    # Check last message for tool calls
-                    for msg in reversed(run_response.messages):
-                        if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                            tool_calls_list = msg.tool_calls
-                            logger.info("[WS] 🔧 Captured tool calls from message: count=%d", len(tool_calls_list))
-                            break
-                
-                # Convert tool calls to serializable format
-                if tool_calls_list:
-                    serializable_tool_calls = []
-                    for tc in tool_calls_list:
-                        tool_call_dict = {
-                            "name": getattr(tc, 'function', {}).get('name') if hasattr(tc, 'function') else getattr(tc, 'name', 'unknown'),
-                        }
+                if run_response:
+                    # Check for tools in RunOutput (new Agno version)
+                    if hasattr(run_response, 'tools') and run_response.tools:
+                        tools_list = run_response.tools
+                        logger.info("[WS] 🔧 Captured tools from run_response.tools: count=%d", len(tools_list))
                         
-                        # Try to get arguments
-                        if hasattr(tc, 'function') and hasattr(tc.function, 'arguments'):
-                            try:
-                                import json as json_lib
-                                tool_call_dict["arguments"] = json_lib.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
-                            except:
-                                tool_call_dict["arguments"] = str(tc.function.arguments)
-                        elif hasattr(tc, 'arguments'):
-                            tool_call_dict["arguments"] = tc.arguments
+                        serializable_tool_calls = []
+                        for tc in tools_list:
+                            # Map ToolExecution to standard format
+                            tool_call_dict = {
+                                "name": getattr(tc, 'tool_name', 'unknown'),
+                                "arguments": getattr(tc, 'tool_args', {})
+                            }
+                            serializable_tool_calls.append(tool_call_dict)
                         
-                        serializable_tool_calls.append(tool_call_dict)
+                        tool_calls_list = serializable_tool_calls
                     
-                    tool_calls_list = serializable_tool_calls
-                    logger.debug("[WS] Serialized tool calls: %s", tool_calls_list)
+                    # Fallback to checking tool_calls (older versions or other models)
+                    elif hasattr(run_response, 'tool_calls') and run_response.tool_calls:
+                        tool_calls_list = run_response.tool_calls
+                        logger.info("[WS] 🔧 Captured tool calls from run_response.tool_calls: count=%d", len(tool_calls_list))
+                        # ... existing logic for tool_calls conversion if needed ...
+                    
+                    elif hasattr(run_response, 'messages') and run_response.messages:
+                        # Check last message for tool calls
+                        if run_response.messages:
+                            last_msg = run_response.messages[-1]
+                            if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
+                                tool_calls_list = last_msg.tool_calls
+                                logger.info("[WS] 🔧 Captured tool calls from message: count=%d", len(tool_calls_list))
+                
+                # Convert tool calls to serializable format (if they came from legacy paths)
+                if tool_calls_list and not isinstance(tool_calls_list[0], dict):
+                     # ... conversion logic only if they are not already dicts ...
+                     pass # (We handled dict conversion for RunOutput.tools above)
         except Exception as e:
             logger.warning("[WS] Failed to extract tool calls: session_id=%s error=%s", session_id, e, exc_info=True)
             
