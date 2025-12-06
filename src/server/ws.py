@@ -603,14 +603,16 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             if ev is None:
                 return ""
             if hasattr(ev, "content"):
-                return str(getattr(ev, "content"))
+                val = getattr(ev, "content")
+                return str(val) if val is not None else ""
             if hasattr(ev, "text"):
-                return str(getattr(ev, "text"))
+                val = getattr(ev, "text")
+                return str(val) if val is not None else ""
             if isinstance(ev, dict):
                 for k in ("content", "text", "delta", "message", "output"):
                     if k in ev and ev[k] is not None:
                         return str(ev[k])
-            return str(ev)
+            return str(ev) if ev is not None else ""
         except Exception:
             return ""
 
@@ -976,7 +978,10 @@ async def _process_message(
             logger.debug("[WS] No chat history provided: session_id=%s", session_id)
 
         async for chunk in _run_agent_stream(agent, text or "", session_id=session_id, chat_history=chat_history):
-            if not chunk:
+            # Skip empty or 'None' chunks
+            if not chunk or chunk == "None":
+                if chunk == "None":
+                    logger.debug("[WS] Filtered unexpected 'None' chunk")
                 continue
             # logger.debug("[WS] Stream chunk: len=%d", len(chunk))
             next_id = await _send_frame(
@@ -1012,7 +1017,8 @@ async def _process_message(
                  for tc in tools_list:
                     tool_call_dict = {
                         "name": getattr(tc, 'tool_name', 'unknown'),
-                        "arguments": getattr(tc, 'tool_args', {})
+                        "arguments": getattr(tc, 'tool_args', {}),
+                        "result": getattr(tc, 'result', None)
                     }
                     serializable_tool_calls.append(tool_call_dict)
                  tool_calls_list = serializable_tool_calls
