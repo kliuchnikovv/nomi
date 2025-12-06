@@ -434,7 +434,9 @@ func (streamer *Streamer) Stream(
 					Operation: DoneOperation,
 				}); err != nil {
 					streamer.logger.Error("failed to write done to model", zap.Error(err))
-					_ = model.Close()
+					if model != nil {
+						_ = model.Close()
+					}
 				}
 				clientAlive = false
 
