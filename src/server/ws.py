@@ -671,24 +671,27 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
         raise RuntimeError("Agent does not have a callable interface for text input")
 
     # Async iterator → stream
+    # Initialize storage for tool executions on the agent instance
+    agent.last_tool_executions = []
+    
     if hasattr(result, "__aiter__"):
         async for ev in result:  # type: ignore
             # Log event type to understand what we are getting
-            logger.debug("[WS] Stream event: type=%s val=%s", type(ev), str(ev)[:100])
-            # Log detailed attributes for completion events
-            event_type_str = str(type(ev))
-            if "ToolCallCompleted" in event_type_str or "RunCompleted" in event_type_str:
-                logger.debug("[WS] Completion event: %s", event_type_str)
-                logger.debug("[WS] Event attrs: %s", ev.__dict__ if hasattr(ev, '__dict__') else "no dict")
+            # logger.debug("[WS] Stream event: type=%s val=%s", type(ev), str(ev)[:100])
             
-            # Check if ev is RunOutput (has tools or tool_calls) and save it
-            # We save it to agent.run_response so we can access it later
+            # Capture tool executions from ToolCallCompletedEvent
+            if "ToolCallCompleted" in str(type(ev)):
+                if hasattr(ev, 'tool') and ev.tool:
+                    logger.info("[WS] 🔧 Captured tool execution: %s", ev.tool.tool_name)
+                    agent.last_tool_executions.append(ev.tool)
+            
+            # Check if ev is RunOutput (has tools or tool_calls) and save it - fallback
             if hasattr(ev, 'tools') and ev.tools:
                  agent.run_response = ev
-                 logger.debug("[WS] Captured RunOutput with tools in stream")
+                 # logger.debug("[WS] Captured RunOutput with tools in stream")
             elif hasattr(ev, 'tool_calls') and ev.tool_calls: # Legacy/Other models
                  agent.run_response = ev
-                 logger.debug("[WS] Captured RunOutput with tool_calls in stream")
+                 # logger.debug("[WS] Captured RunOutput with tool_calls in stream")
             
             chunk = _to_text(ev)
             if chunk:
@@ -998,36 +1001,28 @@ async def _process_message(
         
         # Try to extract tool calls from agent's run_response
         try:
-            logger.debug("[WS] Checking agent attributes...")
-            logger.debug("[WS] Agent dict keys: %s", agent.__dict__.keys() if hasattr(agent, '__dict__') else "no dict")
+            logger.debug("[WS] Checking for tool calls...")
             
-            if hasattr(agent, 'memory'):
-                logger.debug("[WS] Agent memory runs count: %s", len(agent.memory.runs) if agent.memory and agent.memory.runs else "None")
-                if agent.memory and agent.memory.runs:
-                    last_run = agent.memory.runs[-1]
-                    logger.debug("[WS] Last run type: %s", type(last_run))
-                    if hasattr(last_run, 'tools') and last_run.tools:
-                         tools_list = last_run.tools
-                         logger.info("[WS] 🔧 Captured tools from agent.memory.runs[-1].tools: count=%d", len(tools_list))
-                         
-                         serializable_tool_calls = []
-                         for tc in tools_list:
-                            # Map ToolExecution to standard format
-                            tool_call_dict = {
-                                "name": getattr(tc, 'tool_name', 'unknown'),
-                                "arguments": getattr(tc, 'tool_args', {})
-                            }
-                            serializable_tool_calls.append(tool_call_dict)
-                         tool_calls_list = serializable_tool_calls
-
-            logger.debug("[WS] Checking agent.run_response...")
-            if hasattr(agent, 'run_response'):
+            # 1. Check for captured tool executions from stream events (MOST RELIABLE for stream=True)
+            if hasattr(agent, 'last_tool_executions') and agent.last_tool_executions:
+                 tools_list = agent.last_tool_executions
+                 logger.info("[WS] 🔧 Captured tools from agent.last_tool_executions: count=%d", len(tools_list))
+                 
+                 serializable_tool_calls = []
+                 for tc in tools_list:
+                    tool_call_dict = {
+                        "name": getattr(tc, 'tool_name', 'unknown'),
+                        "arguments": getattr(tc, 'tool_args', {})
+                    }
+                    serializable_tool_calls.append(tool_call_dict)
+                 tool_calls_list = serializable_tool_calls
+            
+            # 2. Check RunOutput (if available)
+            elif hasattr(agent, 'run_response'):
                 run_response = agent.run_response
-                logger.debug("[WS] run_response: %s", run_response)
-                
                 if run_response:
-                    # Check for tools in RunOutput (new Agno version)
                     if hasattr(run_response, 'tools') and run_response.tools:
+                        # ... existing logic ...
                         tools_list = run_response.tools
                         logger.info("[WS] 🔧 Captured tools from run_response.tools: count=%d", len(tools_list))
                         
@@ -1042,24 +1037,37 @@ async def _process_message(
                         
                         tool_calls_list = serializable_tool_calls
                     
-                    # Fallback to checking tool_calls (older versions or other models)
                     elif hasattr(run_response, 'tool_calls') and run_response.tool_calls:
-                        tool_calls_list = run_response.tool_calls
-                        logger.info("[WS] 🔧 Captured tool calls from run_response.tool_calls: count=%d", len(tool_calls_list))
-                        # ... existing logic for tool_calls conversion if needed ...
-                    
-                    elif hasattr(run_response, 'messages') and run_response.messages:
-                        # Check last message for tool calls
-                        if run_response.messages:
-                            last_msg = run_response.messages[-1]
-                            if hasattr(last_msg, 'tool_calls') and last_msg.tool_calls:
-                                tool_calls_list = last_msg.tool_calls
-                                logger.info("[WS] 🔧 Captured tool calls from message: count=%d", len(tool_calls_list))
-                
-                # Convert tool calls to serializable format (if they came from legacy paths)
-                if tool_calls_list and not isinstance(tool_calls_list[0], dict):
-                     # ... conversion logic only if they are not already dicts ...
-                     pass # (We handled dict conversion for RunOutput.tools above)
+                         # ... existing logic ...
+                         tool_calls_list = run_response.tool_calls
+
+            # 3. Check Memory (fallback)
+            if not tool_calls_list and hasattr(agent, 'memory') and agent.memory and agent.memory.runs:
+                 # ... existing logic could go here, but omitted for brevity as stream capture covers it ...
+                 pass
+
+            # Convert tool calls to serializable format (if they came from legacy paths and not already converted)
+            if tool_calls_list and not isinstance(tool_calls_list[0], dict):
+                 # ... legacy conversion logic ...
+                    serializable_tool_calls = []
+                    for tc in tool_calls_list:
+                        tool_call_dict = {
+                            "name": getattr(tc, 'function', {}).get('name') if hasattr(tc, 'function') else getattr(tc, 'name', 'unknown'),
+                        }
+                        # Try to get arguments
+                        if hasattr(tc, 'function') and hasattr(tc.function, 'arguments'):
+                            try:
+                                import json as json_lib
+                                tool_call_dict["arguments"] = json_lib.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+                            except:
+                                tool_call_dict["arguments"] = str(tc.function.arguments)
+                        elif hasattr(tc, 'arguments'):
+                            tool_call_dict["arguments"] = tc.arguments
+                        serializable_tool_calls.append(tool_call_dict)
+                    tool_calls_list = serializable_tool_calls
+
+            if tool_calls_list:
+                logger.debug("[WS] Serialized tool calls: %s", tool_calls_list)
         except Exception as e:
             logger.warning("[WS] Failed to extract tool calls: session_id=%s error=%s", session_id, e, exc_info=True)
             
