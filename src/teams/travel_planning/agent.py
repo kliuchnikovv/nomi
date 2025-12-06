@@ -27,7 +27,7 @@ class TravelPlanningAgent(Agent):
             description=description,
             instructions=instructions,
             expected_output=output,
-            add_history_to_context=True,
+            add_history_to_context=False,  # Disabled: history is passed via HISTORY frame
             add_datetime_to_context=True,
             debug_mode=debug_mode,
         )
