@@ -210,6 +210,13 @@ func (streamer *Streamer) Stream(
 	// Track client state to keep model streaming after client disconnects.
 	clientAlive := true
 
+	// Track metadata (model, tool_calls) for the current message
+	var currentMessageMetadata struct {
+		MessageID uuid.UUID
+		Model     string
+		ToolCalls interface{}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -227,6 +234,42 @@ func (streamer *Streamer) Stream(
 
 			resetTimer()
 
+			// Handle metadata frames to capture model and tool_calls
+			if frame.Operation == MessageOperation && frame.Kind == MetaKind && frame.Payload.Type == "metadata" {
+				streamer.logger.Info("received metadata frame",
+					zap.String("message_id", frame.Payload.MessageID.String()),
+					zap.String("model", frame.Payload.Model),
+					zap.Any("tool_calls", frame.Payload.ToolCalls))
+
+				currentMessageMetadata.MessageID = frame.Payload.MessageID
+				if frame.Payload.Model != "" {
+					currentMessageMetadata.Model = frame.Payload.Model
+				}
+				if frame.Payload.ToolCalls != nil {
+					currentMessageMetadata.ToolCalls = frame.Payload.ToolCalls
+				}
+
+				// Update the message in database with metadata
+				if currentMessageMetadata.MessageID != uuid.Nil {
+					if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
+						ID:        currentMessageMetadata.MessageID,
+						ChatID:    frame.ChatID,
+						Sender:    storage.ZeroUUID,
+						Role:      chat.RoleAssistant,
+						Text:      "", // Empty text - just updating metadata
+						Model:     currentMessageMetadata.Model,
+						ToolCalls: currentMessageMetadata.ToolCalls,
+						CreatedAt: time.Now().UTC(),
+					}); err != nil {
+						streamer.logger.Error("failed to update message metadata", zap.Error(err))
+					} else {
+						streamer.logger.Info("updated message metadata",
+							zap.String("message_id", currentMessageMetadata.MessageID.String()),
+							zap.String("model", currentMessageMetadata.Model))
+					}
+				}
+			}
+
 			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
 				streamer.logger.Info("upserting message", zap.Any("frame", frame), zap.String("message_id", frame.Payload.MessageID.String()))
 				if streamer.source == "inbox" {
@@ -241,17 +284,35 @@ func (streamer *Streamer) Stream(
 						streamer.logger.Error("failed to upsert inbox message", zap.Error(err))
 					}
 				} else {
+					// Track message ID for metadata
+					if currentMessageMetadata.MessageID == uuid.Nil {
+						currentMessageMetadata.MessageID = frame.Payload.MessageID
+					}
+
 					if err := streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
 						ID:        frame.Payload.MessageID,
 						ChatID:    frame.ChatID,
 						Sender:    storage.ZeroUUID,
 						Role:      chat.RoleAssistant,
 						Text:      frame.Payload.Message,
+						Model:     currentMessageMetadata.Model,
+						ToolCalls: currentMessageMetadata.ToolCalls,
 						CreatedAt: time.Now().UTC(),
 					}); err != nil {
 						streamer.logger.Error("failed to upsert message", zap.Error(err))
 					}
 				}
+			}
+
+			// Reset metadata after message is done
+			if frame.Operation == DoneOperation {
+				streamer.logger.Info("resetting message metadata after done",
+					zap.String("message_id", currentMessageMetadata.MessageID.String()))
+				currentMessageMetadata = struct {
+					MessageID uuid.UUID
+					Model     string
+					ToolCalls interface{}
+				}{}
 			}
 
 			if clientAlive {

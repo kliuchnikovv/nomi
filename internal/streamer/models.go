@@ -45,12 +45,13 @@ type Frame struct {
 }
 
 type Payload struct {
-	MessageID   uuid.UUID `json:"message_id,omitempty"`
-	Message     string    `json:"message,omitempty"`
-	Model       string    `json:"model,omitempty"`
-	Reason      string    `json:"reason,omitempty"`
-	Index       uint      `json:"ix,omitempty"`
-	EndOfBuffer bool      `json:"eof,omitempty"`
+	MessageID   uuid.UUID   `json:"message_id,omitempty"`
+	Message     string      `json:"message,omitempty"`
+	Model       string      `json:"model,omitempty"`
+	ToolCalls   interface{} `json:"tool_calls,omitempty"`
+	Reason      string      `json:"reason,omitempty"`
+	Index       uint        `json:"ix,omitempty"`
+	EndOfBuffer bool        `json:"eof,omitempty"`
 
 	Type             string      `json:"type,omitempty"`
 	PromptTokens     uint        `json:"prompt_tokens,omitempty"`
