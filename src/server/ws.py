@@ -673,6 +673,9 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
     # Async iterator → stream
     if hasattr(result, "__aiter__"):
         async for ev in result:  # type: ignore
+            # Log event type to understand what we are getting
+            logger.debug("[WS] Stream event: type=%s val=%s", type(ev), str(ev)[:100])
+            
             # Check if ev is RunOutput (has tools or tool_calls) and save it
             # We save it to agent.run_response so we can access it later
             if hasattr(ev, 'tools') and ev.tools:
@@ -991,13 +994,13 @@ async def _process_message(
         # Try to extract tool calls from agent's run_response
         try:
             logger.debug("[WS] Checking agent attributes...")
-            # logger.debug("[WS] Agent dir: %s", dir(agent))
+            logger.debug("[WS] Agent dict keys: %s", agent.__dict__.keys() if hasattr(agent, '__dict__') else "no dict")
             
             if hasattr(agent, 'memory'):
-                logger.debug("[WS] Agent memory runs: %s", len(agent.memory.runs) if agent.memory and agent.memory.runs else "None")
+                logger.debug("[WS] Agent memory runs count: %s", len(agent.memory.runs) if agent.memory and agent.memory.runs else "None")
                 if agent.memory and agent.memory.runs:
                     last_run = agent.memory.runs[-1]
-                    # logger.debug("[WS] Last run from memory: %s", last_run)
+                    logger.debug("[WS] Last run type: %s", type(last_run))
                     if hasattr(last_run, 'tools') and last_run.tools:
                          tools_list = last_run.tools
                          logger.info("[WS] 🔧 Captured tools from agent.memory.runs[-1].tools: count=%d", len(tools_list))
