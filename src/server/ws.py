@@ -675,6 +675,11 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
         async for ev in result:  # type: ignore
             # Log event type to understand what we are getting
             logger.debug("[WS] Stream event: type=%s val=%s", type(ev), str(ev)[:100])
+            # Log detailed attributes for completion events
+            event_type_str = str(type(ev))
+            if "ToolCallCompleted" in event_type_str or "RunCompleted" in event_type_str:
+                logger.debug("[WS] Completion event: %s", event_type_str)
+                logger.debug("[WS] Event attrs: %s", ev.__dict__ if hasattr(ev, '__dict__') else "no dict")
             
             # Check if ev is RunOutput (has tools or tool_calls) and save it
             # We save it to agent.run_response so we can access it later
