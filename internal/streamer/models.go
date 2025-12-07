@@ -54,11 +54,12 @@ type Payload struct {
 	EndOfBuffer bool        `json:"eof,omitempty"`
 
 	Type             string      `json:"type,omitempty"`
-	PromptTokens     uint        `json:"prompt_tokens,omitempty"`
 	CompletionTokens uint        `json:"completion_tokens,omitempty"`
 	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
 	Tools            interface{} `json:"tools,omitempty"`
 	History          interface{} `json:"history,omitempty"`
+	Attachments      interface{} `json:"attachments,omitempty"`
+	AttachmentIDs    []uuid.UUID `json:"attachment_ids,omitempty"`
 }
 
 type ErrorInfo struct {

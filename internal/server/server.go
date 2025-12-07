@@ -78,6 +78,7 @@ func New(
 		streamHandler       = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
 		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
 		modelsHandler = handlers.NewModelsHandler("configs/models.json")
+		uploadHandler = handlers.NewUploadHandler(db)
 		oauthHandler  = func() *handlers.OAuthHandler {
 			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
 			if err != nil {
@@ -139,6 +140,10 @@ func New(
 
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
+
+	// File Upload API
+	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))
+	r.GET("/api/attachments/:id", wrapWithAuth(uploadHandler.GetAttachment, authMiddleware))
 
 	// OAuth API
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))

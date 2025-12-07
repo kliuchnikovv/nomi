@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"context"
+	"encoding/base64"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,12 +19,13 @@ type Streamer struct {
 	userID uuid.UUID
 	// chatID uuid.UUID
 
-	source         string
-	initialMessage string
-	commandPayload interface{}
-	chatHistory    []*chat.Message
-	historyChatID  *uuid.UUID
-	connectModel   func() (*websocket.Conn, error)
+	source             string
+	initialMessage     string
+	initialAttachments []chat.Attachment
+	commandPayload     interface{}
+	chatHistory        []*chat.Message
+	historyChatID      *uuid.UUID
+	connectModel       func() (*websocket.Conn, error)
 }
 
 func New(
@@ -31,6 +33,7 @@ func New(
 	logger *zap.Logger,
 	userID uuid.UUID,
 	initialMessage string,
+	initialAttachments []chat.Attachment,
 	source string,
 	commandPayload interface{},
 	chatHistory []*chat.Message,
@@ -38,15 +41,16 @@ func New(
 	connectModel func() (*websocket.Conn, error),
 ) *Streamer {
 	return &Streamer{
-		storage:        storage,
-		logger:         logger,
-		userID:         userID,
-		initialMessage: initialMessage,
-		source:         source,
-		commandPayload: commandPayload,
-		chatHistory:    chatHistory,
-		historyChatID:  historyChatID,
-		connectModel:   connectModel,
+		storage:            storage,
+		logger:             logger,
+		userID:             userID,
+		initialMessage:     initialMessage,
+		initialAttachments: initialAttachments,
+		source:             source,
+		commandPayload:     commandPayload,
+		chatHistory:        chatHistory,
+		historyChatID:      historyChatID,
+		connectModel:       connectModel,
 	}
 }
 
@@ -173,7 +177,8 @@ func (streamer *Streamer) Stream(
 				Timestamp: time.Now().UTC(),
 				ChatID:    chatID,
 				Payload: Payload{
-					Message: streamer.initialMessage,
+					Message:     streamer.initialMessage,
+					Attachments: streamer.initialAttachments,
 				},
 			}
 			if err := modelReader.Write(ctx, msgFrame); err != nil {
@@ -386,6 +391,26 @@ func (streamer *Streamer) Stream(
 						streamer.logger.Info("successfully saved user message",
 							zap.String("model", userModel))
 					}
+				}
+			}
+
+			// Enrich message with attachments if IDs are present
+			if frame.Operation == MessageOperation && len(frame.Payload.AttachmentIDs) > 0 {
+				atts, err := streamer.storage.GetAttachmentsByIDs(ctx, frame.Payload.AttachmentIDs)
+				if err != nil {
+					streamer.logger.Error("failed to fetch attachments for enrichment", zap.Error(err))
+				} else {
+					var enriched []chat.Attachment
+					for _, att := range atts {
+						enriched = append(enriched, chat.Attachment{
+							ID:       att.ID,
+							FileName: att.FileName,
+							FileType: att.FileType,
+							Size:     att.Size,
+							Content:  base64.StdEncoding.EncodeToString(att.Content),
+						})
+					}
+					frame.Payload.Attachments = enriched
 				}
 			}
 

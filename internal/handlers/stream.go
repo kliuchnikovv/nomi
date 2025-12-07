@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -227,11 +229,42 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		h.logger.Info("extracted initial message from query", zap.String("message", initialMessage))
 	}
 
+	// Extract attachments
+	var initialAttachments []chat.Attachment
+	if attachmentIDsStr := c.Query("attachment_ids"); attachmentIDsStr != "" {
+		parts := strings.Split(attachmentIDsStr, ",")
+		var ids []uuid.UUID
+		for _, p := range parts {
+			if id, err := uuid.Parse(strings.TrimSpace(p)); err == nil {
+				ids = append(ids, id)
+			}
+		}
+
+		if len(ids) > 0 {
+			atts, err := h.storage.GetAttachmentsByIDs(ctx, ids)
+			if err != nil {
+				h.logger.Error("failed to fetch attachments", zap.Error(err))
+			} else {
+				for _, att := range atts {
+					initialAttachments = append(initialAttachments, chat.Attachment{
+						ID:       att.ID,
+						FileName: att.FileName,
+						FileType: att.FileType,
+						Size:     att.Size,
+						// Encode content to base64
+						Content: base64.StdEncoding.EncodeToString(att.Content),
+					})
+				}
+			}
+		}
+	}
+
 	streamer.New(
 		h.storage,
 		h.logger,
 		user.ID,
 		initialMessage,
+		initialAttachments,
 		c.Query("source"),
 		commandPayload,
 		chatHistory,

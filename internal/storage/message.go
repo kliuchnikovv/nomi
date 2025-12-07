@@ -48,6 +48,21 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		return nil, err
 	}
 
+	// Link attachments if provided
+	if len(m.AttachmentIDs) > 0 {
+		if err := s.DB.WithContext(ctx).Model(&Attachment{}).
+			Where("id IN ? AND user_id = ?", m.AttachmentIDs, userID).
+			Update("message_id", messageModel.ID).Error; err != nil {
+			return nil, err
+		}
+	}
+
+	// Retrieve attachments to return in response
+	var attachments []Attachment
+	if err := s.DB.WithContext(ctx).Where("message_id = ?", messageModel.ID).Find(&attachments).Error; err != nil {
+		return nil, err
+	}
+
 	result := &chat.Message{
 		ID:        messageModel.ID,
 		ChatID:    messageModel.ChatID,
@@ -56,6 +71,19 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		Sender:    messageModel.UserID,
 		Model:     messageModel.Model,
 		CreatedAt: messageModel.CreatedAt,
+	}
+
+	// Map attachments
+	if len(attachments) > 0 {
+		result.Attachments = make([]chat.Attachment, len(attachments))
+		for i, att := range attachments {
+			result.Attachments[i] = chat.Attachment{
+				ID:       att.ID,
+				FileName: att.FileName,
+				FileType: att.FileType,
+				Size:     att.Size,
+			}
+		}
 	}
 
 	// Unmarshal ToolCalls if present
@@ -76,6 +104,7 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 
 	var message Message
 	if err := s.DB.WithContext(ctx).
+		Preload("Attachments").
 		Where("messages.id = ?", messageID).
 		First(&message).Error; err != nil {
 		return nil, err
@@ -91,6 +120,19 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 		CreatedAt: message.CreatedAt,
 	}
 
+	// Map attachments
+	if len(message.Attachments) > 0 {
+		result.Attachments = make([]chat.Attachment, len(message.Attachments))
+		for i, att := range message.Attachments {
+			result.Attachments[i] = chat.Attachment{
+				ID:       att.ID,
+				FileName: att.FileName,
+				FileType: att.FileType,
+				Size:     att.Size,
+			}
+		}
+	}
+
 	// Unmarshal ToolCalls if present
 	if len(message.ToolCalls) > 0 {
 		var toolCalls interface{}
@@ -104,6 +146,7 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 
 func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, limit ...int) ([]*chat.Message, error) {
 	query := s.DB.WithContext(ctx).
+		Preload("Attachments").
 		Joins("JOIN chats ON messages.chat_id = chats.id").
 		Where("messages.chat_id = ? AND chats.user_id = ?", chatID, userID).
 		Order("messages.created_at ASC")
@@ -128,6 +171,19 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 			Sender:    msg.UserID,
 			Model:     msg.Model,
 			CreatedAt: msg.CreatedAt,
+		}
+
+		// Map attachments
+		if len(msg.Attachments) > 0 {
+			m.Attachments = make([]chat.Attachment, len(msg.Attachments))
+			for j, att := range msg.Attachments {
+				m.Attachments[j] = chat.Attachment{
+					ID:       att.ID,
+					FileName: att.FileName,
+					FileType: att.FileType,
+					Size:     att.Size,
+				}
+			}
 		}
 
 		// Unmarshal ToolCalls if present
