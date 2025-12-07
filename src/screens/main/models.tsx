@@ -34,6 +34,8 @@ export type Message = {
     actions?: any[]
     importance?: string
     metadata?: Record<string, any>
+    tool_calls?: any[]
+    model?: string
 }
 
 export type Frame = {

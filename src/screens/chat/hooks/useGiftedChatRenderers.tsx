@@ -7,6 +7,7 @@ import { createChatTheme, createMarkdownStyles } from '../theme';
 import { ThemeColors } from '../../../themes/types';
 import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { ToolCallsSection } from '../message/ToolCalls';
 
 interface GiftedChatRenderersParams {
     assistantContainerMaxWidth: string;
@@ -133,22 +134,31 @@ export function useGiftedChatRenderers({
         );
     }, [assistantContainerMaxWidth]);
 
+
+
     const renderMessageText = useCallback((props: any) => {
         const isAssistant = props.currentMessage?.user?._id === 'assistant';
+        const toolCalls = props.currentMessage?.tool_calls;
+
         if (!isAssistant) {
             return <MessageText {...props} />;
         }
 
         return (
-            <Markdown
-                style={markdownStyles as any}
-                onLinkPress={url => {
-                    Linking.openURL(url).catch(() => { });
-                    return false;
-                }}
-            >
-                {props.currentMessage?.text || ''}
-            </Markdown>
+            <View>
+                {toolCalls && toolCalls.length > 0 && (
+                    <ToolCallsSection toolCalls={toolCalls} />
+                )}
+                <Markdown
+                    style={markdownStyles as any}
+                    onLinkPress={url => {
+                        Linking.openURL(url).catch(() => { });
+                        return false;
+                    }}
+                >
+                    {props.currentMessage?.text || ''}
+                </Markdown>
+            </View>
         );
     }, [markdownStyles]);
 

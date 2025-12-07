@@ -4,6 +4,14 @@ export type Message = {
     sender: string;
     role: 'user' | 'assistant' | 'system';
     text: string;
+    tool_calls?: ToolCall[];
+    model?: string;
+};
+
+export type ToolCall = {
+    name: string;
+    arguments?: any;
+    result?: any;
 };
 
 export type Chat = {
