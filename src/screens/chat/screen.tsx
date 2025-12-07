@@ -16,10 +16,28 @@ import { useGiftedChatRenderers } from './hooks/useGiftedChatRenderers';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatSidebar } from './sidebar/screen';
 import { useTheme } from '../../context/ThemeContext';
+import { Skeleton } from '../../components/Skeleton';
+
+function MessageListSkeleton() {
+    return (
+        <View style={{ flex: 1, padding: 16, justifyContent: 'flex-end' }}>
+            <View style={{ alignSelf: 'flex-end', alignItems: 'flex-end', marginBottom: 16, width: '70%' }}>
+                <Skeleton width="100%" height={60} borderRadius={16} style={{ borderBottomRightRadius: 4 }} />
+            </View>
+            <View style={{ alignSelf: 'flex-start', alignItems: 'flex-start', marginBottom: 16, width: '70%' }}>
+                <Skeleton width="100%" height={80} borderRadius={16} style={{ borderBottomLeftRadius: 4 }} />
+            </View>
+            <View style={{ alignSelf: 'flex-end', alignItems: 'flex-end', marginBottom: 16, width: '50%' }}>
+                <Skeleton width="100%" height={40} borderRadius={16} style={{ borderBottomRightRadius: 4 }} />
+            </View>
+        </View>
+    );
+}
 
 export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () => void }) {
     const {
         messages,
+        messagesLoading,
         sendMessage,
         assistantWorking,
         externalTitle,
@@ -34,7 +52,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
-    const { chats, activeChatID, setActiveChatID, getChats, createNewChat, renameChat, deleteChat } = useMain();
+    const { chats, chatsLoading, activeChatID, setActiveChatID, getChats, createNewChat, renameChat, deleteChat } = useMain();
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
 
@@ -192,6 +210,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         variant="inline"
                         width={sidebarWidth}
                         chats={sortedChats}
+                        chatsLoading={chatsLoading}
                         activeChatID={activeChatID}
                         onSelectChat={handleSelectChat}
                         onNewChat={handleNewChat}
@@ -212,30 +231,34 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         style={{ flex: 1 }}
                         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     >
-                        <GiftedChat
-                            messages={giftedMessages}
-                            onSend={handleSend}
-                            user={currentUser}
-                            renderMessage={renderMessage}
-                            renderBubble={renderBubble}
-                            renderMessageText={renderMessageText}
-                            renderInputToolbar={renderInputToolbar}
-                            isTyping={assistantWorking}
-                            renderFooter={renderFooter}
-                            // @ts-ignore
-                            inverted={true}
-                            minInputToolbarHeight={60}
-                            maxComposerHeight={100}
-                            renderAvatar={null}
-                            messagesContainerStyle={styles.messagesContainer}
-                            placeholder="Type a message..."
-                            scrollToBottom
-                            alwaysShowSend
-                            isAlignedTop={false}
-                            isScrollToBottomEnabled={true}
-                            timeFormat="HH:mm"
-                            onLongPress={onLongPressMessage}
-                        />
+                        {messagesLoading ? (
+                            <MessageListSkeleton />
+                        ) : (
+                            <GiftedChat
+                                messages={giftedMessages}
+                                onSend={handleSend}
+                                user={currentUser}
+                                renderMessage={renderMessage}
+                                renderBubble={renderBubble}
+                                renderMessageText={renderMessageText}
+                                renderInputToolbar={renderInputToolbar}
+                                isTyping={assistantWorking}
+                                renderFooter={renderFooter}
+                                // @ts-ignore
+                                inverted={true}
+                                minInputToolbarHeight={60}
+                                maxComposerHeight={100}
+                                renderAvatar={null}
+                                messagesContainerStyle={styles.messagesContainer}
+                                placeholder="Type a message..."
+                                scrollToBottom
+                                alwaysShowSend
+                                isAlignedTop={false}
+                                isScrollToBottomEnabled={true}
+                                timeFormat="HH:mm"
+                                onLongPress={onLongPressMessage}
+                            />
+                        )}
                     </KeyboardAvoidingView>
 
                     {/* Edge Swipe Detector */}
@@ -262,6 +285,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                     visible={true} // Always mounted, controlled by transform
                     width={sidebarWidth}
                     chats={sortedChats}
+                    chatsLoading={chatsLoading}
                     activeChatID={activeChatID}
                     onClose={handleCloseMenu}
                     onSelectChat={handleSelectChat}

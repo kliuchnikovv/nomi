@@ -5,6 +5,7 @@ export interface ChatSidebarProps {
     width: number;
     visible?: boolean;
     chats: Chat[];
+    chatsLoading?: boolean;
     activeChatID?: string | null;
     onClose?: () => void;
     onSelectChat: (chatId: string) => void;

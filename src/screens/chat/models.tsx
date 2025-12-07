@@ -20,6 +20,7 @@ export interface MainContextType {
 
 export interface ChatContextType {
     messages: Message[];
+    messagesLoading: boolean;
     getMessages: (chatId: string) => void;
     sendMessage: (text: string) => void;
     executeMessageAction: (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => Promise<void>;
