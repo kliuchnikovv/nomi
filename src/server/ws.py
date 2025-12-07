@@ -575,6 +575,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     user_message_id=frame.message_id or "",
                     chat_history=chat_history,
                     current_model_name=current_model_name,
+                    attachments=payload.get("attachments"),
                 )
         except WebSocketDisconnect:
             # Клиент отвалился — нормальный сценарий
@@ -592,7 +593,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
 
     return r
 
-async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] = None, chat_history: Optional[list] = None):
+async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] = None, chat_history: Optional[list] = None, attachments: Optional[list] = None):
     """Async generator yielding text chunks from the agent.
 
     Tries to use stream=True where supported; handles async/sync iterators
@@ -622,6 +623,21 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             kwargs = {"stream": True}
             if session_id:
                 kwargs["session_id"] = session_id
+
+            # Process attachments
+            if attachments:
+                images = []
+                for att in attachments:
+                    if isinstance(att, dict):
+                        file_type = att.get("file_type", "")
+                        content = att.get("content", "")
+                        if file_type.startswith("image/") and content:
+                            # Construct data URI
+                            data_uri = f"data:{file_type};base64,{content}"
+                            images.append(data_uri)
+                if images:
+                    kwargs["images"] = images
+                    logger.info("[WS] 🖼️  Passing %d images to agent", len(images))
             
             # Build full message history including current user message
             full_messages = []
@@ -640,8 +656,8 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             logger.debug("[WS] Agent kwargs: stream=True, session_id=%s, messages_count=%d", session_id, len(full_messages))
             
             if asyncio.iscoroutinefunction(fn):
-                return await fn(full_messages, stream=True, stream_events=True, session_id=session_id)
-            return fn(full_messages, stream=True, stream_events=True, session_id=session_id)
+                return await fn(full_messages, stream=True, stream_events=True, session_id=session_id, **({"images": kwargs["images"]} if "images" in kwargs else {}))
+            return fn(full_messages, stream=True, stream_events=True, session_id=session_id, **({"images": kwargs["images"]} if "images" in kwargs else {}))
         except TypeError as e:
             # Fallback without stream or messages
             logger.warning("[WS] TypeError calling agent, falling back: %s", e)
@@ -940,17 +956,19 @@ async def _process_message(
     user_message_id: str,
     chat_history: Optional[list] = None,
     current_model_name: Optional[str] = None,
+    attachments: Optional[list] = None,
 ) -> int:
     message_id = str(uuid.uuid4())
 
     # Signal message start
     logger.info(
-        "[WS] Start message: sessionId=%s message_id=%s text_len=%d user_message_id=%s model=%s",
+        "[WS] Start message: sessionId=%s message_id=%s text_len=%d user_message_id=%s model=%s attachments=%d",
         session_id,
         message_id,
         len(text or ""),
         user_message_id,
         current_model_name,
+        len(attachments or []),
     )
     next_id = await _send_frame(
         websocket=websocket,
@@ -980,7 +998,7 @@ async def _process_message(
         else:
             logger.debug("[WS] No chat history provided: session_id=%s", session_id)
 
-        async for chunk in _run_agent_stream(agent, text or "", session_id=session_id, chat_history=chat_history):
+        async for chunk in _run_agent_stream(agent, text or "", session_id=session_id, chat_history=chat_history, attachments=attachments):
             # Skip empty or 'None' chunks
             if not chunk or chunk == "None":
                 if chunk == "None":
