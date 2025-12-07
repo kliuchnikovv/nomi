@@ -73,46 +73,6 @@ export const styles = StyleSheet.create({
     assistantTime: {
         color: theme.textSecondary,
     },
-    markdown: {
-        body: {
-            color: theme.textPrimary,
-            fontSize: 16,
-            lineHeight: 24,
-        },
-        link: {
-            color: theme.accent,
-        },
-        code_inline: {
-            backgroundColor: 'rgba(192, 202, 245, 0.1)',
-            paddingHorizontal: 4,
-            paddingVertical: 2,
-            borderRadius: 4,
-            fontFamily: 'Menlo',
-            fontSize: 14,
-        },
-        code_block: {
-            backgroundColor: 'rgba(192, 202, 245, 0.05)',
-            padding: 12,
-            borderRadius: 8,
-            marginVertical: 8,
-            fontFamily: 'Menlo',
-            fontSize: 14,
-        },
-        blockquote: {
-            borderLeftWidth: 3,
-            borderLeftColor: '#4b5263',
-            paddingLeft: 8,
-            color: theme.textPrimary,
-        },
-        heading1: {
-            fontSize: 22,
-            fontWeight: '600'
-        },
-        heading2: {
-            fontSize: 20,
-            fontWeight: '600'
-        },
-    },
     importanceBadge: {
         alignSelf: 'flex-start',
         backgroundColor: tokens.importanceBg,
@@ -144,4 +104,112 @@ export const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
+    toolCallsContainer: {
+        marginTop: 8,
+        backgroundColor: withAlpha(palette.blue, 0.08),
+        borderRadius: 8,
+        overflow: 'hidden',
+    },
+    toolCallsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 10,
+    },
+    toolCallsHeaderText: {
+        color: theme.textPrimary,
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    toolCallsExpandIcon: {
+        color: theme.textSecondary,
+        fontSize: 12,
+    },
+    toolCallsList: {
+        paddingHorizontal: 10,
+        paddingBottom: 10,
+    },
+    toolCallItem: {
+        backgroundColor: withAlpha(palette.bg, 0.3),
+        borderRadius: 6,
+        padding: 8,
+        marginTop: 6,
+    },
+    toolCallName: {
+        color: theme.accent,
+        fontSize: 13,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    toolCallArgs: {
+        color: theme.textSecondary,
+        fontSize: 11,
+        fontFamily: 'Menlo',
+    },
+    modelText: {
+        color: theme.textSecondary,
+        fontSize: 11,
+        marginTop: 6,
+        fontStyle: 'italic',
+    },
 });
+
+// Markdown styles - separate from StyleSheet.create() due to custom properties
+export const markdownStyles = {
+    body: {
+        color: theme.textPrimary,
+        fontSize: 16,
+        lineHeight: 24,
+    },
+    link: {
+        color: theme.accent,
+    },
+    code_inline: {
+        backgroundColor: 'rgba(192, 202, 245, 0.1)',
+        paddingHorizontal: 4,
+        paddingVertical: 2,
+        borderRadius: 4,
+        fontFamily: 'Menlo',
+        fontSize: 14,
+    },
+    code_block: {
+        backgroundColor: 'rgba(192, 202, 245, 0.05)',
+        padding: 12,
+        borderRadius: 8,
+        marginVertical: 8,
+        fontFamily: 'Menlo',
+        fontSize: 14,
+    },
+    blockquote: {
+        borderLeftWidth: 3,
+        borderLeftColor: '#4b5263',
+        paddingLeft: 8,
+        color: theme.textPrimary,
+    },
+    heading1: {
+        fontSize: 22,
+        fontWeight: '600'
+    },
+    heading2: {
+        fontSize: 20,
+        fontWeight: '600'
+    },
+    // Compact list styles to reduce spacing
+    bullet_list: {
+        marginTop: 4,
+        marginBottom: 4,
+    },
+    ordered_list: {
+        marginTop: 4,
+        marginBottom: 4,
+    },
+    list_item: {
+        marginTop: 2,
+        marginBottom: 2,
+        flexDirection: 'row',
+    },
+    paragraph: {
+        marginTop: 4,
+        marginBottom: 4,
+    },
+};

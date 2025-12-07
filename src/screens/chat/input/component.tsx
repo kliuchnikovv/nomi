@@ -61,6 +61,9 @@ export default function ChatInput(props: Props) {
     const isProcessing = voiceRecorder.state === 'processing';
 
     const showModelPicker = useCallback(() => {
+        console.log('showModelPicker called, availableModels:', availableModels);
+        console.log('current selectedModel:', selectedModel);
+
         const options = [
             ...availableModels.map(m => m.name),
             'Cancel'
@@ -74,12 +77,15 @@ export default function ChatInput(props: Props) {
                 title: 'Select Model',
             },
             (buttonIndex) => {
+                console.log('ActionSheet buttonIndex:', buttonIndex);
                 if (buttonIndex < availableModels.length) {
-                    setSelectedModel(availableModels[buttonIndex].id);
+                    const selectedModelId = availableModels[buttonIndex].id;
+                    console.log('Setting model to:', selectedModelId);
+                    setSelectedModel(selectedModelId);
                 }
             }
         );
-    }, [availableModels, setSelectedModel]);
+    }, [availableModels, setSelectedModel, selectedModel]);
 
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const selectedModelName = useMemo(() => {

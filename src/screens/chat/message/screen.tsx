@@ -8,10 +8,11 @@ import {
     View,
     ViewStyle,
 } from 'react-native';
+import { ToolCallsSection } from './ToolCalls';
 import Markdown from 'react-native-markdown-display';
 import React, { useCallback } from 'react';
 import { Action, Props, Role } from './models'
-import { styles } from './styles.tsx';
+import { styles, markdownStyles } from './styles.tsx';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import Clipboard from '@react-native-clipboard/clipboard';
 
@@ -26,7 +27,7 @@ export default function MessageScreen(props: Props) {
         ActionSheetIOS.showActionSheetWithOptions(
             {
                 options: options,
-                cancelButtonIndex: options.length-1,
+                cancelButtonIndex: options.length - 1,
                 userInterfaceStyle: 'dark',
             },
             idx => idx === 0 && Clipboard.setString(text || ''),
@@ -55,7 +56,7 @@ export default function MessageScreen(props: Props) {
                 ]}
             >
                 <Markdown
-                    style={styles.markdownStyles as any}
+                    style={markdownStyles as any}
                     onLinkPress={url => {
                         Linking.openURL(url).catch(() => { });
                         return false;
@@ -64,6 +65,12 @@ export default function MessageScreen(props: Props) {
                     {props.message.text || ''}
                 </Markdown>
             </Pressable>
+            {props.message.tool_calls && props.message.tool_calls.length > 0 && (
+                <ToolCallsSection toolCalls={props.message.tool_calls} />
+            )}
+            {props.message.model && (
+                <Text style={styles.modelText}>Model: {props.message.model}</Text>
+            )}
             {props.importance && (
                 <View style={styles.importanceBadge}>
                     <Text style={styles.importanceText}>{props.importance}</Text>
@@ -87,6 +94,8 @@ export default function MessageScreen(props: Props) {
     );
 }
 
+
+
 export function ActionScreen({
     action,
     onActionPress,
@@ -96,7 +105,7 @@ export function ActionScreen({
     onActionPress?: (action: Action) => Promise<void>;
     messageID: string;
 }) {
-    const openWeb= useCallback(async (url: string) =>  {
+    const openWeb = useCallback(async (url: string) => {
         try {
             const isAvailable = await InAppBrowser.isAvailable();
             if (isAvailable) {

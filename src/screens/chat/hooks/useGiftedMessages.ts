@@ -2,7 +2,10 @@ import { useMemo } from 'react';
 import { IMessage } from 'react-native-gifted-chat';
 import { Message as GenieMessage } from '../../main/models';
 
-interface ExtendedIMessage extends IMessage {}
+interface ExtendedIMessage extends IMessage {
+    tool_calls?: any[];
+    model?: string;
+}
 
 const getTimestamp = (value?: number | string | null) => {
     if (!value) {
@@ -23,13 +26,15 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
             const isUserMessage = msg.role === 'user';
 
             return {
-                _id: String(msg.id || `${msg.created_at}-${msg.role}`),
+                _id: String(msg.id || `${msg.created_at} -${msg.role} `),
                 text: msg.text.trimEnd() || '',
                 createdAt: new Date(msg.created_at || Date.now()),
                 user: {
                     _id: isUserMessage ? (userId || 'user') : 'assistant',
                     name: isUserMessage ? 'You' : 'Assistant',
                 },
+                tool_calls: msg.tool_calls,
+                model: msg.model,
             };
         });
     }, [messages, userId]);
