@@ -18,6 +18,14 @@ export type Message = {
     actions?: Action[]
     importance?: string
     metadata?: Record<string, any>
+    tool_calls?: ToolCall[]
+    model?: string
+}
+
+export type ToolCall = {
+    name: string
+    arguments?: any
+    result?: any
 }
 
 export type Action = {

@@ -76,7 +76,7 @@ export class ChatSocket {
     }
 
     open(initialQ?: string, initialSessionId?: string) {
-        // const chatId = this.getChatId();
+        const chatId = this.getChatId();
         const token = this.getToken();
         // messageId is per-message and should not be required to open a long-lived socket
         // const messageId = this.getMessageId();
@@ -93,10 +93,8 @@ export class ChatSocket {
         }
 
         const qs = new URLSearchParams();
-        // qs.set('chatId', chatId);
+        qs.set('chat_id', chatId);
         if (token) qs.set('token', token);
-        // if (messageId) qs.set('messageId', messageId);
-        // if (initialQ) qs.set('q', initialQ);
         if (initialSessionId) qs.set('sessionId', initialSessionId);
 
         // Add model parameter if selected
@@ -264,6 +262,7 @@ export class ChatSocket {
     sendMessage(message: string, sessionId: string, messageID?: string) {
         console.log('Sending message:', message, sessionId);
         const chatID = this.getChatId();
+        const model = this.getModel();
         // const messageID = this.getMessageId();
         if (!chatID) return;
 
@@ -277,6 +276,7 @@ export class ChatSocket {
             payload: {
                 message_id: messageID,
                 message: message,
+                model: model, // Include user's model choice
                 sessionId: sessionId, // Keep sending for server-side logging if needed
             },
         };
@@ -322,6 +322,32 @@ export class ChatSocket {
         };
         this.sentCommandFrame = true;
         this.outbox.unshift(frame);
+    }
+
+    changeModel(newModel: string) {
+        if (!this.isReady()) {
+            console.warn('Cannot change model: WebSocket not ready');
+            return;
+        }
+
+        const chatID = this.getChatId();
+        const frame = {
+            id: 0,
+            kind: 'meta',
+            op: 'model',
+            chat_id: chatID,
+            payload: {
+                model: newModel,
+            },
+        };
+
+        try {
+            console.log('Changing model to:', newModel);
+            this.ws.send(JSON.stringify(frame));
+            this.touchActivity();
+        } catch (err) {
+            console.error('Failed to send model change frame:', err);
+        }
     }
 
     close() {

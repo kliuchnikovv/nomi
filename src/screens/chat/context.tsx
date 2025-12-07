@@ -90,7 +90,20 @@ export function ChatProvider({
     }, []);
 
     // Model selection state
-    const [selectedModel, setSelectedModel] = useState<string | null>('gemini-2.0-flash-exp');
+    const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash-exp');
+    const selectedModelRef = useRef<string | null>('gemini-2.0-flash-exp');
+
+    const setSelectedModel = useCallback((model: string) => {
+        console.log('setSelectedModel called with:', model);
+        setSelectedModelInternal(model);
+        selectedModelRef.current = model;
+
+        // Notify WebSocket about model change if connection is active
+        if (socketRef.current) {
+            console.log('Notifying WebSocket about model change to:', model);
+            socketRef.current.changeModel(model);
+        }
+    }, []);
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
 
     // Error state management
@@ -388,12 +401,16 @@ export function ChatProvider({
         let messageID: string;
 
         try {
+            const model = selectedModelRef.current;
+            console.log('Creating message with model:', model);
+
             const created = await apiClient.post<{ id: string }>(
                 `${API_URL}/chats/${chatID}/messages`,
                 {
                     chat_id: chatID,
                     role: 'user',
                     text: text,
+                    model: model,
                 },
             );
             if (created?.id) {
@@ -422,12 +439,17 @@ export function ChatProvider({
     );
 
     function newWebSocket(tkn: string, chatID: string) {
+        console.log('Creating new WebSocket with model:', selectedModel);
         const sock = new ChatSocket(
             API_URL,
             () => tkn,
             () => pluginThreadMeta ? String(pluginThreadMeta.chatId) : chatID,
             () => currentMessageID,
-            () => selectedModel,
+            () => {
+                const model = selectedModelRef.current;
+                console.log('getModel() returning:', model);
+                return model;
+            },
             () => pluginThreadMeta ? 'inbox' : 'chat',
             () => chatMode,
             () => teamCommand,
@@ -442,7 +464,7 @@ export function ChatProvider({
             },
             onMeta: (frame: Frame) => {
                 console.log('onMeta: received message', frame);
-                // meta используется для побочных данных; chat_id теперь создаём явно через REST
+                setMessages(prevMessages => onReceivedMeta(frame, prevMessages));
             },
             onDone: (frame: Frame) => {
                 console.log(`onDone: received message`, frame);
@@ -494,11 +516,45 @@ export function ChatProvider({
         }
 
         if (!frame.payload.eof) {
-            newMessages[messageIdx].text += frame.payload.message
+            newMessages[messageIdx] = {
+                ...newMessages[messageIdx],
+                text: newMessages[messageIdx].text + frame.payload.message
+            };
             console.log("frame captured", frame.payload.message, frame);
-            console.log("newMessage", prevMessages, newMessages);
         } else {
             setAssistantWorking(false);
+        }
+
+        return newMessages;
+    }
+
+    function onReceivedMeta(frame: Frame, prevMessages: Message[]) {
+        let newMessages: Message[] = [...prevMessages];
+        const payload = frame.payload;
+
+        if (!payload.message_id) return newMessages;
+
+        const messageIdx = newMessages.findIndex(m => m.id === payload.message_id);
+        if (messageIdx === -1) return newMessages;
+
+        if (payload.type === 'metadata') { // Handling tool_calls and model
+            newMessages[messageIdx] = {
+                ...newMessages[messageIdx],
+                tool_calls: payload.tool_calls,
+                model: payload.model || newMessages[messageIdx].model
+            };
+        } else if (payload.type === 'usage') {
+            newMessages[messageIdx] = {
+                ...newMessages[messageIdx],
+                metadata: {
+                    ...newMessages[messageIdx].metadata,
+                    usage: {
+                        prompt_tokens: payload.prompt_tokens,
+                        completion_tokens: payload.completion_tokens,
+                        elapsed_ms: payload.elapsed_ms
+                    }
+                }
+            };
         }
 
         return newMessages;
