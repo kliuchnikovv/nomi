@@ -8,12 +8,27 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: 20,
     },
-    title: {
-        fontSize: 28,
+    logo: {
+        fontSize: 32,
         fontWeight: 'bold',
         color: tokyoNight.text,
-        marginBottom: 32,
         textAlign: 'center',
+        marginBottom: 8,
+    },
+    subtitle: {
+        fontSize: 16,
+        color: tokyoNight.fadedText,
+        textAlign: 'center',
+        marginBottom: 32,
+    },
+    formContainer: {
+        width: '100%',
+    },
+    label: {
+        fontSize: 14,
+        color: tokyoNight.text,
+        marginBottom: 8,
+        marginLeft: 4,
     },
     inputContainer: {
         marginBottom: 16,
@@ -39,6 +54,9 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 8,
     },
+    buttonPressed: {
+        opacity: 0.8,
+    },
     buttonText: {
         color: tokyoNightPalette.bg, // Dark text on bright button
         fontSize: 16,
@@ -51,30 +69,7 @@ export const styles = StyleSheet.create({
     switchButtonText: {
         color: tokyoNight.accent,
         fontSize: 14,
-    },
-    tabContainer: {
-        flexDirection: 'row',
-        marginBottom: 32,
-        backgroundColor: 'rgba(192, 202, 245, 0.06)',
-        borderRadius: 12,
-        padding: 4,
-    },
-    tab: {
-        flex: 1,
-        paddingVertical: 10,
-        alignItems: 'center',
-        borderRadius: 10,
-    },
-    activeTab: {
-        backgroundColor: 'rgba(192, 202, 245, 0.1)',
-    },
-    tabText: {
-        color: tokyoNight.fadedText,
         fontWeight: '600',
-        fontSize: 14,
-    },
-    activeTabText: {
-        color: tokyoNight.text,
     },
     googleButton: {
         flexDirection: 'row',
@@ -87,7 +82,7 @@ export const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(192, 202, 245, 0.1)',
     },
-    dividerContainer: {
+    divider: {
         flexDirection: 'row',
         alignItems: 'center',
         marginVertical: 24,

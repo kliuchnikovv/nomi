@@ -92,11 +92,15 @@ export function ChatProvider({
     // Model selection state
     const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash-exp');
     const selectedModelRef = useRef<string | null>('gemini-2.0-flash-exp');
+    const manualModelSelectionRef = useRef<boolean>(false);
 
-    const setSelectedModel = useCallback((model: string) => {
-        console.log('setSelectedModel called with:', model);
+    const setSelectedModel = useCallback((model: string, isManual: boolean = true) => {
+        console.log('setSelectedModel called with:', model, 'isManual:', isManual);
         setSelectedModelInternal(model);
         selectedModelRef.current = model;
+        if (isManual) {
+            manualModelSelectionRef.current = true;
+        }
 
         // Notify WebSocket about model change if connection is active
         if (socketRef.current) {
@@ -125,6 +129,27 @@ export function ChatProvider({
             }
 
             setMessages(data);
+
+            // Sync model from last assistant message or any message that has a model field
+            if (!manualModelSelectionRef.current && data.length > 0) {
+                // Find the last message that has a model defined
+                let lastModel = null;
+                for (let i = data.length - 1; i >= 0; i--) {
+                    if (data[i].model) {
+                        lastModel = data[i].model;
+                        break;
+                    }
+                }
+
+                if (lastModel) {
+                    console.log('Syncing model from history:', lastModel);
+                    setSelectedModel(lastModel, false);
+                } else {
+                    console.log('No model found in history, resetting to default');
+                    setSelectedModel('gemini-2.0-flash-exp', false);
+                }
+            }
+
         } catch (error) {
             // alertError(`Failed to fetch messages for chat: ${error}`);
             console.error(
@@ -132,7 +157,7 @@ export function ChatProvider({
                 error,
             );
         }
-    }, []);
+    }, [setSelectedModel]);
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
@@ -150,6 +175,8 @@ export function ChatProvider({
             setPluginThreadMeta(null);
         }
         setExternalTitle(null);
+        // Reset manual selection flag when switching chats
+        manualModelSelectionRef.current = false;
         if (!activeChatID || activeChatID === emptyChatID) {
             setMessages([]);
             return;
@@ -238,8 +265,9 @@ export function ChatProvider({
     }, [pluginThreadMeta, mapPluginMessage]);
 
     const sendStreamingMessage = useCallback(
-        async (text: string) => {
-            if (!text.trim() || !user?.id) return;
+        async (text: string, attachments: any[] = []) => {
+            if (!text.trim() && attachments.length === 0) return;
+            if (!user?.id) return;
 
             // Clear error when sending a new message
             setError(null);
@@ -248,6 +276,16 @@ export function ChatProvider({
             let chatIdToUse = activeChatID;
             let messageID: string | undefined;
             const timestamp = Date.now();
+            const attachmentIDs = attachments.map(a => a.id);
+
+            // Map local attachments to model Attachment type
+            const modelAttachments = attachments.map(a => ({
+                id: a.id,
+                file_name: a.name,
+                file_type: a.type,
+                size: 0, // Unknown size for local
+                uri: a.uri
+            }));
 
             if (pluginThreadMeta) {
                 chatIdToUse = String(pluginThreadMeta.chatId);
@@ -260,6 +298,7 @@ export function ChatProvider({
                     role: 'user',
                     text: text.trim(),
                     created_at: timestamp,
+                    attachments: modelAttachments,
                 };
                 setMessages(prev => [...prev, newUserMessage]);
                 // We do not call sidebarApi.sendChatMessage anymore.
@@ -276,7 +315,7 @@ export function ChatProvider({
                     return;
                 }
 
-                messageID = await createMessage(text, chatIdToUse);
+                messageID = await createMessage(text, chatIdToUse, attachmentIDs);
                 if (!messageID) {
                     console.error('Failed to create message before sending via WebSocket');
                     setError('Не удалось создать сообщение');
@@ -291,6 +330,7 @@ export function ChatProvider({
                     role: 'user',
                     text: text.trim(),
                     created_at: timestamp,
+                    attachments: modelAttachments,
                 };
 
                 setMessages(prevMessages => [
@@ -321,7 +361,7 @@ export function ChatProvider({
                 setError('Ошибка отправки сообщения');
                 return;
             }
-            socketRef.current!.sendMessage(text.trim(), sessionId, messageID);
+            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs);
             console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
         },
         [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token],
@@ -341,7 +381,6 @@ export function ChatProvider({
             console.error('Failed to execute plugin action', err);
         }
     }, [pluginThreadMeta, refreshPluginThread]);
-
 
     const startPluginThread = useCallback(async ({ provider, chatId, title, integrationId, integrationName, messages: preloadedMessages }: { provider: string; chatId: string | number; title?: string | null; integrationId?: string; integrationName?: string | null; messages?: any[] }) => {
         setPluginThreadMeta({ provider, chatId, integrationId, integrationName });
@@ -366,8 +405,6 @@ export function ChatProvider({
         }
     }, [setActiveChatID, mapPluginMessage, setChatMode, setTeamCommand]);
 
-
-
     async function createChat(title: string) {
         let chatID: string;
 
@@ -382,7 +419,6 @@ export function ChatProvider({
             if (created?.id) {
                 chatID = created.id;
                 setActiveChatID(created.id);
-                // подтянуть список чатов, чтобы отобразился новый
                 // getChats();
             } else {
                 console.error('Chat create returned no id', created);
@@ -390,14 +426,13 @@ export function ChatProvider({
             }
         } catch (e) {
             console.error('Failed to create chat before sending:', e);
-            // alertError(`Не удалось создать чат: ${e}` as any);
             return;
         }
 
         return chatID;
     }
 
-    async function createMessage(text: string, chatID: string) {
+    async function createMessage(text: string, chatID: string, attachmentIDs?: string[]) {
         let messageID: string;
 
         try {
@@ -411,6 +446,7 @@ export function ChatProvider({
                     role: 'user',
                     text: text,
                     model: model,
+                    attachment_ids: attachmentIDs,
                 },
             );
             if (created?.id) {
@@ -423,7 +459,6 @@ export function ChatProvider({
             }
         } catch (e) {
             console.error('Failed to create message before sending:', e);
-            // alertError(`Не удалось создать сообщение: ${e}` as any);
             return;
         }
 
@@ -432,8 +467,8 @@ export function ChatProvider({
 
     // Modify sendMessage to use sendStreamingMessage
     const sendMessage = useCallback(
-        async (text: string) => {
-            await sendStreamingMessage(text);
+        async (text: string, attachments: any[] = []) => {
+            await sendStreamingMessage(text, attachments);
         },
         [sendStreamingMessage],
     );
@@ -480,7 +515,7 @@ export function ChatProvider({
                     (typeof err === 'string' ? err : null) ||
                     'Ошибка соединения';
                 setError(message);
-                alertError(message);
+                // alertError(message);
             },
             onUnauthorized: async () => {
                 return await refreshToken();

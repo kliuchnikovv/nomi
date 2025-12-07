@@ -7,14 +7,53 @@ import {
     TextStyle,
     View,
     ViewStyle,
+    Image,
+    ActivityIndicator
 } from 'react-native';
 import { ToolCallsSection } from './ToolCalls';
 import Markdown from 'react-native-markdown-display';
-import React, { useCallback } from 'react';
-import { Action, Props, Role } from './models'
+import React, { useCallback, useState, useEffect } from 'react';
+import { Action, Props, Role, Attachment } from './models'
 import { styles, markdownStyles } from './styles.tsx';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import Clipboard from '@react-native-clipboard/clipboard';
+import { authStore } from '../../../apiClient';
+import { API_URL } from '../../../config';
+
+function AttachmentImage({ attachment }: { attachment: Attachment }) {
+    const [token, setToken] = useState<string | null>(authStore.getToken());
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        // Ensure we have a token (or handle refresh if possible, but simplest is to get current)
+        setToken(authStore.getToken());
+    }, []);
+
+    if (!token) return <View style={{ width: 100, height: 100, backgroundColor: '#333' }} />;
+
+    const source = attachment.uri
+        ? { uri: attachment.uri }
+        : {
+            uri: `${API_URL}/attachments/${attachment.id}`,
+            headers: { Authorization: `Bearer ${token}` }
+        };
+
+    return (
+        <View style={{ width: 150, height: 150, borderRadius: 8, overflow: 'hidden', backgroundColor: '#000' }}>
+            <Image
+                source={source}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+                onLoadEnd={() => setLoading(false)}
+            />
+            {loading && (
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+                    <ActivityIndicator color="#fff" />
+                </View>
+            )}
+        </View>
+    );
+}
 
 export default function MessageScreen(props: Props) {
     const onLongPressMsg = (text: string) => {
@@ -35,9 +74,9 @@ export default function MessageScreen(props: Props) {
     };
 
     const containerStylesByType: Record<Role, (ViewStyle | TextStyle | ImageStyle)[]> = {
-        user: [styles.bubble, styles.bubbleUser],
-        assistant: [styles.assistantContainer],
-        daemon: [styles.daemonContainer]
+        user: [styles.bubble, styles.userBubble],
+        assistant: [styles.bubble, styles.assistantBubble],
+        daemon: [styles.bubble, styles.bubbleDaemon]
     };
 
     const isDaemon = props.message.role === 'daemon';
@@ -51,7 +90,6 @@ export default function MessageScreen(props: Props) {
                 onLongPress={() => onLongPressMsg(props.message.text)}
                 delayLongPress={250}
                 style={({ pressed }) => [
-                    isDaemon && [styles.bubble, styles.bubbleDaemon],
                     pressed && { opacity: 0.75 },
                 ]}
             >
@@ -67,6 +105,21 @@ export default function MessageScreen(props: Props) {
             </Pressable>
             {props.message.tool_calls && props.message.tool_calls.length > 0 && (
                 <ToolCallsSection toolCalls={props.message.tool_calls} />
+            )}
+            {props.message.attachments && props.message.attachments.length > 0 && (
+                <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {props.message.attachments.map(att => (
+                        <View key={att.id}>
+                            {att.file_type.startsWith('image/') ? (
+                                <AttachmentImage attachment={att} />
+                            ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', padding: 8, borderRadius: 8 }}>
+                                    <Text>{att.file_name}</Text>
+                                </View>
+                            )}
+                        </View>
+                    ))}
+                </View>
             )}
             {props.message.model && (
                 <Text style={styles.modelText}>Model: {props.message.model}</Text>

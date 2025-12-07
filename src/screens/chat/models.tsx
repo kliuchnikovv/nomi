@@ -21,7 +21,7 @@ export interface MainContextType {
 export interface ChatContextType {
     messages: Message[];
     getMessages: (chatId: string) => void;
-    sendMessage: (text: string) => void;
+    sendMessage: (text: string, attachmentIDs?: string[]) => void;
     executeMessageAction: (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => Promise<void>;
     assistantWorking: boolean;
     externalTitle?: string | null;
@@ -36,7 +36,7 @@ export interface ChatContextType {
     isPluginThread: boolean;
     pluginThreadMeta?: { provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null;
     selectedModel: string | null;
-    setSelectedModel: (model: string) => void;
+    setSelectedModel: (model: string, isManual?: boolean) => void;
     availableModels: Model[];
     chatMode: 'agent' | 'team';
     setChatMode: (mode: 'agent' | 'team') => void;

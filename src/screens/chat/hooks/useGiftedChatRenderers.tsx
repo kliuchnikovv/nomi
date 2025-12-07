@@ -4,6 +4,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
 import { createChatTheme, createMarkdownStyles } from '../theme';
+import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ThemeColors } from '../../../themes/types';
 import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -151,8 +152,24 @@ export function useGiftedChatRenderers({
                 )}
                 <Markdown
                     style={markdownStyles as any}
-                    onLinkPress={url => {
-                        Linking.openURL(url).catch(() => { });
+                    onLinkPress={(url) => {
+                        const openLink = async () => {
+                            try {
+                                if (await InAppBrowser.isAvailable()) {
+                                    await InAppBrowser.open(url, {
+                                        showTitle: true,
+                                        dismissButtonStyle: 'close',
+                                        modalEnabled: true,
+                                        enableDefaultShare: false,
+                                    });
+                                } else {
+                                    await Linking.openURL(url);
+                                }
+                            } catch {
+                                await Linking.openURL(url).catch(() => { });
+                            }
+                        };
+                        openLink();
                         return false;
                     }}
                 >

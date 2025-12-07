@@ -9,47 +9,29 @@ import {
 import { styles } from './styles.tsx';
 import React from 'react';
 import { Props, CONNECTORS } from './models.tsx';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { NavArrowRight } from 'iconoir-react-native';
+import { NavArrowRight, Mail, Calendar, WarningCircle, Trash } from 'iconoir-react-native';
 import { useConnectors } from './context.tsx';
 import { tokyoNightPalette } from '../../../themes/tokyoNight.ts';
-import { pluginsApi } from '../../../apiClient.ts';
+
+
 
 
 export default function ConnectorScreenDialog({ onClose }: Props) {
     const { integrations, startOAuth, deleteIntegration } = useConnectors();
-    const [gmailSyncing, setGmailSyncing] = React.useState(false);
-    const [gmailMessage, setGmailMessage] = React.useState<string | null>(null);
+    const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
     const gmailIntegrations = React.useMemo(
         () => integrations.filter(p => p.provider === 'gmail'),
         [integrations],
     );
-    const otherIntegrations = React.useMemo(
-        () => integrations.filter(p => p.provider !== 'gmail' && p.provider !== 'imap'),
+    const calendarIntegrations = React.useMemo(
+        () => integrations.filter(p => p.provider === 'calendar'),
         [integrations],
     );
-    const hasConnectedGmail = gmailIntegrations.some(p => p.connected);
+    const otherIntegrations = React.useMemo(
+        () => integrations.filter(p => p.provider !== 'gmail' && p.provider !== 'imap' && p.provider !== 'calendar'),
+        [integrations],
+    );
 
-    const handleGmailSync = async () => {
-        setGmailMessage(null);
-        if (gmailIntegrations.length === 0) {
-            setGmailMessage('Gmail plugin is not available');
-            return;
-        }
-        if (!hasConnectedGmail) {
-            setGmailMessage('Connect Gmail first');
-            return;
-        }
-        setGmailSyncing(true);
-        try {
-            const response = await pluginsApi.syncGmail();
-            setGmailMessage(response?.message ? `Status: ${response.message}` : 'Sync triggered');
-        } catch (error) {
-            setGmailMessage(error instanceof Error ? error.message : 'Failed to sync Gmail');
-        } finally {
-            setGmailSyncing(false);
-        }
-    };
 
     // Получаем enabled tools и disabled tools отдельно
     const enabledTools = otherIntegrations.filter(t => t.connected);
@@ -73,12 +55,22 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
     };
 
     const handleAddGmailAccount = async () => {
-        setGmailMessage(null);
+        setErrorMsg(null);
         try {
             await startOAuth('gmail');
         } catch (err) {
             console.warn('Failed to start Gmail OAuth', err);
-            setGmailMessage(err instanceof Error ? err.message : 'Failed to start Gmail OAuth');
+            setErrorMsg(err instanceof Error ? err.message : 'Failed to start Gmail OAuth');
+        }
+    };
+
+    const handleAddCalendarAccount = async () => {
+        setErrorMsg(null);
+        try {
+            await startOAuth('calendar');
+        } catch (err) {
+            console.warn('Failed to start Google Calendar OAuth', err);
+            setErrorMsg(err instanceof Error ? err.message : 'Failed to start Google Calendar OAuth');
         }
     };
 
@@ -125,6 +117,45 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                             <View style={styles.emptyRow}>
                                 <Text style={styles.emptyText}>
                                     No Gmail accounts connected yet
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionTitle}>Google Calendar</Text>
+                        <Pressable
+                            style={styles.addAccountButton}
+                            onPress={handleAddCalendarAccount}
+                            accessibilityLabel="Add Google Calendar account"
+                        >
+                            <Text style={styles.addAccountButtonText}>Add account</Text>
+                        </Pressable>
+                    </View>
+                    <View style={styles.card}>
+                        {calendarIntegrations.map((integration, i) => {
+                            const details = getConnectorDetails(integration.provider);
+                            return (
+                                <View key={integration.id}>
+                                    <Item
+                                        name={integration.name}
+                                        enabled={!!integration.connected}
+                                        glyph={details?.glyph || 'calendar'}
+                                        color={details?.color || tokyoNightPalette.orange}
+                                        configID={integration.id}
+                                        statusText={getIntegrationStatus(integration)}
+                                        onDelete={() => deleteIntegration(integration.id)}
+                                    />
+                                    {i < calendarIntegrations.length - 1 && (
+                                        <View style={styles.divider} />
+                                    )}
+                                </View>
+                            );
+                        })}
+                        {calendarIntegrations.length === 0 && (
+                            <View style={styles.emptyRow}>
+                                <Text style={styles.emptyText}>
+                                    No Google Calendar accounts connected yet
                                 </Text>
                             </View>
                         )}
@@ -184,40 +215,17 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                         </>
                     )}
 
-                    {gmailIntegrations.length > 0 && (
-                        <>
-                            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Inbox plugins</Text>
-                            <View style={styles.card}>
-                                <View style={styles.syncRow}>
-                                    <View style={styles.syncTextBlock}>
-                                        <Text style={styles.rowTitle}>Gmail</Text>
-                                        <Text style={styles.statusText}>Sync all connected Gmail inboxes</Text>
-                                    </View>
-                                    <Pressable
-                                        style={[styles.syncButton, gmailSyncing && styles.syncButtonDisabled]}
-                                        onPress={handleGmailSync}
-                                        disabled={gmailSyncing}
-                                    >
-                                        {gmailSyncing ? (
-                                            <ActivityIndicator size="small" color={tokyoNightPalette.black} />
-                                        ) : (
-                                            <Text style={styles.syncButtonText}>Sync now</Text>
-                                        )}
-                                    </Pressable>
-                                </View>
-                                {gmailMessage && (
-                                    <Text style={styles.syncStatus}>{gmailMessage}</Text>
-                                )}
-                            </View>
-                        </>
-                    )}
 
-                    {enabledTools.length === 0 && disabledTools.length === 0 && gmailIntegrations.length === 0 && (
+
+                    {enabledTools.length === 0 && disabledTools.length === 0 && gmailIntegrations.length === 0 && calendarIntegrations.length === 0 && (
                         <View style={styles.emptyRow}>
                             <Text style={styles.emptyText}>
                                 Нет доступных интеграций
                             </Text>
                         </View>
+                    )}
+                    {errorMsg && (
+                        <Text style={[styles.syncStatus, { marginTop: 20 }]}>{errorMsg}</Text>
                     )}
                 </ScrollView>
             </View>
@@ -254,7 +262,9 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
     return (
         <View style={styles.row}>
             <View style={[styles.iconBubble, { backgroundColor: color }]}>
-                <Icon name={glyph} size={20} color="#fff" />
+                {glyph === 'mail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph === 'calendar' && <Calendar width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph !== 'mail' && glyph !== 'calendar' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
             </View>
             <View style={styles.titleBlock}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
@@ -286,7 +296,7 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
                     onPress={onDelete}
                     style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.7 : 1 })}
                 >
-                    <Icon name="trash-can-outline" size={20} color="rgba(192, 202, 245, 0.8)" />
+                    <Trash width={20} height={20} color="rgba(192, 202, 245, 0.8)" strokeWidth={2} />
                 </Pressable>
             ) : (
                 <NavArrowRight

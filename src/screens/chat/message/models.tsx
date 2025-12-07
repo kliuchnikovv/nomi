@@ -20,6 +20,15 @@ export type Message = {
     metadata?: Record<string, any>
     tool_calls?: ToolCall[]
     model?: string
+    attachments?: Attachment[]
+}
+
+export type Attachment = {
+    id: string
+    file_name: string
+    file_type: string
+    size: number
+    content?: string
 }
 
 export type ToolCall = {

@@ -135,6 +135,10 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         handleCloseMenu();
     }, [createNewChat, handleCloseMenu]);
 
+    const dismissKeyboard = () => {
+        Keyboard.dismiss();
+    };
+
     // Gestures
 
     // Open gesture (edge swipe)
@@ -143,21 +147,21 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         .activeOffsetX([-10, 20]) // Activate if moved right > 20
         .failOffsetY([-20, 20]) // Fail if moved vertically
         .onStart(() => {
-             runOnJS(Keyboard.dismiss)();
-             runOnJS(getChats)({ preserveActiveChat: true });
+            runOnJS(dismissKeyboard)();
+            runOnJS(getChats)({ preserveActiveChat: true });
         })
         .onUpdate((e) => {
-             const newTranslate = -sidebarWidth + e.translationX;
-             sidebarTranslateX.value = Math.min(0, Math.max(-sidebarWidth, newTranslate));
+            const newTranslate = -sidebarWidth + e.translationX;
+            sidebarTranslateX.value = Math.min(0, Math.max(-sidebarWidth, newTranslate));
         })
         .onEnd((e) => {
-             if (sidebarTranslateX.value > -sidebarWidth * 0.6 || e.velocityX > 500) {
-                 sidebarTranslateX.value = withTiming(0);
-                 runOnJS(setSidebarVisible)(true);
-             } else {
-                 sidebarTranslateX.value = withTiming(-sidebarWidth);
-                 runOnJS(setSidebarVisible)(false);
-             }
+            if (sidebarTranslateX.value > -sidebarWidth * 0.6 || e.velocityX > 500) {
+                sidebarTranslateX.value = withTiming(0);
+                runOnJS(setSidebarVisible)(true);
+            } else {
+                sidebarTranslateX.value = withTiming(-sidebarWidth);
+                runOnJS(setSidebarVisible)(false);
+            }
         });
 
     // Close gesture (drag sidebar back)
@@ -167,21 +171,22 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         .activeOffsetX([-20, 1000]) // Activate when dragged left by 20px
         .failOffsetY([-10, 10]) // Fail on vertical scroll
         .onUpdate((e) => {
-             if (e.translationX < 0) { // Dragging left
-                 sidebarTranslateX.value = Math.min(0, Math.max(-sidebarWidth, e.translationX));
-             }
+            if (e.translationX < 0) { // Dragging left
+                sidebarTranslateX.value = Math.min(0, Math.max(-sidebarWidth, e.translationX));
+            }
         })
         .onEnd((e) => {
-             if (sidebarTranslateX.value < -sidebarWidth * 0.2 || e.velocityX < -500) {
-                 sidebarTranslateX.value = withTiming(-sidebarWidth);
-                 runOnJS(setSidebarVisible)(false);
-             } else {
-                 sidebarTranslateX.value = withTiming(0);
-                 runOnJS(setSidebarVisible)(true);
-             }
+            if (sidebarTranslateX.value < -sidebarWidth * 0.2 || e.velocityX < -500) {
+                sidebarTranslateX.value = withTiming(-sidebarWidth);
+                runOnJS(setSidebarVisible)(false);
+            } else {
+                sidebarTranslateX.value = withTiming(0);
+                runOnJS(setSidebarVisible)(true);
+            }
         });
 
-    const headerTitle = externalTitle || 'Gemini';
+    const activeChat = useMemo(() => chats.find(c => c.id === activeChatID), [chats, activeChatID]);
+    const headerTitle = externalTitle || activeChat?.title || 'New Chat';
     const headerSubtitle = assistantWorking ? 'Assistant is thinking…' : 'Available to help';
 
     return (
