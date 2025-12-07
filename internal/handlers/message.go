@@ -43,6 +43,8 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 		return
 	}
 
+	log.Printf("CreateMessage: payload has %d attachments. IDs: %v", len(newMessage.AttachmentIDs), newMessage.AttachmentIDs)
+
 	newMessage.ChatID = chatID
 	createdMessage, err := h.storage.CreateMessage(ctx, user.ID, &newMessage)
 	if err != nil {

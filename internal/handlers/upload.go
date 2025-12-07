@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -97,10 +98,12 @@ func (h *UploadHandler) GetAttachment(c *gin.Context) {
 	// Simple ownership check
 	if attachment.UserID != user.ID {
 		// Ideally also check if user has access to the message/chat this attachment belongs to
+		log.Printf("GetAttachment: Access denied for user %s to attachment %s (owner %s)", user.ID, id, attachment.UserID)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
 
 	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", attachment.FileName))
+	log.Printf("GetAttachment: Serving attachment %s (%s) %d bytes", attachment.ID, attachment.FileType, len(attachment.Content))
 	c.Data(http.StatusOK, attachment.FileType, attachment.Content)
 }
