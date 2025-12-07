@@ -31,7 +31,7 @@ func New(cfg *config.Config) (*Storage, error) {
 	if err := gdb.Exec(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`).Error; err != nil {
 		return nil, err
 	}
-	
+
 	// Auto-migrate models to keep schema in sync with GORM models.
 	if err := gdb.AutoMigrate(
 		&OAuthToken{},
@@ -45,6 +45,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Integration{},
 		&Inbox{},
 		&PluginChat{},
+		&Attachment{},
 	); err != nil {
 		return nil, err
 	}

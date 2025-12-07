@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,17 +21,30 @@ type Chat struct {
 	DeletedAt  gorm.DeletedAt
 }
 
-// Message представляет сообщение в базе данных
+// Attachment represents a file attachment in the database
+type Attachment struct {
+	ID        uuid.UUID  `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	MessageID *uuid.UUID `gorm:"type:uuid;index;default:null"` // Nullable, linked when message is sent
+	UserID    uuid.UUID  `gorm:"type:uuid;not null;index"`
+	FileName  string     `gorm:"type:text;not null"`
+	FileType  string     `gorm:"type:text;not null"`
+	Size      int64      `gorm:"type:bigint;not null"`
+	Content   []byte     `gorm:"type:bytea;not null"` // Store content directly in DB
+	CreatedAt time.Time  `gorm:"not null"`
+}
+
+// Message represents a message in the database
 type Message struct {
-	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	ChatID    uuid.UUID      `gorm:"type:uuid;not null"`
-	UserID    uuid.UUID      `gorm:"type:uuid;not null"`
-	Role      string         `gorm:"type:varchar(20);not null"`
-	Text      string         `gorm:"type:text;not null"`
-	ToolCalls datatypes.JSON `gorm:"type:jsonb"`
-	Model     string         `gorm:"type:text"`
-	CreatedAt time.Time      `gorm:"not null"`
-	UpdatedAt time.Time      `gorm:"not null"`
+	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ChatID      uuid.UUID      `gorm:"type:uuid;not null"`
+	UserID      uuid.UUID      `gorm:"type:uuid;not null"`
+	Role        string         `gorm:"type:varchar(20);not null"`
+	Text        string         `gorm:"type:text;not null"`
+	ToolCalls   datatypes.JSON `gorm:"type:jsonb"`
+	Model       string         `gorm:"type:text"`
+	Attachments []Attachment   `gorm:"foreignKey:MessageID"`
+	CreatedAt   time.Time      `gorm:"not null"`
+	UpdatedAt   time.Time      `gorm:"not null"`
 }
 
 type Integration struct {
@@ -64,4 +78,26 @@ type Inbox struct {
 	ReceivedAt    time.Time      `gorm:"not null"`
 	CreatedAt     time.Time      `gorm:"not null"`
 	UpdatedAt     time.Time      `gorm:"not null"`
+}
+
+// CreateAttachment creates a new attachment record
+func (s *Storage) CreateAttachment(ctx context.Context, attachment *Attachment) error {
+	return s.DB.WithContext(ctx).Create(attachment).Error
+}
+
+// GetAttachmentsByIDs retrieves attachments by their IDs
+func (s *Storage) GetAttachment(ctx context.Context, id uuid.UUID) (*Attachment, error) {
+	var attachment Attachment
+	if err := s.DB.WithContext(ctx).First(&attachment, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &attachment, nil
+}
+
+func (s *Storage) GetAttachmentsByIDs(ctx context.Context, ids []uuid.UUID) ([]Attachment, error) {
+	var attachments []Attachment
+	if err := s.DB.WithContext(ctx).Where("id IN ?", ids).Find(&attachments).Error; err != nil {
+		return nil, err
+	}
+	return attachments, nil
 }

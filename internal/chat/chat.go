@@ -24,13 +24,23 @@ const (
 	RoleAssistant Role = "assistant"
 )
 
+type Attachment struct {
+	ID       uuid.UUID `json:"id"`
+	FileName string    `json:"file_name"`
+	FileType string    `json:"file_type"`
+	Size     int64     `json:"size"`
+	Content  string    `json:"content,omitempty"` // Base64 encoded content
+}
+
 type Message struct {
-	ID        uuid.UUID   `json:"id"`
-	ChatID    uuid.UUID   `json:"chat_id"`
-	Sender    uuid.UUID   `json:"sender"`
-	Role      Role        `json:"role"`
-	Text      string      `json:"text"`
-	ToolCalls interface{} `json:"tool_calls,omitempty"`
-	Model     string      `json:"model,omitempty"`
-	CreatedAt time.Time   `json:"created_at"`
+	ID            uuid.UUID    `json:"id"`
+	ChatID        uuid.UUID    `json:"chat_id"`
+	Sender        uuid.UUID    `json:"sender"`
+	Role          Role         `json:"role"`
+	Text          string       `json:"text"`
+	ToolCalls     interface{}  `json:"tool_calls,omitempty"`
+	Model         string       `json:"model,omitempty"`
+	Attachments   []Attachment `json:"attachments,omitempty"`    // For reading
+	AttachmentIDs []uuid.UUID  `json:"attachment_ids,omitempty"` // For writing
+	CreatedAt     time.Time    `json:"created_at"`
 }
