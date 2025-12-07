@@ -50,11 +50,14 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 
 	// Link attachments if provided
 	if len(m.AttachmentIDs) > 0 {
-		if err := s.DB.WithContext(ctx).Model(&Attachment{}).
+		res := s.DB.WithContext(ctx).Model(&Attachment{}).
 			Where("id IN ? AND user_id = ?", m.AttachmentIDs, userID).
-			Update("message_id", messageModel.ID).Error; err != nil {
-			return nil, err
+			Update("message_id", messageModel.ID)
+
+		if res.Error != nil {
+			return nil, res.Error
 		}
+		fmt.Printf("Storage: Linked %d attachments to message %s (requested %d)\n", res.RowsAffected, messageModel.ID, len(m.AttachmentIDs))
 	}
 
 	// Retrieve attachments to return in response
