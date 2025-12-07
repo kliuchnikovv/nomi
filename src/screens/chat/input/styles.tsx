@@ -93,10 +93,11 @@ export const createStyles = (theme: ThemeColors) => StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 999,
-        backgroundColor: theme.accentAlt,
+        backgroundColor: theme.surfaceAlt,
         borderWidth: 1,
-        borderColor: `${theme.accent}55`,
+        borderColor: theme.surfaceHighlight,
         gap: 8,
+        flexShrink: 1, // Allow shrinking
     },
     modelButtonPressed: {
         opacity: 0.85,
@@ -105,7 +106,7 @@ export const createStyles = (theme: ThemeColors) => StyleSheet.create({
         marginRight: 4,
     },
     modelButtonText: {
-        color: '#ffffff',
+        color: theme.text,
         fontSize: 14,
         fontWeight: '600',
     },

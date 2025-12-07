@@ -42,10 +42,14 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Genie needs access to your camera to take photos for attachments</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Genie needs access to your microphone to record voice messages</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Genie needs access to your photo library to select images for attachments</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Genie uses speech recognition to transcribe your voice messages</string>
 	<key>RCTNewArchEnabled</key>

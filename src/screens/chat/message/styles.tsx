@@ -152,6 +152,18 @@ export const styles = StyleSheet.create({
         marginTop: 6,
         fontStyle: 'italic',
     },
+    daemonHeader: {
+        color: tokens.daemonHeader,
+        fontWeight: 'bold',
+        marginBottom: 4,
+    },
+    bubbleDaemon: {
+        backgroundColor: withAlpha(tokens.daemonHeader, 0.1),
+        alignSelf: 'center',
+        maxWidth: '90%',
+        borderRadius: 16,
+        padding: 12,
+    },
 });
 
 // Markdown styles - separate from StyleSheet.create() due to custom properties

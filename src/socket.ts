@@ -93,26 +93,26 @@ export class ChatSocket {
         }
 
         const qs = new URLSearchParams();
-        qs.set('chat_id', chatId);
-        if (token) qs.set('token', token);
-        if (initialSessionId) qs.set('sessionId', initialSessionId);
+        if (chatId) qs.append('chat_id', chatId);
+        if (token) qs.append('token', token);
+        if (initialSessionId) qs.append('sessionId', initialSessionId);
 
         // Add model parameter if selected
         const model = this.getModel();
-        if (model) qs.set('model', model);
+        if (model) qs.append('model', model);
 
         // Add context parameter
         const context = this.getContext();
-        if (context) qs.set('source', context);
+        if (context) qs.append('source', context);
 
         const mode = this.getMode?.() || 'agent';
-        if (mode) qs.set('mode', mode);
+        if (mode) qs.append('mode', mode);
 
         const command = this.getCommand?.();
         if (command) {
             try {
                 const serialized = typeof command === 'string' ? command : JSON.stringify(command);
-                qs.set('command', serialized);
+                qs.append('command', serialized);
             } catch (err) {
                 console.warn('Failed to serialize command for query', err);
             }
@@ -259,8 +259,8 @@ export class ChatSocket {
         }
     }
 
-    sendMessage(message: string, sessionId: string, messageID?: string) {
-        console.log('Sending message:', message, sessionId);
+    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[]) {
+        console.log('Sending message:', message, sessionId, attachmentIDs);
         const chatID = this.getChatId();
         const model = this.getModel();
         // const messageID = this.getMessageId();
@@ -278,6 +278,7 @@ export class ChatSocket {
                 message: message,
                 model: model, // Include user's model choice
                 sessionId: sessionId, // Keep sending for server-side logging if needed
+                attachment_ids: attachmentIDs,
             },
         };
         console.log('Sending message:', msg);
@@ -326,7 +327,7 @@ export class ChatSocket {
 
     changeModel(newModel: string) {
         if (!this.isReady()) {
-            console.warn('Cannot change model: WebSocket not ready');
+            // console.warn('Cannot change model: WebSocket not ready');
             return;
         }
 

@@ -94,9 +94,16 @@ export const CONNECTORS: Connector[] = [
         toolKey: 'gmail',
         oauthProvider: 'gmail',
         color: tokyoNightPalette.red,
-        glyph: 'gmail',
+        glyph: 'mail',
     },
-    // Calendar hidden for now
+    {
+        id: 'calendar',
+        name: 'Google Calendar',
+        toolKey: 'calendar',
+        oauthProvider: 'calendar',
+        color: tokyoNightPalette.orange,
+        glyph: 'calendar',
+    },
 ];
 
 export interface ConnectorContextType {

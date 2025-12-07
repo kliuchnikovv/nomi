@@ -24,6 +24,15 @@ export type Chat = {
     messages: Message[]
 }
 
+export type Attachment = {
+    id: string
+    file_name: string
+    file_type: string
+    size: number
+    content?: string
+    uri?: string
+}
+
 export type Message = {
     id: string
     chat_id: string
@@ -36,6 +45,7 @@ export type Message = {
     metadata?: Record<string, any>
     tool_calls?: any[]
     model?: string
+    attachments?: Attachment[]
 }
 
 export type Frame = {

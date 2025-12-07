@@ -5,41 +5,68 @@ import {
     Plus,
     XmarkCircle,
     CursorPointer,
+    Attachment as AttachmentIcon,
+    Trash,
+    Camera,
+    Page,
+    MediaImage,
+    Translate,
+    Check
 } from 'iconoir-react-native';
 
-import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View } from 'react-native';
+import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from './styles.tsx';
 import { useChat } from '../context';
-import ModelSelector from './ModelSelector';
+import { ContextMenu, ContextMenuItem } from '../../../components/ContextMenu';
 import { useTheme } from '../../../context/ThemeContext.tsx';
 import { useVoiceRecorder } from './useVoiceRecorder';
 import AudioWaveform from './AudioWaveform';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import DocumentPicker from 'react-native-document-picker';
+import { apiClient } from '../../../apiClient';
 
 type Props = {
     onSend: (text: string) => void;
 };
 
+type LocalAttachment = {
+    id: string; // Server ID
+    uri: string;
+    type: 'image' | 'file';
+    name: string;
+    loading: boolean;
+};
+
 export default function ChatInput(props: Props) {
     const [value, setValue] = useState('');
-    const [modelSelectorVisible, setModelSelectorVisible] = useState(false);
+    const [modelMenuVisible, setModelMenuVisible] = useState(false);
+    const [plusMenuVisible, setPlusMenuVisible] = useState(false);
+    const [voiceLanguageMenuVisible, setVoiceLanguageMenuVisible] = useState(false);
     const [voiceLanguage, setVoiceLanguage] = useState('auto');
+    const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
 
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage } = useChat();
 
     const voiceRecorder = useVoiceRecorder();
 
     const handleSend = useCallback(() => {
         const text = (value ?? '').trim();
-        if (!text) return;
-        props.onSend(text);
+        const hasAttachments = attachments.length > 0 && !attachments.some(a => a.loading);
+
+        if (!text && !hasAttachments) return;
+
+        // Pass full attachments (including URI) to sendMessage for optimistic updates
+        sendMessage(text, attachments);
+
         Keyboard.dismiss();
         setValue('');
-    }, [props, value]);
+        setAttachments([]);
+    }, [value, attachments, sendMessage]);
 
     const toggleRecord = useCallback(async () => {
         if (voiceRecorder.state === 'idle') {
@@ -60,44 +87,242 @@ export default function ChatInput(props: Props) {
     const isRecording = voiceRecorder.state === 'recording';
     const isProcessing = voiceRecorder.state === 'processing';
 
-    const showModelPicker = useCallback(() => {
-        console.log('showModelPicker called, availableModels:', availableModels);
-        console.log('current selectedModel:', selectedModel);
+    const uploadFile = async (uri: string, name: string, type: string, fileType: 'image' | 'file') => {
+        // Optimistic add
+        const tempId = Math.random().toString();
+        setAttachments(prev => [...prev, {
+            id: tempId,
+            uri,
+            type: fileType,
+            name,
+            loading: true
+        }]);
 
-        const options = [
-            ...availableModels.map(m => m.name),
-            'Cancel'
-        ];
+        try {
+            const uploaded = await apiClient.uploadFile({ uri, name, type });
+            setAttachments(prev => prev.map(a => a.id === tempId ? { ...a, id: uploaded.id, loading: false } : a));
+        } catch (err) {
+            console.error('Upload failed', err);
+            // Remove failed upload
+            setAttachments(prev => prev.filter(a => a.id !== tempId));
+        }
+    };
 
-        ActionSheetIOS.showActionSheetWithOptions(
-            {
-                options,
-                cancelButtonIndex: options.length - 1,
-                userInterfaceStyle: 'dark',
-                title: 'Select Model',
-            },
-            (buttonIndex) => {
-                console.log('ActionSheet buttonIndex:', buttonIndex);
-                if (buttonIndex < availableModels.length) {
-                    const selectedModelId = availableModels[buttonIndex].id;
-                    console.log('Setting model to:', selectedModelId);
-                    setSelectedModel(selectedModelId);
-                }
+    const pickImage = async () => {
+        console.log('PickImage called');
+        try {
+            if (!NativeModules.ImagePicker && !global.__turboModuleProxy) {
+                console.error("NativeModules.ImagePicker is null");
+                Alert.alert("Error", "ImagePicker Native Module is missing.");
+                return;
             }
-        );
-    }, [availableModels, setSelectedModel, selectedModel]);
+
+            console.log('Calling launchImageLibrary...');
+            const result = await launchImageLibrary({
+                mediaType: 'photo',
+                quality: 0.8,
+                selectionLimit: 1,
+                includeExtra: true, // Force permission check
+            });
+            console.log('launchImageLibrary result:', result);
+
+            if (result.errorCode) {
+                console.error('ImagePicker Error: ', result.errorMessage);
+                Alert.alert('Error', result.errorMessage || 'Failed to launch image library');
+                return;
+            }
+
+            if (!result.didCancel && result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+                const name = asset.fileName || 'image.jpg';
+                const type = asset.type || 'image/jpeg';
+                const uri = asset.uri!;
+                await uploadFile(uri, name, type, 'image');
+            }
+        } catch (error: any) {
+            console.error('pickImage error:', error);
+            Alert.alert('Error', 'Failed to pick image: ' + error.message);
+        }
+    };
+
+    const takePhoto = async () => {
+        console.log('TakePhoto called');
+        try {
+            console.log('Calling launchCamera...');
+            const result = await launchCamera({
+                mediaType: 'photo',
+                quality: 0.8,
+                saveToPhotos: false,
+                includeExtra: true, // Force permission check
+            });
+            console.log('launchCamera result:', result);
+
+            if (result.errorCode) {
+                console.error('Camera Error: ', result.errorMessage);
+                Alert.alert('Error', result.errorMessage || 'Failed to take photo');
+                return;
+            }
+
+            if (!result.didCancel && result.assets && result.assets.length > 0) {
+                const asset = result.assets[0];
+                const name = asset.fileName || 'camera_photo.jpg';
+                const type = asset.type || 'image/jpeg';
+                const uri = asset.uri!;
+                await uploadFile(uri, name, type, 'image');
+            }
+        } catch (error: any) {
+            console.error('takePhoto error:', error);
+            Alert.alert('Error', 'Failed to take photo: ' + error.message);
+        }
+    };
+
+    const pickDocument = async () => {
+        try {
+            const result = await DocumentPicker.pick({
+                type: [DocumentPicker.types.allFiles],
+                copyTo: 'cachesDirectory',
+            });
+
+            if (result && result.length > 0) {
+                const asset = result[0];
+                const name = asset.name || 'document';
+                const type = asset.type || 'application/octet-stream';
+                await uploadFile(asset.uri, name, type, 'file');
+            }
+        } catch (err: any) {
+            if (DocumentPicker.isCancel(err)) {
+                // User cancelled
+            } else {
+                console.error('pickDocument error:', err);
+                Alert.alert('Error', 'Failed to pick document: ' + (err.message || String(err)));
+            }
+        }
+    };
+
+    const handlePlusPress = useCallback(() => {
+        setPlusMenuVisible(true);
+    }, []);
+
+    const [isPickerActive, setPickerActive] = useState(false);
+
+    const executeWithDelay = useCallback((action: () => Promise<void>) => {
+        if (isPickerActive) return;
+        setPlusMenuVisible(false);
+        setPickerActive(true);
+
+        // Wait for menu close animation
+        setTimeout(async () => {
+            try {
+                await action();
+            } finally {
+                setPickerActive(false);
+            }
+        }, 500);
+    }, [isPickerActive]);
+
+    const plusMenuItems: ContextMenuItem[] = useMemo(() => [
+        {
+            id: 'files',
+            label: 'Files',
+            icon: <AttachmentIcon width={20} height={20} color="#fff" />,
+            onPress: () => executeWithDelay(pickDocument),
+        },
+        {
+            id: 'photos',
+            label: 'Photos',
+            icon: <MediaImage width={20} height={20} color="#fff" />,
+            onPress: () => executeWithDelay(pickImage),
+        },
+        {
+            id: 'camera',
+            label: 'Camera',
+            icon: <Camera width={20} height={20} color="#fff" />,
+            onPress: () => executeWithDelay(takePhoto),
+        },
+        {
+            id: 'voice_language',
+            label: `Voice Language: ${voiceLanguage === 'auto' ? 'Auto' : voiceLanguage}`,
+            icon: <Translate width={20} height={20} color="#fff" />,
+            onPress: () => {
+                // Close main menu and open language menu
+                setPlusMenuVisible(false);
+                setTimeout(() => setVoiceLanguageMenuVisible(true), 300);
+            },
+        }
+    ], [voiceLanguage, pickDocument, pickImage, takePhoto, executeWithDelay]);
+
+    const voiceLanguageItems: ContextMenuItem[] = useMemo(() => [
+        { id: 'auto', label: 'Auto (Device Default)', onPress: () => setVoiceLanguage('auto') },
+        { id: 'en-US', label: 'English', onPress: () => setVoiceLanguage('en-US') },
+        { id: 'ru-RU', label: 'Russian', onPress: () => setVoiceLanguage('ru-RU') },
+        { id: 'es-ES', label: 'Spanish', onPress: () => setVoiceLanguage('es-ES') },
+        { id: 'de-DE', label: 'German', onPress: () => setVoiceLanguage('de-DE') },
+        { id: 'fr-FR', label: 'French', onPress: () => setVoiceLanguage('fr-FR') },
+    ].map(item => ({
+        ...item,
+        icon: item.id === voiceLanguage ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent }} /> : undefined
+    })), [voiceLanguage, theme.accent]);
+
+    const removeAttachment = (id: string) => {
+        setAttachments(prev => prev.filter(a => a.id !== id));
+    };
+
+    // Helper to build default team command if switching model in team mode
+    const buildDefaultTeamCommand = useCallback((modelId: string) => {
+        return {
+            name: 'Default Team',
+            model: modelId,
+            participants: [
+                { type: 'mailer', model: modelId },
+                { type: 'rag', model: modelId },
+                { type: 'memoriser', model: modelId },
+            ],
+        };
+    }, []);
+
+    const showModelPicker = useCallback(() => {
+        setModelMenuVisible(true);
+    }, []);
+
+    const modelMenuItems: ContextMenuItem[] = useMemo(() => {
+        return availableModels.map(model => ({
+            id: model.id,
+            label: model.name || model.id,
+            icon: model.id === selectedModel ? (
+                <Check width={20} height={20} color={theme.accent} />
+            ) : undefined,
+            onPress: () => {
+                const selectedModelId = model.id;
+                setSelectedModel(selectedModelId);
+
+                if (chatMode === 'team') {
+                    setTeamCommand(buildDefaultTeamCommand(selectedModelId));
+                }
+                setModelMenuVisible(false);
+            },
+        }));
+    }, [availableModels, selectedModel, chatMode, setTeamCommand, buildDefaultTeamCommand, theme.accent]);
 
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const selectedModelName = useMemo(() => {
+        if (!selectedModel) {
+            if (availableModels.length > 0) {
+                return availableModels[0].name || 'Auto context';
+            }
+            return 'Auto context';
+        }
         const explicit = availableModels.find(m => m.id === selectedModel)?.name;
         if (explicit) return explicit;
-        if (availableModels.length > 0) {
-            return availableModels[0].name || 'Auto context';
-        }
-        return 'Auto context';
+
+        // If selected model is not in the list, show it formatted or as-is
+        // e.g. gemini-2.0-flash-exp -> Gemini 2.0 Flash Exp
+        return selectedModel
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
     }, [availableModels, selectedModel]);
-    const isMicDisabled = (value?.length ?? 0) > 0 || isProcessing;
-    const isSendDisabled = (value?.length ?? 0) === 0;
+    const isMicDisabled = ((value?.length ?? 0) > 0 || isProcessing) && attachments.length === 0;
+    const isSendDisabled = ((value?.length ?? 0) === 0 && attachments.length === 0) || attachments.some(a => a.loading);
 
     useEffect(() => {
         const keyboardDidShowListener = Keyboard.addListener(
@@ -125,6 +350,35 @@ export default function ChatInput(props: Props) {
                 styles.inputWrapper,
                 { paddingBottom: isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) }
             ]}>
+                {/* Attachments Preview */}
+                {attachments.length > 0 && (
+                    <ScrollView horizontal style={{ flexDirection: 'row', padding: 8, maxHeight: 100 }} contentContainerStyle={{ gap: 8 }}>
+                        {attachments.map(att => (
+                            <View key={att.id} style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', position: 'relative', backgroundColor: theme.surface }}>
+                                {att.type === 'image' ? (
+                                    <Image source={{ uri: att.uri }} style={{ width: '100%', height: '100%' }} />
+                                ) : (
+                                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                        <AttachmentIcon width={24} height={24} color={theme.text} />
+                                        <Text numberOfLines={1} style={{ fontSize: 10, color: theme.text, paddingHorizontal: 2 }}>{att.name}</Text>
+                                    </View>
+                                )}
+                                {att.loading && (
+                                    <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
+                                        <ActivityIndicator color="#fff" />
+                                    </View>
+                                )}
+                                <Pressable
+                                    onPress={() => removeAttachment(att.id)}
+                                    style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, padding: 2 }}
+                                >
+                                    <XmarkCircle width={16} height={16} color="#fff" />
+                                </Pressable>
+                            </View>
+                        ))}
+                    </ScrollView>
+                )}
+
                 {/* Top row: Input field or waveform */}
                 {isRecording ? (
                     <AudioWaveform
@@ -171,7 +425,7 @@ export default function ChatInput(props: Props) {
                             !isProcessing && (
                                 <>
                                     <Pressable
-                                        onPress={() => setModelSelectorVisible(true)}
+                                        onPress={handlePlusPress}
                                         style={({ pressed }) => [
                                             styles.iconBtn,
                                             pressed && styles.iconBtnPressed,
@@ -180,7 +434,7 @@ export default function ChatInput(props: Props) {
                                         <Plus
                                             width={24}
                                             height={24}
-                                            color={theme.icon}
+                                            color={theme.text}
                                         />
                                     </Pressable>
 
@@ -195,10 +449,14 @@ export default function ChatInput(props: Props) {
                                             <CursorPointer
                                                 width={16}
                                                 height={16}
-                                                color="#ffffff"
+                                                color={theme.text}
                                             />
                                         </View>
-                                        <Text style={styles.modelButtonText}>
+                                        <Text
+                                            style={styles.modelButtonText}
+                                            numberOfLines={1}
+                                            ellipsizeMode="tail"
+                                        >
                                             {selectedModelName}
                                         </Text>
                                     </Pressable>
@@ -254,7 +512,7 @@ export default function ChatInput(props: Props) {
                                         <ArrowUp
                                             width={24}
                                             height={24}
-                                            color={theme.icon}
+                                            color={theme.background}
                                         />
                                     </Pressable>
                                 )}
@@ -263,20 +521,29 @@ export default function ChatInput(props: Props) {
                     </View>
                 </View>
             </View>
-            <ModelSelector
-                visible={modelSelectorVisible}
-                onClose={() => setModelSelectorVisible(false)}
-                models={availableModels}
-                selectedModel={selectedModel}
-                onSelectModel={setSelectedModel}
-                loading={availableModels.length === 0}
-                chatMode={chatMode}
-                onModeChange={setChatMode}
-                teamCommand={teamCommand}
-                onChangeTeamCommand={setTeamCommand}
-                hasChatStarted={messages.length > 0}
-                voiceLanguage={voiceLanguage}
-                onSelectVoiceLanguage={setVoiceLanguage}
+
+
+            <ContextMenu
+                visible={modelMenuVisible}
+                onClose={() => setModelMenuVisible(false)}
+                items={modelMenuItems}
+                position="bottom-left"
+                title="Select Model"
+            />
+
+            <ContextMenu
+                visible={plusMenuVisible}
+                onClose={() => setPlusMenuVisible(false)}
+                items={plusMenuItems}
+                position="bottom-left"
+            />
+
+            <ContextMenu
+                visible={voiceLanguageMenuVisible}
+                onClose={() => setVoiceLanguageMenuVisible(false)}
+                items={voiceLanguageItems}
+                title="Select Voice Language"
+                position="center"
             />
         </View>
     );

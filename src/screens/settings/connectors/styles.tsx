@@ -52,6 +52,7 @@ export const styles = StyleSheet.create({
         borderRadius: 16,
         borderWidth: StyleSheet.hairlineWidth,
         borderColor: 'rgba(192, 202, 245, 0.08)',
+        marginBottom: 24,
     },
     sectionHeaderRow: {
         flexDirection: 'row',
@@ -91,7 +92,6 @@ export const styles = StyleSheet.create({
         borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12,
     },
     iconText: {
         color: tokyoNightPalette.bg,
@@ -100,19 +100,19 @@ export const styles = StyleSheet.create({
     rowTitle: {
         color: tokyoNight.text,
         fontSize: 16,
-        flex: 1,
     },
     switchWrap: {
         marginRight: 12,
     },
     titleBlock: {
         flex: 1,
-        marginLeft: 4,
+        marginLeft: 12,
+        justifyContent: 'center',
+        gap: 2,
     },
     statusText: {
         color: tokyoNight.fadedText,
-        fontSize: 11,
-        marginTop: 2,
+        fontSize: 12,
     },
     emptyRow: {
         padding: 16,

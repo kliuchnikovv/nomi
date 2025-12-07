@@ -2,7 +2,7 @@ import { API_URL } from './config';
 import { SidebarChatsResponse, SidebarChatMessagesResponse, SidebarResponse } from './screens/rightsidebar/models';
 
 // Хранилище для функций из AuthContext. Изначально пустое.
-const authStore = {
+export const authStore = {
     getToken: (): string | null => null,
     refreshToken: (): Promise<boolean> => Promise.resolve(false),
     logout: (): void => { },
@@ -98,6 +98,29 @@ export const apiClient = {
     put: <T>(endpoint: string, body: any, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'PUT', body: JSON.stringify(body) }),
     patch: <T>(endpoint: string, body?: any, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
     delete: <T>(endpoint: string, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'DELETE' }),
+    uploadFile: async (file: { uri: string; name: string; type: string }) => {
+        const formData = new FormData();
+        formData.append('file', {
+            uri: file.uri,
+            name: file.name,
+            type: file.type,
+        } as any);
+
+        const response = await fetch(`${API_URL}/upload`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Content-Type': 'multipart/form-data',
+                'Authorization': `Bearer ${authStore.getToken()}`,
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error('File upload failed');
+        }
+
+        return await response.json();
+    },
 };
 
 export const pluginsApi = {
@@ -157,10 +180,10 @@ export const integrationsApi = {
 export const inboxApi = {
     getInbox: ({ page = 1, limit = 20, provider, integrationId }: { page?: number; limit?: number; provider?: string; integrationId?: string }) => {
         const params = new URLSearchParams();
-        params.set('page', String(page));
-        params.set('limit', String(limit));
-        if (provider) params.set('provider', provider);
-        if (integrationId) params.set('integration_id', integrationId);
+        params.append('page', String(page));
+        params.append('limit', String(limit));
+        if (provider) params.append('provider', provider);
+        if (integrationId) params.append('integration_id', integrationId);
         return apiClient.get<any>(`${API_URL}/inbox?${params.toString()}`);
     },
     getInboxMessage: (id: string) =>
