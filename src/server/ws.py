@@ -634,7 +634,14 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                         if file_type.startswith("image/") and content:
                             # Construct data URI
                             data_uri = f"data:{file_type};base64,{content}"
-                            images.append(data_uri)
+                            try:
+                                from agno.media import Image
+                                images.append(Image(url=data_uri))
+                            except ImportError:
+                                # Fallback if Image class is not available or path is wrong
+                                logger.warning("[WS] Could not import agno.media.Image, passing data URI as string (may fail)")
+                                images.append(data_uri)
+
                 if images:
                     kwargs["images"] = images
                     logger.info("[WS] 🖼️  Passing %d images to agent", len(images))
