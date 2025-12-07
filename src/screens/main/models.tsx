@@ -4,6 +4,7 @@ export type GetChatsOptions = {
 
 export interface MainContextType {
     chats: Chat[];
+    chatsLoading: boolean;
     activeChatID: string | null;
     activeChat: Chat | null;
     getChats: (options?: GetChatsOptions) => Promise<void>;
