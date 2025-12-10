@@ -35,6 +35,7 @@ type LocalAttachment = {
     id: string; // Server ID
     uri: string;
     type: 'image' | 'file';
+    mimeType: string;
     name: string;
     loading: boolean;
 };
@@ -97,6 +98,7 @@ export default function ChatInput(props: Props) {
             id: tempId,
             uri,
             type: fileType,
+            mimeType: type,
             name,
             loading: true
         }]);

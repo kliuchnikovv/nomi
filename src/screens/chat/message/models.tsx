@@ -29,6 +29,7 @@ export type Attachment = {
     file_type: string
     size: number
     content?: string
+    uri?: string
 }
 
 export type ToolCall = {
