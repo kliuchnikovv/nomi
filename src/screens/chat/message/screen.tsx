@@ -108,17 +108,20 @@ export default function MessageScreen(props: Props) {
             )}
             {props.message.attachments && props.message.attachments.length > 0 && (
                 <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {props.message.attachments.map(att => (
-                        <View key={att.id}>
-                            {att.file_type.startsWith('image/') ? (
-                                <AttachmentImage attachment={att} />
-                            ) : (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', padding: 8, borderRadius: 8 }}>
-                                    <Text>{att.file_name}</Text>
-                                </View>
-                            )}
-                        </View>
-                    ))}
+                    {props.message.attachments.map(att => {
+                        console.log('Attachment:', att);
+                        return (
+                            <View key={att.id}>
+                                {(att.file_type && (att.file_type.startsWith('image/') || att.file_type === 'image')) ? (
+                                    <AttachmentImage attachment={att} />
+                                ) : (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', padding: 8, borderRadius: 8 }}>
+                                        <Text>{att.file_name}</Text>
+                                    </View>
+                                )}
+                            </View>
+                        );
+                    })}
                 </View>
             )}
             {props.message.model && (

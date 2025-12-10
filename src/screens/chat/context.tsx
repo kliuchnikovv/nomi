@@ -286,7 +286,7 @@ export function ChatProvider({
             const modelAttachments = attachments.map(a => ({
                 id: a.id,
                 file_name: a.name,
-                file_type: a.type,
+                file_type: a.mimeType,
                 size: 0, // Unknown size for local
                 uri: a.uri
             }));

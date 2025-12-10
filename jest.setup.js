@@ -1,13 +1,13 @@
 import 'react-native-gesture-handler/jestSetup';
 
 jest.mock('react-native-reanimated', () => {
-  const Reanimated = require('react-native-reanimated/mock');
+    const Reanimated = require('react-native-reanimated/mock');
 
-  // The mock for `call` immediately calls the callback which is incorrect
-  // So we override it with a no-op
-  Reanimated.default.call = () => {};
+    // The mock for `call` immediately calls the callback which is incorrect
+    // So we override it with a no-op
+    Reanimated.default.call = () => { };
 
-  return Reanimated;
+    return Reanimated;
 });
 
 // Silence the warning: Animated: `useNativeDriver` is not supported because the native animated module is missing
@@ -31,19 +31,19 @@ jest.mock('expo-sharing', () => ({
 }));
 
 jest.mock('@react-native-clipboard/clipboard', () => ({
-  setString: jest.fn(),
-  getString: jest.fn(),
-  hasString: jest.fn(),
-  getImage: jest.fn(),
-  setImage: jest.fn(),
-  getImagePNG: jest.fn(),
-  getImageJPG: jest.fn(),
+    setString: jest.fn(),
+    getString: jest.fn(),
+    hasString: jest.fn(),
+    getImage: jest.fn(),
+    setImage: jest.fn(),
+    getImagePNG: jest.fn(),
+    getImageJPG: jest.fn(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-  SafeAreaProvider: ({ children }) => children,
-  SafeAreaView: ({ children }) => children,
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaProvider: ({ children }) => children,
+    SafeAreaView: ({ children }) => children,
 }));
 
 jest.mock('react-native-image-picker', () => ({
@@ -100,33 +100,36 @@ jest.mock('react-native-audio-recorder-player', () => {
 });
 
 jest.mock('@react-native-async-storage/async-storage', () =>
-  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+    require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 
 jest.mock('@react-native-google-signin/google-signin', () => ({
-  GoogleSignin: {
-    configure: jest.fn(),
-    hasPlayServices: jest.fn(),
-    signIn: jest.fn(),
-    signOut: jest.fn(),
-    isSignedIn: jest.fn(),
-    getCurrentUser: jest.fn(),
-  },
+    GoogleSignin: {
+        configure: jest.fn(),
+        hasPlayServices: jest.fn(),
+        signIn: jest.fn(),
+        signOut: jest.fn(),
+        isSignedIn: jest.fn(),
+        getCurrentUser: jest.fn(),
+    },
 }));
 
 jest.mock('@react-native-voice/voice', () => ({
-  destroy: jest.fn(),
-  removeAllListeners: jest.fn(),
-  onSpeechStart: jest.fn(),
-  onSpeechEnd: jest.fn(),
-  onSpeechResults: jest.fn(),
-  onSpeechError: jest.fn(),
-  start: jest.fn(),
-  stop: jest.fn(),
+    destroy: jest.fn(),
+    removeAllListeners: jest.fn(),
+    onSpeechStart: jest.fn(),
+    onSpeechEnd: jest.fn(),
+    onSpeechResults: jest.fn(),
+    onSpeechError: jest.fn(),
+    start: jest.fn(),
+    stop: jest.fn(),
 }));
 
 jest.mock('react-native-keyboard-controller', () => ({
-  KeyboardProvider: ({ children }) => children,
-  useKeyboardHandler: jest.fn(),
-  useKeyboardController: jest.fn(),
+    KeyboardProvider: ({ children }) => children,
+    useKeyboardHandler: jest.fn(),
+    useKeyboardController: jest.fn(),
 }));
+
+jest.mock('react-native/Libraries/EventEmitter/NativeEventEmitter');
+jest.mock('react-native-markdown-display', () => 'Markdown');
