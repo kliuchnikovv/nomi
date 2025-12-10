@@ -3,6 +3,8 @@ import { TouchableOpacity, Image, View, Text, StyleSheet } from 'react-native';
 import { EmptyPage } from 'iconoir-react-native';
 import { Attachment } from '../../main/models';
 import { ThemeColors } from '../../../themes/types';
+import { useAuth } from '../../auth/context';
+import { API_URL } from '../../../config';
 
 interface AttachmentItemProps {
     attachment: Attachment;
@@ -18,6 +20,7 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
     maxWidth = 200,
 }) => {
     const isImage = attachment.file_type?.startsWith('image/');
+    const { token } = useAuth();
 
     // Helper to format source for Image
     const getImageSource = () => {
@@ -31,6 +34,16 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
             }
             // Add prefix if missing
             return { uri: `data:${attachment.file_type || 'image/png'};base64,${attachment.content}` };
+        }
+        if (attachment.id) {
+            const url = `${API_URL}/attachments/${attachment.id}`;
+            console.log('Building image source:', { url, hasToken: !!token });
+            return {
+                uri: url,
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            };
         }
         return undefined;
     };
