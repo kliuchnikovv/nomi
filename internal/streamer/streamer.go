@@ -411,6 +411,16 @@ func (streamer *Streamer) Stream(
 						})
 					}
 					frame.Payload.Attachments = enriched
+					streamer.logger.Info("enriched message with attachments",
+						zap.Int("count", len(enriched)),
+						zap.String("message_id", frame.Payload.MessageID.String()))
+					for i, att := range enriched {
+						streamer.logger.Info("attachment details",
+							zap.Int("index", i),
+							zap.String("id", att.ID.String()),
+							zap.String("type", att.FileType),
+							zap.Int("size", int(att.Size)))
+					}
 				}
 			}
 
