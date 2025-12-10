@@ -269,7 +269,7 @@ export function ChatProvider({
     }, [pluginThreadMeta, mapPluginMessage]);
 
     const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = []) => {
+        async (text: string, attachments: any[] = [], webSearch?: boolean) => {
             if (!text.trim() && attachments.length === 0) return;
             if (!user?.id) return;
 
@@ -319,7 +319,7 @@ export function ChatProvider({
                     return;
                 }
 
-                messageID = await createMessage(text, chatIdToUse, attachmentIDs);
+                messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch);
                 if (!messageID) {
                     console.error('Failed to create message before sending via WebSocket');
                     setError('Не удалось создать сообщение');
@@ -365,7 +365,7 @@ export function ChatProvider({
                 setError('Ошибка отправки сообщения');
                 return;
             }
-            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs);
+            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch);
             console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
         },
         [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token],
@@ -436,7 +436,7 @@ export function ChatProvider({
         return chatID;
     }
 
-    async function createMessage(text: string, chatID: string, attachmentIDs?: string[]) {
+    async function createMessage(text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean) {
         let messageID: string;
 
         try {
@@ -451,6 +451,7 @@ export function ChatProvider({
                     text: text,
                     model: model,
                     attachment_ids: attachmentIDs,
+                    web_search: webSearch,
                 },
             );
             if (created?.id) {
@@ -471,8 +472,8 @@ export function ChatProvider({
 
     // Modify sendMessage to use sendStreamingMessage
     const sendMessage = useCallback(
-        async (text: string, attachments: any[] = []) => {
-            await sendStreamingMessage(text, attachments);
+        async (text: string, attachments: any[] = [], webSearch?: boolean) => {
+            await sendStreamingMessage(text, attachments, webSearch);
         },
         [sendStreamingMessage],
     );

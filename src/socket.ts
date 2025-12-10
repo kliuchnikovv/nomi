@@ -259,8 +259,8 @@ export class ChatSocket {
         }
     }
 
-    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[]) {
-        console.log('Sending message:', message, sessionId, attachmentIDs);
+    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean) {
+        console.log('Sending message:', message, sessionId, attachmentIDs, webSearch);
         const chatID = this.getChatId();
         const model = this.getModel();
         // const messageID = this.getMessageId();
@@ -279,6 +279,7 @@ export class ChatSocket {
                 model: model, // Include user's model choice
                 sessionId: sessionId, // Keep sending for server-side logging if needed
                 attachment_ids: attachmentIDs,
+                web_search: webSearch,
             },
         };
         console.log('Sending message:', msg);

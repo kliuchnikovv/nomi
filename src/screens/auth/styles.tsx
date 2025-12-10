@@ -1,5 +1,7 @@
 import { StyleSheet } from 'react-native';
-import { tokyoNight, tokyoNightPalette } from '../../themes/tokyoNight';
+import { tokyoNight, tokyoNightTheme } from '../../themes/tokyoNight';
+
+const tokyoNightPalette = tokyoNightTheme.palette;
 
 export const styles = StyleSheet.create({
     container: {
