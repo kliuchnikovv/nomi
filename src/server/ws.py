@@ -645,6 +645,9 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                 if images:
                     kwargs["images"] = images
                     logger.info("[WS] 🖼️  Passing %d images to agent", len(images))
+                    for i, img in enumerate(images):
+                        logger.info(f"[WS] Image {i}: type={type(img)} len={len(str(img)) if not hasattr(img, 'url') else len(img.url)}")
+
             
             # Build full message history including current user message
             full_messages = []
