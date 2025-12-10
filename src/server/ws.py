@@ -15,7 +15,8 @@ from src.server.utils import make_meta, make_error, make_done, make_data
 from src.teams import TeamFactory
 from src.tools.config import ToolConfigClient
 from src.tools.models import ToolSpec
-from agno.tools.duckduckgo import DuckDuckGoTools
+# from agno.tools.duckduckgo import DuckDuckGoTools
+from src.tools.duckduckgo_custom import DuckDuckGoTools
 
 logger = logging.getLogger(__name__)
 
