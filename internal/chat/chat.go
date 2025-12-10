@@ -42,5 +42,6 @@ type Message struct {
 	Model         string       `json:"model,omitempty"`
 	Attachments   []Attachment `json:"attachments,omitempty"`    // For reading
 	AttachmentIDs []uuid.UUID  `json:"attachment_ids,omitempty"` // For writing
+	WebSearch     bool         `json:"web_search,omitempty"`     // For writing
 	CreatedAt     time.Time    `json:"created_at"`
 }

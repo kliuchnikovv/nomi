@@ -60,6 +60,7 @@ type Payload struct {
 	History          interface{} `json:"history,omitempty"`
 	Attachments      interface{} `json:"attachments,omitempty"`
 	AttachmentIDs    []uuid.UUID `json:"attachment_ids,omitempty"`
+	WebSearch        bool        `json:"web_search,omitempty"`
 }
 
 type ErrorInfo struct {
