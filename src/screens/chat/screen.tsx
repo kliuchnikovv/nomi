@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity } from 'react-native';
+import { API_URL } from '../../config';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
@@ -8,7 +9,6 @@ import { useSharedValue, withTiming, runOnJS } from 'react-native-reanimated';
 import ImageViewing from 'react-native-image-viewing';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Eye, EyeClosed } from 'iconoir-react-native';
 
 import { useChat } from './context';
 import { useAuth } from '../auth/context';
@@ -52,7 +52,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         setError,
         retryLastMessage,
     } = useChat();
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { theme } = useTheme();
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const insets = useSafeAreaInsets();
@@ -65,7 +65,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const [imageViewerVisible, setImageViewerVisible] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [previewImages, setPreviewImages] = useState<any[]>([]);
-    const [attachmentPosition, setAttachmentPosition] = useState<'inside' | 'outside'>('outside');
+    const [attachmentPosition] = useState<'inside' | 'outside'>('inside');
 
     const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -107,24 +107,37 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     // Attachment Handlers
     const handleAttachmentPress = useCallback(async (attachment: Attachment) => {
         if (attachment.file_type?.startsWith('image/')) {
-            const images = [{ uri: attachment.uri || attachment.content }];
-            // Ensure data URI if base64
-            if (images[0].uri && !images[0].uri.startsWith('http') && !images[0].uri.startsWith('data:')) {
-                 images[0].uri = `data:${attachment.file_type || 'image/png'};base64,${attachment.content}`;
+            const images: any[] = [];
+            if (attachment.uri) {
+                images.push({ uri: attachment.uri });
+            } else if (attachment.content) {
+                if (attachment.content.startsWith('data:image')) {
+                    images.push({ uri: attachment.content });
+                } else {
+                    images.push({ uri: `data:${attachment.file_type || 'image/png'};base64,${attachment.content}` });
+                }
+            } else if (attachment.id) {
+                images.push({
+                    uri: `${API_URL}/attachments/${attachment.id}`,
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
             }
+
             setPreviewImages(images);
             setCurrentImageIndex(0);
             setImageViewerVisible(true);
         } else {
             try {
                 if (attachment.uri && attachment.uri.startsWith('http')) {
-                   // Remote file
-                   const isAvailable = await Sharing.isAvailableAsync();
-                   if (isAvailable) {
-                       const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'download');
-                       const downloadRes = await FileSystem.downloadAsync(attachment.uri, fileUri);
-                       await Sharing.shareAsync(downloadRes.uri);
-                   }
+                    // Remote file
+                    const isAvailable = await Sharing.isAvailableAsync();
+                    if (isAvailable) {
+                        const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'download');
+                        const downloadRes = await FileSystem.downloadAsync(attachment.uri, fileUri);
+                        await Sharing.shareAsync(downloadRes.uri);
+                    }
                 } else if (attachment.content) {
                     // Base64 content
                     const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'file');
@@ -137,9 +150,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         }
     }, []);
 
-    const toggleAttachmentPosition = useCallback(() => {
-        setAttachmentPosition(prev => prev === 'inside' ? 'outside' : 'inside');
-    }, []);
+
 
     const {
         renderBubble,
@@ -282,35 +293,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         showMenu={!isWide}
                     />
 
-                    {/* Position Toggle Button - Visible */}
-                    <View style={{position: 'absolute', top: 50, right: 10, zIndex: 100}}>
-                         <TouchableOpacity
-                            onPress={toggleAttachmentPosition}
-                            style={{
-                                padding: 8,
-                                backgroundColor: chatTheme.background,
-                                borderRadius: 20,
-                                shadowColor: "#000",
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.25,
-                                shadowRadius: 3.84,
-                                elevation: 5,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: 6,
-                                borderWidth: 1,
-                                borderColor: chatTheme.border
-                            }}>
-                             {attachmentPosition === 'inside' ? (
-                                <EyeClosed width={16} height={16} color={chatTheme.textPrimary} />
-                             ) : (
-                                <Eye width={16} height={16} color={chatTheme.textPrimary} />
-                             )}
-                             <Text style={{color: chatTheme.textPrimary, fontSize: 10, fontWeight: 'bold'}}>
-                                {attachmentPosition === 'inside' ? 'Inside Bubble' : 'Outside Bubble'}
-                             </Text>
-                         </TouchableOpacity>
-                    </View>
+
 
                     <KeyboardAvoidingView
                         style={{ flex: 1 }}
@@ -388,6 +371,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                 imageIndex={currentImageIndex}
                 visible={imageViewerVisible}
                 onRequestClose={() => setImageViewerVisible(false)}
+                keyExtractor={(imageSrc: any, index: number) => `${imageSrc.uri}${index}`}
             />
         </View>
     );
