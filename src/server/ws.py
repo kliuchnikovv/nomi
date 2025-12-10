@@ -15,6 +15,7 @@ from src.server.utils import make_meta, make_error, make_done, make_data
 from src.teams import TeamFactory
 from src.tools.config import ToolConfigClient
 from src.tools.models import ToolSpec
+from agno.tools.googlesearch import GoogleSearch
 
 logger = logging.getLogger(__name__)
 
@@ -576,6 +577,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     chat_history=chat_history,
                     current_model_name=current_model_name,
                     attachments=payload.get("attachments"),
+                    web_search=payload.get("web_search"),
                 )
         except WebSocketDisconnect:
             # Клиент отвалился — нормальный сценарий
@@ -593,7 +595,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
 
     return r
 
-async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] = None, chat_history: Optional[list] = None, attachments: Optional[list] = None):
+async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] = None, chat_history: Optional[list] = None, attachments: Optional[list] = None, web_search: bool = False):
     """Async generator yielding text chunks from the agent.
 
     Tries to use stream=True where supported; handles async/sync iterators
@@ -618,6 +620,22 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             return ""
 
     async def _invoke_with_stream(fn):
+        # Temporarily add GoogleSearch tool if web_search is requested
+        original_tools = []
+        added_search = False
+        if web_search:
+            try:
+                original_tools = list(agent.tools) if agent.tools else []
+                # Check if GoogleSearch is already present to avoid duplicates
+                has_search = any(isinstance(t, GoogleSearch) for t in original_tools)
+                if not has_search:
+                    search_tool = GoogleSearch()
+                    agent.tools = original_tools + [search_tool]
+                    added_search = True
+                    logger.info("[WS] 🌍 Added GoogleSearch tool for this request")
+            except Exception as e:
+                logger.warning("[WS] Failed to add GoogleSearch tool: %s", e)
+
         try:
             # Prepare kwargs
             kwargs = {"stream": True}
@@ -674,6 +692,11 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             if asyncio.iscoroutinefunction(fn):
                 return await fn(text)
             return fn(text)
+        finally:
+            # Restore original tools if we modified them
+            if added_search:
+                agent.tools = original_tools
+                logger.debug("[WS] 🌍 Removed GoogleSearch tool")
 
     # Call agent entrypoints
     result = None
@@ -967,6 +990,7 @@ async def _process_message(
     chat_history: Optional[list] = None,
     current_model_name: Optional[str] = None,
     attachments: Optional[list] = None,
+    web_search: Optional[bool] = False,
 ) -> int:
     message_id = str(uuid.uuid4())
 
@@ -1008,7 +1032,7 @@ async def _process_message(
         else:
             logger.debug("[WS] No chat history provided: session_id=%s", session_id)
 
-        async for chunk in _run_agent_stream(agent, text or "", session_id=session_id, chat_history=chat_history, attachments=attachments):
+        async for chunk in _run_agent_stream(agent, text or "", session_id=session_id, chat_history=chat_history, attachments=attachments, web_search=web_search):
             # Skip empty or 'None' chunks
             if not chunk or chunk == "None":
                 if chunk == "None":
