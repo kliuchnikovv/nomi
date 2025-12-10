@@ -12,7 +12,9 @@ import { Props, CONNECTORS } from './models.tsx';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { NavArrowRight } from 'iconoir-react-native';
 import { useConnectors } from './context.tsx';
-import { tokyoNightPalette } from '../../../themes/tokyoNight.ts';
+import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight.ts';
+
+const palette = tokyoNightTheme.palette;
 import { pluginsApi } from '../../../apiClient.ts';
 
 
@@ -110,7 +112,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                         name={integration.name}
                                         enabled={!!integration.connected}
                                         glyph={details?.glyph || 'application'}
-                                        color={details?.color || tokyoNightPalette.blue}
+                                        color={details?.color || palette.blue}
                                         configID={integration.id}
                                         statusText={getIntegrationStatus(integration)}
                                         onDelete={() => deleteIntegration(integration.id)}
@@ -142,7 +144,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                 name={integration.name}
                                                 enabled={true}
                                                 glyph={details?.glyph || 'application'}
-                                                color={details?.color || tokyoNightPalette.blue}
+                                                color={details?.color || palette.blue}
                                                 configID={integration.id}
                                                 statusText={getIntegrationStatus(integration)}
                                             />
@@ -170,7 +172,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                 name={integration.name}
                                                 enabled={false}
                                                 glyph={details?.glyph || 'application'}
-                                                color={details?.color || tokyoNightPalette.blue}
+                                                color={details?.color || palette.blue}
                                                 configID={integration.id}
                                                 statusText={getIntegrationStatus(integration)}
                                             />
@@ -199,7 +201,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                         disabled={gmailSyncing}
                                     >
                                         {gmailSyncing ? (
-                                            <ActivityIndicator size="small" color={tokyoNightPalette.black} />
+                                            <ActivityIndicator size="small" color={palette.black} />
                                         ) : (
                                             <Text style={styles.syncButtonText}>Sync now</Text>
                                         )}
@@ -274,7 +276,7 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
                         value={enabled}
                         onValueChange={handleToggle}
                         trackColor={{
-                            true: tokyoNightPalette.blue,
+                            true: palette.blue,
                             false: 'rgba(192, 202, 245, 0.3)',
                         }}
                         thumbColor="#fff"

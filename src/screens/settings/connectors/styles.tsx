@@ -1,5 +1,7 @@
 import { StyleSheet } from 'react-native';
-import { tokyoNight, tokyoNightPalette } from '../../../themes/tokyoNight';
+import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight';
+
+const palette = tokyoNightTheme.palette;
 
 export const styles = StyleSheet.create({
     overlay: {
@@ -75,7 +77,7 @@ export const styles = StyleSheet.create({
         marginRight: 10,
     },
     connectBtnPressed: { opacity: 0.85 },
-    connectText: { color: tokyoNightPalette.bg, fontWeight: '700' },
+    connectText: { color: palette.bg, fontWeight: '700' },
     connectedText: { color: tokyoNight.text, marginRight: 10 },
     rowPressed: {
         backgroundColor: 'rgba(192, 202, 245, 0.06)',
@@ -94,7 +96,7 @@ export const styles = StyleSheet.create({
         marginRight: 12,
     },
     iconText: {
-        color: tokyoNightPalette.bg,
+        color: palette.bg,
         fontSize: 18,
     },
     rowTitle: {
@@ -130,7 +132,7 @@ export const styles = StyleSheet.create({
         borderRadius: 12,
     },
     addAccountButtonText: {
-        color: tokyoNightPalette.bg,
+        color: palette.bg,
         fontWeight: '700',
     },
     syncRow: {
@@ -156,7 +158,7 @@ export const styles = StyleSheet.create({
         opacity: 0.8,
     },
     syncButtonText: {
-        color: tokyoNightPalette.bg,
+        color: palette.bg,
         fontWeight: '700',
     },
     inputGroup: {
