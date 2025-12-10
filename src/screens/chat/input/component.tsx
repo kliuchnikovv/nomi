@@ -11,7 +11,8 @@ import {
     Page,
     MediaImage,
     Translate,
-    Check
+    Check,
+    Globe
 } from 'iconoir-react-native';
 
 import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
@@ -45,6 +46,7 @@ export default function ChatInput(props: Props) {
     const [voiceLanguageMenuVisible, setVoiceLanguageMenuVisible] = useState(false);
     const [voiceLanguage, setVoiceLanguage] = useState('auto');
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
+    const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
@@ -61,12 +63,13 @@ export default function ChatInput(props: Props) {
         if (!text && !hasAttachments) return;
 
         // Pass full attachments (including URI) to sendMessage for optimistic updates
-        sendMessage(text, attachments);
+        sendMessage(text, attachments, webSearchEnabled);
 
         Keyboard.dismiss();
         setValue('');
         setAttachments([]);
-    }, [value, attachments, sendMessage]);
+        setWebSearchEnabled(false);
+    }, [value, attachments, sendMessage, webSearchEnabled]);
 
     const toggleRecord = useCallback(async () => {
         if (voiceRecorder.state === 'idle') {
@@ -240,6 +243,15 @@ export default function ChatInput(props: Props) {
             onPress: () => executeWithDelay(takePhoto),
         },
         {
+            id: 'web_search',
+            label: 'Web Search',
+            icon: <Globe width={20} height={20} color={webSearchEnabled ? theme.accent : "#fff"} />,
+            onPress: () => {
+                setWebSearchEnabled(prev => !prev);
+                setPlusMenuVisible(false);
+            }
+        },
+        {
             id: 'voice_language',
             label: `Voice Language: ${voiceLanguage === 'auto' ? 'Auto' : voiceLanguage}`,
             icon: <Translate width={20} height={20} color="#fff" />,
@@ -249,7 +261,7 @@ export default function ChatInput(props: Props) {
                 setTimeout(() => setVoiceLanguageMenuVisible(true), 300);
             },
         }
-    ], [voiceLanguage, pickDocument, pickImage, takePhoto, executeWithDelay]);
+    ], [voiceLanguage, pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, theme.accent]);
 
     const voiceLanguageItems: ContextMenuItem[] = useMemo(() => [
         { id: 'auto', label: 'Auto (Device Default)', onPress: () => setVoiceLanguage('auto') },
@@ -351,8 +363,20 @@ export default function ChatInput(props: Props) {
                 { paddingBottom: isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) }
             ]}>
                 {/* Attachments Preview */}
-                {attachments.length > 0 && (
+                {(attachments.length > 0 || webSearchEnabled) && (
                     <ScrollView horizontal style={{ flexDirection: 'row', padding: 8, maxHeight: 100 }} contentContainerStyle={{ gap: 8 }}>
+                        {webSearchEnabled && (
+                            <View style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', position: 'relative', backgroundColor: theme.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.accent }}>
+                                <Globe width={24} height={24} color={theme.accent} />
+                                <Text numberOfLines={1} style={{ fontSize: 10, color: theme.accent, paddingHorizontal: 2, marginTop: 4 }}>Web Search</Text>
+                                <Pressable
+                                    onPress={() => setWebSearchEnabled(false)}
+                                    style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, padding: 2 }}
+                                >
+                                    <XmarkCircle width={16} height={16} color="#fff" />
+                                </Pressable>
+                            </View>
+                        )}
                         {attachments.map(att => (
                             <View key={att.id} style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', position: 'relative', backgroundColor: theme.surface }}>
                                 {att.type === 'image' ? (
