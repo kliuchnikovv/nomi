@@ -1,6 +1,6 @@
 import { ThemeDescriptor, ThemePalette } from './types';
 
-export const visualStudioLightPalette: ThemePalette = {
+const palette: ThemePalette = {
     red: '#a31515',
     orange: '#d16969',
     yellow: '#795e26',
@@ -25,18 +25,18 @@ export const visualStudioLightPalette: ThemePalette = {
 export const visualStudioLightTheme: ThemeDescriptor = {
     id: 'visualStudioLight',
     name: 'Light (Visual Studio)',
-    palette: visualStudioLightPalette,
+    palette: palette,
     colors: {
-        attention: visualStudioLightPalette.red,
-        background: visualStudioLightPalette.bg,
-        icon: visualStudioLightPalette.fg,
-        text: visualStudioLightPalette.fg,
+        attention: palette.red,
+        background: palette.bg,
+        icon: palette.fg,
+        text: palette.fg,
         fadedText: 'rgba(0, 0, 0, 0.7)',
-        accent: visualStudioLightPalette.blue,
-        accentAlt: visualStudioLightPalette.cyan,
+        accent: palette.blue,
+        accentAlt: palette.cyan,
         border: '#e5e5e5', // Lighter border for light theme
         textSecondary: '#666666', // Darker grey for secondary text on light background
-        textPrimary: visualStudioLightPalette.fg,
+        textPrimary: palette.fg,
         surface: '#f3f3f3', // Light grey for cards/sidebars
         surfaceAlt: '#e5e5e5',
         surfaceHighlight: '#d4d4d4', // Hover/Active state

@@ -12,7 +12,9 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { styles } from './styles.tsx';
 import { Props, CONNECTORS, Connector, Tool, Integration } from './models.tsx';
 import { useConnectors } from './context.tsx';
-import { tokyoNightPalette } from '../../../themes/tokyoNight';
+import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight';
+
+const palette = tokyoNightTheme.palette;
 
 export default function ConnectorsDialog({ visible, onClose }: Props) {
     const { tools, integrations, toggleTool } = useConnectors();
@@ -60,7 +62,7 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
         return (
             <View style={styles.row}>
                 <View style={[styles.iconBubble, { backgroundColor: c.color }]}>
-                    <Icon name={c.glyph} size={20} color={tokyoNightPalette.bg} />
+                    <Icon name={c.glyph} size={20} color={palette.bg} />
                 </View>
                 <View style={styles.titleBlock}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
@@ -74,16 +76,16 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
                 </View>
                 <View style={styles.switchWrap}>
                     {isLoading ? (
-                        <ActivityIndicator size="small" color={tokyoNightPalette.bg} />
+                        <ActivityIndicator size="small" color={palette.bg} />
                     ) : (
                         <Switch
                             value={isConnected}
                             onValueChange={value => handleToggle(integration.id, value)}
                             trackColor={{
-                                true: tokyoNightPalette.blue,
+                                true: palette.blue,
                                 false: 'rgba(192, 202, 245, 0.3)',
                             }}
-                            thumbColor={tokyoNightPalette.bg}
+                            thumbColor={palette.bg}
                         />
                     )}
                 </View>

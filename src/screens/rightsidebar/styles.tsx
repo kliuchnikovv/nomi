@@ -1,5 +1,7 @@
 import { StyleSheet } from 'react-native';
-import { tokyoNight, tokyoNightPalette } from '../../themes/tokyoNight';
+import { tokyoNight, tokyoNightTheme } from '../../themes/tokyoNight';
+
+const palette = tokyoNightTheme.palette;
 
 export const styles = StyleSheet.create({
     root: {
@@ -18,7 +20,7 @@ export const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     sectionTitle: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -28,7 +30,7 @@ export const styles = StyleSheet.create({
         marginLeft: 6,
     },
     expandIcon: {
-        color: tokyoNightPalette.gutterGrey,
+        color: palette.gutterGrey,
     },
     listContent: {
         padding: 8,
@@ -79,8 +81,8 @@ export const styles = StyleSheet.create({
         borderColor: 'rgba(192, 202, 245, 0.1)',
     },
     filterChipActive: {
-        backgroundColor: tokyoNightPalette.white,
-        borderColor: tokyoNightPalette.white,
+        backgroundColor: palette.white,
+        borderColor: palette.white,
     },
     filterChipContent: {
         flexDirection: 'row',
@@ -93,7 +95,7 @@ export const styles = StyleSheet.create({
         fontWeight: '600',
     },
     filterChipTextActive: {
-        color: tokyoNightPalette.black,
+        color: palette.black,
     },
     inboxItem: {
         padding: 10,
@@ -104,7 +106,7 @@ export const styles = StyleSheet.create({
     },
     inboxItemUnread: {
         backgroundColor: 'rgba(122, 162, 247, 0.05)',
-        borderLeftColor: tokyoNight.blue,
+        borderLeftColor: palette.blue,
     },
     inboxHeader: {
         flexDirection: 'row',
@@ -113,7 +115,7 @@ export const styles = StyleSheet.create({
         marginBottom: 4,
     },
     sender: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 12,
         fontWeight: '600',
         marginBottom: 2,
@@ -135,7 +137,7 @@ export const styles = StyleSheet.create({
         fontSize: 11,
     },
     subject: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 13,
         marginBottom: 3,
     },
@@ -300,7 +302,7 @@ export const styles = StyleSheet.create({
         gap: 8,
     },
     structuredTitle: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 14,
         fontWeight: 'bold',
         marginBottom: 4,
@@ -322,7 +324,7 @@ export const styles = StyleSheet.create({
     },
     badgeText: {
         fontSize: 11,
-        color: tokyoNightPalette.white,
+        color: palette.white,
     },
     summary: {
         color: 'rgba(192, 202, 245, 0.8)',
@@ -343,7 +345,7 @@ export const styles = StyleSheet.create({
         opacity: 0.6,
     },
     actionText: {
-        color: tokyoNight.blue,
+        color: palette.blue,
         fontSize: 12,
         fontWeight: '600',
     },
@@ -360,7 +362,7 @@ export const styles = StyleSheet.create({
         borderRadius: 6,
     },
     missingInfoText: {
-        color: tokyoNightPalette.red,
+        color: palette.red,
         fontSize: 12,
     },
     // Стили для плагинов и чатов
@@ -387,7 +389,7 @@ export const styles = StyleSheet.create({
         minWidth: 0,
     },
     pluginName: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 13,
         fontWeight: '600',
         flexShrink: 1,
@@ -401,7 +403,7 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     unreadBadgeText: {
-        color: tokyoNightPalette.black,
+        color: palette.black,
         fontSize: 10,
         fontWeight: '700',
     },
@@ -419,7 +421,7 @@ export const styles = StyleSheet.create({
     chatItemSelected: {
         backgroundColor: 'rgba(122, 162, 247, 0.15)',
         borderLeftWidth: 3,
-        borderLeftColor: tokyoNight.blue,
+        borderLeftColor: palette.blue,
     },
     chatItemUnread: {
         backgroundColor: 'rgba(122, 162, 247, 0.05)',
@@ -428,7 +430,7 @@ export const styles = StyleSheet.create({
         gap: 4,
     },
     chatTitle: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 13,
         fontWeight: '500',
     },
@@ -451,7 +453,7 @@ export const styles = StyleSheet.create({
         fontSize: 11,
     },
     chatUnreadBadge: {
-        backgroundColor: tokyoNight.blue,
+        backgroundColor: palette.blue,
         minWidth: 18,
         height: 18,
         borderRadius: 9,
@@ -460,7 +462,7 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     chatUnreadBadgeText: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 10,
         fontWeight: '700',
     },
@@ -471,7 +473,7 @@ export const styles = StyleSheet.create({
         gap: 8,
     },
     messagePanelTitle: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 14,
         fontWeight: '700',
     },
@@ -482,7 +484,7 @@ export const styles = StyleSheet.create({
         gap: 6,
     },
     messageCardTitle: {
-        color: tokyoNightPalette.white,
+        color: palette.white,
         fontSize: 13,
         fontWeight: '600',
     },
@@ -501,7 +503,7 @@ export const styles = StyleSheet.create({
         fontSize: 11,
     },
     messageStatus: {
-        color: tokyoNight.blue,
+        color: palette.blue,
         fontSize: 11,
         fontWeight: '700',
         textTransform: 'uppercase',

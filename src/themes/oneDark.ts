@@ -1,6 +1,6 @@
 import { ThemeDescriptor, ThemePalette } from './types';
 
-export const oneDarkPalette: ThemePalette = {
+const palette: ThemePalette = {
     red: '#e06c75',
     orange: '#d19a66',
     yellow: '#e5c07b',
@@ -25,21 +25,21 @@ export const oneDarkPalette: ThemePalette = {
 export const oneDarkTheme: ThemeDescriptor = {
     id: 'oneDark',
     name: 'One Dark',
-    palette: oneDarkPalette,
+    palette: palette,
     colors: {
-        attention: oneDarkPalette.red,
-        background: oneDarkPalette.background,
-        icon: oneDarkPalette.white,
-        text: oneDarkPalette.white,
+        attention: palette.red,
+        background: palette.background,
+        icon: palette.white,
+        text: palette.white,
         fadedText: 'rgba(171, 178, 191, 0.7)',
-        accent: oneDarkPalette.blue,
-        accentAlt: oneDarkPalette.cyan,
-        border: oneDarkPalette.gutterGrey,
-        textSecondary: oneDarkPalette.commentGrey,
-        textPrimary: oneDarkPalette.fg,
+        accent: palette.blue,
+        accentAlt: palette.cyan,
+        border: palette.gutterGrey,
+        textSecondary: palette.commentGrey,
+        textPrimary: palette.fg,
         surface: '#2c313a',
         surfaceAlt: '#262b33',
-        surfaceHighlight: oneDarkPalette.selection ?? '#3e4451',
+        surfaceHighlight: palette.selection ?? '#3e4451',
     },
 };
 

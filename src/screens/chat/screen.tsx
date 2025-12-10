@@ -34,7 +34,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
-    const { chats, activeChatID, setActiveChatID, getChats, createNewChat, renameChat, deleteChat } = useMain();
+    const { chats, activeChatID, activeChat, setActiveChatID, getChats, createNewChat, renameChat, deleteChat } = useMain();
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
 
@@ -185,7 +185,6 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             }
         });
 
-    const activeChat = useMemo(() => chats.find(c => c.id === activeChatID), [chats, activeChatID]);
     const headerTitle = externalTitle || activeChat?.title || 'New Chat';
     const headerSubtitle = assistantWorking ? 'Assistant is thinking…' : 'Available to help';
 
