@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { IMessage } from 'react-native-gifted-chat';
-import { Message as GenieMessage } from '../../main/models';
+import { Message as GenieMessage, Attachment } from '../../main/models';
 
-interface ExtendedIMessage extends IMessage {
+export interface ExtendedIMessage extends IMessage {
     tool_calls?: any[];
     model?: string;
+    attachments?: Attachment[];
 }
 
 const getTimestamp = (value?: number | string | null) => {
@@ -35,6 +36,7 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
                 },
                 tool_calls: msg.tool_calls,
                 model: msg.model,
+                attachments: msg.attachments,
             };
         });
     }, [messages, userId]);
