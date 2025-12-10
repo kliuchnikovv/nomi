@@ -1,6 +1,6 @@
 import { ThemeDescriptor, ThemePalette } from './types';
 
-export const tokyoNightPalette: ThemePalette = {
+const palette: ThemePalette = {
     red: '#f7768e',
     orange: '#ff9e64',
     yellow: '#e0af68',
@@ -25,18 +25,18 @@ export const tokyoNightPalette: ThemePalette = {
 export const tokyoNightTheme: ThemeDescriptor = {
     id: 'tokyoNight',
     name: 'Tokyo Night',
-    palette: tokyoNightPalette,
+    palette: palette,
     colors: {
-        attention: tokyoNightPalette.red,
-        background: tokyoNightPalette.bg,
-        icon: tokyoNightPalette.fg,
-        text: tokyoNightPalette.fg,
+        attention: palette.red,
+        background: palette.bg,
+        icon: palette.fg,
+        text: palette.fg,
         fadedText: 'rgba(192, 202, 245, 0.7)',
-        accent: tokyoNightPalette.blue,
-        accentAlt: tokyoNightPalette.cyan,
-        border: tokyoNightPalette.gutterGrey,
-        textSecondary: tokyoNightPalette.commentGrey,
-        textPrimary: tokyoNightPalette.fg,
+        accent: palette.blue,
+        accentAlt: palette.cyan,
+        border: palette.gutterGrey,
+        textSecondary: palette.commentGrey,
+        textPrimary: palette.fg,
         surface: '#24283b', // Slightly lighter background for cards/sidebars
         surfaceAlt: '#1f2335',
         surfaceHighlight: '#2f3549', // Hover/Active state

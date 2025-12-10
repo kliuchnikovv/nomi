@@ -11,9 +11,10 @@ import React from 'react';
 import { Props, CONNECTORS } from './models.tsx';
 import { NavArrowRight, Mail, Calendar, WarningCircle, Trash } from 'iconoir-react-native';
 import { useConnectors } from './context.tsx';
-import { tokyoNightPalette } from '../../../themes/tokyoNight.ts';
+import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight.ts';
 
-
+const palette = tokyoNightTheme.palette;
+import { pluginsApi } from '../../../apiClient.ts';
 
 
 export default function ConnectorScreenDialog({ onClose }: Props) {
@@ -102,7 +103,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                         name={integration.name}
                                         enabled={!!integration.connected}
                                         glyph={details?.glyph || 'application'}
-                                        color={details?.color || tokyoNightPalette.blue}
+                                        color={details?.color || palette.blue}
                                         configID={integration.id}
                                         statusText={getIntegrationStatus(integration)}
                                         onDelete={() => deleteIntegration(integration.id)}
@@ -141,7 +142,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                         name={integration.name}
                                         enabled={!!integration.connected}
                                         glyph={details?.glyph || 'calendar'}
-                                        color={details?.color || tokyoNightPalette.orange}
+                                        color={details?.color || tokyoNight.calendar}
                                         configID={integration.id}
                                         statusText={getIntegrationStatus(integration)}
                                         onDelete={() => deleteIntegration(integration.id)}
@@ -173,7 +174,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                 name={integration.name}
                                                 enabled={true}
                                                 glyph={details?.glyph || 'application'}
-                                                color={details?.color || tokyoNightPalette.blue}
+                                                color={details?.color || palette.blue}
                                                 configID={integration.id}
                                                 statusText={getIntegrationStatus(integration)}
                                             />
@@ -201,7 +202,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                 name={integration.name}
                                                 enabled={false}
                                                 glyph={details?.glyph || 'application'}
-                                                color={details?.color || tokyoNightPalette.blue}
+                                                color={details?.color || palette.blue}
                                                 configID={integration.id}
                                                 statusText={getIntegrationStatus(integration)}
                                             />
@@ -216,20 +217,23 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                     )}
 
 
-
-                    {enabledTools.length === 0 && disabledTools.length === 0 && gmailIntegrations.length === 0 && calendarIntegrations.length === 0 && (
-                        <View style={styles.emptyRow}>
-                            <Text style={styles.emptyText}>
-                                Нет доступных интеграций
-                            </Text>
-                        </View>
-                    )}
-                    {errorMsg && (
-                        <Text style={[styles.syncStatus, { marginTop: 20 }]}>{errorMsg}</Text>
-                    )}
-                </ScrollView>
-            </View>
-        </View>
+                    {
+                        enabledTools.length === 0 && disabledTools.length === 0 && gmailIntegrations.length === 0 && calendarIntegrations.length === 0 && (
+                            <View style={styles.emptyRow}>
+                                <Text style={styles.emptyText}>
+                                    Нет доступных интеграций
+                                </Text>
+                            </View>
+                        )
+                    }
+                    {
+                        errorMsg && (
+                            <Text style={[styles.syncStatus, { marginTop: 20 }]}>{errorMsg}</Text>
+                        )
+                    }
+                </ScrollView >
+            </View >
+        </View >
     );
 }
 
@@ -284,7 +288,7 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
                         value={enabled}
                         onValueChange={handleToggle}
                         trackColor={{
-                            true: tokyoNightPalette.blue,
+                            true: palette.blue,
                             false: 'rgba(192, 202, 245, 0.3)',
                         }}
                         thumbColor="#fff"

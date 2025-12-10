@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { tokyoNight, tokyoNightPalette } from '../../themes/tokyoNight';
+import { tokyoNight, tokyoNightTheme } from '../../themes/tokyoNight';
 
 export const styles = StyleSheet.create({
     root: {
@@ -10,7 +10,7 @@ export const styles = StyleSheet.create({
     },
     sidebarWrap: {
         width: 320,
-        backgroundColor: tokyoNightPalette.bg,
+        backgroundColor: tokyoNightTheme.palette.bg,
         borderRightWidth: 1,
         borderRightColor: tokyoNight.border,
         zIndex: 2,
@@ -28,7 +28,7 @@ export const styles = StyleSheet.create({
     },
     rightSidebarWrap: {
         width: 320,
-        backgroundColor: tokyoNightPalette.bg,
+        backgroundColor: tokyoNightTheme.palette.bg,
         borderLeftWidth: 1,
         borderLeftColor: tokyoNight.border,
         zIndex: 2,
@@ -51,7 +51,7 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     headerIcon: {
-        color: tokyoNight.blue,
+        color: tokyoNightTheme.palette.blue,
         fontSize: 18,
     },
     headerTitle: {
@@ -73,7 +73,7 @@ export const styles = StyleSheet.create({
         position: 'absolute',
         top: -4,
         right: -4,
-        backgroundColor: tokyoNightPalette.red,
+        backgroundColor: tokyoNightTheme.palette.red,
         borderRadius: 8,
         minWidth: 16,
         height: 16,
@@ -82,7 +82,7 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 4,
     },
     badgeText: {
-        color: tokyoNightPalette.bg,
+        color: tokyoNightTheme.palette.bg,
         fontSize: 10,
         fontWeight: '600',
     },

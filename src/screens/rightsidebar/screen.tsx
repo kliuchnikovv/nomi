@@ -10,7 +10,9 @@ import { NavArrowDown, NavArrowRight, Mail, Calendar } from 'iconoir-react-nativ
 import { styles } from './styles.tsx';
 import { usePluginChats } from './context';
 import { useChat } from '../chat/context';
-import { tokyoNight, tokyoNightPalette } from '../../themes/tokyoNight.ts';
+import { tokyoNight, tokyoNightTheme } from '../../themes/tokyoNight.ts';
+
+const palette = tokyoNightTheme.palette;
 import { Plugin, PluginChat } from './models';
 
 type Props = {
@@ -21,16 +23,16 @@ type Props = {
 };
 
 const pluginIconMap: Record<string, { IconComponent: any; color: string }> = {
-    inbox: { IconComponent: Mail, color: tokyoNightPalette.blue },
-    gmail: { IconComponent: Mail, color: tokyoNightPalette.red },
-    imap: { IconComponent: Mail, color: tokyoNightPalette.cyan },
-    calendar: { IconComponent: Calendar, color: tokyoNightPalette.orange },
+    inbox: { IconComponent: Mail, color: palette.blue },
+    gmail: { IconComponent: Mail, color: palette.red },
+    imap: { IconComponent: Mail, color: palette.cyan },
+    calendar: { IconComponent: Calendar, color: palette.orange },
 };
 
 const getPluginIcon = (provider: string) => {
     return pluginIconMap[provider] || {
         IconComponent: Mail,
-        color: tokyoNightPalette.commentGrey,
+        color: palette.commentGrey,
     };
 };
 
@@ -97,13 +99,13 @@ const PluginSection = ({
                         <NavArrowDown
                             width={16}
                             height={16}
-                            color={tokyoNightPalette.gutterGrey}
+                            color={palette.gutterGrey}
                         />
                     ) : (
                         <NavArrowRight
                             width={16}
                             height={16}
-                            color={tokyoNightPalette.gutterGrey}
+                            color={palette.gutterGrey}
                         />
                     )}
                 </View>
@@ -296,7 +298,7 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
             </View>
             {loading && plugins.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <ActivityIndicator size="large" color={tokyoNightPalette.blue} />
+                    <ActivityIndicator size="large" color={palette.blue} />
                 </View>
             ) : plugins.length === 0 ? (
                 <View style={styles.emptyState}>
