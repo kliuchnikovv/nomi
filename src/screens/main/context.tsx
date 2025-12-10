@@ -27,6 +27,7 @@ export function useMain() {
 
 export function MainProvider({ children }: { children: ReactNode }) {
     const [chats, setChats] = useState<Chat[]>([]);
+    const [chatsLoading, setChatsLoading] = useState(false);
     const [activeChatID, setActiveChatID] = useState<string | null>(emptyChatID);
 
     const { isAuthenticated } = useAuth();
@@ -70,6 +71,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
     async function getChats(options: GetChatsOptions = {}) {
         const { preserveActiveChat } = options;
+        setChatsLoading(true);
         try {
             console.log(`${API_URL}/chats`)
             const data = await apiClient.get<[Chat]>(`${API_URL}/chats`)
@@ -108,6 +110,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
             alertError(`Can't get chats: ${error}`)
             console.error(`Can't get chats: ${error}`);
             return;
+        } finally {
+            setChatsLoading(false);
         }
     }
 
@@ -255,6 +259,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
     const value: MainContextType = {
         chats,
+        chatsLoading,
         activeChatID,
         activeChat,
         getChats,
