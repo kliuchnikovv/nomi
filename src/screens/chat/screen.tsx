@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Platform, KeyboardAvoidingView, Keyboard, StyleSheet } from 'react-native';
+import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity } from 'react-native';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useSharedValue, withTiming, runOnJS } from 'react-native-reanimated';
+import ImageViewing from 'react-native-image-viewing';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { Eye, EyeClosed } from 'iconoir-react-native';
 
 import { useChat } from './context';
 import { useAuth } from '../auth/context';
@@ -17,6 +21,7 @@ import { ChatHeader } from './components/ChatHeader';
 import { ChatSidebar } from './sidebar/screen';
 import { useTheme } from '../../context/ThemeContext';
 import { Skeleton } from '../../components/Skeleton';
+import { Attachment } from '../../main/models';
 
 function MessageListSkeleton() {
     return (
@@ -56,6 +61,12 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
 
+    // Attachment Logic
+    const [imageViewerVisible, setImageViewerVisible] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [previewImages, setPreviewImages] = useState<any[]>([]);
+    const [attachmentPosition, setAttachmentPosition] = useState<'inside' | 'outside'>('outside');
+
     const styles = useMemo(() => createStyles(theme), [theme]);
 
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
@@ -93,6 +104,43 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         setError(null);
     }, [setError]);
 
+    // Attachment Handlers
+    const handleAttachmentPress = useCallback(async (attachment: Attachment) => {
+        if (attachment.file_type?.startsWith('image/')) {
+            const images = [{ uri: attachment.uri || attachment.content }];
+            // Ensure data URI if base64
+            if (images[0].uri && !images[0].uri.startsWith('http') && !images[0].uri.startsWith('data:')) {
+                 images[0].uri = `data:${attachment.file_type || 'image/png'};base64,${attachment.content}`;
+            }
+            setPreviewImages(images);
+            setCurrentImageIndex(0);
+            setImageViewerVisible(true);
+        } else {
+            try {
+                if (attachment.uri && attachment.uri.startsWith('http')) {
+                   // Remote file
+                   const isAvailable = await Sharing.isAvailableAsync();
+                   if (isAvailable) {
+                       const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'download');
+                       const downloadRes = await FileSystem.downloadAsync(attachment.uri, fileUri);
+                       await Sharing.shareAsync(downloadRes.uri);
+                   }
+                } else if (attachment.content) {
+                    // Base64 content
+                    const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'file');
+                    await FileSystem.writeAsStringAsync(fileUri, attachment.content, { encoding: FileSystem.EncodingType.Base64 });
+                    await Sharing.shareAsync(fileUri);
+                }
+            } catch (e) {
+                console.error('Error sharing file:', e);
+            }
+        }
+    }, []);
+
+    const toggleAttachmentPosition = useCallback(() => {
+        setAttachmentPosition(prev => prev === 'inside' ? 'outside' : 'inside');
+    }, []);
+
     const {
         renderBubble,
         renderFooter,
@@ -110,6 +158,8 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         error,
         onRetry: retryLastMessage,
         onDismissError: handleDismissError,
+        onAttachmentPress: handleAttachmentPress,
+        attachmentPosition,
     });
 
     const isWide = windowWidth >= 1024;
@@ -231,6 +281,37 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         onMenuPress={handleOpenMenu}
                         showMenu={!isWide}
                     />
+
+                    {/* Position Toggle Button - Visible */}
+                    <View style={{position: 'absolute', top: 50, right: 10, zIndex: 100}}>
+                         <TouchableOpacity
+                            onPress={toggleAttachmentPosition}
+                            style={{
+                                padding: 8,
+                                backgroundColor: chatTheme.background,
+                                borderRadius: 20,
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.25,
+                                shadowRadius: 3.84,
+                                elevation: 5,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                borderWidth: 1,
+                                borderColor: chatTheme.border
+                            }}>
+                             {attachmentPosition === 'inside' ? (
+                                <EyeClosed width={16} height={16} color={chatTheme.textPrimary} />
+                             ) : (
+                                <Eye width={16} height={16} color={chatTheme.textPrimary} />
+                             )}
+                             <Text style={{color: chatTheme.textPrimary, fontSize: 10, fontWeight: 'bold'}}>
+                                {attachmentPosition === 'inside' ? 'Inside Bubble' : 'Outside Bubble'}
+                             </Text>
+                         </TouchableOpacity>
+                    </View>
+
                     <KeyboardAvoidingView
                         style={{ flex: 1 }}
                         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -301,6 +382,13 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                     dragGesture={closeGesture}
                 />
             )}
+
+            <ImageViewing
+                images={previewImages}
+                imageIndex={currentImageIndex}
+                visible={imageViewerVisible}
+                onRequestClose={() => setImageViewerVisible(false)}
+            />
         </View>
     );
 }
