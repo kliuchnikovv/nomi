@@ -8,6 +8,7 @@ import { createSidebarStyles } from './styles';
 import { createChatTheme } from '../theme';
 import { useTheme } from '../../../context/ThemeContext';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import { Skeleton } from '../../../components/Skeleton';
 
 const pad = (value: number) => value.toString().padStart(2, '0');
 
@@ -21,8 +22,24 @@ const formatDateTime = (value?: string) => {
 type SidebarStyles = ReturnType<typeof createSidebarStyles>;
 type SidebarChatTheme = ReturnType<typeof createChatTheme>;
 
+function ChatListSkeleton({ styles }: { styles: SidebarStyles }) {
+    // Generate an array of 5 fake items
+    const items = Array.from({ length: 5 }, (_, i) => String(i));
+    return (
+        <View style={styles.listContent}>
+            {items.map((key) => (
+                <View key={key} style={[styles.item, { opacity: 0.7 }]}>
+                    <Skeleton height={20} width="70%" borderRadius={4} style={{ marginBottom: 4 }} />
+                    <Skeleton height={14} width="40%" borderRadius={4} />
+                </View>
+            ))}
+        </View>
+    );
+}
+
 function ChatList({
     chats,
+    chatsLoading,
     activeChatID,
     onSelectChat,
     onNewChat,
@@ -31,7 +48,7 @@ function ChatList({
     onChatRename,
     styles,
     chatTheme,
-}: Pick<ChatSidebarProps, 'chats' | 'activeChatID' | 'onSelectChat' | 'onNewChat' | 'onSettingsPress' | 'onChatDelete' | 'onChatRename'> & {
+}: Pick<ChatSidebarProps, 'chats' | 'chatsLoading' | 'activeChatID' | 'onSelectChat' | 'onNewChat' | 'onSettingsPress' | 'onChatDelete' | 'onChatRename'> & {
     styles: SidebarStyles;
     chatTheme: SidebarChatTheme;
 }) {
@@ -108,14 +125,18 @@ function ChatList({
                     <Text style={styles.newChatText}>＋ New</Text>
                 </Pressable>
             </View>
-            <FlatList
-                data={chats}
-                keyExtractor={item => item.id}
-                renderItem={renderItem}
-                style={styles.list}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-            />
+            {chatsLoading ? (
+                <ChatListSkeleton styles={styles} />
+            ) : (
+                <FlatList
+                    data={chats}
+                    keyExtractor={item => item.id}
+                    renderItem={renderItem}
+                    style={styles.list}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                />
+            )}
             {onSettingsPress && (
                 <View style={[styles.footer, { marginBottom: insets.bottom }]}>
                     <Pressable
@@ -143,6 +164,7 @@ export function ChatSidebar({
     variant,
     width,
     chats,
+    chatsLoading,
     activeChatID,
     onClose,
     onSelectChat,
@@ -162,6 +184,7 @@ export function ChatSidebar({
             <View style={[styles.container, { width }]}>
                 <ChatList
                     chats={chats}
+                    chatsLoading={chatsLoading}
                     activeChatID={activeChatID}
                     onSelectChat={onSelectChat}
                     onNewChat={onNewChat}
@@ -215,6 +238,7 @@ export function ChatSidebar({
                     <Animated.View style={[styles.overlayCard, { width }, animatedStyle]}>
                         <ChatList
                             chats={chats}
+                            chatsLoading={chatsLoading}
                             activeChatID={activeChatID}
                             onSelectChat={(id) => {
                                 onSelectChat(id);
@@ -239,6 +263,7 @@ export function ChatSidebar({
                 <Animated.View style={[styles.overlayCard, { width }, animatedStyle]}>
                     <ChatList
                         chats={chats}
+                        chatsLoading={chatsLoading}
                         activeChatID={activeChatID}
                         onSelectChat={(id) => {
                             onSelectChat(id);

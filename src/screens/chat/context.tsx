@@ -42,6 +42,7 @@ export function ChatProvider({
     setActiveChatID,
 }: Props) {
     const [messages, setMessages] = useState<Message[]>([]);
+    const [messagesLoading, setMessagesLoading] = useState(false);
     const [externalTitle, setExternalTitle] = useState<string | null>(null);
     const socketRef = useRef<ChatSocket | null>(null); // Declare socketRef
     const seededChatRef = useRef<string | null>(null);
@@ -120,6 +121,7 @@ export function ChatProvider({
 
     // Keep getMessages for initial load and manual refresh if needed
     const getMessages = useCallback(async (chatID: string) => {
+        setMessagesLoading(true);
         try {
             const data = await apiClient.get<Message[]>(
                 `${API_URL}/chats/${chatID}/messages`,
@@ -156,6 +158,8 @@ export function ChatProvider({
                 `Failed to fetch messages for chat ${chatID}:`,
                 error,
             );
+        } finally {
+            setMessagesLoading(false);
         }
     }, [setSelectedModel]);
 
@@ -604,6 +608,7 @@ export function ChatProvider({
 
     const value: ChatContextType = {
         messages,
+        messagesLoading,
         getMessages,
         sendMessage, // Now uses the WebSocket version
         executeMessageAction,
