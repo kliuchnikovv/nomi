@@ -642,9 +642,17 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                                 from agno.media import Image
                                 images.append(Image(url=data_uri))
                             except ImportError:
-                                # Fallback if Image class is not available or path is wrong
-                                logger.warning("[WS] Could not import agno.media.Image, passing data URI as string (may fail)")
-                                images.append(data_uri)
+                                # Fallback if Image class is not available
+                                # Define a minimal compatible class that mimics agno.media.Image
+                                class SimpleImage:
+                                    def __init__(self, url: str):
+                                        self.id = str(uuid.uuid4())
+                                        self.url = url
+                                        self.content = None
+                                        self.file_type = None
+
+                                logger.warning("[WS] Could not import agno.media.Image, using SimpleImage fallback")
+                                images.append(SimpleImage(url=data_uri))
 
                 if images:
                     kwargs["images"] = images
