@@ -11,13 +11,14 @@ import (
 
 // User представляет информацию о пользователе
 type User struct {
-	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	Email        string         `json:"email" gorm:"uniqueIndex;not null"`
-	PasswordHash string         `json:"-" gorm:"not null"`
-	Name         string         `json:"name"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
+	ID               uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	Email            string         `json:"email" gorm:"uniqueIndex;not null"`
+	PasswordHash     string         `json:"-" gorm:"not null"`
+	Name             string         `json:"name"`
+	WebSearchEnabled bool           `json:"web_search_enabled" gorm:"default:false"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 // CreateUser создает нового пользователя
@@ -65,4 +66,13 @@ func (s *Storage) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) 
 func (u *User) VerifyPassword(password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password))
 	return err == nil
+}
+
+// UpdateUser обновляет данные пользователя
+func (s *Storage) UpdateUser(ctx context.Context, user *User) error {
+	result := s.DB.WithContext(ctx).Model(user).Updates(user)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
 }

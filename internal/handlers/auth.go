@@ -207,3 +207,48 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }
+
+// UpdateMe обновляет информацию о текущем пользователе
+// @Summary Обновление информации о текущем пользователе
+// @Description Обновляет настройки текущего пользователя
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body map[string]interface{} true "Поля для обновления"
+// @Success 200 {object} storage.User
+// @Failure 400 {object} string "Invalid request"
+// @Failure 401 {object} string "Unauthorized"
+// @Failure 500 {object} string "Internal server error"
+// @Router /api/auth/me [put]
+func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var body struct {
+		WebSearchEnabled *bool `json:"web_search_enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	updated := false
+	if body.WebSearchEnabled != nil {
+		user.WebSearchEnabled = *body.WebSearchEnabled
+		updated = true
+	}
+
+	if updated {
+		if err := h.storage.UpdateUser(r.Context(), user); err != nil {
+			http.Error(w, "Failed to update user", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
