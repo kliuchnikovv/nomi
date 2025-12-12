@@ -26,7 +26,7 @@ class GenieAgent(Agent):
             tools=tools,
             description="You are a helpful personal assistant.",
             instructions="""You have access to a variety of tools. 
-If the user enables 'Web Search' or asks for current information/news, look for a web search tool (e.g. 'fetch' or 'search' provided by MCP) and use it. 
+If the user enables 'Web Search' or asks for current information/news, look for a web search tool (e.g. 'fetch' or 'search' provided by MCP) and use it(use duck duck go as search engine). 
 Always use the tools provided to answer the user's questions accurately. 
 If no relevant tools are available, answer from your knowledge base.""",
             # expected_output=expected_output,
