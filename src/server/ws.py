@@ -17,6 +17,7 @@ from src.tools.config import ToolConfigClient
 from src.tools.models import ToolSpec
 # from agno.tools.duckduckgo import DuckDuckGoTools
 from src.tools.duckduckgo_custom import DuckDuckGoTools
+from agno.tools.mcp import MCPTools
 
 logger = logging.getLogger(__name__)
 
@@ -627,15 +628,15 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
         if web_search:
             try:
                 original_tools = list(agent.tools) if agent.tools else []
-                # Check if DuckDuckGoTools is already present to avoid duplicates
-                has_search = any(isinstance(t, DuckDuckGoTools) for t in original_tools)
+                # Check if MCPTools is already present to avoid duplicates
+                has_search = any(isinstance(t, MCPTools) and t.url == "https://remote.mcpservers.org/fetch/mcp" for t in original_tools)
                 if not has_search:
-                    search_tool = DuckDuckGoTools()
+                    search_tool = MCPTools(transport="streamable-http", url="https://remote.mcpservers.org/fetch/mcp")
                     agent.tools = original_tools + [search_tool]
                     added_search = True
-                    logger.info("[WS] 🌍 Added DuckDuckGoTools tool for this request")
+                    logger.info("[WS] 🌍 Added MCPTools tool for this request")
             except Exception as e:
-                logger.warning("[WS] Failed to add DuckDuckGoTools tool: %s", e)
+                logger.warning("[WS] Failed to add MCPTools tool: %s", e)
 
         try:
             # Prepare kwargs
@@ -697,7 +698,7 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             # Restore original tools if we modified them
             if added_search:
                 agent.tools = original_tools
-                logger.debug("[WS] 🌍 Removed DuckDuckGoTools tool")
+                logger.debug("[WS] 🌍 Removed MCPTools tool")
 
     # Call agent entrypoints
     result = None
