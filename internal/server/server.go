@@ -102,6 +102,11 @@ func New(
 			http.HandlerFunc(authHandler.GetMe),
 		),
 	))
+	r.PUT("/api/auth/me", gin.WrapH(
+		authMiddleware.RequireAuth(
+			http.HandlerFunc(authHandler.UpdateMe),
+		),
+	))
 
 	// Chat API (protected)
 	r.POST("/api/chats", wrapWithAuth(chatHandler.CreateChat, authMiddleware))

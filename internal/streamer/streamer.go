@@ -126,6 +126,25 @@ func (streamer *Streamer) Stream(
 						payload := map[string]interface{}{
 							"tools": toolsPayload,
 						}
+
+						// Fetch user to check web search preference
+						user, err := streamer.storage.GetUserByID(ctx, streamer.userID)
+						if err == nil && user.WebSearchEnabled {
+							// Add web_search_mcp tool if enabled
+							webSearchTool := map[string]interface{}{
+								"name":    "web_search_mcp",
+								"enabled": true,
+								"params":  map[string]interface{}{},
+							}
+
+							// Check if tools list already exists in payload
+							if existingTools, ok := payload["tools"].([]map[string]interface{}); ok {
+								payload["tools"] = append(existingTools, webSearchTool)
+							} else {
+								payload["tools"] = []map[string]interface{}{webSearchTool}
+							}
+						}
+
 						if streamer.commandPayload != nil {
 							payload["command"] = streamer.commandPayload
 							payload["team"] = streamer.commandPayload
@@ -137,7 +156,14 @@ func (streamer *Streamer) Stream(
 			if err := modelReader.Write(ctx, toolsFrame); err != nil {
 				streamer.logger.Error("failed to send initial tools frame to model", zap.Error(err))
 			} else {
-				streamer.logger.Info("sent initial tools to model", zap.Int("count", len(tools)))
+				toolCount := len(tools)
+				// Simplified counting for log
+				if toolsMap, ok := toolsFrame.Payload.Tools.(map[string]interface{}); ok {
+					if t, ok := toolsMap["tools"].([]map[string]interface{}); ok {
+						toolCount = len(t)
+					}
+				}
+				streamer.logger.Info("sent initial tools to model", zap.Int("count", toolCount))
 			}
 		}
 
