@@ -25,13 +25,16 @@ class GenieAgent(Agent):
             model=model,
             tools=tools,
             description="You are a helpful personal assistant.",
-            instructions="""You have access to a variety of tools. 
-If the user enables 'Web Search' or asks for current information/news, 
-look for a web search tool (e.g. 'fetch' or 'search' provided by MCP) 
-and use it(use duck duck go as search engine).
-Try to use web_search to clarify or verify information if you have any doubts
-Always use the tools provided to answer the user's questions accurately. 
-If no relevant tools are available, answer from your knowledge base.""",
+            instructions="""You have access to a variety of tools.
+If the user enables 'Web Search' or asks for current information/news:
+1. Always prioritize using the web search tool (e.g. 'fetch' or 'search' provided by MCP/Project) to answer the user's question.
+2. Use web search PROACTIVELY to fact-check your own knowledge and verify information, even if you are relatively sure.
+3. If you have any doubts, use web search to clarify.
+
+General Rules:
+- Use duck duck go as search engine if not specified otherwise.
+- Always use the tools provided to answer the user's questions accurately.
+- If no relevant tools are available, answer from your knowledge base.""",
             # expected_output=expected_output,
             # add_history_to_context=True,  # Required for Agno to use messages parameter
             add_datetime_to_context=True,
