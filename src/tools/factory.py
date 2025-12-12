@@ -135,11 +135,21 @@ def _build_memory_writer(_: Dict[str, Any]) -> Toolkit:
     return MemoryWriter()
 
 
+def _build_web_search_mcp(_: Dict[str, Any]) -> Toolkit:
+    # URL is hardcoded or can be passed in params if needed, but for now hardcoded as per req
+    from agno.tools.mcp import MCPTools
+    return MCPTools(
+        transport="streamable-http",
+        url="https://remote.mcpservers.org/fetch/mcp"
+    )
+
+
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Gmail": _build_gmail,
     "Google Calendar": _build_google_calendar,
     "rag": _build_rag,
     "memory_writer": _build_memory_writer,
+    "web_search_mcp": _build_web_search_mcp,
 }
 
 
