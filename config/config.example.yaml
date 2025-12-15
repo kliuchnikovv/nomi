@@ -43,3 +43,6 @@ plugins:
     enabled: false
     state:
       sync_window_days: 7
+
+agno_project:
+  api_url: "http://localhost:8001"
