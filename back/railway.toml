@@ -1,0 +1,8 @@
+[build]
+builder = "NIXPACKS"
+
+[env]
+PYTHON_VERSION = "3.12"
+
+[deploy]
+startCommand = "python app.py"
