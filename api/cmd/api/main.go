@@ -27,9 +27,9 @@ import (
 // @BasePath /
 func main() {
 	// Определяем какой конфиг использовать
-	configPath := "configs/config.yaml"
+	configPath := "../config/config.yaml"
 	if os.Getenv("RAILWAY_ENVIRONMENT") != "" {
-		configPath = "configs/config.railway.yaml"
+		configPath = "../config/config.railway.yaml"
 		log.Printf("Running in Railway environment, using %s", configPath)
 	}
 
