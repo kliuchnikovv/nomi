@@ -37,6 +37,7 @@
     "react-native-inappbrowser-reborn": "^3.7.0",
     "react-native-keyboard-controller": "^1.20.0",
     "react-native-markdown-display": "^7.0.2",
+    "react-native-nitro-modules": "^0.31.10",
     "react-native-permissions": "^5.4.4",
     "react-native-reanimated": "^3.19.3",
     "react-native-safe-area-context": "^5.6.2",

@@ -21,11 +21,13 @@ import { createStyles } from './styles.tsx';
 import { useChat } from '../context';
 import { ContextMenu, ContextMenuItem } from '../../../components/ContextMenu';
 import { useTheme } from '../../../context/ThemeContext.tsx';
+import { useAuth } from '../../auth/context';
 import { useVoiceRecorder } from './useVoiceRecorder';
 import AudioWaveform from './AudioWaveform';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { apiClient } from '../../../apiClient';
+import { API_URL } from '../../../config';
 
 type Props = {
     onSend: (text: string) => void;
@@ -54,6 +56,14 @@ export default function ChatInput(props: Props) {
     const styles = useMemo(() => createStyles(theme), [theme]);
 
     const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage } = useChat();
+    const { user, updateUser } = useAuth();
+
+    // Initialize webSearchEnabled from user preference
+    useEffect(() => {
+        if (user?.web_search_enabled !== undefined) {
+            setWebSearchEnabled(user.web_search_enabled);
+        }
+    }, [user?.web_search_enabled]);
 
     const voiceRecorder = useVoiceRecorder();
 
@@ -112,6 +122,12 @@ export default function ChatInput(props: Props) {
             setAttachments(prev => prev.filter(a => a.id !== tempId));
         }
     };
+
+    useEffect(() => {
+        if (attachments.length > 0) {
+            setWebSearchEnabled(false);
+        }
+    }, [attachments]);
 
     const pickImage = async () => {
         console.log('PickImage called');
@@ -247,10 +263,27 @@ export default function ChatInput(props: Props) {
         {
             id: 'web_search',
             label: 'Web Search',
-            icon: <Globe width={20} height={20} color={webSearchEnabled ? theme.accent : "#fff"} />,
-            onPress: () => {
-                setWebSearchEnabled(prev => !prev);
-                setPlusMenuVisible(false);
+            // icon: <Globe width={20} height={20} color={webSearchEnabled ? theme.accent : "#fff"} />, // Icon is handled by switch now or can be kept if we want both? UI usually has label + switch.
+            isSwitch: true,
+            switchValue: webSearchEnabled,
+            onPress: async () => {
+                const newValue = !webSearchEnabled;
+                setWebSearchEnabled(newValue); // Optimistic update
+                // setPlusMenuVisible(false); // Can keep open now
+
+                if (user) {
+                    try {
+                        const updatedUser = await apiClient.put<any>(`${API_URL}/auth/me`, {
+                            web_search_enabled: newValue
+                        });
+                        if (updatedUser) {
+                            updateUser(updatedUser);
+                        }
+                    } catch (e) {
+                        console.error('Failed to update web search preference', e);
+                        setWebSearchEnabled(!newValue); // Revert on failure
+                    }
+                }
             }
         },
         {
@@ -364,21 +397,49 @@ export default function ChatInput(props: Props) {
                 styles.inputWrapper,
                 { paddingBottom: isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) }
             ]}>
+                {/* Web Search Pill */}
+                {webSearchEnabled && (
+                    <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 }}>
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: '#000',
+                            borderRadius: 16,
+                            paddingVertical: 6,
+                            paddingHorizontal: 12,
+                            alignSelf: 'flex-start',
+                            gap: 6
+                        }}>
+                            <Globe width={16} height={16} color="#3b82f6" strokeWidth={2} />
+                            <Text style={{ fontSize: 13, color: '#3b82f6', fontWeight: '500' }}>Search</Text>
+                            <Pressable
+                                onPress={async () => {
+                                    setWebSearchEnabled(false);
+                                    if (user) {
+                                        try {
+                                            const updatedUser = await apiClient.put<any>(`${API_URL}/auth/me`, {
+                                                web_search_enabled: false
+                                            });
+                                            if (updatedUser) {
+                                                updateUser(updatedUser);
+                                            }
+                                        } catch (e) {
+                                            console.error('Failed to disable web search preference', e);
+                                        }
+                                    }
+                                }}
+                                hitSlop={8}
+                                style={{ marginLeft: 2 }}
+                            >
+                                <XmarkCircle width={16} height={16} color="#3b82f6" opacity={0.8} />
+                            </Pressable>
+                        </View>
+                    </View>
+                )}
+
                 {/* Attachments Preview */}
-                {(attachments.length > 0 || webSearchEnabled) && (
+                {attachments.length > 0 && (
                     <ScrollView horizontal style={{ flexDirection: 'row', padding: 8, maxHeight: 100 }} contentContainerStyle={{ gap: 8 }}>
-                        {webSearchEnabled && (
-                            <View style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', position: 'relative', backgroundColor: theme.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.accent }}>
-                                <Globe width={24} height={24} color={theme.accent} />
-                                <Text numberOfLines={1} style={{ fontSize: 10, color: theme.accent, paddingHorizontal: 2, marginTop: 4 }}>Web Search</Text>
-                                <Pressable
-                                    onPress={() => setWebSearchEnabled(false)}
-                                    style={{ position: 'absolute', top: 2, right: 2, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, padding: 2 }}
-                                >
-                                    <XmarkCircle width={16} height={16} color="#fff" />
-                                </Pressable>
-                            </View>
-                        )}
                         {attachments.map(att => (
                             <View key={att.id} style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden', position: 'relative', backgroundColor: theme.surface }}>
                                 {att.type === 'image' ? (
@@ -416,7 +477,7 @@ export default function ChatInput(props: Props) {
                     <TextInput
                         multiline
                         style={styles.input}
-                        placeholder="Type a message..."
+                        placeholder={webSearchEnabled ? "Search the web" : "Type a message..."}
                         placeholderTextColor="rgba(192, 202, 245, 0.6)"
                         value={value}
                         onChangeText={setValue}
