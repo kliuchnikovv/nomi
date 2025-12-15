@@ -2,6 +2,8 @@ module github.com/kliuchnikovv/genie-api
 
 go 1.25.2
 
+exclude cloud.google.com/go/compute v1.7.0
+
 require (
 	github.com/coreos/go-oidc/v3 v3.4.0
 	github.com/emersion/go-imap v1.2.1
