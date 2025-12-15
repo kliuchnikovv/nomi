@@ -4,6 +4,7 @@ export type User = {
     id: string;
     name: string;
     email: string;
+    web_search_enabled?: boolean;
 }
 
 export interface AuthContextType {
@@ -18,6 +19,7 @@ export interface AuthContextType {
     logout: () => Promise<void>;
     refreshToken: () => Promise<boolean>;
     signInWithGoogle: () => Promise<void>;
+    updateUser: (user: User) => Promise<void>;
 }
 
 export function alertError(message: string) {

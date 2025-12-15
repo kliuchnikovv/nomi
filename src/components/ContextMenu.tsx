@@ -5,6 +5,7 @@ import {
     StyleSheet,
     Text,
     View,
+    Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -16,6 +17,8 @@ export type ContextMenuItem = {
     icon?: React.ReactNode;
     onPress: () => void;
     destructive?: boolean;
+    isSwitch?: boolean;
+    switchValue?: boolean;
 };
 
 type Props = {
@@ -67,11 +70,13 @@ export const ContextMenu = ({
                             key={item.id}
                             onPress={() => {
                                 item.onPress();
-                                onClose();
+                                if (!item.isSwitch) {
+                                    onClose();
+                                }
                             }}
                             style={({ pressed }) => [
                                 styles.item,
-                                pressed && styles.itemPressed,
+                                pressed && !item.isSwitch && styles.itemPressed,
                                 index < items.length - 1 && styles.itemBorder,
                             ]}
                         >
@@ -83,7 +88,23 @@ export const ContextMenu = ({
                             >
                                 {item.label}
                             </Text>
-                            {item.icon && <View style={styles.icon}>{item.icon}</View>}
+                            <View style={styles.rightContainer}>
+                                {item.isSwitch ? (
+                                    <Switch
+                                        value={item.switchValue}
+                                        onValueChange={() => {
+                                            item.onPress();
+                                            // Do not close menu
+                                        }}
+                                        trackColor={{ false: theme.border, true: theme.accent }}
+                                        thumbColor="#fff"
+                                        ios_backgroundColor={theme.border}
+                                        style={{ transform: [{ scale: 0.8 }] }}
+                                    />
+                                ) : (
+                                    item.icon && <View style={styles.icon}>{item.icon}</View>
+                                )}
+                            </View>
                         </Pressable>
                     ))}
                 </View>
@@ -140,6 +161,10 @@ const createStyles = (theme: ThemeColors) => StyleSheet.create({
     },
     destructiveText: {
         color: theme.attention,
+    },
+    rightContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     icon: {
         marginLeft: 8,

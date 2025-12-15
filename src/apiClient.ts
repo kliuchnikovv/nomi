@@ -227,8 +227,11 @@ export const modelsApi = {
 };
 
 export const pluginChatsApi = {
-    renameChat: (chatId: string | number, title: string) =>
-        apiClient.patch<void>(`${API_URL}/plugin_chats/${chatId}`, { title }),
     deleteChat: (chatId: string | number) =>
         apiClient.delete<void>(`${API_URL}/plugin_chats/${chatId}`),
+};
+
+export const authApi = {
+    getMe: () => apiClient.get<any>(`${API_URL}/auth/me`),
+    updateMe: (body: { web_search_enabled?: boolean }) => apiClient.put<any>(`${API_URL}/auth/me`, body),
 };

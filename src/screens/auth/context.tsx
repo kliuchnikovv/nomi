@@ -216,6 +216,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
+    const updateUser = async (updatedUser: User) => {
+        setUser(updatedUser);
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+    };
+
     const value: AuthContextType = {
         user,
         token,
@@ -226,6 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         refreshToken,
         signInWithGoogle,
+        updateUser,
     };
 
     return (
