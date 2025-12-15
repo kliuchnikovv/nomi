@@ -1,0 +1,276 @@
+import React, { useCallback, useMemo } from 'react';
+import { Linking, View, Text, ActionSheetIOS } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
+import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
+import Markdown from 'react-native-markdown-display';
+import { createChatTheme, createMarkdownStyles } from '../theme';
+import InAppBrowser from 'react-native-inappbrowser-reborn';
+import { ThemeColors } from '../../../themes/types';
+import ChatInput from '../input/component';
+import { ErrorBanner } from '../components/ErrorBanner';
+import { ToolCallsSection } from '../message/ToolCalls';
+import { MessageAttachments } from '../components/MessageAttachments';
+import { Attachment } from '../../main/models';
+
+interface GiftedChatRenderersParams {
+    assistantContainerMaxWidth: string;
+    assistantWorking: boolean;
+    bottomInset: number;
+    styles: any;
+    theme: ThemeColors;
+    onSend: (text: string) => void;
+    error: string | null;
+    onRetry: () => void;
+    onDismissError: () => void;
+    onAttachmentPress: (attachment: Attachment) => void;
+    attachmentPosition: 'inside' | 'outside';
+}
+
+export function useGiftedChatRenderers({
+    assistantContainerMaxWidth,
+    assistantWorking,
+    bottomInset,
+    styles,
+    theme,
+    onSend,
+    error,
+    onRetry,
+    onDismissError,
+    onAttachmentPress,
+    attachmentPosition,
+}: GiftedChatRenderersParams) {
+    const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(chatTheme), [chatTheme]);
+
+    const handleLongPress = useCallback((context: any, message: any) => {
+        console.log('handleLongPress called', { context, message });
+        const messageText = message?.text || '';
+        if (!messageText) {
+            console.log('No message text');
+            return;
+        }
+
+        ActionSheetIOS.showActionSheetWithOptions(
+            {
+                options: ['Copy', 'Cancel'],
+                cancelButtonIndex: 1,
+                userInterfaceStyle: 'dark',
+            },
+            (buttonIndex) => {
+                if (buttonIndex === 0) {
+                    Clipboard.setString(messageText);
+                    console.log('Copied to clipboard:', messageText.substring(0, 50));
+                }
+            }
+        );
+    }, []);
+
+    const renderBubble = useCallback((props: any) => {
+        const { currentMessage } = props;
+        const attachments = currentMessage?.attachments;
+        const hasAttachments = attachments && attachments.length > 0;
+        const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
+
+        return (
+            <View>
+                 {/*
+                   If using custom logic inside Bubble, we can inject children or modify content.
+                   GiftedChat Bubble is a bit rigid.
+                   We can use renderCustomView to render something INSIDE the bubble
+                   but usually at the bottom of the bubble (below text).
+
+                   However, user often wants attachments ABOVE text.
+                   GiftedChat renderMessageImage (which is usually top of bubble)
+                   isn't easily swappable without reimplementing the whole Bubble.
+
+                   But wait, renderBubble wraps everything.
+                   If we want to render attachments INSIDE the bubble but TOP of text,
+                   we might need to check if we can abuse `renderMessageImage`.
+
+                   Actually, let's use `renderCustomView`? It renders BELOW text by default.
+
+                   To render ABOVE text inside bubble, we can wrapper the MessageText.
+                */}
+                <Bubble
+                    {...props}
+                    onLongPress={handleLongPress}
+                    wrapperStyle={{
+                        right: {
+                            backgroundColor: chatTheme.userBubble,
+                            borderRadius: 18,
+                            borderBottomRightRadius: 6,
+                            padding: 4,
+                            marginBottom: 0,
+                        },
+                        left: {
+                            backgroundColor: chatTheme.background,
+                            borderRadius: 18,
+                            padding: 4,
+                            paddingLeft: 10,
+                            marginBottom: 0,
+                        },
+                    }}
+                    textStyle={{
+                        right: {
+                            color: chatTheme.textPrimary,
+                            fontSize: 16,
+                            lineHeight: 20,
+                        },
+                        left: {
+                            color: chatTheme.textPrimary,
+                            fontSize: 16,
+                            lineHeight: 20,
+                        },
+                    }}
+                    timeTextStyle={{
+                        right: { color: 'rgba(255, 255, 255, 0.6)' },
+                        left: { color: 'rgba(255, 255, 255, 0.6)' },
+                    }}
+                    containerToNextStyle={{
+                        right: { marginBottom: 4 },
+                        left: { marginBottom: 4 },
+                    }}
+                    containerToPreviousStyle={{
+                        right: { marginBottom: 4 },
+                        left: { marginBottom: 4 },
+                    }}
+                    // We can hijack renderMessageText to include attachments above text if we want "inside"
+                />
+            </View>
+        );
+    }, [chatTheme, handleLongPress, attachmentPosition]);
+
+    const renderInputToolbar = useCallback((props: any) => {
+        return (
+            <View>
+                <ErrorBanner
+                    error={error}
+                    onRetry={onRetry}
+                    onDismiss={onDismissError}
+                    theme={chatTheme}
+                />
+                <ChatInput onSend={onSend} />
+            </View>
+        );
+    }, [onSend, error, onRetry, onDismissError, chatTheme]);
+
+    const renderMessage = useCallback((props: any) => {
+        const { currentMessage } = props;
+        const attachments = currentMessage?.attachments;
+        const hasAttachments = attachments && attachments.length > 0;
+        const showAttachmentsOutside = hasAttachments && attachmentPosition === 'outside';
+
+        return (
+            <View>
+                 {showAttachmentsOutside && (
+                    <View style={{
+                        marginLeft: currentMessage.user._id === 'assistant' ? 0 : 'auto',
+                        marginRight: currentMessage.user._id === 'assistant' ? 'auto' : 0,
+                        marginBottom: 4,
+                        maxWidth: '80%', // Limit width
+                        paddingHorizontal: 10
+                    }}>
+                        <MessageAttachments
+                            attachments={attachments}
+                            onAttachmentPress={onAttachmentPress}
+                            theme={theme}
+                        />
+                    </View>
+                )}
+                <Message
+                    {...props}
+                    containerStyle={{
+                        left: [{ maxWidth: assistantContainerMaxWidth }],
+                    }}
+                />
+            </View>
+        );
+    }, [assistantContainerMaxWidth, attachmentPosition, theme, onAttachmentPress]);
+
+
+
+    const renderMessageText = useCallback((props: any) => {
+        const isAssistant = props.currentMessage?.user?._id === 'assistant';
+        const toolCalls = props.currentMessage?.tool_calls;
+
+        const attachments = props.currentMessage?.attachments;
+        const hasAttachments = attachments && attachments.length > 0;
+        const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
+
+        // Helper to render attachments inside bubble
+        const renderAttachments = () => (
+             <View style={{ marginBottom: 8 }}>
+                <MessageAttachments
+                    attachments={attachments}
+                    onAttachmentPress={onAttachmentPress}
+                    theme={theme}
+                />
+            </View>
+        );
+
+        if (!isAssistant) {
+            return (
+                <View>
+                    {showAttachmentsInside && renderAttachments()}
+                    <MessageText {...props} />
+                </View>
+            );
+        }
+
+        return (
+            <View>
+                {showAttachmentsInside && renderAttachments()}
+                {toolCalls && toolCalls.length > 0 && (
+                    <ToolCallsSection toolCalls={toolCalls} />
+                )}
+                <Markdown
+                    style={markdownStyles as any}
+                    onLinkPress={(url) => {
+                        const openLink = async () => {
+                            try {
+                                if (await InAppBrowser.isAvailable()) {
+                                    await InAppBrowser.open(url, {
+                                        showTitle: true,
+                                        dismissButtonStyle: 'close',
+                                        modalEnabled: true,
+                                        enableDefaultShare: false,
+                                    });
+                                } else {
+                                    await Linking.openURL(url);
+                                }
+                            } catch {
+                                await Linking.openURL(url).catch(() => { });
+                            }
+                        };
+                        openLink();
+                        return false;
+                    }}
+                >
+                    {props.currentMessage?.text || ''}
+                </Markdown>
+            </View>
+        );
+    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress]);
+
+    const renderFooter = useCallback(() => {
+        if (!assistantWorking) {
+            return null;
+        }
+
+        return (
+            <View style={styles.footerContainer}>
+                <View style={styles.typingDot} />
+                <Text style={styles.footerText}>Assistant is thinking…</Text>
+            </View>
+        );
+    }, [assistantWorking, styles]);
+
+    return {
+        renderBubble,
+        renderFooter,
+        renderInputToolbar,
+        renderMessage,
+        renderMessageText,
+        onLongPressMessage: handleLongPress,
+    };
+}
