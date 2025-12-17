@@ -9,9 +9,9 @@ WORKDIR /app
 # Install dependencies
 RUN apk add --no-cache git
 
-# Copy go mod files first for caching
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy go.mod first (go.sum is optional, will be generated)
+COPY go.mod ./
+RUN go mod download && go mod verify
 
 # Copy source code
 COPY . .
