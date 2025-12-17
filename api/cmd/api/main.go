@@ -29,7 +29,8 @@ func main() {
 	// Определяем какой конфиг использовать
 	configPath := "../config/config.yaml"
 	if os.Getenv("RAILWAY_ENVIRONMENT") != "" {
-		configPath = "../config/config.railway.yaml"
+		// In Docker/Railway, config is in the same directory as the binary
+		configPath = "./config.railway.yaml"
 		log.Printf("Running in Railway environment, using %s", configPath)
 	}
 

@@ -30,6 +30,9 @@ RUN apk --no-cache add ca-certificates tzdata
 # Copy binary from builder
 COPY --from=builder /genie-api /app/genie-api
 
+# Copy Railway config
+COPY config.railway.yaml /app/config.railway.yaml
+
 # Expose port
 EXPOSE 8080
 

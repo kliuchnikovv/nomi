@@ -1,0 +1,44 @@
+server:
+  port: ${PORT}
+
+database:
+  host: ${PGHOST}
+  port: ${PGPORT}
+  user: ${PGUSER}
+  password: ${PGPASSWORD}
+  dbname: ${PGDATABASE}
+
+oauth2:
+  callback_base: ${CALLBACK_BASE}
+  providers:
+    google:
+      client_id: ${GOOGLE_CLIENT_ID}
+      client_secret: ${GOOGLE_CLIENT_SECRET}
+      redirect_url: ${GOOGLE_REDIRECT_URL}
+      issuer_url: "https://accounts.google.com"
+      scopes:
+        - "openid"
+        - "https://www.googleapis.com/auth/userinfo.email"
+        - "https://www.googleapis.com/auth/userinfo.profile"
+
+token:
+  refresh_before_minutes: 5
+  jwt_secret: ${JWT_SECRET}
+
+llm:
+  base_url: ${LLM_BASE_URL}
+
+plugins:
+  imap:
+    enabled: false
+    state:
+      imap_host: ${IMAP_HOST}
+      imap_port: ${IMAP_PORT}
+      username: ${IMAP_USERNAME}
+  gmail:
+    enabled: true
+    state: {}
+  calendar:
+    enabled: false
+    state:
+      sync_window_days: 7
