@@ -3,7 +3,9 @@ package plugins
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/emersion/go-imap/client"
@@ -13,6 +15,9 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
+
+// ErrTokenRevoked indicates the OAuth token has been revoked or expired and cannot be refreshed.
+var ErrTokenRevoked = errors.New("oauth token has been revoked or expired")
 
 // NewGmailPlugin returns a Gmail-specific IMAP plugin implementation.
 func NewGmailPlugin() Plugin {
@@ -81,6 +86,18 @@ func (g *gmailBackend) runSyncLoop() {
 			for _, tool := range tools {
 				g.logger.Info("syncing user", zap.String("user_id", tool.UserID.String()))
 				if err := g.Sync(ctx, tool); err != nil {
+					if errors.Is(err, ErrTokenRevoked) {
+						// Token was revoked/expired - disable integration to stop retrying
+						g.logger.Warn("gmail token revoked, disabling integration",
+							zap.String("user_id", tool.UserID.String()),
+							zap.String("integration_id", tool.ID.String()))
+						if disableErr := g.storage.DisableIntegration(ctx, tool.ID); disableErr != nil {
+							g.logger.Error("failed to disable integration after token revocation",
+								zap.String("integration_id", tool.ID.String()),
+								zap.Error(disableErr))
+						}
+						continue
+					}
 					g.logger.Error("auto-sync failed for user",
 						zap.String("user_id", tool.UserID.String()),
 						zap.Error(err))
@@ -190,6 +207,10 @@ func (g *gmailBackend) getValidToken(ctx context.Context, integration storage.In
 	tokenSource := g.oauthConfig.TokenSource(ctx, &token)
 	newToken, err := tokenSource.Token()
 	if err != nil {
+		// Check if error is due to revoked/expired token (invalid_grant)
+		if strings.Contains(err.Error(), "invalid_grant") {
+			return "", "", fmt.Errorf("%w: %v", ErrTokenRevoked, err)
+		}
 		return "", "", fmt.Errorf("failed to refresh token: %w", err)
 	}
 

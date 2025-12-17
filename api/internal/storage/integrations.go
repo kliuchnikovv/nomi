@@ -124,3 +124,22 @@ func (s *Storage) GetIntegrationsByUserProvider(ctx context.Context, userID uuid
 
 	return result, nil
 }
+
+// DisableIntegration disables an integration by ID (e.g., when OAuth token is revoked).
+func (s *Storage) DisableIntegration(ctx context.Context, integrationID uuid.UUID) error {
+	result := s.DB.WithContext(ctx).Model(&Integration{}).
+		Where("id = ?", integrationID).
+		Updates(map[string]any{
+			"enabled":    false,
+			"updated_at": time.Now().UTC(),
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
