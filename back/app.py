@@ -69,6 +69,12 @@ app = agent_os.get_app()
 async def _shutdown_tool_config_client():
     await tool_config_client.close()
 
+# Health check endpoint for Railway zero-downtime deployments
+@app.get("/health")
+async def health_check():
+    from datetime import datetime
+    return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
 # Sessions for OAuth state (required for request.session)
 session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")
 app.add_middleware(SessionMiddleware, secret_key=session_secret)
