@@ -86,6 +86,10 @@ func (s *StorageAdapter) CreateChat(ctx context.Context, userID uuid.UUID, c *ch
 	return s.store.CreateChat(ctx, userID, c)
 }
 
+func (s *StorageAdapter) DisableIntegration(ctx context.Context, integrationID uuid.UUID) error {
+	return s.store.DisableIntegration(ctx, integrationID)
+}
+
 // LLMAdapter exposes only the surface plugins need.
 type LLMAdapter struct {
 	svc *llm.Service

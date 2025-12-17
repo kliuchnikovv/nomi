@@ -25,6 +25,7 @@ type StoragePort interface {
 	GetOAuthTokenByUserAndEmail(ctx context.Context, userID uuid.UUID, provider, email string) (*storage.OAuthToken, error)
 	ListOAuthTokensByUser(ctx context.Context, userID uuid.UUID, provider string) ([]storage.OAuthToken, error)
 	UpdateOAuthToken(ctx context.Context, token *storage.OAuthToken) error
+	DisableIntegration(ctx context.Context, integrationID uuid.UUID) error
 	InboxExistsByMessageID(ctx context.Context, userID uuid.UUID, messageID string) (bool, error)
 	CreateInbox(ctx context.Context, inbox *storage.Inbox) error
 	UpdateInbox(ctx context.Context, inbox *storage.Inbox) error
