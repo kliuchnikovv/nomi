@@ -92,6 +92,14 @@ func New(
 	// existing handlers are standard http handlers; wrap them so they work
 	r.GET("/", gin.WrapF(http.HandlerFunc(handlers.HelloWorld)))
 
+	// Health check endpoint for Railway zero-downtime deployments
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"time":   time.Now().UTC().Format(time.RFC3339),
+		})
+	})
+
 	// Auth API
 	r.POST("/api/auth/register", wrap(http.HandlerFunc(authHandler.Register)))
 	r.POST("/api/auth/login", wrap(http.HandlerFunc(authHandler.Login)))
