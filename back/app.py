@@ -89,6 +89,6 @@ if __name__ == "__main__":
     agent_os.serve(
         app="app:app", 
         reload=True,
-        host=os.getenv("HOST", "0.0.0.0"),
+        host=os.getenv("HOST", "::"),  # Dual-stack: IPv6 + IPv4
         port=int(os.getenv("PORT", 7777)),
     )

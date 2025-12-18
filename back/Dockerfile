@@ -19,5 +19,5 @@ COPY . .
 # Expose port
 EXPOSE 7777
 
-# Run with uvicorn - use PORT env variable or default to 7777
-CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-7777}
+# Run with uvicorn - dual-stack IPv6/IPv4 support
+CMD uvicorn app:app --host :: --port ${PORT:-7777}
