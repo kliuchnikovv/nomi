@@ -104,12 +104,6 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		clientConn.Close()
 	}()
 
-	// Create a fresh URL based on llmURL but without copying query parameters
-	query := url.URL{
-		Scheme: h.llmURL.Scheme,
-		Host:   h.llmURL.Host,
-		Path:   h.llmURL.Path,
-	}
 	commandParam := c.Query("command")
 	if commandParam == "" {
 		commandParam = c.Query("team")
@@ -169,6 +163,13 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 
 	// Provide connector to (re)establish model connection with initial meta.
 	connectModel := func() (*websocket.Conn, error) {
+		// Create a fresh URL for each connection attempt to avoid parameter accumulation
+		query := url.URL{
+			Scheme: h.llmURL.Scheme,
+			Host:   h.llmURL.Host,
+			Path:   h.llmURL.Path,
+		}
+
 		hdr := http.Header{}
 		// Use chat_id as session_id so Agno's memory is keyed by chat.
 		sessionCookie := fmt.Sprintf("session_id=%s", sessionID)
