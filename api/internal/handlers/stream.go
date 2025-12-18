@@ -104,7 +104,12 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		clientConn.Close()
 	}()
 
-	var query = *h.llmURL
+	// Create a fresh URL based on llmURL but without copying query parameters
+	query := url.URL{
+		Scheme: h.llmURL.Scheme,
+		Host:   h.llmURL.Host,
+		Path:   h.llmURL.Path,
+	}
 	commandParam := c.Query("command")
 	if commandParam == "" {
 		commandParam = c.Query("team")
