@@ -171,7 +171,23 @@ export class ChatSocket {
                             break;
                         case 'error':
                             if (data.code !== 401 || retried) {
-                                this.handlers.onError?.(frame);
+                                // Extract error message from various possible locations
+                                let errorMessage = 'Ошибка соединения';
+
+                                if (data.error) {
+                                    errorMessage = typeof data.error === 'string'
+                                        ? data.error
+                                        : data.error.message || JSON.stringify(data.error);
+                                } else if (data.message) {
+                                    errorMessage = data.message;
+                                }
+
+                                // Provide user-friendly message for backend connection errors
+                                if (errorMessage.includes('dial tcp') || errorMessage.includes('connection refused')) {
+                                    errorMessage = 'Не удалось подключиться к AI сервису. Попробуйте позже.';
+                                }
+
+                                this.handlers.onError?.({ ...frame, message: errorMessage });
                                 break;
                             }
 

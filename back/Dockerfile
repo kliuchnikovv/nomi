@@ -16,11 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY . .
 
-# Expose ports
-EXPOSE 7777 8000
+# Expose port
+EXPOSE 7777
 
-# Make start script executable  
-RUN chmod +x start.sh
-
-# Run startup script
-CMD ["./start.sh"]
+# Run with uvicorn on IPv4
+CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-7777}
