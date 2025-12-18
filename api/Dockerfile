@@ -38,3 +38,4 @@ EXPOSE 8080
 
 # Run
 CMD ["/app/genie-api"]
+
