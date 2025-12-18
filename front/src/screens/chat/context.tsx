@@ -117,7 +117,7 @@ export function ChatProvider({
 
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
-    // const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app';
+    // const API_URL = 'https://genie.com';
 
     // Keep getMessages for initial load and manual refresh if needed
     const getMessages = useCallback(async (chatID: string) => {
@@ -515,8 +515,10 @@ export function ChatProvider({
                 console.error('WebSocket error:', err);
                 setAssistantWorking(false);
                 const message =
+                    err?.message ||
                     err?.error?.message ||
                     err?.payload?.message ||
+                    err?.payload?.error ||
                     (typeof err === 'string' ? err : null) ||
                     'Ошибка соединения';
                 setError(message);

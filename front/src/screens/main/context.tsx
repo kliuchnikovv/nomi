@@ -39,7 +39,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     );
 
 
-    // const API_URL = 'https://disciplined-quietude-production-f4b1.up.railway.app';
+    // const API_URL = 'https://genie.com';
 
     // Create a new chat if activeChatID is empty on initial load
     useEffect(() => {
