@@ -93,6 +93,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         tools_specs: List[ToolSpec] = []
         # Track current model - initialize from query param if provided
         current_model_name: Optional[str] = model_from_query
+        # Track current web_search state for agent rebuild
+        current_web_search: bool = False
         
         logger.debug("[WS] Waiting for TOOLS frame: session_id=%s", session_id)
         try:
@@ -298,6 +300,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     model_name=current_model_name,
                     agent_type=agent_type,
                     command_desc=command_desc,
+                    web_search=current_web_search,
                 )
         except Exception as exc:
             next_id = await _send_frame(
@@ -568,6 +571,53 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     logger.warning("[WS] No payload: op=%s session_id=%s", frame.op, session_id)
                     continue
 
+                # Check if web_search setting changed and rebuild agent if needed
+                requested_web_search = bool(payload.get("web_search", False))
+                if requested_web_search != current_web_search:
+                    logger.info(
+                        "[WS] web_search changed: session_id=%s old=%s new=%s - rebuilding agent",
+                        session_id,
+                        current_web_search,
+                        requested_web_search,
+                    )
+                    current_web_search = requested_web_search
+                    try:
+                        if is_team_mode:
+                            # For team mode, include web_search in updated_desc if needed
+                            pass  # Team mode doesn't support web_search per-message currently
+                        else:
+                            agent = await agent_factory.build(
+                                session_id,
+                                tools_specs=tools_specs,
+                                model_name=current_model_name,
+                                agent_type=agent_type,
+                                command_desc=command_desc,
+                                web_search=current_web_search,
+                            )
+                            logger.info(
+                                "[WS] Agent rebuilt with web_search=%s: session_id=%s",
+                                current_web_search,
+                                session_id,
+                            )
+                    except Exception as e:
+                        logger.error(
+                            "[WS] Failed to rebuild agent for web_search change: session_id=%s error=%s",
+                            session_id,
+                            e,
+                        )
+                        next_id = await _send_frame(
+                            websocket=websocket,
+                            frame=make_error(
+                                id=next_id,
+                                chat_id=frame.chat_id,
+                                code="agent_rebuild_failed",
+                                message="Failed to enable/disable web search",
+                                http=500,
+                                details={"error": str(e)},
+                            ),
+                        )
+                        continue
+
                 next_id = await _process_message(
                     agent=agent,
                     websocket=websocket,
@@ -579,7 +629,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     chat_history=chat_history,
                     current_model_name=current_model_name,
                     attachments=payload.get("attachments"),
-                    web_search=payload.get("web_search"),
+                    web_search=requested_web_search,
                 )
         except WebSocketDisconnect:
             # Клиент отвалился — нормальный сценарий
