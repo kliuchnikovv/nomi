@@ -686,29 +686,27 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                         file_type = att.get("file_type", "")
                         content = att.get("content", "")
                         if file_type.startswith("image/") and content:
-                            # Construct data URI
-                            data_uri = f"data:{file_type};base64,{content}"
                             try:
+                                import base64
                                 from agno.media import Image
-                                images.append(Image(url=data_uri))
-                            except ImportError:
-                                # Fallback if Image class is not available
-                                # Define a minimal compatible class that mimics agno.media.Image
-                                class SimpleImage:
-                                    def __init__(self, url: str):
-                                        self.id = str(uuid.uuid4())
-                                        self.url = url
-                                        self.content = None
-                                        self.file_type = None
-
-                                logger.warning("[WS] Could not import agno.media.Image, using SimpleImage fallback")
-                                images.append(SimpleImage(url=data_uri))
+                                # Decode base64 content to bytes
+                                image_bytes = base64.b64decode(content)
+                                # Use content parameter instead of url to avoid httpx trying to fetch it
+                                images.append(Image(content=image_bytes, format=file_type))
+                                logger.info("[WS] 🖼️ Created Image with content bytes, size=%d, format=%s", len(image_bytes), file_type)
+                            except Exception as e:
+                                logger.error("[WS] Failed to create Image from content: %s", e)
+                                # Fallback: try with data URI (might fail with long URLs)
+                                try:
+                                    data_uri = f"data:{file_type};base64,{content}"
+                                    images.append(Image(url=data_uri))
+                                    logger.warning("[WS] Using data URI fallback for image")
+                                except Exception as e2:
+                                    logger.error("[WS] Failed to create Image with data URI fallback: %s", e2)
 
                 if images:
                     kwargs["images"] = images
                     logger.info("[WS] 🖼️  Passing %d images to agent", len(images))
-                    for i, img in enumerate(images):
-                        logger.info(f"[WS] Image {i}: type={type(img)} len={len(str(img)) if not hasattr(img, 'url') else len(img.url)}")
 
             
             # Build full message history including current user message
