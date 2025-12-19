@@ -42,11 +42,12 @@ class AgentFactory:
         """Доступ к ToolConfigClient для запроса инструментов."""
         return self._config_client
 
-    def build_model(self, model_name: str) -> Model:
+    def build_model(self, model_name: str, web_search: bool = False) -> Model:
         """Build a model instance from model name.
         
         Args:
             model_name: Name of the model (e.g., 'gemini-2.0-flash', 'gemini-1.5-pro')
+            web_search: If True, enable native Gemini search grounding
             
         Returns:
             Model instance
@@ -59,7 +60,7 @@ class AgentFactory:
             api_key = os.getenv("GOOGLE_API_KEY")
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable not set")
-            return Gemini(id=model_name, api_key=api_key)
+            return Gemini(id=model_name, api_key=api_key, search=web_search)
         
         # Add support for other providers as needed
         raise ValueError(f"Unsupported model: {model_name}")
@@ -71,13 +72,14 @@ class AgentFactory:
         model_name: Optional[str] = None,
         agent_type: Optional[str] = None,
         command_desc: Optional[dict] = None,
+        web_search: bool = False,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
         if not model_name and command_desc and command_desc.get("model"):
             model_name = command_desc["model"]
 
-        model = self.build_model(model_name) if model_name else self._model
+        model = self.build_model(model_name, web_search=web_search) if model_name else self._model
         
         tools: List[Toolkit] = []
         

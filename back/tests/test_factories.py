@@ -120,3 +120,40 @@ async def test_team_factory_build(agent_factory):
         assert isinstance(team.members[0], GenieAgent)
         assert isinstance(team.members[1], MailerAgent)
         assert team.session_id == "sess-team"
+
+
+@pytest.mark.asyncio
+async def test_agent_factory_build_with_web_search(agent_factory):
+    """Test building agent with web_search enabled creates Gemini with search=True"""
+    with patch("src.agents.factory.build_tools", new_callable=AsyncMock) as mock_build_tools, \
+         patch("src.agents.factory.os.getenv", return_value="fake-api-key"):
+        mock_build_tools.return_value = []
+
+        # Build with web_search=True
+        agent = await agent_factory.build(
+            session_id="sess-1",
+            model_name="gemini-2.0-flash",
+            web_search=True
+        )
+
+        assert isinstance(agent.model, Gemini)
+        assert agent.model.id == "gemini-2.0-flash"
+        assert agent.model.search == True  # Verify search is enabled
+
+
+@pytest.mark.asyncio
+async def test_agent_factory_build_without_web_search(agent_factory):
+    """Test building agent without web_search creates Gemini with search=False"""
+    with patch("src.agents.factory.build_tools", new_callable=AsyncMock) as mock_build_tools, \
+         patch("src.agents.factory.os.getenv", return_value="fake-api-key"):
+        mock_build_tools.return_value = []
+
+        # Build with web_search=False (default)
+        agent = await agent_factory.build(
+            session_id="sess-1",
+            model_name="gemini-2.0-flash",
+            web_search=False
+        )
+
+        assert isinstance(agent.model, Gemini)
+        assert agent.model.search == False  # Verify search is disabled
