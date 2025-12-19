@@ -796,11 +796,22 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                  agent.run_response = ev
                  # logger.debug("[WS] Captured RunOutput with tool_calls in stream")
             
+            # Log ALL events for debugging
+            event_type = type(ev).__name__
+            logger.debug("[WS] 📦 Stream event: type=%s", event_type)
+            
             # Only yield text from Content events to avoid duplication (RunCompletedEvent has full text)
             # and system messages (ToolCallCompletedEvent has status text)
             if "RunContentEvent" in str(type(ev)):
                 chunk = _to_text(ev)
                 if chunk:
+                    logger.debug("[WS] 📝 Yielding content chunk: len=%d preview=%s", len(chunk), chunk[:50] if len(chunk) > 50 else chunk)
+                    yield chunk
+            elif "ModelContentEvent" in str(type(ev)) or "TextDeltaEvent" in str(type(ev)):
+                # Try other event types that might contain text
+                chunk = _to_text(ev)
+                if chunk:
+                    logger.debug("[WS] 📝 Yielding model/delta chunk: len=%d preview=%s", len(chunk), chunk[:50] if len(chunk) > 50 else chunk)
                     yield chunk
         return
 
