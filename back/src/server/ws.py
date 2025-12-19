@@ -727,9 +727,22 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             logger.debug("[WS] 📜 Total messages being passed to agent: count=%d", len(full_messages))
             logger.debug("[WS] Agent kwargs: stream=True, session_id=%s, messages_count=%d", session_id, len(full_messages))
             
-            if asyncio.iscoroutinefunction(fn):
-                return await fn(full_messages, stream=True, stream_events=True, session_id=session_id, **({"images": kwargs["images"]} if "images" in kwargs else {}))
-            return fn(full_messages, stream=True, stream_events=True, session_id=session_id, **({"images": kwargs["images"]} if "images" in kwargs else {}))
+            # When images are present, pass text directly with images
+            # This ensures Gemini can see the images with the current message
+            has_images = "images" in kwargs and kwargs["images"]
+            if has_images:
+                logger.info("[WS] 🖼️ Passing text directly with %d images to agent", len(kwargs["images"]))
+                # Pass just the text with images, not the full message list
+                # Agno needs images to be associated with the current input
+                if asyncio.iscoroutinefunction(fn):
+                    return await fn(text, stream=True, stream_events=True, session_id=session_id, images=kwargs["images"])
+                return fn(text, stream=True, stream_events=True, session_id=session_id, images=kwargs["images"])
+            else:
+                # No images - use full message history
+                if asyncio.iscoroutinefunction(fn):
+                    return await fn(full_messages, stream=True, stream_events=True, session_id=session_id)
+                return fn(full_messages, stream=True, stream_events=True, session_id=session_id)
+
         except TypeError as e:
             # Fallback without stream or messages
             logger.warning("[WS] TypeError calling agent, falling back: %s", e)
