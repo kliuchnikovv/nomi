@@ -36,12 +36,12 @@ General Rules:
 - Always use the tools provided to answer the user's questions accurately.
 - If no relevant tools are available, answer from your knowledge base.""",
             # expected_output=expected_output,
-            # add_history_to_context=True,  # Required for Agno to use messages parameter
+            add_history_to_context=True,  # Let Agno manage history via session_id
             add_datetime_to_context=True,
             debug_mode=debug_mode,
             read_tool_call_history=True,  # Enable reading tool call history
             store_tool_messages=True,  # Store tool call results
-            # read_chat_history=True,
+            read_chat_history=True,  # Read chat history from session
             # search_knowledge=True,
             # update_knowledge=True,
             send_media_to_model=True,
