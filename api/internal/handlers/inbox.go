@@ -10,15 +10,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"go.uber.org/zap"
 )
 
 // InboxHandler exposes inbox data grouped as chat->thread->message.
 type InboxHandler struct {
 	storage *storage.Storage
+	logger  *zap.Logger
 }
 
-func NewInboxHandler(storage *storage.Storage) *InboxHandler {
-	return &InboxHandler{storage: storage}
+func NewInboxHandler(storage *storage.Storage, logger *zap.Logger) *InboxHandler {
+	return &InboxHandler{
+		storage: storage,
+		logger:  logger,
+	}
 }
 
 type InboxMessage struct {
@@ -100,6 +105,12 @@ func (h *InboxHandler) ListInbox(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
 		return
 	}
+	h.logger.Info("loaded inbox messages",
+		zap.Int("count", len(inboxes)),
+		zap.String("user_id", user.ID.String()),
+		zap.Any("integration_filter", integrationFilter),
+		zap.String("source_filter", sourceFilter),
+	)
 
 	// Group messages by sender (chat) and thread.
 	type threadState struct {

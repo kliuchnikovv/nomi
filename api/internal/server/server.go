@@ -71,7 +71,7 @@ func New(
 		actionsHandler      = handlers.NewActionsHandler(db, logger, manager) // Delegates to plugins
 		integrationsHandler = handlers.NewIntegrationsHandler(db)
 		pluginChatsHandler  = handlers.NewPluginChatsHandler(db)
-		inboxHandler        = handlers.NewInboxHandler(db)
+		inboxHandler        = handlers.NewInboxHandler(db, logger)
 		tokenManager        = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler         = handlers.NewAuthHandler(db, tokenManager)
