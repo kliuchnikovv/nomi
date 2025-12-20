@@ -12,6 +12,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
+	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
@@ -62,6 +63,10 @@ func New(
 		logger.Error("failed to register gmail plugin", zap.Error(err))
 	}
 
+	// Initialize Hub
+	hubInstance := hub.NewHub(db, logger, cfg.LLM.BaseURL)
+	go hubInstance.Run()
+
 	// Инициализация обработчиков
 	var (
 		// oauthHandler   = handlers.NewOAuth(cfg, db)
@@ -75,7 +80,7 @@ func New(
 		tokenManager        = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler         = handlers.NewAuthHandler(db, tokenManager)
-		streamHandler       = handlers.NewStreamHandler(logger, cfg.LLM.BaseURL, db)
+		streamHandler       = handlers.NewStreamHandler(logger, hubInstance, db)
 		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
 		modelsHandler = handlers.NewModelsHandler("../config/models.json")
 		uploadHandler = handlers.NewUploadHandler(db)
