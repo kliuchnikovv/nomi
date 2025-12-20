@@ -5,11 +5,13 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"gorm.io/gorm"
 )
 
 // InboxHandler exposes inbox data grouped as chat->thread->message.
@@ -61,6 +63,20 @@ func (h *InboxHandler) ListInbox(c *gin.Context) {
 		return
 	}
 
+	// Pagination parameters
+	page := 1
+	limit := 20
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
 	// Optional filters
 	var integrationFilter *uuid.UUID
 	if integIDStr := c.Query("integration_id"); integIDStr != "" {
@@ -73,14 +89,73 @@ func (h *InboxHandler) ListInbox(c *gin.Context) {
 	}
 	sourceFilter := c.Query("provider")
 
-	// Load inbox messages
-	var inboxes []storage.Inbox
-	q := h.storage.DB.WithContext(ctx).Where("user_id = ?", user.ID)
+	// Base query with filters
+	baseQuery := h.storage.DB.WithContext(ctx).Model(&storage.Inbox{}).Where("user_id = ?", user.ID)
 	if integrationFilter != nil {
-		q = q.Where("integration_id = ?", *integrationFilter)
+		baseQuery = baseQuery.Where("integration_id = ?", *integrationFilter)
 	}
 	if sourceFilter != "" {
-		q = q.Where("source = ?", sourceFilter)
+		baseQuery = baseQuery.Where("source = ?", sourceFilter)
+	}
+
+	// Count total unique senders (chats)
+	var totalCount int64
+	countQuery := baseQuery.Session(&gorm.Session{})
+	if err := countQuery.Select("COUNT(DISTINCT sender || '|' || integration_id::text)").Count(&totalCount).Error; err != nil {
+		// Fallback to simple count
+		totalCount = 0
+	}
+
+	// Load inbox messages with pagination based on distinct senders
+	// First get distinct senders with pagination
+	type senderInfo struct {
+		Sender        string
+		IntegrationID uuid.UUID
+	}
+	var senders []senderInfo
+	senderQuery := h.storage.DB.WithContext(ctx).
+		Model(&storage.Inbox{}).
+		Select("DISTINCT sender, integration_id").
+		Where("user_id = ?", user.ID)
+	if integrationFilter != nil {
+		senderQuery = senderQuery.Where("integration_id = ?", *integrationFilter)
+	}
+	if sourceFilter != "" {
+		senderQuery = senderQuery.Where("source = ?", sourceFilter)
+	}
+	senderQuery = senderQuery.Order("MAX(received_at) DESC").
+		Group("sender, integration_id").
+		Limit(limit).
+		Offset((page - 1) * limit)
+	if err := senderQuery.Find(&senders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load senders"})
+		return
+	}
+
+	if len(senders) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"items":       []InboxChat{},
+			"page":        page,
+			"limit":       limit,
+			"total_count": totalCount,
+			"total_pages": (totalCount + int64(limit) - 1) / int64(limit),
+		})
+		return
+	}
+
+	// Build conditions for selected senders
+	var conditions []string
+	var args []interface{}
+	for _, s := range senders {
+		conditions = append(conditions, "(sender = ? AND integration_id = ?)")
+		args = append(args, s.Sender, s.IntegrationID)
+	}
+
+	// Load all messages for selected senders
+	var inboxes []storage.Inbox
+	q := h.storage.DB.WithContext(ctx).Where("user_id = ?", user.ID)
+	if len(conditions) > 0 {
+		q = q.Where("("+strings.Join(conditions, " OR ")+")", args...)
 	}
 	if err := q.Order("received_at ASC").Find(&inboxes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
@@ -171,7 +246,14 @@ func (h *InboxHandler) ListInbox(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": result})
+	totalPages := (totalCount + int64(limit) - 1) / int64(limit)
+	c.JSON(http.StatusOK, gin.H{
+		"items":       result,
+		"page":        page,
+		"limit":       limit,
+		"total_count": totalCount,
+		"total_pages": totalPages,
+	})
 }
 
 // extractThreadID tries to derive a stable thread identifier from metadata/thread fields.
