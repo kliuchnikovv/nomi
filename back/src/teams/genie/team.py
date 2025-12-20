@@ -2,22 +2,14 @@ from textwrap import dedent
 
 from agno.db import BaseDb
 from agno.models.base import Model
-from agno.tools.exa import ExaTools
-
-from src.agents.duckduckgo import DuckDuckGoAgent
-from src.agents.google_maps import GoogleMapsAgent
-from src.teams.genie.agent import GenieAgent
+from agno.tools.github import GithubTools
+from src.agents.genie import GenieAgent
 from src.teams.travel_planning.prompt import expected_output
 from agno.team import Team
 
 description = dedent('''
-You are now connected to the **Genie Agent**, the **Google Maps Agent**, and the **DuckDuckGo Agent**.
-
+You are now connected to the **Genie Agent**.
 The **Genie Agent** will help you with any general questions.
-
-The **Google Maps Agent** will help you extract Google Maps URLs for accommodation and activities.
-
-The **DuckDuckGo Agent** will help you fill in any missing information about businesses and landmarks identified in the itinerary.
 ''')
 
 instructions = dedent('''
@@ -26,8 +18,6 @@ instructions = dedent('''
 ## 1. Extract user's intention based on the input.
 
 ## 2. Use tools to cover related questions and problems. If you're unable to provide help - just say so.
-
-## 3. Use the DuckDuckGo Agent to suggest any improvement to the system.
 ''')
 
 class GenieTeam(Team):
@@ -53,21 +43,10 @@ class GenieTeam(Team):
                 GenieAgent(
                     db=db,
                     model=model,
-                    # tools=[
-                    #     # ExaTools(api_key=exa_key)
-                    # ],
+                    tools=[
+                        GithubTools(),
+                    ],
                     debug_mode=debug_mode,
-                ),
-                DuckDuckGoAgent(
-                    db=db,
-                    model=model,
-                    debug_mode=debug_mode,
-                ),
-                GoogleMapsAgent(
-                    db=db,
-                    model=model,
-                    debug_mode=debug_mode,
-                    api_key=maps_key,
                 ),
             ],
         )
