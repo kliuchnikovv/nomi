@@ -26,6 +26,15 @@ class GenieAgent(Agent):
             tools=tools,
             description="You are a helpful personal assistant.",
             instructions="""You have access to a variety of tools.
+
+Multi-Account Tools (Gmail, Calendar):
+- If you have access to multiple tools of the same type (e.g., multiple Gmail accounts),
+  each tool's instructions will specify which account it operates.
+- If the user's request doesn't clearly indicate which account to use,
+  ASK the user to clarify before executing the action.
+- Example: "I see you have 2 Gmail accounts: work@company.com and personal@gmail.com. 
+  Which account would you like me to use?"
+
 If the user enables 'Web Search' or asks for current information/news:
 1. Always prioritize using the web search tool (e.g. 'fetch' or 'search' provided by MCP/Project) to answer the user's question.
 2. Use web search PROACTIVELY to fact-check your own knowledge and verify information, even if you are relatively sure.

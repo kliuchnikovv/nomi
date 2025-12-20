@@ -91,7 +91,17 @@ def _build_gmail(params: Dict[str, Any]) -> Toolkit:
 
     variants.append(base)
 
-    return _instantiate_tool(GmailTools, variants, "gmail")
+    tool = _instantiate_tool(GmailTools, variants, "gmail")
+    
+    # Add account context for multi-account support
+    account_email = params.get("account_email", "")
+    if account_email:
+        tool.add_instructions = True
+        tool.instructions = f"""This Gmail tool operates the mailbox: {account_email}
+Only use this tool when the user wants to interact with {account_email}."""
+        logger.debug("[Gmail] Added account context for %s", account_email)
+    
+    return tool
 
 
 def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
@@ -108,17 +118,22 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
         tool.creds = creds
 
     now = datetime.now(timezone.utc)
+    
+    # Add account context for multi-account support
+    account_email = params.get("account_email", "")
+    account_context = f" for {account_email}" if account_email else ""
 
     tool.add_instructions = True
-    tool.instructions = """You are operating the Google Calendar tool. 
+    tool.instructions = f"""You are operating the Google Calendar tool{account_context}. 
 Treat current time as {now}.
-- Before creating/updating events, confirm the user’s timezone, date(s), and duration; ask if missing.
+- Before creating/updating events, confirm the user's timezone, date(s), and duration; ask if missing.
 - When reading/searching events, use current time as a reference and clarify the desired time range.
 - Check for conflicts: compare proposed slots with existing events, report overlaps, and suggest alternatives.
 - Capture key fields: title, start, end, timezone, attendees (email), description, location/meeting link, reminders.
 - After any operation, briefly confirm what was created/updated/found, when, and in which timezone.
 - Do not invent data and do not perform actions without explicit user permission.
-- If additional access is required or permissions are missing, say so and request reauthorization."""
+- If additional access is required or permissions are missing, say so and request reauthorization.
+- If there are multiple calendar accounts available, clarify which one to use before proceeding."""
 
     logger.debug("[GC] instructions are: {tool.instructions}")
     
