@@ -22,7 +22,8 @@ import { ChatSidebar } from './sidebar/screen';
 import RightSidebar from '../rightsidebar/screen';
 import { useTheme } from '../../context/ThemeContext';
 import { Skeleton } from '../../components/Skeleton';
-import { Attachment } from '../../main/models';
+import { Attachment, MessageAction } from '../main/models';
+import { sidebarApi } from '../../apiClient';
 
 function MessageListSkeleton() {
     return (
@@ -153,6 +154,16 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         }
     }, []);
 
+    const handleMessageAction = useCallback(async (messageId: string, action: MessageAction) => {
+        try {
+            await sidebarApi.executeMessageAction('any', messageId, action);
+            console.log('Action executed:', action);
+        } catch (e) {
+            console.error('Failed to execute action', e);
+            // Optionally set error or show toast
+        }
+    }, []);
+
 
 
     const {
@@ -174,6 +185,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         onDismissError: handleDismissError,
         onAttachmentPress: handleAttachmentPress,
         attachmentPosition,
+        onMessageAction: handleMessageAction,
     });
 
     const isWide = windowWidth >= 1024;

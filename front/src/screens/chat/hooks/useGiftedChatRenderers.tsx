@@ -11,7 +11,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { ToolCallsSection } from '../message/ToolCalls';
 import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageActions } from '../message/MessageActions';
-import { Attachment } from '../../main/models';
+import { Attachment, MessageAction } from '../../main/models';
 
 interface GiftedChatRenderersParams {
     assistantContainerMaxWidth: string;
@@ -25,6 +25,7 @@ interface GiftedChatRenderersParams {
     onDismissError: () => void;
     onAttachmentPress: (attachment: Attachment) => void;
     attachmentPosition: 'inside' | 'outside';
+    onMessageAction?: (messageId: string, action: MessageAction) => void;
 }
 
 export function useGiftedChatRenderers({
@@ -39,6 +40,7 @@ export function useGiftedChatRenderers({
     onDismissError,
     onAttachmentPress,
     attachmentPosition,
+    onMessageAction,
 }: GiftedChatRenderersParams) {
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const markdownStyles = useMemo(() => createMarkdownStyles(chatTheme), [chatTheme]);
@@ -293,13 +295,15 @@ export function useGiftedChatRenderers({
                             onSend(action.prompt);
                         } else {
                             console.log('Action pressed:', action);
-                            // TODO: Handle API actions like mark_as_read
+                            if (onMessageAction && props.currentMessage?._id) {
+                                onMessageAction(String(props.currentMessage._id), action);
+                            }
                         }
                     }}
                 />
-            </View >
+            </View > // Note: keeping View same but updating content
         );
-    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend]);
+    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend, onMessageAction]);
 
     const renderFooter = useCallback(() => {
         if (!assistantWorking) {
