@@ -14,8 +14,6 @@ jobs:
   deploy-preview:
     name: Deploy Preview Environment
     runs-on: ubuntu-latest
-    # Only run if Railway token is configured
-    if: ${{ secrets.RAILWAY_TOKEN != '' }}
     
     permissions:
       contents: read
