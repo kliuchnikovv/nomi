@@ -348,7 +348,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         });
 
     const headerTitle = externalTitle || activeChat?.title || 'New Chat';
-    const headerSubtitle = assistantWorking ? 'Assistant is thinking…' : 'Available to help';
+    const headerSubtitle = '';
 
     return (
         <View style={styles.container}>

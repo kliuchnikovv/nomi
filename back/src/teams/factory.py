@@ -46,6 +46,15 @@ class TeamFactory:
                 debug_mode=self.debug_mode
             )
 
+        elif team_type == "development_team":
+            from src.teams.development.team import DevelopmentTeam
+            logger.info("[WS] Instantiating DevelopmentTeam")
+            return DevelopmentTeam(
+                model=self.model,
+                db=self.db,
+                debug_mode=self.debug_mode
+            )
+
         # 2. Dynamic Team Building (Fallback)
         members = []
         if command_desc.get("participants"):

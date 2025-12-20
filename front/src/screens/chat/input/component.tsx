@@ -11,7 +11,9 @@ import {
     Page,
     MediaImage,
     Translate,
-    Check
+    Check,
+    Group,
+    User
 } from 'iconoir-react-native';
 
 import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
@@ -27,6 +29,7 @@ import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { apiClient } from '../../../apiClient';
 import { API_URL } from '../../../config';
+import { AVAILABLE_TEAMS, TeamDetails } from '../teams';
 
 type Props = {
     onSend: (text: string) => void;
@@ -44,6 +47,7 @@ type LocalAttachment = {
 export default function ChatInput(props: Props) {
     const [value, setValue] = useState('');
     const [modelMenuVisible, setModelMenuVisible] = useState(false);
+    const [teamMenuVisible, setTeamMenuVisible] = useState(false);
     const [plusMenuVisible, setPlusMenuVisible] = useState(false);
     const [voiceLanguageMenuVisible, setVoiceLanguageMenuVisible] = useState(false);
     const [voiceLanguage, setVoiceLanguage] = useState('auto');
@@ -54,7 +58,7 @@ export default function ChatInput(props: Props) {
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam } = useChat();
     const { user, updateUser } = useAuth();
 
     // Initialize webSearchEnabled from user preference
@@ -131,7 +135,7 @@ export default function ChatInput(props: Props) {
     const pickImage = async () => {
         console.log('PickImage called');
         try {
-            if (!NativeModules.ImagePicker && !global.__turboModuleProxy) {
+            if (!NativeModules.ImagePicker && !(global as any).__turboModuleProxy) {
                 console.error("NativeModules.ImagePicker is null");
                 Alert.alert("Error", "ImagePicker Native Module is missing.");
                 return;
@@ -286,6 +290,25 @@ export default function ChatInput(props: Props) {
             }
         },
         {
+            id: 'mode_toggle',
+            label: `Mode: ${chatMode === 'team' ? 'Team' : 'Agent'}`,
+            icon: chatMode === 'team' ? <Group width={20} height={20} color="#fff" /> : <User width={20} height={20} color="#fff" />,
+            onPress: () => {
+                const newMode = chatMode === 'agent' ? 'team' : 'agent';
+                setChatMode(newMode);
+                setPlusMenuVisible(false); // Close menu on toggle
+            }
+        },
+        ...(chatMode === 'team' ? [{
+            id: 'select_team',
+            label: 'Select Team',
+            icon: <Group width={20} height={20} color="#fff" />, // Reuse group icon
+            onPress: () => {
+                setPlusMenuVisible(false);
+                setTimeout(() => setTeamMenuVisible(true), 300);
+            }
+        }] : []),
+        {
             id: 'voice_language',
             label: `Voice Language: ${voiceLanguage === 'auto' ? 'Auto' : voiceLanguage}`,
             icon: <Translate width={20} height={20} color="#fff" />,
@@ -295,7 +318,7 @@ export default function ChatInput(props: Props) {
                 setTimeout(() => setVoiceLanguageMenuVisible(true), 300);
             },
         }
-    ], [voiceLanguage, pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, theme.accent]);
+    ], [voiceLanguage, pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, theme.accent, chatMode, setChatMode]);
 
     const voiceLanguageItems: ContextMenuItem[] = useMemo(() => [
         { id: 'auto', label: 'Auto (Device Default)', onPress: () => setVoiceLanguage('auto') },
@@ -340,33 +363,50 @@ export default function ChatInput(props: Props) {
             onPress: () => {
                 const selectedModelId = model.id;
                 setSelectedModel(selectedModelId);
-
-                if (chatMode === 'team') {
-                    setTeamCommand(buildDefaultTeamCommand(selectedModelId));
-                }
+                // Team command update is handled by effect in context
                 setModelMenuVisible(false);
             },
         }));
-    }, [availableModels, selectedModel, chatMode, setTeamCommand, buildDefaultTeamCommand, theme.accent]);
+    }, [availableModels, selectedModel, setSelectedModel, theme.accent]);
+
+    const teamMenuItems: ContextMenuItem[] = useMemo(() => {
+        return AVAILABLE_TEAMS.map(team => ({
+            id: team.id,
+            label: team.name, // + (team.description ? ` - ${team.description}` : ''), // Keep it short
+            icon: team.id === selectedTeamId ? (
+                <Check width={20} height={20} color={theme.accent} />
+            ) : undefined,
+            onPress: () => {
+                selectTeam(team.id);
+                setTeamMenuVisible(false);
+            },
+        }));
+    }, [selectedTeamId, selectTeam, theme.accent]);
 
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const selectedModelName = useMemo(() => {
+        // If in team mode, show team name + model? Or just team name?
+        // Let's show Team Name if in team mode, or keep showing model but maybe with an icon?
+        // For now, keeping model name behavior as it drives the underlying LLM mainly.
+        // Maybe we should append "- Team" if in team mode?
+        let name = '';
         if (!selectedModel) {
-            if (availableModels.length > 0) {
-                return availableModels[0].name || 'Auto context';
-            }
-            return 'Auto context';
+            name = availableModels.length > 0 ? (availableModels[0].name || 'Auto context') : 'Auto context';
+        } else {
+            const explicit = availableModels.find(m => m.id === selectedModel)?.name;
+            if (explicit) name = explicit;
+            else name = selectedModel.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
-        const explicit = availableModels.find(m => m.id === selectedModel)?.name;
-        if (explicit) return explicit;
 
-        // If selected model is not in the list, show it formatted or as-is
-        // e.g. gemini-2.0-flash-exp -> Gemini 2.0 Flash Exp
-        return selectedModel
-            .split('-')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-    }, [availableModels, selectedModel]);
+        if (chatMode === 'team') {
+            const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
+            if (team) return `${team.name}`; // Show Team Name instead of model when in team mode? Or "Team: Model"? 
+            // Users probably care more about "Travel Agent" being active than "Gemini 1.5"
+            return `${team?.name || 'Team'}`;
+        }
+
+        return name;
+    }, [availableModels, selectedModel, chatMode, selectedTeamId]);
     const isMicDisabled = ((value?.length ?? 0) > 0 || isProcessing) && attachments.length === 0;
     const isSendDisabled = ((value?.length ?? 0) === 0 && attachments.length === 0) || attachments.some(a => a.loading);
 
@@ -577,6 +617,14 @@ export default function ChatInput(props: Props) {
                 items={modelMenuItems}
                 position="bottom-left"
                 title="Select Model"
+            />
+
+            <ContextMenu
+                visible={teamMenuVisible}
+                onClose={() => setTeamMenuVisible(false)}
+                items={teamMenuItems}
+                position="bottom-left"
+                title="Select Team"
             />
 
             <ContextMenu
