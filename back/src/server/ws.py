@@ -710,18 +710,22 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
 
             
             # Build full message history including current user message
-            full_messages = []
-            if chat_history:
-                full_messages.extend(chat_history)
-                logger.debug("[WS] 📜 Added %d messages from chat_history", len(chat_history))
+            # Note: We ignore chat_history arg as we rely on Agno's DB history with add_history_to_context=True
             
             # Add current user message to history
-            full_messages.append({
+            full_messages = [{
                 "role": "user",
                 "content": text
-            })
+            }]
             logger.debug("[WS] 📜 Passing text to agent (Agno will use session-based history)")
             logger.debug("[WS] Agent kwargs: stream=True, session_id=%s", session_id)
+            
+            # DEBUG: Check agent memory if available
+            if hasattr(agent, "memory") and agent.memory:
+                 msgs = agent.memory.messages
+                 logger.info("[WS] 🧠 Agent memory check: session_id=%s count=%d", session_id, len(msgs))
+                 if msgs:
+                     logger.debug("[WS] 🧠 First msg: %s", str(msgs[0])[:100])
             
             # EXPERIMENT: Let Agno manage history via session_id
             # We pass only text (current message), Agno will load history from its DB by session_id
