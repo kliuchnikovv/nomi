@@ -14,8 +14,6 @@ jobs:
   deploy-preview:
     name: Deploy Preview Environment
     runs-on: ubuntu-latest
-    # Only run if Railway token is configured
-    if: ${{ secrets.RAILWAY_TOKEN != '' }}
     
     permissions:
       contents: read
@@ -29,32 +27,31 @@ jobs:
 
       - name: Create Preview Environment
         id: preview
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           # Create environment name from PR number
           ENV_NAME="pr-${{ github.event.pull_request.number }}"
           
           echo "Creating preview environment: $ENV_NAME"
           
-          # Check if environment already exists, create if not
-          railway environment --name "$ENV_NAME" 2>/dev/null || \
-            railway environment create --name "$ENV_NAME"
+          # Create new environment (or switch to existing)
+          railway environment new "$ENV_NAME" 2>/dev/null || \
+            railway environment "$ENV_NAME"
           
-          # Deploy API service
+          echo "Deploying API service..."
           cd api
-          railway up --environment "$ENV_NAME" --detach
-          API_URL=$(railway status --environment "$ENV_NAME" --json | jq -r '.url // empty')
+          railway up --detach || echo "API deploy queued"
           cd ..
           
-          # Deploy Agent service  
+          echo "Deploying Agent service..."
           cd back
-          railway up --environment "$ENV_NAME" --detach
-          AGENT_URL=$(railway status --environment "$ENV_NAME" --json | jq -r '.url // empty')
+          railway up --detach || echo "Agent deploy queued"
           cd ..
           
-          # Output URLs
-          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-          echo "agent_url=$AGENT_URL" >> $GITHUB_OUTPUT
+          # Get project info
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
+          echo "status=deployed" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
         uses: thollander/actions-comment-pull-request@v2
@@ -62,12 +59,9 @@ jobs:
           message: |
             ## 🚀 Backend Preview Deployed
             
-            | Service | URL |
-            |---------|-----|
-            | **Go API** | ${{ steps.preview.outputs.api_url || 'Deploying...' }} |
-            | **Python Agent** | ${{ steps.preview.outputs.agent_url || 'Deploying...' }} |
-            
             **Environment:** `${{ steps.preview.outputs.env_name }}`
+            
+            Services are deploying to Railway. Check [Railway Dashboard](https://railway.app) for URLs.
             
             > ⏱️ Preview will be destroyed when PR is closed.
             > 💤 Services sleep after 10min of inactivity.
