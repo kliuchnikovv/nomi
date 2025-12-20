@@ -1,5 +1,7 @@
 import os
 import logging
+import uuid
+from pydantic import BaseModel
 
 from agno.db.postgres import PostgresDb
 from agno.os import AgentOS
@@ -74,6 +76,23 @@ async def _shutdown_tool_config_client():
 async def health_check():
     from datetime import datetime
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
+class QueryRequest(BaseModel):
+    query: str
+
+@app.post("/query")
+async def run_query(request: QueryRequest):
+    session_id = str(uuid.uuid4())
+    # AgentFactory is already configured
+    agent = await agent_factory.build(session_id=session_id)
+    
+    # Run agent
+    response = await agent.arun(request.query)
+    
+    # Extract content
+    # Handle response.content which might be None
+    answer = response.content if response.content else ""
+    return {"answer": answer}
 
 # Sessions for OAuth state (required for request.session)
 session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")

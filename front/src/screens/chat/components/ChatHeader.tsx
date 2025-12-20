@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { Menu } from 'iconoir-react-native';
+import { Menu, Mail } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from '../styles';
 import { useTheme } from '../../../context/ThemeContext';
@@ -9,13 +9,27 @@ interface ChatHeaderProps {
     title: string;
     subtitle: string;
     onMenuPress?: () => void;
+    onInboxPress?: () => void;
     showMenu?: boolean;
+    showInbox?: boolean;
+    isInboxMode?: boolean;
 }
 
-export function ChatHeader({ title, subtitle, onMenuPress, showMenu = true }: ChatHeaderProps) {
-    const { theme } = useTheme();
+export function ChatHeader({
+    title,
+    subtitle,
+    onMenuPress,
+    onInboxPress,
+    showMenu = true,
+    showInbox = true,
+    isInboxMode = false,
+}: ChatHeaderProps) {
+    const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
+
+    // Change accent color based on mode
+    const accentColor = isInboxMode ? palette.orange : theme.accent;
 
     return (
         <View style={[
@@ -23,11 +37,11 @@ export function ChatHeader({ title, subtitle, onMenuPress, showMenu = true }: Ch
             {
                 paddingTop: insets.top,
                 height: 60 + insets.top,
-                backgroundColor: `${theme.accent}1F`, // Match input field background
+                backgroundColor: `${accentColor}1F`,
                 borderBottomLeftRadius: 24,
                 borderBottomRightRadius: 24,
                 borderBottomWidth: 1,
-                borderBottomColor: `${theme.accent}40`, // Match input field border
+                borderBottomColor: `${accentColor}40`,
             }
         ]}>
             {showMenu && (
@@ -36,14 +50,28 @@ export function ChatHeader({ title, subtitle, onMenuPress, showMenu = true }: Ch
                 </TouchableOpacity>
             )}
             <View style={styles.headerAvatar}>
-                <Text style={styles.headerAvatarText}>G</Text>
+                <Text style={styles.headerAvatarText}>{isInboxMode ? 'I' : 'G'}</Text>
             </View>
-            <View style={styles.headerBody}>
-                <Text style={styles.headerTitle}>{title}</Text>
-                <Text style={styles.headerSubtitle}>{subtitle}</Text>
+            <View style={[styles.headerBody, { flex: 1, minWidth: 0 }]}>
+                <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">
+                    {title}
+                </Text>
+                <Text style={styles.headerSubtitle} numberOfLines={1}>
+                    {subtitle}
+                </Text>
             </View>
-            <View style={styles.headerBadge}>
-                <Text style={styles.headerBadgeText}>AI</Text>
+            {showInbox && onInboxPress && (
+                <TouchableOpacity style={styles.menuButton} onPress={onInboxPress}>
+                    <Mail
+                        width={22}
+                        height={22}
+                        color={isInboxMode ? palette.orange : theme.textPrimary}
+                        strokeWidth={2}
+                    />
+                </TouchableOpacity>
+            )}
+            <View style={[styles.headerBadge, isInboxMode && { backgroundColor: palette.orange }]}>
+                <Text style={styles.headerBadgeText}>{isInboxMode ? 'IN' : 'AI'}</Text>
             </View>
         </View>
     );

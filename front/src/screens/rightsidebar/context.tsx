@@ -5,6 +5,7 @@ import { InboxMessage, Plugin, PluginChat, PluginChatMessage } from './models';
 interface PluginChatsContextType {
     plugins: Plugin[];
     loading: boolean;
+    refreshing: boolean;
     error: string | null;
     selectedChatId: string | null;
     selectedChatMessages: PluginChatMessage[];
@@ -13,6 +14,9 @@ interface PluginChatsContextType {
     selectChat: (chat: PluginChat) => Promise<{ provider: string; chatId: string | number; messages: PluginChatMessage[]; integrationId?: string; title?: string | null } | null>;
     setSelectedChatId: (chatId: string | null) => void; // legacy, use selectChat
     refresh: () => Promise<void>;
+    loadMoreForPlugin: (pluginId: string) => Promise<void>;
+    hasMoreForPlugin: (pluginId: string) => boolean;
+    loadingMorePlugins: Set<string>;
 }
 
 const PluginChatsContext = createContext<PluginChatsContextType | undefined>(undefined);
@@ -37,7 +41,7 @@ export const useInbox = () => {
             return total + plugin.chats.reduce((sum, chat) => sum + chat.unreadCount, 0);
         }, 0);
     }, [context.plugins]);
-    
+
     // Возвращаем совместимый интерфейс
     return {
         messages: [] as InboxMessage[],
@@ -47,10 +51,10 @@ export const useInbox = () => {
         totalPages: 1,
         totalCount: 0,
         unreadCount,
-        loadInbox: async () => {},
-        markAsRead: async () => {},
-        executeAction: async () => {},
-        loadMore: async () => {},
+        loadInbox: async () => { },
+        markAsRead: async () => { },
+        executeAction: async () => { },
+        loadMore: async () => { },
         refresh: context.refresh,
     };
 };
@@ -58,11 +62,15 @@ export const useInbox = () => {
 export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [plugins, setPlugins] = useState<Plugin[]>([]);
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
     const [selectedChatMessages, setSelectedChatMessages] = useState<PluginChatMessage[]>([]);
     const [chatLoading, setChatLoading] = useState(false);
     const [chatError, setChatError] = useState<string | null>(null);
+    const [pluginPages, setPluginPages] = useState<Record<string, number>>({});
+    const [pluginHasMore, setPluginHasMore] = useState<Record<string, boolean>>({});
+    const [loadingMorePlugins, setLoadingMorePlugins] = useState<Set<string>>(new Set());
 
     const mapInboxItemsToPlugins = async (): Promise<Plugin[]> => {
         try {
@@ -158,8 +166,93 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }, []);
 
     const refresh = useCallback(async () => {
-        await loadPlugins();
+        setRefreshing(true);
+        try {
+            await loadPlugins();
+            // Reset pagination state
+            setPluginPages({});
+            setPluginHasMore({});
+        } finally {
+            setRefreshing(false);
+        }
     }, [loadPlugins]);
+
+    const loadMoreForPlugin = useCallback(async (pluginId: string) => {
+        const plugin = plugins.find(p => p.id === pluginId);
+        if (!plugin) return;
+
+        // Skip if already loading
+        if (loadingMorePlugins.has(pluginId)) return;
+
+        const currentPage = pluginPages[pluginId] || 1;
+        const nextPage = currentPage + 1;
+
+        setLoadingMorePlugins(prev => new Set(prev).add(pluginId));
+
+        try {
+            const inbox = await inboxApi.getInbox({
+                provider: plugin.provider,
+                integrationId: pluginId,
+                page: nextPage,
+                limit: 20,
+            });
+            const items = inbox?.items || [];
+            const totalPages = inbox?.total_pages || 1;
+
+            if (items.length === 0) {
+                setPluginHasMore(prev => ({ ...prev, [pluginId]: false }));
+                return;
+            }
+
+            // Add new chats to the plugin
+            const newChats: PluginChat[] = items.map((chatItem: any, chatIdx: number) => {
+                const chatId = chatItem.chat_id ?? `chat-${currentPage * 20 + chatIdx}`;
+                const threads = chatItem.threads || [];
+                return {
+                    id: `${pluginId}:${chatId}`,
+                    pluginId: pluginId,
+                    title: chatItem.sender || `Chat ${chatId}`,
+                    lastMessage: chatItem.count ? `${chatItem.count} messages` : undefined,
+                    lastMessageAt: chatItem.last_received ? new Date(chatItem.last_received).getTime() : undefined,
+                    unreadCount: 0,
+                    metadata: {
+                        provider: plugin.provider,
+                        integrationId: pluginId,
+                        chatId,
+                        threads: threads.map((thread: any, idx: number) => ({
+                            ...thread,
+                            thread_id: thread.thread_id ?? `${chatId}-thread-${idx}`,
+                            messages: thread.messages || [],
+                        })),
+                    },
+                };
+            });
+
+            setPlugins(prev => prev.map(p => {
+                if (p.id === pluginId) {
+                    return { ...p, chats: [...p.chats, ...newChats] };
+                }
+                return p;
+            }));
+
+            setPluginPages(prev => ({ ...prev, [pluginId]: nextPage }));
+            // Use total_pages from API response to determine if there are more pages
+            setPluginHasMore(prev => ({ ...prev, [pluginId]: nextPage < totalPages }));
+        } catch (err) {
+            console.error(`Failed to load more for plugin ${pluginId}`, err);
+        } finally {
+            setLoadingMorePlugins(prev => {
+                const next = new Set(prev);
+                next.delete(pluginId);
+                return next;
+            });
+        }
+    }, [plugins, pluginPages, loadingMorePlugins]);
+
+    const hasMoreForPlugin = useCallback((pluginId: string) => {
+        // Default to true if we haven't loaded more yet
+        return pluginHasMore[pluginId] !== false;
+    }, [pluginHasMore]);
 
     const selectChat = useCallback(async (chat: PluginChat) => {
         setSelectedChatId(chat.id);
@@ -199,6 +292,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const value = useMemo(() => ({
         plugins,
         loading,
+        refreshing,
         error,
         selectedChatId,
         selectedChatMessages,
@@ -207,9 +301,13 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         selectChat,
         setSelectedChatId,
         refresh,
+        loadMoreForPlugin,
+        hasMoreForPlugin,
+        loadingMorePlugins,
     }), [
         plugins,
         loading,
+        refreshing,
         error,
         selectedChatId,
         selectedChatMessages,
@@ -217,6 +315,9 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         chatError,
         selectChat,
         refresh,
+        loadMoreForPlugin,
+        hasMoreForPlugin,
+        loadingMorePlugins,
     ]);
 
     return (

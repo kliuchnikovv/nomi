@@ -19,6 +19,7 @@ import { useGiftedMessages } from './hooks/useGiftedMessages';
 import { useGiftedChatRenderers } from './hooks/useGiftedChatRenderers';
 import { ChatHeader } from './components/ChatHeader';
 import { ChatSidebar } from './sidebar/screen';
+import RightSidebar from '../rightsidebar/screen';
 import { useTheme } from '../../context/ThemeContext';
 import { Skeleton } from '../../components/Skeleton';
 import { Attachment } from '../../main/models';
@@ -51,6 +52,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         error,
         setError,
         retryLastMessage,
+        clearPluginThread,
     } = useChat();
     const { user, token } = useAuth();
     const { theme } = useTheme();
@@ -60,6 +62,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const { chats, chatsLoading, activeChatID, activeChat, setActiveChatID, getChats, createNewChat, renameChat, deleteChat } = useMain();
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
+    const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
 
     // Attachment Logic
     const [imageViewerVisible, setImageViewerVisible] = useState(false);
@@ -176,8 +179,10 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const isWide = windowWidth >= 1024;
     const sidebarWidth = isWide ? 320 : Math.min(windowWidth * 0.9, 360);
 
-    // Sidebar Animation Logic
+    // Left Sidebar Animation Logic
     const sidebarTranslateX = useSharedValue(-sidebarWidth);
+    // Right Sidebar Animation Logic
+    const rightSidebarTranslateX = useSharedValue(sidebarWidth);
 
     useEffect(() => {
         if (isWide) {
@@ -185,24 +190,48 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         }
     }, [getChats, isWide]);
 
-    // Update shared value if sidebarWidth changes
+    // Update shared values if sidebarWidth changes
     useEffect(() => {
         if (!isWide && !sidebarVisible) {
             sidebarTranslateX.value = -sidebarWidth;
         }
+        if (!isWide && !rightSidebarVisible) {
+            rightSidebarTranslateX.value = sidebarWidth;
+        }
     }, [sidebarWidth, isWide]);
 
+    // Close right sidebar when opening left
     const handleOpenMenu = useCallback(() => {
+        if (rightSidebarVisible) {
+            setRightSidebarVisible(false);
+            rightSidebarTranslateX.value = withTiming(sidebarWidth);
+        }
         Keyboard.dismiss();
         getChats({ preserveActiveChat: true });
         setSidebarVisible(true);
         sidebarTranslateX.value = withTiming(0);
-    }, [getChats, sidebarTranslateX]);
+    }, [getChats, sidebarTranslateX, rightSidebarVisible, rightSidebarTranslateX, sidebarWidth]);
 
     const handleCloseMenu = useCallback(() => {
         setSidebarVisible(false);
         sidebarTranslateX.value = withTiming(-sidebarWidth);
     }, [sidebarTranslateX, sidebarWidth]);
+
+    // Close left sidebar when opening right
+    const handleOpenInbox = useCallback(() => {
+        if (sidebarVisible) {
+            setSidebarVisible(false);
+            sidebarTranslateX.value = withTiming(-sidebarWidth);
+        }
+        Keyboard.dismiss();
+        setRightSidebarVisible(true);
+        rightSidebarTranslateX.value = withTiming(0);
+    }, [sidebarTranslateX, rightSidebarTranslateX, sidebarVisible, sidebarWidth]);
+
+    const handleCloseInbox = useCallback(() => {
+        setRightSidebarVisible(false);
+        rightSidebarTranslateX.value = withTiming(sidebarWidth);
+    }, [rightSidebarTranslateX, sidebarWidth]);
 
     const handleSelectChat = useCallback((chatId: string) => {
         setActiveChatID(chatId);
@@ -210,9 +239,10 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     }, [setActiveChatID, handleCloseMenu]);
 
     const handleNewChat = useCallback(() => {
+        clearPluginThread();
         createNewChat();
         handleCloseMenu();
-    }, [createNewChat, handleCloseMenu]);
+    }, [createNewChat, handleCloseMenu, clearPluginThread]);
 
     const dismissKeyboard = () => {
         Keyboard.dismiss();
@@ -264,6 +294,47 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             }
         });
 
+    // Open right sidebar gesture (edge swipe from right)
+    const openRightGesture = Gesture.Pan()
+        .maxPointers(1)
+        .activeOffsetX([-20, 10]) // Activate if moved left > 20
+        .failOffsetY([-20, 20])
+        .onStart(() => {
+            runOnJS(dismissKeyboard)();
+        })
+        .onUpdate((e) => {
+            const newTranslate = sidebarWidth + e.translationX;
+            rightSidebarTranslateX.value = Math.max(0, Math.min(sidebarWidth, newTranslate));
+        })
+        .onEnd((e) => {
+            if (rightSidebarTranslateX.value < sidebarWidth * 0.6 || e.velocityX < -500) {
+                rightSidebarTranslateX.value = withTiming(0);
+                runOnJS(setRightSidebarVisible)(true);
+            } else {
+                rightSidebarTranslateX.value = withTiming(sidebarWidth);
+                runOnJS(setRightSidebarVisible)(false);
+            }
+        });
+
+    // Close right sidebar gesture
+    const closeRightGesture = Gesture.Pan()
+        .activeOffsetX([1000, 40]) // Activate when dragged right by 40px (more tolerance)
+        .failOffsetY([-30, 30]) // Allow more vertical movement before failing (for scroll)
+        .onUpdate((e) => {
+            if (e.translationX > 0) {
+                rightSidebarTranslateX.value = Math.max(0, Math.min(sidebarWidth, e.translationX));
+            }
+        })
+        .onEnd((e) => {
+            if (rightSidebarTranslateX.value > sidebarWidth * 0.2 || e.velocityX > 500) {
+                rightSidebarTranslateX.value = withTiming(sidebarWidth);
+                runOnJS(setRightSidebarVisible)(false);
+            } else {
+                rightSidebarTranslateX.value = withTiming(0);
+                runOnJS(setRightSidebarVisible)(true);
+            }
+        });
+
     const headerTitle = externalTitle || activeChat?.title || 'New Chat';
     const headerSubtitle = assistantWorking ? 'Assistant is thinking…' : 'Available to help';
 
@@ -290,7 +361,10 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         title={headerTitle}
                         subtitle={headerSubtitle}
                         onMenuPress={handleOpenMenu}
+                        onInboxPress={handleOpenInbox}
                         showMenu={!isWide}
+                        showInbox={!isWide}
+                        isInboxMode={isPluginThread}
                     />
 
 
@@ -329,7 +403,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         )}
                     </KeyboardAvoidingView>
 
-                    {/* Edge Swipe Detector */}
+                    {/* Edge Swipe Detector - Left */}
                     {!isWide && (
                         <GestureDetector gesture={openGesture}>
                             <View
@@ -344,13 +418,28 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                             />
                         </GestureDetector>
                     )}
+                    {/* Edge Swipe Detector - Right */}
+                    {!isWide && (
+                        <GestureDetector gesture={openRightGesture}>
+                            <View
+                                style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: 20,
+                                    zIndex: 100,
+                                }}
+                            />
+                        </GestureDetector>
+                    )}
                 </View>
             </View>
 
             {!isWide && (
                 <ChatSidebar
                     variant="overlay"
-                    visible={true} // Always mounted, controlled by transform
+                    visible={true}
                     width={sidebarWidth}
                     chats={sortedChats}
                     chatsLoading={chatsLoading}
@@ -363,6 +452,16 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                     onChatRename={renameChat}
                     sidebarTranslateX={sidebarTranslateX}
                     dragGesture={closeGesture}
+                />
+            )}
+
+            {!isWide && (
+                <RightSidebar
+                    variant="overlay"
+                    width={sidebarWidth}
+                    onClose={handleCloseInbox}
+                    translateX={rightSidebarTranslateX}
+                    dragGesture={closeRightGesture}
                 />
             )}
 

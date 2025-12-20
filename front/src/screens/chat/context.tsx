@@ -409,6 +409,12 @@ export function ChatProvider({
         }
     }, [setActiveChatID, mapPluginMessage, setChatMode, setTeamCommand]);
 
+    const clearPluginThread = useCallback(() => {
+        setPluginThreadMeta(null);
+        setExternalTitle(null);
+        setMessages([]);
+    }, []);
+
     async function createChat(title: string) {
         let chatID: string;
 
@@ -620,6 +626,7 @@ export function ChatProvider({
         startPluginThread,
         isPluginThread: !!pluginThreadMeta,
         pluginThreadMeta,
+        clearPluginThread,
         selectedModel,
         setSelectedModel,
         availableModels,

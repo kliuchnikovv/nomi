@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Linking, View, Text, ActionSheetIOS } from 'react-native';
+import { Linking, View, Text, ActionSheetIOS, Pressable } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
@@ -65,6 +65,26 @@ export function useGiftedChatRenderers({
         );
     }, []);
 
+    // Direct long press handler for text content
+    const handleTextLongPress = useCallback((text: string) => {
+        console.log('handleTextLongPress called', text?.substring(0, 50));
+        if (!text) return;
+
+        ActionSheetIOS.showActionSheetWithOptions(
+            {
+                options: ['Copy', 'Cancel'],
+                cancelButtonIndex: 1,
+                userInterfaceStyle: 'dark',
+            },
+            (buttonIndex) => {
+                if (buttonIndex === 0) {
+                    Clipboard.setString(text);
+                    console.log('Copied to clipboard');
+                }
+            }
+        );
+    }, []);
+
     const renderBubble = useCallback((props: any) => {
         const { currentMessage } = props;
         const attachments = currentMessage?.attachments;
@@ -73,7 +93,7 @@ export function useGiftedChatRenderers({
 
         return (
             <View>
-                 {/*
+                {/*
                    If using custom logic inside Bubble, we can inject children or modify content.
                    GiftedChat Bubble is a bit rigid.
                    We can use renderCustomView to render something INSIDE the bubble
@@ -134,7 +154,7 @@ export function useGiftedChatRenderers({
                         right: { marginBottom: 4 },
                         left: { marginBottom: 4 },
                     }}
-                    // We can hijack renderMessageText to include attachments above text if we want "inside"
+                // We can hijack renderMessageText to include attachments above text if we want "inside"
                 />
             </View>
         );
@@ -162,7 +182,7 @@ export function useGiftedChatRenderers({
 
         return (
             <View>
-                 {showAttachmentsOutside && (
+                {showAttachmentsOutside && (
                     <View style={{
                         marginLeft: currentMessage.user._id === 'assistant' ? 0 : 'auto',
                         marginRight: currentMessage.user._id === 'assistant' ? 'auto' : 0,
@@ -199,7 +219,7 @@ export function useGiftedChatRenderers({
 
         // Helper to render attachments inside bubble
         const renderAttachments = () => (
-             <View style={{ marginBottom: 8 }}>
+            <View style={{ marginBottom: 8 }}>
                 <MessageAttachments
                     attachments={attachments}
                     onAttachmentPress={onAttachmentPress}
@@ -208,14 +228,23 @@ export function useGiftedChatRenderers({
             </View>
         );
 
+        const userMessageText = props.currentMessage?.text || '';
+
         if (!isAssistant) {
             return (
                 <View>
                     {showAttachmentsInside && renderAttachments()}
-                    <MessageText {...props} />
+                    <Pressable
+                        onLongPress={() => handleTextLongPress(userMessageText)}
+                        delayLongPress={300}
+                    >
+                        <MessageText {...props} />
+                    </Pressable>
                 </View>
             );
         }
+
+        const messageText = props.currentMessage?.text || '';
 
         return (
             <View>
@@ -223,34 +252,39 @@ export function useGiftedChatRenderers({
                 {toolCalls && toolCalls.length > 0 && (
                     <ToolCallsSection toolCalls={toolCalls} />
                 )}
-                <Markdown
-                    style={markdownStyles as any}
-                    onLinkPress={(url) => {
-                        const openLink = async () => {
-                            try {
-                                if (await InAppBrowser.isAvailable()) {
-                                    await InAppBrowser.open(url, {
-                                        showTitle: true,
-                                        dismissButtonStyle: 'close',
-                                        modalEnabled: true,
-                                        enableDefaultShare: false,
-                                    });
-                                } else {
-                                    await Linking.openURL(url);
-                                }
-                            } catch {
-                                await Linking.openURL(url).catch(() => { });
-                            }
-                        };
-                        openLink();
-                        return false;
-                    }}
+                <Pressable
+                    onLongPress={() => handleTextLongPress(messageText)}
+                    delayLongPress={300}
                 >
-                    {props.currentMessage?.text || ''}
-                </Markdown>
+                    <Markdown
+                        style={markdownStyles as any}
+                        onLinkPress={(url) => {
+                            const openLink = async () => {
+                                try {
+                                    if (await InAppBrowser.isAvailable()) {
+                                        await InAppBrowser.open(url, {
+                                            showTitle: true,
+                                            dismissButtonStyle: 'close',
+                                            modalEnabled: true,
+                                            enableDefaultShare: false,
+                                        });
+                                    } else {
+                                        await Linking.openURL(url);
+                                    }
+                                } catch {
+                                    await Linking.openURL(url).catch(() => { });
+                                }
+                            };
+                            openLink();
+                            return false;
+                        }}
+                    >
+                        {messageText}
+                    </Markdown>
+                </Pressable>
             </View>
         );
-    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress]);
+    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress]);
 
     const renderFooter = useCallback(() => {
         if (!assistantWorking) {

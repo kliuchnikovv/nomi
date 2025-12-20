@@ -1,18 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View, ActionSheetIOS, Alert } from 'react-native';
-import Animated, { interpolate, SharedValue, useAnimatedStyle } from 'react-native-reanimated';
+import { SharedValue } from 'react-native-reanimated';
 import { Settings } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Gesture } from 'react-native-gesture-handler';
 import { ChatSidebarProps } from './models';
 import { createSidebarStyles } from './styles';
 import { createChatTheme } from '../theme';
 import { useTheme } from '../../../context/ThemeContext';
-import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { Skeleton } from '../../../components/Skeleton';
+import { Sidebar } from '../../../components/Sidebar';
 
 const pad = (value: number) => value.toString().padStart(2, '0');
 
-const formatDateTime = (value?: string) => {
+const formatDateTime = (value?: string | number | null) => {
     if (!value) return '';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
@@ -23,7 +24,6 @@ type SidebarStyles = ReturnType<typeof createSidebarStyles>;
 type SidebarChatTheme = ReturnType<typeof createChatTheme>;
 
 function ChatListSkeleton({ styles }: { styles: SidebarStyles }) {
-    // Generate an array of 5 fake items
     const items = Array.from({ length: 5 }, (_, i) => String(i));
     return (
         <View style={styles.listContent}>
@@ -37,7 +37,7 @@ function ChatListSkeleton({ styles }: { styles: SidebarStyles }) {
     );
 }
 
-function ChatList({
+function ChatListContent({
     chats,
     chatsLoading,
     activeChatID,
@@ -69,7 +69,6 @@ function ChatList({
             (buttonIndex) => {
                 setHighlightedChatID(null);
                 if (buttonIndex === 0 && onChatRename) {
-                    // Rename
                     Alert.prompt(
                         'Rename Chat',
                         'Enter new name for the chat',
@@ -88,7 +87,6 @@ function ChatList({
                         chatTitle
                     );
                 } else if (buttonIndex === 1 && onChatDelete) {
-                    // Delete
                     onChatDelete(chatId);
                 }
             }
@@ -179,111 +177,42 @@ export function ChatSidebar({
     const styles = useMemo(() => createSidebarStyles(theme), [theme]);
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
 
-    if (variant === 'inline') {
-        return (
-            <View style={[styles.container, { width }]}>
-                <ChatList
-                    chats={chats}
-                    chatsLoading={chatsLoading}
-                    activeChatID={activeChatID}
-                    onSelectChat={onSelectChat}
-                    onNewChat={onNewChat}
-                    onSettingsPress={onSettingsPress}
-                    onChatDelete={onChatDelete}
-                    onChatRename={onChatRename}
-                    styles={styles}
-                    chatTheme={chatTheme}
-                />
-            </View>
-        );
-    }
+    const handleSelectChat = (id: string) => {
+        onSelectChat(id);
+        if (variant === 'overlay') onClose?.();
+    };
 
-    // Overlay variant using Reanimated
-    // If sidebarTranslateX is not provided, we should probably fallback or return null,
-    // but in this refactor it is expected to be provided by parent.
-    if (!sidebarTranslateX) {
-        return null;
-    }
+    const handleNewChat = () => {
+        onNewChat();
+        if (variant === 'overlay') onClose?.();
+    };
 
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ translateX: sidebarTranslateX.value }],
-    }));
-
-    const backdropStyle = useAnimatedStyle(() => {
-        // Map translateX from [-width, 0] to opacity [0, 0.5]
-        const opacity = interpolate(
-            sidebarTranslateX.value,
-            [-width, 0],
-            [0, 0.5],
-            'clamp'
-        );
-        return { opacity };
-    });
-
-    const containerStyle = useAnimatedStyle(() => {
-         // Hide container when fully closed to allow touches to pass through
-         // Assuming -width is closed state.
-         return {
-             zIndex: sidebarTranslateX.value <= -width + 1 ? -1 : 100,
-         };
-    });
+    const handleSettingsPress = () => {
+        onSettingsPress?.();
+        if (variant === 'overlay') onClose?.();
+    };
 
     return (
-        <Animated.View style={[styles.overlayRoot, containerStyle]} pointerEvents="box-none">
-             <Animated.View style={[styles.overlayBackdrop, backdropStyle]}>
-                 <Pressable style={{ flex: 1 }} onPress={onClose} />
-             </Animated.View>
-             {dragGesture ? (
-                 <GestureDetector gesture={dragGesture}>
-                    <Animated.View style={[styles.overlayCard, { width }, animatedStyle]}>
-                        <ChatList
-                            chats={chats}
-                            chatsLoading={chatsLoading}
-                            activeChatID={activeChatID}
-                            onSelectChat={(id) => {
-                                onSelectChat(id);
-                                onClose?.();
-                            }}
-                            onNewChat={() => {
-                                onNewChat();
-                                onClose?.();
-                            }}
-                            onSettingsPress={() => {
-                                onSettingsPress?.();
-                                onClose?.();
-                            }}
-                            onChatDelete={onChatDelete}
-                            onChatRename={onChatRename}
-                            styles={styles}
-                            chatTheme={chatTheme}
-                        />
-                    </Animated.View>
-                 </GestureDetector>
-             ) : (
-                <Animated.View style={[styles.overlayCard, { width }, animatedStyle]}>
-                    <ChatList
-                        chats={chats}
-                        chatsLoading={chatsLoading}
-                        activeChatID={activeChatID}
-                        onSelectChat={(id) => {
-                            onSelectChat(id);
-                            onClose?.();
-                        }}
-                        onNewChat={() => {
-                            onNewChat();
-                            onClose?.();
-                        }}
-                        onSettingsPress={() => {
-                            onSettingsPress?.();
-                            onClose?.();
-                        }}
-                        onChatDelete={onChatDelete}
-                        onChatRename={onChatRename}
-                        styles={styles}
-                        chatTheme={chatTheme}
-                    />
-                </Animated.View>
-             )}
-        </Animated.View>
+        <Sidebar
+            side="left"
+            variant={variant}
+            width={width}
+            onClose={onClose}
+            translateX={sidebarTranslateX}
+            dragGesture={dragGesture}
+        >
+            <ChatListContent
+                chats={chats}
+                chatsLoading={chatsLoading}
+                activeChatID={activeChatID}
+                onSelectChat={handleSelectChat}
+                onNewChat={handleNewChat}
+                onSettingsPress={handleSettingsPress}
+                onChatDelete={onChatDelete}
+                onChatRename={onChatRename}
+                styles={styles}
+                chatTheme={chatTheme}
+            />
+        </Sidebar>
     );
 }

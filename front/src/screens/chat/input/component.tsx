@@ -11,8 +11,7 @@ import {
     Page,
     MediaImage,
     Translate,
-    Check,
-    Globe
+    Check
 } from 'iconoir-react-native';
 
 import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
@@ -397,45 +396,7 @@ export default function ChatInput(props: Props) {
                 styles.inputWrapper,
                 { paddingBottom: isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) }
             ]}>
-                {/* Web Search Pill */}
-                {webSearchEnabled && (
-                    <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 }}>
-                        <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            backgroundColor: '#000',
-                            borderRadius: 16,
-                            paddingVertical: 6,
-                            paddingHorizontal: 12,
-                            alignSelf: 'flex-start',
-                            gap: 6
-                        }}>
-                            <Globe width={16} height={16} color="#3b82f6" strokeWidth={2} />
-                            <Text style={{ fontSize: 13, color: '#3b82f6', fontWeight: '500' }}>Search</Text>
-                            <Pressable
-                                onPress={async () => {
-                                    setWebSearchEnabled(false);
-                                    if (user) {
-                                        try {
-                                            const updatedUser = await apiClient.put<any>(`${API_URL}/auth/me`, {
-                                                web_search_enabled: false
-                                            });
-                                            if (updatedUser) {
-                                                updateUser(updatedUser);
-                                            }
-                                        } catch (e) {
-                                            console.error('Failed to disable web search preference', e);
-                                        }
-                                    }
-                                }}
-                                hitSlop={8}
-                                style={{ marginLeft: 2 }}
-                            >
-                                <XmarkCircle width={16} height={16} color="#3b82f6" opacity={0.8} />
-                            </Pressable>
-                        </View>
-                    </View>
-                )}
+
 
                 {/* Attachments Preview */}
                 {attachments.length > 0 && (

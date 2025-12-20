@@ -1,38 +1,50 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
     ActivityIndicator,
     FlatList,
     Pressable,
+    RefreshControl,
     Text,
     View,
+    ScrollView,
 } from 'react-native';
 import { NavArrowDown, NavArrowRight, Mail, Calendar } from 'iconoir-react-native';
-import { styles } from './styles.tsx';
+import { SharedValue } from 'react-native-reanimated';
+import { Gesture } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createRightSidebarStyles, RightSidebarStyles } from './styles';
 import { usePluginChats } from './context';
 import { useChat } from '../chat/context';
-import { tokyoNight, tokyoNightTheme } from '../../themes/tokyoNight.ts';
-
-const palette = tokyoNightTheme.palette;
+import { useTheme } from '../../context/ThemeContext';
+import { Sidebar } from '../../components/Sidebar';
 import { Plugin, PluginChat } from './models';
+import { ThemePalette } from '../../themes/types';
 
-type Props = {
+export interface RightSidebarProps {
+    variant: 'inline' | 'overlay';
     width: number;
-    isOpen: boolean;
+    visible?: boolean;
     onChatSelect?: (chat: PluginChat) => void;
     onClose?: () => void;
+    translateX?: SharedValue<number>;
+    dragGesture?: ReturnType<typeof Gesture.Pan>;
+}
+
+const pluginIconMap: Record<string, { IconComponent: any; colorKey: keyof ThemePalette }> = {
+    inbox: { IconComponent: Mail, colorKey: 'blue' },
+    gmail: { IconComponent: Mail, colorKey: 'red' },
+    imap: { IconComponent: Mail, colorKey: 'cyan' },
+    calendar: { IconComponent: Calendar, colorKey: 'orange' },
 };
 
-const pluginIconMap: Record<string, { IconComponent: any; color: string }> = {
-    inbox: { IconComponent: Mail, color: palette.blue },
-    gmail: { IconComponent: Mail, color: palette.red },
-    imap: { IconComponent: Mail, color: palette.cyan },
-    calendar: { IconComponent: Calendar, color: palette.orange },
-};
-
-const getPluginIcon = (provider: string) => {
-    return pluginIconMap[provider] || {
+const getPluginIcon = (provider: string, palette: ThemePalette) => {
+    const meta = pluginIconMap[provider] || {
         IconComponent: Mail,
-        color: palette.commentGrey,
+        colorKey: 'commentGrey' as keyof ThemePalette,
+    };
+    return {
+        IconComponent: meta.IconComponent,
+        color: palette[meta.colorKey] as string,
     };
 };
 
@@ -55,13 +67,18 @@ const formatTimestamp = (timestamp?: number) => {
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 };
 
-const PluginSection = ({
+function PluginSection({
     plugin,
     expandedPlugins,
     onTogglePlugin,
     expandedChats,
     onToggleChat,
     onThreadSelect,
+    onLoadMore,
+    hasMore,
+    isLoadingMore,
+    styles,
+    palette,
 }: {
     plugin: Plugin;
     expandedPlugins: Set<string>;
@@ -69,9 +86,15 @@ const PluginSection = ({
     expandedChats: Set<string>;
     onToggleChat: (chatId: string) => void;
     onThreadSelect: (chat: PluginChat, thread: any) => void;
-}) => {
+    onLoadMore: () => void;
+    hasMore: boolean;
+    isLoadingMore: boolean;
+    styles: RightSidebarStyles;
+    palette: ThemePalette;
+}) {
+    const { theme } = useTheme();
     const isExpanded = expandedPlugins.has(plugin.id);
-    const iconMeta = getPluginIcon(plugin.provider);
+    const iconMeta = getPluginIcon(plugin.provider, palette);
     const IconComponent = iconMeta.IconComponent;
     const totalUnread = plugin.chats.reduce((sum, chat) => sum + chat.unreadCount, 0);
 
@@ -99,13 +122,13 @@ const PluginSection = ({
                         <NavArrowDown
                             width={16}
                             height={16}
-                            color={palette.gutterGrey}
+                            color={theme.textSecondary}
                         />
                     ) : (
                         <NavArrowRight
                             width={16}
                             height={16}
-                            color={palette.gutterGrey}
+                            color={theme.textSecondary}
                         />
                     )}
                 </View>
@@ -121,6 +144,7 @@ const PluginSection = ({
                                     chat={chat}
                                     isSelected={chatExpanded}
                                     onPress={() => onToggleChat(chat.id)}
+                                    styles={styles}
                                 />
                                 {chatExpanded && threads.length > 0 && (
                                     <View style={{ paddingLeft: 28, gap: 6 }}>
@@ -130,7 +154,7 @@ const PluginSection = ({
                                                 style={({ pressed }) => [
                                                     styles.chatItem,
                                                     pressed && { opacity: 0.8 },
-                                                    { backgroundColor: 'rgba(122, 162, 247, 0.05)' },
+                                                    { backgroundColor: `${theme.accent}08` },
                                                 ]}
                                                 onPress={() => onThreadSelect(chat, thread)}
                                             >
@@ -158,21 +182,46 @@ const PluginSection = ({
                             </View>
                         );
                     })}
+                    {/* Load More Button */}
+                    {hasMore && (
+                        <Pressable
+                            onPress={onLoadMore}
+                            disabled={isLoadingMore}
+                            style={({ pressed }) => [{
+                                paddingVertical: 12,
+                                paddingHorizontal: 16,
+                                marginTop: 8,
+                                borderRadius: 8,
+                                backgroundColor: pressed ? `${theme.accent}20` : `${theme.accent}10`,
+                                alignItems: 'center',
+                            }]}
+                        >
+                            {isLoadingMore ? (
+                                <ActivityIndicator size="small" color={theme.accent} />
+                            ) : (
+                                <Text style={{ color: theme.accent, fontWeight: '600', fontSize: 13 }}>
+                                    Load More
+                                </Text>
+                            )}
+                        </Pressable>
+                    )}
                 </View>
             )}
         </View>
     );
-};
+}
 
-const ChatItem = ({
+function ChatItem({
     chat,
     isSelected,
     onPress,
+    styles,
 }: {
     chat: PluginChat;
     isSelected: boolean;
     onPress: () => void;
-}) => {
+    styles: RightSidebarStyles;
+}) {
     return (
         <Pressable
             style={[
@@ -214,10 +263,22 @@ const ChatItem = ({
             </View>
         </Pressable>
     );
-};
+}
 
-export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: Props) {
-    const { plugins, loading, error, selectChat, refresh } = usePluginChats();
+function RightSidebarContent({
+    onChatSelect,
+    onClose,
+    styles,
+    palette,
+}: {
+    onChatSelect?: (chat: PluginChat) => void;
+    onClose?: () => void;
+    styles: RightSidebarStyles;
+    palette: ThemePalette;
+}) {
+    const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
+    const { plugins, loading, refreshing, error, refresh, loadMoreForPlugin, hasMoreForPlugin, loadingMorePlugins } = usePluginChats();
     const { startPluginThread } = useChat();
     const [expandedPlugins, setExpandedPlugins] = useState<Set<string>>(new Set());
     const [expandedChats, setExpandedChats] = useState<Set<string>>(new Set());
@@ -255,9 +316,7 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
             messages,
         });
         onChatSelect?.(chat);
-        if (onClose) {
-            onClose();
-        }
+        onClose?.();
     };
 
     useEffect(() => {
@@ -266,17 +325,10 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
         }
     }, [plugins, expandedPlugins.size]);
 
-    // Refresh when sidebar becomes open
-    useEffect(() => {
-        if (isOpen) {
-            refresh();
-        }
-    }, [isOpen, refresh]);
-
     if (error) {
         return (
-            <View style={[styles.root, { width }]}>
-                <View style={styles.sectionHeader}>
+            <View style={styles.root}>
+                <View style={[styles.sectionHeader, { paddingTop: insets.top + 12 }]}>
                     <Text style={styles.sectionTitle}>Inbox Chats</Text>
                 </View>
                 <View style={styles.emptyState}>
@@ -292,13 +344,13 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
     }
 
     return (
-        <View style={[styles.root, { width }]}>
-            <View style={styles.sectionHeader}>
+        <View style={styles.root}>
+            <View style={[styles.sectionHeader, { paddingTop: insets.top + 12 }]}>
                 <Text style={styles.sectionTitle}>Inbox Chats</Text>
             </View>
             {loading && plugins.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <ActivityIndicator size="large" color={palette.blue} />
+                    <ActivityIndicator size="large" color={theme.accent} />
                 </View>
             ) : plugins.length === 0 ? (
                 <View style={styles.emptyState}>
@@ -308,7 +360,16 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
                 <FlatList
                     data={plugins}
                     keyExtractor={plugin => plugin.id}
+                    style={{ flex: 1 }}
                     contentContainerStyle={styles.pluginsList}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={refresh}
+                            tintColor={theme.accent}
+                            colors={[theme.accent]}
+                        />
+                    }
                     renderItem={({ item: plugin }) => (
                         <PluginSection
                             plugin={plugin}
@@ -317,10 +378,53 @@ export default function RightSidebar({ width, isOpen, onChatSelect, onClose }: P
                             expandedChats={expandedChats}
                             onToggleChat={toggleChat}
                             onThreadSelect={handleThreadSelect}
+                            onLoadMore={() => loadMoreForPlugin(plugin.id)}
+                            hasMore={hasMoreForPlugin(plugin.id)}
+                            isLoadingMore={loadingMorePlugins.has(plugin.id)}
+                            styles={styles}
+                            palette={palette}
                         />
                     )}
                 />
             )}
         </View>
+    );
+}
+
+export default function RightSidebar({
+    variant,
+    width,
+    onChatSelect,
+    onClose,
+    translateX,
+    dragGesture,
+}: RightSidebarProps) {
+    const { theme, palette } = useTheme();
+    const { refresh } = usePluginChats();
+    const styles = useMemo(() => createRightSidebarStyles(theme, palette), [theme, palette]);
+
+    // Refresh when sidebar becomes visible
+    useEffect(() => {
+        if (variant === 'inline' || (translateX && translateX.value === 0)) {
+            refresh();
+        }
+    }, [variant, refresh]);
+
+    return (
+        <Sidebar
+            side="right"
+            variant={variant}
+            width={width}
+            onClose={onClose}
+            translateX={translateX}
+            dragGesture={dragGesture}
+        >
+            <RightSidebarContent
+                onChatSelect={onChatSelect}
+                onClose={onClose}
+                styles={styles}
+                palette={palette}
+            />
+        </Sidebar>
     );
 }

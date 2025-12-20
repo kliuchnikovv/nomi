@@ -36,6 +36,7 @@ export interface ChatContextType {
     }) => Promise<void>;
     isPluginThread: boolean;
     pluginThreadMeta?: { provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null;
+    clearPluginThread: () => void;
     selectedModel: string | null;
     setSelectedModel: (model: string, isManual?: boolean) => void;
     availableModels: Model[];

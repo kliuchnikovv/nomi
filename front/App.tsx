@@ -15,6 +15,7 @@ import {
 } from 'react-native-safe-area-context';
 
 import { MainProvider } from './src/screens/main/context';
+import { PluginChatsProvider } from './src/screens/rightsidebar/context';
 
 import { AuthScreen } from './src/screens/auth/screen.tsx';
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
@@ -34,9 +35,11 @@ function App() {
                             <StatusBar
                                 barStyle={isDarkMode ? 'light-content' : 'dark-content'}
                             />
-                            <MainProvider>
-                                <AppContent />
-                            </MainProvider>
+                            <PluginChatsProvider>
+                                <MainProvider>
+                                    <AppContent />
+                                </MainProvider>
+                            </PluginChatsProvider>
                         </AuthProvider>
                     </ThemeProvider>
                 </SafeAreaProvider>
