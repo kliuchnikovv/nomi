@@ -1,6 +1,7 @@
 import os
 import logging
 import uuid
+import inspect
 from pydantic import BaseModel
 
 from agno.db.postgres import PostgresDb
@@ -86,12 +87,24 @@ async def run_query(request: QueryRequest):
     # AgentFactory is already configured
     agent = await agent_factory.build(session_id=session_id)
     
-    # Run agent
-    response = await agent.arun(request.query)
+    # Run agent non-streaming
+    # arun might be a coroutine function or a regular function returning a coroutine/generator
+    # We force stream=False to get a RunResponse object instead of generator
+    response_or_coro = agent.arun(request.query, stream=False)
+    
+    if inspect.isawaitable(response_or_coro):
+        response = await response_or_coro
+    else:
+        response = response_or_coro
     
     # Extract content
-    # Handle response.content which might be None
-    answer = response.content if response.content else ""
+    # response should be RunResponse
+    answer = ""
+    if hasattr(response, "content") and response.content:
+        answer = str(response.content)
+    elif response and isinstance(response, str):
+         answer = response
+         
     return {"answer": answer}
 
 # Sessions for OAuth state (required for request.session)
