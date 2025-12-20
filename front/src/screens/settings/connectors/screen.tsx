@@ -320,8 +320,10 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
         <View style={styles.row}>
             <View style={[styles.iconBubble, { backgroundColor: color }]}>
                 {glyph === 'mail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph === 'gmail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph === 'calendar' && <Calendar width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph !== 'mail' && glyph !== 'calendar' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph === 'github' && <Github width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph !== 'mail' && glyph !== 'gmail' && glyph !== 'calendar' && glyph !== 'github' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
             </View>
             <View style={styles.titleBlock}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
