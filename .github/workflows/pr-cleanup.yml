@@ -11,21 +11,21 @@ jobs:
   cleanup:
     name: Cleanup Preview Environment
     runs-on: ubuntu-latest
-    # Only run if Railway token is configured
-    if: ${{ secrets.RAILWAY_TOKEN != '' }}
 
     steps:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
       - name: Delete Preview Environment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           ENV_NAME="pr-${{ github.event.pull_request.number }}"
           
           echo "Deleting preview environment: $ENV_NAME"
           
           # Delete the environment (ignore errors if it doesn't exist)
-          railway environment delete --name "$ENV_NAME" --yes 2>/dev/null || \
+          railway environment delete "$ENV_NAME" 2>/dev/null || \
             echo "Environment $ENV_NAME not found or already deleted"
           
           echo "✅ Cleanup complete"

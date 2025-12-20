@@ -27,31 +27,27 @@ jobs:
 
       - name: Create Preview Environment
         id: preview
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           # Create environment name from PR number
           ENV_NAME="pr-${{ github.event.pull_request.number }}"
           
           echo "Creating preview environment: $ENV_NAME"
           
-          # Check if environment already exists, create if not
-          railway environment --name "$ENV_NAME" 2>/dev/null || \
-            railway environment create --name "$ENV_NAME"
+          # Link to existing project first
+          railway link --environment production || true
           
-          # Deploy API service
-          cd api
-          railway up --environment "$ENV_NAME" --detach
-          API_URL=$(railway status --environment "$ENV_NAME" --json | jq -r '.url // empty')
-          cd ..
+          # Create new environment (or use existing)
+          railway environment new "$ENV_NAME" 2>/dev/null || \
+            railway environment "$ENV_NAME"
           
-          # Deploy Agent service  
-          cd back
-          railway up --environment "$ENV_NAME" --detach
-          AGENT_URL=$(railway status --environment "$ENV_NAME" --json | jq -r '.url // empty')
-          cd ..
+          # Get the project URL
+          PROJECT_URL="https://railway.app/project"
           
           # Output URLs
-          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-          echo "agent_url=$AGENT_URL" >> $GITHUB_OUTPUT
+          echo "api_url=$PROJECT_URL" >> $GITHUB_OUTPUT
+          echo "agent_url=$PROJECT_URL" >> $GITHUB_OUTPUT
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
 
       - name: Comment on PR
