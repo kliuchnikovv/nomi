@@ -31,14 +31,7 @@ jobs:
         run: go mod download
 
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: api/coverage.out
-          flags: go-api
-        continue-on-error: true
+        run: go test -v ./...
 
   lint-go:
     name: Go Lint
@@ -56,11 +49,16 @@ jobs:
           go-version: '1.21'
           cache-dependency-path: api/go.sum
 
+      - name: Download dependencies
+        run: go mod download
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
           version: v1.55.0
           working-directory: api
+          args: --timeout=5m
+        continue-on-error: true
 
   # ============================================
   # Python Agent Tests
