@@ -6,6 +6,7 @@ export interface ExtendedIMessage extends IMessage {
     tool_calls?: any[];
     model?: string;
     attachments?: Attachment[];
+    actions?: any[];
 }
 
 const getTimestamp = (value?: number | string | null) => {
@@ -37,6 +38,7 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
                 tool_calls: msg.tool_calls,
                 model: msg.model,
                 attachments: msg.attachments,
+                actions: msg.actions,
             };
         });
     }, [messages, userId]);

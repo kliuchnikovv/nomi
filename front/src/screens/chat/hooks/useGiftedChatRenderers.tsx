@@ -10,6 +10,7 @@ import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ToolCallsSection } from '../message/ToolCalls';
 import { MessageAttachments } from '../components/MessageAttachments';
+import { MessageActions } from '../message/MessageActions';
 import { Attachment } from '../../main/models';
 
 interface GiftedChatRenderersParams {
@@ -282,9 +283,23 @@ export function useGiftedChatRenderers({
                         {messageText}
                     </Markdown>
                 </Pressable>
-            </View>
+                <MessageActions
+                    actions={props.currentMessage?.actions}
+                    theme={theme}
+                    onActionPress={(action) => {
+                        if (action.url) {
+                            Linking.openURL(action.url).catch(err => console.error("Failed to open URL:", err));
+                        } else if (action.prompt) {
+                            onSend(action.prompt);
+                        } else {
+                            console.log('Action pressed:', action);
+                            // TODO: Handle API actions like mark_as_read
+                        }
+                    }}
+                />
+            </View >
         );
-    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress]);
+    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend]);
 
     const renderFooter = useCallback(() => {
         if (!assistantWorking) {

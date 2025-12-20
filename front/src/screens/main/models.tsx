@@ -34,6 +34,15 @@ export type Attachment = {
     uri?: string
 }
 
+export type MessageAction = {
+    label: string
+    command: string
+    url?: string | null
+    prompt?: string | null
+    agent?: string
+    why?: string
+}
+
 export type Message = {
     id: string
     chat_id: string
@@ -41,7 +50,7 @@ export type Message = {
     role: string
     text: string
     created_at: number
-    actions?: any[]
+    actions?: MessageAction[]
     importance?: string
     metadata?: Record<string, any>
     tool_calls?: any[]
