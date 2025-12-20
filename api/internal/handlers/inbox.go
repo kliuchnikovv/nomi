@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
-	"gorm.io/gorm"
 )
 
 // InboxHandler exposes inbox data grouped as chat->thread->message.
@@ -100,34 +99,42 @@ func (h *InboxHandler) ListInbox(c *gin.Context) {
 
 	// Count total unique senders (chats)
 	var totalCount int64
-	countQuery := baseQuery.Session(&gorm.Session{})
-	if err := countQuery.Select("COUNT(DISTINCT sender || '|' || integration_id::text)").Count(&totalCount).Error; err != nil {
-		// Fallback to simple count
-		totalCount = 0
-	}
-
-	// Load inbox messages with pagination based on distinct senders
-	// First get distinct senders with pagination
-	type senderInfo struct {
-		Sender        string
-		IntegrationID uuid.UUID
-	}
-	var senders []senderInfo
-	senderQuery := h.storage.DB.WithContext(ctx).
+	countQuery := h.storage.DB.WithContext(ctx).
 		Model(&storage.Inbox{}).
-		Select("DISTINCT sender, integration_id").
 		Where("user_id = ?", user.ID)
 	if integrationFilter != nil {
-		senderQuery = senderQuery.Where("integration_id = ?", *integrationFilter)
+		countQuery = countQuery.Where("integration_id = ?", *integrationFilter)
 	}
 	if sourceFilter != "" {
-		senderQuery = senderQuery.Where("source = ?", sourceFilter)
+		countQuery = countQuery.Where("source = ?", sourceFilter)
 	}
-	senderQuery = senderQuery.Order("MAX(received_at) DESC").
-		Group("sender, integration_id").
+	countQuery.Select("COUNT(DISTINCT sender || '|' || integration_id::text)").Count(&totalCount)
+
+	// Load inbox messages with pagination based on distinct senders
+	// Use a subquery approach: first get unique sender/integration pairs with limit/offset
+	type senderInfo struct {
+		Sender        string    `gorm:"column:sender"`
+		IntegrationID uuid.UUID `gorm:"column:integration_id"`
+	}
+
+	// Build subquery for distinct senders ordered by latest message
+	subquery := h.storage.DB.WithContext(ctx).
+		Model(&storage.Inbox{}).
+		Select("sender, integration_id, MAX(received_at) as last_received").
+		Where("user_id = ?", user.ID)
+	if integrationFilter != nil {
+		subquery = subquery.Where("integration_id = ?", *integrationFilter)
+	}
+	if sourceFilter != "" {
+		subquery = subquery.Where("source = ?", sourceFilter)
+	}
+	subquery = subquery.Group("sender, integration_id").
+		Order("last_received DESC").
 		Limit(limit).
 		Offset((page - 1) * limit)
-	if err := senderQuery.Find(&senders).Error; err != nil {
+
+	var senders []senderInfo
+	if err := subquery.Scan(&senders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load senders"})
 		return
 	}
