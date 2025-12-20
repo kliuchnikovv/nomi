@@ -320,15 +320,16 @@ Respond ONLY with valid JSON in this format:
   "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
   "summary": "2-3 sentence summary",
   "suggested_actions": [
-    {"label": "Action label", "command": "action_command", "why": "why this action makes sense", "prompt": "detailed prompt for executing this action"}
+    {"label": "Action label", "command": "action_command", "why": "why this action makes sense", "prompt": "detailed prompt for executing this action", "url": "https://example.com"}
   ]
 }
 
 Note: suggested_actions is optional. Only suggest actions if they make sense for this email. Each action should have:
 - label: Short, user-friendly action name
-- command: One of: reply, forward, create_task, add_to_calendar, save_attachment, or custom
+- command: One of: reply, forward, create_task, add_to_calendar, save_attachment, open_web, or custom
 - why: Brief explanation of why this action is relevant
-- prompt: Detailed instruction for executing the action (what to say in reply, what task to create, etc.)
+- prompt: Detailed instruction for executing the action (what to say in reply, what task to create, etc.). LEAVE EMPTY if command is open_web.
+- url: Full URL to open if command is open_web. LEAVE EMPTY otherwise.
 `, item.Sender, item.Header, item.Content, item.Header)
 
 		llmResponse, err := s.llmService.GenerateSimple(ctx, userID, prompt, "mailer")
