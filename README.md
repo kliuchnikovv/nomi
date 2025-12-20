@@ -32,10 +32,10 @@ The system consists of three main components that interact seamlessly:
 
 ```mermaid
 graph LR
-    A[Mobile App (React Native)] <-->|WebSockets/REST| B[API Gateway (Go)]
-    B <-->|gRPC/HTTP| C[Agent Service (Python)]
-    C <--> D[LLMs & Tools]
-    B <--> E[(PostgreSQL)]
+    A["Mobile App (React Native)"] <-->|WebSockets/REST| B["API Gateway (Go)"]
+    B <-->|gRPC/HTTP| C["Agent Service (Python)"]
+    C <--> D["LLMs & Tools"]
+    B <--> E[("PostgreSQL")]
 ```
 
 ## 🛠 Tech Stack
