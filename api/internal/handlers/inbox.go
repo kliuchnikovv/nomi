@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -88,81 +87,14 @@ func (h *InboxHandler) ListInbox(c *gin.Context) {
 	}
 	sourceFilter := c.Query("provider")
 
-	// Base query with filters
-	baseQuery := h.storage.DB.WithContext(ctx).Model(&storage.Inbox{}).Where("user_id = ?", user.ID)
-	if integrationFilter != nil {
-		baseQuery = baseQuery.Where("integration_id = ?", *integrationFilter)
-	}
-	if sourceFilter != "" {
-		baseQuery = baseQuery.Where("source = ?", sourceFilter)
-	}
-
-	// Count total unique senders (chats)
-	var totalCount int64
-	countQuery := h.storage.DB.WithContext(ctx).
-		Model(&storage.Inbox{}).
-		Where("user_id = ?", user.ID)
-	if integrationFilter != nil {
-		countQuery = countQuery.Where("integration_id = ?", *integrationFilter)
-	}
-	if sourceFilter != "" {
-		countQuery = countQuery.Where("source = ?", sourceFilter)
-	}
-	countQuery.Select("COUNT(DISTINCT sender || '|' || integration_id::text)").Count(&totalCount)
-
-	// Load inbox messages with pagination based on distinct senders
-	// Use a subquery approach: first get unique sender/integration pairs with limit/offset
-	type senderInfo struct {
-		Sender        string    `gorm:"column:sender"`
-		IntegrationID uuid.UUID `gorm:"column:integration_id"`
-	}
-
-	// Build subquery for distinct senders ordered by latest message
-	subquery := h.storage.DB.WithContext(ctx).
-		Model(&storage.Inbox{}).
-		Select("sender, integration_id, MAX(received_at) as last_received").
-		Where("user_id = ?", user.ID)
-	if integrationFilter != nil {
-		subquery = subquery.Where("integration_id = ?", *integrationFilter)
-	}
-	if sourceFilter != "" {
-		subquery = subquery.Where("source = ?", sourceFilter)
-	}
-	subquery = subquery.Group("sender, integration_id").
-		Order("last_received DESC").
-		Limit(limit).
-		Offset((page - 1) * limit)
-
-	var senders []senderInfo
-	if err := subquery.Scan(&senders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load senders"})
-		return
-	}
-
-	if len(senders) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"items":       []InboxChat{},
-			"page":        page,
-			"limit":       limit,
-			"total_count": totalCount,
-			"total_pages": (totalCount + int64(limit) - 1) / int64(limit),
-		})
-		return
-	}
-
-	// Build conditions for selected senders
-	var conditions []string
-	var args []interface{}
-	for _, s := range senders {
-		conditions = append(conditions, "(sender = ? AND integration_id = ?)")
-		args = append(args, s.Sender, s.IntegrationID)
-	}
-
-	// Load all messages for selected senders
+	// Load all inbox messages (we'll paginate the grouped results in memory)
 	var inboxes []storage.Inbox
 	q := h.storage.DB.WithContext(ctx).Where("user_id = ?", user.ID)
-	if len(conditions) > 0 {
-		q = q.Where("("+strings.Join(conditions, " OR ")+")", args...)
+	if integrationFilter != nil {
+		q = q.Where("integration_id = ?", *integrationFilter)
+	}
+	if sourceFilter != "" {
+		q = q.Where("source = ?", sourceFilter)
 	}
 	if err := q.Order("received_at ASC").Find(&inboxes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
@@ -237,23 +169,37 @@ func (h *InboxHandler) ListInbox(c *gin.Context) {
 	}
 
 	// Flatten to slice preserving insertion order (best-effort sorted by last_received desc)
-	result := make([]InboxChat, 0, len(chatMap))
+	allChats := make([]InboxChat, 0, len(chatMap))
 	for _, chat := range chatMap {
-		result = append(result, *chat)
+		allChats = append(allChats, *chat)
 	}
 
 	// sort chats by LastReceived desc
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].LastReceived.After(result[j].LastReceived)
+	sort.Slice(allChats, func(i, j int) bool {
+		return allChats[i].LastReceived.After(allChats[j].LastReceived)
 	})
-	for i := range result {
+	for i := range allChats {
 		// sort threads by LastReceived desc
-		sort.Slice(result[i].Threads, func(a, b int) bool {
-			return result[i].Threads[a].LastReceived.After(result[i].Threads[b].LastReceived)
+		sort.Slice(allChats[i].Threads, func(a, b int) bool {
+			return allChats[i].Threads[a].LastReceived.After(allChats[i].Threads[b].LastReceived)
 		})
 	}
 
-	totalPages := (totalCount + int64(limit) - 1) / int64(limit)
+	// Apply pagination to grouped results
+	totalCount := len(allChats)
+	totalPages := (totalCount + limit - 1) / limit
+
+	startIdx := (page - 1) * limit
+	endIdx := startIdx + limit
+	if startIdx > totalCount {
+		startIdx = totalCount
+	}
+	if endIdx > totalCount {
+		endIdx = totalCount
+	}
+
+	result := allChats[startIdx:endIdx]
+
 	c.JSON(http.StatusOK, gin.H{
 		"items":       result,
 		"page":        page,
