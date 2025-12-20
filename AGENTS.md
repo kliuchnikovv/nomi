@@ -150,12 +150,20 @@ npm install
 
 ## CI/CD Integration
 
+### GitHub Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `backend-ci.yml` | PR changes to `api/` or `back/` | Run tests & linters |
+| `backend-preview.yml` | PR opened/updated | Deploy preview to Railway |
+| `pr-cleanup.yml` | PR closed | Delete preview environment |
+
 ### Pull Request Workflow
 1. Agent creates PR with changes
-2. CI runs tests for affected components
-3. Backend preview deploys to Cloud Run (link posted in PR comment)
-4. Mobile build uploads to Firebase App Distribution
-5. Human reviews and merges
+2. CI runs tests for affected components (`backend-ci.yml`)
+3. Backend preview deploys to Railway (link posted in PR comment)
+4. Human reviews and merges
+5. Preview environment automatically deleted
 
 ### Handling CI Failures
 If CI fails:
@@ -163,3 +171,7 @@ If CI fails:
 2. Identify the failing component and line
 3. Propose a fix based on the error message
 4. Do NOT retry without understanding the cause
+
+### Required Secrets
+- `RAILWAY_TOKEN`: Railway API token for preview deployments
+
