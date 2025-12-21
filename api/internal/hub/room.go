@@ -364,7 +364,11 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			r.logger.Error("failed to save user message", zap.Error(err))
 		}
 
-		// 3. Broadcast to ALL clients (deduplication handled client-side)
+		// 3. Set role/sender in frame for multi-device sync
+		frame.Payload.Role = "user"
+		frame.Payload.Sender = senderID
+
+		// 4. Broadcast to ALL clients (deduplication handled client-side)
 		broadcast(frame)
 
 		// 4. Forward to LLM

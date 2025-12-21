@@ -582,14 +582,22 @@ export function ChatProvider({
 
         if (messageIdx === -1) {
             messageIdx = newMessages.length
+            // Use role from payload if available (for multi-device sync)
+            const role = frame.payload.role || 'assistant';
+            const sender = frame.payload.sender || (role === 'user' ? 'user' : 'assistant');
             newMessages[messageIdx] = {
                 id: messageID,
                 chat_id: activeChatID,
-                sender: 'assistant',
-                role: 'assistant',
-                text: "",
+                sender: sender,
+                role: role,
+                text: role === 'user' ? (frame.payload.message || "") : "",
                 created_at: Date.now(),
             };
+            // For user messages from other devices, we're done - don't accumulate
+            if (role === 'user') {
+                console.log('Received user message from other device', messageID);
+                return newMessages;
+            }
         }
 
         if (!frame.payload.eof) {

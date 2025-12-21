@@ -53,6 +53,10 @@ type Payload struct {
 	Index       uint        `json:"ix,omitempty"`
 	EndOfBuffer bool        `json:"eof,omitempty"`
 
+	// Role and Sender for multi-device sync (to distinguish user/assistant messages)
+	Role   string    `json:"role,omitempty"`   // "user" or "assistant"
+	Sender uuid.UUID `json:"sender,omitempty"` // User ID who sent the message
+
 	Type             string      `json:"type,omitempty"`
 	CompletionTokens uint        `json:"completion_tokens,omitempty"`
 	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
@@ -63,8 +67,8 @@ type Payload struct {
 	WebSearch        bool        `json:"web_search,omitempty"`
 
 	// Command/Team specific
-	Command    interface{} `json:"command,omitempty"`
-	Team       interface{} `json:"team,omitempty"`
+	Command interface{} `json:"command,omitempty"`
+	Team    interface{} `json:"team,omitempty"`
 }
 
 type ErrorInfo struct {
