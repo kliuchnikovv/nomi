@@ -56,9 +56,11 @@ export function ChatHeader({
                 <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">
                     {title}
                 </Text>
-                <Text style={styles.headerSubtitle} numberOfLines={1}>
-                    {subtitle}
-                </Text>
+                {subtitle ? (
+                    <Text style={styles.headerSubtitle} numberOfLines={1}>
+                        {subtitle}
+                    </Text>
+                ) : null}
             </View>
             {showInbox && onInboxPress && (
                 <TouchableOpacity style={styles.menuButton} onPress={onInboxPress}>
@@ -70,9 +72,7 @@ export function ChatHeader({
                     />
                 </TouchableOpacity>
             )}
-            <View style={[styles.headerBadge, isInboxMode && { backgroundColor: palette.orange }]}>
-                <Text style={styles.headerBadgeText}>{isInboxMode ? 'IN' : 'AI'}</Text>
-            </View>
+
         </View>
     );
 }

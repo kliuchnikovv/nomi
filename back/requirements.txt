@@ -57,3 +57,4 @@ packaging>=23.0
 posthog>=3.0.0
 duckduckgo-search
 mcp
+PyGithub

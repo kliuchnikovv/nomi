@@ -14,6 +14,7 @@ import { alertError } from '../auth/models.tsx';
 import { ChatSocket } from '../../socket';
 import { getApiUrl, API_URL } from '../../config.ts';
 import { modelsApi, sidebarApi } from '../../apiClient';
+import { AVAILABLE_TEAMS } from './teams';
 
 function generateUUID() {
     // RFC4122 version 4 compliant enough for client-side ids
@@ -203,16 +204,35 @@ export function ChatProvider({
         fetchModels();
     }, []);
 
+    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0].id);
+
+    const selectTeam = useCallback((teamId: string) => {
+        setSelectedTeamId(teamId);
+    }, []);
+
     useEffect(() => {
         if (chatMode !== 'team') return;
+
+        const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId) || AVAILABLE_TEAMS[0];
+        const baseCommand = team.command;
+
+        // Apply model override if the team is dynamic or allows it. 
+        // For now, let's assume all teams can have their primary model overridden by the UI picker
+        // provided the backend team implementation respects it (TravelPlanning/GenieTeam take a 'model' param).
+        const next = {
+            ...baseCommand,
+            model: selectedModel || baseCommand.model,
+            // For dynamic teams, we might want to update participants' models too, 
+            // but let's keep it simple: model picker overrides the main team/conductor model.
+        };
+
         setTeamCommand((prev: any) => {
-            const next = buildTeamCommand(selectedModel);
             try {
                 if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
             } catch { /* ignore */ }
             return next;
         });
-    }, [chatMode, selectedModel, buildTeamCommand]);
+    }, [chatMode, selectedModel, selectedTeamId]);
 
     useEffect(() => {
         console.log('WebSocket useEffect: activeChatID:', activeChatID);
@@ -646,6 +666,8 @@ export function ChatProvider({
         error,
         setError,
         retryLastMessage,
+        selectedTeamId,
+        selectTeam,
     };
 
     return (
