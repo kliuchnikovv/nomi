@@ -585,6 +585,13 @@ export function ChatProvider({
             // Use role from payload if available (for multi-device sync)
             const role = frame.payload.role || 'assistant';
             const sender = frame.payload.sender || (role === 'user' ? 'user' : 'assistant');
+            console.log('[DEBUG] New message received:', {
+                messageID,
+                payloadRole: frame.payload.role,
+                resolvedRole: role,
+                payloadSender: frame.payload.sender,
+                message: frame.payload.message?.substring(0, 50),
+            });
             newMessages[messageIdx] = {
                 id: messageID,
                 chat_id: activeChatID,

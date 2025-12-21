@@ -265,6 +265,11 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 	// Helper to broadcast to all clients
 	broadcast := func(f Frame) {
+		r.logger.Info("broadcast to clients",
+			zap.Int("client_count", len(r.clients)),
+			zap.String("op", string(f.Operation)),
+			zap.String("role", f.Payload.Role),
+		)
 		b, _ := json.Marshal(f)
 		for client := range r.clients {
 			select {
@@ -367,6 +372,11 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// 3. Set role/sender in frame for multi-device sync
 		frame.Payload.Role = "user"
 		frame.Payload.Sender = senderID
+		r.logger.Info("broadcasting user message with role",
+			zap.String("role", frame.Payload.Role),
+			zap.String("sender", senderID.String()),
+			zap.String("message", frame.Payload.Message),
+		)
 
 		// 4. Broadcast to ALL clients (deduplication handled client-side)
 		broadcast(frame)
