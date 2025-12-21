@@ -262,8 +262,11 @@ export class ChatSocket {
             };
 
             ws.onerror = (e: any) => {
-                console.error('WebSocket onerror event:', e); // Log the full event object
-                this.handlers.onError?.(e);
+                // WebSocket errors are usually connection drops (phone locked, network change)
+                // We just log them - actual error handling with codes happens in onclose
+                console.log('WebSocket onerror event (connection issue):', e);
+                // Don't call onError here - it shows confusing messages to users
+                // this.handlers.onError?.(e);
             };
 
             ws.onclose = async (e: any) => {
@@ -271,6 +274,8 @@ export class ChatSocket {
                 if (this.ws === ws) this.ws = null;
                 const code = e?.code;
                 const unauthorized = code === 4401 || code === 4001 || code === 1008;
+
+                // Handle unauthorized
                 if (unauthorized && !retried) {
                     retried = true;
                     const ok = await (this.handlers.onUnauthorized?.() ?? false);
@@ -278,6 +283,15 @@ export class ChatSocket {
                         this.open();
                         return;
                     }
+                }
+
+                // For normal disconnects (phone locked, network change, etc.), 
+                // don't show error - will reconnect on next user action
+                const normalDisconnect = code === 1006 || code === 1001 || code === 1000;
+                if (normalDisconnect) {
+                    console.log('Normal disconnect, will reconnect on next action');
+                    // Don't call onError for normal disconnects
+                    return;
                 }
             };
         } catch (e) {
