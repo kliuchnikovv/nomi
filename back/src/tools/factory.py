@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List
 from agno.tools import Toolkit
 from agno.tools.gmail import GmailTools
 from agno.tools.googlecalendar import GoogleCalendarTools
+from agno.tools.github import GithubTools
 from google.oauth2.credentials import Credentials
 from src.tools.memory_writer import MemoryWriter
 from src.tools.rag_tool import RagTool
@@ -159,9 +160,41 @@ def _build_web_search_mcp(_: Dict[str, Any]) -> Toolkit:
     )
 
 
+def _build_github(params: Dict[str, Any]) -> Toolkit:
+    """Build GithubTools with access token from integration."""
+    # Extract access token from params (passed from Go API integration)
+    creds_data = params.get("creds", {}) if isinstance(params.get("creds"), dict) else {}
+    access_token = creds_data.get("token") or params.get("access_token")
+    username = params.get("username", "")
+    account_email = params.get("account_email", "")
+    
+    if access_token:
+        tool = GithubTools(access_token=access_token)
+        logger.info("[GitHub] Created GithubTools with access token for user: %s", username or account_email)
+    else:
+        tool = GithubTools()
+        logger.warning("[GitHub] Created GithubTools without access token (will use env GITHUB_TOKEN)")
+    
+    # Add context instructions
+    tool.add_instructions = True
+    account_context = f" for GitHub user: {username}" if username else ""
+    tool.instructions = f"""You have access to GitHub API tools{account_context}.
+You can:
+- Search repositories, issues, and pull requests
+- Get repository information and file contents
+- List and manage issues
+- Create and review pull requests
+- Access user information
+
+Always confirm repository ownership before making changes."""
+    
+    return tool
+
+
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Gmail": _build_gmail,
     "Google Calendar": _build_google_calendar,
+    "GitHub": _build_github,
     "rag": _build_rag,
     "memory_writer": _build_memory_writer,
     "web_search_mcp": _build_web_search_mcp,
