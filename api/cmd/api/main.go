@@ -27,7 +27,7 @@ import (
 // @BasePath /
 func main() {
 	// Определяем какой конфиг использовать
-	configPath := "../config/config.yaml"
+	configPath := "./config.yaml"
 	if os.Getenv("RAILWAY_ENVIRONMENT") != "" {
 		// In Docker/Railway, config is in the same directory as the binary
 		configPath = "./config.railway.yaml"

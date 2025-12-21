@@ -18,5 +18,5 @@
 # Go debug bins
 __debug*
 
-# Config
-config.yaml
+# Config with secrets (use .example.yaml as template)
+api/config.yaml

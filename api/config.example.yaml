@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+database:
+  host: "${DB_HOST:-localhost}"
+  port: ${DB_PORT:-5432}
+  user: "${DB_USER:-postgres}"
+  password: "${DB_PASSWORD:-postgres}"
+  dbname: "${DB_NAME:-postgres}"
+
+oauth2:
+  callback_base: "http://localhost:8080"
+  providers:
+    google:
+      client_id: "${GOOGLE_CLIENT_ID}"
+      client_secret: "${GOOGLE_CLIENT_SECRET}"
+      issuer_url: "https://accounts.google.com"
+      scopes:
+        - "openid"
+        - "https://www.googleapis.com/auth/userinfo.email"
+        - "https://www.googleapis.com/auth/userinfo.profile"
+    github:
+      client_id: "${GITHUB_CLIENT_ID}"
+      client_secret: "${GITHUB_CLIENT_SECRET}"
+
+token:
+  refresh_before_minutes: 5
+  jwt_secret: "your-super-secret-key-change-in-production"
+
+llm:
+  base_url: "http://localhost:7777"
+
+plugins:
+  gmail:
+    enabled: true
+    state: {}
+  calendar:
+    enabled: false
+    state:
+      sync_window_days: 7
