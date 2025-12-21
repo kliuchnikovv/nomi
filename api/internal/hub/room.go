@@ -382,8 +382,8 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			zap.String("message", frame.Payload.Message),
 		)
 
-		// 4. Broadcast to ALL clients (deduplication handled client-side)
-		broadcast(frame)
+		// 4. Broadcast to OTHER clients (sender already has this message optimistically)
+		broadcastExcept(frame, msg.Client)
 
 		// 5. Forward to LLM
 		r.connectLLM() // Ensure connected
