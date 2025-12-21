@@ -394,6 +394,14 @@ func (r *Room) handleLLMMessage(frame Frame) {
 		r.logger.Error("failed to marshal llm frame", zap.Error(err))
 		return
 	}
+
+	clientCount := len(r.clients)
+	r.logger.Debug("broadcasting LLM frame",
+		zap.Int("client_count", clientCount),
+		zap.String("kind", string(frame.Kind)),
+		zap.String("operation", string(frame.Operation)),
+	)
+
 	for client := range r.clients {
 		select {
 		case client.send <- b:
@@ -431,8 +439,16 @@ func (r *Room) handleLLMMessage(frame Frame) {
 	}
 
 	if frame.Operation == MessageOperation && frame.Kind == TokenKind {
-		if r.currentMessageMetadata.MessageID == uuid.Nil {
-			r.currentMessageMetadata.MessageID = frame.Payload.MessageID
+		// Reset metadata if this is a new message (different ID)
+		if r.currentMessageMetadata.MessageID != frame.Payload.MessageID {
+			r.currentMessageMetadata = struct {
+				MessageID uuid.UUID
+				Model     string
+				ToolCalls interface{}
+				Text      string
+			}{
+				MessageID: frame.Payload.MessageID,
+			}
 		}
 
 		r.currentMessageMetadata.Text += frame.Payload.Message
