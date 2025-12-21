@@ -456,6 +456,11 @@ func (r *Room) handleLLMMessage(frame Frame) {
 	if frame.Operation == MessageOperation && frame.Kind == TokenKind {
 		// Reset metadata if this is a new message (different ID)
 		if r.currentMessageMetadata.MessageID != frame.Payload.MessageID {
+			r.logger.Info("resetting metadata for new message",
+				zap.String("old_msg_id", r.currentMessageMetadata.MessageID.String()),
+				zap.String("new_msg_id", frame.Payload.MessageID.String()),
+				zap.Int("old_text_len", len(r.currentMessageMetadata.Text)),
+			)
 			r.currentMessageMetadata = struct {
 				MessageID uuid.UUID
 				Model     string
@@ -466,7 +471,16 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			}
 		}
 
+		oldLen := len(r.currentMessageMetadata.Text)
 		r.currentMessageMetadata.Text += frame.Payload.Message
+		newLen := len(r.currentMessageMetadata.Text)
+
+		r.logger.Debug("accumulating LLM text",
+			zap.String("msg_id", frame.Payload.MessageID.String()),
+			zap.Int("token_len", len(frame.Payload.Message)),
+			zap.Int("old_total", oldLen),
+			zap.Int("new_total", newLen),
+		)
 
 		_ = r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
 			ID:        frame.Payload.MessageID,

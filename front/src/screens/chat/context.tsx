@@ -261,8 +261,12 @@ export function ChatProvider({
         }
 
         if (!socketRef.current) {
-            console.log('WebSocket useEffect: Initializing ChatSocket.');
+            const socketId = Math.random().toString(36).substring(7);
+            console.log(`[WS-${socketId}] Creating new ChatSocket. socketRef was null.`);
             socketRef.current = newWebSocket(token, activeChatID);
+            (socketRef.current as any).__debugId = socketId;
+        } else {
+            console.log(`[WS-${(socketRef.current as any).__debugId}] socketRef.current already exists, not creating new.`);
         }
 
         console.log(`WebSocket useEffect: socket ready`)
@@ -272,7 +276,7 @@ export function ChatProvider({
             socketRef.current?.close();
             socketRef.current = null;
         };
-    }, [activeChatID, token, refreshToken, API_URL]); // Dependencies for WebSocket lifecycle
+    }, [activeChatID, token, refreshToken]); // Dependencies for WebSocket lifecycle
     const refreshPluginThread = useCallback(async () => {
         if (!pluginThreadMeta) return;
         try {
@@ -607,6 +611,22 @@ export function ChatProvider({
             }
         }
 
+        // For ANY user message (new or existing), don't do text accumulation
+        // User messages arrive complete in a single frame, not streamed
+        const messageRole = frame.payload.role || newMessages[messageIdx]?.role;
+        if (messageRole === 'user') {
+            // User messages don't stream - they're complete
+            // Just update text if needed and return
+            if (frame.payload.message && newMessages[messageIdx]) {
+                newMessages[messageIdx] = {
+                    ...newMessages[messageIdx],
+                    text: frame.payload.message, // Replace, don't append
+                };
+            }
+            return newMessages;
+        }
+
+        // Only accumulate text for assistant messages (streaming)
         if (!frame.payload.eof) {
             newMessages[messageIdx] = {
                 ...newMessages[messageIdx],

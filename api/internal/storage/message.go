@@ -220,7 +220,7 @@ func (s *Storage) UpdateMessageText(ctx context.Context, userID uuid.UUID, messa
 }
 
 func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.Message) error {
-	message, err := s.GetMessage(ctx, userID, m.ID)
+	_, err := s.GetMessage(ctx, userID, m.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// Message doesn't exist, create it
@@ -233,8 +233,9 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 	}
 
 	// Message exists, update all fields
+	// NOTE: Text is REPLACED, not appended. Caller is responsible for accumulation.
 	updates := map[string]interface{}{
-		"text":       message.Text + m.Text,
+		"text":       m.Text,
 		"updated_at": time.Now().UTC(),
 	}
 
