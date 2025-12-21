@@ -154,100 +154,110 @@ export class ChatSocket {
             ws.onmessage = async (e: any) => {
                 this.touchActivity();
                 const raw = typeof e.data === 'string' ? e.data : '';
-                try {
-                    const rawJson = raw ? JSON.parse(raw) : null;
-                    if (!rawJson) return;
 
-                    const frame = rawJson as Frame;
+                // Handle potentially concatenated JSON messages (can happen when phone is locked/unlocked)
+                // Split on }{ pattern to separate multiple JSON objects
+                const jsonStrings = raw.split(/(?<=\})(?=\{)/);
 
-                    const kind = frame.kind;
-                    const data = frame.payload;
-                    const operation = frame.op;
+                for (const jsonStr of jsonStrings) {
+                    const trimmed = jsonStr.trim();
+                    if (!trimmed) continue;
 
-                    console.log(`${operation} with kind ${kind}`, frame);
-                    switch (operation) {
-                        case 'ping':
-                            this.handlers.onPing?.(frame);
-                            break;
-                        case 'error':
-                            if (data.code !== 401 || retried) {
-                                // Extract error message from various possible locations
-                                let errorMessage = 'Ошибка соединения';
+                    try {
+                        const rawJson = JSON.parse(trimmed);
+                        if (!rawJson) continue;
 
-                                if (data.error) {
-                                    errorMessage = typeof data.error === 'string'
-                                        ? data.error
-                                        : data.error.message || JSON.stringify(data.error);
-                                } else if (data.message) {
-                                    errorMessage = data.message;
+                        const frame = rawJson as Frame;
+
+                        const kind = frame.kind;
+                        const data = frame.payload;
+                        const operation = frame.op;
+
+                        console.log(`${operation} with kind ${kind}`, frame);
+                        switch (operation) {
+                            case 'ping':
+                                this.handlers.onPing?.(frame);
+                                break;
+                            case 'error':
+                                if (data.code !== 401 || retried) {
+                                    // Extract error message from various possible locations
+                                    let errorMessage = 'Ошибка соединения';
+
+                                    if (data.error) {
+                                        errorMessage = typeof data.error === 'string'
+                                            ? data.error
+                                            : data.error.message || JSON.stringify(data.error);
+                                    } else if (data.message) {
+                                        errorMessage = data.message;
+                                    }
+
+                                    // Provide user-friendly message for backend connection errors
+                                    if (errorMessage.includes('dial tcp') || errorMessage.includes('connection refused')) {
+                                        errorMessage = 'Не удалось подключиться к AI сервису. Попробуйте позже.';
+                                    }
+
+                                    this.handlers.onError?.({ ...frame, message: errorMessage });
+                                    break;
                                 }
 
-                                // Provide user-friendly message for backend connection errors
-                                if (errorMessage.includes('dial tcp') || errorMessage.includes('connection refused')) {
-                                    errorMessage = 'Не удалось подключиться к AI сервису. Попробуйте позже.';
+                                retried = true;
+                                const ok = await (this.handlers.onUnauthorized?.() ?? false);
+                                if (!ok) {
+                                    break;
                                 }
 
-                                this.handlers.onError?.({ ...frame, message: errorMessage });
+                                try { ws.close(); } catch { }
+                                this.open();
+
                                 break;
-                            }
+                            case 'message':
+                                if (kind === 'data') {
+                                    this.handlers.onMessage?.(frame);
+                                } else {
+                                    this.handlers.onMeta?.(frame);
+                                }
 
-                            retried = true;
-                            const ok = await (this.handlers.onUnauthorized?.() ?? false);
-                            if (!ok) {
                                 break;
-                            }
+                            case 'done':
+                                this.handlers.onDone?.(frame);
+                                break;
+                            default:
+                                console.warn(`Unknown message op: ${operation}`, rawJson);
+                                break;
+                        }
 
-                            try { ws.close(); } catch { }
-                            this.open();
-
-                            break;
-                        case 'message':
-                            if (kind === 'data') {
-                                this.handlers.onMessage?.(frame);
-                            } else {
-                                this.handlers.onMeta?.(frame);
-                            }
-
-                            break;
-                        case 'done':
-                            this.handlers.onDone?.(frame);
-                            break;
-                        default:
-                            console.warn(`Unknown message op: ${operation}`, rawJson);
-                            break;
+                        // if (frame.op === 'announce' || data?.chat_id || data?.chatId) {
+                        //     const announcedId = data?.chat_id || data?.chatId || data?.id;
+                        //     if (announcedId) this.handlers.onAnnounce?.(String(announcedId));
+                        // }
+                        //
+                        // if (kind === 'data' && typeof data?.message === 'string') {
+                        //     if (data.eof) {
+                        //         // This is a full message
+                        //         this.handlers.onMessage?.(data.message, data.message_id);
+                        //     } else {
+                        //         // This is a streaming token
+                        //         this.handlers.onToken?.(data.message);
+                        //     }
+                        // } else if (kind === 'done') {
+                        //     this.handlers.onDone?.(data?.message_id);
+                        // } else if (
+                        //     kind === 'error' &&
+                        //     (data?.code === 401 || data?.status === 401)
+                        // ) {
+                        //     if (!retried) {
+                        //         retried = true;
+                        //         const ok = await (this.handlers.onUnauthorized?.() ?? false);
+                        //         if (ok) {
+                        //             try { ws.close(); } catch {}
+                        //             this.open();
+                        //             return;
+                        //         }
+                        //     }
+                        // }
+                    } catch (err) {
+                        console.warn('Failed to parse WS message:', err, trimmed);
                     }
-
-                    // if (frame.op === 'announce' || data?.chat_id || data?.chatId) {
-                    //     const announcedId = data?.chat_id || data?.chatId || data?.id;
-                    //     if (announcedId) this.handlers.onAnnounce?.(String(announcedId));
-                    // }
-                    //
-                    // if (kind === 'data' && typeof data?.message === 'string') {
-                    //     if (data.eof) {
-                    //         // This is a full message
-                    //         this.handlers.onMessage?.(data.message, data.message_id);
-                    //     } else {
-                    //         // This is a streaming token
-                    //         this.handlers.onToken?.(data.message);
-                    //     }
-                    // } else if (kind === 'done') {
-                    //     this.handlers.onDone?.(data?.message_id);
-                    // } else if (
-                    //     kind === 'error' &&
-                    //     (data?.code === 401 || data?.status === 401)
-                    // ) {
-                    //     if (!retried) {
-                    //         retried = true;
-                    //         const ok = await (this.handlers.onUnauthorized?.() ?? false);
-                    //         if (ok) {
-                    //             try { ws.close(); } catch {}
-                    //             this.open();
-                    //             return;
-                    //         }
-                    //     }
-                    // }
-                } catch (err) {
-                    console.warn('Failed to parse WS message:', err, raw);
                 }
             };
 

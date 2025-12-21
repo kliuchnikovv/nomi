@@ -329,8 +329,8 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		frame.ChatID = r.ID
 	}
 
-	if frame.Operation == MessageOperation && frame.Payload.MessageID == storage.ZeroUUID {
-		// This is a new user message.
+	if frame.Operation == MessageOperation {
+		// This is a user message from client
 		// 1. Enrich with attachments
 		if len(frame.Payload.AttachmentIDs) > 0 {
 			atts, err := r.store.GetAttachmentsByIDs(context.Background(), frame.Payload.AttachmentIDs)
@@ -352,12 +352,16 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 
 		// 2. Save to DB
-		// Use initiatorID or the sender from the frame? Frame doesn't have SenderID usually.
-		// We use msg.Client.userID.
 		senderID := msg.Client.userID
 
+		// Use the messageID from payload if provided, otherwise generate new
+		msgID := frame.Payload.MessageID
+		if msgID == uuid.Nil || msgID == storage.ZeroUUID {
+			msgID = uuid.New()
+		}
+
 		err := r.store.UpsertMessage(context.Background(), senderID, &chat.Message{
-			ID:        uuid.New(), // Generate new ID
+			ID:        msgID,
 			ChatID:    r.ID,
 			Sender:    senderID,
 			Role:      chat.RoleUser,
@@ -381,18 +385,15 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// 4. Broadcast to ALL clients (deduplication handled client-side)
 		broadcast(frame)
 
-		// 4. Forward to LLM
+		// 5. Forward to LLM
 		r.connectLLM() // Ensure connected
 		if r.llmSocket != nil {
 			if err := r.llmSocket.Write(context.Background(), frame); err != nil {
 				r.logger.Error("failed to forward to llm", zap.Error(err))
-				// Try reconnect?
 			}
 		}
 	} else {
-		// Pass through other frames? (e.g. commands, meta)
-		// Or broadcast them?
-		// For now, pass through to LLM and broadcast.
+		// Pass through other frames (e.g. commands, meta, tools, history)
 		broadcast(frame)
 		r.connectLLM()
 		if r.llmSocket != nil {
