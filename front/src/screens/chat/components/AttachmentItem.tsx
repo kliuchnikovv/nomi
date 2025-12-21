@@ -4,7 +4,7 @@ import { EmptyPage } from 'iconoir-react-native';
 import { Attachment } from '../../main/models';
 import { ThemeColors } from '../../../themes/types';
 import { useAuth } from '../../auth/context';
-import { API_URL } from '../../../config';
+import { getApiUrl, API_URL } from '../../../config';
 
 interface AttachmentItemProps {
     attachment: Attachment;
@@ -36,7 +36,7 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
             return { uri: `data:${attachment.file_type || 'image/png'};base64,${attachment.content}` };
         }
         if (attachment.id) {
-            const url = `${API_URL}/attachments/${attachment.id}`;
+            const url = `${getApiUrl()}/attachments/${attachment.id}`;
             console.log('Building image source:', { url, hasToken: !!token });
             return {
                 uri: url,
@@ -63,10 +63,10 @@ export const AttachmentItem: React.FC<AttachmentItemProps> = ({
     return (
         <TouchableOpacity
             onPress={() => onPress(attachment)}
-            style={[styles.fileContainer, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}
+            style={[styles.fileContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}
         >
-            <View style={[styles.iconContainer, { backgroundColor: theme.primary + '20' }]}>
-                <EmptyPage width={24} height={24} color={theme.primary} />
+            <View style={[styles.iconContainer, { backgroundColor: theme.accent + '20' }]}>
+                <EmptyPage width={24} height={24} color={theme.accent} />
             </View>
             <View style={styles.fileInfo}>
                 <Text style={[styles.fileName, { color: theme.textPrimary }]} numberOfLines={1}>

@@ -11,7 +11,7 @@ import { Alert, Platform, ToastAndroid } from 'react-native';
 import { useAuth } from '../auth/context.tsx';
 import { apiClient } from '../../apiClient.ts'
 import { Chat, GetChatsOptions, MainContextType } from "./models";
-import { API_URL } from '../../config.ts';
+import { getApiUrl, API_URL } from '../../config.ts';
 
 export const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -73,8 +73,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         const { preserveActiveChat } = options;
         setChatsLoading(true);
         try {
-            console.log(`${API_URL}/chats`)
-            const data = await apiClient.get<[Chat]>(`${API_URL}/chats`)
+            console.log(`${getApiUrl()}/chats`)
+            const data = await apiClient.get<[Chat]>(`${getApiUrl()}/chats`)
             if (!data) {
                 return;
             }
@@ -119,7 +119,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     //     if (!chatId || chatId === emptyChatID) return;
     //     try {
     //         const data =  await apiClient.get<[Message]>(
-    //             `${API_URL}/chats/${chatId}/messages`
+    //             `${getApiUrl()}/chats/${chatId}/messages`
     //         )
     //         if (!data) {
     //             return;
@@ -210,7 +210,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     async function deleteChat(chatId: string) {
         try {
             await apiClient.delete<void>(
-                `${API_URL}/chats/${chatId}`
+                `${getApiUrl()}/chats/${chatId}`
             )
 
             if (activeChatID === chatId) {
@@ -227,7 +227,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     async function renameChat(chatId: string, newTitle: string) {
         try {
             await apiClient.put<void>(
-                `${API_URL}/chats/${chatId}`,
+                `${getApiUrl()}/chats/${chatId}`,
                 { title: newTitle }
             );
             await getChats({ preserveActiveChat: true });

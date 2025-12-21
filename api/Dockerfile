@@ -33,6 +33,9 @@ COPY --from=builder /genie-api /app/genie-api
 # Copy Railway config
 COPY config.railway.yaml /app/config.railway.yaml
 
+# Copy models config
+COPY config/models.json /app/config/models.json
+
 # Expose port
 EXPOSE 8080
 

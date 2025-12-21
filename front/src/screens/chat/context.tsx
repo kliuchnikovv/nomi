@@ -12,7 +12,7 @@ import { ChatContextType, Props, Model } from './models';
 import { useAuth } from '../auth/context.tsx';
 import { alertError } from '../auth/models.tsx';
 import { ChatSocket } from '../../socket';
-import { API_URL } from '../../config.ts';
+import { getApiUrl, API_URL } from '../../config.ts';
 import { modelsApi, sidebarApi } from '../../apiClient';
 import { AVAILABLE_TEAMS } from './teams';
 
@@ -125,7 +125,7 @@ export function ChatProvider({
         setMessagesLoading(true);
         try {
             const data = await apiClient.get<Message[]>(
-                `${API_URL}/chats/${chatID}/messages`,
+                `${getApiUrl()}/chats/${chatID}/messages`,
             );
             if (!data) {
                 return;
@@ -440,7 +440,7 @@ export function ChatProvider({
 
         try {
             const created = await apiClient.post<{ id: string }>(
-                `${API_URL}/chats`,
+                `${getApiUrl()}/chats`,
                 {
                     "title": title,
                     "model": emptyChatID
@@ -470,7 +470,7 @@ export function ChatProvider({
             console.log('Creating message with model:', model);
 
             const created = await apiClient.post<{ id: string }>(
-                `${API_URL}/chats/${chatID}/messages`,
+                `${getApiUrl()}/chats/${chatID}/messages`,
                 {
                     chat_id: chatID,
                     role: 'user',
@@ -507,7 +507,7 @@ export function ChatProvider({
     function newWebSocket(tkn: string, chatID: string) {
         console.log('Creating new WebSocket with model:', selectedModel);
         const sock = new ChatSocket(
-            API_URL,
+            getApiUrl(),
             () => tkn,
             () => pluginThreadMeta ? String(pluginThreadMeta.chatId) : chatID,
             () => currentMessageID,
@@ -565,6 +565,15 @@ export function ChatProvider({
         if (!messageID) {
             console.error(`Frame got no message_id`, frame)
             return newMessages;
+        }
+
+        // Check if message already exists (deduplication for optimistic updates)
+        const existingMessage = newMessages.find(m => m.id === messageID);
+
+        // For user messages: if already exists with same text, skip (optimistic duplicate)
+        if (existingMessage && existingMessage.role === 'user') {
+            console.log('Dedup: skipping duplicate user message', messageID);
+            return prevMessages; // Return unchanged
         }
 
         let messageIdx = newMessages.findIndex((item) => {

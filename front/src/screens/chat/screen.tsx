@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity } from 'react-native';
-import { API_URL } from '../../config';
+import { getApiUrl, API_URL } from '../../config';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
@@ -122,7 +122,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                 }
             } else if (attachment.id) {
                 images.push({
-                    uri: `${API_URL}/attachments/${attachment.id}`,
+                    uri: `${getApiUrl()}/attachments/${attachment.id}`,
                     headers: {
                         Authorization: `Bearer ${token}`
                     }
