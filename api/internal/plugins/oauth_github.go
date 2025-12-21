@@ -39,8 +39,8 @@ func NewGitHubIntegration(
 		return nil, fmt.Errorf("github provider config not found")
 	}
 
-	// GitHub OAuth scopes for basic user info and repo access
-	scopes := []string{"user:email", "read:user"}
+	// GitHub OAuth scopes for user info and full repository access
+	scopes := []string{"user:email", "read:user", "repo"}
 
 	oauthConfig := &oauth2.Config{
 		ClientID:     providerCfg.ClientID,
