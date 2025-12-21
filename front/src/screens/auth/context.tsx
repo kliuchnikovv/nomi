@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import { apiClient, setupApiClient } from '../../apiClient';
-import { API_URL } from '../../config';
+import { getApiUrl, API_URL } from '../../config';
 import { AuthContextType, User, alertError } from "./models";
 
 
@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-            const data = await apiClient.post<any>(`${API_URL}/auth/register`, {
+            const data = await apiClient.post<any>(`${getApiUrl()}/auth/register`, {
                 name,
                 email,
                 password,
@@ -142,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-            const data = await apiClient.post<any>(`${API_URL}/auth/login`, {
+            const data = await apiClient.post<any>(`${getApiUrl()}/auth/login`, {
                 email,
                 password,
             });
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-            const response = await fetch(`${API_URL}/auth/refresh`, {
+            const response = await fetch(`${getApiUrl()}/auth/refresh`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -197,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const userInfo = await GoogleSignin.signIn();
 
             // Exchange Google token with backend
-            const data = await apiClient.post<any>(`${API_URL}/auth/google`, {
+            const data = await apiClient.post<any>(`${getApiUrl()}/auth/google`, {
                 id_token: userInfo.data?.idToken,
             });
 

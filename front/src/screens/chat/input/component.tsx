@@ -26,7 +26,7 @@ import AudioWaveform from './AudioWaveform';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { apiClient } from '../../../apiClient';
-import { API_URL } from '../../../config';
+import { getApiUrl, API_URL } from '../../../config';
 
 type Props = {
     onSend: (text: string) => void;
@@ -272,7 +272,7 @@ export default function ChatInput(props: Props) {
 
                 if (user) {
                     try {
-                        const updatedUser = await apiClient.put<any>(`${API_URL}/auth/me`, {
+                        const updatedUser = await apiClient.put<any>(`${getApiUrl()}/auth/me`, {
                             web_search_enabled: newValue
                         });
                         if (updatedUser) {
