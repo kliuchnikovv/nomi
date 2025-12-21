@@ -10,11 +10,11 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 # Copy go.mod first (go.sum is optional, will be generated)
-COPY go.mod ./
+COPY api/go.mod ./
 RUN go mod download && go mod verify
 
 # Copy source code
-COPY . .
+COPY api/ .
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /genie-api ./cmd/api/...
@@ -30,8 +30,8 @@ RUN apk --no-cache add ca-certificates tzdata
 # Copy binary from builder
 COPY --from=builder /genie-api /app/genie-api
 
-# Copy Railway config
-COPY config.railway.yaml /app/config.railway.yaml
+# Copy Railway config from central config folder
+COPY config/config.railway.yaml /app/config.railway.yaml
 
 # Copy models config
 COPY config/models.json /app/config/models.json
@@ -41,4 +41,3 @@ EXPOSE 8080
 
 # Run
 CMD ["/app/genie-api"]
-
