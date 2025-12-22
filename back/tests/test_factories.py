@@ -157,3 +157,65 @@ async def test_agent_factory_build_without_web_search(agent_factory):
 
         assert isinstance(agent.model, Gemini)
         assert agent.model.search == False  # Verify search is disabled
+
+
+@pytest.mark.asyncio
+async def test_agent_factory_build_with_thinking(agent_factory):
+    """Test building agent with thinking mode enabled for Gemini 2.5 models"""
+    with patch("src.agents.factory.build_tools", new_callable=AsyncMock) as mock_build_tools, \
+         patch("src.agents.factory.os.getenv", return_value="fake-api-key"):
+        mock_build_tools.return_value = []
+
+        # Build with thinking=True for a 2.5 model
+        agent = await agent_factory.build(
+            session_id="sess-1",
+            model_name="gemini-2.5-flash",
+            thinking=True
+        )
+
+        assert isinstance(agent.model, Gemini)
+        assert agent.model.id == "gemini-2.5-flash"
+        # Verify thinking config is passed
+        assert agent.model.thinking_budget == -1
+        assert agent.model.include_thoughts == True
+
+
+@pytest.mark.asyncio
+async def test_agent_factory_build_thinking_not_supported_for_older_models(agent_factory):
+    """Test that thinking mode is not enabled for older Gemini models"""
+    with patch("src.agents.factory.build_tools", new_callable=AsyncMock) as mock_build_tools, \
+         patch("src.agents.factory.os.getenv", return_value="fake-api-key"):
+        mock_build_tools.return_value = []
+
+        # Build with thinking=True for a 2.0 model (should not enable thinking)
+        agent = await agent_factory.build(
+            session_id="sess-1",
+            model_name="gemini-2.0-flash",
+            thinking=True
+        )
+
+        assert isinstance(agent.model, Gemini)
+        assert agent.model.id == "gemini-2.0-flash"
+        # Thinking should not be enabled for 2.0 models
+        assert agent.model.thinking_budget is None
+
+
+@pytest.mark.asyncio
+async def test_agent_factory_build_thinking_not_supported_for_lite(agent_factory):
+    """Test that thinking mode is not enabled for lite models"""
+    with patch("src.agents.factory.build_tools", new_callable=AsyncMock) as mock_build_tools, \
+         patch("src.agents.factory.os.getenv", return_value="fake-api-key"):
+        mock_build_tools.return_value = []
+
+        # Build with thinking=True for a lite model (should not enable thinking)
+        agent = await agent_factory.build(
+            session_id="sess-1",
+            model_name="gemini-2.5-flash-lite",
+            thinking=True
+        )
+
+        assert isinstance(agent.model, Gemini)
+        assert agent.model.id == "gemini-2.5-flash-lite"
+        # Thinking should not be enabled for lite models
+        assert agent.model.thinking_budget is None
+

@@ -13,7 +13,9 @@ export interface ModelDetail {
     context_window: number;
     supports_streaming: boolean;
     supports_tools: boolean;
+    supports_thinking?: boolean;
 }
+
 
 export interface ModelsResponse {
     models: ModelDetail[];

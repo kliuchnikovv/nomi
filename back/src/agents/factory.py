@@ -42,12 +42,13 @@ class AgentFactory:
         """Доступ к ToolConfigClient для запроса инструментов."""
         return self._config_client
 
-    def build_model(self, model_name: str, web_search: bool = False) -> Model:
+    def build_model(self, model_name: str, web_search: bool = False, thinking: bool = False) -> Model:
         """Build a model instance from model name.
         
         Args:
             model_name: Name of the model (e.g., 'gemini-2.0-flash', 'gemini-1.5-pro')
             web_search: If True, enable native Gemini search grounding
+            thinking: If True, enable thinking mode for supported models (Gemini 2.5+)
             
         Returns:
             Model instance
@@ -60,7 +61,23 @@ class AgentFactory:
             api_key = os.getenv("GOOGLE_API_KEY")
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable not set")
-            return Gemini(id=model_name, api_key=api_key, search=web_search)
+            
+            # Configure thinking mode for supported models (Gemini 2.5 Pro/Flash)
+            thinking_budget = None
+            include_thoughts = None
+            if thinking and model_name.startswith("gemini-2.5-") and "lite" not in model_name:
+                # Use dynamic thinking budget (-1) for automatic adjustment
+                thinking_budget = -1
+                include_thoughts = True
+                logger.info("[Factory] Enabling thinking mode for model: %s", model_name)
+            
+            return Gemini(
+                id=model_name,
+                api_key=api_key,
+                search=web_search,
+                thinking_budget=thinking_budget,
+                include_thoughts=include_thoughts
+            )
         
         # Add support for other providers as needed
         raise ValueError(f"Unsupported model: {model_name}")
@@ -73,13 +90,14 @@ class AgentFactory:
         agent_type: Optional[str] = None,
         command_desc: Optional[dict] = None,
         web_search: bool = False,
+        thinking: bool = False,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
         if not model_name and command_desc and command_desc.get("model"):
             model_name = command_desc["model"]
 
-        model = self.build_model(model_name, web_search=web_search) if model_name else self._model
+        model = self.build_model(model_name, web_search=web_search, thinking=thinking) if model_name else self._model
         
         tools: List[Toolkit] = []
         
