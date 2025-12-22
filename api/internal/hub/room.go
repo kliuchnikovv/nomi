@@ -448,14 +448,14 @@ func (r *Room) handleLLMMessage(frame Frame) {
 		if frame.Payload.ToolCalls != nil {
 			r.currentMessageMetadata.ToolCalls = frame.Payload.ToolCalls
 		}
-		// Update DB logic... similar to Streamer
+		// Update DB logic - preserve accumulated text, don't overwrite with empty!
 		if r.currentMessageMetadata.MessageID != uuid.Nil {
 			if err := r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
 				ID:        r.currentMessageMetadata.MessageID,
 				ChatID:    frame.ChatID,
 				Sender:    storage.ZeroUUID,
 				Role:      chat.RoleAssistant,
-				Text:      "",
+				Text:      r.currentMessageMetadata.Text, // FIXED: Use accumulated text
 				Model:     r.currentMessageMetadata.Model,
 				ToolCalls: r.currentMessageMetadata.ToolCalls,
 				CreatedAt: time.Now().UTC(),
