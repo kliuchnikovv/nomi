@@ -800,6 +800,22 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             event_type = type(ev).__name__
             logger.debug("[WS] 📦 Stream event: type=%s", event_type)
             
+            # Capture reasoning events
+            if "ReasoningStep" in event_type or "Reasoning" in event_type:
+                reasoning_content = None
+                if hasattr(ev, 'reasoning_content'):
+                    reasoning_content = ev.reasoning_content
+                elif hasattr(ev, 'content'):
+                    reasoning_content = ev.content
+                elif hasattr(ev, 'text'):
+                    reasoning_content = ev.text
+                    
+                if reasoning_content:
+                    if not hasattr(agent, 'reasoning_steps'):
+                        agent.reasoning_steps = []
+                    agent.reasoning_steps.append(reasoning_content)
+                    logger.info("[WS] 🧠 Captured reasoning step: %s...", str(reasoning_content)[:50])
+            
             # Only yield text from Content events to avoid duplication (RunCompletedEvent has full text)
             # and system messages (ToolCallCompletedEvent has status text)
             if "RunContentEvent" in str(type(ev)):
@@ -1249,6 +1265,11 @@ async def _process_message(
     if current_model_name:
         metadata_payload["model"] = current_model_name
         logger.info("[WS] 📊 Sending model: %s", current_model_name)
+    
+    # Add reasoning steps if captured
+    if hasattr(agent, 'reasoning_steps') and agent.reasoning_steps:
+        metadata_payload["reasoning_steps"] = agent.reasoning_steps
+        logger.info("[WS] 🧠 Sending reasoning steps: count=%d", len(agent.reasoning_steps))
     
     if metadata_payload:
         next_id = await _send_frame(

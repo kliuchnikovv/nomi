@@ -603,6 +603,7 @@ export function ChatProvider({
                 role: role,
                 text: role === 'user' ? (frame.payload.message || "") : "",
                 created_at: Date.now(),
+                content_parts: role === 'user' ? undefined : [], // Initialize content_parts for assistant
             };
             // For user messages from other devices, we're done - don't accumulate
             if (role === 'user') {
@@ -628,11 +629,26 @@ export function ChatProvider({
 
         // Only accumulate text for assistant messages (streaming)
         if (!frame.payload.eof) {
+            const newText = frame.payload.message || '';
+            const existingParts = newMessages[messageIdx].content_parts || [];
+
+            // Append to last text part or create new one
+            let updatedParts = [...existingParts];
+            if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === 'text') {
+                // Append to existing text part
+                const lastPart = updatedParts[updatedParts.length - 1] as { type: 'text'; text: string };
+                updatedParts[updatedParts.length - 1] = { type: 'text', text: lastPart.text + newText };
+            } else {
+                // Create new text part
+                updatedParts.push({ type: 'text', text: newText });
+            }
+
             newMessages[messageIdx] = {
                 ...newMessages[messageIdx],
-                text: newMessages[messageIdx].text + frame.payload.message
+                text: newMessages[messageIdx].text + newText,
+                content_parts: updatedParts,
             };
-            console.log("frame captured", frame.payload.message, frame);
+            console.log("frame captured", newText, frame);
         } else {
             setAssistantWorking(false);
         }
@@ -649,10 +665,30 @@ export function ChatProvider({
         const messageIdx = newMessages.findIndex(m => m.id === payload.message_id);
         if (messageIdx === -1) return newMessages;
 
-        if (payload.type === 'metadata') { // Handling tool_calls and model
+        if (payload.type === 'metadata') { // Handling tool_calls, reasoning, and model
+            // Insert reasoning and tool calls inline into content_parts
+            const existingParts = newMessages[messageIdx].content_parts || [];
+            let updatedParts = [...existingParts];
+
+            // Add reasoning steps at the beginning (they happen before response)
+            if (payload.reasoning_steps && Array.isArray(payload.reasoning_steps)) {
+                for (const reasoning of payload.reasoning_steps) {
+                    // Insert at beginning, before text
+                    updatedParts.unshift({ type: 'reasoning', reasoning });
+                }
+            }
+
+            if (payload.tool_calls && Array.isArray(payload.tool_calls)) {
+                for (const tc of payload.tool_calls) {
+                    updatedParts.push({ type: 'tool_call', tool_call: tc });
+                }
+            }
+
             newMessages[messageIdx] = {
                 ...newMessages[messageIdx],
                 tool_calls: payload.tool_calls,
+                reasoning_steps: payload.reasoning_steps,
+                content_parts: updatedParts,
                 model: payload.model || newMessages[messageIdx].model
             };
         } else if (payload.type === 'usage') {

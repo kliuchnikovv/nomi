@@ -440,7 +440,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 		}
 		// Update DB logic... similar to Streamer
 		if r.currentMessageMetadata.MessageID != uuid.Nil {
-			_ = r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
+			if err := r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
 				ID:        r.currentMessageMetadata.MessageID,
 				ChatID:    frame.ChatID,
 				Sender:    storage.ZeroUUID,
@@ -449,7 +449,13 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				Model:     r.currentMessageMetadata.Model,
 				ToolCalls: r.currentMessageMetadata.ToolCalls,
 				CreatedAt: time.Now().UTC(),
-			})
+			}); err != nil {
+				r.logger.Error("failed to upsert assistant message (metadata)",
+					zap.Error(err),
+					zap.String("msg_id", r.currentMessageMetadata.MessageID.String()),
+					zap.String("chat_id", frame.ChatID.String()),
+				)
+			}
 		}
 	}
 
@@ -482,7 +488,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			zap.Int("new_total", newLen),
 		)
 
-		_ = r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
+		if err := r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
 			ID:        frame.Payload.MessageID,
 			ChatID:    frame.ChatID,
 			Sender:    storage.ZeroUUID, // Assistant
@@ -491,7 +497,14 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			Model:     r.currentMessageMetadata.Model,
 			ToolCalls: r.currentMessageMetadata.ToolCalls,
 			CreatedAt: time.Now().UTC(),
-		})
+		}); err != nil {
+			r.logger.Error("failed to upsert assistant message (token)",
+				zap.Error(err),
+				zap.String("msg_id", frame.Payload.MessageID.String()),
+				zap.String("chat_id", frame.ChatID.String()),
+				zap.Int("text_len", len(r.currentMessageMetadata.Text)),
+			)
+		}
 	}
 
 	if frame.Operation == DoneOperation {

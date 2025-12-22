@@ -164,6 +164,62 @@ export const styles = StyleSheet.create({
         borderRadius: 16,
         padding: 12,
     },
+    // Inline single tool call styles
+    singleToolCallContainer: {
+        marginVertical: 6,
+        backgroundColor: withAlpha(palette.blue, 0.08),
+        borderRadius: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: palette.blue,
+        overflow: 'hidden',
+    },
+    singleToolCallHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+    },
+    singleToolCallName: {
+        color: palette.blue,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    singleToolCallDetails: {
+        paddingHorizontal: 10,
+        paddingBottom: 8,
+    },
+    // Reasoning block styles
+    reasoningContainer: {
+        marginVertical: 6,
+        backgroundColor: withAlpha(palette.magenta, 0.08),
+        borderRadius: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: palette.magenta,
+        overflow: 'hidden',
+    },
+    reasoningHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+    },
+    reasoningHeaderText: {
+        color: palette.magenta,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    reasoningContent: {
+        paddingHorizontal: 10,
+        paddingBottom: 8,
+    },
+    reasoningText: {
+        color: theme.textSecondary,
+        fontSize: 13,
+        lineHeight: 18,
+        fontStyle: 'italic',
+    },
 });
 
 // Markdown styles - separate from StyleSheet.create() due to custom properties

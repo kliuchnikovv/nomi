@@ -8,6 +8,24 @@ export type Props = {
 
 export type Role = 'user' | 'assistant' | 'daemon';
 
+// Content part types for inline rendering
+export type TextPart = {
+    type: 'text';
+    text: string;
+};
+
+export type ToolCallPart = {
+    type: 'tool_call';
+    tool_call: ToolCall;
+};
+
+export type ReasoningPart = {
+    type: 'reasoning';
+    reasoning: string;
+};
+
+export type ContentPart = TextPart | ToolCallPart | ReasoningPart;
+
 export type Message = {
     id: string
     chat_id: string
@@ -19,6 +37,7 @@ export type Message = {
     importance?: string
     metadata?: Record<string, any>
     tool_calls?: ToolCall[]
+    content_parts?: ContentPart[] // For inline tool call rendering
     model?: string
     attachments?: Attachment[]
 }

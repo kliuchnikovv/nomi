@@ -62,3 +62,89 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
         </View>
     );
 }
+
+// Single tool call component for inline rendering
+export function SingleToolCall({ toolCall }: { toolCall: any }) {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!toolCall) return null;
+
+    return (
+        <View style={styles.singleToolCallContainer}>
+            <Pressable
+                onPress={() => setExpanded(!expanded)}
+                style={({ pressed }) => [
+                    styles.singleToolCallHeader,
+                    pressed && { opacity: 0.7 },
+                ]}
+            >
+                <Text style={styles.singleToolCallName}>
+                    {toolCall.name}
+                </Text>
+                <Text style={styles.toolCallsExpandIcon}>
+                    {expanded ? '▼' : '▶'}
+                </Text>
+            </Pressable>
+            {expanded && (
+                <View style={styles.singleToolCallDetails}>
+                    {toolCall.arguments && (
+                        <Text style={styles.toolCallArgs}>
+                            {typeof toolCall.arguments === 'string'
+                                ? toolCall.arguments
+                                : JSON.stringify(toolCall.arguments, null, 2)}
+                        </Text>
+                    )}
+                    {toolCall.result && (
+                        <View style={{ marginTop: 4 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#888', marginBottom: 2 }}>Result:</Text>
+                            <Text style={styles.toolCallArgs}>
+                                {(typeof toolCall.result === 'string'
+                                    ? toolCall.result
+                                    : JSON.stringify(toolCall.result, null, 2)
+                                ).slice(0, 100) + (
+                                        (typeof toolCall.result === 'string'
+                                            ? toolCall.result.length
+                                            : JSON.stringify(toolCall.result, null, 2).length
+                                        ) > 100 ? '...' : ''
+                                    )}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            )}
+        </View>
+    );
+}
+
+// Reasoning block component for inline thinking display
+export function ReasoningBlock({ reasoning }: { reasoning: string }) {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!reasoning) return null;
+
+    return (
+        <View style={styles.reasoningContainer}>
+            <Pressable
+                onPress={() => setExpanded(!expanded)}
+                style={({ pressed }) => [
+                    styles.reasoningHeader,
+                    pressed && { opacity: 0.7 },
+                ]}
+            >
+                <Text style={styles.reasoningHeaderText}>
+                    🧠 Thinking
+                </Text>
+                <Text style={styles.toolCallsExpandIcon}>
+                    {expanded ? '▼' : '▶'}
+                </Text>
+            </Pressable>
+            {expanded && (
+                <View style={styles.reasoningContent}>
+                    <Text style={styles.reasoningText}>
+                        {reasoning}
+                    </Text>
+                </View>
+            )}
+        </View>
+    );
+}

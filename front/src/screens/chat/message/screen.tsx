@@ -10,10 +10,10 @@ import {
     Image,
     ActivityIndicator
 } from 'react-native';
-import { ToolCallsSection } from './ToolCalls';
+import { ToolCallsSection, SingleToolCall, ReasoningBlock } from './ToolCalls';
 import Markdown from 'react-native-markdown-display';
 import React, { useCallback, useState, useEffect } from 'react';
-import { Action, Props, Role, Attachment } from './models'
+import { Action, Props, Role, Attachment, ContentPart } from './models'
 import { styles, markdownStyles } from './styles.tsx';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -55,6 +55,35 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
     );
 }
 
+// Render content parts (text + inline tool calls + reasoning)
+function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
+    return (
+        <>
+            {parts.map((part, index) => {
+                if (part.type === 'text') {
+                    return (
+                        <Pressable
+                            key={`text-${index}`}
+                            onLongPress={() => onLongPress(part.text)}
+                            delayLongPress={250}
+                            style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+                        >
+                            <Markdown style={markdownStyles as any}>
+                                {part.text || ''}
+                            </Markdown>
+                        </Pressable>
+                    );
+                } else if (part.type === 'tool_call') {
+                    return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
+                } else if (part.type === 'reasoning') {
+                    return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
+                }
+                return null;
+            })}
+        </>
+    );
+}
+
 export default function MessageScreen(props: Props) {
     const onLongPressMsg = (text: string) => {
         const options = [
@@ -81,30 +110,44 @@ export default function MessageScreen(props: Props) {
 
     const isDaemon = props.message.role === 'daemon';
 
+    // Use content_parts for inline rendering, fallback to text + grouped tool_calls
+    const hasContentParts = props.message.content_parts && props.message.content_parts.length > 0;
+
     return (
         <View style={containerStylesByType[props.message.role]}>
             {props.header && (
                 <Text style={styles.daemonHeader}>{props.header}</Text>
             )}
-            <Pressable
-                onLongPress={() => onLongPressMsg(props.message.text)}
-                delayLongPress={250}
-                style={({ pressed }) => [
-                    pressed && { opacity: 0.75 },
-                ]}
-            >
-                <Markdown
-                    style={markdownStyles as any}
-                    onLinkPress={url => {
-                        Linking.openURL(url).catch(() => { });
-                        return false;
-                    }}
-                >
-                    {props.message.text || ''}
-                </Markdown>
-            </Pressable>
-            {props.message.tool_calls && props.message.tool_calls.length > 0 && (
-                <ToolCallsSection toolCalls={props.message.tool_calls} />
+            {hasContentParts ? (
+                // New: Render content_parts inline
+                <ContentPartsRenderer
+                    parts={props.message.content_parts!}
+                    onLongPress={onLongPressMsg}
+                />
+            ) : (
+                // Fallback: Old rendering (text + grouped tool calls)
+                <>
+                    <Pressable
+                        onLongPress={() => onLongPressMsg(props.message.text)}
+                        delayLongPress={250}
+                        style={({ pressed }) => [
+                            pressed && { opacity: 0.75 },
+                        ]}
+                    >
+                        <Markdown
+                            style={markdownStyles as any}
+                            onLinkPress={url => {
+                                Linking.openURL(url).catch(() => { });
+                                return false;
+                            }}
+                        >
+                            {props.message.text || ''}
+                        </Markdown>
+                    </Pressable>
+                    {props.message.tool_calls && props.message.tool_calls.length > 0 && (
+                        <ToolCallsSection toolCalls={props.message.tool_calls} />
+                    )}
+                </>
             )}
             {props.message.attachments && props.message.attachments.length > 0 && (
                 <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

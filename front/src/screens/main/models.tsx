@@ -43,6 +43,24 @@ export type MessageAction = {
     why?: string
 }
 
+// Content part types for inline tool call rendering
+export type TextPart = {
+    type: 'text';
+    text: string;
+};
+
+export type ToolCallPart = {
+    type: 'tool_call';
+    tool_call: any;
+};
+
+export type ReasoningPart = {
+    type: 'reasoning';
+    reasoning: string;
+};
+
+export type ContentPart = TextPart | ToolCallPart | ReasoningPart;
+
 export type Message = {
     id: string
     chat_id: string
@@ -54,6 +72,8 @@ export type Message = {
     importance?: string
     metadata?: Record<string, any>
     tool_calls?: any[]
+    reasoning_steps?: string[]  // Reasoning/thinking content
+    content_parts?: ContentPart[] // For inline tool call rendering
     model?: string
     attachments?: Attachment[]
 }

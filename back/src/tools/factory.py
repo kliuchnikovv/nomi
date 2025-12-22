@@ -162,13 +162,20 @@ def _build_web_search_mcp(_: Dict[str, Any]) -> Toolkit:
 
 def _build_github(params: Dict[str, Any]) -> Toolkit:
     """Build GithubTools with access token from integration."""
+    logger.info("[GitHub] Building GithubTools with params keys: %s", list(params.keys()))
+    
     # Extract access token from params (passed from Go API integration)
     creds_data = params.get("creds", {}) if isinstance(params.get("creds"), dict) else {}
+    logger.debug("[GitHub] creds_data keys: %s", list(creds_data.keys()) if creds_data else "empty")
+    
     access_token = creds_data.get("token") or params.get("access_token")
     username = params.get("username", "")
     account_email = params.get("account_email", "")
     
     if access_token:
+        # Mask token for logging (show first 8 and last 4 chars)
+        masked_token = f"{access_token[:8]}...{access_token[-4:]}" if len(access_token) > 12 else "***"
+        logger.info("[GitHub] Found access token: %s for user: %s", masked_token, username or account_email)
         tool = GithubTools(access_token=access_token)
         logger.info("[GitHub] Created GithubTools with access token for user: %s", username or account_email)
     else:
