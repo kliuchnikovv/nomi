@@ -261,5 +261,10 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		return fmt.Errorf("failed to update message in upsert: %w", result.Error)
 	}
 
+	// Log if no rows were affected - this indicates user_id mismatch
+	if result.RowsAffected == 0 {
+		fmt.Printf("[WARN] UpsertMessage: UPDATE affected 0 rows for msg_id=%s user_id=%s - possible user_id mismatch\n", m.ID, userID)
+	}
+
 	return nil
 }
