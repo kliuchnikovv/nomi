@@ -403,6 +403,16 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 }
 
 func (r *Room) handleLLMMessage(frame Frame) {
+	// DEBUG: Log all incoming LLM frames
+	r.logger.Info("handleLLMMessage received frame",
+		zap.String("kind", string(frame.Kind)),
+		zap.String("op", string(frame.Operation)),
+		zap.String("chat_id", frame.ChatID.String()),
+		zap.String("msg_id", frame.Payload.MessageID.String()),
+		zap.String("type", frame.Payload.Type),
+		zap.Int("msg_len", len(frame.Payload.Message)),
+	)
+
 	// Broadcast to clients
 	b, err := json.Marshal(frame)
 	if err != nil {
