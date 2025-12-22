@@ -95,6 +95,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         current_model_name: Optional[str] = model_from_query
         # Track current web_search state for agent rebuild
         current_web_search: bool = False
+        # Track current thinking mode state for agent rebuild
+        current_thinking: bool = False
         
         logger.debug("[WS] Waiting for TOOLS frame: session_id=%s", session_id)
         try:
@@ -612,6 +614,53 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                 chat_id=frame.chat_id,
                                 code="agent_rebuild_failed",
                                 message="Failed to enable/disable web search",
+                                http=500,
+                                details={"error": str(e)},
+                            ),
+                        )
+                        continue
+
+                # Check if thinking setting changed and rebuild agent if needed
+                requested_thinking = bool(payload.get("thinking", False))
+                if requested_thinking != current_thinking:
+                    logger.info(
+                        "[WS] thinking changed: session_id=%s old=%s new=%s - rebuilding agent",
+                        session_id,
+                        current_thinking,
+                        requested_thinking,
+                    )
+                    current_thinking = requested_thinking
+                    try:
+                        if is_team_mode:
+                            pass  # Team mode doesn't support thinking per-message currently
+                        else:
+                            agent = await agent_factory.build(
+                                session_id,
+                                tools_specs=tools_specs,
+                                model_name=current_model_name,
+                                agent_type=agent_type,
+                                command_desc=command_desc,
+                                web_search=current_web_search,
+                                thinking=current_thinking,
+                            )
+                            logger.info(
+                                "[WS] Agent rebuilt with thinking=%s: session_id=%s",
+                                current_thinking,
+                                session_id,
+                            )
+                    except Exception as e:
+                        logger.error(
+                            "[WS] Failed to rebuild agent for thinking change: session_id=%s error=%s",
+                            session_id,
+                            e,
+                        )
+                        next_id = await _send_frame(
+                            websocket=websocket,
+                            frame=make_error(
+                                id=next_id,
+                                chat_id=frame.chat_id,
+                                code="agent_rebuild_failed",
+                                message="Failed to enable/disable thinking mode",
                                 http=500,
                                 details={"error": str(e)},
                             ),

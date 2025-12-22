@@ -293,7 +293,7 @@ export function ChatProvider({
     }, [pluginThreadMeta, mapPluginMessage]);
 
     const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean) => {
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: boolean) => {
             if (!text.trim() && attachments.length === 0) return;
             if (!user?.id) return;
 
@@ -389,7 +389,7 @@ export function ChatProvider({
                 setError('Ошибка отправки сообщения');
                 return;
             }
-            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch);
+            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch, thinking);
             console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
         },
         [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token],
@@ -500,10 +500,9 @@ export function ChatProvider({
         return messageID;
     }
 
-    // Modify sendMessage to use sendStreamingMessage
     const sendMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean) => {
-            await sendStreamingMessage(text, attachments, webSearch);
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: boolean) => {
+            await sendStreamingMessage(text, attachments, webSearch, thinking);
         },
         [sendStreamingMessage],
     );

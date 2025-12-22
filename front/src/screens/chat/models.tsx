@@ -22,7 +22,7 @@ export interface ChatContextType {
     messages: Message[];
     messagesLoading: boolean;
     getMessages: (chatId: string) => void;
-    sendMessage: (text: string, attachments?: any[], webSearch?: boolean) => void;
+    sendMessage: (text: string, attachments?: any[], webSearch?: boolean, thinking?: boolean) => void;
     executeMessageAction: (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => Promise<void>;
     assistantWorking: boolean;
     externalTitle?: string | null;
@@ -56,6 +56,7 @@ export interface Model {
     name: string;
     description?: string;
     provider?: string;
+    supports_thinking?: boolean;
 }
 
 export interface ModelDetail {

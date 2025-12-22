@@ -13,7 +13,8 @@ import {
     Translate,
     Check,
     Group,
-    User
+    User,
+    Brain
 } from 'iconoir-react-native';
 
 import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
@@ -53,6 +54,7 @@ export default function ChatInput(props: Props) {
     const [voiceLanguage, setVoiceLanguage] = useState('auto');
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
     const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+    const [thinkingEnabled, setThinkingEnabled] = useState(false);
 
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
@@ -77,13 +79,14 @@ export default function ChatInput(props: Props) {
         if (!text && !hasAttachments) return;
 
         // Pass full attachments (including URI) to sendMessage for optimistic updates
-        sendMessage(text, attachments, webSearchEnabled);
+        sendMessage(text, attachments, webSearchEnabled, thinkingEnabled);
 
         Keyboard.dismiss();
         setValue('');
         setAttachments([]);
         setWebSearchEnabled(false);
-    }, [value, attachments, sendMessage, webSearchEnabled]);
+        setThinkingEnabled(false);
+    }, [value, attachments, sendMessage, webSearchEnabled, thinkingEnabled]);
 
     const toggleRecord = useCallback(async () => {
         if (voiceRecorder.state === 'idle') {
@@ -290,6 +293,26 @@ export default function ChatInput(props: Props) {
             }
         },
         {
+            id: 'thinking',
+            label: 'Thinking Mode',
+            isSwitch: true,
+            switchValue: thinkingEnabled,
+            onPress: () => {
+                const newValue = !thinkingEnabled;
+                setThinkingEnabled(newValue);
+                // If enabling thinking and current model doesn't support it, auto-select one that does
+                if (newValue) {
+                    const currentModelObj = availableModels.find(m => m.id === selectedModel);
+                    if (!currentModelObj?.supports_thinking) {
+                        const thinkingModel = availableModels.find(m => m.supports_thinking === true);
+                        if (thinkingModel) {
+                            setSelectedModel(thinkingModel.id);
+                        }
+                    }
+                }
+            }
+        },
+        {
             id: 'mode_toggle',
             label: `Mode: ${chatMode === 'team' ? 'Team' : 'Agent'}`,
             icon: chatMode === 'team' ? <Group width={20} height={20} color="#fff" /> : <User width={20} height={20} color="#fff" />,
@@ -318,7 +341,7 @@ export default function ChatInput(props: Props) {
                 setTimeout(() => setVoiceLanguageMenuVisible(true), 300);
             },
         }
-    ], [voiceLanguage, pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, theme.accent, chatMode, setChatMode]);
+    ], [voiceLanguage, pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, thinkingEnabled, theme.accent, chatMode, setChatMode]);
 
     const voiceLanguageItems: ContextMenuItem[] = useMemo(() => [
         { id: 'auto', label: 'Auto (Device Default)', onPress: () => setVoiceLanguage('auto') },
@@ -354,7 +377,12 @@ export default function ChatInput(props: Props) {
     }, []);
 
     const modelMenuItems: ContextMenuItem[] = useMemo(() => {
-        return availableModels.map(model => ({
+        // Filter models: when thinking is enabled, show only models that support it
+        const filteredModels = thinkingEnabled
+            ? availableModels.filter(model => model.supports_thinking === true)
+            : availableModels;
+
+        return filteredModels.map(model => ({
             id: model.id,
             label: model.name || model.id,
             icon: model.id === selectedModel ? (
@@ -367,7 +395,7 @@ export default function ChatInput(props: Props) {
                 setModelMenuVisible(false);
             },
         }));
-    }, [availableModels, selectedModel, setSelectedModel, theme.accent]);
+    }, [availableModels, selectedModel, setSelectedModel, theme.accent, thinkingEnabled]);
 
     const teamMenuItems: ContextMenuItem[] = useMemo(() => {
         return AVAILABLE_TEAMS.map(team => ({

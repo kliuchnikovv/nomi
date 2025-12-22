@@ -19,6 +19,7 @@ type Model struct {
 	RPMLimit          int    `json:"rpm_limit"`
 	SupportsStreaming bool   `json:"supports_streaming"`
 	SupportsTools     bool   `json:"supports_tools"`
+	SupportsThinking  bool   `json:"supports_thinking"`
 }
 
 type ModelsResponse struct {
