@@ -895,7 +895,7 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             # Capture tool executions from ToolCallCompletedEvent
             if "ToolCallCompleted" in str(type(ev)):
                 if hasattr(ev, 'tool') and ev.tool:
-                    logger.info("[WS] 🔧 Captured tool execution: %s", ev.tool.tool_name)
+                    logger.info("[WS] 🔧 Tool execution event: %s", str(ev))
                     agent.last_tool_executions.append(ev.tool)
             
             # Check if ev is RunOutput (has tools or tool_calls) and save it - fallback
@@ -931,7 +931,9 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                     if not hasattr(agent, 'reasoning_steps'):
                         agent.reasoning_steps = []
                     agent.reasoning_steps.append(reasoning_content)
-                    logger.info("[WS] 🧠 Captured reasoning/thought: %s...", str(reasoning_content)[:50])
+                    logger.info("[WS] 🧠 Captured reasoning/thought: %s", str(reasoning_content))
+                    # Yield special object for reasoning to be streamed immediately
+                    yield {"type": "reasoning", "content": reasoning_content}
             
             # Only yield text from Content events to avoid duplication (RunCompletedEvent has full text)
             # and system messages (ToolCallCompletedEvent has status text)
@@ -1229,6 +1231,24 @@ async def _process_message(
             logger.debug("[WS] No chat history provided: session_id=%s", session_id)
 
         async for chunk in _run_agent_stream(agent, text or "", session_id=session_id, chat_history=chat_history, attachments=attachments, web_search=web_search):
+            # Check for reasoning object
+            if isinstance(chunk, dict) and chunk.get("type") == "reasoning":
+                logger.info("[WS] 🧠 Streaming reasoning content: %s...", str(chunk.get("content"))[:20])
+                next_id = await _send_frame(
+                    websocket=websocket,
+                    frame=make_meta(
+                        id=next_id,
+                        op=Op.MESSAGE,
+                        chat_id=chat_id,
+                        payload={
+                            "type": "metadata",
+                            "message_id": message_id,
+                            "reasoning_steps": [chunk.get("content")]
+                        }
+                    )
+                )
+                continue
+
             # Skip empty or 'None' chunks
             if not chunk or chunk == "None":
                 if chunk == "None":
