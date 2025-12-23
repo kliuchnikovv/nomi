@@ -200,14 +200,11 @@ func (r *Room) initLLMContext() {
 			})
 		}
 
-		user, err := r.store.GetUserByID(ctx, r.initiatorID)
-		if err == nil && user.WebSearchEnabled {
-			toolsPayload = append(toolsPayload, map[string]interface{}{
-				"name":    "web_search_mcp",
-				"enabled": true,
-				"params":  map[string]interface{}{},
-			})
-		}
+
+		// user, err := r.store.GetUserByID(ctx, r.initiatorID)
+		// if err == nil && user.WebSearchEnabled {
+		// 	// Web search is enabled via Python side directly
+		// }
 
 		frame := Frame{
 			ID:        0,

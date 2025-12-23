@@ -128,22 +128,10 @@ func (streamer *Streamer) Stream(
 						}
 
 						// Fetch user to check web search preference
-						user, err := streamer.storage.GetUserByID(ctx, streamer.userID)
-						if err == nil && user.WebSearchEnabled {
-							// Add web_search_mcp tool if enabled
-							webSearchTool := map[string]interface{}{
-								"name":    "web_search_mcp",
-								"enabled": true,
-								"params":  map[string]interface{}{},
-							}
-
-							// Check if tools list already exists in payload
-							if existingTools, ok := payload["tools"].([]map[string]interface{}); ok {
-								payload["tools"] = append(existingTools, webSearchTool)
-							} else {
-								payload["tools"] = []map[string]interface{}{webSearchTool}
-							}
-						}
+						// user, err := streamer.storage.GetUserByID(ctx, streamer.userID)
+						// if err == nil && user.WebSearchEnabled {
+						// 	// Web search is enabled via Python side directly
+						// }
 
 						if streamer.commandPayload != nil {
 							payload["command"] = streamer.commandPayload
