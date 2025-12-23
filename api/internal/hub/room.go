@@ -223,6 +223,18 @@ func (r *Room) initLLMContext() {
 		}
 		if err := r.llmSocket.Write(context.Background(), frame); err != nil {
 			r.logger.Error("failed to send tools", zap.Error(err))
+		} else {
+			r.logger.Info("sent tools to model",
+				zap.Int("count", len(toolsPayload)),
+				zap.Any("tools_names", func() []string {
+					names := make([]string, len(toolsPayload))
+					for i, t := range toolsPayload {
+						if name, ok := t["name"].(string); ok {
+							names[i] = name
+						}
+					}
+					return names
+				}()))
 		}
 	}
 
