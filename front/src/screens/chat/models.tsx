@@ -49,6 +49,8 @@ export interface ChatContextType {
     error: string | null;
     setError: (error: string | null) => void;
     retryLastMessage: () => void;
+    thinkingEnabled: boolean;
+    setThinkingEnabled: (enabled: boolean) => void;
 }
 
 export interface Model {

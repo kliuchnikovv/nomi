@@ -54,13 +54,12 @@ export default function ChatInput(props: Props) {
     const [voiceLanguage, setVoiceLanguage] = useState('auto');
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
     const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-    const [thinkingEnabled, setThinkingEnabled] = useState(false);
 
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingEnabled, setThinkingEnabled } = useChat();
     const { user, updateUser } = useAuth();
 
     // Initialize webSearchEnabled from user preference

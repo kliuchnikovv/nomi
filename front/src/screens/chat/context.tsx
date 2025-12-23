@@ -116,6 +116,9 @@ export function ChatProvider({
     const [error, setError] = useState<string | null>(null);
     const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
+    // Thinking mode state (persists within chat session)
+    const [thinkingEnabled, setThinkingEnabled] = useState(false);
+
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
     // const API_URL = 'https://genie.com';
@@ -738,6 +741,8 @@ export function ChatProvider({
         retryLastMessage,
         selectedTeamId,
         selectTeam,
+        thinkingEnabled,
+        setThinkingEnabled,
     };
 
     return (

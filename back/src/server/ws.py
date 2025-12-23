@@ -476,7 +476,9 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                     agent = await agent_factory.build(
                                         session_id,
                                         tools_specs=tools_specs,
-                                        model_name=new_model_name
+                                        model_name=new_model_name,
+                                        web_search=current_web_search,
+                                        thinking=current_thinking,
                                     )
                                 current_model_name = new_model_name
                                 logger.info(
@@ -573,6 +575,41 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     logger.warning("[WS] No payload: op=%s session_id=%s", frame.op, session_id)
                     continue
 
+                # Check if model changed in MESSAGE payload and update current_model_name
+                # This is needed when thinking mode auto-selects a different model
+                msg_model = payload.get("model")
+                model_changed = msg_model and msg_model != current_model_name
+                if model_changed:
+                    logger.info(
+                        "[WS] Model from MESSAGE payload differs: session_id=%s current=%s new=%s - rebuilding agent",
+                        session_id,
+                        current_model_name,
+                        msg_model,
+                    )
+                    current_model_name = msg_model
+                    try:
+                        agent = await agent_factory.build(
+                            session_id,
+                            tools_specs=tools_specs,
+                            model_name=current_model_name,
+                            agent_type=agent_type,
+                            command_desc=command_desc,
+                            web_search=current_web_search,
+                            thinking=current_thinking,
+                        )
+                        logger.info(
+                            "[WS] Agent rebuilt with new model: session_id=%s model=%s",
+                            session_id,
+                            current_model_name,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "[WS] Failed to rebuild agent for model change: session_id=%s model=%s error=%s",
+                            session_id,
+                            msg_model,
+                            e,
+                        )
+
                 # Check if web_search setting changed and rebuild agent if needed
                 requested_web_search = bool(payload.get("web_search", False))
                 if requested_web_search != current_web_search:
@@ -595,6 +632,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                 agent_type=agent_type,
                                 command_desc=command_desc,
                                 web_search=current_web_search,
+                                thinking=current_thinking,
                             )
                             logger.info(
                                 "[WS] Agent rebuilt with web_search=%s: session_id=%s",
