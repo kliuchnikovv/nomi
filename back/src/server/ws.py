@@ -111,19 +111,24 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             if frame.op == Op.TOOLS:
                 # Получили инструменты от genie-api
                 payload = frame.payload
+                logger.info("[WS] Received TOOLS frame: session_id=%s payload_type=%s", session_id, type(payload).__name__)
                 logger.debug("[WS] Tools payload raw: session_id=%s payload=%s", session_id, payload)
                 if payload:
                     if not isinstance(payload, dict):
                         payload = payload if hasattr(payload, '__dict__') else {}
                     
                     tools_obj = payload.get("tools") if isinstance(payload, dict) else None
+                    logger.info("[WS] tools_obj: type=%s value=%s", type(tools_obj).__name__ if tools_obj else "None", str(tools_obj)[:200] if tools_obj else "None")
                     if tools_obj:
                         if isinstance(tools_obj, dict):
                             tools_data = tools_obj.get("tools", [])
+                            logger.info("[WS] tools_obj is dict, extracted tools_data: count=%d", len(tools_data) if isinstance(tools_data, list) else 0)
                         elif isinstance(tools_obj, list):
                             tools_data = tools_obj
+                            logger.info("[WS] tools_obj is list: count=%d", len(tools_data))
                         else:
                             tools_data = []
+                            logger.warning("[WS] tools_obj is unexpected type: %s", type(tools_obj).__name__)
                         
                         if isinstance(tools_data, list):
                             for tool_dict in tools_data:
