@@ -101,8 +101,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         
         logger.info("[WS] Waiting for TOOLS frame: session_id=%s", session_id)
         try:
-            # Ждем первый фрейм с инструментами
-            raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+            # Ждем первый фрейм с инструментами (15 сек таймаут для медленных DB запросов)
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=15.0)
             logger.info("[WS] Received raw data (TOOLS wait): session_id=%s len=%d", session_id, len(raw))
             data = json.loads(raw)
             frame = Frame(**data)
