@@ -11,21 +11,7 @@ name='Genie'
 # instructions=instruction
 # expected_output=expected_output
 
-class GenieAgent(Agent):
-    def __init__(
-        self,
-        model: Model,
-        db: PostgresDb | None = None,
-        tools: Sequence[Toolkit | Function | dict] | None = None,
-        debug_mode: bool = False,
-    ):
-        super().__init__(
-            db=db,
-            name=name,
-            model=model,
-            tools=tools,
-            description="You are a helpful personal assistant.",
-            instructions="""You have access to a variety of tools.
+BASE_INSTRUCTIONS = """You have access to a variety of tools.
 
 Multi-Account Tools (Gmail, Calendar):
 - If you have access to multiple tools of the same type (e.g., multiple Gmail accounts),
@@ -43,7 +29,45 @@ If the user enables 'Web Search' or asks for current information/news:
 General Rules:
 - Use duck duck go as search engine if not specified otherwise.
 - Always use the tools provided to answer the user's questions accurately.
-- If no relevant tools are available, answer from your knowledge base.""",
+- If no relevant tools are available, answer from your knowledge base."""
+
+THINKING_INSTRUCTIONS = """
+
+THINKING MODE ENABLED:
+When thinking mode is enabled, you MUST show your reasoning process:
+1. **Break down the problem** - Analyze the user's request step by step
+2. **Consider alternatives** - Think about different approaches before choosing
+3. **Show your reasoning** - Use bullet points or numbered steps to explain your thought process
+4. **Be explicit** - State your assumptions and why you made certain decisions
+5. **Conclude clearly** - After reasoning, provide a clear final answer
+
+Format your thinking as:
+🤔 **Analysis:**
+- [Your step-by-step reasoning here]
+
+💡 **Conclusion:**
+[Your final answer]"""
+
+class GenieAgent(Agent):
+    def __init__(
+        self,
+        model: Model,
+        db: PostgresDb | None = None,
+        tools: Sequence[Toolkit | Function | dict] | None = None,
+        debug_mode: bool = False,
+        thinking: bool = False,
+    ):
+        instructions = BASE_INSTRUCTIONS
+        if thinking:
+            instructions += THINKING_INSTRUCTIONS
+            
+        super().__init__(
+            db=db,
+            name=name,
+            model=model,
+            tools=tools,
+            description="You are a helpful personal assistant.",
+            instructions=instructions,
             # expected_output=expected_output,
             add_history_to_context=True,  # Agno automatically adds session history to context
             add_datetime_to_context=True,
@@ -58,4 +82,3 @@ General Rules:
             # store_history_messages=True,
             stream=True
         )
-

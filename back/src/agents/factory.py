@@ -148,6 +148,7 @@ class AgentFactory:
                     model=model,
                     tools=tools,
                     debug_mode=self._debug_mode,
+                    thinking=thinking,
                 )
 
             # _attach_tool_context removed - ChatHistoryTool is disabled

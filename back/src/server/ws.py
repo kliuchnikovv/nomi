@@ -849,21 +849,28 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             event_type = type(ev).__name__
             logger.debug("[WS] 📦 Stream event: type=%s", event_type)
             
-            # Capture reasoning events
-            if "ReasoningStep" in event_type or "Reasoning" in event_type:
+            # Capture reasoning events (including Gemini thoughts)
+            is_reasoning_event = (
+                "ReasoningStep" in event_type or 
+                "Reasoning" in event_type or
+                "Thinking" in event_type or
+                hasattr(ev, 'thought') and ev.thought  # Gemini thought parts
+            )
+            
+            if is_reasoning_event:
                 reasoning_content = None
                 if hasattr(ev, 'reasoning_content'):
                     reasoning_content = ev.reasoning_content
-                elif hasattr(ev, 'content'):
-                    reasoning_content = ev.content
                 elif hasattr(ev, 'text'):
                     reasoning_content = ev.text
+                elif hasattr(ev, 'content'):
+                    reasoning_content = ev.content
                     
                 if reasoning_content:
                     if not hasattr(agent, 'reasoning_steps'):
                         agent.reasoning_steps = []
                     agent.reasoning_steps.append(reasoning_content)
-                    logger.info("[WS] 🧠 Captured reasoning step: %s...", str(reasoning_content)[:50])
+                    logger.info("[WS] 🧠 Captured reasoning/thought: %s...", str(reasoning_content)[:50])
             
             # Only yield text from Content events to avoid duplication (RunCompletedEvent has full text)
             # and system messages (ToolCallCompletedEvent has status text)

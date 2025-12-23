@@ -85,7 +85,6 @@ export default function ChatInput(props: Props) {
         setValue('');
         setAttachments([]);
         setWebSearchEnabled(false);
-        setThinkingEnabled(false);
     }, [value, attachments, sendMessage, webSearchEnabled, thinkingEnabled]);
 
     const toggleRecord = useCallback(async () => {
