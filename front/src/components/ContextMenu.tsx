@@ -6,6 +6,7 @@ import {
     Text,
     View,
     Switch,
+    ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -65,48 +66,50 @@ export const ContextMenu = ({
                     ]}
                 >
                     {title && <Text style={styles.title}>{title}</Text>}
-                    {items.map((item, index) => (
-                        <Pressable
-                            key={item.id}
-                            onPress={() => {
-                                item.onPress();
-                                if (!item.isSwitch) {
-                                    onClose();
-                                }
-                            }}
-                            style={({ pressed }) => [
-                                styles.item,
-                                pressed && !item.isSwitch && styles.itemPressed,
-                                index < items.length - 1 && styles.itemBorder,
-                            ]}
-                        >
-                            <Text
-                                style={[
-                                    styles.itemText,
-                                    item.destructive && styles.destructiveText,
+                    <ScrollView style={{ maxHeight: 320 }} bounces={false} showsVerticalScrollIndicator={true}>
+                        {items.map((item, index) => (
+                            <Pressable
+                                key={item.id}
+                                onPress={() => {
+                                    item.onPress();
+                                    if (!item.isSwitch) {
+                                        onClose();
+                                    }
+                                }}
+                                style={({ pressed }) => [
+                                    styles.item,
+                                    pressed && !item.isSwitch && styles.itemPressed,
+                                    index < items.length - 1 && styles.itemBorder,
                                 ]}
                             >
-                                {item.label}
-                            </Text>
-                            <View style={styles.rightContainer}>
-                                {item.isSwitch ? (
-                                    <Switch
-                                        value={item.switchValue}
-                                        onValueChange={() => {
-                                            item.onPress();
-                                            // Do not close menu
-                                        }}
-                                        trackColor={{ false: theme.border, true: theme.accent }}
-                                        thumbColor="#fff"
-                                        ios_backgroundColor={theme.border}
-                                        style={{ transform: [{ scale: 0.8 }] }}
-                                    />
-                                ) : (
-                                    item.icon && <View style={styles.icon}>{item.icon}</View>
-                                )}
-                            </View>
-                        </Pressable>
-                    ))}
+                                <Text
+                                    style={[
+                                        styles.itemText,
+                                        item.destructive && styles.destructiveText,
+                                    ]}
+                                >
+                                    {item.label}
+                                </Text>
+                                <View style={styles.rightContainer}>
+                                    {item.isSwitch ? (
+                                        <Switch
+                                            value={item.switchValue}
+                                            onValueChange={() => {
+                                                item.onPress();
+                                                // Do not close menu
+                                            }}
+                                            trackColor={{ false: theme.border, true: theme.accent }}
+                                            thumbColor="#fff"
+                                            ios_backgroundColor={theme.border}
+                                            style={{ transform: [{ scale: 0.8 }] }}
+                                        />
+                                    ) : (
+                                        item.icon && <View style={styles.icon}>{item.icon}</View>
+                                    )}
+                                </View>
+                            </Pressable>
+                        ))}
+                    </ScrollView>
                 </View>
             </Pressable>
         </Modal>

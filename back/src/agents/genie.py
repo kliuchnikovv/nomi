@@ -64,8 +64,8 @@ class GenieAgent(Agent):
         thinking: str = "off",
     ):
         instructions = BASE_INSTRUCTIONS
-        if thinking and thinking != "off":
-            instructions += THINKING_INSTRUCTIONS
+        # if thinking and thinking != "off":
+        #     instructions += THINKING_INSTRUCTIONS
             
         super().__init__(
             db=db,
@@ -86,5 +86,6 @@ class GenieAgent(Agent):
             send_media_to_model=True,
             store_media=True,
             # store_history_messages=True,
-            stream=True
+            stream=True,
+            reasoning=(thinking != "off")
         )

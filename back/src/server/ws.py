@@ -916,30 +916,50 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             event_type = type(ev).__name__
             logger.debug("[WS] 📦 Stream event: type=%s", event_type)
             
-            # Capture reasoning events (including Gemini thoughts)
-            is_reasoning_event = (
-                "ReasoningStep" in event_type or 
-                "Reasoning" in event_type or
-                "Thinking" in event_type or
-                hasattr(ev, 'thought') and ev.thought  # Gemini thought parts
-            )
+            # Check for thought in parts (Gemini 2.0)
+            has_thought_in_parts = False
+            if hasattr(ev, 'parts'):
+                try:
+                    for part in ev.parts:
+                        if hasattr(part, 'thought') and part.thought:
+                            has_thought_in_parts = True
+                            break
+                except Exception:
+                    pass
+
+            # Capture reasoning events (including Gemini thoughts and Agno reasoning)
+            # reasoning_content: used in ReasoningStepEvent and RunResponseCompletedEvent
+            # thinking: used in RunResponseContentEvent (Anthropic) and RunResponseCompletedEvent
             
-            if is_reasoning_event:
-                reasoning_content = None
-                if hasattr(ev, 'reasoning_content'):
-                    reasoning_content = ev.reasoning_content
-                elif hasattr(ev, 'text'):
-                    reasoning_content = ev.text
-                elif hasattr(ev, 'content'):
-                    reasoning_content = ev.content
-                    
-                if reasoning_content:
-                    if not hasattr(agent, 'reasoning_steps'):
-                        agent.reasoning_steps = []
-                    agent.reasoning_steps.append(reasoning_content)
-                    logger.info("[WS] 🧠 Captured reasoning/thought: %s", str(reasoning_content))
-                    # Yield special object for reasoning to be streamed immediately
-                    yield {"type": "reasoning", "content": reasoning_content}
+            captured_reasoning = None
+            
+            # 1. Check for standard Agno reasoning_content
+            if hasattr(ev, 'reasoning_content') and ev.reasoning_content:
+                captured_reasoning = ev.reasoning_content
+                
+            # 2. Check for thinking attribute (Anthropic style / RunResponseContentEvent)
+            elif hasattr(ev, 'thinking') and ev.thinking:
+                captured_reasoning = ev.thinking
+                
+            # 3. Check for Gemini native thoughts in parts
+            elif has_thought_in_parts:
+                for part in ev.parts:
+                    if hasattr(part, 'thought') and part.thought:
+                        captured_reasoning = part.text
+                        break
+                        
+            # 4. Fallback for Reasoning events (older styles or direct content)
+            elif "ReasoningStep" in event_type or "Reasoning" in event_type:
+                 if hasattr(ev, 'content') and ev.content:
+                     captured_reasoning = ev.content
+
+            if captured_reasoning:
+                if not hasattr(agent, 'reasoning_steps'):
+                    agent.reasoning_steps = []
+                agent.reasoning_steps.append(captured_reasoning)
+                logger.debug("[WS] 🧠 Captured reasoning/thought: %s", str(captured_reasoning)[:100])
+                # Yield special object for reasoning to be streamed immediately
+                yield {"type": "reasoning", "content": captured_reasoning}
             
             # Only yield text from Content events to avoid duplication (RunCompletedEvent has full text)
             # and system messages (ToolCallCompletedEvent has status text)

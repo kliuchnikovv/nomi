@@ -47,6 +47,7 @@ export default function ChatInput(props: Props) {
     const [modelMenuVisible, setModelMenuVisible] = useState(false);
     const [teamMenuVisible, setTeamMenuVisible] = useState(false);
     const [plusMenuVisible, setPlusMenuVisible] = useState(false);
+    const [thinkingMenuVisible, setThinkingMenuVisible] = useState(false);
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
     const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
@@ -273,21 +274,8 @@ export default function ChatInput(props: Props) {
             label: `Thinking: ${thinkingLevel.charAt(0).toUpperCase() + thinkingLevel.slice(1)}`,
             icon: <Brain width={20} height={20} color={thinkingLevel !== 'off' ? theme.accent : "#fff"} />,
             onPress: () => {
-                const levels = ['off', 'low', 'medium', 'high'];
-                const currentIdx = levels.indexOf(thinkingLevel);
-                const nextLevel = levels[(currentIdx + 1) % levels.length];
-                setThinkingLevel(nextLevel);
-
-                // If enabling thinking (not off) and current model doesn't support it, auto-select one that does
-                if (nextLevel !== 'off') {
-                    const currentModelObj = availableModels.find(m => m.id === selectedModel);
-                    if (!currentModelObj?.supports_thinking) {
-                        const thinkingModel = availableModels.find(m => m.supports_thinking === true);
-                        if (thinkingModel) {
-                            setSelectedModel(thinkingModel.id);
-                        }
-                    }
-                }
+                setPlusMenuVisible(false);
+                setTimeout(() => setThinkingMenuVisible(true), 300);
             }
         },
         {
@@ -366,6 +354,31 @@ export default function ChatInput(props: Props) {
             },
         }));
     }, [selectedTeamId, selectTeam, theme.accent]);
+
+    const thinkingMenuItems: ContextMenuItem[] = useMemo(() => {
+        const levels = ['off', 'low', 'medium', 'high'];
+        return levels.map(level => ({
+            id: level,
+            label: level.charAt(0).toUpperCase() + level.slice(1),
+            icon: level === thinkingLevel ? (
+                <Check width={20} height={20} color={theme.accent} />
+            ) : undefined,
+            onPress: () => {
+                setThinkingLevel(level);
+                setThinkingMenuVisible(false);
+                // If enabling thinking (not off) and current model doesn't support it, auto-select one that does
+                if (level !== 'off') {
+                    const currentModelObj = availableModels.find(m => m.id === selectedModel);
+                    if (!currentModelObj?.supports_thinking) {
+                        const thinkingModel = availableModels.find(m => m.supports_thinking === true);
+                        if (thinkingModel) {
+                            setSelectedModel(thinkingModel.id);
+                        }
+                    }
+                }
+            },
+        }));
+    }, [thinkingLevel, setThinkingLevel, theme.accent, availableModels, selectedModel, setSelectedModel]);
 
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const selectedModelName = useMemo(() => {
@@ -573,6 +586,14 @@ export default function ChatInput(props: Props) {
                 onClose={() => setPlusMenuVisible(false)}
                 items={plusMenuItems}
                 position="bottom-left"
+            />
+
+            <ContextMenu
+                visible={thinkingMenuVisible}
+                onClose={() => setThinkingMenuVisible(false)}
+                items={thinkingMenuItems}
+                position="bottom-left"
+                title="Thinking Level"
             />
 
 
