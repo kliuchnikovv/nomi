@@ -21,6 +21,7 @@ class Op(str, Enum):
     TOOLS = "tools"
     HISTORY = "history"
     MODEL = "model"
+    STOP = "stop"
 
 class StreamInfo(BaseModel):
     id: str

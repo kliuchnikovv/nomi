@@ -51,6 +51,7 @@ export interface ChatContextType {
     retryLastMessage: () => void;
     thinkingEnabled: boolean;
     setThinkingEnabled: (enabled: boolean) => void;
+    stopGeneration: () => void;
 }
 
 export interface Model {

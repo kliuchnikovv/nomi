@@ -88,6 +88,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         )
 
         next_id = 0
+        cancel_event = asyncio.Event()  # For graceful stop
         
         # Ждем инструменты от genie-api при подключении (genie-api отправляет их автоматически)
         tools_specs: List[ToolSpec] = []
@@ -413,6 +414,23 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                             payload={},
                         ),
                     )
+                    continue
+                elif frame.op == Op.STOP:
+                    logger.info("[WS] Client requested stop generation: session_id=%s", session_id)
+                    cancel_event.set()
+                    next_id = await _send_frame(
+                        websocket=websocket,
+                        frame=make_done(
+                            id=next_id,
+                            chat_id=frame.chat_id,
+                            payload={
+                                "message": "stopped",
+                                "reason": "user_cancelled"
+                            },
+                        ),
+                    )
+                    # Reset for next message
+                    cancel_event.clear()
                     continue
                 elif frame.op == Op.DONE:
                     logger.info("[WS] Client requested close: session_id=%s", session_id)

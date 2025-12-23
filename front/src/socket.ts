@@ -367,6 +367,28 @@ export class ChatSocket {
         this.outbox.unshift(frame);
     }
 
+    sendStop() {
+        const chatID = this.getChatId();
+        const frame = {
+            id: 0,
+            kind: 'meta',
+            op: 'stop',
+            chat_id: chatID,
+            payload: {},
+        };
+
+        if (this.isReady()) {
+            try {
+                console.log('Sending stop frame');
+                this.ws.send(JSON.stringify(frame));
+            } catch (err) {
+                console.error('Failed to send stop frame:', err);
+            }
+        }
+        // Close the connection to ensure agent stops
+        this.close();
+    }
+
     changeModel(newModel: string) {
         if (!this.isReady()) {
             // console.warn('Cannot change model: WebSocket not ready');

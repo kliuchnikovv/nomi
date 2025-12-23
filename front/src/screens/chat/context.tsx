@@ -717,6 +717,15 @@ export function ChatProvider({
         }
     }, [lastFailedMessage, sendStreamingMessage]);
 
+    const stopGeneration = useCallback(() => {
+        console.log('Stopping generation');
+        if (socketRef.current) {
+            socketRef.current.sendStop();
+            socketRef.current = null;
+        }
+        setAssistantWorking(false);
+    }, []);
+
     const value: ChatContextType = {
         messages,
         messagesLoading,
@@ -743,6 +752,7 @@ export function ChatProvider({
         selectTeam,
         thinkingEnabled,
         setThinkingEnabled,
+        stopGeneration,
     };
 
     return (

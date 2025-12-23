@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ArrowUp,
-    Microphone,
     Plus,
     XmarkCircle,
     CursorPointer,
@@ -10,11 +9,11 @@ import {
     Camera,
     Page,
     MediaImage,
-    Translate,
     Check,
     Group,
     User,
-    Brain
+    Brain,
+    Square
 } from 'iconoir-react-native';
 
 import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
@@ -24,8 +23,6 @@ import { useChat } from '../context';
 import { ContextMenu, ContextMenuItem } from '../../../components/ContextMenu';
 import { useTheme } from '../../../context/ThemeContext.tsx';
 import { useAuth } from '../../auth/context';
-import { useVoiceRecorder } from './useVoiceRecorder';
-import AudioWaveform from './AudioWaveform';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { apiClient } from '../../../apiClient';
@@ -50,16 +47,14 @@ export default function ChatInput(props: Props) {
     const [modelMenuVisible, setModelMenuVisible] = useState(false);
     const [teamMenuVisible, setTeamMenuVisible] = useState(false);
     const [plusMenuVisible, setPlusMenuVisible] = useState(false);
-    const [voiceLanguageMenuVisible, setVoiceLanguageMenuVisible] = useState(false);
-    const [voiceLanguage, setVoiceLanguage] = useState('auto');
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
     const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
-    const { theme } = useTheme();
+    const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingEnabled, setThinkingEnabled } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingEnabled, setThinkingEnabled, assistantWorking, stopGeneration } = useChat();
     const { user, updateUser } = useAuth();
 
     // Initialize webSearchEnabled from user preference
@@ -69,7 +64,7 @@ export default function ChatInput(props: Props) {
         }
     }, [user?.web_search_enabled]);
 
-    const voiceRecorder = useVoiceRecorder();
+
 
     const handleSend = useCallback(() => {
         const text = (value ?? '').trim();
@@ -86,24 +81,7 @@ export default function ChatInput(props: Props) {
         setWebSearchEnabled(false);
     }, [value, attachments, sendMessage, webSearchEnabled, thinkingEnabled]);
 
-    const toggleRecord = useCallback(async () => {
-        if (voiceRecorder.state === 'idle') {
-            await voiceRecorder.startRecording(voiceLanguage === 'auto' ? undefined : voiceLanguage);
-        } else if (voiceRecorder.state === 'recording') {
-            await voiceRecorder.stopRecording();
-        }
-    }, [voiceRecorder, voiceLanguage]);
 
-    // When transcription is complete, insert it into the input
-    useEffect(() => {
-        if (voiceRecorder.transcribedText && voiceRecorder.state === 'idle') {
-            setValue(voiceRecorder.transcribedText);
-            voiceRecorder.reset();
-        }
-    }, [voiceRecorder.transcribedText, voiceRecorder.state]);
-
-    const isRecording = voiceRecorder.state === 'recording';
-    const isProcessing = voiceRecorder.state === 'processing';
 
     const uploadFile = async (uri: string, name: string, type: string, fileType: 'image' | 'file') => {
         // Optimistic add
@@ -329,29 +307,7 @@ export default function ChatInput(props: Props) {
                 setTimeout(() => setTeamMenuVisible(true), 300);
             }
         }] : []),
-        {
-            id: 'voice_language',
-            label: `Voice Language: ${voiceLanguage === 'auto' ? 'Auto' : voiceLanguage}`,
-            icon: <Translate width={20} height={20} color="#fff" />,
-            onPress: () => {
-                // Close main menu and open language menu
-                setPlusMenuVisible(false);
-                setTimeout(() => setVoiceLanguageMenuVisible(true), 300);
-            },
-        }
-    ], [voiceLanguage, pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, thinkingEnabled, theme.accent, chatMode, setChatMode]);
-
-    const voiceLanguageItems: ContextMenuItem[] = useMemo(() => [
-        { id: 'auto', label: 'Auto (Device Default)', onPress: () => setVoiceLanguage('auto') },
-        { id: 'en-US', label: 'English', onPress: () => setVoiceLanguage('en-US') },
-        { id: 'ru-RU', label: 'Russian', onPress: () => setVoiceLanguage('ru-RU') },
-        { id: 'es-ES', label: 'Spanish', onPress: () => setVoiceLanguage('es-ES') },
-        { id: 'de-DE', label: 'German', onPress: () => setVoiceLanguage('de-DE') },
-        { id: 'fr-FR', label: 'French', onPress: () => setVoiceLanguage('fr-FR') },
-    ].map(item => ({
-        ...item,
-        icon: item.id === voiceLanguage ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent }} /> : undefined
-    })), [voiceLanguage, theme.accent]);
+    ], [pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, thinkingEnabled, theme.accent, chatMode, setChatMode]);
 
     const removeAttachment = (id: string) => {
         setAttachments(prev => prev.filter(a => a.id !== id));
@@ -433,7 +389,6 @@ export default function ChatInput(props: Props) {
 
         return name;
     }, [availableModels, selectedModel, chatMode, selectedTeamId]);
-    const isMicDisabled = ((value?.length ?? 0) > 0 || isProcessing) && attachments.length === 0;
     const isSendDisabled = ((value?.length ?? 0) === 0 && attachments.length === 0) || attachments.some(a => a.loading);
 
     useEffect(() => {
@@ -493,144 +448,102 @@ export default function ChatInput(props: Props) {
                     </ScrollView>
                 )}
 
-                {/* Top row: Input field or waveform */}
-                {isRecording ? (
-                    <AudioWaveform
-                        audioLevels={voiceRecorder.audioLevels}
-                        duration={voiceRecorder.duration}
-                        maxDuration={voiceRecorder.maxDuration}
-                    />
-                ) : (
-                    <TextInput
-                        multiline
-                        style={styles.input}
-                        placeholder={webSearchEnabled ? "Search the web" : "Type a message..."}
-                        placeholderTextColor="rgba(192, 202, 245, 0.6)"
-                        value={value}
-                        onChangeText={setValue}
-                        textAlignVertical="center"
-                        autoCorrect={false}
-                        returnKeyType="send"
-                        onSubmitEditing={handleSend}
-                        editable={!isProcessing}
-                        onBlur={() => Keyboard.dismiss()}
-                    />
-                )}
+                {/* Top row: Input field */}
+                <TextInput
+                    multiline
+                    style={styles.input}
+                    placeholder={webSearchEnabled ? "Search the web" : "Type a message..."}
+                    placeholderTextColor="rgba(192, 202, 245, 0.6)"
+                    value={value}
+                    onChangeText={setValue}
+                    textAlignVertical="center"
+                    autoCorrect={false}
+                    returnKeyType="send"
+                    onSubmitEditing={handleSend}
+                    onBlur={() => Keyboard.dismiss()}
+                />
 
                 {/* Bottom row: Buttons */}
                 <View style={styles.buttonRow}>
                     <View style={styles.leftActions}>
-                        {isRecording ? (
-                            <Pressable
-                                onPress={voiceRecorder.cancelRecording}
-                                style={({ pressed }) => [
-                                    styles.iconBtn,
-                                    styles.cancelBtn,
-                                    pressed && styles.iconBtnPressed,
-                                ]}
-                            >
-                                <XmarkCircle
-                                    width={24}
-                                    height={24}
-                                    color="#ffffff"
-                                />
-                            </Pressable>
-                        ) : (
-                            !isProcessing && (
-                                <>
-                                    <Pressable
-                                        onPress={handlePlusPress}
-                                        style={({ pressed }) => [
-                                            styles.iconBtn,
-                                            pressed && styles.iconBtnPressed,
-                                        ]}
-                                    >
-                                        <Plus
-                                            width={24}
-                                            height={24}
-                                            color={theme.text}
-                                        />
-                                    </Pressable>
+                        <Pressable
+                            onPress={handlePlusPress}
+                            style={({ pressed }) => [
+                                styles.iconBtn,
+                                pressed && styles.iconBtnPressed,
+                            ]}
+                        >
+                            <Plus
+                                width={24}
+                                height={24}
+                                color={theme.text}
+                            />
+                        </Pressable>
 
-                                    <Pressable
-                                        onPress={showModelPicker}
-                                        style={({ pressed }) => [
-                                            styles.modelButton,
-                                            pressed && styles.modelButtonPressed,
-                                        ]}
-                                    >
-                                        <View style={styles.modelButtonIcon}>
-                                            <CursorPointer
-                                                width={16}
-                                                height={16}
-                                                color={theme.text}
-                                            />
-                                        </View>
-                                        <Text
-                                            style={styles.modelButtonText}
-                                            numberOfLines={1}
-                                            ellipsizeMode="tail"
-                                        >
-                                            {selectedModelName}
-                                        </Text>
-                                    </Pressable>
-                                </>
-                            )
-                        )}
+                        <Pressable
+                            onPress={showModelPicker}
+                            style={({ pressed }) => [
+                                styles.modelButton,
+                                thinkingEnabled && {
+                                    backgroundColor: `${palette.orange}30`,
+                                    borderColor: `${palette.orange}60`,
+                                },
+                                pressed && styles.modelButtonPressed,
+                            ]}
+                        >
+                            <View style={styles.modelButtonIcon}>
+                                <CursorPointer
+                                    width={16}
+                                    height={16}
+                                    color={thinkingEnabled ? palette.orange : theme.text}
+                                />
+                            </View>
+                            <Text
+                                style={[
+                                    styles.modelButtonText,
+                                    thinkingEnabled && { color: palette.orange },
+                                ]}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                            >
+                                {selectedModelName}
+                            </Text>
+                        </Pressable>
                     </View>
 
                     <View style={styles.rightActions}>
-                        {isRecording && (
+                        {assistantWorking ? (
                             <Pressable
-                                onPress={toggleRecord}
+                                onPress={stopGeneration}
                                 style={({ pressed }) => [
                                     styles.sendBtn,
-                                    pressed && styles.sendBtnPressed,
+                                    { backgroundColor: '#e74c3c' },
+                                    pressed && { opacity: 0.7 },
                                 ]}
                             >
-                                <Microphone
-                                    width={24}
-                                    height={24}
-                                    color={theme.icon}
+                                <Square
+                                    width={16}
+                                    height={16}
+                                    color={theme.background}
+                                    fill={theme.background}
                                 />
                             </Pressable>
-                        )}
-                        {!isRecording && (
-                            <>
-                                <Pressable
-                                    onPress={toggleRecord}
-                                    disabled={isMicDisabled}
-                                    style={({ pressed }) => [
-                                        styles.iconBtn,
-                                        isMicDisabled && styles.iconBtnDisabled,
-                                        pressed && !isMicDisabled && styles.iconBtnPressed,
-                                    ]}
-                                >
-                                    <Microphone
-                                        width={24}
-                                        height={24}
-                                        color={theme.icon}
-                                    />
-                                </Pressable>
-
-                                {!isProcessing && (
-                                    <Pressable
-                                        onPress={handleSend}
-                                        style={({ pressed }) => [
-                                            styles.sendBtn,
-                                            isSendDisabled && styles.iconBtnDisabled,
-                                            pressed && !isSendDisabled && styles.sendBtnPressed,
-                                        ]}
-                                        disabled={isSendDisabled}
-                                    >
-                                        <ArrowUp
-                                            width={24}
-                                            height={24}
-                                            color={theme.background}
-                                        />
-                                    </Pressable>
-                                )}
-                            </>
+                        ) : (
+                            <Pressable
+                                onPress={handleSend}
+                                style={({ pressed }) => [
+                                    styles.sendBtn,
+                                    isSendDisabled && styles.iconBtnDisabled,
+                                    pressed && !isSendDisabled && styles.sendBtnPressed,
+                                ]}
+                                disabled={isSendDisabled}
+                            >
+                                <ArrowUp
+                                    width={24}
+                                    height={24}
+                                    color={theme.background}
+                                />
+                            </Pressable>
                         )}
                     </View>
                 </View>
@@ -660,13 +573,7 @@ export default function ChatInput(props: Props) {
                 position="bottom-left"
             />
 
-            <ContextMenu
-                visible={voiceLanguageMenuVisible}
-                onClose={() => setVoiceLanguageMenuVisible(false)}
-                items={voiceLanguageItems}
-                title="Select Voice Language"
-                position="center"
-            />
+
         </View>
     );
 }
