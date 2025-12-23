@@ -299,7 +299,7 @@ export class ChatSocket {
         }
     }
 
-    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: boolean) {
+    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: string) {
         console.log('Sending message:', message, sessionId, attachmentIDs, webSearch, thinking);
         const chatID = this.getChatId();
         const model = this.getModel();

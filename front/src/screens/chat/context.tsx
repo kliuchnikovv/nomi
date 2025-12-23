@@ -117,7 +117,7 @@ export function ChatProvider({
     const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
 
     // Thinking mode state (persists within chat session)
-    const [thinkingEnabled, setThinkingEnabled] = useState(false);
+    const [thinkingLevel, setThinkingLevel] = useState<string>('off');
 
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
@@ -296,7 +296,7 @@ export function ChatProvider({
     }, [pluginThreadMeta, mapPluginMessage]);
 
     const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: boolean) => {
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string) => {
             if (!text.trim() && attachments.length === 0) return;
             if (!user?.id) return;
 
@@ -504,7 +504,7 @@ export function ChatProvider({
     }
 
     const sendMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: boolean) => {
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string) => {
             await sendStreamingMessage(text, attachments, webSearch, thinking);
         },
         [sendStreamingMessage],
@@ -750,8 +750,8 @@ export function ChatProvider({
         retryLastMessage,
         selectedTeamId,
         selectTeam,
-        thinkingEnabled,
-        setThinkingEnabled,
+        thinkingLevel,
+        setThinkingLevel,
         stopGeneration,
     };
 

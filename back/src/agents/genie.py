@@ -61,10 +61,10 @@ class GenieAgent(Agent):
         db: PostgresDb | None = None,
         tools: Sequence[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
-        thinking: bool = False,
+        thinking: str = "off",
     ):
         instructions = BASE_INSTRUCTIONS
-        if thinking:
+        if thinking and thinking != "off":
             instructions += THINKING_INSTRUCTIONS
             
         super().__init__(

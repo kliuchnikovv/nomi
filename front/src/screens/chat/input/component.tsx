@@ -54,7 +54,7 @@ export default function ChatInput(props: Props) {
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingEnabled, setThinkingEnabled, assistantWorking, stopGeneration } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration } = useChat();
     const { user, updateUser } = useAuth();
 
     // Initialize webSearchEnabled from user preference
@@ -73,13 +73,13 @@ export default function ChatInput(props: Props) {
         if (!text && !hasAttachments) return;
 
         // Pass full attachments (including URI) to sendMessage for optimistic updates
-        sendMessage(text, attachments, webSearchEnabled, thinkingEnabled);
+        sendMessage(text, attachments, webSearchEnabled, thinkingLevel);
 
         Keyboard.dismiss();
         setValue('');
         setAttachments([]);
         setWebSearchEnabled(false);
-    }, [value, attachments, sendMessage, webSearchEnabled, thinkingEnabled]);
+    }, [value, attachments, sendMessage, webSearchEnabled, thinkingLevel]);
 
 
 
@@ -270,14 +270,16 @@ export default function ChatInput(props: Props) {
         },
         {
             id: 'thinking',
-            label: 'Thinking Mode',
-            isSwitch: true,
-            switchValue: thinkingEnabled,
+            label: `Thinking: ${thinkingLevel.charAt(0).toUpperCase() + thinkingLevel.slice(1)}`,
+            icon: <Brain width={20} height={20} color={thinkingLevel !== 'off' ? theme.accent : "#fff"} />,
             onPress: () => {
-                const newValue = !thinkingEnabled;
-                setThinkingEnabled(newValue);
-                // If enabling thinking and current model doesn't support it, auto-select one that does
-                if (newValue) {
+                const levels = ['off', 'low', 'medium', 'high'];
+                const currentIdx = levels.indexOf(thinkingLevel);
+                const nextLevel = levels[(currentIdx + 1) % levels.length];
+                setThinkingLevel(nextLevel);
+
+                // If enabling thinking (not off) and current model doesn't support it, auto-select one that does
+                if (nextLevel !== 'off') {
                     const currentModelObj = availableModels.find(m => m.id === selectedModel);
                     if (!currentModelObj?.supports_thinking) {
                         const thinkingModel = availableModels.find(m => m.supports_thinking === true);
@@ -307,7 +309,7 @@ export default function ChatInput(props: Props) {
                 setTimeout(() => setTeamMenuVisible(true), 300);
             }
         }] : []),
-    ], [pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, thinkingEnabled, theme.accent, chatMode, setChatMode]);
+    ], [pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, thinkingLevel, theme.accent, chatMode, setChatMode]);
 
     const removeAttachment = (id: string) => {
         setAttachments(prev => prev.filter(a => a.id !== id));
@@ -332,7 +334,7 @@ export default function ChatInput(props: Props) {
 
     const modelMenuItems: ContextMenuItem[] = useMemo(() => {
         // Filter models: when thinking is enabled, show only models that support it
-        const filteredModels = thinkingEnabled
+        const filteredModels = thinkingLevel !== 'off'
             ? availableModels.filter(model => model.supports_thinking === true)
             : availableModels;
 
@@ -349,7 +351,7 @@ export default function ChatInput(props: Props) {
                 setModelMenuVisible(false);
             },
         }));
-    }, [availableModels, selectedModel, setSelectedModel, theme.accent, thinkingEnabled]);
+    }, [availableModels, selectedModel, setSelectedModel, theme.accent, thinkingLevel]);
 
     const teamMenuItems: ContextMenuItem[] = useMemo(() => {
         return AVAILABLE_TEAMS.map(team => ({
@@ -484,7 +486,7 @@ export default function ChatInput(props: Props) {
                             onPress={showModelPicker}
                             style={({ pressed }) => [
                                 styles.modelButton,
-                                thinkingEnabled && {
+                                thinkingLevel !== 'off' && {
                                     backgroundColor: `${palette.orange}30`,
                                     borderColor: `${palette.orange}60`,
                                 },
@@ -495,13 +497,13 @@ export default function ChatInput(props: Props) {
                                 <CursorPointer
                                     width={16}
                                     height={16}
-                                    color={thinkingEnabled ? palette.orange : theme.text}
+                                    color={thinkingLevel !== 'off' ? palette.orange : theme.text}
                                 />
                             </View>
                             <Text
                                 style={[
                                     styles.modelButtonText,
-                                    thinkingEnabled && { color: palette.orange },
+                                    thinkingLevel !== 'off' && { color: palette.orange },
                                 ]}
                                 numberOfLines={1}
                                 ellipsizeMode="tail"

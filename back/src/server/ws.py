@@ -97,7 +97,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         # Track current web_search state for agent rebuild
         current_web_search: bool = False
         # Track current thinking mode state for agent rebuild
-        current_thinking: bool = False
+        current_thinking: str = "off"
         
         logger.info("[WS] Waiting for TOOLS frame: session_id=%s", session_id)
         try:
@@ -682,7 +682,13 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                         continue
 
                 # Check if thinking setting changed and rebuild agent if needed
-                requested_thinking = bool(payload.get("thinking", False))
+                requested_thinking_raw = payload.get("thinking")
+                requested_thinking = "off"
+                if isinstance(requested_thinking_raw, bool):
+                     requested_thinking = "medium" if requested_thinking_raw else "off"
+                elif isinstance(requested_thinking_raw, str):
+                     requested_thinking = requested_thinking_raw.lower() or "off"
+
                 if requested_thinking != current_thinking:
                     logger.info(
                         "[WS] thinking changed: session_id=%s old=%s new=%s - rebuilding agent",

@@ -42,13 +42,13 @@ class AgentFactory:
         """Доступ к ToolConfigClient для запроса инструментов."""
         return self._config_client
 
-    def build_model(self, model_name: str, web_search: bool = False, thinking: bool = False) -> Model:
+    def build_model(self, model_name: str, web_search: bool = False, thinking: str = "off") -> Model:
         """Build a model instance from model name.
         
         Args:
             model_name: Name of the model (e.g., 'gemini-2.0-flash', 'gemini-1.5-pro')
             web_search: If True, enable native Gemini search grounding
-            thinking: If True, enable thinking mode for supported models (Gemini 2.5+)
+            thinking: Thinking level ("off", "low", "medium", "high")
             
         Returns:
             Model instance
@@ -65,19 +65,20 @@ class AgentFactory:
             # Configure thinking mode for supported models (Gemini 2.5 Pro/Flash)
             thinking_budget = None
             include_thoughts = None
-            # Check if model supports thinking
-            # is_thinking_capable = (
-            #     "thinking" in model_name or 
-            #     model_name.startswith("gemini-2.5-") or
-            #     model_name.startswith("gemini-2.0-flash-thinking")
-            # )
             
-            if thinking:
-                # Use reasonable thinking budget (8192 tokens) for enhanced reasoning
-                # Valid range: 0-24576 for Flash, 128-32768 for Pro
+            if thinking and thinking != "off":
+                # Defaults
                 thinking_budget = 8192
+                
+                if thinking == "low":
+                    thinking_budget = 2048
+                elif thinking == "medium":
+                    thinking_budget = 8192
+                elif thinking == "high":
+                    thinking_budget = 32768 # Max for Gemini 2.0 Flash Thinking
+                    
                 include_thoughts = True
-                logger.info("[Factory] Enabling thinking mode for model: %s (budget=%d)", model_name, thinking_budget)
+                logger.info("[Factory] Enabling thinking mode for model: %s (level=%s, budget=%d)", model_name, thinking, thinking_budget)
             
             return Gemini(
                 id=model_name,
@@ -98,7 +99,7 @@ class AgentFactory:
         agent_type: Optional[str] = None,
         command_desc: Optional[dict] = None,
         web_search: bool = False,
-        thinking: bool = False,
+        thinking: str = "off",
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
