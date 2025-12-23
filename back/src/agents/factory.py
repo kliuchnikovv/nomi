@@ -75,7 +75,7 @@ class AgentFactory:
             return Gemini(
                 id=model_name,
                 api_key=api_key,
-                search=web_search,
+                # search=web_search,
                 thinking_budget=thinking_budget,
                 include_thoughts=include_thoughts
             )
@@ -98,7 +98,7 @@ class AgentFactory:
         if not model_name and command_desc and command_desc.get("model"):
             model_name = command_desc["model"]
 
-        model = self.build_model(model_name, web_search=web_search, thinking=thinking) if model_name else self._model
+        model = self.build_model(model_name, web_search=False, thinking=thinking) if model_name else self._model
         
         tools: List[Toolkit] = []
         
@@ -112,6 +112,10 @@ class AgentFactory:
                     logger.debug("[WS] tool appended: enabled")
                 else:
                     logger.debug("[WS] tool not appended: not enabled")
+            # Add DuckDuckGo search if web_search is enabled (instead of native Gemini search)
+            if web_search:
+                config.add("duckduckgo")
+                logger.info("[WS] Added DuckDuckGo search tool (web_search=True)")
             tools = await build_tools(config)
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])

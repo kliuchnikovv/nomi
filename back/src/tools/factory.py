@@ -8,6 +8,7 @@ from agno.tools import Toolkit
 from agno.tools.gmail import GmailTools
 from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools.github import GithubTools
+from agno.tools.duckduckgo import DuckDuckGoTools
 from google.oauth2.credentials import Credentials
 from src.tools.memory_writer import MemoryWriter
 from src.tools.rag_tool import RagTool
@@ -198,6 +199,17 @@ Always confirm repository ownership before making changes."""
     return tool
 
 
+def _build_duckduckgo(_: Dict[str, Any]) -> Toolkit:
+    """Build DuckDuckGo search tool."""
+    logger.info("[DuckDuckGo] Building DuckDuckGoTools")
+    tool = DuckDuckGoTools()
+    tool.add_instructions = True
+    tool.instructions = """You have access to DuckDuckGo web search.
+Use this to search for current information, news, and facts from the internet.
+Always cite sources when providing information from search results."""
+    return tool
+
+
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Gmail": _build_gmail,
     "Google Calendar": _build_google_calendar,
@@ -205,6 +217,7 @@ TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "rag": _build_rag,
     "memory_writer": _build_memory_writer,
     "web_search_mcp": _build_web_search_mcp,
+    "duckduckgo": _build_duckduckgo,
 }
 
 
