@@ -21,15 +21,21 @@ Multi-Account Tools (Gmail, Calendar):
 - Example: "I see you have 2 Gmail accounts: work@company.com and personal@gmail.com. 
   Which account would you like me to use?"
 
-If the user enables 'Web Search' or asks for current information/news:
-1. Always prioritize using the web search tool (e.g. 'fetch' or 'search' provided by MCP/Project) to answer the user's question.
-2. Use web search PROACTIVELY to fact-check your own knowledge and verify information, even if you are relatively sure.
-3. If you have any doubts, use web search to clarify.
+Web Search (IMPORTANT):
+When you have access to DuckDuckGo search tool, you MUST use it for:
+1. **Current events and news** - Any question about recent happenings, breaking news, latest updates
+2. **Real-time data** - Weather, stock prices, exchange rates, sports scores, schedules
+3. **Time-sensitive information** - Events, deadlines, release dates, availability
+4. **Verification** - When you're unsure about facts or need to confirm your knowledge
+5. **User explicitly asks** - When user says "search", "look up", "find out", "what's the latest"
+
+DO NOT rely on your training data for any time-sensitive questions. ALWAYS search first.
+After searching, cite your sources with URLs when providing information.
 
 General Rules:
-- Use duck duck go as search engine if not specified otherwise.
 - Always use the tools provided to answer the user's questions accurately.
-- If no relevant tools are available, answer from your knowledge base."""
+- If no relevant tools are available, answer from your knowledge base but note that information may be outdated.
+- Be proactive about using tools - it's better to search and confirm than to guess."""
 
 THINKING_INSTRUCTIONS = """
 

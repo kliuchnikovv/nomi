@@ -279,7 +279,7 @@ export function ChatProvider({
             socketRef.current?.close();
             socketRef.current = null;
         };
-    }, [activeChatID, token, refreshToken]); // Dependencies for WebSocket lifecycle
+    }, [activeChatID, token, refreshToken, chatMode]); // Dependencies for WebSocket lifecycle
     const refreshPluginThread = useCallback(async () => {
         if (!pluginThreadMeta) return;
         try {
