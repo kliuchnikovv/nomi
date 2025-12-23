@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -81,8 +82,8 @@ func New(
 		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler         = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler       = handlers.NewStreamHandler(logger, hubInstance, db)
-		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
-		modelsHandler = handlers.NewModelsHandler("config/models.json")
+// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
+		modelsHandler = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
 		uploadHandler = handlers.NewUploadHandler(db)
 		oauthHandler  = func() *handlers.OAuthHandler {
 			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)

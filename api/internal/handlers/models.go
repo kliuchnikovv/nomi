@@ -2,9 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
-	"os"
+	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,22 +30,37 @@ type ModelsResponse struct {
 	Models []Model `json:"models"`
 }
 
-type ModelsHandler struct {
-	modelsCache *ModelsResponse
-	mu          sync.RWMutex
-	configPath  string
+type GoogleModel struct {
+	Name                       string   `json:"name"`
+	DisplayName                string   `json:"displayName"`
+	Description                string   `json:"description"`
+	InputTokenLimit            int      `json:"inputTokenLimit"`
+	OutputTokenLimit           int      `json:"outputTokenLimit"`
+	SupportedGenerationMethods []string `json:"supportedGenerationMethods"`
 }
 
-func NewModelsHandler(configPath string) *ModelsHandler {
+type GoogleModelsListResponse struct {
+	Models []GoogleModel `json:"models"`
+}
+
+type ModelsHandler struct {
+	apiKey      string
+	modelsCache *ModelsResponse
+	lastUpdated time.Time
+	mu          sync.RWMutex
+}
+
+func NewModelsHandler(apiKey string) *ModelsHandler {
 	return &ModelsHandler{
-		configPath: configPath,
+		apiKey: apiKey,
 	}
 }
 
-// loadModels loads models from JSON file with caching
+// loadModels fetch models from Google API with caching
 func (h *ModelsHandler) loadModels() (*ModelsResponse, error) {
 	h.mu.RLock()
-	if h.modelsCache != nil {
+	// Cache for 1 hour
+	if h.modelsCache != nil && time.Since(h.lastUpdated) < 1*time.Hour {
 		defer h.mu.RUnlock()
 		return h.modelsCache, nil
 	}
@@ -50,28 +69,78 @@ func (h *ModelsHandler) loadModels() (*ModelsResponse, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Double-check after acquiring write lock
-	if h.modelsCache != nil {
+	// Double-check
+	if h.modelsCache != nil && time.Since(h.lastUpdated) < 1*time.Hour {
 		return h.modelsCache, nil
 	}
 
-	data, err := os.ReadFile(h.configPath)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", h.apiKey)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	var response ModelsResponse
-	if err := json.Unmarshal(data, &response); err != nil {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("google api error: %s %s", resp.Status, string(body))
+	}
+
+	var googleResp GoogleModelsListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&googleResp); err != nil {
 		return nil, err
 	}
 
-	h.modelsCache = &response
+	var models []Model
+	for _, gm := range googleResp.Models {
+		// Filter only models that support content generation
+		isGenerative := false
+		for _, method := range gm.SupportedGenerationMethods {
+			if method == "generateContent" {
+				isGenerative = true
+				break
+			}
+		}
+		if !isGenerative {
+			continue
+		}
+
+		// Clean ID (remove "models/" prefix)
+		id := strings.TrimPrefix(gm.Name, "models/")
+
+		models = append(models, Model{
+			ID:                id,
+			Name:              gm.DisplayName,
+			Provider:          "google",
+			Description:       gm.Description,
+			ContextWindow:     gm.InputTokenLimit,
+			MaxOutputTokens:   gm.OutputTokenLimit,
+			RPMLimit:          0, // API doesn't allow fetching this dynamically per key easily without quotas API
+			SupportsStreaming: true,
+			SupportsTools:     true, // Most Gemini models support tools
+			SupportsThinking:  strings.Contains(strings.ToLower(gm.DisplayName), "thinking") || strings.Contains(id, "thinking"),
+		})
+	}
+
+	// Sort by Name
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].Name < models[j].Name
+	})
+
+	h.modelsCache = &ModelsResponse{Models: models}
+	h.lastUpdated = time.Now()
 	return h.modelsCache, nil
 }
 
 // ListModels returns the list of available models
 // @Summary List available models
-// @Description Get list of all available LLM models
+// @Description Get list of all available LLM models from Google API
 // @Tags models
 // @Produce json
 // @Success 200 {object} ModelsResponse
@@ -80,7 +149,9 @@ func (h *ModelsHandler) loadModels() (*ModelsResponse, error) {
 func (h *ModelsHandler) ListModels(c *gin.Context) {
 	models, err := h.loadModels()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load models configuration"})
+		// Log error but return typical error response
+		// In production, might want to fallback to hardcoded list if API fails
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to fetch models: %v", err)})
 		return
 	}
 
