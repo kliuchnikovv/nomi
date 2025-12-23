@@ -99,14 +99,14 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         # Track current thinking mode state for agent rebuild
         current_thinking: bool = False
         
-        logger.debug("[WS] Waiting for TOOLS frame: session_id=%s", session_id)
+        logger.info("[WS] Waiting for TOOLS frame: session_id=%s", session_id)
         try:
             # Ждем первый фрейм с инструментами
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-            logger.debug("[WS] Received raw data (TOOLS wait): session_id=%s len=%d", session_id, len(raw))
+            logger.info("[WS] Received raw data (TOOLS wait): session_id=%s len=%d", session_id, len(raw))
             data = json.loads(raw)
             frame = Frame(**data)
-            logger.debug("[WS] Parsed frame (TOOLS wait): session_id=%s op=%s", session_id, frame.op)
+            logger.info("[WS] Parsed frame (TOOLS wait): session_id=%s op=%s", session_id, frame.op)
             
             if frame.op == Op.TOOLS:
                 # Получили инструменты от genie-api
