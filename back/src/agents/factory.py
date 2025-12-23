@@ -65,7 +65,14 @@ class AgentFactory:
             # Configure thinking mode for supported models (Gemini 2.5 Pro/Flash)
             thinking_budget = None
             include_thoughts = None
-            if thinking and model_name.startswith("gemini-2.5-") and "lite" not in model_name:
+            # Check if model supports thinking
+            # is_thinking_capable = (
+            #     "thinking" in model_name or 
+            #     model_name.startswith("gemini-2.5-") or
+            #     model_name.startswith("gemini-2.0-flash-thinking")
+            # )
+            
+            if thinking:
                 # Use reasonable thinking budget (8192 tokens) for enhanced reasoning
                 # Valid range: 0-24576 for Flash, 128-32768 for Pro
                 thinking_budget = 8192
