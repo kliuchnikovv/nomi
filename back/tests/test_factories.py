@@ -176,7 +176,7 @@ async def test_agent_factory_build_with_thinking(agent_factory):
         assert isinstance(agent.model, Gemini)
         assert agent.model.id == "gemini-2.5-flash"
         # Verify thinking config is passed
-        assert agent.model.thinking_budget == -1
+        assert agent.model.thinking_budget == 8192
         assert agent.model.include_thoughts == True
 
 

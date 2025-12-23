@@ -66,10 +66,11 @@ class AgentFactory:
             thinking_budget = None
             include_thoughts = None
             if thinking and model_name.startswith("gemini-2.5-") and "lite" not in model_name:
-                # Use dynamic thinking budget (-1) for automatic adjustment
-                thinking_budget = -1
+                # Use reasonable thinking budget (8192 tokens) for enhanced reasoning
+                # Valid range: 0-24576 for Flash, 128-32768 for Pro
+                thinking_budget = 8192
                 include_thoughts = True
-                logger.info("[Factory] Enabling thinking mode for model: %s", model_name)
+                logger.info("[Factory] Enabling thinking mode for model: %s (budget=%d)", model_name, thinking_budget)
             
             return Gemini(
                 id=model_name,
