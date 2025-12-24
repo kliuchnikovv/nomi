@@ -914,7 +914,11 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             
             # Log ALL events for debugging
             event_type = type(ev).__name__
-            logger.debug("[WS] 📦 Stream event: type=%s", event_type)
+            # Debug log to inspect event attributes for missing reasoning
+            if "Content" in event_type or "Reasoning" in event_type:
+                logger.debug("[WS] 📦 Stream event: type=%s attrs=%s", event_type, dir(ev))
+            else:
+                logger.debug("[WS] 📦 Stream event: type=%s", event_type)
             
             # Check for thought in parts (Gemini 2.0)
             has_thought_in_parts = False
@@ -965,7 +969,8 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
             # and system messages (ToolCallCompletedEvent has status text)
             if "RunContentEvent" in str(type(ev)):
                 chunk = _to_text(ev)
-                if chunk:
+                # Ensure we don't yield reasoning as content if Agno mixed them (unlikely but possible)
+                if chunk and chunk != captured_reasoning:
                     logger.debug("[WS] 📝 Yielding content chunk: len=%d preview=%s", len(chunk), chunk[:50] if len(chunk) > 50 else chunk)
                     yield chunk
             elif "ModelContentEvent" in str(type(ev)) or "TextDeltaEvent" in str(type(ev)):

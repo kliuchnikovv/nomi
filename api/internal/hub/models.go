@@ -50,7 +50,9 @@ type Payload struct {
 	Model       string      `json:"model,omitempty"`
 	ToolCalls   interface{} `json:"tool_calls,omitempty"`
 	Reason      string      `json:"reason,omitempty"`
-	Index       uint        `json:"ix,omitempty"`
+	// ReasoningSteps contains "thinking" content from models that support it
+	ReasoningSteps []string `json:"reasoning_steps,omitempty"`
+	Index          uint     `json:"ix,omitempty"`
 	EndOfBuffer bool        `json:"eof,omitempty"`
 
 	// Role and Sender for multi-device sync (to distinguish user/assistant messages)

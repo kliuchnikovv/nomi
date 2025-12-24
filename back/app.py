@@ -100,12 +100,20 @@ async def run_query(request: QueryRequest):
     # Extract content
     # response should be RunResponse
     answer = ""
+    reasoning = None
+
     if hasattr(response, "content") and response.content:
         answer = str(response.content)
     elif response and isinstance(response, str):
          answer = response
          
-    return {"answer": answer}
+    # Extract reasoning
+    if hasattr(response, "reasoning_content") and response.reasoning_content:
+        reasoning = str(response.reasoning_content)
+    elif hasattr(response, "reasoning_steps") and response.reasoning_steps:
+         reasoning = "\n".join([str(step) for step in response.reasoning_steps])
+
+    return {"answer": answer, "reasoning": reasoning}
 
 # Sessions for OAuth state (required for request.session)
 session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")

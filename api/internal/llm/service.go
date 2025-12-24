@@ -58,12 +58,17 @@ func (s *Service) GenerateResponse(ctx context.Context, userQuery string) (strin
 
 	// 3. Декодируем и возвращаем успешный ответ
 	var responseBody struct {
-		Answer string `json:"answer"`
+		Answer    string `json:"answer"`
+		Reasoning string `json:"reasoning,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
 		return "", fmt.Errorf("failed to decode agno response: %w", err)
 	}
 
+	// We append reasoning if available
+	if responseBody.Reasoning != "" {
+		return responseBody.Answer + "\n\n<thinking>\n" + responseBody.Reasoning + "\n</thinking>", nil
+	}
 	return responseBody.Answer, nil
 }
 
