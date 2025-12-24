@@ -45,6 +45,7 @@ type Room struct {
 		Model     string
 		ToolCalls interface{}
 		Text      string
+		Reasoning string
 	}
 }
 
@@ -457,6 +458,17 @@ func (r *Room) handleLLMMessage(frame Frame) {
 		if frame.Payload.ToolCalls != nil {
 			r.currentMessageMetadata.ToolCalls = frame.Payload.ToolCalls
 		}
+		// Handle ReasoningSteps if present
+		if len(frame.Payload.ReasoningSteps) > 0 {
+			for _, step := range frame.Payload.ReasoningSteps {
+				// Append newline if not empty to separate steps
+				if r.currentMessageMetadata.Reasoning != "" {
+					r.currentMessageMetadata.Reasoning += "\n"
+				}
+				r.currentMessageMetadata.Reasoning += step
+			}
+		}
+
 		// Update DB logic - preserve accumulated text, don't overwrite with empty!
 		if r.currentMessageMetadata.MessageID != uuid.Nil {
 			if err := r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
@@ -465,6 +477,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				Sender:    storage.ZeroUUID,
 				Role:      chat.RoleAssistant,
 				Text:      r.currentMessageMetadata.Text, // FIXED: Use accumulated text
+				Reasoning: r.currentMessageMetadata.Reasoning,
 				Model:     r.currentMessageMetadata.Model,
 				ToolCalls: r.currentMessageMetadata.ToolCalls,
 				CreatedAt: time.Now().UTC(),
@@ -491,6 +504,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				Model     string
 				ToolCalls interface{}
 				Text      string
+				Reasoning string
 			}{
 				MessageID: frame.Payload.MessageID,
 			}
@@ -513,6 +527,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			Sender:    storage.ZeroUUID, // Assistant
 			Role:      chat.RoleAssistant,
 			Text:      r.currentMessageMetadata.Text,
+			Reasoning: r.currentMessageMetadata.Reasoning,
 			Model:     r.currentMessageMetadata.Model,
 			ToolCalls: r.currentMessageMetadata.ToolCalls,
 			CreatedAt: time.Now().UTC(),
@@ -533,6 +548,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			Model     string
 			ToolCalls interface{}
 			Text      string
+			Reasoning string
 		}{}
 	}
 }

@@ -41,6 +41,7 @@ type Message struct {
 	Role        string         `gorm:"type:varchar(20);not null"`
 	Text        string         `gorm:"type:text;not null"`
 	ToolCalls   datatypes.JSON `gorm:"type:jsonb"`
+	Reasoning   string         `gorm:"type:text"` // Stores accumulated reasoning/thinking steps
 	Model       string         `gorm:"type:text"`
 	Attachments []Attachment   `gorm:"foreignKey:MessageID"`
 	CreatedAt   time.Time      `gorm:"not null"`
