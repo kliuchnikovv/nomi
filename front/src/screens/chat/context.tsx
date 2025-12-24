@@ -192,19 +192,28 @@ export function ChatProvider({
         getMessages(activeChatID);
     }, [activeChatID, getMessages, pluginThreadMeta]); // Dependency on activeChatID
 
-    // Fetch available models on mount
+    // Fetch available models on mount with retry
     useEffect(() => {
-        const fetchModels = async () => {
+        let mounted = true;
+        const fetchModels = async (retryCount = 0) => {
             try {
                 const models = await modelsApi.getModels();
-                if (models) {
+                if (mounted && models && models.length > 0) {
                     setAvailableModels(models);
+                } else if (mounted && retryCount < 3) {
+                    console.log(`Fetch models returned empty list, retrying... (${retryCount + 1}/3)`);
+                    setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));
                 }
             } catch (error) {
                 console.error('Failed to fetch models:', error);
+                if (mounted && retryCount < 3) {
+                    console.log(`Fetch models failed, retrying... (${retryCount + 1}/3)`);
+                    setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));
+                }
             }
         };
         fetchModels();
+        return () => { mounted = false; };
     }, []);
 
     const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0].id);

@@ -322,9 +322,15 @@ export default function ChatInput(props: Props) {
 
     const modelMenuItems: ContextMenuItem[] = useMemo(() => {
         // Filter models: when thinking is enabled, show only models that support it
-        const filteredModels = thinkingLevel !== 'off'
+        let filteredModels = thinkingLevel !== 'off'
             ? availableModels.filter(model => model.supports_thinking === true)
             : availableModels;
+
+        // Fallback: If filtering leaves no models (e.g. user selected High thinking but no models support it yet due to API change or bug),
+        // show all models to avoid empty menu.
+        if (filteredModels.length === 0) {
+            filteredModels = availableModels;
+        }
 
         return filteredModels.map(model => ({
             id: model.id,
