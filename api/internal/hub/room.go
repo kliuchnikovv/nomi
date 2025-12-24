@@ -459,12 +459,9 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			r.currentMessageMetadata.ToolCalls = frame.Payload.ToolCalls
 		}
 		// Handle ReasoningSteps if present
+		// Note: ReasoningSteps are streamed as tokens/deltas, so we concatenate directly.
 		if len(frame.Payload.ReasoningSteps) > 0 {
 			for _, step := range frame.Payload.ReasoningSteps {
-				// Append newline if not empty to separate steps
-				if r.currentMessageMetadata.Reasoning != "" {
-					r.currentMessageMetadata.Reasoning += "\n"
-				}
 				r.currentMessageMetadata.Reasoning += step
 			}
 		}
