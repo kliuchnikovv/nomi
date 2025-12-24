@@ -106,6 +106,14 @@ export const CONNECTORS: Connector[] = [
         color: palette.magenta,
         glyph: 'github',
     },
+    {
+        id: 'jules',
+        name: 'Jules',
+        toolKey: 'jules',
+        oauthProvider: 'jules',
+        color: palette.orange,
+        glyph: 'jules',
+    },
 ];
 
 export interface ConnectorContextType {

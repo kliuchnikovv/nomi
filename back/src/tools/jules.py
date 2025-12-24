@@ -1,4 +1,5 @@
 from typing import Optional, Dict, List, Any
+import json
 import requests
 from agno.tools import Toolkit
 from agno.utils.log import logger
@@ -57,7 +58,7 @@ class JulesTools(Toolkit):
         Returns:
             str: JSON string containing list of sources.
         """
-        return str(self._get("sources"))
+        return json.dumps(self._get("sources"))
 
     def create_session(
         self,
@@ -93,7 +94,7 @@ class JulesTools(Toolkit):
         if title:
             payload["title"] = title
 
-        return str(self._post("sessions", payload))
+        return json.dumps(self._post("sessions", payload))
 
     def list_sessions(self, page_size: int = 5) -> str:
         """Lists recent sessions.
@@ -104,7 +105,7 @@ class JulesTools(Toolkit):
         Returns:
             str: JSON string containing list of sessions.
         """
-        return str(self._get("sessions", params={"pageSize": page_size}))
+        return json.dumps(self._get("sessions", params={"pageSize": page_size}))
 
     def approve_plan(self, session_id: str) -> str:
         """Approves the current plan for a session.
@@ -124,7 +125,7 @@ class JulesTools(Toolkit):
         # Let's handle both.
 
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
-        return str(self._post(f"{resource_path}:approvePlan"))
+        return json.dumps(self._post(f"{resource_path}:approvePlan"))
 
     def list_activities(self, session_id: str, page_size: int = 30) -> str:
         """Lists activities for a specific session.
@@ -137,7 +138,7 @@ class JulesTools(Toolkit):
             str: JSON string containing activities.
         """
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
-        return str(self._get(f"{resource_path}/activities", params={"pageSize": page_size}))
+        return json.dumps(self._get(f"{resource_path}/activities", params={"pageSize": page_size}))
 
     def send_message(self, session_id: str, prompt: str) -> str:
         """Sends a message to an existing session.
@@ -150,4 +151,4 @@ class JulesTools(Toolkit):
             str: JSON string (response will be empty, use list_activities to see reply).
         """
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
-        return str(self._post(f"{resource_path}:sendMessage", data={"prompt": prompt}))
+        return json.dumps(self._post(f"{resource_path}:sendMessage", data={"prompt": prompt}))

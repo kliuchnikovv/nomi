@@ -153,6 +153,8 @@ export const pluginsApi = {
     syncGmail: () => apiClient.post<{ message: string }>(`${API_URL()}/plugins/gmail/sync`, {}),
     syncImap: (config: { host: string; username: string; password: string }) =>
         apiClient.post<{ status: string }>(`${API_URL()}/plugins/imap/sync`, config),
+    connectJules: (apiKey: string) =>
+        apiClient.post<{ status: string; id: string }>(`${API_URL()}/plugins/jules/connect`, { api_key: apiKey }),
 };
 
 export const integrationsApi = {

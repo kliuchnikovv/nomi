@@ -97,6 +97,8 @@ func New(
 			return h
 		}()
 	)
+	julesAuthHandler := handlers.NewJulesAuthHandler(db, logger)
+
 	_ = n // notifier will be used when needed
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -175,6 +177,7 @@ func New(
 
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
+	pluginGroup.POST("/jules/connect", julesAuthHandler.Connect)
 	manager.Mount(pluginGroup)
 
 	return &Server{

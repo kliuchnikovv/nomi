@@ -114,11 +114,6 @@ func (j *julesPlugin) Sync(ctx context.Context, integration storage.Integration)
 		}
 
 		for _, act := range activities {
-			// We treat Agent activities as "Incoming Messages"
-			if act.Originator != "agent" {
-				continue
-			}
-
 			// Check if exists
 			exists, err := j.storage.InboxExistsByMessageID(ctx, integration.UserID, act.Name)
 			if err != nil {
@@ -140,6 +135,20 @@ func (j *julesPlugin) Sync(ctx context.Context, integration storage.Integration)
 				}
 			} else if act.PlanGenerated != nil {
 				content = "Plan Generated"
+			} else {
+				// Fallback or specific handling for user messages if they have content?
+				// Jules activities for 'user' usually are "user said: ..."
+				// But we might not have the text in 'activities' response directly in a simple field?
+				// API doc says "activities" response has different union fields.
+				// Let's assume generic display for now, relying on 'act.Name' or other fields if present.
+			}
+
+			// Determine Role
+			role := "daemon"
+			sender := "Jules Agent"
+			if act.Originator == "user" {
+				role = "human"
+				sender = "Me"
 			}
 
 			// Create Inbox Item
@@ -161,8 +170,8 @@ func (j *julesPlugin) Sync(ctx context.Context, integration storage.Integration)
 				IntegrationID: integration.ID,
 				Source:        "jules",
 				MessageID:     act.Name,
-				Sender:        "Jules Agent",
-				Role:          "daemon",
+				Sender:        sender,
+				Role:          role,
 				Header:        sess.Title, // Group by session title
 				Content:       content,
 				Status:        "pending",

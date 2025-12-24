@@ -5,11 +5,12 @@ import {
     Switch,
     Text,
     View,
+    TextInput,
 } from 'react-native';
 import { styles } from './styles.tsx';
 import React from 'react';
 import { Props, CONNECTORS } from './models.tsx';
-import { NavArrowRight, Mail, Calendar, WarningCircle, Trash, Github } from 'iconoir-react-native';
+import { NavArrowRight, Mail, Calendar, WarningCircle, Trash, Github, Sparkles } from 'iconoir-react-native';
 import { useConnectors } from './context.tsx';
 import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight.ts';
 
@@ -32,8 +33,12 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
         () => integrations.filter(p => p.provider === 'github'),
         [integrations],
     );
+    const julesIntegrations = React.useMemo(
+        () => integrations.filter(p => p.provider === 'jules'),
+        [integrations],
+    );
     const otherIntegrations = React.useMemo(
-        () => integrations.filter(p => p.provider !== 'gmail' && p.provider !== 'imap' && p.provider !== 'calendar' && p.provider !== 'github'),
+        () => integrations.filter(p => p.provider !== 'gmail' && p.provider !== 'imap' && p.provider !== 'calendar' && p.provider !== 'github' && p.provider !== 'jules'),
         [integrations],
     );
 
@@ -86,6 +91,31 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
         } catch (err) {
             console.warn('Failed to start GitHub OAuth', err);
             setErrorMsg(err instanceof Error ? err.message : 'Failed to start GitHub OAuth');
+        }
+    };
+
+    const [showJulesInput, setShowJulesInput] = React.useState(false);
+    const [julesApiKey, setJulesApiKey] = React.useState('');
+    const [isConnectingJules, setIsConnectingJules] = React.useState(false);
+
+    const handleAddJulesAccount = () => {
+        setShowJulesInput(!showJulesInput);
+        setErrorMsg(null);
+    };
+
+    const submitJulesKey = async () => {
+        if (!julesApiKey.trim()) return;
+        setIsConnectingJules(true);
+        setErrorMsg(null);
+        try {
+            await pluginsApi.connectJules(julesApiKey);
+            await useConnectors.getState().getIntegrations();
+            setShowJulesInput(false);
+            setJulesApiKey('');
+        } catch (e) {
+            setErrorMsg(e instanceof Error ? e.message : 'Failed to connect');
+        } finally {
+            setIsConnectingJules(false);
         }
     };
 
@@ -215,6 +245,84 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                         )}
                     </View>
 
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionTitle}>Jules</Text>
+                        <Pressable
+                            style={styles.addAccountButton}
+                            onPress={handleAddJulesAccount}
+                            accessibilityLabel="Add Jules account"
+                        >
+                            <Text style={styles.addAccountButtonText}>{showJulesInput ? 'Cancel' : 'Add account'}</Text>
+                        </Pressable>
+                    </View>
+
+                    {showJulesInput && (
+                        <View style={[styles.card, { marginBottom: 16, padding: 12 }]}>
+                            <Text style={{ color: palette.fg, marginBottom: 8 }}>Enter API Key:</Text>
+                            <TextInput
+                                style={{
+                                    backgroundColor: 'rgba(0,0,0,0.2)',
+                                    color: palette.fg,
+                                    borderRadius: 8,
+                                    padding: 10,
+                                    marginBottom: 12,
+                                }}
+                                value={julesApiKey}
+                                onChangeText={setJulesApiKey}
+                                placeholder="sk-..."
+                                placeholderTextColor="rgba(255,255,255,0.3)"
+                                autoCapitalize="none"
+                                secureTextEntry
+                            />
+                            <Pressable
+                                onPress={submitJulesKey}
+                                disabled={isConnectingJules || !julesApiKey.trim()}
+                                style={({ pressed }) => ({
+                                    backgroundColor: pressed ? `${palette.blue}80` : palette.blue,
+                                    padding: 12,
+                                    borderRadius: 8,
+                                    alignItems: 'center',
+                                    opacity: (!julesApiKey.trim() || isConnectingJules) ? 0.5 : 1,
+                                })}
+                            >
+                                {isConnectingJules ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Connect</Text>
+                                )}
+                            </Pressable>
+                        </View>
+                    )}
+
+                    <View style={styles.card}>
+                        {julesIntegrations.map((integration, i) => {
+                            const details = getConnectorDetails(integration.provider);
+                            return (
+                                <View key={integration.id}>
+                                    <Item
+                                        name={integration.name}
+                                        enabled={!!integration.connected}
+                                        glyph={details?.glyph || 'jules'}
+                                        color={details?.color || palette.orange}
+                                        configID={integration.id}
+                                        statusText={getIntegrationStatus(integration)}
+                                        onDelete={() => deleteIntegration(integration.id)}
+                                    />
+                                    {i < julesIntegrations.length - 1 && (
+                                        <View style={styles.divider} />
+                                    )}
+                                </View>
+                            );
+                        })}
+                        {julesIntegrations.length === 0 && !showJulesInput && (
+                            <View style={styles.emptyRow}>
+                                <Text style={styles.emptyText}>
+                                    No Jules accounts connected yet
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+
                     {enabledTools.length > 0 && (
                         <>
                             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Enabled</Text>
@@ -323,7 +431,8 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
                 {glyph === 'gmail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph === 'calendar' && <Calendar width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph === 'github' && <Github width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph !== 'mail' && glyph !== 'gmail' && glyph !== 'calendar' && glyph !== 'github' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph === 'jules' && <Sparkles width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph !== 'mail' && glyph !== 'gmail' && glyph !== 'calendar' && glyph !== 'github' && glyph !== 'jules' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
             </View>
             <View style={styles.titleBlock}>
                 <Text style={styles.rowTitle} numberOfLines={1}>

@@ -8,7 +8,7 @@ import {
     View,
     ScrollView,
 } from 'react-native';
-import { NavArrowDown, NavArrowRight, Mail, Calendar } from 'iconoir-react-native';
+import { NavArrowDown, NavArrowRight, Mail, Calendar, Sparkles } from 'iconoir-react-native';
 import { SharedValue } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,6 +35,7 @@ const pluginIconMap: Record<string, { IconComponent: any; colorKey: keyof ThemeP
     gmail: { IconComponent: Mail, colorKey: 'red' },
     imap: { IconComponent: Mail, colorKey: 'cyan' },
     calendar: { IconComponent: Calendar, colorKey: 'orange' },
+    jules: { IconComponent: Sparkles, colorKey: 'orange' },
 };
 
 const getPluginIcon = (provider: string, palette: ThemePalette) => {
