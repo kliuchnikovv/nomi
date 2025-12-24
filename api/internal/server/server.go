@@ -17,6 +17,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
+	"github.com/kliuchnikovv/genie-api/internal/plugins/jules"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
@@ -62,6 +63,9 @@ func New(
 	}
 	if err := manager.Register(plugins.NewGmailPlugin()); err != nil {
 		logger.Error("failed to register gmail plugin", zap.Error(err))
+	}
+	if err := manager.Register(jules.NewJulesPlugin()); err != nil {
+		logger.Error("failed to register jules plugin", zap.Error(err))
 	}
 
 	// Initialize Hub
