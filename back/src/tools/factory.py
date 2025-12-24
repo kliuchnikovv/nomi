@@ -12,6 +12,7 @@ from agno.tools.duckduckgo import DuckDuckGoTools
 from google.oauth2.credentials import Credentials
 from src.tools.memory_writer import MemoryWriter
 from src.tools.rag_tool import RagTool
+from src.tools.jules import JulesTools
 
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
@@ -210,6 +211,26 @@ Always cite sources when providing information from search results."""
     return tool
 
 
+def _build_jules(params: Dict[str, Any]) -> Toolkit:
+    """Build JulesTools with API key."""
+    logger.info("[Jules] Building JulesTools")
+
+    # Check for credentials in nested 'creds' or directly in params
+    creds_data = params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
+
+    # Support 'key', 'api_key', or 'token'
+    api_key = creds_data.get("api_key") or creds_data.get("key") or creds_data.get("token")
+
+    if not api_key:
+        logger.warning("[Jules] No API key found in params")
+        raise ValueError("API key required for Jules tool")
+
+    masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
+    logger.info("[Jules] Using API key: %s", masked_key)
+
+    return JulesTools(api_key=api_key)
+
+
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Gmail": _build_gmail,
     "Google Calendar": _build_google_calendar,
@@ -218,6 +239,7 @@ TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "memory_writer": _build_memory_writer,
     "web_search_mcp": _build_web_search_mcp,
     "duckduckgo": _build_duckduckgo,
+    "Jules": _build_jules,
 }
 
 
