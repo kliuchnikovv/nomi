@@ -1,0 +1,39 @@
+server:
+  port: 8080
+
+database:
+  host: "${DB_HOST:-localhost}"
+  port: ${DB_PORT:-5432}
+  user: "${DB_USER:-postgres}"
+  password: "${DB_PASSWORD:-postgres}"
+  dbname: "${DB_NAME:-postgres}"
+
+redis:
+  addr: "localhost:6379"
+  username: ""
+  password: ""
+  db: 0
+  stream: genie:messages
+  dlq_stream: genie:messages:dlq
+  maxlen: 100
+  trim_approx: true
+  max_attempts: 3
+
+oauth2:
+  callback_base: "http://localhost:8080"
+  providers:
+    google:
+      client_id: "174083236719-itfjiur5c404ndjjhj3rukinl85sug66.apps.googleusercontent.com"
+      client_secret: "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"
+      issuer_url: "https://accounts.google.com"
+      scopes:
+        - "openid"
+        - "https://www.googleapis.com/auth/userinfo.email"
+        - "https://www.googleapis.com/auth/userinfo.profile"
+
+token:
+  refresh_before_minutes: 5
+  jwt_secret: "your-super-secret-key-change-in-production"
+
+llm:
+  base_url: "http://localhost:7777"

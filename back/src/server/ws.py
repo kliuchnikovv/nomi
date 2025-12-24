@@ -813,6 +813,12 @@ async def _run_agent_stream(agent: Agent, text: str, session_id: Optional[str] =
                 if chunk:
                     logger.debug("[WS] 📝 Yielding model/delta chunk: len=%d preview=%s", len(chunk), chunk[:50] if len(chunk) > 50 else chunk)
                     yield chunk
+            elif "Thinking" in str(type(ev)) or "Reasoning" in str(type(ev)):
+                # Capture reasoning/thinking events
+                chunk = _to_text(ev)
+                if chunk:
+                    logger.debug("[WS] 📝 Yielding thinking chunk: len=%d", len(chunk))
+                    yield chunk
         return
 
     # Sync iterator → stream

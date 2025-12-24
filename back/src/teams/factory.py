@@ -16,46 +16,7 @@ class TeamFactory:
         self.debug_mode = debug_mode
 
     async def build(self, command_desc: dict, session_id: str) -> Team:
-        logger.info("[WS] Building Team from command description: %s", command_desc)
-        
-        team_type = command_desc.get("type", "").lower()
-        
-        # 1. Check for Predefined Teams
-        if team_type == "travel_planning":
-             from src.teams.travel_planning.team import TravelPlanning
-             logger.info("[WS] Instantiating TravelPlanning team")
-             # Assuming keys are in environment or config - for now passing what we have or empty
-             # In a real scenario we'd pull these from environment vars or TeamFactory init
-             import os
-             return TravelPlanning(
-                 model=self.model,
-                 maps_key=os.getenv("GOOGLE_MAPS_API_KEY", ""),
-                 exa_key=os.getenv("EXA_API_KEY", ""),
-                 db=self.db,
-                 debug_mode=self.debug_mode
-             )
-        
-        elif team_type == "genie":
-            from src.teams.genie.team import GenieTeam
-            logger.info("[WS] Instantiating GenieTeam")
-            import os
-            return GenieTeam(
-                model=self.model,
-                maps_key=os.getenv("GOOGLE_MAPS_API_KEY", ""),
-                db=self.db,
-                debug_mode=self.debug_mode
-            )
-
-        elif team_type == "development_team":
-            from src.teams.development.team import DevelopmentTeam
-            logger.info("[WS] Instantiating DevelopmentTeam")
-            return DevelopmentTeam(
-                model=self.model,
-                db=self.db,
-                debug_mode=self.debug_mode
-            )
-
-        # 2. Dynamic Team Building (Fallback)
+        logger.info("[WS] Building Team from command description")
         members = []
         if command_desc.get("participants"):
             for p_data in command_desc["participants"]:

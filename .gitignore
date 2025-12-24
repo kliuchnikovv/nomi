@@ -19,4 +19,4 @@
 __debug*
 
 # Config
-config.yaml
+configs/config.yaml

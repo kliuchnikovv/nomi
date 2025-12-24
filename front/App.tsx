@@ -5,7 +5,7 @@
  * @format
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ChatLayout from './src/screens/main/screen.tsx';
@@ -22,20 +22,9 @@ import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
 
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
-import { initApiUrl } from './src/config';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
-    const [configReady, setConfigReady] = useState(false);
-
-    // Initialize API URL from AsyncStorage before rendering
-    useEffect(() => {
-        initApiUrl().then(() => setConfigReady(true));
-    }, []);
-
-    if (!configReady) {
-        return null; // Wait for config to load
-    }
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>

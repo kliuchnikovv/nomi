@@ -82,7 +82,7 @@ func New(
 		authHandler         = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler       = handlers.NewStreamHandler(logger, hubInstance, db)
 		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
-		modelsHandler = handlers.NewModelsHandler("config/models.json")
+		modelsHandler = handlers.NewModelsHandler("../config/models.json")
 		uploadHandler = handlers.NewUploadHandler(db)
 		oauthHandler  = func() *handlers.OAuthHandler {
 			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)

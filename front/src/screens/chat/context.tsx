@@ -12,9 +12,8 @@ import { ChatContextType, Props, Model } from './models';
 import { useAuth } from '../auth/context.tsx';
 import { alertError } from '../auth/models.tsx';
 import { ChatSocket } from '../../socket';
-import { getApiUrl, API_URL } from '../../config.ts';
+import { API_URL } from '../../config.ts';
 import { modelsApi, sidebarApi } from '../../apiClient';
-import { AVAILABLE_TEAMS } from './teams';
 
 function generateUUID() {
     // RFC4122 version 4 compliant enough for client-side ids
@@ -125,7 +124,7 @@ export function ChatProvider({
         setMessagesLoading(true);
         try {
             const data = await apiClient.get<Message[]>(
-                `${getApiUrl()}/chats/${chatID}/messages`,
+                `${API_URL}/chats/${chatID}/messages`,
             );
             if (!data) {
                 return;
@@ -204,35 +203,16 @@ export function ChatProvider({
         fetchModels();
     }, []);
 
-    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0].id);
-
-    const selectTeam = useCallback((teamId: string) => {
-        setSelectedTeamId(teamId);
-    }, []);
-
     useEffect(() => {
         if (chatMode !== 'team') return;
-
-        const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId) || AVAILABLE_TEAMS[0];
-        const baseCommand = team.command;
-
-        // Apply model override if the team is dynamic or allows it. 
-        // For now, let's assume all teams can have their primary model overridden by the UI picker
-        // provided the backend team implementation respects it (TravelPlanning/GenieTeam take a 'model' param).
-        const next = {
-            ...baseCommand,
-            model: selectedModel || baseCommand.model,
-            // For dynamic teams, we might want to update participants' models too, 
-            // but let's keep it simple: model picker overrides the main team/conductor model.
-        };
-
         setTeamCommand((prev: any) => {
+            const next = buildTeamCommand(selectedModel);
             try {
                 if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
             } catch { /* ignore */ }
             return next;
         });
-    }, [chatMode, selectedModel, selectedTeamId]);
+    }, [chatMode, selectedModel, buildTeamCommand]);
 
     useEffect(() => {
         console.log('WebSocket useEffect: activeChatID:', activeChatID);
@@ -440,7 +420,7 @@ export function ChatProvider({
 
         try {
             const created = await apiClient.post<{ id: string }>(
-                `${getApiUrl()}/chats`,
+                `${API_URL}/chats`,
                 {
                     "title": title,
                     "model": emptyChatID
@@ -470,7 +450,7 @@ export function ChatProvider({
             console.log('Creating message with model:', model);
 
             const created = await apiClient.post<{ id: string }>(
-                `${getApiUrl()}/chats/${chatID}/messages`,
+                `${API_URL}/chats/${chatID}/messages`,
                 {
                     chat_id: chatID,
                     role: 'user',
@@ -507,7 +487,7 @@ export function ChatProvider({
     function newWebSocket(tkn: string, chatID: string) {
         console.log('Creating new WebSocket with model:', selectedModel);
         const sock = new ChatSocket(
-            getApiUrl(),
+            API_URL,
             () => tkn,
             () => pluginThreadMeta ? String(pluginThreadMeta.chatId) : chatID,
             () => currentMessageID,
@@ -565,15 +545,6 @@ export function ChatProvider({
         if (!messageID) {
             console.error(`Frame got no message_id`, frame)
             return newMessages;
-        }
-
-        // Check if message already exists (deduplication for optimistic updates)
-        const existingMessage = newMessages.find(m => m.id === messageID);
-
-        // For user messages: if already exists with same text, skip (optimistic duplicate)
-        if (existingMessage && existingMessage.role === 'user') {
-            console.log('Dedup: skipping duplicate user message', messageID);
-            return prevMessages; // Return unchanged
         }
 
         let messageIdx = newMessages.findIndex((item) => {
@@ -666,8 +637,6 @@ export function ChatProvider({
         error,
         setError,
         retryLastMessage,
-        selectedTeamId,
-        selectTeam,
     };
 
     return (

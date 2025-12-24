@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity } from 'react-native';
-import { getApiUrl, API_URL } from '../../config';
+import { API_URL } from '../../config';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
@@ -122,7 +122,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                 }
             } else if (attachment.id) {
                 images.push({
-                    uri: `${getApiUrl()}/attachments/${attachment.id}`,
+                    uri: `${API_URL}/attachments/${attachment.id}`,
                     headers: {
                         Authorization: `Bearer ${token}`
                     }
@@ -348,7 +348,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         });
 
     const headerTitle = externalTitle || activeChat?.title || 'New Chat';
-    const headerSubtitle = '';
+    const headerSubtitle = assistantWorking ? 'Assistant is thinking…' : 'Available to help';
 
     return (
         <View style={styles.container}>

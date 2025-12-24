@@ -9,7 +9,7 @@ import {
 import { styles } from './styles.tsx';
 import React from 'react';
 import { Props, CONNECTORS } from './models.tsx';
-import { NavArrowRight, Mail, Calendar, WarningCircle, Trash, Github } from 'iconoir-react-native';
+import { NavArrowRight, Mail, Calendar, WarningCircle, Trash } from 'iconoir-react-native';
 import { useConnectors } from './context.tsx';
 import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight.ts';
 
@@ -28,12 +28,8 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
         () => integrations.filter(p => p.provider === 'calendar'),
         [integrations],
     );
-    const githubIntegrations = React.useMemo(
-        () => integrations.filter(p => p.provider === 'github'),
-        [integrations],
-    );
     const otherIntegrations = React.useMemo(
-        () => integrations.filter(p => p.provider !== 'gmail' && p.provider !== 'imap' && p.provider !== 'calendar' && p.provider !== 'github'),
+        () => integrations.filter(p => p.provider !== 'gmail' && p.provider !== 'imap' && p.provider !== 'calendar'),
         [integrations],
     );
 
@@ -76,16 +72,6 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
         } catch (err) {
             console.warn('Failed to start Google Calendar OAuth', err);
             setErrorMsg(err instanceof Error ? err.message : 'Failed to start Google Calendar OAuth');
-        }
-    };
-
-    const handleAddGitHubAccount = async () => {
-        setErrorMsg(null);
-        try {
-            await startOAuth('github');
-        } catch (err) {
-            console.warn('Failed to start GitHub OAuth', err);
-            setErrorMsg(err instanceof Error ? err.message : 'Failed to start GitHub OAuth');
         }
     };
 
@@ -156,7 +142,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                         name={integration.name}
                                         enabled={!!integration.connected}
                                         glyph={details?.glyph || 'calendar'}
-                                        color={details?.color || palette.green}
+                                        color={details?.color || tokyoNight.calendar}
                                         configID={integration.id}
                                         statusText={getIntegrationStatus(integration)}
                                         onDelete={() => deleteIntegration(integration.id)}
@@ -171,45 +157,6 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                             <View style={styles.emptyRow}>
                                 <Text style={styles.emptyText}>
                                     No Google Calendar accounts connected yet
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
-                    <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitle}>GitHub</Text>
-                        <Pressable
-                            style={styles.addAccountButton}
-                            onPress={handleAddGitHubAccount}
-                            accessibilityLabel="Add GitHub account"
-                        >
-                            <Text style={styles.addAccountButtonText}>Add account</Text>
-                        </Pressable>
-                    </View>
-                    <View style={styles.card}>
-                        {githubIntegrations.map((integration, i) => {
-                            const details = getConnectorDetails(integration.provider);
-                            return (
-                                <View key={integration.id}>
-                                    <Item
-                                        name={integration.name}
-                                        enabled={!!integration.connected}
-                                        glyph={details?.glyph || 'github'}
-                                        color={details?.color || palette.magenta}
-                                        configID={integration.id}
-                                        statusText={getIntegrationStatus(integration)}
-                                        onDelete={() => deleteIntegration(integration.id)}
-                                    />
-                                    {i < githubIntegrations.length - 1 && (
-                                        <View style={styles.divider} />
-                                    )}
-                                </View>
-                            );
-                        })}
-                        {githubIntegrations.length === 0 && (
-                            <View style={styles.emptyRow}>
-                                <Text style={styles.emptyText}>
-                                    No GitHub accounts connected yet
                                 </Text>
                             </View>
                         )}
@@ -320,10 +267,8 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
         <View style={styles.row}>
             <View style={[styles.iconBubble, { backgroundColor: color }]}>
                 {glyph === 'mail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph === 'gmail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph === 'calendar' && <Calendar width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph === 'github' && <Github width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph !== 'mail' && glyph !== 'gmail' && glyph !== 'calendar' && glyph !== 'github' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph !== 'mail' && glyph !== 'calendar' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
             </View>
             <View style={styles.titleBlock}>
                 <Text style={styles.rowTitle} numberOfLines={1}>

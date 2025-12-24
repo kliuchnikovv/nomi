@@ -18,7 +18,7 @@ import { styles, markdownStyles } from './styles.tsx';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { authStore } from '../../../apiClient';
-import { getApiUrl, API_URL } from '../../../config';
+import { API_URL } from '../../../config';
 
 function AttachmentImage({ attachment }: { attachment: Attachment }) {
     const [token, setToken] = useState<string | null>(authStore.getToken());
@@ -34,7 +34,7 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
     const source = attachment.uri
         ? { uri: attachment.uri }
         : {
-            uri: `${getApiUrl()}/attachments/${attachment.id}`,
+            uri: `${API_URL}/attachments/${attachment.id}`,
             headers: { Authorization: `Bearer ${token}` }
         };
 

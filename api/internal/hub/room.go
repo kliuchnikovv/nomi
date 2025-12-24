@@ -263,7 +263,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	// We need to parse it to Frame.
 	// Wait, we defined ClientMessage with Payload []byte.
 
-	// Helper to broadcast to all clients
+	// Helper to broadcast
 	broadcast := func(f Frame) {
 		b, _ := json.Marshal(f)
 		for client := range r.clients {
@@ -275,27 +275,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 	}
-
-	// Helper to broadcast to all clients EXCEPT the sender
-	// Used for user messages to avoid duplication (frontend adds them optimistically)
-	broadcastExcept := func(f Frame, sender *Client) {
-		b, _ := json.Marshal(f)
-		for client := range r.clients {
-			if client == sender {
-				continue // Skip sender - they already have this message
-			}
-			select {
-			case client.send <- b:
-			default:
-				close(client.send)
-				delete(r.clients, client)
-			}
-		}
-	}
-
-	// Suppress unused variable warning
-	_ = broadcast
-	_ = broadcastExcept
 
 	// Parse
 	// We can use a temporary struct or just Frame if it matches.
@@ -364,7 +343,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			r.logger.Error("failed to save user message", zap.Error(err))
 		}
 
-		// 3. Broadcast to ALL clients (deduplication handled client-side)
+		// 3. Broadcast to ALL (including sender)
 		broadcast(frame)
 
 		// 4. Forward to LLM

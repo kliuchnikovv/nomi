@@ -32,7 +32,6 @@ type OAuthHandler struct {
 	oidcProviders       map[string]*oidc.Provider
 	gmailIntegration    *plugins.GmailIntegration
 	calendarIntegration *plugins.CalendarIntegration
-	githubIntegration   *plugins.GitHubIntegration
 	sessionTTL          time.Duration
 }
 
@@ -61,12 +60,6 @@ func NewOAuthHandler(
 		return nil, fmt.Errorf("failed to init calendar integration: %w", err)
 	}
 
-	githubIntegration, err := plugins.NewGitHubIntegration(logger, cfg, storage)
-	if err != nil {
-		// GitHub is optional, log warning but don't fail
-		logger.Warn("failed to init github integration, GitHub OAuth will be unavailable", zap.Error(err))
-	}
-
 	return &OAuthHandler{
 		cfg:                 cfg,
 		storage:             storage,
@@ -74,7 +67,6 @@ func NewOAuthHandler(
 		oidcProviders:       oidcProviders,
 		gmailIntegration:    gmailIntegration,
 		calendarIntegration: calendarIntegration,
-		githubIntegration:   githubIntegration,
 		sessionTTL:          5 * time.Minute,
 	}, nil
 }
@@ -88,7 +80,7 @@ func (h *OAuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	if providerName != plugins.ProviderGmail && providerName != plugins.ProviderCalendar && providerName != plugins.ProviderGitHub {
+	if providerName != plugins.ProviderGmail && providerName != plugins.ProviderCalendar {
 		if _, err := h.providerConfig(providerName); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -140,12 +132,6 @@ func (h *OAuthHandler) Redirect(c *gin.Context) {
 		authURL = h.gmailIntegration.GetAuthURL(session.State)
 	} else if providerName == plugins.ProviderCalendar {
 		authURL = h.calendarIntegration.GetAuthURL(session.State)
-	} else if providerName == plugins.ProviderGitHub {
-		if h.githubIntegration == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "GitHub OAuth not configured"})
-			return
-		}
-		authURL = h.githubIntegration.GetAuthURL(session.State)
 	} else {
 		oauthCfg, err := h.providerConfig(providerName)
 		if err != nil {
@@ -169,7 +155,7 @@ func (h *OAuthHandler) Redirect(c *gin.Context) {
 func (h *OAuthHandler) Callback(c *gin.Context) {
 	ctx := c.Request.Context()
 	providerName := c.Param("provider")
-	if providerName != plugins.ProviderGmail && providerName != plugins.ProviderCalendar && providerName != plugins.ProviderGitHub {
+	if providerName != plugins.ProviderGmail && providerName != plugins.ProviderCalendar {
 		if _, err := h.providerConfig(providerName); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -237,21 +223,6 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 			return
 		}
 		email, err = h.calendarIntegration.HandleCallback(ctx, code, user)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-	} else if providerName == plugins.ProviderGitHub {
-		if h.githubIntegration == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "GitHub OAuth not configured"})
-			return
-		}
-		user, err := h.storage.GetUserByID(ctx, session.UserID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
-			return
-		}
-		email, err = h.githubIntegration.HandleCallback(ctx, code, user)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

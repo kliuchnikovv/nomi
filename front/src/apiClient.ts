@@ -1,8 +1,5 @@
-import { getApiUrl } from './config';
+import { API_URL } from './config';
 import { SidebarChatsResponse, SidebarChatMessagesResponse, SidebarResponse } from './screens/rightsidebar/models';
-
-// Helper to get current API URL (reads from cache, falls back to default)
-const API_URL = () => getApiUrl();
 
 // Хранилище для функций из AuthContext. Изначально пустое.
 export const authStore = {
@@ -88,7 +85,7 @@ async function call(endpoint: string, options: RequestInit = {}) {
 }
 
 async function startOAuthLogin(provider: string): Promise<string> {
-    const response = await apiClient.post<{ auth_url: string }>(`${API_URL()}/oauth/${provider}/login`, {});
+    const response = await apiClient.post<{ auth_url: string }>(`${API_URL}/oauth/${provider}/login`, {});
     if (response?.auth_url) {
         return response.auth_url;
     }
@@ -109,7 +106,7 @@ export const apiClient = {
             type: file.type,
         } as any);
 
-        const response = await fetch(`${API_URL()}/upload`, {
+        const response = await fetch(`${API_URL}/upload`, {
             method: 'POST',
             body: formData,
             headers: {
@@ -136,23 +133,23 @@ export const pluginsApi = {
         integration_id?: string;
         id?: string;
         params?: Record<string, any>;
-    }>>(`${API_URL()}/plugins`),
+    }>>(`${API_URL}/plugins`),
     enablePlugin: (name: string, integrationId?: string) =>
         apiClient.post<void>(
-            `${API_URL()}/plugins/${name}/enable`,
+            `${API_URL}/plugins/${name}/enable`,
             integrationId ? { integration_id: integrationId } : {},
         ),
     disablePlugin: (name: string, integrationId?: string) =>
         apiClient.post<void>(
-            `${API_URL()}/plugins/${name}/disable`,
+            `${API_URL}/plugins/${name}/disable`,
             integrationId ? { integration_id: integrationId } : {},
         ),
-    getPluginState: (name: string) => apiClient.get<{ enabled: boolean; state: Record<string, any> }>(`${API_URL()}/plugins/${name}/state`),
-    updatePluginState: (name: string, state: Record<string, any>) => apiClient.put<void>(`${API_URL()}/plugins/${name}/state`, state),
+    getPluginState: (name: string) => apiClient.get<{ enabled: boolean; state: Record<string, any> }>(`${API_URL}/plugins/${name}/state`),
+    updatePluginState: (name: string, state: Record<string, any>) => apiClient.put<void>(`${API_URL}/plugins/${name}/state`, state),
     startOAuthLogin,
-    syncGmail: () => apiClient.post<{ message: string }>(`${API_URL()}/plugins/gmail/sync`, {}),
+    syncGmail: () => apiClient.post<{ message: string }>(`${API_URL}/plugins/gmail/sync`, {}),
     syncImap: (config: { host: string; username: string; password: string }) =>
-        apiClient.post<{ status: string }>(`${API_URL()}/plugins/imap/sync`, config),
+        apiClient.post<{ status: string }>(`${API_URL}/plugins/imap/sync`, config),
 };
 
 export const integrationsApi = {
@@ -174,10 +171,10 @@ export const integrationsApi = {
         state?: Record<string, any>;
         params?: Record<string, any>;
         info?: Record<string, any>;
-    }>>(`${API_URL()}/integrations`),
+    }>>(`${API_URL}/integrations`),
     update: (id: string, body: { name?: string; enabled?: boolean }) =>
-        apiClient.patch<void>(`${API_URL()}/integrations/${id}`, body),
-    delete: (id: string) => apiClient.delete<void>(`${API_URL()}/integrations/${id}`),
+        apiClient.patch<void>(`${API_URL}/integrations/${id}`, body),
+    delete: (id: string) => apiClient.delete<void>(`${API_URL}/integrations/${id}`),
 };
 
 export const inboxApi = {
@@ -187,12 +184,12 @@ export const inboxApi = {
         params.append('limit', String(limit));
         if (provider) params.append('provider', provider);
         if (integrationId) params.append('integration_id', integrationId);
-        return apiClient.get<any>(`${API_URL()}/inbox?${params.toString()}`);
+        return apiClient.get<any>(`${API_URL}/inbox?${params.toString()}`);
     },
     getInboxMessage: (id: string) =>
-        apiClient.get<any>(`${API_URL()}/inbox/${id}`),
+        apiClient.get<any>(`${API_URL}/inbox/${id}`),
     markAsRead: (id: string) =>
-        apiClient.patch<void>(`${API_URL()}/inbox/${id}/read`),
+        apiClient.patch<void>(`${API_URL}/inbox/${id}/read`),
     executeAction: (messageId: string, action: {
         command: string;
         agent?: string;
@@ -203,38 +200,38 @@ export const inboxApi = {
             success: boolean;
             message: string;
             result?: string;
-        }>(`${API_URL()}/inbox/${messageId}/actions`, action),
+        }>(`${API_URL}/inbox/${messageId}/actions`, action),
 };
 
 export const sidebarApi = {
-    getSidebar: () => apiClient.get<SidebarResponse>(`${API_URL()}/sidebar`),
+    getSidebar: () => apiClient.get<SidebarResponse>(`${API_URL}/sidebar`),
     getChats: (provider: string, integrationId?: string) =>
         apiClient.get<SidebarChatsResponse>(
-            `${API_URL()}/sidebar/${provider}/chats${integrationId ? `?integration_id=${integrationId}` : ''}`,
+            `${API_URL}/sidebar/${provider}/chats${integrationId ? `?integration_id=${integrationId}` : ''}`,
         ),
     getChatMessages: (provider: string, chatId: string | number, integrationId?: string) =>
         apiClient.get<SidebarChatMessagesResponse>(
-            `${API_URL()}/sidebar/${provider}/chats/${chatId}${integrationId ? `?integration_id=${integrationId}` : ''}`,
+            `${API_URL}/sidebar/${provider}/chats/${chatId}${integrationId ? `?integration_id=${integrationId}` : ''}`,
         ),
     sendChatMessage: (provider: string, chatId: string | number, body: any) =>
-        apiClient.post(`${API_URL()}/sidebar/${provider}/chats/${chatId}/messages`, body),
+        apiClient.post(`${API_URL}/sidebar/${provider}/chats/${chatId}/messages`, body),
     executeMessageAction: (provider: string, messageId: string, body: any) =>
-        apiClient.post(`${API_URL()}/sidebar/${provider}/messages/${messageId}/actions`, body),
+        apiClient.post(`${API_URL}/sidebar/${provider}/messages/${messageId}/actions`, body),
 };
 
 export const modelsApi = {
     getModels: async () => {
-        const response = await apiClient.get<{ models: any[] }>(`${API_URL()}/models`);
+        const response = await apiClient.get<{ models: any[] }>(`${API_URL}/models`);
         return response?.models || [];
     },
 };
 
 export const pluginChatsApi = {
     deleteChat: (chatId: string | number) =>
-        apiClient.delete<void>(`${API_URL()}/plugin_chats/${chatId}`),
+        apiClient.delete<void>(`${API_URL}/plugin_chats/${chatId}`),
 };
 
 export const authApi = {
-    getMe: () => apiClient.get<any>(`${API_URL()}/auth/me`),
-    updateMe: (body: { web_search_enabled?: boolean }) => apiClient.put<any>(`${API_URL()}/auth/me`, body),
+    getMe: () => apiClient.get<any>(`${API_URL}/auth/me`),
+    updateMe: (body: { web_search_enabled?: boolean }) => apiClient.put<any>(`${API_URL}/auth/me`, body),
 };
