@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/clients/jules"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -259,14 +260,9 @@ func (j *julesPlugin) handleSend(c *gin.Context) {
 	// Assuming "user_id" is injected into context by auth middleware
 	// If not, we can't securely get the integration.
 	// Let's assume the standard way:
-	val, exists := c.Get("user")
-	if !exists {
-		c.JSON(401, gin.H{"error": "unauthorized"})
-		return
-	}
-	user, ok := val.(*storage.User)
+	user, ok := auth.GetUserFromContext(c.Request.Context())
 	if !ok {
-		c.JSON(500, gin.H{"error": "invalid user context"})
+		c.JSON(401, gin.H{"error": "unauthorized"})
 		return
 	}
 

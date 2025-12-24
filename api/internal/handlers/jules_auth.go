@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
@@ -32,14 +33,9 @@ func (h *JulesAuthHandler) Connect(c *gin.Context) {
 		return
 	}
 
-	val, exists := c.Get("user")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	user, ok := val.(*storage.User)
+	user, ok := auth.GetUserFromContext(c.Request.Context())
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
