@@ -602,6 +602,31 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     logger.warning("[WS] No payload: op=%s session_id=%s", frame.op, session_id)
                     continue
 
+                # Check if tools are provided in MESSAGE payload (e.g., from scheduler)
+                # If so, use those tools instead of the ones from TOOLS frame
+                msg_tools = payload.get("tools")
+                if msg_tools is not None:
+                    logger.info(
+                        "[WS] Tools from MESSAGE payload: session_id=%s tools_count=%d",
+                        session_id,
+                        len(msg_tools) if isinstance(msg_tools, list) else 0,
+                    )
+                    # Convert tools from payload to ToolSpec format
+                    try:
+                        from agno.tools.models import ToolSpec
+                        tools_specs = []
+                        if isinstance(msg_tools, list):
+                            for tool_dict in msg_tools:
+                                if isinstance(tool_dict, dict):
+                                    tools_specs.append(ToolSpec(
+                                        name=tool_dict.get("name", ""),
+                                        description=tool_dict.get("description", ""),
+                                        parameters=tool_dict.get("parameters", {})
+                                    ))
+                        logger.info("[WS] Converted tools from payload: count=%d", len(tools_specs))
+                    except Exception as e:
+                        logger.warning("[WS] Failed to convert tools from payload: %s", e)
+
                 # Check if model changed in MESSAGE payload and update current_model_name
                 # This is needed when thinking mode auto-selects a different model
                 msg_model = payload.get("model")

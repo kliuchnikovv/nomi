@@ -15,6 +15,7 @@ type CreateTaskRequest struct {
 	UserID   uuid.UUID       `json:"user_id"`
 	ChatID   uuid.UUID       `json:"chat_id"`
 	Message  string          `json:"message"`
+	Tools    json.RawMessage `json:"tools"`     // Tool specifications from agent creation time
 	Time     string          `json:"time"`      // ISO 8601 or similar
 	Cron     string          `json:"cron"`      // Optional
 	DelaySec int             `json:"delay_sec"` // Optional, if time is not set
@@ -69,6 +70,7 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		ChatID:    req.ChatID,
 		Type:      "agent_message",
 		Payload:   datatypes.JSON(payloadBytes),
+		Tools:     datatypes.JSON(req.Tools), // Save tools from creation time
 		CronExpr:  req.Cron,
 		ExecuteAt: executeAt,
 		Status:    storage.TaskStatusPending,

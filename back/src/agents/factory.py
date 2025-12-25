@@ -131,8 +131,8 @@ class AgentFactory:
 
         # Always add SchedulerTools for Genie
         if not agent_type or agent_type.lower() == "genie":
-            # Pass user_id and chat_id to SchedulerTools for context
-            tools.append(SchedulerTools(user_id=user_id, chat_id=chat_id))
+            # Pass user_id, chat_id, AND tools_specs to SchedulerTools for context
+            tools.append(SchedulerTools(user_id=user_id, chat_id=chat_id, tools_specs=tools_specs))
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 

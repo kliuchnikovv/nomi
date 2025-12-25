@@ -134,6 +134,15 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 
 	// For now, let's construct a minimal valid frame and inject.
 	msgID := uuid.New()
+	
+	// Unmarshal tools from task if they exist
+	var tools interface{}
+	if len(task.Tools) > 0 {
+		if err := json.Unmarshal(task.Tools, &tools); err != nil {
+			s.logger.Warn("failed to unmarshal task tools", zap.Error(err))
+		}
+	}
+	
 	frame := Frame{
 		ChatID:    task.ChatID,
 		Operation: MessageOperation,
@@ -143,6 +152,7 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 			MessageID: msgID,
 			Message:   payload.Message,
 			Role:      "system",
+			Tools:     tools, // Include tools from task creation time
 		},
 	}
 	frameBytes, _ := json.Marshal(frame)

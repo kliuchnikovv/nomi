@@ -1,7 +1,8 @@
-from typing import Optional
+from typing import Optional, List, Any
 import os
 from datetime import datetime, timedelta
 import requests
+import json
 from agno.agent import Agent
 from agno.tools import Toolkit
 
@@ -9,13 +10,14 @@ class SchedulerTools(Toolkit):
     # Default to Railway production URL, can be overridden by SCHEDULER_API_URL env var
     DEFAULT_API_URL = "https://genie-api-production-7074.up.railway.app/api"
     
-    def __init__(self, api_url: Optional[str] = None, user_id: Optional[str] = None, chat_id: Optional[str] = None):
+    def __init__(self, api_url: Optional[str] = None, user_id: Optional[str] = None, chat_id: Optional[str] = None, tools_specs: Optional[List[Any]] = None):
         super().__init__(name="scheduler_tools")
         # Priority: explicit param > env var > default production URL
         self.api_url = api_url or os.getenv("SCHEDULER_API_URL", self.DEFAULT_API_URL)
         self.api_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key") # Default for dev
         self._user_id = user_id
         self._chat_id = chat_id
+        self._tools_specs = tools_specs or []
         self.register(self.schedule_task)
 
     def schedule_task(self, agent: Agent, message: str, time: Optional[str] = None, delay_seconds: Optional[int] = None, cron: Optional[str] = None) -> str:
@@ -58,10 +60,27 @@ class SchedulerTools(Toolkit):
             # Or ask the user? No, user doesn't know UUIDs.
             return "Error: Could not determine User ID or Chat ID from agent context."
 
+        # Serialize tools_specs to JSON format expected by Go API
+        tools_json = None
+        if self._tools_specs:
+            try:
+                # Convert tool specs to JSON-serializable format
+                tools_json = [
+                    {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.parameters if hasattr(tool, 'parameters') else {}
+                    }
+                    for tool in self._tools_specs
+                ]
+            except Exception as e:
+                print(f"Warning: Could not serialize tools: {e}")
+
         payload = {
             "user_id": user_id,
             "chat_id": chat_id,
             "message": message,
+            "tools": tools_json,  # Include tools from creation time
             "time": time,
             "delay_sec": delay_seconds,
             "cron": cron

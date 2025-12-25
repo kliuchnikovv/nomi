@@ -25,6 +25,7 @@ type Task struct {
 	ChatID    uuid.UUID      `gorm:"type:uuid;not null"`
 	Type      string         `gorm:"type:varchar(50);not null"` // e.g. "agent_message"
 	Payload   datatypes.JSON `gorm:"type:jsonb;not null"`       // e.g. {"message": "check news"}
+	Tools     datatypes.JSON `gorm:"type:jsonb"`                // Tools that were active when task was created
 	CronExpr  string         `gorm:"type:varchar(50)"`          // Optional cron expression
 	ExecuteAt time.Time      `gorm:"not null"`
 	Status    TaskStatus     `gorm:"type:varchar(20);default:'pending';not null"`
