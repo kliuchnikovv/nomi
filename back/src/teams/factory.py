@@ -15,7 +15,13 @@ class TeamFactory:
         self.model = model
         self.debug_mode = debug_mode
 
-    async def build(self, command_desc: dict, session_id: str) -> Team:
+    async def build(
+        self,
+        command_desc: dict,
+        session_id: str,
+        user_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
+    ) -> Team:
         logger.info("[WS] Building Team from command description: %s", command_desc)
         
         team_type = command_desc.get("type", "").lower()
@@ -52,7 +58,9 @@ class TeamFactory:
             return DevelopmentTeam(
                 model=self.model,
                 db=self.db,
-                debug_mode=self.debug_mode
+                debug_mode=self.debug_mode,
+                user_id=user_id,
+                chat_id=chat_id,
             )
 
         # 2. Dynamic Team Building (Fallback)

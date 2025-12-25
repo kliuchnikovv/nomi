@@ -221,6 +221,8 @@ class LLMWebSocketSession:
                 self.agent = await team_factory.build(
                     command_desc=self.command_desc,
                     session_id=self.session_id,
+                    user_id=self.session_id,
+                    chat_id=self.chat_id_param,
                 )
             else:
                 self.agent = await self.agent_factory.build(
