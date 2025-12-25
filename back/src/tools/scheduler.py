@@ -6,10 +6,12 @@ from agno.agent import Agent
 from agno.tools import Toolkit
 
 class SchedulerTools(Toolkit):
-    def __init__(self, api_url: str = "http://localhost:8080/api"):
+    def __init__(self, api_url: str = "http://localhost:8080/api", user_id: Optional[str] = None, chat_id: Optional[str] = None):
         super().__init__(name="scheduler_tools")
         self.api_url = api_url
         self.api_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key") # Default for dev
+        self._user_id = user_id
+        self._chat_id = chat_id
         self.register(self.schedule_task)
 
     def schedule_task(self, agent: Agent, message: str, time: Optional[str] = None, delay_seconds: Optional[int] = None, cron: Optional[str] = None) -> str:
@@ -25,37 +27,27 @@ class SchedulerTools(Toolkit):
         Returns:
             str: Confirmation message with Task ID or error.
         """
-
-        # Get context from Agent (chat_id, user_id)
-        # Note: Agno Agent might not expose these directly in tool signature unless passed.
-        # But we can try to inspect the agent state or require the user to provide it?
-        # Actually, the Agent usually runs in a context where we know the chat_id.
-        # In this project, `genie.py` or the runner usually has context.
-
-        # However, `agent` argument is passed by Agno.
-        # We need `chat_id` and `user_id`.
-        # These are usually available in `agent.storage` or `agent.context`.
-
-        # Let's assume for now we can extract them from environment or Agent metadata if available.
-        # If not, we might fail.
-
-        # HACK: For now, we need to pass chat_id/user_id.
-        # But the LLM doesn't know them.
-        # The Python backend knows them when it receives the request.
-        # We can inject them into the Tool instance when creating the Agent for the request.
-
-        # But `SchedulerTools` is initialized once?
-        # No, we can initialize it per request or use a context var.
-
-        # Let's look at how other tools work.
-        pass
-
-        # To implement this correctly, we need the user_id and chat_id.
-        # We will retrieve them from the agent's context if available,
-        # or we rely on the caller to configure the tool with them.
-
-        user_id = agent.context.get("user_id") if agent.context else None
-        chat_id = agent.context.get("chat_id") if agent.context else None
+        # Try to get context from multiple sources:
+        # 1. Instance variables (set at init time)
+        # 2. Agent's context attribute (if available)
+        # 3. Agent's session_state (if available)
+        
+        user_id = self._user_id
+        chat_id = self._chat_id
+        
+        # Try agent.context if instance vars not set
+        if not user_id or not chat_id:
+            agent_context = getattr(agent, 'context', None)
+            if agent_context and isinstance(agent_context, dict):
+                user_id = user_id or agent_context.get("user_id")
+                chat_id = chat_id or agent_context.get("chat_id")
+        
+        # Try agent.session_state as fallback
+        if not user_id or not chat_id:
+            session_state = getattr(agent, 'session_state', None)
+            if session_state and isinstance(session_state, dict):
+                user_id = user_id or session_state.get("user_id")
+                chat_id = chat_id or session_state.get("chat_id")
 
         if not user_id or not chat_id:
             # Fallback: try to find them in env or global state?
