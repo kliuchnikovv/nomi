@@ -105,7 +105,8 @@ export default function MessageScreen(props: Props) {
     const containerStylesByType: Record<Role, (ViewStyle | TextStyle | ImageStyle)[]> = {
         user: [styles.bubble, styles.userBubble],
         assistant: [styles.bubble, styles.assistantBubble],
-        daemon: [styles.bubble, styles.bubbleDaemon]
+        daemon: [styles.bubble, styles.bubbleDaemon],
+        system: [styles.bubble, styles.systemBubble]
     };
 
     const isDaemon = props.message.role === 'daemon';

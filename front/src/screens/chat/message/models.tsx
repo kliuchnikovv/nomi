@@ -6,7 +6,7 @@ export type Props = {
     onActionPress?: (action: Action) => Promise<void>
 }
 
-export type Role = 'user' | 'assistant' | 'daemon';
+export type Role = 'user' | 'assistant' | 'daemon' | 'system';
 
 // Content part types for inline rendering
 export type TextPart = {

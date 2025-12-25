@@ -137,7 +137,7 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 		Operation: MessageOperation,
 		Payload: Payload{
 			Message: payload.Message,
-			Role:    "user",
+			Role:    "system",
 		},
 	}
 	frameBytes, _ := json.Marshal(frame)

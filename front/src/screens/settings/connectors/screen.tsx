@@ -130,275 +130,280 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
             <Pressable style={styles.backdrop} onPress={onClose} />
             <View style={styles.sheet}>
                 <Text style={styles.dialogTitle}>Apps & connectors</Text>
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={{ flex: 1 }}
                 >
-                    <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitle}>Gmail accounts</Text>
-                        <Pressable
-                            style={styles.addAccountButton}
-                            onPress={handleAddGmailAccount}
-                            accessibilityLabel="Add Gmail account"
-                        >
-                            <Text style={styles.addAccountButtonText}>Add account</Text>
-                        </Pressable>
-                    </View>
-                    <View style={styles.card}>
-                        {gmailIntegrations.map((integration, i) => {
-                            const details = getConnectorDetails(integration.provider);
-                            return (
-                                <View key={integration.id}>
-                                    <Item
-                                        name={integration.name}
-                                        enabled={!!integration.connected}
-                                        glyph={details?.glyph || 'application'}
-                                        color={details?.color || palette.blue}
-                                        configID={integration.id}
-                                        statusText={getIntegrationStatus(integration)}
-                                        onDelete={() => deleteIntegration(integration.id)}
-                                    />
-                                    {i < gmailIntegrations.length - 1 && (
-                                        <View style={styles.divider} />
-                                    )}
-                                </View>
-                            );
-                        })}
-                        {gmailIntegrations.length === 0 && (
-                            <View style={styles.emptyRow}>
-                                <Text style={styles.emptyText}>
-                                    No Gmail accounts connected yet
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
-                    <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitle}>Google Calendar</Text>
-                        <Pressable
-                            style={styles.addAccountButton}
-                            onPress={handleAddCalendarAccount}
-                            accessibilityLabel="Add Google Calendar account"
-                        >
-                            <Text style={styles.addAccountButtonText}>Add account</Text>
-                        </Pressable>
-                    </View>
-                    <View style={styles.card}>
-                        {calendarIntegrations.map((integration, i) => {
-                            const details = getConnectorDetails(integration.provider);
-                            return (
-                                <View key={integration.id}>
-                                    <Item
-                                        name={integration.name}
-                                        enabled={!!integration.connected}
-                                        glyph={details?.glyph || 'calendar'}
-                                        color={details?.color || palette.green}
-                                        configID={integration.id}
-                                        statusText={getIntegrationStatus(integration)}
-                                        onDelete={() => deleteIntegration(integration.id)}
-                                    />
-                                    {i < calendarIntegrations.length - 1 && (
-                                        <View style={styles.divider} />
-                                    )}
-                                </View>
-                            );
-                        })}
-                        {calendarIntegrations.length === 0 && (
-                            <View style={styles.emptyRow}>
-                                <Text style={styles.emptyText}>
-                                    No Google Calendar accounts connected yet
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
-                    <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitle}>GitHub</Text>
-                        <Pressable
-                            style={styles.addAccountButton}
-                            onPress={handleAddGitHubAccount}
-                            accessibilityLabel="Add GitHub account"
-                        >
-                            <Text style={styles.addAccountButtonText}>Add account</Text>
-                        </Pressable>
-                    </View>
-                    <View style={styles.card}>
-                        {githubIntegrations.map((integration, i) => {
-                            const details = getConnectorDetails(integration.provider);
-                            return (
-                                <View key={integration.id}>
-                                    <Item
-                                        name={integration.name}
-                                        enabled={!!integration.connected}
-                                        glyph={details?.glyph || 'github'}
-                                        color={details?.color || palette.magenta}
-                                        configID={integration.id}
-                                        statusText={getIntegrationStatus(integration)}
-                                        onDelete={() => deleteIntegration(integration.id)}
-                                    />
-                                    {i < githubIntegrations.length - 1 && (
-                                        <View style={styles.divider} />
-                                    )}
-                                </View>
-                            );
-                        })}
-                        {githubIntegrations.length === 0 && (
-                            <View style={styles.emptyRow}>
-                                <Text style={styles.emptyText}>
-                                    No GitHub accounts connected yet
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
-                    <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitle}>Jules</Text>
-                        <Pressable
-                            style={styles.addAccountButton}
-                            onPress={handleAddJulesAccount}
-                            accessibilityLabel="Add Jules account"
-                        >
-                            <Text style={styles.addAccountButtonText}>{showJulesInput ? 'Cancel' : 'Add account'}</Text>
-                        </Pressable>
-                    </View>
-
-                    {showJulesInput && (
-                        <View style={[styles.card, { marginBottom: 16, padding: 12 }]}>
-                            <Text style={{ color: palette.fg, marginBottom: 8 }}>Enter API Key:</Text>
-                            <TextInput
-                                style={{
-                                    backgroundColor: 'rgba(0,0,0,0.2)',
-                                    color: palette.fg,
-                                    borderRadius: 8,
-                                    padding: 10,
-                                    marginBottom: 12,
-                                }}
-                                value={julesApiKey}
-                                onChangeText={setJulesApiKey}
-                                placeholder="sk-..."
-                                placeholderTextColor="rgba(255,255,255,0.3)"
-                                autoCapitalize="none"
-                                secureTextEntry
-                            />
+                    <ScrollView
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <View style={styles.sectionHeaderRow}>
+                            <Text style={styles.sectionTitle}>Gmail accounts</Text>
                             <Pressable
-                                onPress={submitJulesKey}
-                                disabled={isConnectingJules || !julesApiKey.trim()}
-                                style={({ pressed }) => ({
-                                    backgroundColor: pressed ? `${palette.blue}80` : palette.blue,
-                                    padding: 12,
-                                    borderRadius: 8,
-                                    alignItems: 'center',
-                                    opacity: (!julesApiKey.trim() || isConnectingJules) ? 0.5 : 1,
-                                })}
+                                style={styles.addAccountButton}
+                                onPress={handleAddGmailAccount}
+                                accessibilityLabel="Add Gmail account"
                             >
-                                {isConnectingJules ? (
-                                    <ActivityIndicator color="#fff" />
-                                ) : (
-                                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>Connect</Text>
-                                )}
+                                <Text style={styles.addAccountButtonText}>Add account</Text>
                             </Pressable>
                         </View>
-                    )}
-
-                    <View style={styles.card}>
-                        {julesIntegrations.map((integration, i) => {
-                            const details = getConnectorDetails(integration.provider);
-                            return (
-                                <View key={integration.id}>
-                                    <Item
-                                        name={integration.name}
-                                        enabled={!!integration.connected}
-                                        glyph={details?.glyph || 'jules'}
-                                        color={details?.color || palette.orange}
-                                        configID={integration.id}
-                                        statusText={getIntegrationStatus(integration)}
-                                        onDelete={() => deleteIntegration(integration.id)}
-                                    />
-                                    {i < julesIntegrations.length - 1 && (
-                                        <View style={styles.divider} />
-                                    )}
+                        <View style={styles.card}>
+                            {gmailIntegrations.map((integration, i) => {
+                                const details = getConnectorDetails(integration.provider);
+                                return (
+                                    <View key={integration.id}>
+                                        <Item
+                                            name={integration.name}
+                                            enabled={!!integration.connected}
+                                            glyph={details?.glyph || 'application'}
+                                            color={details?.color || palette.blue}
+                                            configID={integration.id}
+                                            statusText={getIntegrationStatus(integration)}
+                                            onDelete={() => deleteIntegration(integration.id)}
+                                        />
+                                        {i < gmailIntegrations.length - 1 && (
+                                            <View style={styles.divider} />
+                                        )}
+                                    </View>
+                                );
+                            })}
+                            {gmailIntegrations.length === 0 && (
+                                <View style={styles.emptyRow}>
+                                    <Text style={styles.emptyText}>
+                                        No Gmail accounts connected yet
+                                    </Text>
                                 </View>
-                            );
-                        })}
-                        {julesIntegrations.length === 0 && !showJulesInput && (
-                            <View style={styles.emptyRow}>
-                                <Text style={styles.emptyText}>
-                                    No Jules accounts connected yet
-                                </Text>
+                            )}
+                        </View>
+
+                        <View style={styles.sectionHeaderRow}>
+                            <Text style={styles.sectionTitle}>Google Calendar</Text>
+                            <Pressable
+                                style={styles.addAccountButton}
+                                onPress={handleAddCalendarAccount}
+                                accessibilityLabel="Add Google Calendar account"
+                            >
+                                <Text style={styles.addAccountButtonText}>Add account</Text>
+                            </Pressable>
+                        </View>
+                        <View style={styles.card}>
+                            {calendarIntegrations.map((integration, i) => {
+                                const details = getConnectorDetails(integration.provider);
+                                return (
+                                    <View key={integration.id}>
+                                        <Item
+                                            name={integration.name}
+                                            enabled={!!integration.connected}
+                                            glyph={details?.glyph || 'calendar'}
+                                            color={details?.color || palette.green}
+                                            configID={integration.id}
+                                            statusText={getIntegrationStatus(integration)}
+                                            onDelete={() => deleteIntegration(integration.id)}
+                                        />
+                                        {i < calendarIntegrations.length - 1 && (
+                                            <View style={styles.divider} />
+                                        )}
+                                    </View>
+                                );
+                            })}
+                            {calendarIntegrations.length === 0 && (
+                                <View style={styles.emptyRow}>
+                                    <Text style={styles.emptyText}>
+                                        No Google Calendar accounts connected yet
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={styles.sectionHeaderRow}>
+                            <Text style={styles.sectionTitle}>GitHub</Text>
+                            <Pressable
+                                style={styles.addAccountButton}
+                                onPress={handleAddGitHubAccount}
+                                accessibilityLabel="Add GitHub account"
+                            >
+                                <Text style={styles.addAccountButtonText}>Add account</Text>
+                            </Pressable>
+                        </View>
+                        <View style={styles.card}>
+                            {githubIntegrations.map((integration, i) => {
+                                const details = getConnectorDetails(integration.provider);
+                                return (
+                                    <View key={integration.id}>
+                                        <Item
+                                            name={integration.name}
+                                            enabled={!!integration.connected}
+                                            glyph={details?.glyph || 'github'}
+                                            color={details?.color || palette.magenta}
+                                            configID={integration.id}
+                                            statusText={getIntegrationStatus(integration)}
+                                            onDelete={() => deleteIntegration(integration.id)}
+                                        />
+                                        {i < githubIntegrations.length - 1 && (
+                                            <View style={styles.divider} />
+                                        )}
+                                    </View>
+                                );
+                            })}
+                            {githubIntegrations.length === 0 && (
+                                <View style={styles.emptyRow}>
+                                    <Text style={styles.emptyText}>
+                                        No GitHub accounts connected yet
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={styles.sectionHeaderRow}>
+                            <Text style={styles.sectionTitle}>Jules</Text>
+                            <Pressable
+                                style={styles.addAccountButton}
+                                onPress={handleAddJulesAccount}
+                                accessibilityLabel="Add Jules account"
+                            >
+                                <Text style={styles.addAccountButtonText}>{showJulesInput ? 'Cancel' : 'Add account'}</Text>
+                            </Pressable>
+                        </View>
+
+                        {showJulesInput && (
+                            <View style={[styles.card, { marginBottom: 16, padding: 12 }]}>
+                                <Text style={{ color: palette.fg, marginBottom: 8 }}>Enter API Key:</Text>
+                                <TextInput
+                                    style={{
+                                        backgroundColor: 'rgba(0,0,0,0.2)',
+                                        color: palette.fg,
+                                        borderRadius: 8,
+                                        padding: 10,
+                                        marginBottom: 12,
+                                    }}
+                                    value={julesApiKey}
+                                    onChangeText={setJulesApiKey}
+                                    placeholder="sk-..."
+                                    placeholderTextColor="rgba(255,255,255,0.3)"
+                                    autoCapitalize="none"
+                                    secureTextEntry
+                                />
+                                <Pressable
+                                    onPress={submitJulesKey}
+                                    disabled={isConnectingJules || !julesApiKey.trim()}
+                                    style={({ pressed }) => ({
+                                        backgroundColor: pressed ? `${palette.blue}80` : palette.blue,
+                                        padding: 12,
+                                        borderRadius: 8,
+                                        alignItems: 'center',
+                                        opacity: (!julesApiKey.trim() || isConnectingJules) ? 0.5 : 1,
+                                    })}
+                                >
+                                    {isConnectingJules ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Connect</Text>
+                                    )}
+                                </Pressable>
                             </View>
                         )}
-                    </View>
 
-                    {enabledTools.length > 0 && (
-                        <>
-                            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Enabled</Text>
-                            <View style={styles.card}>
-                                {enabledTools.map((integration, i) => {
-                                    const details = getConnectorDetails(integration.provider);
-                                    return (
-                                        <View key={integration.id}>
-                                            <Item
-                                                name={integration.name}
-                                                enabled={true}
-                                                glyph={details?.glyph || 'application'}
-                                                color={details?.color || palette.blue}
-                                                configID={integration.id}
-                                                statusText={getIntegrationStatus(integration)}
-                                            />
-                                            {i < enabledTools.length - 1 && (
-                                                <View style={styles.divider} />
-                                            )}
-                                        </View>
-                                    );
-                                })}
-                            </View>
-                        </>
-                    )}
+                        <View style={styles.card}>
+                            {julesIntegrations.map((integration, i) => {
+                                const details = getConnectorDetails(integration.provider);
+                                return (
+                                    <View key={integration.id}>
+                                        <Item
+                                            name={integration.name}
+                                            enabled={!!integration.connected}
+                                            glyph={details?.glyph || 'jules'}
+                                            color={details?.color || palette.orange}
+                                            configID={integration.id}
+                                            statusText={getIntegrationStatus(integration)}
+                                            onDelete={() => deleteIntegration(integration.id)}
+                                        />
+                                        {i < julesIntegrations.length - 1 && (
+                                            <View style={styles.divider} />
+                                        )}
+                                    </View>
+                                );
+                            })}
+                            {julesIntegrations.length === 0 && !showJulesInput && (
+                                <View style={styles.emptyRow}>
+                                    <Text style={styles.emptyText}>
+                                        No Jules accounts connected yet
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
 
-                    {disabledTools.length > 0 && (
-                        <>
-                            <Text style={[styles.sectionTitle, { marginTop: (enabledTools.length > 0 || disabledTools.length > 0) ? 16 : 0 }]}>
-                                Доступные интеграции
-                            </Text>
-                            <View style={styles.card}>
-                                {disabledTools.map((integration, i) => {
-                                    const details = getConnectorDetails(integration.provider);
-                                    return (
-                                        <View key={integration.id}>
-                                            <Item
-                                                name={integration.name}
-                                                enabled={false}
-                                                glyph={details?.glyph || 'application'}
-                                                color={details?.color || palette.blue}
-                                                configID={integration.id}
-                                                statusText={getIntegrationStatus(integration)}
-                                            />
-                                            {i < disabledTools.length - 1 && (
-                                                <View style={styles.divider} />
-                                            )}
-                                        </View>
-                                    );
-                                })}
-                            </View>
-                        </>
-                    )}
+                        {enabledTools.length > 0 && (
+                            <>
+                                <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Enabled</Text>
+                                <View style={styles.card}>
+                                    {enabledTools.map((integration, i) => {
+                                        const details = getConnectorDetails(integration.provider);
+                                        return (
+                                            <View key={integration.id}>
+                                                <Item
+                                                    name={integration.name}
+                                                    enabled={true}
+                                                    glyph={details?.glyph || 'application'}
+                                                    color={details?.color || palette.blue}
+                                                    configID={integration.id}
+                                                    statusText={getIntegrationStatus(integration)}
+                                                />
+                                                {i < enabledTools.length - 1 && (
+                                                    <View style={styles.divider} />
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
 
-
-                    {
-                        enabledTools.length === 0 && disabledTools.length === 0 && gmailIntegrations.length === 0 && calendarIntegrations.length === 0 && (
-                            <View style={styles.emptyRow}>
-                                <Text style={styles.emptyText}>
-                                    Нет доступных интеграций
+                        {disabledTools.length > 0 && (
+                            <>
+                                <Text style={[styles.sectionTitle, { marginTop: (enabledTools.length > 0 || disabledTools.length > 0) ? 16 : 0 }]}>
+                                    Доступные интеграции
                                 </Text>
-                            </View>
-                        )
-                    }
-                    {
-                        errorMsg && (
-                            <Text style={[styles.syncStatus, { marginTop: 20 }]}>{errorMsg}</Text>
-                        )
-                    }
-                </ScrollView >
+                                <View style={styles.card}>
+                                    {disabledTools.map((integration, i) => {
+                                        const details = getConnectorDetails(integration.provider);
+                                        return (
+                                            <View key={integration.id}>
+                                                <Item
+                                                    name={integration.name}
+                                                    enabled={false}
+                                                    glyph={details?.glyph || 'application'}
+                                                    color={details?.color || palette.blue}
+                                                    configID={integration.id}
+                                                    statusText={getIntegrationStatus(integration)}
+                                                />
+                                                {i < disabledTools.length - 1 && (
+                                                    <View style={styles.divider} />
+                                                )}
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
+
+
+                        {
+                            enabledTools.length === 0 && disabledTools.length === 0 && gmailIntegrations.length === 0 && calendarIntegrations.length === 0 && (
+                                <View style={styles.emptyRow}>
+                                    <Text style={styles.emptyText}>
+                                        Нет доступных интеграций
+                                    </Text>
+                                </View>
+                            )
+                        }
+                        {
+                            errorMsg && (
+                                <Text style={[styles.syncStatus, { marginTop: 20 }]}>{errorMsg}</Text>
+                            )
+                        }
+                    </ScrollView >
+                </KeyboardAvoidingView>
             </View >
         </View >
     );

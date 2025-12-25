@@ -52,6 +52,16 @@ export const styles = StyleSheet.create({
         alignSelf: 'flex-start',
         borderBottomLeftRadius: 4,
     },
+    systemBubble: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        alignSelf: 'center',
+        borderRadius: 12,
+        marginVertical: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
     text: {
         fontSize: 16,
         lineHeight: 24,
