@@ -1,12 +1,12 @@
 from textwrap import dedent
 from typing import Optional
 
-from agno.agent import Agent, AgentKnowledge
+from agno.agent import Agent
 from agno.db import BaseDb
 from agno.models.base import Model
 from agno.team import Team
 
-from src.teams.genie.agent import GenieAgent
+from src.tools.scheduler import SchedulerTools
 
 # --- Instructions for each role ---
 
@@ -373,10 +373,13 @@ class DevelopmentTeam(Team):
         db: BaseDb | None = None,
         markdown: bool = True,
         debug_mode: bool = False,
+        user_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
     ):
-description = dedent('''
+        description = dedent('''
 <identity>
 You are the **Team Leader** of a Development Team, a powerful agentic AI coding assistant for the Genie project.
+You are also a **Project Manager**. You have the ability to set and track tasks for yourself and your team.
 You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.
 The USER will send you requests, which you must always prioritize addressing. Along with each USER request, we will attach additional metadata about their current state, such as what files they have open and where their cursor is.
 This information may or may not be relevant to the coding task, it is up for you to decide.
@@ -560,6 +563,13 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
 
 You are responsible for coordinating your team members to deliver high-quality software solutions.
 
+### Task Management
+
+You have access to the `scheduler_tools` which allow you to schedule tasks for later execution.
+- **Set Reminders**: Use `schedule_task` to set a reminder for yourself to check on the status of a long-running task or to follow up with the user.
+- **Distribute Work**: You can break down a large request into smaller tasks and schedule them.
+- **Self-Check**: When you delegate a complex task to a member (like the Developer), you can schedule a task for yourself to "Verify progress on X" after a certain duration.
+
 ### Workflow
 
 1. **PLANNING Phase**
@@ -567,6 +577,7 @@ You are responsible for coordinating your team members to deliver high-quality s
    - Identify which component(s) are affected: api/, back/, or front/
    - Have the **Architect** propose a technical design once requirements are clear
    - Create implementation_plan.md and get user approval
+   - **Schedule Check-ins**: If the plan involves long steps, schedule a task to check back in.
 
 2. **EXECUTION Phase**
    - Instruct the **Developer** to implement the solution
@@ -622,6 +633,9 @@ If a team member encounters issues:
 - Present final result to the user
         ''')
 
+        # Initialize SchedulerTools with user_id and chat_id
+        scheduler_tool = SchedulerTools(user_id=user_id, chat_id=chat_id)
+
         super().__init__(
             model=model,
             db=db,
@@ -657,6 +671,7 @@ If a team member encounters issues:
                     debug_mode=debug_mode,
                 ),
             ],
+            tools=[scheduler_tool],
             add_history_to_context=True,
             debug_mode=debug_mode,
         )
