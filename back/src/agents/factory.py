@@ -14,6 +14,7 @@ from src.agents.mailer import MailerAgent
 from src.tools.config import ToolConfigClient
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
+from src.tools.scheduler import SchedulerTools
 from agno.tools.gmail import GmailTools
 from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools import Toolkit
@@ -125,6 +126,11 @@ class AgentFactory:
                 config.add("duckduckgo")
                 logger.info("[WS] Added DuckDuckGo search tool (web_search=True)")
             tools = await build_tools(config)
+
+        # Always add SchedulerTools for Genie
+        if not agent_type or agent_type.lower() == "genie":
+            # Pass environment variable for API URL if needed, default is set in class
+            tools.append(SchedulerTools())
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 

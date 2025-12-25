@@ -46,6 +46,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Inbox{},
 		&PluginChat{},
 		&Attachment{},
+		&Task{},
 	); err != nil {
 		return nil, err
 	}
