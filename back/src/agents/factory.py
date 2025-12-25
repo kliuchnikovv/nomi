@@ -101,6 +101,8 @@ class AgentFactory:
         command_desc: Optional[dict] = None,
         web_search: bool = False,
         thinking: str = "off",
+        user_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -129,8 +131,8 @@ class AgentFactory:
 
         # Always add SchedulerTools for Genie
         if not agent_type or agent_type.lower() == "genie":
-            # Pass environment variable for API URL if needed, default is set in class
-            tools.append(SchedulerTools())
+            # Pass user_id and chat_id to SchedulerTools for context
+            tools.append(SchedulerTools(user_id=user_id, chat_id=chat_id))
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 

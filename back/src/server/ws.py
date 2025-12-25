@@ -309,6 +309,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     agent_type=agent_type,
                     command_desc=command_desc,
                     web_search=current_web_search,
+                    user_id=session_id,
+                    chat_id=chat_id_param,
                 )
         except Exception as exc:
             next_id = await _send_frame(
@@ -502,6 +504,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                         model_name=new_model_name,
                                         web_search=current_web_search,
                                         thinking=current_thinking,
+                                        user_id=session_id,
+                                        chat_id=chat_id_param,
                                     )
                                 current_model_name = new_model_name
                                 logger.info(
@@ -619,6 +623,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                             command_desc=command_desc,
                             web_search=current_web_search,
                             thinking=current_thinking,
+                            user_id=session_id,
+                            chat_id=chat_id_param,
                         )
                         logger.info(
                             "[WS] Agent rebuilt with new model: session_id=%s model=%s",
@@ -656,6 +662,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                 command_desc=command_desc,
                                 web_search=current_web_search,
                                 thinking=current_thinking,
+                                user_id=session_id,
+                                chat_id=chat_id_param,
                             )
                             logger.info(
                                 "[WS] Agent rebuilt with web_search=%s: session_id=%s",
@@ -709,6 +717,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                                 command_desc=command_desc,
                                 web_search=current_web_search,
                                 thinking=current_thinking,
+                                user_id=session_id,
+                                chat_id=chat_id_param,
                             )
                             logger.info(
                                 "[WS] Agent rebuilt with thinking=%s: session_id=%s",
