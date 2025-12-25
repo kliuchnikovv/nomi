@@ -265,6 +265,19 @@ func (r *Room) initLLMContext() {
 	}
 }
 
+func (r *Room) InjectMessage(userID uuid.UUID, payload []byte) {
+	// Create a "fake" client message
+	msg := &ClientMessage{
+		Client: &Client{
+			userID: userID,
+			// send:   make(chan []byte), // We don't read from this, so nil is fine? No, broadcast writes to it.
+			// Actually, if we pass nil client, we need to handle it in handleUserMessage.
+		},
+		Payload: payload,
+	}
+	r.handleUserMessage(msg)
+}
+
 func (r *Room) handleUserMessage(msg *ClientMessage) {
 	// Parse message
 	// The ClientMessage.Payload is JSON bytes of Frame
@@ -282,6 +295,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		)
 		b, _ := json.Marshal(f)
 		for client := range r.clients {
+			if client.send == nil {
+				continue
+			}
 			select {
 			case client.send <- b:
 			default:
@@ -296,8 +312,13 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	broadcastExcept := func(f Frame, sender *Client) {
 		b, _ := json.Marshal(f)
 		for client := range r.clients {
-			if client == sender {
-				continue // Skip sender - they already have this message
+			// Skip sender if valid (might be nil for system messages)
+			if sender != nil && client == sender {
+				continue
+			}
+			// Skip clients with nil send channel (safety)
+			if client.send == nil {
+				continue
 			}
 			select {
 			case client.send <- b:

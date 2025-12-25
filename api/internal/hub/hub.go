@@ -52,6 +52,20 @@ func (h *Hub) Run() {
 	}
 }
 
+func (h *Hub) GetOrCreateRoom(chatID uuid.UUID, userID uuid.UUID) (*Room, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	room, ok := h.rooms[chatID]
+	if !ok {
+		room = NewRoom(h, chatID, userID, h.store, h.logger, h.llmBaseURL)
+		h.rooms[chatID] = room
+		go room.Run()
+		h.logger.Info("room created", zap.String("room_id", chatID.String()))
+	}
+	return room, nil
+}
+
 func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, chatID uuid.UUID, user *storage.User) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -67,15 +81,11 @@ func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, chatID uuid.UUID, 
 		logger: h.logger.With(zap.String("client_id", user.ID.String())),
 	}
 
-	h.mu.Lock()
-	room, ok := h.rooms[chatID]
-	if !ok {
-		room = NewRoom(h, chatID, user.ID, h.store, h.logger, h.llmBaseURL)
-		h.rooms[chatID] = room
-		go room.Run()
-		h.logger.Info("room created", zap.String("room_id", chatID.String()))
+	room, err := h.GetOrCreateRoom(chatID, user.ID)
+	if err != nil {
+		h.logger.Error("failed to get/create room", zap.Error(err))
+		return
 	}
-	h.mu.Unlock()
 
 	client.room = room
 	room.register <- client

@@ -99,6 +99,11 @@ func New(
 	)
 	julesAuthHandler := handlers.NewJulesAuthHandler(db, logger)
 
+	// Initialize Scheduler (Task Manager)
+	// We start it here.
+	scheduler := hub.NewScheduler(db, hubInstance, logger)
+	go scheduler.Start()
+
 	_ = n // notifier will be used when needed
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -141,6 +146,26 @@ func New(
 	// Message API (protected)
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
+
+	// Task API (protected)
+	// Allow INTERNAL_API_KEY for system calls (like from Python backend)
+	tasksHandler := handlers.Handler{Store: db, Logger: logger} // TODO: Refactor handlers to common struct
+
+	taskAuth := func(c *gin.Context) {
+		// Check for Internal Secret
+		secret := os.Getenv("INTERNAL_API_KEY")
+		if secret == "" {
+			secret = "jules-secret-key" // Default for dev
+		}
+		if c.GetHeader("X-Internal-Secret") == secret {
+			c.Next()
+			return
+		}
+		// Fallback to standard user auth
+		authGinMiddleware(authMiddleware)(c)
+	}
+
+	r.POST("/api/tasks", taskAuth, gin.WrapH(http.HandlerFunc(tasksHandler.CreateTask)))
 
 	// Sidebar API - grouped inbox by plugin/integration
 	r.GET("/api/sidebar", wrapWithAuth(sidebarHandler.ListSidebar, authMiddleware))
