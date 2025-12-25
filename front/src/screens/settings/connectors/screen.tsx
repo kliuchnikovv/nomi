@@ -6,6 +6,8 @@ import {
     Text,
     View,
     TextInput,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { styles } from './styles.tsx';
 import React from 'react';

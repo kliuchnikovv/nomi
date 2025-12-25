@@ -6,9 +6,13 @@ from agno.agent import Agent
 from agno.tools import Toolkit
 
 class SchedulerTools(Toolkit):
-    def __init__(self, api_url: str = "http://localhost:8080/api", user_id: Optional[str] = None, chat_id: Optional[str] = None):
+    # Default to Railway production URL, can be overridden by SCHEDULER_API_URL env var
+    DEFAULT_API_URL = "https://genie-api-production-7074.up.railway.app/api"
+    
+    def __init__(self, api_url: Optional[str] = None, user_id: Optional[str] = None, chat_id: Optional[str] = None):
         super().__init__(name="scheduler_tools")
-        self.api_url = api_url
+        # Priority: explicit param > env var > default production URL
+        self.api_url = api_url or os.getenv("SCHEDULER_API_URL", self.DEFAULT_API_URL)
         self.api_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key") # Default for dev
         self._user_id = user_id
         self._chat_id = chat_id
