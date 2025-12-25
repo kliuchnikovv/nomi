@@ -88,8 +88,10 @@ func (j *julesPlugin) Sync(ctx context.Context, integration storage.Integration)
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}
+	j.logger.Info("jules sync: fetched sessions", zap.Int("count", len(sessions)), zap.String("user_id", integration.UserID.String()))
 
 	for _, sess := range sessions {
+		j.logger.Debug("processing jules session", zap.String("session_name", sess.Name), zap.String("title", sess.Title))
 		// Ensure Chat
 		chat, err := j.storage.FindPluginChatByExternalID(ctx, integration.UserID, "jules", sess.Name)
 		if err != nil {
@@ -236,8 +238,41 @@ func (j *julesPlugin) RegisterRoutes(router *gin.RouterGroup) {
 }
 
 func (j *julesPlugin) handleSync(c *gin.Context) {
-	// Trigger manual sync... similar to gmail
-	c.Status(200)
+	// Trigger manual sync for the authenticated user
+	user, ok := auth.GetUserFromContext(c.Request.Context())
+	if !ok {
+		c.JSON(401, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Get Jules integrations for this user
+	integrations, err := j.storage.GetIntegrationsByProvider(c.Request.Context(), "jules")
+	if err != nil {
+		j.logger.Error("failed to get jules integrations", zap.Error(err))
+		c.JSON(500, gin.H{"error": "failed to get integrations"})
+		return
+	}
+
+	var synced int
+	var errors []string
+	for _, integ := range integrations {
+		if integ.UserID != user.ID {
+			continue
+		}
+		j.logger.Info("manual jules sync triggered", zap.String("user_id", user.ID.String()), zap.String("integration_id", integ.ID.String()))
+		if err := j.Sync(c.Request.Context(), integ); err != nil {
+			j.logger.Error("manual sync failed", zap.Error(err))
+			errors = append(errors, err.Error())
+		} else {
+			synced++
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"status":  "ok",
+		"synced":  synced,
+		"errors":  errors,
+	})
 }
 
 func (j *julesPlugin) handleSend(c *gin.Context) {
