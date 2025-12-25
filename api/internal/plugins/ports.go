@@ -90,6 +90,14 @@ func (s *StorageAdapter) DisableIntegration(ctx context.Context, integrationID u
 	return s.store.DisableIntegration(ctx, integrationID)
 }
 
+func (s *StorageAdapter) CreateIntegration(ctx context.Context, userID uuid.UUID, integration *storage.Integration) (*storage.Integration, error) {
+	return s.store.CreateIntegration(ctx, userID, integration)
+}
+
+func (s *StorageAdapter) UpdateIntegration(ctx context.Context, userID uuid.UUID, integration *storage.Integration) (*storage.Integration, error) {
+	return s.store.UpdateIntegration(ctx, userID, integration)
+}
+
 // LLMAdapter exposes only the surface plugins need.
 type LLMAdapter struct {
 	svc *llm.Service

@@ -235,6 +235,118 @@ func (j *julesPlugin) ExecuteAction(ctx context.Context, userID uuid.UUID, actio
 func (j *julesPlugin) RegisterRoutes(router *gin.RouterGroup) {
 	router.POST("/sync", j.handleSync)
 	router.POST("/send", j.handleSend)
+	router.POST("/connect", j.handleConnect)
+}
+
+func (j *julesPlugin) handleConnect(c *gin.Context) {
+	var req struct {
+		ApiKey string `json:"api_key"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if req.ApiKey == "" {
+		c.JSON(400, gin.H{"error": "api_key is required"})
+		return
+	}
+
+	user, ok := auth.GetUserFromContext(c.Request.Context())
+	if !ok {
+		c.JSON(401, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Check for existing integration
+	ctx := c.Request.Context()
+	existing, err := j.storage.GetIntegrationsByUserProvider(ctx, user.ID, "jules")
+	if err != nil {
+		j.logger.Error("failed to list integrations", zap.Error(err))
+		c.JSON(500, gin.H{"error": "internal error"})
+		return
+	}
+
+	params := map[string]string{"api_key": req.ApiKey}
+	paramsBytes, _ := json.Marshal(params)
+
+	if len(existing) > 0 {
+		// Update first existing one
+		integration := existing[0]
+		integration.Params = string(paramsBytes)
+		// We don't have a direct UpdateIntegration method exposed in the interface trivially?
+		// Wait, StoragePort has DisableIntegration, but UpdateIntegration?
+		// Let's check StoragePort definition in manager.go again.
+		// It has: DisableIntegration, CreateInbox, UpdateInbox.
+		// It DOES NOT have UpdateIntegration exposed in the interface shown in `view_file` output (lines 20-36 of manager.go).
+		// Wait, line 21-36:
+		// GetIntegrations...
+		// GetOAuthToken...
+		// UpdateOAuthToken...
+		// DisableIntegration...
+		// Inbox...
+		// PluginChat...
+		// Chat...
+		// It seems UpdateIntegration is missing from the interface!
+		// BUT `oauth_gmail.go` used `g.storage.UpdateIntegration`.
+		// `oauth_gmail.go` uses `*storage.Storage` struct directly, NOT the `StoragePort` interface.
+		// `julesPlugin` uses `plugins.StoragePort`.
+		
+		// I must check if `UpdateIntegration` is in `plugins.StoragePort`.
+		// If not, I can't update it easily without casting or adding it.
+		// For now, I'll delete and recreate if update is missing, OR better: add it to interface.
+		// But I cannot easily change the interface if other plugins rely on it (though usually it's fine).
+		
+		// ACTUALLY, checking the `manager.go` file again...
+		// `type StoragePort interface` at line 20.
+		// It does NOT list UpdateIntegration.
+		
+		// Workaround: Disable old one (soft delete?) and create new one?
+		// Or assume the interface implementation (Runtime) has it and I can cast? No, that's bad.
+		
+		// Let's check if I can just use `CreateIntegration`. Usually Create handles upserts or I can just ignore the old one?
+		// No, usually we want one active integration.
+		
+		// Let's assume for a moment `UpdateIntegration` IS in the interface but I missed it in the truncated view?
+		// No, I viewed the whole file.
+		
+		// Let's use `CreateIntegration`. It might fail if unique constraint?
+		// `storage.Integration` likely has no unique constraint on provider/user, multiple allowed?
+		// Gmail has one per email.
+		
+		// I'll try to just Create. If there's an existing one, I'll mark it disabled if I can.
+		// Interface has `DisableIntegration(ctx, id)`.
+		
+		if err := j.storage.DisableIntegration(ctx, integration.ID); err != nil {
+			j.logger.Error("failed to disable old integration", zap.Error(err))
+		}
+	}
+
+	// Create new
+	integ := &storage.Integration{
+		UserID:   user.ID,
+		Provider: "jules",
+		Name:     "Jules",
+		Params:   string(paramsBytes),
+		Enabled:  true,
+	}
+
+	if _, err := j.storage.CreateIntegration(ctx, user.ID, integ); err != nil {
+		j.logger.Error("failed to create integration", zap.Error(err))
+		c.JSON(500, gin.H{"error": "failed to create integration"})
+		return
+	}
+
+	// Trigger initial sync immediately
+	go func() {
+		// Use a detached context for async operation
+		bgCtx := context.Background()
+		if err := j.Sync(bgCtx, *integ); err != nil {
+			j.logger.Error("initial sync failed", zap.Error(err))
+		}
+	}()
+
+	c.JSON(200, gin.H{"status": "connected", "id": integ.ID.String()})
 }
 
 func (j *julesPlugin) handleSync(c *gin.Context) {

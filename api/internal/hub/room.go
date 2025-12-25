@@ -405,7 +405,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 
 		// 3. Set role/sender in frame for multi-device sync
-		frame.Payload.Role = "user"
+		if frame.Payload.Role != "system" {
+			frame.Payload.Role = "user"
+		}
 		frame.Payload.Sender = senderID
 		r.logger.Info("broadcasting user message with role",
 			zap.String("role", frame.Payload.Role),
