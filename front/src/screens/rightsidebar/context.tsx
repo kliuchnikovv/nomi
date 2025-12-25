@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
-import { inboxApi, integrationsApi } from '../../apiClient';
+import { inboxApi, integrationsApi, sidebarApi } from '../../apiClient';
 import { InboxMessage, Plugin, PluginChat, PluginChatMessage } from './models';
 
 interface PluginChatsContextType {
@@ -97,6 +97,38 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
             for (const integ of parsedIntegrations) {
                 try {
+                    // For Jules, we use the sidebar API which returns proper chat objects
+                    if (integ.provider === 'jules') {
+                        console.log('[PluginChatsContext] Loading Jules chats for integration:', integ.id);
+                        const response = await sidebarApi.getChats(integ.provider, integ.id);
+                        console.log('[PluginChatsContext] Jules API response:', response);
+                        const items = response?.chats || [];
+                        console.log('[PluginChatsContext] Jules chats count:', items.length);
+
+                        const mappedChats: PluginChat[] = items.map((chatItem) => ({
+                            id: `${integ.id}:${chatItem.chat_id}`,
+                            pluginId: integ.id,
+                            title: chatItem.title || `Chat`,
+                            lastMessage: chatItem.count ? `${chatItem.count} messages` : undefined,
+                            lastMessageAt: chatItem.last_received ? new Date(chatItem.last_received).getTime() : undefined,
+                            unreadCount: 0,
+                            metadata: {
+                                provider: integ.provider,
+                                integrationId: integ.id,
+                                chatId: chatItem.chat_id,
+                                threads: [], // Jules chats are linear for now
+                            },
+                        }));
+
+                        plugins.push({
+                            id: integ.id,
+                            provider: integ.provider,
+                            name: integ.name,
+                            chats: mappedChats,
+                        });
+                        continue;
+                    }
+
                     const inbox = await inboxApi.getInbox({
                         provider: integ.provider,
                         integrationId: integ.id,
@@ -134,7 +166,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         chats,
                     });
                 } catch (err) {
-                    console.error(`Failed to load inbox for integration ${integ.id}`, err);
+                    console.error(`Failed to load ${integ.provider === 'jules' ? 'chats' : 'inbox'} for integration ${integ.id}`, err);
                     plugins.push({
                         id: integ.id,
                         provider: integ.provider,

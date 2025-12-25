@@ -155,6 +155,8 @@ export const pluginsApi = {
         apiClient.post<{ status: string }>(`${API_URL()}/plugins/imap/sync`, config),
     connectJules: (apiKey: string) =>
         apiClient.post<{ status: string; id: string }>(`${API_URL()}/plugins/jules/connect`, { api_key: apiKey }),
+    syncJules: () =>
+        apiClient.post<{ status: string; synced: number; errors: string[] }>(`${API_URL()}/plugins/jules/sync`, {}),
 };
 
 export const integrationsApi = {

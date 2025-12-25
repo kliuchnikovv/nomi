@@ -10,7 +10,7 @@ import {
 import { styles } from './styles.tsx';
 import React from 'react';
 import { Props, CONNECTORS } from './models.tsx';
-import { NavArrowRight, Mail, Calendar, WarningCircle, Trash, Github, Sparkles } from 'iconoir-react-native';
+import { NavArrowRight, Mail, Calendar, WarningCircle, Trash, Github, Sparks } from 'iconoir-react-native';
 import { useConnectors } from './context.tsx';
 import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight.ts';
 
@@ -19,7 +19,7 @@ import { pluginsApi } from '../../../apiClient.ts';
 
 
 export default function ConnectorScreenDialog({ onClose }: Props) {
-    const { integrations, startOAuth, deleteIntegration } = useConnectors();
+    const { integrations, startOAuth, deleteIntegration, getIntegrations } = useConnectors();
     const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
     const gmailIntegrations = React.useMemo(
         () => integrations.filter(p => p.provider === 'gmail'),
@@ -109,7 +109,11 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
         setErrorMsg(null);
         try {
             await pluginsApi.connectJules(julesApiKey);
-            await useConnectors.getState().getIntegrations();
+            // Trigger sync immediately to fetch Jules sessions
+            console.log('[Connectors] Triggering Jules sync...');
+            const syncResult = await pluginsApi.syncJules();
+            console.log('[Connectors] Jules sync result:', syncResult);
+            await getIntegrations();
             setShowJulesInput(false);
             setJulesApiKey('');
         } catch (e) {
@@ -431,7 +435,7 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
                 {glyph === 'gmail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph === 'calendar' && <Calendar width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph === 'github' && <Github width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph === 'jules' && <Sparkles width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph === 'jules' && <Sparks width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph !== 'mail' && glyph !== 'gmail' && glyph !== 'calendar' && glyph !== 'github' && glyph !== 'jules' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
             </View>
             <View style={styles.titleBlock}>
