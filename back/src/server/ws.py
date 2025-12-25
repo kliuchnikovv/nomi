@@ -1130,7 +1130,11 @@ async def _send_frame(
 ) -> int:
     data = frame.marshal()
     logger.debug("[WS] Sending frame: op=%s id=%d payload_len=%d", frame.op, frame.id, len(str(data.get("payload", ""))))
-    await websocket.send_json(data)
+    try:
+        await websocket.send_json(data)
+    except RuntimeError as e:
+        # WebSocket already closed - this can happen during error handling
+        logger.debug("[WS] Cannot send frame (WebSocket closed): %s", e)
     return frame.id+1
 
 

@@ -123,10 +123,10 @@ class AgentFactory:
                     logger.debug("[WS] tool appended: enabled")
                 else:
                     logger.debug("[WS] tool not appended: not enabled")
-            # Add DuckDuckGo search if web_search is enabled (instead of native Gemini search)
+            # Add web search if web_search is enabled (instead of native Gemini search)
             if web_search:
-                config.add("duckduckgo")
-                logger.info("[WS] Added DuckDuckGo search tool (web_search=True)")
+                config.add("web_search")
+                logger.info("[WS] Added web search tool (web_search=True)")
             tools = await build_tools(config)
 
         # Capture tools_specs BEFORE adding SchedulerTools (to avoid including it in saved tools)

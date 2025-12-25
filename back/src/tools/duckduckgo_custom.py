@@ -22,7 +22,7 @@ class DuckDuckGoTools(Toolkit):
         proxies: Optional[Any] = None,
         timeout: Optional[int] = None,
     ):
-        super().__init__(name="duckduckgo_search")
+        super().__init__(name="web_search")
 
         self.news = news
         self.fixed_max_results = fixed_max_results
