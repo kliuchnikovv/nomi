@@ -64,17 +64,35 @@ class SchedulerTools(Toolkit):
         tools_json = None
         if self._tools_specs:
             try:
+                print(f"[SchedulerTools] Serializing {len(self._tools_specs)} tools")
                 # Convert tool specs to JSON-serializable format
-                tools_json = [
-                    {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.parameters if hasattr(tool, 'parameters') else {}
-                    }
-                    for tool in self._tools_specs
-                ]
+                tools_json = []
+                for tool in self._tools_specs:
+                    # Handle both ToolSpec objects and dict representations
+                    if isinstance(tool, dict):
+                        tools_json.append(tool)
+                    elif hasattr(tool, '__dict__'):
+                        # Try to extract attributes
+                        tool_dict = {
+                            "name": getattr(tool, 'name', ''),
+                            "description": getattr(tool, 'description', ''),
+                        }
+                        # Try to get parameters
+                        if hasattr(tool, 'parameters'):
+                            tool_dict["parameters"] = tool.parameters
+                        elif hasattr(tool, 'model_json_schema'):
+                            # For Pydantic models
+                            tool_dict["parameters"] = tool.model_json_schema()
+                        tools_json.append(tool_dict)
+                        print(f"[SchedulerTools] Serialized tool: {tool_dict['name']}")
+                    else:
+                        print(f"[SchedulerTools] Unknown tool type: {type(tool)}")
+                
+                print(f"[SchedulerTools] Serialized {len(tools_json)} tools to JSON")
             except Exception as e:
                 print(f"Warning: Could not serialize tools: {e}")
+                import traceback
+                traceback.print_exc()
 
         payload = {
             "user_id": user_id,
@@ -96,3 +114,4 @@ class SchedulerTools(Toolkit):
             return f"Task scheduled successfully. ID: {response.json().get('task_id')}"
         except Exception as e:
             return f"Failed to schedule task: {str(e)}"
+

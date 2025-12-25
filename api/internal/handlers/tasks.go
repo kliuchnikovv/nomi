@@ -65,6 +65,18 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	payloadBytes, _ := json.Marshal(payloadMap)
 
+	toolsPreview := string(req.Tools)
+	if len(toolsPreview) > 200 {
+		toolsPreview = toolsPreview[:200] + "..."
+	}
+	
+	h.Logger.Info("creating task",
+		zap.String("user_id", req.UserID.String()),
+		zap.String("chat_id", req.ChatID.String()),
+		zap.Int("tools_len", len(req.Tools)),
+		zap.String("tools_preview", toolsPreview),
+	)
+
 	task := &storage.Task{
 		UserID:    req.UserID,
 		ChatID:    req.ChatID,
@@ -83,6 +95,8 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to create task", http.StatusInternalServerError)
 		return
 	}
+
+	h.Logger.Info("task created successfully", zap.String("task_id", task.ID.String()))
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]interface{}{
