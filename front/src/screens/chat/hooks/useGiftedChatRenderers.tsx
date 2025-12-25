@@ -295,9 +295,6 @@ export function useGiftedChatRenderers({
         return (
             <View>
                 {showAttachmentsInside && renderAttachments()}
-                {toolCalls && toolCalls.length > 0 && (
-                    <ToolCallsSection toolCalls={toolCalls} />
-                )}
                 <Pressable
                     onLongPress={() => handleTextLongPress(messageText)}
                     delayLongPress={300}
@@ -328,6 +325,9 @@ export function useGiftedChatRenderers({
                         {messageText}
                     </Markdown>
                 </Pressable>
+                {toolCalls && toolCalls.length > 0 && (
+                    <ToolCallsSection toolCalls={toolCalls} />
+                )}
                 <MessageActions
                     actions={props.currentMessage?.actions}
                     theme={theme}

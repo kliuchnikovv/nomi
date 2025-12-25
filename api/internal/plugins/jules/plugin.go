@@ -101,6 +101,10 @@ func (j *julesPlugin) Sync(ctx context.Context, integration storage.Integration)
 		chat, err := j.storage.FindPluginChatByExternalID(ctx, integration.UserID, "jules", sess.Name)
 		if err != nil {
 			// Create
+			j.logger.Info("jules: creating new plugin chat",
+				zap.String("session", sess.Name),
+				zap.String("title", sess.Title))
+			
 			chat, err = j.storage.CreatePluginChat(ctx, &storage.PluginChat{
 				UserID:        integration.UserID,
 				Provider:      "jules",
@@ -109,9 +113,14 @@ func (j *julesPlugin) Sync(ctx context.Context, integration storage.Integration)
 				Title:         sess.Title,
 			})
 			if err != nil {
-				j.logger.Error("failed to create chat", zap.Error(err))
+				j.logger.Error("jules: FAILED to create plugin chat",
+					zap.Error(err),
+					zap.String("session", sess.Name))
 				continue
 			}
+			j.logger.Info("jules: created plugin chat", zap.String("chat_id", chat.ID.String()))
+		} else {
+			j.logger.Debug("jules: found existing plugin chat", zap.String("chat_id", chat.ID.String()))
 		}
 
 		// 2. Sync Activities -> Inbox Items (only Agent messages for now)

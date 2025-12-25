@@ -174,15 +174,15 @@ def _build_github(params: Dict[str, Any]) -> Toolkit:
     username = params.get("username", "")
     account_email = params.get("account_email", "")
     
-    if access_token:
-        # Mask token for logging (show first 8 and last 4 chars)
-        masked_token = f"{access_token[:8]}...{access_token[-4:]}" if len(access_token) > 12 else "***"
-        logger.info("[GitHub] Found access token: %s for user: %s", masked_token, username or account_email)
-        tool = GithubTools(access_token=access_token)
-        logger.info("[GitHub] Created GithubTools with access token for user: %s", username or account_email)
-    else:
-        tool = GithubTools()
-        logger.warning("[GitHub] Created GithubTools without access token (will use env GITHUB_TOKEN)")
+    if not access_token:
+        logger.warning("[GitHub] No access token found in params")
+        raise ValueError("GitHub access token is required")
+    
+    # Mask token for logging (show first 8 and last 4 chars)
+    masked_token = f"{access_token[:8]}...{access_token[-4:]}" if len(access_token) > 12 else "***"
+    logger.info("[GitHub] Found access token: %s for user: %s", masked_token, username or account_email)
+    tool = GithubTools(access_token=access_token)
+    logger.info("[GitHub] Created GithubTools with access token for user: %s", username or account_email)
     
     # Add context instructions
     tool.add_instructions = True
@@ -269,6 +269,18 @@ async def build(config: ToolsConfig) -> List[Toolkit]:
         if not builder:
             logger.warning(f"[Tools] No builder found for tool: {item.name}")
             continue
-            
-        tools.append(builder(item.params))
+        
+        # Gracefully skip tools that fail to initialize (e.g., missing credentials)
+        try:
+            tool = builder(item.params)
+            tools.append(tool)
+            logger.debug(f"[Tools] Successfully built tool: {item.name}")
+        except Exception as exc:
+            logger.warning(
+                "[Tools] Failed to build tool '%s': %s - skipping",
+                item.name,
+                exc
+            )
+            continue
+    
     return tools
