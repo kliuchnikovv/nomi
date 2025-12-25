@@ -30,7 +30,7 @@ class DuckDuckGoTools(Toolkit):
         self.proxy = proxy
         self.proxies = proxies
         self.timeout = timeout
-        self.ddgs = DDGS(headers=headers, proxy=proxy, proxies=proxies, timeout=timeout)
+        self.ddgs = DDGS(proxy=proxy, proxies=proxies, timeout=timeout)
 
         self.register(self.duckduckgo_search)
         if self.news:
