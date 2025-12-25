@@ -86,9 +86,14 @@ func (j *julesPlugin) Sync(ctx context.Context, integration storage.Integration)
 	// 1. Sync Sessions -> PluginChats
 	sessions, err := client.ListSessions(ctx, 10)
 	if err != nil {
+		j.logger.Error("jules sync: failed to list sessions", zap.Error(err))
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}
 	j.logger.Info("jules sync: fetched sessions", zap.Int("count", len(sessions)), zap.String("user_id", integration.UserID.String()))
+
+	if len(sessions) == 0 {
+		return nil
+	}
 
 	for _, sess := range sessions {
 		j.logger.Debug("processing jules session", zap.String("session_name", sess.Name), zap.String("title", sess.Title))
