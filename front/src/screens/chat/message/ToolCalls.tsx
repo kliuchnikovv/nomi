@@ -43,15 +43,9 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
                                 <View style={{ marginTop: 8 }}>
                                     <Text style={{ fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 4 }}>Result:</Text>
                                     <Text style={styles.toolCallArgs}>
-                                        {(typeof toolCall.result === 'string'
+                                        {typeof toolCall.result === 'string'
                                             ? toolCall.result
-                                            : JSON.stringify(toolCall.result, null, 2)
-                                        ).slice(0, 50) + (
-                                                (typeof toolCall.result === 'string'
-                                                    ? toolCall.result.length
-                                                    : JSON.stringify(toolCall.result, null, 2).length
-                                                ) > 50 ? '...' : ''
-                                            )}
+                                            : JSON.stringify(toolCall.result, null, 2)}
                                     </Text>
                                 </View>
                             )}
@@ -98,15 +92,9 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
                         <View style={{ marginTop: 4 }}>
                             <Text style={{ fontSize: 11, fontWeight: '600', color: '#888', marginBottom: 2 }}>Result:</Text>
                             <Text style={styles.toolCallArgs}>
-                                {(typeof toolCall.result === 'string'
+                                {typeof toolCall.result === 'string'
                                     ? toolCall.result
-                                    : JSON.stringify(toolCall.result, null, 2)
-                                ).slice(0, 100) + (
-                                        (typeof toolCall.result === 'string'
-                                            ? toolCall.result.length
-                                            : JSON.stringify(toolCall.result, null, 2).length
-                                        ) > 100 ? '...' : ''
-                                    )}
+                                    : JSON.stringify(toolCall.result, null, 2)}
                             </Text>
                         </View>
                     )}

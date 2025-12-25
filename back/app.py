@@ -81,6 +81,7 @@ def _init_logging():
 
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("hpack").setLevel(logging.WARNING)
     
     logging.info("Logging initialized at %s", level_name)
 
