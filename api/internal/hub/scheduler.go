@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
@@ -132,12 +133,16 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 	// Refactor Room to have `ProcessMessage(userID, frame)` method that can be called by both WebSocket handler and Scheduler.
 
 	// For now, let's construct a minimal valid frame and inject.
+	msgID := uuid.New()
 	frame := Frame{
 		ChatID:    task.ChatID,
 		Operation: MessageOperation,
+		Kind:      TokenKind, // Ensure Kind is set
+		Timestamp: time.Now().UTC(),
 		Payload: Payload{
-			Message: payload.Message,
-			Role:    "system",
+			MessageID: msgID,
+			Message:   payload.Message,
+			Role:      "system",
 		},
 	}
 	frameBytes, _ := json.Marshal(frame)
