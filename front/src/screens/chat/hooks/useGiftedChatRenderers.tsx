@@ -12,6 +12,44 @@ import { ToolCallsSection } from '../message/ToolCalls';
 import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
+import { styles as messageStyles } from '../message/styles';
+
+function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
+    const [expanded, setExpanded] = React.useState(true);
+
+    // Create markdown styles with theme
+    const markdownStyles = useMemo(() => createMarkdownStyles(createChatTheme(theme)), [theme]);
+
+    return (
+        <View style={{ marginBottom: 8, paddingHorizontal: 16 }}>
+            <View style={messageStyles.toolCallsContainer}>
+                <Pressable
+                    onPress={() => setExpanded(!expanded)}
+                    style={({ pressed }) => [
+                        messageStyles.toolCallsHeader,
+                        pressed && { opacity: 0.7 },
+                    ]}
+                >
+                    <Text style={messageStyles.toolCallsHeaderText}>
+                        System Activity
+                    </Text>
+                    <Text style={messageStyles.toolCallsExpandIcon}>
+                        {expanded ? '▼' : '▶'}
+                    </Text>
+                </Pressable>
+                {expanded && (
+                    <View style={messageStyles.toolCallsList}>
+                        <View style={messageStyles.toolCallItem}>
+                            <Markdown style={markdownStyles as any}>
+                                {text}
+                            </Markdown>
+                        </View>
+                    </View>
+                )}
+            </View>
+        </View>
+    );
+}
 
 interface GiftedChatRenderersParams {
     assistantContainerMaxWidth: string;
@@ -183,6 +221,11 @@ export function useGiftedChatRenderers({
         const hasAttachments = attachments && attachments.length > 0;
         const showAttachmentsOutside = hasAttachments && attachmentPosition === 'outside';
 
+        // Check for system message (Tool Call style)
+        if (currentMessage.user._id === 'system') {
+            return <SystemMessageBubble text={currentMessage.text} theme={theme} />;
+        }
+
         return (
             <View>
                 {showAttachmentsOutside && (
@@ -208,7 +251,7 @@ export function useGiftedChatRenderers({
                 />
             </View>
         );
-    }, [assistantContainerMaxWidth, attachmentPosition, theme, onAttachmentPress]);
+    }, [assistantContainerMaxWidth, attachmentPosition, theme, onAttachmentPress, markdownStyles]);
 
 
 

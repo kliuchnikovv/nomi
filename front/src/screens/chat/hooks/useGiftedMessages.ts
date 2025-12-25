@@ -26,14 +26,25 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
 
         return sorted.map((msg): ExtendedIMessage => {
             const isUserMessage = msg.role === 'user';
+            const isSystemMessage = msg.role === 'system';
+
+            let userIdMapped = 'assistant';
+            let userName = 'Assistant';
+            if (isUserMessage) {
+                userIdMapped = userId || 'user';
+                userName = 'You';
+            } else if (isSystemMessage) {
+                userIdMapped = 'system';
+                userName = 'System';
+            }
 
             return {
                 _id: String(msg.id || `${msg.created_at} -${msg.role} `),
                 text: msg.text.trimEnd() || '',
                 createdAt: new Date(msg.created_at || Date.now()),
                 user: {
-                    _id: isUserMessage ? (userId || 'user') : 'assistant',
-                    name: isUserMessage ? 'You' : 'Assistant',
+                    _id: userIdMapped,
+                    name: userName,
                 },
                 tool_calls: msg.tool_calls,
                 model: msg.model,

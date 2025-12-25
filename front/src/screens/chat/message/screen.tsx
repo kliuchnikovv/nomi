@@ -85,6 +85,9 @@ function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], on
 }
 
 export default function MessageScreen(props: Props) {
+    if (props.message.role === 'system') {
+        return null;
+    }
     const onLongPressMsg = (text: string) => {
         const options = [
             'Copy',

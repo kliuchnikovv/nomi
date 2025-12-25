@@ -50,6 +50,10 @@ func New(
 	for name, st := range cfg.Plugins {
 		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
 	}
+	// Force enable 'jules' if not configured (it uses per-user auth, safe to be globally enabled)
+	if _, ok := pluginState["jules"]; !ok {
+		pluginState["jules"] = plugins.PluginState{Enabled: true}
+	}
 	runtime := plugins.NewRuntime(
 		plugins.NewNotifierAdapter(n),
 		plugins.NewStorageAdapter(db),

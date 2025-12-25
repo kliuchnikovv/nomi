@@ -132,7 +132,6 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                 <Text style={styles.dialogTitle}>Apps & connectors</Text>
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={{ flex: 1 }}
                 >
                     <ScrollView
                         contentContainerStyle={styles.scrollContent}
