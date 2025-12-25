@@ -542,34 +542,64 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			}
 		}
 
-		oldLen := len(r.currentMessageMetadata.Text)
-		r.currentMessageMetadata.Text += frame.Payload.Message
-		newLen := len(r.currentMessageMetadata.Text)
+		shouldUpsert := false
 
-		r.logger.Debug("accumulating LLM text",
-			zap.String("msg_id", frame.Payload.MessageID.String()),
-			zap.Int("token_len", len(frame.Payload.Message)),
-			zap.Int("old_total", oldLen),
-			zap.Int("new_total", newLen),
-		)
+		// Handle Tool Call
+		if frame.Payload.Type == "tool_call" && frame.Payload.Tool != nil {
+			// Append tool call to metadata
+			// r.currentMessageMetadata.ToolCalls is interface{}, likely []interface{} or []map[string]interface{}
+			// We need to be careful with type assertions.
 
-		if err := r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
-			ID:        frame.Payload.MessageID,
-			ChatID:    frame.ChatID,
-			Sender:    storage.ZeroUUID, // Assistant
-			Role:      chat.RoleAssistant,
-			Text:      r.currentMessageMetadata.Text,
-			Reasoning: r.currentMessageMetadata.Reasoning,
-			Model:     r.currentMessageMetadata.Model,
-			ToolCalls: r.currentMessageMetadata.ToolCalls,
-			CreatedAt: time.Now().UTC(),
-		}); err != nil {
-			r.logger.Error("failed to upsert assistant message (token)",
-				zap.Error(err),
+			var currentTools []interface{}
+			if r.currentMessageMetadata.ToolCalls != nil {
+				if ct, ok := r.currentMessageMetadata.ToolCalls.([]interface{}); ok {
+					currentTools = ct
+				}
+			}
+			currentTools = append(currentTools, frame.Payload.Tool)
+			r.currentMessageMetadata.ToolCalls = currentTools
+			shouldUpsert = true
+
+			r.logger.Info("accumulating tool call",
 				zap.String("msg_id", frame.Payload.MessageID.String()),
-				zap.String("chat_id", frame.ChatID.String()),
-				zap.Int("text_len", len(r.currentMessageMetadata.Text)),
+				zap.Any("tool", frame.Payload.Tool),
 			)
+		} else {
+			// Handle Text
+			oldLen := len(r.currentMessageMetadata.Text)
+			r.currentMessageMetadata.Text += frame.Payload.Message
+			newLen := len(r.currentMessageMetadata.Text)
+
+			if newLen > oldLen {
+				shouldUpsert = true
+				r.logger.Debug("accumulating LLM text",
+					zap.String("msg_id", frame.Payload.MessageID.String()),
+					zap.Int("token_len", len(frame.Payload.Message)),
+					zap.Int("old_total", oldLen),
+					zap.Int("new_total", newLen),
+				)
+			}
+		}
+
+		if shouldUpsert {
+			if err := r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
+				ID:        frame.Payload.MessageID,
+				ChatID:    frame.ChatID,
+				Sender:    storage.ZeroUUID, // Assistant
+				Role:      chat.RoleAssistant,
+				Text:      r.currentMessageMetadata.Text,
+				Reasoning: r.currentMessageMetadata.Reasoning,
+				Model:     r.currentMessageMetadata.Model,
+				ToolCalls: r.currentMessageMetadata.ToolCalls,
+				CreatedAt: time.Now().UTC(),
+			}); err != nil {
+				r.logger.Error("failed to upsert assistant message (token)",
+					zap.Error(err),
+					zap.String("msg_id", frame.Payload.MessageID.String()),
+					zap.String("chat_id", frame.ChatID.String()),
+					zap.Int("text_len", len(r.currentMessageMetadata.Text)),
+				)
+			}
 		}
 	}
 

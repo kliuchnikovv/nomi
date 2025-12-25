@@ -62,6 +62,7 @@ type Payload struct {
 	Type             string      `json:"type,omitempty"`
 	CompletionTokens uint        `json:"completion_tokens,omitempty"`
 	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
+	Tool             interface{} `json:"tool,omitempty"`
 	Tools            interface{} `json:"tools,omitempty"`
 	History          interface{} `json:"history,omitempty"`
 	Attachments      interface{} `json:"attachments,omitempty"`

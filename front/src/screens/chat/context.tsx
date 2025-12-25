@@ -640,26 +640,42 @@ export function ChatProvider({
 
         // Only accumulate text for assistant messages (streaming)
         if (!frame.payload.eof) {
-            const newText = frame.payload.message || '';
             const existingParts = newMessages[messageIdx].content_parts || [];
-
-            // Append to last text part or create new one
             let updatedParts = [...existingParts];
-            if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === 'text') {
-                // Append to existing text part
-                const lastPart = updatedParts[updatedParts.length - 1] as { type: 'text'; text: string };
-                updatedParts[updatedParts.length - 1] = { type: 'text', text: lastPart.text + newText };
-            } else {
-                // Create new text part
-                updatedParts.push({ type: 'text', text: newText });
-            }
 
-            newMessages[messageIdx] = {
-                ...newMessages[messageIdx],
-                text: newMessages[messageIdx].text + newText,
-                content_parts: updatedParts,
-            };
-            console.log("frame captured", newText, frame);
+            // Handle streaming tool call
+            if (frame.payload.type === 'tool_call' && frame.payload.tool) {
+                updatedParts.push({ type: 'tool_call', tool_call: frame.payload.tool });
+
+                // Also update top-level tool_calls array for backward compatibility
+                const currentToolCalls = newMessages[messageIdx].tool_calls || [];
+                newMessages[messageIdx] = {
+                    ...newMessages[messageIdx],
+                    content_parts: updatedParts,
+                    tool_calls: [...currentToolCalls, frame.payload.tool]
+                };
+            } else {
+                // Handle text streaming
+                const newText = frame.payload.message || '';
+                if (newText) {
+                    // Append to last text part or create new one
+                    if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === 'text') {
+                        // Append to existing text part
+                        const lastPart = updatedParts[updatedParts.length - 1] as { type: 'text'; text: string };
+                        updatedParts[updatedParts.length - 1] = { type: 'text', text: lastPart.text + newText };
+                    } else {
+                        // Create new text part
+                        updatedParts.push({ type: 'text', text: newText });
+                    }
+
+                    newMessages[messageIdx] = {
+                        ...newMessages[messageIdx],
+                        text: newMessages[messageIdx].text + newText,
+                        content_parts: updatedParts,
+                    };
+                }
+            }
+            console.log("frame captured", frame.payload.type || "text", frame);
         } else {
             setAssistantWorking(false);
         }
@@ -677,28 +693,61 @@ export function ChatProvider({
         if (messageIdx === -1) return newMessages;
 
         if (payload.type === 'metadata') { // Handling tool_calls, reasoning, and model
-            // Insert reasoning and tool calls inline into content_parts
             const existingParts = newMessages[messageIdx].content_parts || [];
             let updatedParts = [...existingParts];
+            let updatedReasoningSteps = [...(newMessages[messageIdx].reasoning_steps || [])];
 
-            // Add reasoning steps at the beginning (they happen before response)
-            if (payload.reasoning_steps && Array.isArray(payload.reasoning_steps)) {
-                for (const reasoning of payload.reasoning_steps) {
-                    // Insert at beginning, before text
-                    updatedParts.unshift({ type: 'reasoning', reasoning });
+            // Handle streaming reasoning steps
+            if (payload.reasoning_steps && Array.isArray(payload.reasoning_steps) && payload.reasoning_steps.length > 0) {
+                // Assuming payload contains chunks of reasoning
+                for (const chunk of payload.reasoning_steps) {
+                    // Append to last reasoning part or create new one
+                    if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === 'reasoning') {
+                        const lastPart = updatedParts[updatedParts.length - 1] as { type: 'reasoning', reasoning: string };
+                        updatedParts[updatedParts.length - 1] = { type: 'reasoning', reasoning: lastPart.reasoning + chunk };
+
+                        // Also update top-level array (update last element)
+                        if (updatedReasoningSteps.length > 0) {
+                            updatedReasoningSteps[updatedReasoningSteps.length - 1] += chunk;
+                        } else {
+                            updatedReasoningSteps.push(chunk);
+                        }
+                    } else {
+                        // Create new reasoning part
+                        updatedParts.push({ type: 'reasoning', reasoning: chunk });
+                        updatedReasoningSteps.push(chunk);
+                    }
                 }
             }
 
-            if (payload.tool_calls && Array.isArray(payload.tool_calls)) {
-                for (const tc of payload.tool_calls) {
+            // Legacy tool_calls handling (if sent as a block in metadata, e.g. at end)
+            // Note: Our new streaming approach sends them as data frames.
+            // This block handles the case if they are sent in metadata (e.g. legacy or redundancy).
+            // To avoid duplication, we should check if they are already in content_parts.
+            // But usually payload.tool_calls in metadata means "all tool calls so far" or "final list".
+            // If we are streaming, we probably shouldn't blindly append.
+            // Let's rely on streaming data frames for tool calls, and use metadata only for model info
+            // or if we trust it doesn't duplicate.
+            // The Go backend sends tool calls in metadata at the end if accumulated.
+
+            // If we receive tool_calls in metadata, let's assume it's the COMPLETE list and sync if needed,
+            // OR just ignore if we are building incrementally.
+            // Since we implemented streaming tool calls, we should prioritize that.
+            // However, the previous code handled it here.
+
+            // Checking if we already have tool calls in content parts
+            const hasToolCalls = updatedParts.some(p => p.type === 'tool_call');
+            if (!hasToolCalls && payload.tool_calls && Array.isArray(payload.tool_calls)) {
+                 for (const tc of payload.tool_calls) {
                     updatedParts.push({ type: 'tool_call', tool_call: tc });
                 }
             }
 
             newMessages[messageIdx] = {
                 ...newMessages[messageIdx],
-                tool_calls: payload.tool_calls,
-                reasoning_steps: payload.reasoning_steps,
+                // tool_calls: payload.tool_calls, // Don't overwrite with payload if we are streaming
+                tool_calls: payload.tool_calls || newMessages[messageIdx].tool_calls,
+                reasoning_steps: updatedReasoningSteps,
                 content_parts: updatedParts,
                 model: payload.model || newMessages[messageIdx].model
             };
