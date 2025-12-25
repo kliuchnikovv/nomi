@@ -40,10 +40,11 @@ type Message struct {
 	UserID      uuid.UUID      `gorm:"type:uuid;not null"`
 	Role        string         `gorm:"type:varchar(20);not null"`
 	Text        string         `gorm:"type:text;not null"`
-	ToolCalls   datatypes.JSON `gorm:"type:jsonb"`
-	Reasoning   string         `gorm:"type:text"` // Stores accumulated reasoning/thinking steps
-	Model       string         `gorm:"type:text"`
-	Attachments []Attachment   `gorm:"foreignKey:MessageID"`
+	ToolCalls    datatypes.JSON `gorm:"type:jsonb"`
+	ContentParts datatypes.JSON `gorm:"type:jsonb"` // Stores ordered text, tool_calls, reasoning
+	Reasoning    string         `gorm:"type:text"`  // Stores accumulated reasoning/thinking steps
+	Model        string         `gorm:"type:text"`
+	Attachments  []Attachment   `gorm:"foreignKey:MessageID"`
 	CreatedAt   time.Time      `gorm:"not null"`
 	UpdatedAt   time.Time      `gorm:"not null"`
 }

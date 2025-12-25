@@ -41,11 +41,12 @@ type Room struct {
 
 	// Metadata tracking for current assistant message
 	currentMessageMetadata struct {
-		MessageID uuid.UUID
-		Model     string
-		ToolCalls interface{}
-		Text      string
-		Reasoning string
+		MessageID    uuid.UUID
+		Model        string
+		ToolCalls    interface{}
+		Text         string
+		Reasoning    string
+		ContentParts []interface{}
 	}
 }
 
@@ -496,23 +497,47 @@ func (r *Room) handleLLMMessage(frame Frame) {
 		// Handle ReasoningSteps if present
 		// Note: ReasoningSteps are streamed as tokens/deltas, so we concatenate directly.
 		if len(frame.Payload.ReasoningSteps) > 0 {
+			stepContent := ""
 			for _, step := range frame.Payload.ReasoningSteps {
 				r.currentMessageMetadata.Reasoning += step
+				stepContent += step
 			}
+
+			// Append to ContentParts
+			parts := r.currentMessageMetadata.ContentParts
+			if len(parts) > 0 {
+				lastPart := parts[len(parts)-1].(map[string]interface{})
+				if lastPart["type"] == "reasoning" {
+					lastPart["reasoning"] = lastPart["reasoning"].(string) + stepContent
+					parts[len(parts)-1] = lastPart
+				} else {
+					parts = append(parts, map[string]interface{}{
+						"type":      "reasoning",
+						"reasoning": stepContent,
+					})
+				}
+			} else {
+				parts = append(parts, map[string]interface{}{
+					"type":      "reasoning",
+					"reasoning": stepContent,
+				})
+			}
+			r.currentMessageMetadata.ContentParts = parts
 		}
 
 		// Update DB logic - preserve accumulated text, don't overwrite with empty!
 		if r.currentMessageMetadata.MessageID != uuid.Nil {
 			if err := r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
-				ID:        r.currentMessageMetadata.MessageID,
-				ChatID:    frame.ChatID,
-				Sender:    storage.ZeroUUID,
-				Role:      chat.RoleAssistant,
-				Text:      r.currentMessageMetadata.Text, // FIXED: Use accumulated text
-				Reasoning: r.currentMessageMetadata.Reasoning,
-				Model:     r.currentMessageMetadata.Model,
-				ToolCalls: r.currentMessageMetadata.ToolCalls,
-				CreatedAt: time.Now().UTC(),
+				ID:           r.currentMessageMetadata.MessageID,
+				ChatID:       frame.ChatID,
+				Sender:       storage.ZeroUUID,
+				Role:         chat.RoleAssistant,
+				Text:         r.currentMessageMetadata.Text, // FIXED: Use accumulated text
+				Reasoning:    r.currentMessageMetadata.Reasoning,
+				Model:        r.currentMessageMetadata.Model,
+				ToolCalls:    r.currentMessageMetadata.ToolCalls,
+				ContentParts: r.currentMessageMetadata.ContentParts,
+				CreatedAt:    time.Now().UTC(),
 			}); err != nil {
 				r.logger.Error("failed to upsert assistant message (metadata)",
 					zap.Error(err),
@@ -532,11 +557,12 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				zap.Int("old_text_len", len(r.currentMessageMetadata.Text)),
 			)
 			r.currentMessageMetadata = struct {
-				MessageID uuid.UUID
-				Model     string
-				ToolCalls interface{}
-				Text      string
-				Reasoning string
+				MessageID    uuid.UUID
+				Model        string
+				ToolCalls    interface{}
+				Text         string
+				Reasoning    string
+				ContentParts []interface{}
 			}{
 				MessageID: frame.Payload.MessageID,
 			}
@@ -544,12 +570,11 @@ func (r *Room) handleLLMMessage(frame Frame) {
 
 		shouldUpsert := false
 
+		parts := r.currentMessageMetadata.ContentParts
+
 		// Handle Tool Call
 		if frame.Payload.Type == "tool_call" && frame.Payload.Tool != nil {
 			// Append tool call to metadata
-			// r.currentMessageMetadata.ToolCalls is interface{}, likely []interface{} or []map[string]interface{}
-			// We need to be careful with type assertions.
-
 			var currentTools []interface{}
 			if r.currentMessageMetadata.ToolCalls != nil {
 				if ct, ok := r.currentMessageMetadata.ToolCalls.([]interface{}); ok {
@@ -558,6 +583,14 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			}
 			currentTools = append(currentTools, frame.Payload.Tool)
 			r.currentMessageMetadata.ToolCalls = currentTools
+
+			// Append to ContentParts
+			parts = append(parts, map[string]interface{}{
+				"type":      "tool_call",
+				"tool_call": frame.Payload.Tool,
+			})
+			r.currentMessageMetadata.ContentParts = parts
+
 			shouldUpsert = true
 
 			r.logger.Info("accumulating tool call",
@@ -566,11 +599,33 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			)
 		} else {
 			// Handle Text
+			textDelta := frame.Payload.Message
+
 			oldLen := len(r.currentMessageMetadata.Text)
-			r.currentMessageMetadata.Text += frame.Payload.Message
+			r.currentMessageMetadata.Text += textDelta
 			newLen := len(r.currentMessageMetadata.Text)
 
 			if newLen > oldLen {
+				// Append to ContentParts
+				if len(parts) > 0 {
+					lastPart := parts[len(parts)-1].(map[string]interface{})
+					if lastPart["type"] == "text" {
+						lastPart["text"] = lastPart["text"].(string) + textDelta
+						parts[len(parts)-1] = lastPart
+					} else {
+						parts = append(parts, map[string]interface{}{
+							"type": "text",
+							"text": textDelta,
+						})
+					}
+				} else {
+					parts = append(parts, map[string]interface{}{
+						"type": "text",
+						"text": textDelta,
+					})
+				}
+				r.currentMessageMetadata.ContentParts = parts
+
 				shouldUpsert = true
 				r.logger.Debug("accumulating LLM text",
 					zap.String("msg_id", frame.Payload.MessageID.String()),
@@ -583,15 +638,16 @@ func (r *Room) handleLLMMessage(frame Frame) {
 
 		if shouldUpsert {
 			if err := r.store.UpsertMessage(ctx, r.initiatorID, &chat.Message{
-				ID:        frame.Payload.MessageID,
-				ChatID:    frame.ChatID,
-				Sender:    storage.ZeroUUID, // Assistant
-				Role:      chat.RoleAssistant,
-				Text:      r.currentMessageMetadata.Text,
-				Reasoning: r.currentMessageMetadata.Reasoning,
-				Model:     r.currentMessageMetadata.Model,
-				ToolCalls: r.currentMessageMetadata.ToolCalls,
-				CreatedAt: time.Now().UTC(),
+				ID:           frame.Payload.MessageID,
+				ChatID:       frame.ChatID,
+				Sender:       storage.ZeroUUID, // Assistant
+				Role:         chat.RoleAssistant,
+				Text:         r.currentMessageMetadata.Text,
+				Reasoning:    r.currentMessageMetadata.Reasoning,
+				Model:        r.currentMessageMetadata.Model,
+				ToolCalls:    r.currentMessageMetadata.ToolCalls,
+				ContentParts: r.currentMessageMetadata.ContentParts,
+				CreatedAt:    time.Now().UTC(),
 			}); err != nil {
 				r.logger.Error("failed to upsert assistant message (token)",
 					zap.Error(err),
@@ -606,11 +662,12 @@ func (r *Room) handleLLMMessage(frame Frame) {
 	if frame.Operation == DoneOperation {
 		// Reset metadata
 		r.currentMessageMetadata = struct {
-			MessageID uuid.UUID
-			Model     string
-			ToolCalls interface{}
-			Text      string
-			Reasoning string
+			MessageID    uuid.UUID
+			Model        string
+			ToolCalls    interface{}
+			Text         string
+			Reasoning    string
+			ContentParts []interface{}
 		}{}
 	}
 }

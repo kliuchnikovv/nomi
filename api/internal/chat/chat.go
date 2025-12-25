@@ -39,6 +39,7 @@ type Message struct {
 	Role          Role         `json:"role"`
 	Text          string       `json:"text"`
 	ToolCalls     interface{}  `json:"tool_calls,omitempty"`
+	ContentParts  interface{}  `json:"content_parts,omitempty"`
 	Reasoning     string       `json:"reasoning,omitempty"`
 	Model         string       `json:"model,omitempty"`
 	Attachments   []Attachment `json:"attachments,omitempty"`    // For reading

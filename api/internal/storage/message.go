@@ -39,6 +39,14 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
+	// Handle ContentParts if provided
+	if m.ContentParts != nil {
+		contentPartsJSON, err := json.Marshal(m.ContentParts)
+		if err == nil {
+			messageModel.ContentParts = contentPartsJSON
+		}
+	}
+
 	// Handle Model if provided
 	if m.Model != "" {
 		messageModel.Model = m.Model
@@ -97,6 +105,14 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
+	// Unmarshal ContentParts if present
+	if len(messageModel.ContentParts) > 0 {
+		var contentParts interface{}
+		if err := json.Unmarshal(messageModel.ContentParts, &contentParts); err == nil {
+			result.ContentParts = contentParts
+		}
+	}
+
 	return result, nil
 }
 
@@ -141,6 +157,14 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 		var toolCalls interface{}
 		if err := json.Unmarshal(message.ToolCalls, &toolCalls); err == nil {
 			result.ToolCalls = toolCalls
+		}
+	}
+
+	// Unmarshal ContentParts if present
+	if len(message.ContentParts) > 0 {
+		var contentParts interface{}
+		if err := json.Unmarshal(message.ContentParts, &contentParts); err == nil {
+			result.ContentParts = contentParts
 		}
 	}
 
@@ -197,6 +221,14 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 			}
 		}
 
+		// Unmarshal ContentParts if present
+		if len(msg.ContentParts) > 0 {
+			var contentParts interface{}
+			if err := json.Unmarshal(msg.ContentParts, &contentParts); err == nil {
+				m.ContentParts = contentParts
+			}
+		}
+
 		result[i] = m
 	}
 	return result, nil
@@ -249,6 +281,14 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		toolCallsJSON, err := json.Marshal(m.ToolCalls)
 		if err == nil {
 			updates["tool_calls"] = toolCallsJSON
+		}
+	}
+
+	// Update content_parts if provided
+	if m.ContentParts != nil {
+		contentPartsJSON, err := json.Marshal(m.ContentParts)
+		if err == nil {
+			updates["content_parts"] = contentPartsJSON
 		}
 	}
 
