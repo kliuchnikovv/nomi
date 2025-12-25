@@ -10,17 +10,17 @@ class SchedulerTools(Toolkit):
     # Default to Railway production URL, can be overridden by SCHEDULER_API_URL env var
     DEFAULT_API_URL = "https://genie-api-production-7074.up.railway.app/api"
     
-    def __init__(self, api_url: Optional[str] = None, user_id: Optional[str] = None, chat_id: Optional[str] = None, tools_specs: Optional[List[Any]] = None):
+    def __init__(self, api_url: Optional[str] = None, user_id: Optional[str] = None, chat_id: Optional[str] = None, tools_list: Optional[List[Any]] = None):
         super().__init__(name="scheduler_tools")
         # Priority: explicit param > env var > default production URL
         self.api_url = api_url or os.getenv("SCHEDULER_API_URL", self.DEFAULT_API_URL)
         self.api_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key") # Default for dev
         self._user_id = user_id
         self._chat_id = chat_id
-        self._tools_specs = tools_specs or []
-        print(f"[SchedulerTools.__init__] Initialized with {len(self._tools_specs)} tools_specs")
-        if self._tools_specs:
-            print(f"[SchedulerTools.__init__] Tools: {[type(t).__name__ for t in self._tools_specs]}")
+        self._tools_list = tools_list or []
+        print(f"[SchedulerTools.__init__] Initialized with {len(self._tools_list)} tools")
+        if self._tools_list:
+            print(f"[SchedulerTools.__init__] Tools: {[getattr(t, 'name', type(t).__name__) for t in self._tools_list]}")
         self.register(self.schedule_task)
 
     def schedule_task(self, agent: Agent, message: str, time: Optional[str] = None, delay_seconds: Optional[int] = None, cron: Optional[str] = None) -> str:
@@ -63,35 +63,20 @@ class SchedulerTools(Toolkit):
             # Or ask the user? No, user doesn't know UUIDs.
             return "Error: Could not determine User ID or Chat ID from agent context."
 
-        # Serialize tools_specs to JSON format expected by Go API
+        # Serialize tools_list to JSON format expected by Go API
+        # For now, just save tool names - we'll reconstruct them from user's integrations during execution
         tools_json = None
-        if self._tools_specs:
+        if self._tools_list:
             try:
-                print(f"[SchedulerTools] Serializing {len(self._tools_specs)} tools")
-                # Convert tool specs to JSON-serializable format
+                print(f"[SchedulerTools] Serializing {len(self._tools_list)} tools")
+                # Just save tool names for simplicity
                 tools_json = []
-                for tool in self._tools_specs:
-                    # Handle both ToolSpec objects and dict representations
-                    if isinstance(tool, dict):
-                        tools_json.append(tool)
-                    elif hasattr(tool, '__dict__'):
-                        # Try to extract attributes
-                        tool_dict = {
-                            "name": getattr(tool, 'name', ''),
-                            "description": getattr(tool, 'description', ''),
-                        }
-                        # Try to get parameters
-                        if hasattr(tool, 'parameters'):
-                            tool_dict["parameters"] = tool.parameters
-                        elif hasattr(tool, 'model_json_schema'):
-                            # For Pydantic models
-                            tool_dict["parameters"] = tool.model_json_schema()
-                        tools_json.append(tool_dict)
-                        print(f"[SchedulerTools] Serialized tool: {tool_dict['name']}")
-                    else:
-                        print(f"[SchedulerTools] Unknown tool type: {type(tool)}")
+                for tool in self._tools_list:
+                    tool_name = getattr(tool, 'name', str(tool))
+                    tools_json.append({"name": tool_name})
+                    print(f"[SchedulerTools] Serialized tool: {tool_name}")
                 
-                print(f"[SchedulerTools] Serialized {len(tools_json)} tools to JSON")
+                print(f"[SchedulerTools] Serialized {len(tools_json)} tool names to JSON")
             except Exception as e:
                 print(f"Warning: Could not serialize tools: {e}")
                 import traceback
