@@ -716,7 +716,7 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                     chat_history=chat_history,
                     current_model_name=current_model_name,
                     attachments=payload.get("attachments"),
-                    web_search=requested_web_search,
+                    web_search=current_web_search,
                 )
         except WebSocketDisconnect:
             # Клиент отвалился — нормальный сценарий

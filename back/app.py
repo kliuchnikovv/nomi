@@ -71,10 +71,16 @@ def _init_logging():
     
     # Configure third-party library loggers
     logging.getLogger("agno").setLevel(level)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)  # Reduce httpcore noise
-    logging.getLogger("httpx").setLevel(logging.WARNING)     # Reduce httpx noise
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)   # Reduce uvicorn noise
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    
+    # Silence noise but allow propagation for Uvicorn errors to use our JSON formatter
+    for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
+        log = logging.getLogger(logger_name)
+        log.handlers = []  # Remove default Uvicorn handlers
+        log.propagate = True # Let it bubble up to root (which has our JSON formatter)
+        log.setLevel(logging.WARNING)
+
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     
     logging.info("Logging initialized at %s", level_name)
 
