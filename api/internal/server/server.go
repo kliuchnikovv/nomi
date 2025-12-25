@@ -97,7 +97,6 @@ func New(
 			return h
 		}()
 	)
-	julesAuthHandler := handlers.NewJulesAuthHandler(db, logger)
 
 	// Initialize Scheduler (Task Manager)
 	// We start it here.
@@ -202,7 +201,6 @@ func New(
 
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
-	pluginGroup.POST("/jules/connect", julesAuthHandler.Connect)
 	manager.Mount(pluginGroup)
 
 	return &Server{
