@@ -19,7 +19,6 @@ class DuckDuckGoTools(Toolkit):
         fixed_max_results: Optional[int] = None,
         headers: Optional[Any] = None,
         proxy: Optional[str] = None,
-        proxies: Optional[Any] = None,
         timeout: Optional[int] = None,
     ):
         super().__init__(name="web_search")
@@ -28,9 +27,8 @@ class DuckDuckGoTools(Toolkit):
         self.fixed_max_results = fixed_max_results
         self.headers = headers
         self.proxy = proxy
-        self.proxies = proxies
         self.timeout = timeout
-        self.ddgs = DDGS(proxy=proxy, proxies=proxies, timeout=timeout)
+        self.ddgs = DDGS(proxy=proxy, timeout=timeout)
 
         self.register(self.duckduckgo_search)
         if self.news:

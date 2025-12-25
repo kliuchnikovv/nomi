@@ -15,7 +15,7 @@ import { Attachment, MessageAction } from '../../main/models';
 import { styles as messageStyles } from '../message/styles';
 
 function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
-    const [expanded, setExpanded] = React.useState(true);
+    const [expanded, setExpanded] = React.useState(false);
 
     // Create markdown styles with theme
     const markdownStyles = useMemo(() => createMarkdownStyles(createChatTheme(theme)), [theme]);
