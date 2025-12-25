@@ -16,12 +16,12 @@ class DummyAgent:
     def __init__(self):
         self.name = "dummy"
 
-    async def run(self, text: str, stream: bool = True, session_id: str = None, messages: list = None) -> str:
+    async def run(self, text: str, stream: bool = True, session_id: str = None, messages: list = None, **kwargs) -> str:
         # Echo-like behavior for predictable tests
         return f"echo:{text}"
 
     # Add dummy methods to satisfy Agent interface if needed
-    async def arun(self, text: str, stream: bool = True, session_id: str = None, messages: list = None) -> str:
+    async def arun(self, text: str, stream: bool = True, session_id: str = None, messages: list = None, **kwargs) -> str:
         return f"echo:{text}"
 
 class DummyAgentFactory:
@@ -39,6 +39,7 @@ class DummyAgentFactory:
         model_name: Optional[str] = None,
         agent_type: Optional[str] = None,
         command_desc: Optional[dict] = None,
+        **kwargs
     ) -> DummyAgent:
         return DummyAgent()
 
