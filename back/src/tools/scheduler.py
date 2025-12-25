@@ -18,6 +18,9 @@ class SchedulerTools(Toolkit):
         self._user_id = user_id
         self._chat_id = chat_id
         self._tools_specs = tools_specs or []
+        print(f"[SchedulerTools.__init__] Initialized with {len(self._tools_specs)} tools_specs")
+        if self._tools_specs:
+            print(f"[SchedulerTools.__init__] Tools: {[type(t).__name__ for t in self._tools_specs]}")
         self.register(self.schedule_task)
 
     def schedule_task(self, agent: Agent, message: str, time: Optional[str] = None, delay_seconds: Optional[int] = None, cron: Optional[str] = None) -> str:

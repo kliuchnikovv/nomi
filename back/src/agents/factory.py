@@ -129,10 +129,13 @@ class AgentFactory:
                 logger.info("[WS] Added DuckDuckGo search tool (web_search=True)")
             tools = await build_tools(config)
 
+        # Capture tools_specs BEFORE adding SchedulerTools (to avoid including it in saved tools)
+        tools_specs_for_scheduler = list(tools_specs) if tools_specs else []
+        
         # Always add SchedulerTools for Genie
         if not agent_type or agent_type.lower() == "genie":
             # Pass user_id, chat_id, AND tools_specs to SchedulerTools for context
-            tools.append(SchedulerTools(user_id=user_id, chat_id=chat_id, tools_specs=tools_specs))
+            tools.append(SchedulerTools(user_id=user_id, chat_id=chat_id, tools_specs=tools_specs_for_scheduler))
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 
