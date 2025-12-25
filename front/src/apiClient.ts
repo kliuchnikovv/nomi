@@ -240,5 +240,5 @@ export const pluginChatsApi = {
 
 export const authApi = {
     getMe: () => apiClient.get<any>(`${API_URL()}/auth/me`),
-    updateMe: (body: { web_search_enabled?: boolean }) => apiClient.put<any>(`${API_URL()}/auth/me`, body),
+    updateMe: (body: any) => apiClient.put<any>(`${API_URL()}/auth/me`, body),
 };

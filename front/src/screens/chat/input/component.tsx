@@ -49,7 +49,6 @@ export default function ChatInput(props: Props) {
     const [plusMenuVisible, setPlusMenuVisible] = useState(false);
     const [thinkingMenuVisible, setThinkingMenuVisible] = useState(false);
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
-    const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
@@ -57,14 +56,6 @@ export default function ChatInput(props: Props) {
 
     const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration } = useChat();
     const { user, updateUser } = useAuth();
-
-    // Initialize webSearchEnabled from user preference
-    useEffect(() => {
-        if (user?.web_search_enabled !== undefined) {
-            setWebSearchEnabled(user.web_search_enabled);
-        }
-    }, [user?.web_search_enabled]);
-
 
 
     const handleSend = useCallback(() => {
@@ -74,13 +65,13 @@ export default function ChatInput(props: Props) {
         if (!text && !hasAttachments) return;
 
         // Pass full attachments (including URI) to sendMessage for optimistic updates
-        sendMessage(text, attachments, webSearchEnabled, thinkingLevel);
+        // webSearchEnabled is now always valid/handled, but we can pass true or ignore it if backend handles it
+        sendMessage(text, attachments, true, thinkingLevel);
 
         Keyboard.dismiss();
         setValue('');
         setAttachments([]);
-        setWebSearchEnabled(false);
-    }, [value, attachments, sendMessage, webSearchEnabled, thinkingLevel]);
+    }, [value, attachments, sendMessage, thinkingLevel]);
 
 
 
@@ -105,12 +96,6 @@ export default function ChatInput(props: Props) {
             setAttachments(prev => prev.filter(a => a.id !== tempId));
         }
     };
-
-    useEffect(() => {
-        if (attachments.length > 0) {
-            setWebSearchEnabled(false);
-        }
-    }, [attachments]);
 
     const pickImage = async () => {
         console.log('PickImage called');
@@ -244,32 +229,6 @@ export default function ChatInput(props: Props) {
             onPress: () => executeWithDelay(takePhoto),
         },
         {
-            id: 'web_search',
-            label: 'Web Search',
-            // icon: <Globe width={20} height={20} color={webSearchEnabled ? theme.accent : "#fff"} />, // Icon is handled by switch now or can be kept if we want both? UI usually has label + switch.
-            isSwitch: true,
-            switchValue: webSearchEnabled,
-            onPress: async () => {
-                const newValue = !webSearchEnabled;
-                setWebSearchEnabled(newValue); // Optimistic update
-                // setPlusMenuVisible(false); // Can keep open now
-
-                if (user) {
-                    try {
-                        const updatedUser = await apiClient.put<any>(`${getApiUrl()}/auth/me`, {
-                            web_search_enabled: newValue
-                        });
-                        if (updatedUser) {
-                            updateUser(updatedUser);
-                        }
-                    } catch (e) {
-                        console.error('Failed to update web search preference', e);
-                        setWebSearchEnabled(!newValue); // Revert on failure
-                    }
-                }
-            }
-        },
-        {
             id: 'thinking',
             label: `Thinking: ${thinkingLevel.charAt(0).toUpperCase() + thinkingLevel.slice(1)}`,
             icon: <Brain width={20} height={20} color={thinkingLevel !== 'off' ? theme.accent : "#fff"} />,
@@ -297,7 +256,7 @@ export default function ChatInput(props: Props) {
                 setTimeout(() => setTeamMenuVisible(true), 300);
             }
         }] : []),
-    ], [pickDocument, pickImage, takePhoto, executeWithDelay, webSearchEnabled, thinkingLevel, theme.accent, chatMode, setChatMode]);
+    ], [pickDocument, pickImage, takePhoto, executeWithDelay, thinkingLevel, theme.accent, chatMode, setChatMode]);
 
     const removeAttachment = (id: string) => {
         setAttachments(prev => prev.filter(a => a.id !== id));
@@ -473,7 +432,7 @@ export default function ChatInput(props: Props) {
                 <TextInput
                     multiline
                     style={styles.input}
-                    placeholder={webSearchEnabled ? "Search the web" : "Type a message..."}
+                    placeholder="Type a message..."
                     placeholderTextColor="rgba(192, 202, 245, 0.6)"
                     value={value}
                     onChangeText={setValue}

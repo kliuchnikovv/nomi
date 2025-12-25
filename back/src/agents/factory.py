@@ -123,10 +123,10 @@ class AgentFactory:
                     logger.debug("[WS] tool appended: enabled")
                 else:
                     logger.debug("[WS] tool not appended: not enabled")
-            # Add web search if web_search is enabled (instead of native Gemini search)
-            if web_search:
-                config.add("web_search")
-                logger.info("[WS] Added web search tool (web_search=True)")
+            # Always add web search tool
+            config.add("web_search")
+            logger.info("[WS] Added web search tool (always enabled)")
+            
             tools = await build_tools(config)
 
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)

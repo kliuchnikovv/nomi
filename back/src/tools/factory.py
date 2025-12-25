@@ -8,7 +8,7 @@ from agno.tools import Toolkit
 from agno.tools.gmail import GmailTools
 from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools.github import GithubTools
-from agno.tools.duckduckgo import DuckDuckGoTools as WebSearchTools
+from src.tools.duckduckgo_custom import DuckDuckGoTools as WebSearchTools  # Use our custom version
 from google.oauth2.credentials import Credentials
 from src.tools.memory_writer import MemoryWriter
 from src.tools.rag_tool import RagTool

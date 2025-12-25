@@ -4,7 +4,6 @@ export type User = {
     id: string;
     name: string;
     email: string;
-    web_search_enabled?: boolean;
 }
 
 export interface AuthContextType {

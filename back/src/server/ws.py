@@ -646,55 +646,9 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                             e,
                         )
 
-                # Check if web_search setting changed and rebuild agent if needed
-                requested_web_search = bool(payload.get("web_search", False))
-                if requested_web_search != current_web_search:
-                    logger.info(
-                        "[WS] web_search changed: session_id=%s old=%s new=%s - rebuilding agent",
-                        session_id,
-                        current_web_search,
-                        requested_web_search,
-                    )
-                    current_web_search = requested_web_search
-                    try:
-                        if is_team_mode:
-                            # For team mode, include web_search in updated_desc if needed
-                            pass  # Team mode doesn't support web_search per-message currently
-                        else:
-                            agent = await agent_factory.build(
-                                session_id,
-                                tools_specs=tools_specs,
-                                model_name=current_model_name,
-                                agent_type=agent_type,
-                                command_desc=command_desc,
-                                web_search=current_web_search,
-                                thinking=current_thinking,
-                                user_id=session_id,
-                                chat_id=chat_id_param,
-                            )
-                            logger.info(
-                                "[WS] Agent rebuilt with web_search=%s: session_id=%s",
-                                current_web_search,
-                                session_id,
-                            )
-                    except Exception as e:
-                        logger.error(
-                            "[WS] Failed to rebuild agent for web_search change: session_id=%s error=%s",
-                            session_id,
-                            e,
-                        )
-                        next_id = await _send_frame(
-                            websocket=websocket,
-                            frame=make_error(
-                                id=next_id,
-                                chat_id=frame.chat_id,
-                                code="agent_rebuild_failed",
-                                message="Failed to enable/disable web search",
-                                http=500,
-                                details={"error": str(e)},
-                            ),
-                        )
-                        continue
+                # Web search is now permanently enabled in backend, so we ignore payload toggle
+                # requested_web_search = bool(payload.get("web_search", False))
+                # if requested_web_search != current_web_search: ... logic removed ...
 
                 # Check if thinking setting changed and rebuild agent if needed
                 requested_thinking_raw = payload.get("thinking")

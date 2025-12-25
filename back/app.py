@@ -21,6 +21,43 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ---- Logging ----
+class RailwayJsonFormatter(logging.Formatter):
+    """JSON formatter for Railway-compatible logs"""
+    
+    LEVEL_MAP = {
+        logging.DEBUG: "debug",
+        logging.INFO: "info",
+        logging.WARNING: "warn",
+        logging.ERROR: "error",
+        logging.CRITICAL: "fatal",
+    }
+    
+    def format(self, record: logging.LogRecord) -> str:
+        import json
+        from datetime import datetime
+        
+        # Clean message without timestamp and level
+        message = record.getMessage()
+        
+        # Build Railway-compatible JSON structure
+        log_entry = {
+            "message": message,
+            "attributes": {
+                "level": self.LEVEL_MAP.get(record.levelno, "info"),
+            },
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        
+        # Add logger name if not root
+        if record.name and record.name != "root":
+            log_entry["attributes"]["logger"] = record.name
+        
+        # Add exception info if present
+        if record.exc_info:
+            log_entry["attributes"]["exception"] = self.formatException(record.exc_info)
+        
+        return json.dumps(log_entry, ensure_ascii=False)
+
 def _init_logging():
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
@@ -28,10 +65,17 @@ def _init_logging():
     root.setLevel(level)
     if not root.handlers:
         h = logging.StreamHandler()
-        fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s - %(message)s")
+        fmt = RailwayJsonFormatter()
         h.setFormatter(fmt)
         root.addHandler(h)
+    
+    # Configure third-party library loggers
     logging.getLogger("agno").setLevel(level)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)  # Reduce httpcore noise
+    logging.getLogger("httpx").setLevel(logging.WARNING)     # Reduce httpx noise
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)   # Reduce uvicorn noise
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    
     logging.info("Logging initialized at %s", level_name)
 
 debug_mode = os.getenv("DEBUG") == "True"

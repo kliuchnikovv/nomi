@@ -1,10 +1,13 @@
 from typing import Optional, List, Any
 import os
+import logging
 from datetime import datetime, timedelta
 import requests
 import json
 from agno.agent import Agent
 from agno.tools import Toolkit
+
+logger = logging.getLogger(__name__)
 
 class SchedulerTools(Toolkit):
     # Default to Railway production URL, can be overridden by SCHEDULER_API_URL env var
@@ -18,9 +21,9 @@ class SchedulerTools(Toolkit):
         self._user_id = user_id
         self._chat_id = chat_id
         self._tools_list = tools_list or []
-        print(f"[SchedulerTools.__init__] Initialized with {len(self._tools_list)} tools")
+        logger.info("[SchedulerTools.__init__] Initialized with %d tools", len(self._tools_list))
         if self._tools_list:
-            print(f"[SchedulerTools.__init__] Tools: {[getattr(t, 'name', type(t).__name__) for t in self._tools_list]}")
+            logger.info("[SchedulerTools.__init__] Tools: %s", [getattr(t, 'name', type(t).__name__) for t in self._tools_list])
         self.register(self.schedule_task)
 
     def schedule_task(self, agent: Agent, message: str, time: Optional[str] = None, delay_seconds: Optional[int] = None, cron: Optional[str] = None) -> str:
@@ -68,17 +71,17 @@ class SchedulerTools(Toolkit):
         tools_json = None
         if self._tools_list:
             try:
-                print(f"[SchedulerTools] Serializing {len(self._tools_list)} tools")
+                logger.info("[SchedulerTools] Serializing %d tools", len(self._tools_list))
                 # Just save tool names for simplicity
                 tools_json = []
                 for tool in self._tools_list:
                     tool_name = getattr(tool, 'name', str(tool))
                     tools_json.append({"name": tool_name})
-                    print(f"[SchedulerTools] Serialized tool: {tool_name}")
+                    logger.info("[SchedulerTools] Serialized tool: %s", tool_name)
                 
-                print(f"[SchedulerTools] Serialized {len(tools_json)} tool names to JSON")
+                logger.info("[SchedulerTools] Serialized %d tool names to JSON", len(tools_json))
             except Exception as e:
-                print(f"Warning: Could not serialize tools: {e}")
+                logger.warning("Warning: Could not serialize tools: %s", e)
                 import traceback
                 traceback.print_exc()
 
