@@ -611,9 +611,8 @@ def router(agent_factory: AgentFactory) -> APIRouter:
                         session_id,
                         len(msg_tools) if isinstance(msg_tools, list) else 0,
                     )
-                    # Convert tools from payload to ToolSpec format
+                    # Convert tools from payload to ToolSpec format (ToolSpec is already imported at top)
                     try:
-                        from agno.tools.models import ToolSpec
                         tools_specs = []
                         if isinstance(msg_tools, list):
                             for tool_dict in msg_tools:

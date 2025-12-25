@@ -142,6 +142,14 @@ func (h *SidebarHandler) ListChats(c *gin.Context) {
 		return
 	}
 
+	// DEBUG: Log what we got from storage
+	fmt.Printf("[DEBUG ListChats] provider=%s, integration_id=%v, user_id=%s, chats_count=%d\n", 
+		provider, integrationFilter, user.ID.String(), len(chats))
+	for i, chat := range chats {
+		fmt.Printf("[DEBUG ListChats] chat[%d]: id=%s, title=%s, count=%d\n", 
+			i, chat.ID.String(), chat.Title, chat.Count)
+	}
+
 	resp := make([]SidebarChat, 0, len(chats))
 	for _, chat := range chats {
 		var last time.Time
