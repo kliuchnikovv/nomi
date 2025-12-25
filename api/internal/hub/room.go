@@ -391,11 +391,23 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			msgID = uuid.New()
 		}
 
+		// Determine role
+		role := chat.RoleUser
+		if frame.Payload.Role == string(chat.RoleSystem) {
+			role = chat.RoleSystem
+		}
+
+		r.logger.Info("saving message to db", 
+			zap.String("original_payload_role", frame.Payload.Role),
+			zap.String("determined_role", string(role)),
+			zap.String("msg_id", msgID.String()),
+		)
+
 		err := r.store.UpsertMessage(context.Background(), senderID, &chat.Message{
 			ID:        msgID,
 			ChatID:    r.ID,
 			Sender:    senderID,
-			Role:      chat.RoleUser,
+			Role:      role,
 			Text:      frame.Payload.Message,
 			Model:     frame.Payload.Model,
 			CreatedAt: time.Now().UTC(),
