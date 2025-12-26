@@ -24,7 +24,13 @@ export type ReasoningPart = {
     reasoning: string;
 };
 
-export type ContentPart = TextPart | ToolCallPart | ReasoningPart;
+export type MemberResponsePart = {
+    type: 'member_response';
+    agent_name: string;
+    text: string;
+};
+
+export type ContentPart = TextPart | ToolCallPart | ReasoningPart | MemberResponsePart;
 
 export type Message = {
     id: string

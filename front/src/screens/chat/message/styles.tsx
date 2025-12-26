@@ -230,6 +230,36 @@ export const styles = StyleSheet.create({
         lineHeight: 18,
         fontStyle: 'italic',
     },
+    // Member response block styles (for team member agent activity)
+    memberResponseContainer: {
+        marginVertical: 6,
+        backgroundColor: withAlpha(palette.cyan, 0.08),
+        borderRadius: 8,
+        borderLeftWidth: 3,
+        borderLeftColor: palette.cyan,
+        overflow: 'hidden',
+    },
+    memberResponseHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+    },
+    memberResponseHeaderText: {
+        color: palette.cyan,
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    memberResponseContent: {
+        paddingHorizontal: 10,
+        paddingBottom: 8,
+    },
+    memberResponseText: {
+        color: theme.textSecondary,
+        fontSize: 13,
+        lineHeight: 18,
+    },
 });
 
 // Markdown styles - separate from StyleSheet.create() due to custom properties

@@ -412,6 +412,18 @@ class LLMWebSocketSession:
                         "message_id": message_id
                     }))
 
+                elif evt_type == "member_response":
+                    # Team member agent response - send as system activity
+                    chunk = event.get("content", "")
+                    agent_name = event.get("agent_name", "Member")
+                    if chunk:
+                        await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
+                            "type": "member_response",
+                            "agent_name": agent_name,
+                            "message": chunk,
+                            "message_id": message_id
+                        }))
+
         except Exception as e:
             await self._send_error(e, chat_id)
             return
@@ -511,11 +523,20 @@ class LLMWebSocketSession:
                 event_type = type(ev).__name__
                 # logger.debug("[WS] Event: %s", event_type)
 
+                # Check if this is a member agent event (not the leader)
+                agent_id = getattr(ev, 'agent_id', None)
+                agent_name = getattr(ev, 'agent_name', None) or agent_id
+                is_member_event = agent_id is not None
+
                 # 1. Tool Calls
                 # Agno emits ToolCallCompletedEvent with 'tool' attribute
                 if "ToolCallCompleted" in event_type:
                     if hasattr(ev, 'tool') and ev.tool:
-                        yield {"type": "tool_call", "tool": ev.tool}
+                        tool_data = {"type": "tool_call", "tool": ev.tool}
+                        if is_member_event:
+                            tool_data["agent_id"] = agent_id
+                            tool_data["agent_name"] = agent_name
+                        yield tool_data
 
                 # 2. Reasoning
                 captured_reasoning = None
@@ -542,7 +563,11 @@ class LLMWebSocketSession:
 
                     chunk = str(val) if val is not None else ""
                     if chunk and chunk != captured_reasoning:
-                         yield {"type": "text", "content": chunk}
+                         # Mark member responses differently
+                         if is_member_event:
+                             yield {"type": "member_response", "content": chunk, "agent_id": agent_id, "agent_name": agent_name}
+                         else:
+                             yield {"type": "text", "content": chunk}
 
         elif hasattr(result, "__iter__") and not isinstance(result, (str, bytes)):
              # Sync iterator

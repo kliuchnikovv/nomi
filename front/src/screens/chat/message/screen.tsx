@@ -10,7 +10,7 @@ import {
     Image,
     ActivityIndicator
 } from 'react-native';
-import { ToolCallsSection, SingleToolCall, ReasoningBlock } from './ToolCalls';
+import { ToolCallsSection, SingleToolCall, ReasoningBlock, MemberResponseBlock } from './ToolCalls';
 import Markdown from 'react-native-markdown-display';
 import React, { useCallback, useState, useEffect } from 'react';
 import { Action, Props, Role, Attachment, ContentPart } from './models'
@@ -55,7 +55,7 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
     );
 }
 
-// Render content parts (text + inline tool calls + reasoning)
+// Render content parts (text + inline tool calls + reasoning + member responses)
 function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
     return (
         <>
@@ -77,6 +77,10 @@ function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], on
                     return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
                 } else if (part.type === 'reasoning') {
                     return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
+                } else if ((part as any).type === 'member_response') {
+                    // Team member response
+                    const memberPart = part as any;
+                    return <MemberResponseBlock key={`member-${index}`} agentName={memberPart.agent_name} text={memberPart.text} />;
                 }
                 return null;
             })}

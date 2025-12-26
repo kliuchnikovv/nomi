@@ -654,6 +654,31 @@ export function ChatProvider({
                     content_parts: updatedParts,
                     tool_calls: [...currentToolCalls, frame.payload.tool]
                 };
+            } else if (frame.payload.type === 'member_response') {
+                // Handle team member agent response - accumulate into collapsible part
+                const memberText = frame.payload.message || '';
+                const agentName = frame.payload.agent_name || 'Member';
+
+                if (memberText) {
+                    // Check if last part is from the same member agent
+                    const lastPart = updatedParts.length > 0 ? updatedParts[updatedParts.length - 1] : null;
+                    if (lastPart && (lastPart as any).type === 'member_response' && (lastPart as any).agent_name === agentName) {
+                        // Append to existing member response
+                        updatedParts[updatedParts.length - 1] = {
+                            type: 'member_response',
+                            agent_name: agentName,
+                            text: (lastPart as any).text + memberText
+                        } as any;
+                    } else {
+                        // Create new member response part
+                        updatedParts.push({ type: 'member_response', agent_name: agentName, text: memberText } as any);
+                    }
+
+                    newMessages[messageIdx] = {
+                        ...newMessages[messageIdx],
+                        content_parts: updatedParts,
+                    };
+                }
             } else {
                 // Handle text streaming
                 const newText = frame.payload.message || '';

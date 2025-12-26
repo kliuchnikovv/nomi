@@ -136,3 +136,36 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
         </View>
     );
 }
+
+// Team member response block for showing agent activity
+export function MemberResponseBlock({ agentName, text }: { agentName: string; text: string }) {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!text) return null;
+
+    return (
+        <View style={styles.memberResponseContainer}>
+            <Pressable
+                onPress={() => setExpanded(!expanded)}
+                style={({ pressed }) => [
+                    styles.memberResponseHeader,
+                    pressed && { opacity: 0.7 },
+                ]}
+            >
+                <Text style={styles.memberResponseHeaderText}>
+                    👤 {agentName}
+                </Text>
+                <Text style={styles.toolCallsExpandIcon}>
+                    {expanded ? '▼' : '▶'}
+                </Text>
+            </Pressable>
+            {expanded && (
+                <View style={styles.memberResponseContent}>
+                    <Text style={styles.memberResponseText}>
+                        {text}
+                    </Text>
+                </View>
+            )}
+        </View>
+    );
+}
