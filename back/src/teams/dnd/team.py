@@ -55,7 +55,11 @@ class DnDTeam(Team):
 
             2. **Turn Loop**:
                - Identify whose turn it is.
-               - If **User**: Stop and ask "What do you want to do?". List valid options (Attack, Hide, Spell, etc.).
+               - If **User**: Stop and present **3-5 action options** based on the current situation. Examples:
+                 * In combat: "Attack", "Defend", "Cast Spell", "Use Item", "Flee"
+                 * In dialogue: "Intimidate", "Persuade", "Ask about...", "Leave", "Attack"
+                 * Exploring: "Investigate", "Sneak", "Open door", "Search for traps", "Rest"
+               - Always include at least one creative/risky option and one cautious option.
                - If **NPC/Ally**: Call PartyAgent/DM to decide action.
 
             3. **Resolution**:
@@ -65,7 +69,13 @@ class DnDTeam(Team):
                - Pass narration to Secretary for logging.
 
             4. **Output**:
-               - Ensure the final output to the user is the DM's narration + the prompt for the next action.
+               - End EVERY response with a clear prompt: "What do you do?" followed by numbered action options.
+               - Format: 
+                 1. [Action 1 - brief description]
+                 2. [Action 2 - brief description]
+                 3. [Action 3 - brief description]
+                 4. [Action 4 - optional creative/risky]
+                 5. [Other - describe your own action]
                - **Tone**: Immersive, fantasy, adventurous.
                - **Language**: Match the user's language (respond in the same language they write in).
         """)
