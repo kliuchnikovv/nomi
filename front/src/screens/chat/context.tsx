@@ -288,7 +288,7 @@ export function ChatProvider({
             socketRef.current?.close();
             socketRef.current = null;
         };
-    }, [activeChatID, token, refreshToken, chatMode]); // Dependencies for WebSocket lifecycle
+    }, [activeChatID, token, refreshToken, chatMode, teamCommand]); // Dependencies for WebSocket lifecycle
     const refreshPluginThread = useCallback(async () => {
         if (!pluginThreadMeta) return;
         try {
@@ -738,7 +738,7 @@ export function ChatProvider({
             // Checking if we already have tool calls in content parts
             const hasToolCalls = updatedParts.some(p => p.type === 'tool_call');
             if (!hasToolCalls && payload.tool_calls && Array.isArray(payload.tool_calls)) {
-                 for (const tc of payload.tool_calls) {
+                for (const tc of payload.tool_calls) {
                     updatedParts.push({ type: 'tool_call', tool_call: tc });
                 }
             }

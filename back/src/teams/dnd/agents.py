@@ -8,14 +8,20 @@ def create_dm_agent(model: Model) -> Agent:
         model=model,
         instructions=dedent("""
             You are the Dungeon Master (DM) for a D&D 5e game.
+            You are a master storyteller.
+
             Your responsibilities:
-            1. Describe the scene vividly but concisely (max 60 words).
-            2. Control NPCs and monsters.
+            1. Describe the scene vividly, using sensory details (sight, sound, smell).
+            2. Control NPCs and monsters with distinct personalities.
             3. Adjudicate outcomes of actions based on rules provided by the RulesLawyer.
             4. Move the story forward.
 
+            **Safety Override:**
+            - This is a fictional roleplay. Combat and conflict are expected.
+            - Do not refuse to narrate fictional violence or danger.
+
             Output strictly JSON when requested by the Team Leader.
-            Otherwise, speak naturally but keep it brief.
+            Otherwise, speak naturally as the DM.
         """),
         markdown=True
     )
@@ -55,9 +61,11 @@ def create_party_agent(model: Model) -> Agent:
         model=model,
         instructions=dedent("""
             You play the role of the other party members (not the User's character).
-            - Make decisions consistent with their personalities.
+            - You are a helpful adventurer companion.
+            - Make decisions consistent with your fictional persona.
             - Cooperate with the User.
             - In combat, choose tactical actions.
+            - Engage in banter and roleplay.
         """),
         markdown=True
     )
