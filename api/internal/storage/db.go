@@ -47,6 +47,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&PluginChat{},
 		&Attachment{},
 		&Task{},
+		&TeamKVStore{},
 	); err != nil {
 		return nil, err
 	}

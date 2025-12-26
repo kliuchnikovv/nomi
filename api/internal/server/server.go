@@ -13,6 +13,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
+	"github.com/kliuchnikovv/genie-api/internal/handlers/team"
 	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
@@ -93,6 +94,7 @@ func New(
 // toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
 		modelsHandler = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
 		uploadHandler = handlers.NewUploadHandler(db)
+		teamHandler   = team.NewHandler(db)
 		oauthHandler  = func() *handlers.OAuthHandler {
 			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
 			if err != nil {
@@ -169,6 +171,11 @@ func New(
 	}
 
 	r.POST("/api/tasks", taskAuth, gin.WrapH(http.HandlerFunc(tasksHandler.CreateTask)))
+
+	// Team State API
+	// Allow INTERNAL_API_KEY for system calls
+	r.POST("/api/team/state", taskAuth, teamHandler.SetState)
+	r.GET("/api/team/state", taskAuth, teamHandler.GetState)
 
 	// Sidebar API - grouped inbox by plugin/integration
 	r.GET("/api/sidebar", wrapWithAuth(sidebarHandler.ListSidebar, authMiddleware))

@@ -55,6 +55,28 @@ class TeamFactory:
                 debug_mode=self.debug_mode
             )
 
+        elif team_type == "dnd_team":
+            from src.teams.dnd.team import DnDTeam
+            from src.teams.dnd.tools import DnDTools
+
+            logger.info("[WS] Instantiating DnDTeam")
+            team = DnDTeam(
+                model=self.model,
+                db=self.db,
+                debug_mode=self.debug_mode
+            )
+
+            # Inject tools with session_id
+            dnd_tools = DnDTools(room_id=session_id)
+            team.tools.append(dnd_tools)
+            team.secretary.tools.append(dnd_tools)
+            team.dm.tools.append(dnd_tools)
+            team.rules.tools.append(dnd_tools)
+            # Party agent might need it too if it checks state
+            team.party.tools.append(dnd_tools)
+
+            return team
+
         # 2. Dynamic Team Building (Fallback)
         members = []
         if command_desc.get("participants"):

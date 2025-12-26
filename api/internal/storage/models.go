@@ -44,6 +44,7 @@ type Message struct {
 	ContentParts datatypes.JSON `gorm:"type:jsonb"` // Stores ordered text, tool_calls, reasoning
 	Reasoning    string         `gorm:"type:text"`  // Stores accumulated reasoning/thinking steps
 	Model        string         `gorm:"type:text"`
+	Actions      datatypes.JSON `gorm:"type:jsonb"` // Stores potential user actions (buttons)
 	Attachments  []Attachment   `gorm:"foreignKey:MessageID"`
 	CreatedAt   time.Time      `gorm:"not null"`
 	UpdatedAt   time.Time      `gorm:"not null"`
