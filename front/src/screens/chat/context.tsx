@@ -682,6 +682,7 @@ export function ChatProvider({
             } else if (frame.payload.type === 'actions') {
                 // Handle D&D action buttons from suggest_actions tool
                 const actions = frame.payload.actions || [];
+                console.log('[ChatContext] Received actions frame:', actions);
                 if (actions.length > 0) {
                     // Set actions on the message for button rendering
                     newMessages[messageIdx] = {
@@ -691,6 +692,7 @@ export function ChatProvider({
                             message_id: frame.payload.message_id
                         })),
                     };
+                    console.log('[ChatContext] Set actions on message:', newMessages[messageIdx].actions);
                 }
             } else {
                 // Handle text streaming

@@ -107,6 +107,7 @@ class DnDTools(Toolkit):
         """
         # This tool result is special - it will be parsed by the streaming handler
         # and converted to clickable action buttons
+        logger.info(f"[DnDTools] suggest_actions called with: {actions}")
         result = {
             "__action_buttons__": True,
             "actions": [
