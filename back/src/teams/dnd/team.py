@@ -104,7 +104,15 @@ class DnDTeam(Team):
             stream_member_events=False,    # Don't stream member events to output
         )
 
-    # We need to intercept the build/run to inject tools with session_id
-    # But Agno might handle this differently.
-    # In 'back/src/teams/factory.py', the team is built.
-    # We can add a method `configure_tools(room_id)` that the factory calls.
+    def configure_tools(self, dnd_tools):
+        """Configure DnD tools for the team after initialization."""
+        # Add to the team's tools list (leader uses these)
+        if not self.tools:
+            self.tools = []
+        self.tools.append(dnd_tools)
+        
+        # Also add to each member for state access
+        for member in [self.dm, self.secretary, self.rules, self.party]:
+            if not hasattr(member, 'tools') or member.tools is None:
+                member.tools = []
+            member.tools.append(dnd_tools)

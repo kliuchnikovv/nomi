@@ -401,10 +401,24 @@ class LLMWebSocketSession:
                     
                     # Check if tool result contains action buttons (from suggest_actions)
                     result = safe_tool.get("result")
-                    if result and isinstance(result, str):
+                    # Try additional sources if result not in safe_tool
+                    if result is None and hasattr(ev, 'tool') and hasattr(ev.tool, 'result'):
+                        result = ev.tool.result
+                    if result is None and hasattr(ev, 'result'):
+                        result = ev.result
+                    
+                    if result:
                         try:
-                            result_data = json.loads(result)
-                            if result_data.get("__action_buttons__"):
+                            # Parse result - could be string or already dict
+                            if isinstance(result, str):
+                                result_data = json.loads(result)
+                            elif isinstance(result, dict):
+                                result_data = result
+                            else:
+                                result_data = None
+                            
+                            if result_data and result_data.get("__action_buttons__"):
+                                logger.info("[WS] Sending action buttons from suggest_actions")
                                 # Send action buttons as a special frame
                                 await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
                                     "type": "actions",
@@ -413,7 +427,7 @@ class LLMWebSocketSession:
                                 }))
                                 # Don't send regular tool call frame for action buttons
                                 continue
-                        except json.JSONDecodeError:
+                        except (json.JSONDecodeError, TypeError):
                             pass
                     
                     await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {

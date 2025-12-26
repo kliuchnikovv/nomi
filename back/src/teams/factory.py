@@ -66,14 +66,9 @@ class TeamFactory:
                 debug_mode=self.debug_mode,
             )
 
-            # Inject tools with session_id
+            # Inject tools with session_id using the configure method
             dnd_tools = DnDTools(room_id=session_id)
-            team.tools.append(dnd_tools)
-            team.secretary.tools.append(dnd_tools)
-            team.dm.tools.append(dnd_tools)
-            team.rules.tools.append(dnd_tools)
-            # Party agent might need it too if it checks state
-            team.party.tools.append(dnd_tools)
+            team.configure_tools(dnd_tools)
 
             return team
 
