@@ -39,6 +39,10 @@ type Room struct {
 	llmCtx    context.Context
 	llmCancel context.CancelFunc
 
+	// Team Mode
+	mode    string // "agent" or "team"
+	command string // JSON-encoded team command
+
 	// Metadata tracking for current assistant message
 	currentMessageMetadata struct {
 		MessageID    uuid.UUID
@@ -50,7 +54,7 @@ type Room struct {
 	}
 }
 
-func NewRoom(hub *Hub, id uuid.UUID, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Room {
+func NewRoom(hub *Hub, id uuid.UUID, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string, mode string, command string) *Room {
 	return &Room{
 		ID:          id,
 		hub:         hub,
@@ -62,6 +66,8 @@ func NewRoom(hub *Hub, id uuid.UUID, initiatorID uuid.UUID, store *storage.Stora
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		llmBaseURL:  llmBaseURL,
+		mode:        mode,
+		command:     command,
 	}
 }
 
@@ -162,15 +168,22 @@ func (r *Room) connectLLM() {
 
 	query := u.Query()
 	query.Add("chat_id", r.ID.String())
-	// We don't have model params here yet, or use default.
-	// The User Message will carry the model.
+	
+	// Forward mode and command to Python backend
+	if r.mode != "" {
+		query.Add("mode", r.mode)
+	}
+	if r.command != "" {
+		query.Add("command", r.command)
+	}
+	
 	u.RawQuery = query.Encode()
 
 	hdr := http.Header{}
 	sessionCookie := fmt.Sprintf("session_id=%s", r.ID.String())
 	hdr.Add("Cookie", sessionCookie)
 
-	r.logger.Info("connecting to llm", zap.String("url", u.String()))
+	r.logger.Info("connecting to llm", zap.String("url", u.String()), zap.String("mode", r.mode))
 	conn, _, err := websocket.DefaultDialer.Dial(u.String(), hdr)
 	if err != nil {
 		r.logger.Error("failed to dial llm", zap.Error(err))

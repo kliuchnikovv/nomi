@@ -71,5 +71,19 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		h.logger.Info("no chat_id provided, generated new session_id", zap.String("session_id", chatID.String()))
 	}
 
-	h.hub.ServeWs(c.Writer, c.Request, chatID, user)
+	// Extract team mode params from query
+	mode := c.Query("mode")
+	if mode == "" {
+		mode = "agent" // Default to agent mode
+	}
+	command := c.Query("command")
+	if command == "" {
+		command = c.Query("team")
+	}
+
+	h.logger.Info("websocket params",
+		zap.String("mode", mode),
+		zap.Bool("has_command", command != ""))
+
+	h.hub.ServeWs(c.Writer, c.Request, chatID, user, mode, command)
 }

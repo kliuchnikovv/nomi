@@ -108,7 +108,7 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 	// Or force create a room.
 
 	// Let's modify Hub to expose GetOrCreateRoom
-	room, err := s.hub.GetOrCreateRoom(task.ChatID, task.UserID)
+	room, err := s.hub.GetOrCreateRoom(task.ChatID, task.UserID, "agent", "") // Scheduled tasks use agent mode
 	if err != nil {
 		return err
 	}
