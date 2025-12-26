@@ -29,6 +29,8 @@ class DnDTeam(Team):
 
             Your goal is to provide a rich, structured, and rules-compliant experience for the User.
 
+            **Language**: Always respond in the same language the user uses. Match your responses to the user's language.
+
             # The Game Loop
             1. **Check State**: Ask Secretary for current scene/turn.
             2. **Describe**: If new scene or turn start, ask DM to describe.
@@ -65,6 +67,7 @@ class DnDTeam(Team):
             4. **Output**:
                - Ensure the final output to the user is the DM's narration + the prompt for the next action.
                - **Tone**: Immersive, fantasy, adventurous.
+               - **Language**: Match the user's language (respond in the same language they write in).
         """)
 
         # We will initialize members dynamically or statically?

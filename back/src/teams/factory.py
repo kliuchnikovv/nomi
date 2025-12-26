@@ -63,7 +63,7 @@ class TeamFactory:
             team = DnDTeam(
                 model=self.model,
                 db=self.db,
-                debug_mode=self.debug_mode
+                debug_mode=self.debug_mode,
             )
 
             # Inject tools with session_id

@@ -40,17 +40,24 @@ class DnDTools(Toolkit):
 
         return f"Rolled {expression}: {rolls} {'+' if modifier >=0 else ''}{modifier} = {total}"
 
-    def save_state(self, key: str, value: dict) -> str:
+    def save_state(self, key: str, value) -> str:
         """
-        Saves a state object (dict) to the persistent store under a specific key (e.g., 'world', 'party').
+        Saves a state value to the persistent store under a specific key (e.g., 'world', 'party', 'turn').
+        The value can be a dict, string, number, or any JSON-serializable object.
         """
         try:
             headers = {"X-Internal-Secret": self.api_key}
+            # Normalize value to dict for storage
+            if isinstance(value, dict):
+                normalized_value = value
+            else:
+                normalized_value = {"value": value}
+            
             payload = {
                 "room_id": self.room_id,
                 "team_id": self.team_id,
                 "key": key,
-                "value": value
+                "value": normalized_value
             }
             resp = httpx.post(self.api_url, json=payload, headers=headers, timeout=5.0)
             resp.raise_for_status()
