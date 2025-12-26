@@ -3,6 +3,7 @@ import json
 import logging
 import httpx
 from agno.tools import Toolkit
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class DnDTools(Toolkit):
         self.register(self.roll_dice)
         self.register(self.save_state)
         self.register(self.load_state)
+        self.register(self.suggest_actions)
 
     def roll_dice(self, expression: str) -> str:
         """
@@ -87,3 +89,30 @@ class DnDTools(Toolkit):
         except Exception as e:
             logger.error(f"Failed to load state {key}: {e}")
             return "{}"
+
+    def suggest_actions(self, actions: List[str]) -> str:
+        """
+        Presents action buttons to the player. Each action is a short label like "Attack", "Investigate", "Talk to barkeeper".
+        
+        ALWAYS use this tool at the end of each turn to give the player 3-5 clickable action options.
+        The actions should be context-appropriate based on the current situation.
+        
+        Example: suggest_actions(["Attack the goblin", "Cast fireball", "Flee", "Try to negotiate", "Other action"])
+        
+        Args:
+            actions: List of 3-5 action labels to present as buttons.
+        
+        Returns:
+            Confirmation that actions were suggested.
+        """
+        # This tool result is special - it will be parsed by the streaming handler
+        # and converted to clickable action buttons
+        result = {
+            "__action_buttons__": True,
+            "actions": [
+                {"label": action, "prompt": action, "command": "dnd_action"}
+                for action in actions
+            ]
+        }
+        return json.dumps(result)
+

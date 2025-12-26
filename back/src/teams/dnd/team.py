@@ -69,13 +69,10 @@ class DnDTeam(Team):
                - Pass narration to Secretary for logging.
 
             4. **Output**:
-               - End EVERY response with a clear prompt: "What do you do?" followed by numbered action options.
-               - Format: 
-                 1. [Action 1 - brief description]
-                 2. [Action 2 - brief description]
-                 3. [Action 3 - brief description]
-                 4. [Action 4 - optional creative/risky]
-                 5. [Other - describe your own action]
+               - After narration, ALWAYS call `suggest_actions` tool with 3-5 contextual action options.
+               - Actions should be short, clear labels like "Attack", "Talk to barkeeper", "Investigate the noise".
+               - Always include at least one cautious option and one risky option.
+               - The last option should always be "Другое действие" (or equivalent in user's language) for custom input.
                - **Tone**: Immersive, fantasy, adventurous.
                - **Language**: Match the user's language (respond in the same language they write in).
         """)
@@ -104,6 +101,7 @@ class DnDTeam(Team):
             tools=[],
             add_history_to_context=True,
             debug_mode=debug_mode,
+            show_members_responses=False,  # Hide internal member agent outputs
         )
 
     # We need to intercept the build/run to inject tools with session_id

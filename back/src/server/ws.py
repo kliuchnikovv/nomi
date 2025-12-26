@@ -398,6 +398,24 @@ class LLMWebSocketSession:
                          safe_tool["name"] = tool_data.name
 
                     logger.info("[WS] Streaming tool call: %s", safe_tool["name"])
+                    
+                    # Check if tool result contains action buttons (from suggest_actions)
+                    result = safe_tool.get("result")
+                    if result and isinstance(result, str):
+                        try:
+                            result_data = json.loads(result)
+                            if result_data.get("__action_buttons__"):
+                                # Send action buttons as a special frame
+                                await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
+                                    "type": "actions",
+                                    "actions": result_data.get("actions", []),
+                                    "message_id": message_id
+                                }))
+                                # Don't send regular tool call frame for action buttons
+                                continue
+                        except json.JSONDecodeError:
+                            pass
+                    
                     await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
                         "type": "tool_call",
                         "tool": safe_tool,

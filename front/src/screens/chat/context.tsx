@@ -679,6 +679,19 @@ export function ChatProvider({
                         content_parts: updatedParts,
                     };
                 }
+            } else if (frame.payload.type === 'actions') {
+                // Handle D&D action buttons from suggest_actions tool
+                const actions = frame.payload.actions || [];
+                if (actions.length > 0) {
+                    // Set actions on the message for button rendering
+                    newMessages[messageIdx] = {
+                        ...newMessages[messageIdx],
+                        actions: actions.map((a: any) => ({
+                            ...a,
+                            message_id: frame.payload.message_id
+                        })),
+                    };
+                }
             } else {
                 // Handle text streaming
                 const newText = frame.payload.message || '';
