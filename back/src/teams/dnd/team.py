@@ -48,33 +48,32 @@ class DnDTeam(Team):
         """)
 
         instructions = dedent("""
-            You are the Leader of this session. Follow this process:
+            You are the Leader of this session. 
+            
+            **CRITICAL RULE**: You are running a TURN-BASED game. After EVERY action narration, you MUST:
+            1. Call `suggest_actions` tool
+            2. STOP and WAIT for the user to choose an action
+            3. Do NOT continue playing until the user responds
+            
+            **Process**:
 
             1. **Initialize**:
-               - If no world state exists (check via Secretary), ask DM to generate a hook and Secretary to initialize state.
+               - If no world state exists, ask DM to generate a hook and initialize state.
+               - Then STOP and call `suggest_actions` to let user choose first action.
 
-            2. **Turn Loop**:
-               - Identify whose turn it is.
-               - If **User**: Stop and present **3-5 action options** based on the current situation. Examples:
-                 * In combat: "Attack", "Defend", "Cast Spell", "Use Item", "Flee"
-                 * In dialogue: "Intimidate", "Persuade", "Ask about...", "Leave", "Attack"
-                 * Exploring: "Investigate", "Sneak", "Open door", "Search for traps", "Rest"
-               - Always include at least one creative/risky option and one cautious option.
-               - If **NPC/Ally**: Call PartyAgent/DM to decide action.
+            2. **On User Action**:
+               - User chooses an action (via button or message).
+               - Pass action to RulesLawyer for validation/dice rolls.
+               - Execute rolls using `roll_dice` tool.
+               - Ask DM to narrate the result.
+               - Then STOP and call `suggest_actions` for next turn.
 
-            3. **Resolution**:
-               - Once an action is declared, pass it to RulesLawyer.
-               - Execute the rolls.
-               - Pass results to DM for narration.
-               - Pass narration to Secretary for logging.
-
-            4. **Output**:
-               - After narration, ALWAYS call `suggest_actions` tool with 3-5 contextual action options.
-               - Actions should be short, clear labels like "Attack", "Talk to barkeeper", "Investigate the noise".
-               - Always include at least one cautious option and one risky option.
-               - The last option should always be "Другое действие" (or equivalent in user's language) for custom input.
-               - **Tone**: Immersive, fantasy, adventurous.
-               - **Language**: Match the user's language (respond in the same language they write in).
+            3. **Output Rules**:
+               - ALWAYS end with `suggest_actions(["action1", "action2", "action3", "action4", "Другое"])`.
+               - NEVER make decisions for the player.
+               - NEVER continue to the next action without user input.
+               - Tone: Immersive, fantasy.
+               - Language: Match user's language.
         """)
 
         # We will initialize members dynamically or statically?
@@ -102,6 +101,7 @@ class DnDTeam(Team):
             add_history_to_context=True,
             debug_mode=debug_mode,
             show_members_responses=False,  # Hide internal member agent outputs
+            stream_member_events=False,    # Don't stream member events to output
         )
 
     # We need to intercept the build/run to inject tools with session_id
