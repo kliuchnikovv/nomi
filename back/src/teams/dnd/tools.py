@@ -11,7 +11,9 @@ class DnDTools(Toolkit):
         super().__init__(name="dnd_tools")
         self.room_id = room_id
         self.team_id = team_id
-        self.api_url = "http://localhost:8080/api/team/state" # Internal URL
+        # Use GO_API_URL environment variable for deployed environments
+        base_url = os.getenv("GO_API_URL", "http://localhost:8080")
+        self.api_url = f"{base_url}/api/team/state"
         self.api_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
 
         self.register(self.roll_dice)
