@@ -112,6 +112,4 @@ class DnDTeam(Team):
             debug_mode=debug_mode,
             show_members_responses=True,   # Show DM narration as main text
             stream_member_events=True,     # Stream member agent responses
-            reasoning=True,                # Route coordination as reasoning
-            show_full_reasoning=True,      # Show reasoning in output
         )
