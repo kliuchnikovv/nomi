@@ -84,16 +84,15 @@ class DnDTeam(Team):
         super().__init__(
             model=model,
             db=db,
-            session_id=session_id,  # Required for conversation history management
+            session_id=session_id,
             description=description,
             instructions=instructions,
             members=[self.dm, self.rules, self.secretary, self.party],
-            tools=[self.dnd_tools],  # Pass tools at init time!
-            # WORKAROUND: Gemini has a bug with tool call results in history creating empty 'parts'.
-            # Limit num_history_runs to reduce likelihood of encountering the issue.
+            tools=[self.dnd_tools],
             add_history_to_context=True,
-            num_history_runs=3,  # Limit history to avoid problematic entries accumulating
+            num_history_runs=3,
+            store_tool_messages=False,  # Fix for Gemini empty parts bug - don't save tool calls to history
             debug_mode=debug_mode,
-            show_members_responses=False,  # Disabled for now to test
-            stream_member_events=False,    # Disabled for now to test
+            show_members_responses=True,
+            stream_member_events=True,
         )
