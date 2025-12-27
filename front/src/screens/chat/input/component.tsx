@@ -13,7 +13,9 @@ import {
     Group,
     User,
     Brain,
-    Square
+    Square,
+    Eye,
+    EyeClosed
 } from 'iconoir-react-native';
 
 import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
@@ -54,7 +56,7 @@ export default function ChatInput(props: Props) {
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration, showToolCalls, setShowToolCalls, showReasoning, setShowReasoning, showMemberResponses, setShowMemberResponses } = useChat();
     const { user, updateUser } = useAuth();
 
 
@@ -256,7 +258,20 @@ export default function ChatInput(props: Props) {
                 setTimeout(() => setTeamMenuVisible(true), 300);
             }
         }] : []),
-    ], [pickDocument, pickImage, takePhoto, executeWithDelay, thinkingLevel, theme.accent, chatMode, setChatMode]);
+        // Display settings - single toggle for all details
+        {
+            id: 'toggle_details',
+            label: `Details: ${showToolCalls ? 'Show' : 'Hide'}`,
+            icon: showToolCalls ? <Eye width={20} height={20} color={theme.accent} /> : <EyeClosed width={20} height={20} color="#fff" />,
+            onPress: () => {
+                const newValue = !showToolCalls;
+                setShowToolCalls(newValue);
+                setShowReasoning(newValue);
+                setShowMemberResponses(newValue);
+                setPlusMenuVisible(false);
+            }
+        },
+    ], [pickDocument, pickImage, takePhoto, executeWithDelay, thinkingLevel, theme.accent, chatMode, setChatMode, showToolCalls, setShowToolCalls, setShowReasoning, setShowMemberResponses]);
 
     const removeAttachment = (id: string) => {
         setAttachments(prev => prev.filter(a => a.id !== id));

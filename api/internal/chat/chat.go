@@ -42,6 +42,7 @@ type Message struct {
 	ContentParts  interface{}  `json:"content_parts,omitempty"`
 	Reasoning     string       `json:"reasoning,omitempty"`
 	Model         string       `json:"model,omitempty"`
+	Actions       interface{}  `json:"actions,omitempty"`       // D&D action buttons
 	Attachments   []Attachment `json:"attachments,omitempty"`    // For reading
 	AttachmentIDs []uuid.UUID  `json:"attachment_ids,omitempty"` // For writing
 	WebSearch     bool         `json:"web_search,omitempty"`     // For writing

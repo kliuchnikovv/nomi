@@ -47,6 +47,14 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
+	// Handle Actions if provided
+	if m.Actions != nil {
+		actionsJSON, err := json.Marshal(m.Actions)
+		if err == nil {
+			messageModel.Actions = actionsJSON
+		}
+	}
+
 	// Handle Model if provided
 	if m.Model != "" {
 		messageModel.Model = m.Model
@@ -113,6 +121,14 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
+	// Unmarshal Actions if present
+	if len(messageModel.Actions) > 0 {
+		var actions interface{}
+		if err := json.Unmarshal(messageModel.Actions, &actions); err == nil {
+			result.Actions = actions
+		}
+	}
+
 	return result, nil
 }
 
@@ -165,6 +181,14 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 		var contentParts interface{}
 		if err := json.Unmarshal(message.ContentParts, &contentParts); err == nil {
 			result.ContentParts = contentParts
+		}
+	}
+
+	// Unmarshal Actions if present
+	if len(message.Actions) > 0 {
+		var actions interface{}
+		if err := json.Unmarshal(message.Actions, &actions); err == nil {
+			result.Actions = actions
 		}
 	}
 
@@ -229,6 +253,14 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 			}
 		}
 
+		// Unmarshal Actions if present
+		if len(msg.Actions) > 0 {
+			var actions interface{}
+			if err := json.Unmarshal(msg.Actions, &actions); err == nil {
+				m.Actions = actions
+			}
+		}
+
 		result[i] = m
 	}
 	return result, nil
@@ -289,6 +321,14 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		contentPartsJSON, err := json.Marshal(m.ContentParts)
 		if err == nil {
 			updates["content_parts"] = contentPartsJSON
+		}
+	}
+
+	// Update actions if provided
+	if m.Actions != nil {
+		actionsJSON, err := json.Marshal(m.Actions)
+		if err == nil {
+			updates["actions"] = actionsJSON
 		}
 	}
 

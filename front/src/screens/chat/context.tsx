@@ -119,6 +119,11 @@ export function ChatProvider({
     // Thinking mode state (persists within chat session)
     const [thinkingLevel, setThinkingLevel] = useState<string>('off');
 
+    // Display settings (persists within chat session)
+    const [showToolCalls, setShowToolCalls] = useState<boolean>(true);
+    const [showReasoning, setShowReasoning] = useState<boolean>(true);
+    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(true);
+
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
     // const API_URL = 'https://genie.com';
@@ -854,6 +859,13 @@ export function ChatProvider({
         thinkingLevel,
         setThinkingLevel,
         stopGeneration,
+        // Display settings
+        showToolCalls,
+        setShowToolCalls,
+        showReasoning,
+        setShowReasoning,
+        showMemberResponses,
+        setShowMemberResponses,
     };
 
     return (

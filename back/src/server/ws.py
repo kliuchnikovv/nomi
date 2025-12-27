@@ -336,6 +336,11 @@ class LLMWebSocketSession:
         message_id = str(uuid.uuid4())
         chat_id = frame.chat_id
 
+        # Validate that we have actual content
+        if not text or not text.strip():
+            logger.warning("[WS] Received empty message, ignoring to prevent Gemini 400 error")
+            return
+
         # Check settings changes in payload
         msg_model = payload.get("model")
         if msg_model and msg_model != self.current_model_name:

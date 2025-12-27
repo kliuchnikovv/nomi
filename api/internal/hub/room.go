@@ -43,6 +43,9 @@ type Room struct {
 	mode    string // "agent" or "team"
 	command string // JSON-encoded team command
 
+	// Generation state - prevents room from closing while LLM is generating
+	generationInProgress bool
+
 	// Metadata tracking for current assistant message
 	currentMessageMetadata struct {
 		MessageID    uuid.UUID
@@ -51,6 +54,7 @@ type Room struct {
 		Text         string
 		Reasoning    string
 		ContentParts []interface{}
+		Actions      interface{} // D&D action buttons
 	}
 }
 
@@ -143,10 +147,13 @@ func (r *Room) Run() {
 			}
 
 		case <-timer.C:
-			if len(r.clients) == 0 {
+			if len(r.clients) == 0 && !r.generationInProgress {
 				r.logger.Info("room idle timeout, closing")
 				r.hub.unregister <- r
 				return
+			}
+			if r.generationInProgress {
+				r.logger.Debug("room has no clients but generation in progress, keeping alive")
 			}
 			// If clients exist, reset timer (shouldn't happen if resetTimer works, but safety)
 			timer.Reset(idleTimeout)
@@ -447,8 +454,10 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// 5. Forward to LLM
 		r.connectLLM() // Ensure connected
 		if r.llmSocket != nil {
+			r.generationInProgress = true // Keep room alive until response complete
 			if err := r.llmSocket.Write(context.Background(), frame); err != nil {
 				r.logger.Error("failed to forward to llm", zap.Error(err))
+				r.generationInProgress = false
 			}
 		}
 	} else {
@@ -550,6 +559,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				Model:        r.currentMessageMetadata.Model,
 				ToolCalls:    r.currentMessageMetadata.ToolCalls,
 				ContentParts: r.currentMessageMetadata.ContentParts,
+				Actions:      r.currentMessageMetadata.Actions,
 				CreatedAt:    time.Now().UTC(),
 			}); err != nil {
 				r.logger.Error("failed to upsert assistant message (metadata)",
@@ -576,6 +586,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				Text         string
 				Reasoning    string
 				ContentParts []interface{}
+				Actions      interface{}
 			}{
 				MessageID: frame.Payload.MessageID,
 			}
@@ -609,6 +620,15 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			r.logger.Info("accumulating tool call",
 				zap.String("msg_id", frame.Payload.MessageID.String()),
 				zap.Any("tool", frame.Payload.Tool),
+			)
+		} else if frame.Payload.Type == "actions" && frame.Payload.Actions != nil {
+			// Handle D&D action buttons
+			r.currentMessageMetadata.Actions = frame.Payload.Actions
+			shouldUpsert = true
+
+			r.logger.Info("storing actions",
+				zap.String("msg_id", frame.Payload.MessageID.String()),
+				zap.Any("actions", frame.Payload.Actions),
 			)
 		} else {
 			// Handle Text
@@ -660,6 +680,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				Model:        r.currentMessageMetadata.Model,
 				ToolCalls:    r.currentMessageMetadata.ToolCalls,
 				ContentParts: r.currentMessageMetadata.ContentParts,
+				Actions:      r.currentMessageMetadata.Actions,
 				CreatedAt:    time.Now().UTC(),
 			}); err != nil {
 				r.logger.Error("failed to upsert assistant message (token)",
@@ -673,6 +694,10 @@ func (r *Room) handleLLMMessage(frame Frame) {
 	}
 
 	if frame.Operation == DoneOperation {
+		// Generation complete - room can now close if no clients
+		r.generationInProgress = false
+		r.logger.Info("generation complete", zap.String("msg_id", frame.Payload.MessageID.String()))
+		
 		// Reset metadata
 		r.currentMessageMetadata = struct {
 			MessageID    uuid.UUID
@@ -681,6 +706,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 			Text         string
 			Reasoning    string
 			ContentParts []interface{}
+			Actions      interface{}
 		}{}
 	}
 }

@@ -12,13 +12,14 @@ import {
 } from 'react-native';
 import { ToolCallsSection, SingleToolCall, ReasoningBlock, MemberResponseBlock } from './ToolCalls';
 import Markdown from 'react-native-markdown-display';
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { Action, Props, Role, Attachment, ContentPart } from './models'
 import { styles, markdownStyles } from './styles.tsx';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { authStore } from '../../../apiClient';
 import { getApiUrl, API_URL } from '../../../config';
+import { useChat } from '../context';
 
 function AttachmentImage({ attachment }: { attachment: Attachment }) {
     const [token, setToken] = useState<string | null>(authStore.getToken());
@@ -57,9 +58,21 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
 
 // Render content parts (text + inline tool calls + reasoning + member responses)
 function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
+    const { showToolCalls, showReasoning, showMemberResponses } = useChat();
+
+    // Filter parts based on display settings
+    const filteredParts = useMemo(() => {
+        return parts.filter(part => {
+            if (part.type === 'tool_call' && !showToolCalls) return false;
+            if (part.type === 'reasoning' && !showReasoning) return false;
+            if ((part as any).type === 'member_response' && !showMemberResponses) return false;
+            return true;
+        });
+    }, [parts, showToolCalls, showReasoning, showMemberResponses]);
+
     return (
         <>
-            {parts.map((part, index) => {
+            {filteredParts.map((part, index) => {
                 if (part.type === 'text') {
                     return (
                         <Pressable
@@ -89,6 +102,8 @@ function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], on
 }
 
 export default function MessageScreen(props: Props) {
+    const { showToolCalls } = useChat();
+
     if (props.message.role === 'system') {
         return null;
     }
@@ -152,7 +167,7 @@ export default function MessageScreen(props: Props) {
                             {props.message.text || ''}
                         </Markdown>
                     </Pressable>
-                    {props.message.tool_calls && props.message.tool_calls.length > 0 && (
+                    {showToolCalls && props.message.tool_calls && props.message.tool_calls.length > 0 && (
                         <ToolCallsSection toolCalls={props.message.tool_calls} />
                     )}
                 </>

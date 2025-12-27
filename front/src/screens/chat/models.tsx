@@ -52,6 +52,13 @@ export interface ChatContextType {
     thinkingLevel: string;
     setThinkingLevel: (level: string) => void;
     stopGeneration: () => void;
+    // Display settings
+    showToolCalls: boolean;
+    setShowToolCalls: (show: boolean) => void;
+    showReasoning: boolean;
+    setShowReasoning: (show: boolean) => void;
+    showMemberResponses: boolean;
+    setShowMemberResponses: (show: boolean) => void;
 }
 
 export interface Model {

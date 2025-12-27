@@ -13,6 +13,7 @@ import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
 import { styles as messageStyles } from '../message/styles';
+import { useChat } from '../context';
 
 function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
     const [expanded, setExpanded] = React.useState(false);
@@ -82,6 +83,7 @@ export function useGiftedChatRenderers({
 }: GiftedChatRenderersParams) {
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const markdownStyles = useMemo(() => createMarkdownStyles(chatTheme), [chatTheme]);
+    const { showToolCalls } = useChat();
 
     const handleLongPress = useCallback((context: any, message: any) => {
         console.log('handleLongPress called', { context, message });
@@ -325,7 +327,7 @@ export function useGiftedChatRenderers({
                         {messageText}
                     </Markdown>
                 </Pressable>
-                {toolCalls && toolCalls.length > 0 && (
+                {showToolCalls && toolCalls && toolCalls.length > 0 && (
                     <ToolCallsSection toolCalls={toolCalls} />
                 )}
                 <MessageActions
@@ -346,7 +348,7 @@ export function useGiftedChatRenderers({
                 />
             </View > // Note: keeping View same but updating content
         );
-    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend, onMessageAction]);
+    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend, onMessageAction, showToolCalls]);
 
     const renderFooter = useCallback(() => {
         if (!assistantWorking) {
