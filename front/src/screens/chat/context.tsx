@@ -129,7 +129,7 @@ export function ChatProvider({
     // Display settings (persists within chat session)
     const [showToolCalls, setShowToolCalls] = useState<boolean>(false);
     const [showReasoning, setShowReasoning] = useState<boolean>(false);
-    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(false);
+    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(true);
 
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
@@ -743,6 +743,7 @@ export function ChatProvider({
 
                     newMessages[messageIdx] = {
                         ...newMessages[messageIdx],
+                        text: newMessages[messageIdx].text + memberText,
                         content_parts: updatedParts,
                     };
                 }

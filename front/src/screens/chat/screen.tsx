@@ -426,11 +426,16 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                             isScrollToBottomEnabled={true}
                             timeFormat="HH:mm"
                             onLongPress={onLongPressMessage}
-                            renderChatEmpty={() => (
-                                <View style={{ flex: 1, transform: [{ scaleY: -1 }] }}>
-                                    <MessageListSkeleton />
-                                </View>
-                            )}
+                            renderChatEmpty={() => {
+                                if (messagesLoading) {
+                                    return (
+                                        <View style={{ flex: 1, transform: [{ scaleY: -1 }] }}>
+                                            <MessageListSkeleton />
+                                        </View>
+                                    );
+                                }
+                                return null;
+                            }}
                         />
                     </KeyboardAvoidingView>
 

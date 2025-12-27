@@ -349,10 +349,8 @@ class LLMWebSocketSession:
         message_id = str(uuid.uuid4())
         chat_id = frame.chat_id
 
-        # Validate that we have actual content
-        if not text or not text.strip():
-            logger.warning("[WS] Received empty message, ignoring to prevent Gemini 400 error")
-            return
+        # Allow empty messages when there's history - Team agents need this for continuation
+        # The agno library will handle validation
 
         # Check settings changes in payload
         msg_model = payload.get("model")
