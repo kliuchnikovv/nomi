@@ -91,8 +91,8 @@ class DnDTeam(Team):
             tools=[self.dnd_tools],
             add_history_to_context=True,
             num_history_runs=3,
-            store_tool_messages=False,  # Keep disabled - tool messages cause empty parts issues
+            store_tool_messages=True,  # Keep disabled - tool messages cause empty parts issues
             debug_mode=debug_mode,
-            show_members_responses=True,
-            stream_member_events=True,
+            show_members_responses=False,  # Hide member responses (they're in English)
+            stream_member_events=True,     # Don't stream member events
         )
