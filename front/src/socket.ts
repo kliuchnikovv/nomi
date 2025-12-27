@@ -216,16 +216,27 @@ export class ChatSocket {
                                 this.handlers.onPing?.(frame);
                                 break;
                             case 'error':
-                                if (data.code !== 401 || retried) {
+                                if (data?.code !== 401 || retried) {
                                     // Extract error message from various possible locations
                                     let errorMessage = 'Ошибка соединения';
 
-                                    if (data.error) {
-                                        errorMessage = typeof data.error === 'string'
-                                            ? data.error
-                                            : data.error.message || JSON.stringify(data.error);
-                                    } else if (data.message) {
-                                        errorMessage = data.message;
+                                    // Check frame.error (preferred source from backend)
+                                    if (frame.error) {
+                                        if (typeof frame.error === 'string') {
+                                            errorMessage = frame.error;
+                                        } else if (frame.error.message && typeof frame.error.message === 'string') {
+                                            errorMessage = frame.error.message;
+                                        }
+                                    }
+                                    // Fallback to legacy checks on payload (data)
+                                    else if (data && typeof data === 'object') {
+                                        if (data.error) {
+                                            errorMessage = typeof data.error === 'string'
+                                                ? data.error
+                                                : data.error.message || JSON.stringify(data.error);
+                                        } else if (data.message) {
+                                            errorMessage = data.message;
+                                        }
                                     }
 
                                     // Provide user-friendly message for backend connection errors
@@ -257,6 +268,11 @@ export class ChatSocket {
                                 break;
                             case 'done':
                                 this.handlers.onDone?.(frame);
+                                break;
+                            case 'model':
+                                break;
+                            case 'tools':
+                                this.handlers.onTools?.(frame);
                                 break;
                             default:
                                 console.warn(`Unknown message op: ${operation}`, rawJson);

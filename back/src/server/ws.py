@@ -250,7 +250,7 @@ class LLMWebSocketSession:
         try:
             await self.build_agent_instance()
         except Exception as e:
-            await self._send_frame(make_error(self.next_id, "agent_init_failed", None, str(e), 500))
+            await self._send_error(e, self.chat_id_param)
             await self.websocket.close(code=1011)
             return
 

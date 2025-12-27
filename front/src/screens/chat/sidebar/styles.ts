@@ -41,6 +41,7 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 12,
+        height: 60,
     },
     title: {
         color: theme.textPrimary,

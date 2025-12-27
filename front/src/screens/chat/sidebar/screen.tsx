@@ -244,6 +244,15 @@ function ChatListContent({
 
     const renderItem = ({ item }: { item: Chat }) => {
         const isActive = item.id === activeChatID;
+
+        const subtitle = formatDateTime(item.updated_at || item.created_at);
+        let category: string | null = null;
+        if (selectedFilter === 'all') {
+            category = item.mode === 'team'
+                ? (AVAILABLE_TEAMS.find(t => t.id === item.team_id)?.name || 'Team')
+                : 'Agent';
+        }
+
         return (
             <Pressable
                 style={[
@@ -254,11 +263,18 @@ function ChatListContent({
                 onPress={() => onSelectChat(item.id)}
                 onLongPress={() => openChatMenu(item.id, item.title || 'Untitled')}
             >
-                <Text style={[styles.itemTitle, isActive && { color: styles.title.color }]} numberOfLines={1}>
-                    {item.title || 'Untitled'}
-                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                    <Text style={[styles.itemTitle, isActive && { color: styles.title.color }, { flex: 1, marginRight: 8 }]} numberOfLines={1}>
+                        {item.title || 'Untitled'}
+                    </Text>
+                    {category && (
+                        <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '500' }}>
+                            {category}
+                        </Text>
+                    )}
+                </View>
                 <Text style={styles.itemSubtitle} numberOfLines={1}>
-                    {formatDateTime(item.updated_at || item.created_at)}
+                    {subtitle}
                 </Text>
             </Pressable>
         );
@@ -335,8 +351,8 @@ function ChatListContent({
 
                             // Attempt to scroll to approximate position to force render
                             // 55 is approximate item height
-                            flatListRef.current?.getScrollResponder()?.scrollTo({
-                                y: info.index * 55,
+                            flatListRef.current?.scrollToOffset({
+                                offset: info.index * 55,
                                 animated: false
                             });
 

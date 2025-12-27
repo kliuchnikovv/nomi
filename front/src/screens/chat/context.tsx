@@ -115,7 +115,13 @@ export function ChatProvider({
 
     // Error state management
     const [error, setError] = useState<string | null>(null);
-    const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
+    const [lastFailedMessage, setLastFailedMessage] = useState<{
+        text: string;
+        attachments?: any[];
+        messageId?: string;
+        webSearch?: boolean;
+        thinking?: string;
+    } | null>(null);
 
     // Thinking mode state (persists within chat session)
     const [thinkingLevel, setThinkingLevel] = useState<string>('off');
@@ -191,6 +197,7 @@ export function ChatProvider({
             setPluginThreadMeta(null);
         }
         setExternalTitle(null);
+        setError(null); // Clear error on chat switch
         // Reset manual selection flag when switching chats
         manualModelSelectionRef.current = false;
 
@@ -335,20 +342,15 @@ export function ChatProvider({
     }, [pluginThreadMeta, mapPluginMessage]);
 
     const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string) => {
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string) => {
             if (!text.trim() && attachments.length === 0) return;
             if (!user?.id) return;
 
             // Clear error when sending a new message
             setError(null);
-            setLastFailedMessage(text.trim());
 
-            let chatIdToUse = activeChatID;
-            let messageID: string | undefined;
-            const timestamp = Date.now();
+            // Map local attachments to model Attachment type early for both cases
             const attachmentIDs = attachments.map(a => a.id);
-
-            // Map local attachments to model Attachment type
             const modelAttachments = attachments.map(a => ({
                 id: a.id,
                 file_name: a.name,
@@ -357,20 +359,37 @@ export function ChatProvider({
                 uri: a.uri
             }));
 
+            // Save for retry with all details, but update messageId later if created
+            setLastFailedMessage({
+                text: text.trim(),
+                attachments: attachments,
+                messageId: reuseMessageId, // Will be updated if fresh send
+                webSearch,
+                thinking
+            });
+
+            let chatIdToUse = activeChatID;
+            let messageID: string | undefined = reuseMessageId;
+            const timestamp = Date.now();
+
             if (pluginThreadMeta) {
                 chatIdToUse = String(pluginThreadMeta.chatId);
-                messageID = generateUUID();
+                if (!messageID) {
+                    messageID = generateUUID();
+                }
 
-                const newUserMessage: Message = {
-                    id: messageID,
-                    chat_id: chatIdToUse,
-                    sender: user.id,
-                    role: 'user',
-                    text: text.trim(),
-                    created_at: timestamp,
-                    attachments: modelAttachments,
-                };
-                setMessages(prev => [...prev, newUserMessage]);
+                if (!reuseMessageId) {
+                    const newUserMessage: Message = {
+                        id: messageID,
+                        chat_id: chatIdToUse,
+                        sender: user.id,
+                        role: 'user',
+                        text: text.trim(),
+                        created_at: timestamp,
+                        attachments: modelAttachments,
+                    };
+                    setMessages(prev => [...prev, newUserMessage]);
+                }
                 // We do not call sidebarApi.sendChatMessage anymore.
                 // We rely on WebSocket to handle the message.
             } else {
@@ -385,28 +404,36 @@ export function ChatProvider({
                     return;
                 }
 
-                messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch);
-                if (!messageID) {
-                    console.error('Failed to create message before sending via WebSocket');
-                    setError('Не удалось создать сообщение');
-                    return;
+                if (!reuseMessageId) {
+                    messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch);
+                    if (!messageID) {
+                        console.error('Failed to create message before sending via WebSocket');
+                        setError('Не удалось создать сообщение');
+                        return;
+                    }
+                    setCurrentMessageID(messageID!);
+
+                    // Update lastFailedMessage with the real messageID so retry can use it
+                    setLastFailedMessage(prev => prev ? { ...prev, messageId: messageID } : null);
+
+                    const userMessage: Message = {
+                        id: messageID!,
+                        chat_id: chatIdToUse!,
+                        sender: user.id,
+                        role: 'user',
+                        text: text.trim(),
+                        created_at: timestamp,
+                        attachments: modelAttachments,
+                    };
+
+                    setMessages(prevMessages => [
+                        ...prevMessages,
+                        userMessage,
+                    ]);
+                } else {
+                    console.log('Reusing existing message ID for retry:', reuseMessageId);
+                    setCurrentMessageID(reuseMessageId);
                 }
-                setCurrentMessageID(messageID!);
-
-                const userMessage: Message = {
-                    id: messageID!,
-                    chat_id: chatIdToUse!,
-                    sender: user.id,
-                    role: 'user',
-                    text: text.trim(),
-                    created_at: timestamp,
-                    attachments: modelAttachments,
-                };
-
-                setMessages(prevMessages => [
-                    ...prevMessages,
-                    userMessage,
-                ]);
             }
 
             const sessionId = `sess_${timestamp}`;
@@ -846,7 +873,13 @@ export function ChatProvider({
     const retryLastMessage = useCallback(() => {
         if (lastFailedMessage) {
             setError(null);
-            sendStreamingMessage(lastFailedMessage);
+            sendStreamingMessage(
+                lastFailedMessage.text,
+                lastFailedMessage.attachments,
+                lastFailedMessage.webSearch,
+                lastFailedMessage.thinking,
+                lastFailedMessage.messageId // reusing the message ID!
+            );
         }
     }, [lastFailedMessage, sendStreamingMessage]);
 
