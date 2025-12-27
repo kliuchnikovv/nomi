@@ -47,6 +47,7 @@ type SidebarChat struct {
 	Title        string    `json:"title"`
 	LastReceived time.Time `json:"last_received"`
 	Count        int       `json:"count"`
+	Icon         string    `json:"icon,omitempty"`
 }
 
 type SidebarChatMessage struct {
@@ -156,11 +157,30 @@ func (h *SidebarHandler) ListChats(c *gin.Context) {
 		if chat.LastReceived != nil {
 			last = *chat.LastReceived
 		}
+		
+		// Map team ID to icon (using same logic as chat handler, but specialized for plugin chats if needed)
+		// Usually plugin chats might not have 'TeamID' directly exposed in 'ListPluginChatsWithStats' result 
+		// if they are generic plugin chats. But if they align with teams (e.g. Genie), we might deduce it 
+		// or if 'Provider' maps to team.
+		// For now, let's map 'Provider' to icon as a fallback or primary method for sidebar.
+		icon := ""
+		switch provider {
+		case "genie":
+			icon = "sparkles"
+		case "dnd_team":
+			icon = "d20"
+		case "travel_planning":
+			icon = "plane"
+		case "development_team":
+			icon = "code"
+		}
+
 		resp = append(resp, SidebarChat{
 			ChatID:       chat.ID.String(),
 			Title:        firstNonEmpty(chat.LastTitle, chat.Title),
 			LastReceived: last,
 			Count:        int(chat.Count),
+			Icon:         icon,
 		})
 	}
 

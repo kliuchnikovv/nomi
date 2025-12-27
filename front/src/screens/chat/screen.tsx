@@ -353,7 +353,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             }
         });
 
-    const headerTitle = externalTitle || activeChat?.title || '';
+    const headerTitle = externalTitle || activeChat?.title || 'New Chat';
     const headerSubtitle = '';
 
     return (
@@ -385,6 +385,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         showMenu={!isWide}
                         showInbox={!isWide}
                         isInboxMode={isPluginThread}
+                        icon={activeChat?.icon}
                     />
 
 

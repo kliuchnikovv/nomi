@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { Menu, Mail } from 'iconoir-react-native';
+import { Menu, Mail, MagicWand, Code, Airplane, Cube } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from '../styles';
 import { useTheme } from '../../../context/ThemeContext';
@@ -13,6 +13,7 @@ interface ChatHeaderProps {
     showMenu?: boolean;
     showInbox?: boolean;
     isInboxMode?: boolean;
+    icon?: string;
 }
 
 export function ChatHeader({
@@ -23,6 +24,7 @@ export function ChatHeader({
     showMenu = true,
     showInbox = true,
     isInboxMode = false,
+    icon,
 }: ChatHeaderProps) {
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
@@ -30,6 +32,21 @@ export function ChatHeader({
 
     // Change accent color based on mode
     const accentColor = isInboxMode ? palette.orange : theme.accent;
+
+    const renderIcon = () => {
+        if (!icon) return null;
+        const color = theme.textPrimary;
+        const size = 20; // Slightly smaller than container
+        switch (icon) {
+            case 'sparkles': return <MagicWand width={size} height={size} color={color} strokeWidth={2} />;
+            case 'code': return <Code width={size} height={size} color={color} strokeWidth={2} />;
+            case 'plane': return <Airplane width={size} height={size} color={color} strokeWidth={2} />;
+            case 'd20': return <Cube width={size} height={size} color={color} strokeWidth={2} />;
+            default: return null;
+        }
+    };
+
+    const iconElement = renderIcon();
 
     return (
         <View style={[
@@ -50,7 +67,11 @@ export function ChatHeader({
                 </TouchableOpacity>
             )}
             <View style={styles.headerAvatar}>
-                <Text style={styles.headerAvatarText}>{isInboxMode ? 'I' : 'G'}</Text>
+                {iconElement ? (
+                    iconElement
+                ) : (
+                    <Text style={styles.headerAvatarText}>{isInboxMode ? 'I' : 'G'}</Text>
+                )}
             </View>
             <View style={[styles.headerBody, { flex: 1, minWidth: 0 }]}>
                 <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">

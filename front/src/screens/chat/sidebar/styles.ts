@@ -9,7 +9,7 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
         borderRightColor: theme.border,
         borderTopRightRadius: 24,
         borderBottomRightRadius: 24,
-        paddingTop: 12,
+        // paddingTop: 12, // Removed for alignment
         paddingBottom: 12,
         paddingHorizontal: 12,
     },
@@ -28,7 +28,7 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
         borderRightColor: theme.border,
         borderTopRightRadius: 24,
         borderBottomRightRadius: 24,
-        paddingTop: 16,
+        // paddingTop: 16, // Removed for alignment
         paddingBottom: 16,
         paddingHorizontal: 12,
         shadowColor: '#000',
@@ -46,7 +46,7 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
     title: {
         color: theme.textPrimary,
         fontSize: 16,
-        fontWeight: '700',
+        fontWeight: '600',
     },
     newChatButton: {
         borderRadius: 12,
@@ -62,6 +62,9 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
     filterBar: {
         marginBottom: 12,
         flexGrow: 0,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: theme.border,
+        paddingBottom: 12, // Move marginBottom to paddingBottom to include border
     },
     filterContent: {
         paddingHorizontal: 16,
@@ -139,5 +142,10 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         marginLeft: 12,
+    },
+    separator: {
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: theme.border,
+        // marginLeft: 16, // Optional: match padding or inset 
     },
 });

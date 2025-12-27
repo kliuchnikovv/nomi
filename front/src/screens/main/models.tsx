@@ -28,6 +28,7 @@ export type Chat = {
     archived_at: number | null
     deleted_at: number | null
     messages: Message[]
+    icon?: string
 }
 
 export type Attachment = {

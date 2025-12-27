@@ -19,4 +19,5 @@ export type Chat = {
     title: string;
     created_at: number;
     messages?: Message[];
+    icon?: string;
 };

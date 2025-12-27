@@ -296,7 +296,7 @@ function ChatListContent({
 
     return (
         <>
-            <View style={[styles.header, { marginTop: insets.top }]}>
+            <View style={[styles.header, { paddingTop: insets.top - 25, height: insets.top + 20 }]}>
                 <Text style={styles.title}>Chats</Text>
                 <Pressable onPress={handleCreateChat} style={styles.newChatButton}>
                     <Text style={styles.newChatText}>＋ New</Text>
@@ -334,6 +334,7 @@ function ChatListContent({
                     data={visibleChats}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
+                    ItemSeparatorComponent={() => <View style={styles.separator} />}
                     ListFooterComponent={renderListFooter}
                     ListEmptyComponent={
                         <View style={{ padding: 32, alignItems: 'center' }}>

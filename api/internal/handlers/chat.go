@@ -50,6 +50,8 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	
+	chat.Icon = getIconForTeam(chat.TeamID)
 
 	c.JSON(http.StatusOK, chat)
 }
@@ -74,6 +76,8 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
 		return
 	}
+	
+	chat.Icon = getIconForTeam(chat.TeamID)
 
 	c.JSON(http.StatusOK, chat)
 }
@@ -91,6 +95,10 @@ func (h *ChatHandler) ListChats(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
 		return
+	}
+
+	for i := range chats {
+		chats[i].Icon = getIconForTeam(chats[i].TeamID)
 	}
 
 	c.JSON(http.StatusOK, chats)
@@ -123,6 +131,8 @@ func (h *ChatHandler) UpdateChat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	
+	chat.Icon = getIconForTeam(chat.TeamID)
 
 	c.JSON(http.StatusOK, chat)
 }
@@ -148,4 +158,22 @@ func (h *ChatHandler) DeleteChat(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusNoContent, nil)
+}
+
+func getIconForTeam(teamID *string) string {
+	if teamID == nil {
+		return ""
+	}
+	switch *teamID {
+	case "dnd_team":
+		return "d20"
+	case "genie":
+		return "sparkles"
+	case "development_team":
+		return "code"
+	case "travel_planning":
+		return "plane"
+	default:
+		return ""
+	}
 }
