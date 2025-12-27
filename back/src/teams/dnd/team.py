@@ -89,10 +89,10 @@ class DnDTeam(Team):
             instructions=instructions,
             members=[self.dm, self.rules, self.secretary, self.party],
             tools=[self.dnd_tools],
-            add_history_to_context=True,
+            add_history_to_context=False,
             num_history_runs=3,
             store_tool_messages=False,
-            store_history_messages=False,  # Fix for Gemini empty parts bug - don't save tool calls to history
+            store_history_messages=False,
             debug_mode=debug_mode,
             show_members_responses=True,
             stream_member_events=True,
