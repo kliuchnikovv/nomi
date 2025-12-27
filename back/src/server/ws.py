@@ -521,7 +521,8 @@ class LLMWebSocketSession:
         
         # Prepare inputs
         kwargs = {}
-        if self.session_id:
+        # Only pass session_id for non-team mode - Team mode has history issues
+        if self.session_id and self.build_mode != "team":
             kwargs["session_id"] = self.session_id
             
         if attachments:
