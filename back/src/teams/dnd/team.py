@@ -89,7 +89,11 @@ class DnDTeam(Team):
             instructions=instructions,
             members=[self.dm, self.rules, self.secretary, self.party],
             tools=[self.dnd_tools],  # Pass tools at init time!
+            # WORKAROUND: Gemini has a bug with tool call results in history creating empty 'parts'.
+            # Try with add_history_to_context=True but limit with num_history_runs
             add_history_to_context=True,
+            num_history_runs=3,  # Limit history to avoid problematic entries accumulating
+            enable_agentic_context=False,  # May help avoid tool call history issues
             debug_mode=debug_mode,
             show_members_responses=False,  # Disabled for now to test
             stream_member_events=False,    # Disabled for now to test
