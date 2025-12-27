@@ -239,25 +239,6 @@ export default function ChatInput(props: Props) {
                 setTimeout(() => setThinkingMenuVisible(true), 300);
             }
         },
-        {
-            id: 'mode_toggle',
-            label: `Mode: ${chatMode === 'team' ? 'Team' : 'Agent'}`,
-            icon: chatMode === 'team' ? <Group width={20} height={20} color="#fff" /> : <User width={20} height={20} color="#fff" />,
-            onPress: () => {
-                const newMode = chatMode === 'agent' ? 'team' : 'agent';
-                setChatMode(newMode);
-                setPlusMenuVisible(false); // Close menu on toggle
-            }
-        },
-        ...(chatMode === 'team' ? [{
-            id: 'select_team',
-            label: 'Select Team',
-            icon: <Group width={20} height={20} color="#fff" />, // Reuse group icon
-            onPress: () => {
-                setPlusMenuVisible(false);
-                setTimeout(() => setTeamMenuVisible(true), 300);
-            }
-        }] : []),
         // Display settings - single toggle for all details
         {
             id: 'toggle_details',
@@ -271,7 +252,7 @@ export default function ChatInput(props: Props) {
                 setPlusMenuVisible(false);
             }
         },
-    ], [pickDocument, pickImage, takePhoto, executeWithDelay, thinkingLevel, theme.accent, chatMode, setChatMode, showToolCalls, setShowToolCalls, setShowReasoning, setShowMemberResponses]);
+    ], [pickDocument, pickImage, takePhoto, executeWithDelay, thinkingLevel, theme.accent, showToolCalls, setShowToolCalls, setShowReasoning, setShowMemberResponses]);
 
     const removeAttachment = (id: string) => {
         setAttachments(prev => prev.filter(a => a.id !== id));

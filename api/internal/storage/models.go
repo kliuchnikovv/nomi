@@ -15,6 +15,8 @@ type Chat struct {
 	UserID     uuid.UUID  `gorm:"type:uuid;not null"`
 	Model      string     `gorm:"type:text;not null"`
 	Title      string     `gorm:"not null"`
+	Mode       string     `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
+	TeamID     *string    `gorm:"type:varchar(50);default:null"`             // e.g. 'dnd_team', 'travel_planning'
 	CreatedAt  time.Time  `gorm:"not null"`
 	UpdatedAt  time.Time  `gorm:"not null"`
 	ArchivedAt *time.Time `gorm:"default:null"`

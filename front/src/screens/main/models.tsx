@@ -9,15 +9,20 @@ export interface MainContextType {
     activeChat: Chat | null;
     getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
+    createNewChatWithMode: (mode: 'agent' | 'team', teamId: string | null) => void;
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
     deleteChat: (chatId: string) => void;
     setActiveChatID: (id: string | null) => void;
+    pendingChatMode?: { mode: 'agent' | 'team'; teamId: string | null } | null;
+    clearPendingChatMode?: () => void;
 }
 
 export type Chat = {
     id: string
     model: string
     title: string
+    mode: 'agent' | 'team'     // 'agent' or 'team'
+    team_id: string | null     // null for agent mode
     created_at: number
     updated_at: number
     archived_at: number | null

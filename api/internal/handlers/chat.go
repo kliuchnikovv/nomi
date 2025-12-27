@@ -39,6 +39,8 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 		ID:         uuid.New(),
 		Model:      newChat.Model,
 		Title:      newChat.Title,
+		Mode:       newChat.Mode,
+		TeamID:     newChat.TeamID,
 		CreatedAt:  time.Now().UTC(),
 		UpdatedAt:  time.Now().UTC(),
 		ArchivedAt: nil,

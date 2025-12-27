@@ -10,6 +10,8 @@ type Chat struct {
 	ID         uuid.UUID  `json:"id"`
 	Model      string     `json:"model"`
 	Title      string     `json:"title"`
+	Mode       string     `json:"mode"`              // 'agent' or 'team'
+	TeamID     *string    `json:"team_id,omitempty"` // null for agent mode
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 	ArchivedAt *time.Time `json:"archived_at"`

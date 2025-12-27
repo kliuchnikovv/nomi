@@ -242,20 +242,22 @@ export function MainProvider({ children }: { children: ReactNode }) {
             setActiveChatID(emptyChatID);
             return;
         }
-
-        // const newChat: Chat = {
-        //     id: emptyChatID,
-        //     title: 'New Chat',
-        //     model: 'gemini',
-        //     created_at: Date.now(),
-        //     updated_at: Date.now(),
-        //     archived_at: null,
-        //     deleted_at: null,
-        //     messages: [],
-        // };
-        // setChats(prev => [newChat, ...prev]);
         setActiveChatID(emptyChatID);
     }
+
+    // State to store pending mode/team for new chat
+    const [pendingChatMode, setPendingChatMode] = useState<{ mode: 'agent' | 'team'; teamId: string | null } | null>(null);
+
+    function createNewChatWithMode(mode: 'agent' | 'team', teamId: string | null) {
+        // Store the mode/team to be used when the chat is created
+        setPendingChatMode({ mode, teamId });
+        // Trigger creation of a new chat
+        setActiveChatID(emptyChatID);
+    }
+
+    // Export pending mode for chat context to use
+    const getPendingChatMode = () => pendingChatMode;
+    const clearPendingChatMode = () => setPendingChatMode(null);
 
     const value: MainContextType = {
         chats,
@@ -264,9 +266,12 @@ export function MainProvider({ children }: { children: ReactNode }) {
         activeChat,
         getChats,
         createNewChat,
+        createNewChatWithMode,
         renameChat,
         deleteChat,
         setActiveChatID,
+        pendingChatMode,
+        clearPendingChatMode,
     };
 
     return (

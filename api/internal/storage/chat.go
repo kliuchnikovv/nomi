@@ -10,11 +10,19 @@ import (
 )
 
 func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
+	// Default mode to 'agent' if not specified
+	mode := c.Mode
+	if mode == "" {
+		mode = "agent"
+	}
+
 	chatModel := &Chat{
 		ID:        c.ID,
 		UserID:    userID,
 		Model:     c.Model,
 		Title:     c.Title,
+		Mode:      mode,
+		TeamID:    c.TeamID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -27,6 +35,8 @@ func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 		ID:        chatModel.ID,
 		Model:     chatModel.Model,
 		Title:     chatModel.Title,
+		Mode:      chatModel.Mode,
+		TeamID:    chatModel.TeamID,
 		CreatedAt: chatModel.CreatedAt,
 		UpdatedAt: chatModel.UpdatedAt,
 	}, nil
@@ -44,6 +54,8 @@ func (s *Storage) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUI
 		ID:         chatModel.ID,
 		Model:      chatModel.Model,
 		Title:      chatModel.Title,
+		Mode:       chatModel.Mode,
+		TeamID:     chatModel.TeamID,
 		CreatedAt:  chatModel.CreatedAt,
 		UpdatedAt:  chatModel.UpdatedAt,
 		ArchivedAt: chatModel.ArchivedAt,
@@ -64,6 +76,8 @@ func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.C
 			ID:         model.ID,
 			Model:      model.Model,
 			Title:      model.Title,
+			Mode:       model.Mode,
+			TeamID:     model.TeamID,
 			CreatedAt:  model.CreatedAt,
 			UpdatedAt:  model.UpdatedAt,
 			ArchivedAt: model.ArchivedAt,

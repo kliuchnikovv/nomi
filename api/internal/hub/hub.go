@@ -39,16 +39,13 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub 
 }
 
 func (h *Hub) Run() {
-	for {
-		select {
-		case room := <-h.unregister:
-			h.mu.Lock()
-			if _, ok := h.rooms[room.ID]; ok {
-				delete(h.rooms, room.ID)
-				h.logger.Info("room closed", zap.String("room_id", room.ID.String()))
-			}
-			h.mu.Unlock()
+	for room := range h.unregister {
+		h.mu.Lock()
+		if _, ok := h.rooms[room.ID]; ok {
+			delete(h.rooms, room.ID)
+			h.logger.Info("room closed", zap.String("room_id", room.ID.String()))
 		}
+		h.mu.Unlock()
 	}
 }
 

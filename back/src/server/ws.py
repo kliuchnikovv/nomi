@@ -190,6 +190,9 @@ class LLMWebSocketSession:
                     pass
             if isinstance(cmd_obj, dict):
                 self.command_desc = cmd_obj
+                # If model is not set (e.g. from URL), set it from command to prevent unnecessary rebuilds
+                if self.current_model_name is None:
+                    self.current_model_name = cmd_obj.get("model")
 
         logger.info("[WS] Parsed tools: count=%d", len(self.tools_specs))
 
@@ -451,8 +454,8 @@ class LLMWebSocketSession:
                                     "actions": actions_list,
                                     "message_id": message_id
                                 }))
-                                # Don't send regular tool call frame for action buttons
-                                continue
+                                # Proceed to send regular tool call frame so it gets persisted
+                                # continue
                         except (json.JSONDecodeError, TypeError):
                             pass
                     

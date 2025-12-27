@@ -15,6 +15,7 @@ import { ChatSocket } from '../../socket';
 import { getApiUrl, API_URL } from '../../config.ts';
 import { modelsApi, sidebarApi } from '../../apiClient';
 import { AVAILABLE_TEAMS } from './teams';
+import { useMain } from '../main/context';
 
 function generateUUID() {
     // RFC4122 version 4 compliant enough for client-side ids
@@ -172,6 +173,8 @@ export function ChatProvider({
         }
     }, [setSelectedModel]);
 
+    const { activeChat, pendingChatMode, clearPendingChatMode } = useMain();
+
     // Fetch messages when activeChatID changes
     useEffect(() => {
         // In plugin mode we keep activeChatID as placeholder; skip resetting state
@@ -190,12 +193,34 @@ export function ChatProvider({
         setExternalTitle(null);
         // Reset manual selection flag when switching chats
         manualModelSelectionRef.current = false;
+
+        // Sync mode from active chat or pending state
+        if (activeChatID === emptyChatID && pendingChatMode) {
+            // New chat with specific mode requested
+            setChatMode(pendingChatMode.mode);
+            if (pendingChatMode.teamId) {
+                selectTeam(pendingChatMode.teamId);
+            }
+            clearPendingChatMode?.();
+        } else if (activeChat) {
+            // Existing chat - restore mode
+            if (activeChat.mode) {
+                setChatMode(activeChat.mode);
+            } else {
+                setChatMode('agent');
+            }
+
+            if (activeChat.team_id) {
+                selectTeam(activeChat.team_id);
+            }
+        }
+
         if (!activeChatID || activeChatID === emptyChatID) {
             setMessages([]);
             return;
         }
         getMessages(activeChatID);
-    }, [activeChatID, getMessages, pluginThreadMeta]); // Dependency on activeChatID
+    }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode]);
 
     // Fetch available models on mount with retry
     useEffect(() => {
@@ -464,7 +489,9 @@ export function ChatProvider({
                 `${getApiUrl()}/chats`,
                 {
                     "title": title,
-                    "model": emptyChatID
+                    "model": emptyChatID,
+                    "mode": chatMode,
+                    "team_id": chatMode === 'team' ? selectedTeamId : null
                 },
             );
             if (created?.id) {
