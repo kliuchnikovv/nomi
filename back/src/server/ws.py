@@ -385,6 +385,15 @@ class LLMWebSocketSession:
                 elif evt_type == "tool_call":
                     # Send tool call immediately
                     tool_data = event.get("tool", {})
+                    
+                    # Debug logging to find where result is stored
+                    logger.info("[WS] Tool call event. tool_data type: %s", type(tool_data))
+                    if hasattr(tool_data, '__dict__'):
+                        logger.info("[WS] tool_data attrs: %s", list(tool_data.__dict__.keys()))
+                    logger.info("[WS] ev type: %s, has result: %s", type(ev), hasattr(ev, 'result'))
+                    if hasattr(ev, 'result'):
+                        logger.info("[WS] ev.result: %s", str(ev.result)[:200] if ev.result else None)
+                    
                     # Map to serializable format
                     safe_tool = {
                         "name": getattr(tool_data, "tool_name", "unknown") if hasattr(tool_data, "tool_name") else tool_data.get("name", "unknown"),
@@ -418,11 +427,13 @@ class LLMWebSocketSession:
                                 result_data = None
                             
                             if result_data and result_data.get("__action_buttons__"):
-                                logger.info("[WS] Sending action buttons from suggest_actions")
+                                actions_list = result_data.get("actions", [])
+                                logger.info("[WS] Sending action buttons from suggest_actions: %s", actions_list)
+                                logger.info("[WS] Full result_data: %s", result_data)
                                 # Send action buttons as a special frame
                                 await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
                                     "type": "actions",
-                                    "actions": result_data.get("actions", []),
+                                    "actions": actions_list,
                                     "message_id": message_id
                                 }))
                                 # Don't send regular tool call frame for action buttons

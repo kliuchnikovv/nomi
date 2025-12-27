@@ -10,6 +10,9 @@ interface MessageActionsProps {
 }
 
 export const MessageActions: React.FC<MessageActionsProps> = ({ actions, theme, onActionPress }) => {
+    // Debug logging
+    console.log('[MessageActions] Rendering with actions:', actions);
+
     if (!actions || actions.length === 0) {
         return null;
     }

@@ -539,6 +539,9 @@ export function ChatProvider({
         sock.setHandlers({
             onMessage: (frame: Frame) => {
                 console.log('onMessage: received message', frame);
+                if (frame.payload?.type === 'actions') {
+                    console.log('>>> ACTIONS FRAME RECEIVED:', frame.payload);
+                }
                 setMessages(prevMessages =>
                     onReceivedMessage(frame, prevMessages)
                 );
