@@ -6,6 +6,7 @@ from agno.agent import Agent
 from agno.db.postgres import PostgresDb
 from agno.models.base import Model
 from agno.models.google import Gemini
+from src.models.safe_gemini import SafeGemini
 
 from src.agents.genie import GenieAgent
 from src.agents.rag import RagAgent
@@ -81,7 +82,8 @@ class AgentFactory:
                 include_thoughts = True
                 logger.info("[Factory] Enabling thinking mode for model: %s (level=%s, budget=%d)", model_name, thinking, thinking_budget)
             
-            return Gemini(
+            # Use SafeGemini to filter empty parts and prevent 400 errors
+            return SafeGemini(
                 id=model_name,
                 api_key=api_key,
                 # search=web_search,
