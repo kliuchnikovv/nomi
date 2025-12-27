@@ -14,6 +14,7 @@ class DnDTeam(Team):
         self,
         model: Model,
         room_id: str = "",  # Required for tools
+        session_id: str = "",  # Required for history management
         db: BaseDb | None = None,
         markdown: bool = True,
         debug_mode: bool = False,
@@ -102,6 +103,7 @@ class DnDTeam(Team):
         super().__init__(
             model=model,
             db=db,
+            session_id=session_id or room_id,  # Use session_id for history management
             description=description,
             instructions=instructions,
             members=[self.dm, self.rules, self.secretary, self.party],

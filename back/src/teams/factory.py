@@ -62,6 +62,7 @@ class TeamFactory:
             team = DnDTeam(
                 model=self.model,
                 room_id=session_id,  # Pass room_id so tools are created at init
+                session_id=session_id,  # Pass session_id for history management
                 db=self.db,
                 debug_mode=self.debug_mode,
             )
