@@ -390,9 +390,9 @@ class LLMWebSocketSession:
                     logger.info("[WS] Tool call event. tool_data type: %s", type(tool_data))
                     if hasattr(tool_data, '__dict__'):
                         logger.info("[WS] tool_data attrs: %s", list(tool_data.__dict__.keys()))
-                    logger.info("[WS] ev type: %s, has result: %s", type(ev), hasattr(ev, 'result'))
-                    if hasattr(ev, 'result'):
-                        logger.info("[WS] ev.result: %s", str(ev.result)[:200] if ev.result else None)
+                    logger.info("[WS] event type: %s, has result: %s", type(event), event.get('result') is not None)
+                    if event.get('result'):
+                        logger.info("[WS] event.result: %s", str(event.get('result'))[:200])
                     
                     # Map to serializable format
                     safe_tool = {
