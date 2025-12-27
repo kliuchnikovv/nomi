@@ -70,9 +70,29 @@ function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], on
         });
     }, [parts, showToolCalls, showReasoning, showMemberResponses]);
 
+    // Merge consecutive text parts for proper markdown rendering
+    const mergedParts = useMemo(() => {
+        const result: ContentPart[] = [];
+        for (const part of filteredParts) {
+            if (part.type === 'text') {
+                const last = result[result.length - 1];
+                if (last && last.type === 'text') {
+                    // Merge with previous text part
+                    last.text = (last.text || '') + (part.text || '');
+                } else {
+                    // Create new text part (copy to avoid mutation)
+                    result.push({ type: 'text', text: part.text || '' });
+                }
+            } else {
+                result.push(part);
+            }
+        }
+        return result;
+    }, [filteredParts]);
+
     return (
         <>
-            {filteredParts.map((part, index) => {
+            {mergedParts.map((part, index) => {
                 if (part.type === 'text') {
                     return (
                         <Pressable

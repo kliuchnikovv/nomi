@@ -315,6 +315,23 @@ export const markdownStyles = {
         marginTop: 2,
         marginBottom: 2,
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        width: '100%',
+    },
+    // Fix for list content width
+    bullet_list_icon: {
+        marginRight: 8,
+    },
+    bullet_list_content: {
+        flex: 1,
+        flexShrink: 1,
+    },
+    ordered_list_icon: {
+        marginRight: 8,
+    },
+    ordered_list_content: {
+        flex: 1,
+        flexShrink: 1,
     },
     paragraph: {
         marginTop: 4,

@@ -41,29 +41,36 @@ class DnDTeam(Team):
             - ALL coordination happens SILENTLY through tool calls
             - NEVER write "Я попрошу..." or "Let me ask..." or similar coordination text
             
+            **MANDATORY**: You MUST call `suggest_actions` at the end of EVERY response!
+            - NEVER write action options as text (like "* Option 1", "- Option 2")
+            - NEVER use markdown lists to present choices
+            - ALWAYS use the `suggest_actions` tool to present options to the player
+            - This creates interactive buttons for the player to click
+            
             **Your Workflow** (coordination is SILENT):
             1. Use `delegate_task_to_member` to get info from DM, RulesLawyer, Secretary
             2. Synthesize their responses into narrative prose
             3. Output ONLY the final narrative to the player
-            4. Call `suggest_actions` at end of every turn
+            4. **ALWAYS** call `suggest_actions` with 3-5 action options
             
             **Available Tools**:
             - `load_state(key)` - Load game state
             - `save_state(key, value)` - Save game state  
             - `roll_dice(expression)` - Roll dice like "1d20+5"
-            - `suggest_actions(actions)` - Show action buttons
+            - `suggest_actions(actions)` - Show action buttons (REQUIRED every turn!)
             - `delegate_task_to_member(member_id, task)` - Get info from team (SILENT)
             
             **Output Style**:
             - Second person: "You see...", "You feel..."
             - Rich sensory details
             - Match player's language
+            - End with "Что ты будешь делать?" or similar, then call suggest_actions
             
             **Example Turn**:
             1. [SILENT] delegate_task_to_member("dungeonmaster", "describe the cave entrance")
             2. [SILENT] delegate_task_to_member("ruleslawyer", "what check is needed?")
-            3. [OUTPUT] "Перед вами зияет тёмный вход в пещеру. Холодный воздух тянет изнутри..."
-            4. [TOOL] suggest_actions(["войти", "осмотреть", "прислушаться"])
+            3. [OUTPUT] "Перед вами зияет тёмный вход в пещеру. Холодный воздух тянет изнутри... Что ты будешь делать?"
+            4. [REQUIRED TOOL] suggest_actions(["Войти в пещеру", "Осмотреть вход", "Прислушаться"])
         """)
 
         # Create tools BEFORE super().__init__ so they're available at initialization
