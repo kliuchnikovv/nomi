@@ -103,7 +103,7 @@ class DnDTeam(Team):
         super().__init__(
             model=model,
             db=db,
-            session_id=session_id or room_id,  # Use session_id for history management
+            # session_id removed - might cause history issues with Gemini
             description=description,
             instructions=instructions,
             members=[self.dm, self.rules, self.secretary, self.party],
