@@ -307,6 +307,16 @@ class LLMWebSocketSession:
         elif frame.op == Op.MESSAGE:
             await self.handle_user_message(frame)
             
+        elif frame.op == Op.TOOLS:
+            # Handle late TOOLS frame (e.g., from Go backend reconnection)
+            logger.info("[WS] Received late TOOLS frame, re-parsing tools")
+            self._parse_tools(frame.payload)
+            
+        elif frame.op == Op.HISTORY:
+            # Handle late HISTORY frame (e.g., from Go backend reconnection)
+            logger.info("[WS] Received late HISTORY frame, re-parsing history")
+            self._parse_history(frame.payload)
+            
         else:
             logger.warning("[WS] Unexpected op: %s", frame.op)
 

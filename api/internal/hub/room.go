@@ -125,11 +125,10 @@ func (r *Room) Run() {
 
 		case frame, ok := <-r.llmFrames:
 			if !ok {
-				r.logger.Warn("llm frames channel closed")
-				r.llmFrames = nil // Disable case
-				// Should we reconnect? Only on next user message or if needed.
-				// For now, let's mark as disconnected.
-				r.llmSocket = nil
+				r.logger.Warn("llm frames channel closed, will retry connection on next message")
+				r.llmFrames = nil // Disable this case to avoid busy loop
+				// Don't set llmSocket = nil here - the connection might still be valid for writes
+				// If the next write fails, connectLLM will handle reconnection
 				continue
 			}
 			resetTimer()
@@ -141,6 +140,7 @@ func (r *Room) Run() {
 				continue
 			}
 			r.logger.Error("llm error", zap.Error(err))
+			// Only reset socket on actual errors
 			if r.llmSocket != nil {
 				r.llmSocket.Close()
 				r.llmSocket = nil
@@ -162,6 +162,18 @@ func (r *Room) Run() {
 }
 
 func (r *Room) connectLLM() {
+	// If we have a socket but no frames channel, we need to restart the reader
+	if r.llmSocket != nil && r.llmFrames == nil {
+		r.logger.Info("restarting LLM reader goroutine")
+		// Cancel old context if exists
+		if r.llmCancel != nil {
+			r.llmCancel()
+		}
+		r.llmCtx, r.llmCancel = context.WithCancel(context.Background())
+		r.llmFrames, r.llmErrs = r.llmSocket.Read(r.llmCtx)
+		return
+	}
+
 	if r.llmSocket != nil {
 		return
 	}
