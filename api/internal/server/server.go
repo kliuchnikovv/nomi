@@ -127,6 +127,7 @@ func New(
 	r.POST("/api/auth/login", wrap(http.HandlerFunc(authHandler.Login)))
 	// r.POST("/api/auth/logout", wrapWithAuth(authHandler.Logout, authMiddleware))
 	r.POST("/api/auth/refresh", wrap(http.HandlerFunc(authHandler.Refresh)))
+	r.POST("/api/auth/google", wrap(http.HandlerFunc(authHandler.GoogleLogin)))
 	r.GET("/api/auth/me", gin.WrapH(
 		authMiddleware.RequireAuth(
 			http.HandlerFunc(authHandler.GetMe),

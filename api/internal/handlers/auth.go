@@ -1,10 +1,14 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
@@ -251,4 +255,99 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
+}
+
+type GoogleLoginRequest struct {
+	IDToken string `json:"id_token"`
+}
+
+// GoogleLogin handles Google Sign-In
+// @Summary Google Sign-In
+// @Description Authenticates user via Google ID Token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body GoogleLoginRequest true "Google ID Token"
+// @Success 200 {object} AuthResponse
+// @Failure 400 {object} string "Invalid request"
+// @Failure 401 {object} string "Invalid token"
+// @Failure 500 {object} string "Internal server error"
+// @Router /api/auth/google [post]
+func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	var req GoogleLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.IDToken == "" {
+		http.Error(w, "id_token is required", http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	provider, err := oidc.NewProvider(ctx, "https://accounts.google.com")
+	if err != nil {
+		http.Error(w, "Failed to get OIDC provider", http.StatusInternalServerError)
+		return
+	}
+
+	verifier := provider.Verifier(&oidc.Config{
+		SkipClientIDCheck: true, // Client ID is checked on client side
+	})
+
+	idToken, err := verifier.Verify(ctx, req.IDToken)
+	if err != nil {
+		http.Error(w, "Invalid token: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var claims struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := idToken.Claims(&claims); err != nil {
+		http.Error(w, "Failed to parse claims", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if user exists
+	user, err := h.storage.GetUserByEmail(ctx, claims.Email)
+	if err != nil {
+		// User does not exist, create new one
+		// Generate random password
+		randomBytes := make([]byte, 16)
+		_, _ = rand.Read(randomBytes)
+		randomPassword := hex.EncodeToString(randomBytes)
+
+		name := claims.Name
+		if name == "" {
+			name = strings.Split(claims.Email, "@")[0]
+		}
+
+		user, err = h.storage.CreateUser(ctx, claims.Email, randomPassword, name)
+		if err != nil {
+			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Generate tokens
+	token, err := h.tokenManager.GenerateToken(user)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+	rtoken, err := h.tokenManager.GenerateRefreshToken()
+	if err != nil {
+		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
+		return
+	}
+	if err := h.storage.SaveRefreshToken(ctx, user.ID, rtoken, 30*24*time.Hour); err != nil {
+		http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AuthResponse{Token: token, RefreshToken: rtoken, User: user})
 }
