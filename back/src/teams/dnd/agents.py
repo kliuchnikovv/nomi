@@ -23,7 +23,9 @@ def create_dm_agent(model: Model) -> Agent:
             Output strictly JSON when requested by the Team Leader.
             Otherwise, speak naturally as the DM.
         """),
-        markdown=True
+        markdown=True,
+        add_history_to_messages=True,
+        add_history_to_context=True
     )
 
 def create_rules_agent(model: Model) -> Agent:
@@ -38,7 +40,9 @@ def create_rules_agent(model: Model) -> Agent:
 
             Output strictly JSON when requested.
         """),
-        markdown=True
+        markdown=True,
+        add_history_to_messages=True,
+        add_history_to_context=True
     )
 
 def create_secretary_agent(model: Model) -> Agent:
@@ -52,7 +56,9 @@ def create_secretary_agent(model: Model) -> Agent:
 
             You have access to 'save_state' and 'load_state' tools. USE THEM.
         """),
-        markdown=True
+        markdown=True,
+        add_history_to_messages=True,
+        add_history_to_context=True
     )
 
 def create_party_agent(model: Model) -> Agent:
@@ -67,5 +73,7 @@ def create_party_agent(model: Model) -> Agent:
             - In combat, choose tactical actions.
             - Engage in banter and roleplay.
         """),
-        markdown=True
+        markdown=True,
+        add_history_to_messages=True,
+        add_history_to_context=True
     )
