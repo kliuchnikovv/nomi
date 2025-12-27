@@ -638,6 +638,15 @@ class LLMWebSocketSession:
                     elif hasattr(ev, "delta"): val = ev.delta
 
                     chunk = str(val) if val is not None else ""
+                    
+                    # Skip tool outputs that shouldn't be shown to users
+                    if chunk and (
+                        chunk.startswith("```tool_outputs") or
+                        chunk.startswith("{\"delegate_task_to_member") or
+                        "delegate_task_to_member_response" in chunk
+                    ):
+                        continue
+                    
                     if chunk and chunk != captured_reasoning:
                          # Mark member responses differently
                          if is_member_event:
