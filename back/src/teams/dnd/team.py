@@ -110,6 +110,6 @@ class DnDTeam(Team):
             tools=[self.dnd_tools],  # Pass tools at init time!
             add_history_to_context=True,
             debug_mode=debug_mode,
-            show_members_responses=True,   # Show DM narration as main text
-            stream_member_events=True,     # Stream member agent responses
+            show_members_responses=False,  # Disabled for now to test
+            stream_member_events=False,    # Disabled for now to test
         )
