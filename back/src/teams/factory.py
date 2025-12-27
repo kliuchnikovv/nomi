@@ -28,7 +28,6 @@ class TeamFactory:
              logger.info("[WS] Instantiating TravelPlanning team")
              # Assuming keys are in environment or config - for now passing what we have or empty
              # In a real scenario we'd pull these from environment vars or TeamFactory init
-             import os
              return TravelPlanning(
                  model=self.model,
                  maps_key=os.getenv("GOOGLE_MAPS_API_KEY", ""),
@@ -40,7 +39,6 @@ class TeamFactory:
         elif team_type == "genie":
             from src.teams.genie.team import GenieTeam
             logger.info("[WS] Instantiating GenieTeam")
-            import os
             return GenieTeam(
                 model=self.model,
                 maps_key=os.getenv("GOOGLE_MAPS_API_KEY", ""),
