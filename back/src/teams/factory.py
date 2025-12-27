@@ -3,7 +3,9 @@ from agno.team import Team
 from agno.models.base import Model
 from agno.db.postgres import PostgresDb
 from agno.tools import Toolkit, Function
+from src.models.safe_gemini import SafeGemini
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +61,14 @@ class TeamFactory:
             from src.teams.dnd.team import DnDTeam
 
             logger.info("[WS] Instantiating DnDTeam with room_id=%s", session_id)
+            
+            # Use SafeGemini to filter empty parts and prevent 400 errors with history
+            model_id = getattr(self.model, 'id', 'gemini-2.0-flash')
+            api_key = os.getenv("GOOGLE_API_KEY")
+            safe_model = SafeGemini(id=model_id, api_key=api_key)
+            
             team = DnDTeam(
-                model=self.model,
+                model=safe_model,
                 room_id=session_id,  # Pass room_id so tools are created at init
                 session_id=session_id,  # Pass session_id for history management
                 db=self.db,
