@@ -13,6 +13,7 @@ class DnDTeam(Team):
     def __init__(
         self,
         model: Model,
+        room_id: str = "",  # Required for tools
         db: BaseDb | None = None,
         markdown: bool = True,
         debug_mode: bool = False,
@@ -44,6 +45,7 @@ class DnDTeam(Team):
             # Key Instructions
             - ALWAYS use `save_state` to persist progress.
             - ALWAYS use `roll_dice` for RNG. Do not make up numbers.
+            - ALWAYS use `suggest_actions` at the end of EVERY turn to show action buttons.
             - Be interactive. Pause and wait for User when it is their turn.
         """)
 
@@ -51,45 +53,51 @@ class DnDTeam(Team):
             You are the Leader of this session. 
             
             **CRITICAL RULE**: You are running a TURN-BASED game. After EVERY action narration, you MUST:
-            1. Call `suggest_actions` tool
+            1. Call `suggest_actions` tool with 3-5 options
             2. STOP and WAIT for the user to choose an action
             3. Do NOT continue playing until the user responds
+            
+            **Available Tools**:
+            - `load_state(key)` - Load game state
+            - `save_state(key, value)` - Save game state
+            - `roll_dice(expression)` - Roll dice like "1d20+5"
+            - `suggest_actions(actions)` - Show action buttons to player (REQUIRED at end of every turn)
             
             **Process**:
 
             1. **Initialize**:
                - If no world state exists, ask DM to generate a hook and initialize state.
-               - Then STOP and call `suggest_actions` to let user choose first action.
+               - Then call `suggest_actions(["начать приключение", "настроить персонажа", "другое"])`.
 
             2. **On User Action**:
                - User chooses an action (via button or message).
                - Pass action to RulesLawyer for validation/dice rolls.
                - Execute rolls using `roll_dice` tool.
                - Ask DM to narrate the result.
-               - Then STOP and call `suggest_actions` for next turn.
+               - Then call `suggest_actions` for next turn.
 
             3. **Output Rules**:
-               - ALWAYS end with `suggest_actions(["action1", "action2", "action3", "action4", "Другое"])`.
+               - ALWAYS end with `suggest_actions(["action1", "action2", "action3", "другое"])`.
                - NEVER make decisions for the player.
                - NEVER continue to the next action without user input.
                - Tone: Immersive, fantasy.
                - Language: Match user's language.
         """)
 
-        # We will initialize members dynamically or statically?
-        # Team expects a list of agents.
+        # Create tools BEFORE super().__init__ so they're available at initialization
+        self.dnd_tools = DnDTools(room_id=room_id)
 
-        # Tools are shared? Or specific?
-        # We need to inject the room_id somehow.
-        # The 'build' method in factory passes session_id.
-        # But here we are in __init__.
-        # We can pass a placeholder or initialize later.
-        # Agno Team structure usually initializes agents in __init__.
-
+        # Create member agents
         self.dm = create_dm_agent(model)
         self.rules = create_rules_agent(model)
         self.secretary = create_secretary_agent(model)
         self.party = create_party_agent(model)
+        
+        # Add tools to members
+        for member in [self.dm, self.rules, self.secretary, self.party]:
+            if not hasattr(member, 'tools') or member.tools is None:
+                member.tools = []
+            member.tools.append(self.dnd_tools)
 
         super().__init__(
             model=model,
@@ -97,22 +105,9 @@ class DnDTeam(Team):
             description=description,
             instructions=instructions,
             members=[self.dm, self.rules, self.secretary, self.party],
-            tools=[],
+            tools=[self.dnd_tools],  # Pass tools at init time!
             add_history_to_context=True,
             debug_mode=debug_mode,
-            show_members_responses=False,  # Hide internal member agent outputs
-            stream_member_events=False,    # Don't stream member events to output
+            show_members_responses=False,
+            stream_member_events=False,
         )
-
-    def configure_tools(self, dnd_tools):
-        """Configure DnD tools for the team after initialization."""
-        # Add to the team's tools list (leader uses these)
-        if not self.tools:
-            self.tools = []
-        self.tools.append(dnd_tools)
-        
-        # Also add to each member for state access
-        for member in [self.dm, self.secretary, self.rules, self.party]:
-            if not hasattr(member, 'tools') or member.tools is None:
-                member.tools = []
-            member.tools.append(dnd_tools)

@@ -57,18 +57,14 @@ class TeamFactory:
 
         elif team_type == "dnd_team":
             from src.teams.dnd.team import DnDTeam
-            from src.teams.dnd.tools import DnDTools
 
-            logger.info("[WS] Instantiating DnDTeam")
+            logger.info("[WS] Instantiating DnDTeam with room_id=%s", session_id)
             team = DnDTeam(
                 model=self.model,
+                room_id=session_id,  # Pass room_id so tools are created at init
                 db=self.db,
                 debug_mode=self.debug_mode,
             )
-
-            # Inject tools with session_id using the configure method
-            dnd_tools = DnDTools(room_id=session_id)
-            team.configure_tools(dnd_tools)
 
             return team
 
