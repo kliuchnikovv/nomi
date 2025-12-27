@@ -60,7 +60,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
-    const { chats, chatsLoading, activeChatID, activeChat, setActiveChatID, getChats, createNewChat, renameChat, deleteChat } = useMain();
+    const { chats, chatsLoading, activeChatID, activeChat, setActiveChatID, getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat } = useMain();
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
     const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
@@ -256,6 +256,12 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         handleCloseMenu();
     }, [createNewChat, handleCloseMenu, clearPluginThread]);
 
+    const handleNewChatWithMode = useCallback((mode: 'agent' | 'team', teamId: string | null) => {
+        clearPluginThread();
+        createNewChatWithMode(mode, teamId);
+        handleCloseMenu();
+    }, [createNewChatWithMode, handleCloseMenu, clearPluginThread]);
+
     const dismissKeyboard = () => {
         Keyboard.dismiss();
     };
@@ -347,7 +353,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             }
         });
 
-    const headerTitle = externalTitle || activeChat?.title || 'New Chat';
+    const headerTitle = externalTitle || activeChat?.title || '';
     const headerSubtitle = '';
 
     return (
@@ -362,9 +368,11 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         activeChatID={activeChatID}
                         onSelectChat={handleSelectChat}
                         onNewChat={handleNewChat}
+                        onNewChatWithMode={handleNewChatWithMode}
                         onSettingsPress={onSettingsPress}
                         onChatDelete={deleteChat}
                         onChatRename={renameChat}
+                        isOpen={true}
                     />
                 )}
 
@@ -459,11 +467,13 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                     onClose={handleCloseMenu}
                     onSelectChat={handleSelectChat}
                     onNewChat={handleNewChat}
+                    onNewChatWithMode={handleNewChatWithMode}
                     onSettingsPress={onSettingsPress}
                     onChatDelete={deleteChat}
                     onChatRename={renameChat}
                     sidebarTranslateX={sidebarTranslateX}
                     dragGesture={closeGesture}
+                    isOpen={sidebarVisible}
                 />
             )}
 

@@ -187,7 +187,7 @@ func (r *Room) connectLLM() {
 
 	query := u.Query()
 	query.Add("chat_id", r.ID.String())
-	
+
 	// Forward mode and command to Python backend
 	if r.mode != "" {
 		query.Add("mode", r.mode)
@@ -195,7 +195,7 @@ func (r *Room) connectLLM() {
 	if r.command != "" {
 		query.Add("command", r.command)
 	}
-	
+
 	u.RawQuery = query.Encode()
 
 	hdr := http.Header{}
@@ -233,7 +233,6 @@ func (r *Room) initLLMContext() {
 				"params":  integration.Params,
 			})
 		}
-
 
 		// user, err := r.store.GetUserByID(ctx, r.initiatorID)
 		// if err == nil && user.WebSearchEnabled {
@@ -430,7 +429,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			role = chat.RoleSystem
 		}
 
-		r.logger.Info("saving message to db", 
+		r.logger.Info("saving message to db",
 			zap.String("original_payload_role", frame.Payload.Role),
 			zap.String("determined_role", string(role)),
 			zap.String("msg_id", msgID.String()),
@@ -448,6 +447,29 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		if err != nil {
 			r.logger.Error("failed to save user message", zap.Error(err))
 		}
+
+		// Update Chat Title if empty (or default)
+		go func() {
+			ctx := context.Background()
+			c, err := r.store.GetChat(ctx, r.initiatorID, r.ID)
+			if err == nil && (c.Title == "" || c.Title == "New Chat") {
+				newTitle := frame.Payload.Message
+				runes := []rune(newTitle)
+				if len(runes) > 50 {
+					newTitle = string(runes[:50]) + "..."
+				}
+				if newTitle == "" {
+					newTitle = "Chat"
+				}
+
+				c.Title = newTitle
+				if _, err := r.store.UpdateChat(ctx, r.initiatorID, c); err != nil {
+					r.logger.Error("failed to update chat title", zap.Error(err))
+				} else {
+					r.logger.Info("updated chat title", zap.String("new_title", newTitle))
+				}
+			}
+		}()
 
 		// 3. Set role/sender in frame for multi-device sync
 		if frame.Payload.Role != "system" {
@@ -709,7 +731,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 		// Generation complete - room can now close if no clients
 		r.generationInProgress = false
 		r.logger.Info("generation complete", zap.String("msg_id", frame.Payload.MessageID.String()))
-		
+
 		// Reset metadata
 		r.currentMessageMetadata = struct {
 			MessageID    uuid.UUID

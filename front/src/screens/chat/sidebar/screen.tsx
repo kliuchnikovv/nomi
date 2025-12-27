@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { SectionList, Pressable, Text, View, ActionSheetIOS, Alert } from 'react-native';
+import { FlatList, Pressable, Text, View, ActionSheetIOS, Alert, ScrollView } from 'react-native';
 import { SharedValue } from 'react-native-reanimated';
-import { Settings, User, Group } from 'iconoir-react-native';
+import { Settings, User, Group, NavArrowDown, NavArrowRight } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture } from 'react-native-gesture-handler';
 import { ChatSidebarProps } from './models';
@@ -31,6 +31,7 @@ type ChatSection = {
     teamId: string | null;
     icon: 'user' | 'group';
     data: Chat[];
+    totalCount: number;
 };
 
 function ChatListSkeleton({ styles }: { styles: SidebarStyles }) {
@@ -59,60 +60,135 @@ function ChatListContent({
     onChatRename,
     styles,
     chatTheme,
+    isOpen,
 }: Pick<ChatSidebarProps, 'chats' | 'chatsLoading' | 'activeChatID' | 'onSelectChat' | 'onNewChat' | 'onNewChatWithMode' | 'onSettingsPress' | 'onChatDelete' | 'onChatRename'> & {
     styles: SidebarStyles;
     chatTheme: SidebarChatTheme;
+    isOpen?: boolean;
 }) {
     const insets = useSafeAreaInsets();
     const { theme } = useTheme();
     const [highlightedChatID, setHighlightedChatID] = useState<string | null>(null);
+    const flatListRef = React.useRef<FlatList<Chat>>(null);
+    const pendingScrollRef = React.useRef<{ index: number; animated: boolean; viewPosition: number; retries: number } | null>(null);
 
-    // Group chats by mode/team
-    const sections = useMemo((): ChatSection[] => {
-        // Separate agent and team chats
-        const agentChats = chats.filter(c => !c.mode || c.mode === 'agent');
-        const teamChats = chats.filter(c => c.mode === 'team');
+    const [selectedFilter, setSelectedFilter] = useState<string>('all');
+    const [listLimit, setListLimit] = useState(20);
 
-        const result: ChatSection[] = [];
-
-        // Agent section first
-        if (agentChats.length > 0) {
-            result.push({
-                title: 'Agent',
-                mode: 'agent',
-                teamId: null,
-                icon: 'user',
-                data: agentChats.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)),
-            });
-        }
-
-        // Team sections
-        AVAILABLE_TEAMS.forEach(team => {
-            const teamData = teamChats.filter(c => c.team_id === team.id);
-            if (teamData.length > 0) {
-                result.push({
-                    title: team.name,
-                    mode: 'team',
-                    teamId: team.id,
-                    icon: 'group',
-                    data: teamData.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)),
-                });
-            }
+    const filters = useMemo(() => {
+        const list = [
+            { id: 'all', title: 'All' },
+            { id: 'agent', title: 'Agent' },
+        ];
+        AVAILABLE_TEAMS.forEach(t => {
+            list.push({ id: t.id, title: t.name });
         });
+        return list;
+    }, []);
 
-        // If no chats at all, show empty agent section
-        if (result.length === 0) {
-            result.push({
-                title: 'Agent',
-                mode: 'agent',
-                teamId: null,
-                icon: 'user',
-                data: [],
-            });
+    const filteredChats = useMemo(() => {
+        let data = chats;
+
+        if (selectedFilter === 'agent') {
+            data = chats.filter(c => !c.mode || c.mode === 'agent');
+        } else if (selectedFilter !== 'all') {
+            // Team filter
+            data = chats.filter(c => c.mode === 'team' && c.team_id === selectedFilter);
         }
 
-        return result;
-    }, [chats]);
+        return data.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
+    }, [chats, selectedFilter]);
+
+    const visibleChats = useMemo(() => {
+        return filteredChats.slice(0, listLimit);
+    }, [filteredChats, listLimit]);
+
+    // Scroll to active chat when isOpen becomes true
+    React.useEffect(() => {
+        if (isOpen && activeChatID) {
+            const activeChat = chats.find(c => c.id === activeChatID);
+            if (!activeChat) return;
+
+            let requiredFilter = 'all';
+            if (!activeChat.mode || activeChat.mode === 'agent') {
+                requiredFilter = 'agent';
+            } else if (activeChat.mode === 'team' && activeChat.team_id) {
+                requiredFilter = activeChat.team_id;
+            }
+
+            // Auto-switch filter ONLY if we are syncing to active chat (on open or change)
+            // preventing the effect from reverting manual user selection
+            let effectiveFilter = selectedFilter;
+
+            if (selectedFilter !== 'all' && selectedFilter !== requiredFilter) {
+                setSelectedFilter(requiredFilter);
+                effectiveFilter = requiredFilter;
+                // Proceed to scroll after render? 
+                // We can rely on next render cycle or force it if we want instant.
+                // But simply setting state will trigger re-render and re-run THIS effect if we don't be careful.
+                // Actually this effect depends on [isOpen, activeChatID].
+                // If those didn't change, setting selectedFilter won't re-trigger this effect (since selectedFilter is NOT in deps).
+                // GOOD.
+            }
+
+            // Find index in filtered list
+            // Note: filteredChats is derived from selectedFilter. 
+            // If we just changed selectedFilter, filteredChats is STALE in this closure.
+            // We cannot scroll immediately if we switched filter.
+            // We should split this logic? 
+            // Or let the re-render handle the scroll?
+            // If we set state, we return.
+            if (activeChat.mode === 'agent' && effectiveFilter !== 'agent' && effectiveFilter !== 'all') return;
+            // Simplified: If we changed filter, return and let the next render (triggered by state change) handle scrolling? 
+            // BUT this effect won't run again if deps [isOpen, activeChatID] don't change.
+            // So we need a separate effect for scrolling?
+
+            // Actually, simplest is:
+            // 1. Effect [isOpen, activeChatID] -> Ensures correct filter is selected.
+            // 2. Effect [filteredChats] -> If activeChat is in it, scroll to it? 
+            //    But we don't want to scroll every time filteredChats changes (e.g. typing in search? or new message).
+            //    Only if "we just opened" or "active chat changed".
+
+            // Let's stick to current structure but fix stale data issue.
+            // If we switched filter, we CANNOT calculate index yet.
+            if (selectedFilter !== 'all' && selectedFilter !== requiredFilter) {
+                // We rely on the fact that switching filter will re-render list.
+                // We just need to ensure we scroll AFTER that.
+                // Maybe set a flag 'pendingScrollToActive'?
+                return;
+            }
+
+            // Logic for scrolling (when filter is already correct)
+            // filteredChats is from closure, so it matches current render.
+            const index = filteredChats.findIndex(c => c.id === activeChatID);
+            if (index !== -1) {
+                if (index >= listLimit) {
+                    setListLimit(index + 5);
+                    return;
+                }
+
+                pendingScrollRef.current = {
+                    index,
+                    animated: false,
+                    viewPosition: 0.5,
+                    retries: 0,
+                };
+
+                setTimeout(() => {
+                    try {
+                        flatListRef.current?.scrollToIndex({
+                            index,
+                            animated: false,
+                            viewPosition: 0.5,
+                        });
+                    } catch (e) {
+                        // ignore
+                    }
+                }, 100);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, activeChatID]); // Removed selectedFilter, filteredChats, listLimit to prevent interaction loops
 
     const openChatMenu = (chatId: string, chatTitle: string) => {
         if (!onChatDelete && !onChatRename) return;
@@ -152,41 +228,19 @@ function ChatListContent({
         );
     };
 
-    const showNewChatMenu = useCallback(() => {
+    const handleCreateChat = useCallback(() => {
         if (!onNewChatWithMode) {
-            // Fallback to legacy behavior
             onNewChat();
             return;
         }
 
-        // Build options: Agent + all teams
-        const options = ['👤 Agent', ...AVAILABLE_TEAMS.map(t => `👥 ${t.name}`), 'Cancel'];
-        const cancelIdx = options.length - 1;
-
-        ActionSheetIOS.showActionSheetWithOptions(
-            {
-                title: 'New Chat',
-                options,
-                cancelButtonIndex: cancelIdx,
-                userInterfaceStyle: 'dark',
-            },
-            (buttonIndex) => {
-                if (buttonIndex === cancelIdx) return;
-
-                if (buttonIndex === 0) {
-                    // Agent mode
-                    onNewChatWithMode('agent', null);
-                } else {
-                    // Team mode - buttonIndex 1 = AVAILABLE_TEAMS[0], etc.
-                    const teamIndex = buttonIndex - 1;
-                    const team = AVAILABLE_TEAMS[teamIndex];
-                    if (team) {
-                        onNewChatWithMode('team', team.id);
-                    }
-                }
-            }
-        );
-    }, [onNewChat, onNewChatWithMode]);
+        if (selectedFilter === 'all' || selectedFilter === 'agent') {
+            onNewChatWithMode('agent', null);
+        } else {
+            // Team ID
+            onNewChatWithMode('team', selectedFilter);
+        }
+    }, [onNewChat, onNewChatWithMode, selectedFilter]);
 
     const renderItem = ({ item }: { item: Chat }) => {
         const isActive = item.id === activeChatID;
@@ -210,52 +264,97 @@ function ChatListContent({
         );
     };
 
-    const renderSectionHeader = ({ section }: { section: ChatSection }) => (
-        <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingTop: 16,
-            paddingBottom: 8,
-            gap: 8,
-        }}>
-            {section.icon === 'user' ? (
-                <User width={16} height={16} color={theme.textSecondary || '#888'} />
-            ) : (
-                <Group width={16} height={16} color={theme.textSecondary || '#888'} />
-            )}
-            <Text style={{
-                fontSize: 12,
-                fontWeight: '600',
-                color: theme.textSecondary || '#888',
-                textTransform: 'uppercase',
-                letterSpacing: 0.5,
-            }}>
-                {section.title}
-            </Text>
-        </View>
-    );
+    const renderListFooter = () => {
+        if (visibleChats.length < filteredChats.length) {
+            return (
+                <Pressable
+                    onPress={() => setListLimit(prev => prev + 20)}
+                    style={styles.showMoreButton}
+                >
+                    <Text style={styles.showMoreText}>Show more</Text>
+                </Pressable>
+            );
+        }
+        return <View style={{ height: 20 }} />;
+    };
 
     return (
         <>
             <View style={[styles.header, { marginTop: insets.top }]}>
                 <Text style={styles.title}>Chats</Text>
-                <Pressable onPress={showNewChatMenu} style={styles.newChatButton}>
+                <Pressable onPress={handleCreateChat} style={styles.newChatButton}>
                     <Text style={styles.newChatText}>＋ New</Text>
                 </Pressable>
             </View>
+            {/* Filter Bar */}
+            <View style={styles.filterBar}>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.filterContent}
+                >
+                    {filters.map(filter => (
+                        <Pressable
+                            key={filter.id}
+                            style={styles.filterItem}
+                            onPress={() => {
+                                setSelectedFilter(filter.id);
+                                setListLimit(20);
+                            }}
+                        >
+                            <Text style={[styles.filterText, selectedFilter === filter.id && styles.filterTextActive]}>
+                                {filter.title}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </ScrollView>
+            </View>
+
             {chatsLoading ? (
                 <ChatListSkeleton styles={styles} />
             ) : (
-                <SectionList
-                    sections={sections}
-                    keyExtractor={item => item.id}
+                <FlatList<Chat>
+                    ref={flatListRef}
+                    data={visibleChats}
+                    keyExtractor={(item) => item.id}
                     renderItem={renderItem}
-                    renderSectionHeader={renderSectionHeader}
+                    ListFooterComponent={renderListFooter}
+                    ListEmptyComponent={
+                        <View style={{ padding: 32, alignItems: 'center' }}>
+                            <Text style={{ color: theme.textSecondary }}>No chats found</Text>
+                        </View>
+                    }
                     style={styles.list}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}
-                    stickySectionHeadersEnabled={false}
+                    onScrollToIndexFailed={(info) => {
+                        const target = pendingScrollRef.current;
+                        if (target && target.retries < 10) {
+                            target.retries++;
+                            console.log(`Scroll to index failed, retrying (${target.retries}/10)...`, info);
+
+                            // Attempt to scroll to approximate position to force render
+                            // 55 is approximate item height
+                            flatListRef.current?.getScrollResponder()?.scrollTo({
+                                y: info.index * 55,
+                                animated: false
+                            });
+
+                            setTimeout(() => {
+                                try {
+                                    flatListRef.current?.scrollToIndex({
+                                        index: target.index,
+                                        animated: false,
+                                        viewPosition: target.viewPosition,
+                                    });
+                                } catch (e) {
+                                    console.warn('Retry scroll failed', e);
+                                }
+                            }, 200);
+                        } else {
+                            console.warn('Scroll to index failed permanently', info);
+                        }
+                    }}
                 />
             )}
             {onSettingsPress && (
@@ -295,7 +394,8 @@ export function ChatSidebar({
     onChatDelete,
     onChatRename,
     sidebarTranslateX,
-    dragGesture
+    dragGesture,
+    isOpen,
 }: ChatSidebarReanimatedProps) {
     const { theme } = useTheme();
     const styles = useMemo(() => createSidebarStyles(theme), [theme]);
@@ -342,6 +442,7 @@ export function ChatSidebar({
                 onChatRename={onChatRename}
                 styles={styles}
                 chatTheme={chatTheme}
+                isOpen={isOpen}
             />
         </Sidebar>
     );

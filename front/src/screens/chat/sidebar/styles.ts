@@ -58,6 +58,35 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
         fontWeight: '700',
         fontSize: 13,
     },
+    filterBar: {
+        marginBottom: 12,
+        flexGrow: 0,
+    },
+    filterContent: {
+        paddingHorizontal: 16,
+        paddingRight: 32,
+        gap: 24,
+    },
+    filterItem: {
+        paddingVertical: 6,
+    },
+    filterText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: theme.textSecondary,
+    },
+    filterTextActive: {
+        color: theme.accent,
+    },
+    showMoreButton: {
+        paddingVertical: 12,
+        alignItems: 'center',
+    },
+    showMoreText: {
+        color: theme.accent,
+        fontWeight: '600',
+        fontSize: 13,
+    },
     list: {
         marginHorizontal: -4,
     },

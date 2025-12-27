@@ -157,7 +157,44 @@ export class ChatSocket {
 
                 // Handle potentially concatenated JSON messages (can happen when phone is locked/unlocked)
                 // Split on }{ pattern to separate multiple JSON objects
-                const jsonStrings = raw.split(/(?<=\})(?=\{)/);
+                // Handle concatenated JSON messages using bracket counting
+                const jsonStrings: string[] = [];
+                let depth = 0;
+                let inString = false;
+                let start = 0;
+
+                for (let i = 0; i < raw.length; i++) {
+                    const char = raw[i];
+                    if (inString) {
+                        if (char === '"') {
+                            let backslashes = 0;
+                            let j = i - 1;
+                            while (j >= start && raw[j] === '\\') {
+                                backslashes++;
+                                j--;
+                            }
+                            if (backslashes % 2 === 0) inString = false;
+                        }
+                    } else {
+                        if (char === '"') {
+                            inString = true;
+                        } else if (char === '{') {
+                            // If starting a top-level object, ensure start points here? 
+                            // Actually start is updated after push.
+                            // If raw starts with whitespace, start handles it via skip logic below.
+                            depth++;
+                        } else if (char === '}') {
+                            depth--;
+                            if (depth === 0) {
+                                jsonStrings.push(raw.substring(start, i + 1));
+                                start = i + 1;
+                                // Skip whitespace
+                                while (start < raw.length && /\s/.test(raw[start])) start++;
+                                i = start - 1;
+                            }
+                        }
+                    }
+                }
 
                 for (const jsonStr of jsonStrings) {
                     const trimmed = jsonStr.trim();

@@ -11,8 +11,8 @@ export interface ChatSidebarProps {
     onSelectChat: (chatId: string) => void;
     onNewChat: () => void;
     onNewChatWithMode?: (mode: 'agent' | 'team', teamId: string | null) => void;
+    isOpen?: boolean;
     onSettingsPress?: () => void;
     onChatDelete?: (chatId: string) => void;
     onChatRename?: (chatId: string, newTitle: string) => void;
 }
-
