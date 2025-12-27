@@ -550,11 +550,19 @@ class LLMWebSocketSession:
         # Try async stream
         result = None
         
+        # Log what we're sending to the agent for debugging
+        logger.info("[WS] Calling agent with: text=%s (len=%d), kwargs=%s", 
+                    _truncate(text, 100), len(text) if text else 0, kwargs.keys())
+        
         # Helper to decide if we should await
         async def run_fn(fn):
+            # Use the text or provide a continuation prompt for empty messages
+            # This prevents Gemini API 400 error about missing parts field
+            message_text = text if (text and text.strip()) else "[continue from previous context]"
+            
             if asyncio.iscoroutinefunction(fn):
-                return await fn(text, stream=True, stream_events=True, **kwargs)
-            return fn(text, stream=True, stream_events=True, **kwargs)
+                return await fn(message_text, stream=True, stream_events=True, **kwargs)
+            return fn(message_text, stream=True, stream_events=True, **kwargs)
 
         try:
             if hasattr(agent, "arun"):
