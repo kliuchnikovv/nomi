@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, View, ActionSheetIOS, Alert, ScrollView } from 'react-native';
+import { FlatList, Pressable, Text, View, ActionSheetIOS, Alert, ScrollView, TextInput } from 'react-native';
 import { SharedValue } from 'react-native-reanimated';
-import { Settings, User, Group, NavArrowDown, NavArrowRight } from 'iconoir-react-native';
+import { Settings, User, Group, NavArrowDown, NavArrowRight, Search } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture } from 'react-native-gesture-handler';
 import { ChatSidebarProps } from './models';
@@ -73,6 +73,7 @@ function ChatListContent({
     const pendingScrollRef = React.useRef<{ index: number; animated: boolean; viewPosition: number; retries: number } | null>(null);
 
     const [selectedFilter, setSelectedFilter] = useState<string>('all');
+    const [searchQuery, setSearchQuery] = useState('');
     const [listLimit, setListLimit] = useState(20);
 
     const filters = useMemo(() => {
@@ -96,8 +97,13 @@ function ChatListContent({
             data = chats.filter(c => c.mode === 'team' && c.team_id === selectedFilter);
         }
 
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase().trim();
+            data = data.filter(c => (c.title || 'Untitled').toLowerCase().includes(query));
+        }
+
         return data.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
-    }, [chats, selectedFilter]);
+    }, [chats, selectedFilter, searchQuery]);
 
     const visibleChats = useMemo(() => {
         return filteredChats.slice(0, listLimit);
@@ -297,9 +303,18 @@ function ChatListContent({
     return (
         <>
             <View style={[styles.header, { paddingTop: insets.top - 25, height: insets.top + 20 }]}>
-                <Text style={styles.title}>Chats</Text>
+                <View style={styles.searchContainer}>
+                    <Search width={16} height={16} color={theme.textSecondary} />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search for chats"
+                        placeholderTextColor={theme.textSecondary}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                </View>
                 <Pressable onPress={handleCreateChat} style={styles.newChatButton}>
-                    <Text style={styles.newChatText}>＋ New</Text>
+                    <Text style={styles.newChatText}>+ New</Text>
                 </Pressable>
             </View>
             {/* Filter Bar */}
@@ -375,7 +390,7 @@ function ChatListContent({
                 />
             )}
             {onSettingsPress && (
-                <View style={[styles.footer, { marginBottom: insets.bottom }]}>
+                <View style={[styles.footer, { marginBottom: insets.bottom - 20 }]}>
                     <Pressable
                         onPress={onSettingsPress}
                         style={({ pressed }) => [

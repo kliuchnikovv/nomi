@@ -42,11 +42,30 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 12,
         height: 60,
+        gap: 12,
     },
     title: {
         color: theme.textPrimary,
         fontSize: 16,
         fontWeight: '600',
+    },
+    searchContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.surfaceHighlight,
+        borderRadius: 24,
+        paddingHorizontal: 12,
+        paddingVertical: 8, // reduced vertical
+        gap: 8,
+        height: 40,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: theme.textPrimary,
+        padding: 0,
+        margin: 0,
     },
     newChatButton: {
         borderRadius: 12,

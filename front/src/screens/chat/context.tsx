@@ -607,6 +607,11 @@ export function ChatProvider({
             },
             onMeta: (frame: Frame) => {
                 console.log('onMeta: received message', frame);
+                if (frame.payload?.type === 'chat_update' && frame.payload.message) {
+                    console.log('Updating chat title:', frame.payload.message);
+                    setExternalTitle(frame.payload.message);
+                    return;
+                }
                 setMessages(prevMessages => onReceivedMeta(frame, prevMessages));
             },
             onDone: (frame: Frame) => {

@@ -449,27 +449,38 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 
 		// Update Chat Title if empty (or default)
-		go func() {
-			ctx := context.Background()
-			c, err := r.store.GetChat(ctx, r.initiatorID, r.ID)
-			if err == nil && (c.Title == "" || c.Title == "New Chat") {
-				newTitle := frame.Payload.Message
-				runes := []rune(newTitle)
-				if len(runes) > 50 {
-					newTitle = string(runes[:50]) + "..."
-				}
-				if newTitle == "" {
-					newTitle = "Chat"
-				}
-
-				c.Title = newTitle
-				if _, err := r.store.UpdateChat(ctx, r.initiatorID, c); err != nil {
-					r.logger.Error("failed to update chat title", zap.Error(err))
-				} else {
-					r.logger.Info("updated chat title", zap.String("new_title", newTitle))
-				}
+		ctx := context.Background()
+		c, err := r.store.GetChat(ctx, r.initiatorID, r.ID)
+		if err == nil && (c.Title == "" || c.Title == "New Chat") {
+			newTitle := frame.Payload.Message
+			runes := []rune(newTitle)
+			if len(runes) > 50 {
+				newTitle = string(runes[:50]) + "..."
 			}
-		}()
+			if newTitle == "" {
+				newTitle = "Chat"
+			}
+
+			c.Title = newTitle
+			if _, err := r.store.UpdateChat(ctx, r.initiatorID, c); err != nil {
+				r.logger.Error("failed to update chat title", zap.Error(err))
+			} else {
+				r.logger.Info("updated chat title", zap.String("new_title", newTitle))
+				
+				// Broadcast title update to client
+				broadcast(Frame{
+					ID:        0,
+					ChatID:    r.ID,
+					Kind:      MetaKind,
+					Operation: MessageOperation,
+					Timestamp: time.Now().UTC(),
+					Payload: Payload{
+						Type:    "chat_update",
+						Message: newTitle,
+					},
+				})
+			}
+		}
 
 		// 3. Set role/sender in frame for multi-device sync
 		if frame.Payload.Role != "system" {
