@@ -91,7 +91,8 @@ class DnDTeam(Team):
             tools=[self.dnd_tools],
             add_history_to_context=True,
             num_history_runs=3,
-            store_tool_messages=False,  # Fix for Gemini empty parts bug - don't save tool calls to history
+            store_tool_messages=False,
+            store_history_messages=False,  # Fix for Gemini empty parts bug - don't save tool calls to history
             debug_mode=debug_mode,
             show_members_responses=True,
             stream_member_events=True,
