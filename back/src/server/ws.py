@@ -590,8 +590,14 @@ class LLMWebSocketSession:
         if hasattr(result, "__aiter__"):
             async for ev in result:
                 event_type = type(ev).__name__
-                # logger.debug("[WS] Event: %s", event_type)
-
+                
+                # VERBOSE LOGGING - show everything from agno
+                logger.info("[AGNO] Event type: %s", event_type)
+                if hasattr(ev, '__dict__'):
+                    for key, value in ev.__dict__.items():
+                        val_str = str(value)[:500] if value else "None"
+                        logger.info("[AGNO]   .%s = %s", key, val_str)
+                
                 # Check if this is a member agent event (not the leader)
                 agent_id = getattr(ev, 'agent_id', None)
                 agent_name = getattr(ev, 'agent_name', None) or agent_id
