@@ -89,7 +89,7 @@ class DnDTeam(Team):
             instructions=instructions,
             members=[self.dm, self.rules, self.secretary, self.party],
             tools=[self.dnd_tools],
-            add_history_to_context=False,
+            add_history_to_context=True,
             num_history_runs=3,
             store_tool_messages=False,
             store_history_messages=False,

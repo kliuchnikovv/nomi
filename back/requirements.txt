@@ -1,5 +1,5 @@
 # Core dependencies (versions pinned for stability)
-agno>=2.3.0
+agno>=2.3.21
 alembic>=1.13.0
 fastapi>=0.100.0
 SQLAlchemy>=2.0.0
