@@ -72,6 +72,9 @@ type Payload struct {
 	// Command/Team specific
 	Command interface{} `json:"command,omitempty"`
 	Team    interface{} `json:"team,omitempty"`
+	
+	// Actions for action buttons
+	Actions interface{} `json:"actions,omitempty"`
 }
 
 type ErrorInfo struct {
