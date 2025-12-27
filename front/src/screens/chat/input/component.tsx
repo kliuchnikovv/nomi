@@ -28,6 +28,7 @@ import { useAuth } from '../../auth/context';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import DocumentPicker from 'react-native-document-picker';
 import { apiClient } from '../../../apiClient';
+import { useMain } from '../../main/context';
 import { getApiUrl, API_URL } from '../../../config';
 import { AVAILABLE_TEAMS, TeamDetails } from '../teams';
 
@@ -56,8 +57,10 @@ export default function ChatInput(props: Props) {
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
+
     const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration, showToolCalls, setShowToolCalls, showReasoning, setShowReasoning, showMemberResponses, setShowMemberResponses } = useChat();
     const { user, updateUser } = useAuth();
+    const { activeChatID } = useMain();
 
 
     const handleSend = useCallback(() => {
@@ -74,6 +77,12 @@ export default function ChatInput(props: Props) {
         setValue('');
         setAttachments([]);
     }, [value, attachments, sendMessage, thinkingLevel]);
+
+    // Reset input when switching chats
+    useEffect(() => {
+        setValue('');
+        setAttachments([]);
+    }, [activeChatID]);
 
 
 
@@ -343,10 +352,8 @@ export default function ChatInput(props: Props) {
 
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const selectedModelName = useMemo(() => {
-        // If in team mode, show team name + model? Or just team name?
-        // Let's show Team Name if in team mode, or keep showing model but maybe with an icon?
-        // For now, keeping model name behavior as it drives the underlying LLM mainly.
-        // Maybe we should append "- Team" if in team mode?
+        // If in team mode, we still show the model name in the input bar
+        // because the team name is now displayed in the header.
         let name = '';
         if (!selectedModel) {
             name = availableModels.length > 0 ? (availableModels[0].name || 'Auto context') : 'Auto context';
@@ -355,16 +362,8 @@ export default function ChatInput(props: Props) {
             if (explicit) name = explicit;
             else name = selectedModel.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
-
-        if (chatMode === 'team') {
-            const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
-            if (team) return `${team.name}`; // Show Team Name instead of model when in team mode? Or "Team: Model"? 
-            // Users probably care more about "Travel Agent" being active than "Gemini 1.5"
-            return `${team?.name || 'Team'}`;
-        }
-
         return name;
-    }, [availableModels, selectedModel, chatMode, selectedTeamId]);
+    }, [availableModels, selectedModel]);
     const isSendDisabled = ((value?.length ?? 0) === 0 && attachments.length === 0) || attachments.some(a => a.loading);
 
     useEffect(() => {

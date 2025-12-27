@@ -24,6 +24,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Skeleton } from '../../components/Skeleton';
 import { Attachment, MessageAction } from '../main/models';
 import { sidebarApi } from '../../apiClient';
+import { AVAILABLE_TEAMS } from './teams';
 
 function MessageListSkeleton() {
     return (
@@ -54,6 +55,8 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         setError,
         retryLastMessage,
         clearPluginThread,
+        chatMode,
+        selectedTeamId,
     } = useChat();
     const { user, token } = useAuth();
     const { theme } = useTheme();
@@ -354,7 +357,13 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         });
 
     const headerTitle = externalTitle || activeChat?.title || 'New Chat';
-    const headerSubtitle = '';
+    const headerSubtitle = useMemo(() => {
+        if (chatMode === 'team') {
+            const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
+            return team?.name || '';
+        }
+        return '';
+    }, [chatMode, selectedTeamId]);
 
     return (
         <View style={styles.container}>
@@ -394,34 +403,35 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         style={{ flex: 1 }}
                         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                     >
-                        {messagesLoading ? (
-                            <MessageListSkeleton />
-                        ) : (
-                            <GiftedChat
-                                messages={giftedMessages}
-                                onSend={handleSend}
-                                user={currentUser}
-                                renderMessage={renderMessage}
-                                renderBubble={renderBubble}
-                                renderMessageText={renderMessageText}
-                                renderInputToolbar={renderInputToolbar}
-                                isTyping={assistantWorking}
-                                renderFooter={renderFooter}
-                                // @ts-ignore
-                                inverted={true}
-                                minInputToolbarHeight={60}
-                                maxComposerHeight={100}
-                                renderAvatar={null}
-                                messagesContainerStyle={styles.messagesContainer}
-                                placeholder="Type a message..."
-                                scrollToBottom
-                                alwaysShowSend
-                                isAlignedTop={false}
-                                isScrollToBottomEnabled={true}
-                                timeFormat="HH:mm"
-                                onLongPress={onLongPressMessage}
-                            />
-                        )}
+                        <GiftedChat
+                            messages={messagesLoading ? [] : giftedMessages}
+                            onSend={handleSend}
+                            user={currentUser}
+                            renderMessage={renderMessage}
+                            renderBubble={renderBubble}
+                            renderMessageText={renderMessageText}
+                            renderInputToolbar={renderInputToolbar}
+                            isTyping={assistantWorking}
+                            renderFooter={renderFooter}
+                            // @ts-ignore
+                            inverted={true}
+                            minInputToolbarHeight={60}
+                            maxComposerHeight={100}
+                            renderAvatar={null}
+                            messagesContainerStyle={styles.messagesContainer}
+                            placeholder="Type a message..."
+                            scrollToBottom
+                            alwaysShowSend
+                            isAlignedTop={false}
+                            isScrollToBottomEnabled={true}
+                            timeFormat="HH:mm"
+                            onLongPress={onLongPressMessage}
+                            renderChatEmpty={() => (
+                                <View style={{ flex: 1, transform: [{ scaleY: -1 }] }}>
+                                    <MessageListSkeleton />
+                                </View>
+                            )}
+                        />
                     </KeyboardAvoidingView>
 
                     {/* Edge Swipe Detector - Left */}

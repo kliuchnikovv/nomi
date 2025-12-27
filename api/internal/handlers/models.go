@@ -3,10 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"sort"
-	"strings"
+	"os"
 	"sync"
 	"time"
 
@@ -56,10 +54,10 @@ func NewModelsHandler(apiKey string) *ModelsHandler {
 	}
 }
 
-// loadModels fetch models from Google API with caching
+// loadModels reads models from local config file
 func (h *ModelsHandler) loadModels() (*ModelsResponse, error) {
 	h.mu.RLock()
-	// Cache for 1 hour
+	// Cache for 1 hour (though file read is fast, we can keep caching)
 	if h.modelsCache != nil && time.Since(h.lastUpdated) < 1*time.Hour {
 		defer h.mu.RUnlock()
 		return h.modelsCache, nil
@@ -74,73 +72,37 @@ func (h *ModelsHandler) loadModels() (*ModelsResponse, error) {
 		return h.modelsCache, nil
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", h.apiKey)
-	req, err := http.NewRequest("GET", url, nil)
+	// Read from config file
+	// Assuming running from root, path is api/config/models.json or config/models.json
+	// Let's try relative path assuming execution from project root
+	// Adjust path as necessary based on deployment
+	path := "api/config/models.json"
+	
+    // Ensure we can find the file. If running inside docker or built binary, location might differ.
+    // For local dev "api/config/models.json" seems correct based on file structure.
+	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+        // Fallback to "config/models.json" if "api/config/models.json" fails (e.g. running from api dir)
+        file, err = os.Open("config/models.json")
+        if err != nil {
+		    return nil, fmt.Errorf("failed to open models config: %w", err)
+        }
+	}
+	defer file.Close()
+
+	var response ModelsResponse
+	if err := json.NewDecoder(file).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode models config: %w", err)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("google api error: %s %s", resp.Status, string(body))
-	}
-
-	var googleResp GoogleModelsListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&googleResp); err != nil {
-		return nil, err
-	}
-
-	var models []Model
-	for _, gm := range googleResp.Models {
-		// Filter only models that support content generation
-		isGenerative := false
-		for _, method := range gm.SupportedGenerationMethods {
-			if method == "generateContent" {
-				isGenerative = true
-				break
-			}
-		}
-		if !isGenerative {
-			continue
-		}
-
-		// Clean ID (remove "models/" prefix)
-		id := strings.TrimPrefix(gm.Name, "models/")
-
-		models = append(models, Model{
-			ID:                id,
-			Name:              gm.DisplayName,
-			Provider:          "google",
-			Description:       gm.Description,
-			ContextWindow:     gm.InputTokenLimit,
-			MaxOutputTokens:   gm.OutputTokenLimit,
-			RPMLimit:          0, // API doesn't allow fetching this dynamically per key easily without quotas API
-			SupportsStreaming: true,
-			SupportsTools:     true, // Most Gemini models support tools
-			SupportsThinking:  strings.Contains(strings.ToLower(gm.DisplayName), "thinking") || strings.Contains(id, "thinking"),
-		})
-	}
-
-	// Sort by Name
-	sort.Slice(models, func(i, j int) bool {
-		return models[i].Name < models[j].Name
-	})
-
-	h.modelsCache = &ModelsResponse{Models: models}
+	h.modelsCache = &response
 	h.lastUpdated = time.Now()
 	return h.modelsCache, nil
 }
 
 // ListModels returns the list of available models
 // @Summary List available models
-// @Description Get list of all available LLM models from Google API
+// @Description Get list of all available LLM models from configuration
 // @Tags models
 // @Produce json
 // @Success 200 {object} ModelsResponse
@@ -149,9 +111,7 @@ func (h *ModelsHandler) loadModels() (*ModelsResponse, error) {
 func (h *ModelsHandler) ListModels(c *gin.Context) {
 	models, err := h.loadModels()
 	if err != nil {
-		// Log error but return typical error response
-		// In production, might want to fallback to hardcoded list if API fails
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to fetch models: %v", err)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load models: %v", err)})
 		return
 	}
 

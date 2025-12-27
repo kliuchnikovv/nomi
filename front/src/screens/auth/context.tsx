@@ -63,8 +63,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Configure Google Sign-In
     useEffect(() => {
         GoogleSignin.configure({
-            webClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com', // TODO: Replace with actual web client ID
-            iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', // TODO: Replace with actual iOS client ID
+            webClientId: '174083236719-itfjiur5c404ndjjhj3rukinl85sug66.apps.googleusercontent.com',
+            iosClientId: '174083236719-itfjiur5c404ndjjhj3rukinl85sug66.apps.googleusercontent.com',
             offlineAccess: true,
         });
     }, []);

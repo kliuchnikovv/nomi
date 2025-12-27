@@ -68,15 +68,17 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
         margin: 0,
     },
     newChatButton: {
-        borderRadius: 12,
-        paddingHorizontal: 12,
+        borderRadius: 20,
+        paddingHorizontal: 16,
         paddingVertical: 8,
-        backgroundColor: theme.accent,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: 'transparent',
     },
     newChatText: {
-        color: theme.background,
-        fontWeight: '700',
-        fontSize: 13,
+        color: theme.textPrimary,
+        fontWeight: '600',
+        fontSize: 14,
     },
     filterBar: {
         marginBottom: 12,
@@ -88,13 +90,22 @@ export const createSidebarStyles = (theme: ThemeColors) => StyleSheet.create({
     filterContent: {
         paddingHorizontal: 16,
         paddingRight: 32,
-        gap: 24,
+        gap: 8,
     },
     filterItem: {
-        paddingVertical: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: 'transparent',
+    },
+    filterItemActive: {
+        borderColor: theme.accent,
+        backgroundColor: `${theme.accent}15`, // optional: slight background tint
     },
     filterText: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '600',
         color: theme.textSecondary,
     },

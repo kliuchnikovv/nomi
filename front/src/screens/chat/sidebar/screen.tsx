@@ -327,7 +327,7 @@ function ChatListContent({
                     {filters.map(filter => (
                         <Pressable
                             key={filter.id}
-                            style={styles.filterItem}
+                            style={[styles.filterItem, selectedFilter === filter.id && styles.filterItemActive]}
                             onPress={() => {
                                 setSelectedFilter(filter.id);
                                 setListLimit(20);
