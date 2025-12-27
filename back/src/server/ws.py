@@ -578,6 +578,8 @@ class LLMWebSocketSession:
                         break
         except Exception as e:
             logger.error("[WS] Agent invocation failed: %s", e)
+            logger.error("[WS] Agent type: %s, mode: %s", type(agent).__name__, self.build_mode)
+            logger.error("[WS] Full error details:", exc_info=True)
             raise
 
         if not result:
