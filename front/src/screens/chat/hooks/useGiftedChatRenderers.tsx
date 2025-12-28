@@ -14,6 +14,7 @@ import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
 import { styles as messageStyles } from '../message/styles';
 import { useChat } from '../context';
+import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
 
 function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
     const [expanded, setExpanded] = React.useState(false);
@@ -260,6 +261,7 @@ export function useGiftedChatRenderers({
     const renderMessageText = useCallback((props: any) => {
         const isAssistant = props.currentMessage?.user?._id === 'assistant';
         const toolCalls = props.currentMessage?.tool_calls;
+        const contentParts = props.currentMessage?.content_parts;
 
         const attachments = props.currentMessage?.attachments;
         const hasAttachments = attachments && attachments.length > 0;
@@ -276,14 +278,49 @@ export function useGiftedChatRenderers({
             </View>
         );
 
-        const userMessageText = props.currentMessage?.text || '';
+        // Helper to render actions
+        const renderActions = () => (
+            <MessageActions
+                actions={props.currentMessage?.actions}
+                theme={theme}
+                onActionPress={(action) => {
+                    if (action.url) {
+                        Linking.openURL(action.url).catch(err => console.error("Failed to open URL:", err));
+                    } else if (action.prompt) {
+                        onSend(action.prompt);
+                    } else {
+                        console.log('Action pressed:', action);
+                        if (onMessageAction && props.currentMessage?._id) {
+                            onMessageAction(String(props.currentMessage._id), action);
+                        }
+                    }
+                }}
+            />
+        );
 
+        // EXCLUSIVE PATH: If we have content parts, use ContentPartsRenderer ONLY.
+        if (contentParts && contentParts.length > 0) {
+            return (
+                <View>
+                    {showAttachmentsInside && renderAttachments()}
+                    <ContentPartsRenderer
+                        parts={contentParts}
+                        onLongPress={handleTextLongPress}
+                    />
+                    {renderActions()}
+                </View>
+            );
+        }
+
+        const messageText = props.currentMessage?.text || '';
+
+        // User message
         if (!isAssistant) {
             return (
                 <View>
                     {showAttachmentsInside && renderAttachments()}
                     <Pressable
-                        onLongPress={() => handleTextLongPress(userMessageText)}
+                        onLongPress={() => handleTextLongPress(messageText)}
                         delayLongPress={300}
                     >
                         <MessageText {...props} />
@@ -292,8 +329,7 @@ export function useGiftedChatRenderers({
             );
         }
 
-        const messageText = props.currentMessage?.text || '';
-
+        // Fallback Assistant (Legacy)
         return (
             <View>
                 {showAttachmentsInside && renderAttachments()}
@@ -327,8 +363,11 @@ export function useGiftedChatRenderers({
                         {messageText}
                     </Markdown>
                 </Pressable>
-                {showToolCalls && toolCalls && toolCalls.length > 0 && (
+                {/* {showToolCalls && toolCalls && toolCalls.length > 0 && (
                     <ToolCallsSection toolCalls={toolCalls} />
+                )} */}
+                {showToolCalls && contentParts && contentParts.length > 0 && (
+                    <ContentPartsRenderer parts={contentParts} onLongPress={handleTextLongPress} />
                 )}
                 <MessageActions
                     actions={props.currentMessage?.actions}

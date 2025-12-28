@@ -161,7 +161,7 @@ class DnDTeam(Team):
             store_tool_messages=False,
             debug_mode=debug_mode,
             show_members_responses=True,   # Show member responses during streaming
-            stream_member_events=True,     # Stream member agent events
+            stream_member_events=False,     # Stream member agent events
             # CRITICAL: Must end with suggest_actions tool call
             expected_output="Narrative in Russian followed by a call to suggest_actions tool with 3-5 player options in Russian. YOUR TURN IS COMPLETE ONLY AFTER CALLING suggest_actions().",
             tool_call_limit=15,  # Prevent runaway generation

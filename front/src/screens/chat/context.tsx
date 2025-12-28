@@ -129,7 +129,7 @@ export function ChatProvider({
     // Display settings (persists within chat session)
     const [showToolCalls, setShowToolCalls] = useState<boolean>(false);
     const [showReasoning, setShowReasoning] = useState<boolean>(false);
-    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(true);
+    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(false);
 
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
@@ -597,7 +597,7 @@ export function ChatProvider({
 
         sock.setHandlers({
             onMessage: (frame: Frame) => {
-                console.log('onMessage: received message', frame);
+                // console.log('onMessage: received message', frame);
                 if (frame.payload?.type === 'actions') {
                     console.log('>>> ACTIONS FRAME RECEIVED:', frame.payload);
                 }
@@ -606,7 +606,7 @@ export function ChatProvider({
                 );
             },
             onMeta: (frame: Frame) => {
-                console.log('onMeta: received message', frame);
+                // console.log('onMeta: received message', frame);
                 if (frame.payload?.type === 'chat_update' && frame.payload.message) {
                     console.log('Updating chat title:', frame.payload.message);
                     setExternalTitle(frame.payload.message);
@@ -811,7 +811,7 @@ export function ChatProvider({
                     };
                 }
             }
-            console.log("frame captured", frame.payload.type || "text", frame);
+            // console.log("frame captured", frame.payload.type || "text", frame);
         } else {
             setAssistantWorking(false);
         }

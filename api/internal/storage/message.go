@@ -27,6 +27,7 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		UserID:    userID,
 		Role:      string(m.Role),
 		Text:      m.Text,
+		Reasoning: m.Reasoning,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -87,6 +88,7 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		ChatID:    messageModel.ChatID,
 		Role:      chat.Role(messageModel.Role),
 		Text:      messageModel.Text,
+		Reasoning: messageModel.Reasoning,
 		Sender:    messageModel.UserID,
 		Model:     messageModel.Model,
 		CreatedAt: messageModel.CreatedAt,
@@ -219,6 +221,7 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 			ChatID:    msg.ChatID,
 			Role:      chat.Role(msg.Role),
 			Text:      msg.Text,
+			Reasoning: msg.Reasoning,
 			Sender:    msg.UserID,
 			Model:     msg.Model,
 			CreatedAt: msg.CreatedAt,
@@ -250,6 +253,37 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 			var contentParts interface{}
 			if err := json.Unmarshal(msg.ContentParts, &contentParts); err == nil {
 				m.ContentParts = contentParts
+			}
+		}
+
+		// Backfill reasoning into ContentParts if missing but present in Reasoning column
+		// This handles cases where ContentParts were not correctly saved or are from legacy messages
+		if m.Reasoning != "" {
+			hasReasoning := false
+			if parts, ok := m.ContentParts.([]interface{}); ok {
+				for _, p := range parts {
+					if partMap, ok := p.(map[string]interface{}); ok {
+						if partMap["type"] == "reasoning" {
+							hasReasoning = true
+							break
+						}
+					}
+				}
+				if !hasReasoning {
+					// Append reasoning part
+					m.ContentParts = append(parts, map[string]interface{}{
+						"type":      "reasoning",
+						"reasoning": m.Reasoning,
+					})
+				}
+			} else if m.ContentParts == nil {
+				// Create new ContentParts with reasoning
+				m.ContentParts = []interface{}{
+					map[string]interface{}{
+						"type":      "reasoning",
+						"reasoning": m.Reasoning,
+					},
+				}
 			}
 		}
 
@@ -323,6 +357,11 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 			updates["content_parts"] = contentPartsJSON
 		}
 	}
+    
+    // Update reasoning if provided
+    if m.Reasoning != "" {
+        updates["reasoning"] = m.Reasoning
+    }
 
 	// Update actions if provided
 	if m.Actions != nil {

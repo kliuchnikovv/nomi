@@ -79,7 +79,7 @@ class LLMWebSocketSession:
             make_error(
                 id=self.next_id,
                 chat_id=chat_id,
-                code=status_text,
+                code=status_text or "unknown_error",
                 message=user_msg,
                 http=http_status,
             )
@@ -288,7 +288,7 @@ class LLMWebSocketSession:
                             await self.process_frame(frame)
                         except Exception as ex:
                             logger.warning("[WS] Bad frame: %s", ex)
-                            await self._send_frame(make_error(self.next_id, None, "bad_request", "Invalid frame", 400))
+                            await self._send_frame(make_error(self.next_id, "bad_request", None, "Invalid frame", 400))
                     
                     if self.current_generation_task in done:
                         # Generation completed
@@ -334,7 +334,7 @@ class LLMWebSocketSession:
                         await self._send_frame(make_data(self.next_id, Op.PING, None, {}))
                     except Exception as ex:
                         logger.warning("[WS] Bad frame: %s", ex)
-                        await self._send_frame(make_error(self.next_id, None, "bad_request", "Invalid frame", 400))
+                        await self._send_frame(make_error(self.next_id, "bad_request", None, "Invalid frame", 400))
             except WebSocketDisconnect:
                 logger.info("[WS] Disconnected - cancelling any running generation")
                 if self.current_generation_task and not self.current_generation_task.done():
@@ -659,6 +659,7 @@ class LLMWebSocketSession:
 
         # Iterate stream
         if hasattr(result, "__aiter__"):
+            streamed_text_len = 0
             async for ev in result:
                 event_type = type(ev).__name__
                 
@@ -697,6 +698,18 @@ class LLMWebSocketSession:
                 if captured_reasoning:
                     yield {"type": "reasoning", "content": captured_reasoning}
 
+                elif "RunCompleted" in event_type:
+                    val = getattr(ev, "content", None)
+                    if val and len(str(val)) > streamed_text_len:
+                        remainder = str(val)[streamed_text_len:]
+                        if remainder.strip():
+                            logger.info("[WS] Sending remaining content from RunCompleted: %s...", remainder[:50])
+                            # Check if it looks like reasoning
+                            if remainder.strip().startswith("My thinking process") or remainder.strip().startswith("Thinking Process:"):
+                                yield {"type": "reasoning", "content": remainder}
+                            else:
+                                yield {"type": "text", "content": remainder}
+
                 # 3. Text Content
                 # Only yield text if it's a content event
                 # Be careful not to yield reasoning again if it came as content
@@ -723,6 +736,7 @@ class LLMWebSocketSession:
                              yield {"type": "member_response", "content": chunk, "agent_id": agent_id, "agent_name": agent_name}
                          else:
                              yield {"type": "text", "content": chunk}
+                             streamed_text_len += len(chunk)
 
         elif hasattr(result, "__iter__") and not isinstance(result, (str, bytes)):
              # Sync iterator

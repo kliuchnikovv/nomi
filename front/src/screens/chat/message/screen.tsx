@@ -56,73 +56,18 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
     );
 }
 
-// Render content parts (text + inline tool calls + reasoning + member responses)
-function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
-    const { showToolCalls, showReasoning, showMemberResponses } = useChat();
-
-    // Filter parts based on display settings
-    const filteredParts = useMemo(() => {
-        return parts.filter(part => {
-            if (part.type === 'tool_call' && !showToolCalls) return false;
-            if (part.type === 'reasoning' && !showReasoning) return false;
-            if ((part as any).type === 'member_response' && !showMemberResponses) return false;
-            return true;
-        });
-    }, [parts, showToolCalls, showReasoning, showMemberResponses]);
-
-    // Merge consecutive text parts for proper markdown rendering
-    const mergedParts = useMemo(() => {
-        const result: ContentPart[] = [];
-        for (const part of filteredParts) {
-            if (part.type === 'text') {
-                const last = result[result.length - 1];
-                if (last && last.type === 'text') {
-                    // Merge with previous text part
-                    last.text = (last.text || '') + (part.text || '');
-                } else {
-                    // Create new text part (copy to avoid mutation)
-                    result.push({ type: 'text', text: part.text || '' });
-                }
-            } else {
-                result.push(part);
-            }
-        }
-        return result;
-    }, [filteredParts]);
-
-    return (
-        <>
-            {mergedParts.map((part, index) => {
-                if (part.type === 'text') {
-                    return (
-                        <Pressable
-                            key={`text-${index}`}
-                            onLongPress={() => onLongPress(part.text)}
-                            delayLongPress={250}
-                            style={({ pressed }) => [pressed && { opacity: 0.75 }]}
-                        >
-                            <Markdown style={markdownStyles as any}>
-                                {part.text || ''}
-                            </Markdown>
-                        </Pressable>
-                    );
-                } else if (part.type === 'tool_call') {
-                    return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
-                } else if (part.type === 'reasoning') {
-                    return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
-                } else if ((part as any).type === 'member_response') {
-                    // Team member response
-                    const memberPart = part as any;
-                    return <MemberResponseBlock key={`member-${index}`} agentName={memberPart.agent_name} text={memberPart.text} />;
-                }
-                return null;
-            })}
-        </>
-    );
-}
-
+import { ContentPartsRenderer } from './ContentPartsRenderer';
 export default function MessageScreen(props: Props) {
-    const { showToolCalls } = useChat();
+    const { showToolCalls, showReasoning } = useChat();
+
+    // Debug logging
+    console.log('[MessageScreen] Render:', {
+        id: props.message.id,
+        role: props.message.role,
+        hasContentParts: props.message.content_parts && props.message.content_parts.length > 0,
+        partsCount: props.message.content_parts?.length,
+        showReasoning,
+    });
 
     if (props.message.role === 'system') {
         return null;
@@ -157,6 +102,14 @@ export default function MessageScreen(props: Props) {
     const hasContentParts = props.message.content_parts && props.message.content_parts.length > 0;
 
     // Debug logging
+    console.log('[MessageScreen] Render:', {
+        id: props.message.id,
+        role: props.message.role,
+        hasContentParts,
+        partsCount: props.message.content_parts?.length,
+        showReasoning, // from context hook
+    });
+
     if (props.message.role === 'assistant') {
         console.log('[MessageScreen] Rendering assistant message:', {
             id: props.message.id,

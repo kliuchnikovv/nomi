@@ -666,6 +666,20 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				zap.String("msg_id", frame.Payload.MessageID.String()),
 				zap.Any("tool", frame.Payload.Tool),
 			)
+
+			// SPECIFIC FIX: If this is "suggest_actions", extract the actions and save them to metadata
+			// so they are persisted in the "actions" column.
+			if toolMap, ok := frame.Payload.Tool.(map[string]interface{}); ok {
+				if name, ok := toolMap["name"].(string); ok && name == "suggest_actions" {
+					if args, ok := toolMap["arguments"].(map[string]interface{}); ok {
+						if actions, ok := args["actions"].([]interface{}); ok {
+							r.currentMessageMetadata.Actions = actions
+							r.logger.Info("intercepted suggest_actions, saving actions to metadata", 
+								zap.Int("count", len(actions)))
+						}
+					}
+				}
+			}
 		} else if frame.Payload.Type == "actions" && frame.Payload.Actions != nil {
 			// Handle D&D action buttons
 			r.currentMessageMetadata.Actions = frame.Payload.Actions

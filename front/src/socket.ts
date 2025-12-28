@@ -210,7 +210,7 @@ export class ChatSocket {
                         const data = frame.payload;
                         const operation = frame.op;
 
-                        console.log(`${operation} with kind ${kind}`, frame);
+                        // console.log(`${operation} with kind ${kind}`, frame);
                         switch (operation) {
                             case 'ping':
                                 this.handlers.onPing?.(frame);
@@ -353,7 +353,7 @@ export class ChatSocket {
     }
 
     sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: string) {
-        console.log('Sending message:', message, sessionId, attachmentIDs, webSearch, thinking);
+        // console.log('Sending message:', message, sessionId, attachmentIDs, webSearch, thinking);
         const chatID = this.getChatId();
         const model = this.getModel();
         // const messageID = this.getMessageId();
@@ -376,7 +376,7 @@ export class ChatSocket {
                 thinking: thinking,
             },
         };
-        console.log('Sending message:', msg);
+        // console.log('Sending message:', msg);
 
         if (!this.ws) {
             // Queue the message and open the connection; onopen flushes outbox
@@ -387,7 +387,7 @@ export class ChatSocket {
 
         if (this.isReady()) {
             try {
-                console.log('send', JSON.stringify(msg));
+                // console.log('send', JSON.stringify(msg));
                 this.ws.send(JSON.stringify(msg));
                 this.touchActivity();
             } catch {
