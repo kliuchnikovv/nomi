@@ -74,22 +74,22 @@ class DnDTeam(Team):
             - SKIP if: No significant state changes
             - `delegate_task_to_member("secretary", "Save: player now at 15 HP, gained gold pouch, entered dungeon")`
             
-            ### Step 8: SUGGEST ACTIONS - Player Options
-            - ALWAYS CALL before Narrator
-            - If dice roll needed: `suggest_actions(["🎲 Бросить кубик (Ловкость +3)"])` - ONLY the roll button!
-            - If no roll needed: `suggest_actions(["Option 1", "Option 2", "Option 3"])` - 3-5 contextual options
+            ### Step 8: NARRATOR - Final Output
+            - ALWAYS CALL as the last agent before presenting options
+            - Narrator translates/formats DM output for the player in Russian
+            - `delegate_task_to_member("narrator", "Present the scene in Russian: [scene description]")`
             
-            ### ⛔ CRITICAL: STOP AFTER suggest_actions!
-            After calling `suggest_actions()`, you MUST STOP IMMEDIATELY.
-            - DO NOT continue to Step 9 (Narrator)
-            - DO NOT delegate any more tasks
-            - DO NOT generate more content
-            - Your turn is COMPLETE. Wait for player to choose an action.
+            ### Step 9: SUGGEST ACTIONS - Player Options (⛔ FINAL STEP!)
+            - ALWAYS CALL as the VERY LAST action of your turn
+            - `suggest_actions(["Option 1", "Option 2", "Option 3"])` - 3-5 contextual options
+            - If dice roll is needed: `suggest_actions(["🎲 Бросить кубик (Ловкость +3)"])`
             
-            ### Step 9: NARRATOR - Final Output (ONLY if needed for translation)
-            - CALL ONLY if DungeonMaster output was in English and needs translation to player's language
-            - SKIP if DungeonMaster already responded in player's language (Russian)
-            - `delegate_task_to_member("narrator", "Translate and present: [scene description]")`
+            ## ⛔⛔⛔ CRITICAL: YOUR TURN ENDS AFTER suggest_actions! ⛔⛔⛔
+            Once you call `suggest_actions()`, your work is DONE:
+            - Do NOT call any more tools
+            - Do NOT delegate to any more agents
+            - Do NOT generate any more text
+            - STOP IMMEDIATELY and wait for player input
             
             ---
             

@@ -99,8 +99,10 @@ class DnDTools(Toolkit):
         """
         Presents action buttons to the player. Each action is a short label like "Attack", "Investigate", "Talk to barkeeper".
         
-        ALWAYS use this tool at the end of each turn to give the player 3-5 clickable action options.
+        ALWAYS use this tool as the FINAL step of each turn to give the player 3-5 clickable action options.
         The actions should be context-appropriate based on the current situation.
+        
+        ⛔ IMPORTANT: After calling this tool, your turn is COMPLETE. Do NOT continue generating content.
         
         Example: suggest_actions(["Attack the goblin", "Cast fireball", "Flee", "Try to negotiate", "Other action"])
         
@@ -108,7 +110,7 @@ class DnDTools(Toolkit):
             actions: List of 3-5 action labels to present as buttons.
         
         Returns:
-            Confirmation that actions were suggested.
+            Confirmation that your turn is complete and player must choose.
         """
         # This tool result is special - it will be parsed by the streaming handler
         # and converted to clickable action buttons
@@ -120,7 +122,7 @@ class DnDTools(Toolkit):
                 for action in actions
             ]
         }
-        return json.dumps(result)
+        return json.dumps(result) + "\n\n[TURN COMPLETE - Waiting for player to choose an action. Do not generate more content.]"
 
 
 class MemberTools(DnDTools):
