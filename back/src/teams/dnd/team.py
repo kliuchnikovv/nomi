@@ -109,4 +109,5 @@ class DnDTeam(Team):
             debug_mode=debug_mode,
             show_members_responses=False,  # Hide internal member responses
             stream_member_events=False,    # Don't stream internal member events
+            include_thoughts=False,
         )
