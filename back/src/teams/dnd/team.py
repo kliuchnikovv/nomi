@@ -44,14 +44,15 @@ class DnDTeam(Team):
             4. **Determine Actions**: Decide 3-5 logical next actions for the player
             5. **Call suggest_actions**: `suggest_actions(["Action 1", "Action 2", "Action 3"])`
             6. **FINAL STEP - ALWAYS**: `delegate_task_to_member("narrator", <compiled_info>)`
-               - Pass all the narrative info to Narrator
-               - Narrator will produce the final player-facing output
+               - Pass ONLY the "Scene Facts", "Outcome", and "Suggested Actions" to Narrator.
+               - **DO NOT** pass your internal reasoning, thought process, or raw JSON logs.
+               - **DO NOT** pass "I think the player wants..." or "The dice rolled X so...". Just facts.
             
             **Critical Rules:**
             - You MUST call `suggest_actions` BEFORE delegating to narrator
             - You MUST end with `delegate_task_to_member("narrator", ...)` - this is what the player sees
             - YOUR direct text output is NOT shown to the player, only narrator's is
-            - Compile a summary for narrator including: scene description, action results, any dialogue
+            - Compile a CLEAN summary for narrator.
             
             **Member IDs (use lowercase):**
             - `dungeonmaster` - Scene descriptions, NPCs, world details
@@ -70,7 +71,7 @@ class DnDTeam(Team):
             1. delegate_task_to_member("dungeonmaster", "Player enters the cave. Describe the scene.")
             2. roll_dice("1d20") → Result: 15
             3. suggest_actions(["Исследовать пещеру", "Зажечь факел", "Прислушаться"])
-            4. delegate_task_to_member("narrator", "Scene: dark cave, dripping water, player rolled 15. Write immersive narrative in Russian.")
+            4. delegate_task_to_member("narrator", "Scene: dark cave, dripping water. Outcome: Player succeeds (15). Options: Explore, Torch, Listen.")
         """)
 
         # Create tools BEFORE super().__init__ so they're available at initialization
