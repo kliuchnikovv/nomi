@@ -149,7 +149,5 @@ class DnDTeam(Team):
             debug_mode=debug_mode,
             show_members_responses=True,   # Show member responses during streaming
             stream_member_events=True,     # Stream member agent events
-            enable_agentic_context=True,   # Better orchestration context
-            # NOTE: reasoning=True is incompatible with Gemini function calling!
-            # It causes: "Function calling with a response mime type: 'application/json' is unsupported"
+            # NOTE: reasoning=True removed - use Gemini native thinking_budget instead
         )
