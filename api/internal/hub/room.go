@@ -667,15 +667,29 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				zap.Any("tool", frame.Payload.Tool),
 			)
 
-			// SPECIFIC FIX: If this is "suggest_actions", extract the actions and save them to metadata
-			// so they are persisted in the "actions" column.
 			if toolMap, ok := frame.Payload.Tool.(map[string]interface{}); ok {
 				if name, ok := toolMap["name"].(string); ok && name == "suggest_actions" {
 					if args, ok := toolMap["arguments"].(map[string]interface{}); ok {
 						if actions, ok := args["actions"].([]interface{}); ok {
-							r.currentMessageMetadata.Actions = actions
-							r.logger.Info("intercepted suggest_actions, saving actions to metadata", 
-								zap.Int("count", len(actions)))
+							// Normalize actions to ensure they are objects with label/prompt/command
+							normalizedActions := make([]interface{}, 0, len(actions))
+							for _, act := range actions {
+								if actStr, ok := act.(string); ok {
+									// Convert string to object
+									normalizedActions = append(normalizedActions, map[string]interface{}{
+										"label":   actStr,
+										"prompt":  actStr,
+										"command": "dnd_action",
+									})
+								} else {
+									// Already an object or other type, keep as is
+									normalizedActions = append(normalizedActions, act)
+								}
+							}
+							
+							r.currentMessageMetadata.Actions = normalizedActions
+							r.logger.Info("intercepted suggest_actions, saving normalized actions to metadata", 
+								zap.Int("count", len(normalizedActions)))
 						}
 					}
 				}
