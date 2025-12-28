@@ -7,6 +7,7 @@ from typing import List
 
 logger = logging.getLogger(__name__)
 
+
 class DnDTools(Toolkit):
     def __init__(self, room_id: str, team_id: str = "dnd"):
         super().__init__(name="dnd_tools")
@@ -21,24 +22,6 @@ class DnDTools(Toolkit):
         self.register(self.save_state)
         self.register(self.load_state)
         self.register(self.suggest_actions)
-
-
-class MemberTools(DnDTools):
-    """Tools for member agents - excludes suggest_actions which is TeamLead-only."""
-    def __init__(self, room_id: str, team_id: str = "dnd"):
-        # Initialize Toolkit directly, skipping DnDTools.__init__ to avoid registering suggest_actions
-        Toolkit.__init__(self, name="member_tools")
-        self.room_id = room_id
-        self.team_id = team_id
-        base_url = os.getenv("GO_API_URL", "http://localhost:8080")
-        self.api_url = f"{base_url}/api/team/state"
-        self.api_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
-
-        # Register only the tools that member agents should have
-        self.register(self.roll_dice)
-        self.register(self.save_state)
-        self.register(self.load_state)
-        # NOTE: suggest_actions is NOT registered - only TeamLead can call it
 
     def roll_dice(self, expression: str) -> str:
         """
@@ -135,3 +118,20 @@ class MemberTools(DnDTools):
         }
         return json.dumps(result)
 
+
+class MemberTools(DnDTools):
+    """Tools for member agents - excludes suggest_actions which is TeamLead-only."""
+    def __init__(self, room_id: str, team_id: str = "dnd"):
+        # Initialize Toolkit directly to skip DnDTools registration
+        Toolkit.__init__(self, name="member_tools")
+        self.room_id = room_id
+        self.team_id = team_id
+        base_url = os.getenv("GO_API_URL", "http://localhost:8080")
+        self.api_url = f"{base_url}/api/team/state"
+        self.api_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+
+        # Register only the tools that member agents should have (inherited from DnDTools)
+        self.register(self.roll_dice)
+        self.register(self.save_state)
+        self.register(self.load_state)
+        # NOTE: suggest_actions is NOT registered - only TeamLead can call it
