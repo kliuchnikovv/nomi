@@ -61,7 +61,9 @@ class TeamFactory:
             logger.info("[WS] Instantiating DnDTeam with room_id=%s", session_id)
             
             # Use SafeGemini to filter empty parts and prevent 400 errors with history
-            model_id = getattr(self.model, 'id', 'gemini-2.0-flash')
+            # Priority: command_desc['model'] > self.model.id > fallback
+            model_id = command_desc.get('model') or getattr(self.model, 'id', None) or 'gemini-2.0-flash'
+            logger.info("[WS] DnDTeam using model: %s", model_id)
             api_key = os.getenv("GOOGLE_API_KEY")
             safe_model = SafeGemini(id=model_id, api_key=api_key)
             

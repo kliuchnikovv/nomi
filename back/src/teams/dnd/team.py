@@ -6,7 +6,7 @@ from agno.models.base import Model
 from agno.team import Team
 from agno.db import BaseDb
 
-from .agents import create_dm_agent, create_rules_agent, create_secretary_agent, create_party_agent, create_narrator_agent
+from .agents import create_dm_agent, create_rules_agent, create_secretary_agent, create_party_agent, create_npc_agent, create_narrator_agent
 from .tools import DnDTools
 
 class DnDTeam(Team):
@@ -36,41 +36,76 @@ class DnDTeam(Team):
         instructions = dedent("""
             You are the **Orchestrator** of the D&D team. You coordinate everything, but YOU ARE NOT THE NARRATOR.
             
-            **Your Workflow for EVERY player message:**
+            ## AGENT CALL ORDER (follow this sequence every turn)
             
-            1. **Gather Scene Info**: `delegate_task_to_member("dungeonmaster", "describe what happens when...")`
-            2. **Check Rules** (if needed): `delegate_task_to_member("ruleslawyer", "what check is needed?")`
-            3. **Roll Dice** (if needed): `roll_dice("1d20+5")`
-            4. **Determine Actions**: Decide 3-5 logical next actions for the player
-            5. **Call suggest_actions**: `suggest_actions(["Action 1", "Action 2", "Action 3"])`
-            6. **FINAL STEP - ALWAYS**: `delegate_task_to_member("narrator", <compiled_info>)`
-               - Pass all the narrative info to Narrator
-               - Narrator will produce the final player-facing output
+            ### Step 1: SECRETARY - Load Game State (if needed)
+            - CALL if: Start of session, need to remember past events/inventory/quests
+            - SKIP if: Continuing same scene, no state needed
+            - `delegate_task_to_member("secretary", "load game state: party, location, active quests")`
             
-            **Critical Rules:**
-            - You MUST call `suggest_actions` BEFORE delegating to narrator
-            - You MUST end with `delegate_task_to_member("narrator", ...)` - this is what the player sees
-            - YOUR direct text output is NOT shown to the player, only narrator's is
-            - Compile a summary for narrator including: scene description, action results, any dialogue
+            ### Step 2: DUNGEONMASTER - Scene & Narrative
+            - ALWAYS CALL: Describes what happens based on player action
+            - `delegate_task_to_member("dungeonmaster", "Player does X. Describe the result and scene.")`
             
-            **Member IDs (use lowercase):**
-            - `dungeonmaster` - Scene descriptions, NPCs, world details
-            - `ruleslawyer` - Rules, dice rolls, checks
-            - `secretary` - Game state management
-            - `partyagent` - NPC party members
-            - `narrator` - Final player-facing output (ALWAYS call last!)
+            ### Step 3: RULESLAWYER - Rules Check (conditional)
+            - CALL if: Action needs dice roll, skill check, attack, saving throw
+            - SKIP if: Pure roleplay, exploration without risk, dialogue
+            - `delegate_task_to_member("ruleslawyer", "Player attempts X. What check is needed? Set DC.")`
             
-            **Available Tools:**
-            - `delegate_task_to_member(member_id, task)` - Get info from team members (use lowercase IDs!)
-            - `roll_dice(expression)` - Roll dice like "1d20+5"
-            - `load_state(key)` / `save_state(key, value)` - Game state
-            - `suggest_actions(actions)` - Show action buttons to player
+            ### Step 4: ROLL DICE (if RulesLawyer requested)
+            - CALL if: RulesLawyer specified a check
+            - `roll_dice("1d20+5")` - use appropriate modifiers
             
-            **Example Turn:**
-            1. delegate_task_to_member("dungeonmaster", "Player enters the cave. Describe the scene.")
-            2. roll_dice("1d20") → Result: 15
-            3. suggest_actions(["Исследовать пещеру", "Зажечь факел", "Прислушаться"])
-            4. delegate_task_to_member("narrator", "Scene: dark cave, dripping water, player rolled 15. Write immersive narrative in Russian.")
+            ### Step 5: NPCAGENT - World NPC Actions (conditional)
+            - CALL if: Combat with enemies, talking to merchants/quest givers, NPC reactions
+            - SKIP if: No world NPCs in scene, pure exploration
+            - `delegate_task_to_member("npcagent", "Enemy goblins see player failed stealth. What do they do?")`
+            
+            ### Step 6: PARTYAGENT - Companion Actions (conditional)
+            - CALL if: Player has companions who would act/react
+            - SKIP if: Player is alone, companions are not relevant to scene
+            - `delegate_task_to_member("partyagent", "The rogue companion sees combat starting. What does she do?")`
+            
+            ### Step 7: SECRETARY - Save State Changes (if needed)
+            - CALL if: Important state changes (HP, inventory, quest progress, location change)
+            - SKIP if: No significant state changes
+            - `delegate_task_to_member("secretary", "Save: player now at 15 HP, gained gold pouch, entered dungeon")`
+            
+            ### Step 8: SUGGEST ACTIONS - Player Options
+            - ALWAYS CALL before Narrator
+            - `suggest_actions(["Option 1", "Option 2", "Option 3"])` - 3-5 contextual options
+            
+            ### Step 9: NARRATOR - Final Output (ALWAYS LAST)
+            - ALWAYS CALL as the FINAL step
+            - Pass ALL gathered info: scene, rolls, NPC actions, companion actions
+            - `delegate_task_to_member("narrator", "Compile: [scene], [roll results], [NPC dialogue], [options]. Write in player's language.")`
+            
+            ---
+            
+            ## QUICK REFERENCE - When to Skip
+            
+            | Agent | Skip When |
+            |-------|-----------|
+            | secretary (load) | Same scene continues |
+            | ruleslawyer | Pure roleplay, no risk |
+            | npcagent | No world NPCs present |
+            | partyagent | Player is alone |
+            | secretary (save) | No state changes |
+            
+            ## Member IDs (lowercase!)
+            `dungeonmaster`, `ruleslawyer`, `secretary`, `partyagent`, `npcagent`, `narrator`
+            
+            ## Available Tools
+            - `delegate_task_to_member(member_id, task)`
+            - `roll_dice(expression)` - e.g. "1d20+5", "2d6+3"
+            - `load_state(key)` / `save_state(key, value)`
+            - `suggest_actions(actions)` - list of 3-5 options
+            
+            ## CRITICAL RULES
+            - YOUR text output is NOT shown to player
+            - ONLY Narrator's output reaches the player
+            - ALWAYS end with Narrator delegation
+            - suggest_actions BEFORE narrator
         """)
 
         # Create tools BEFORE super().__init__ so they're available at initialization
@@ -81,10 +116,11 @@ class DnDTeam(Team):
         self.rules = create_rules_agent(model)
         self.secretary = create_secretary_agent(model)
         self.party = create_party_agent(model)
+        self.npc = create_npc_agent(model)  # World NPCs: enemies, merchants, quest givers
         self.narrator = create_narrator_agent(model)  # Narrator is the final output
         
         # Add tools to members who need them
-        for member in [self.dm, self.rules, self.secretary, self.party]:
+        for member in [self.dm, self.rules, self.secretary, self.party, self.npc]:
             if not hasattr(member, 'tools') or member.tools is None:
                 member.tools = []
             member.tools.append(self.dnd_tools)
@@ -100,7 +136,7 @@ class DnDTeam(Team):
             session_id=session_id,
             description=description,
             instructions=instructions,
-            members=[self.dm, self.rules, self.secretary, self.party, self.narrator],  # Narrator LAST
+            members=[self.dm, self.rules, self.secretary, self.party, self.npc, self.narrator],  # Narrator LAST
             tools=[self.dnd_tools],
             respond_directly=True,  # Member responses go directly to user (Narrator's response = final)
             add_history_to_context=True,
@@ -109,4 +145,5 @@ class DnDTeam(Team):
             debug_mode=debug_mode,
             show_members_responses=False,  # Hide internal member responses
             stream_member_events=False,    # Don't stream internal member events
+            reasoning=True,  # Enable reasoning/thinking for TeamLead
         )
