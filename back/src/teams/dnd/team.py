@@ -7,7 +7,7 @@ from agno.team import Team
 from agno.db import BaseDb
 
 from .agents import create_dm_agent, create_rules_agent, create_secretary_agent, create_party_agent, create_npc_agent, create_narrator_agent
-from .tools import DnDTools
+from .tools import DnDTools, MemberTools
 
 class DnDTeam(Team):
     def __init__(
@@ -119,27 +119,25 @@ class DnDTeam(Team):
             - suggest_actions BEFORE narrator
         """)
 
-        # Create tools BEFORE super().__init__ so they're available at initialization
+        # Initialize tools
+        # TeamLead gets full DnDTools (including suggest_actions)
         self.dnd_tools = DnDTools(room_id=room_id)
-
-        # Create member agents
-        self.dm = create_dm_agent(model)
-        self.rules = create_rules_agent(model)
-        self.secretary = create_secretary_agent(model)
-        self.party = create_party_agent(model)
+        # Members get MemberTools (excludes suggest_actions - only TeamLead can offer actions)
+        self.member_tools = MemberTools(room_id=room_id)
+        
+        # Initialize agents
+        self.dm = create_dm_agent(model)  # Main narrative generator
+        self.rules = create_rules_agent(model)  # D&D 5e rules expert
+        self.secretary = create_secretary_agent(model)  # State manager
+        self.party = create_party_agent(model)  # NPC companions in the party
         self.npc = create_npc_agent(model)  # World NPCs: enemies, merchants, quest givers
         self.narrator = create_narrator_agent(model)  # Narrator is the final output
         
-        # Add tools to members who need them
-        for member in [self.dm, self.rules, self.secretary, self.party, self.npc]:
+        # Add MemberTools to members (no suggest_actions - only roll_dice, save/load_state)
+        for member in [self.dm, self.rules, self.secretary, self.party, self.npc, self.narrator]:
             if not hasattr(member, 'tools') or member.tools is None:
                 member.tools = []
-            member.tools.append(self.dnd_tools)
-        
-        # Narrator gets tools too - specifically needs suggest_actions to show translated action buttons
-        if not hasattr(self.narrator, 'tools') or self.narrator.tools is None:
-            self.narrator.tools = []
-        self.narrator.tools.append(self.dnd_tools)
+            member.tools.append(self.member_tools)
 
         super().__init__(
             model=model,
