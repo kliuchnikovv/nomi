@@ -45,6 +45,7 @@ class LLMWebSocketSession:
         self.agent_factory = agent_factory
         self.next_id = 0
         self.cancel_event = asyncio.Event()
+        self.current_generation_task: Optional[asyncio.Task] = None
 
         # State
         self.agent: Optional[Agent] = None
@@ -243,7 +244,7 @@ class LLMWebSocketSession:
             raise
 
     async def run_loop(self):
-        """Main event loop."""
+        """Main event loop - handles frames concurrently with generation."""
         last_activity = time.monotonic()
 
         # Initial build
@@ -259,32 +260,87 @@ class LLMWebSocketSession:
             if self.pending_frame:
                 frame = self.pending_frame
                 self.pending_frame = None
+                # Handle frame (may start async generation task)
                 await self.process_frame(frame)
                 continue
 
-            # Wait for next frame
+            # Wait for next frame, but allow concurrent tasks to run
             try:
-                raw = await asyncio.wait_for(self.websocket.receive_text(), timeout=30.0)
-                last_activity = time.monotonic()
-                try:
-                    data = json.loads(raw)
-                    frame = Frame(**data)
-                    frame.validate_invariants()
-                    await self.process_frame(frame)
-                except Exception as ex:
-                    logger.warning("[WS] Bad frame: %s", ex)
-                    await self._send_frame(make_error(self.next_id, None, "bad_request", "Invalid frame", 400))
-            except asyncio.TimeoutError:
-                idle_for = time.monotonic() - last_activity
-                if idle_for >= 180:
-                    logger.info("[WS] Idle timeout")
-                    await self._send_frame(make_done(self.next_id, None, {"reason": "idle_timeout"}))
-                    await self.websocket.close(code=1000)
-                    break
-                # Keepalive
-                await self._send_frame(make_data(self.next_id, Op.PING, None, {}))
+                # Create receive task
+                receive_task = asyncio.create_task(self.websocket.receive_text())
+                
+                # If there's a running generation, wait for either
+                if self.current_generation_task and not self.current_generation_task.done():
+                    done, pending = await asyncio.wait(
+                        [receive_task, self.current_generation_task],
+                        timeout=30.0,
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    # Check what completed
+                    if receive_task in done:
+                        try:
+                            raw = receive_task.result()
+                            last_activity = time.monotonic()
+                            data = json.loads(raw)
+                            frame = Frame(**data)
+                            frame.validate_invariants()
+                            await self.process_frame(frame)
+                        except Exception as ex:
+                            logger.warning("[WS] Bad frame: %s", ex)
+                            await self._send_frame(make_error(self.next_id, None, "bad_request", "Invalid frame", 400))
+                    
+                    if self.current_generation_task in done:
+                        # Generation completed
+                        try:
+                            self.current_generation_task.result()
+                        except asyncio.CancelledError:
+                            logger.info("[WS] Generation was cancelled")
+                        except Exception as e:
+                            logger.error("[WS] Generation task error: %s", e)
+                        self.current_generation_task = None
+                    
+                    # Handle timeout
+                    if not done:
+                        idle_for = time.monotonic() - last_activity
+                        if idle_for >= 180:
+                            logger.info("[WS] Idle timeout")
+                            await self._send_frame(make_done(self.next_id, None, {"reason": "idle_timeout"}))
+                            await self.websocket.close(code=1000)
+                            break
+                        # Keepalive
+                        await self._send_frame(make_data(self.next_id, Op.PING, None, {}))
+                        # Cancel receive task so we can retry
+                        receive_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await receive_task
+                else:
+                    # No generation running, simple wait
+                    try:
+                        raw = await asyncio.wait_for(receive_task, timeout=30.0)
+                        last_activity = time.monotonic()
+                        data = json.loads(raw)
+                        frame = Frame(**data)
+                        frame.validate_invariants()
+                        await self.process_frame(frame)
+                    except asyncio.TimeoutError:
+                        idle_for = time.monotonic() - last_activity
+                        if idle_for >= 180:
+                            logger.info("[WS] Idle timeout")
+                            await self._send_frame(make_done(self.next_id, None, {"reason": "idle_timeout"}))
+                            await self.websocket.close(code=1000)
+                            break
+                        # Keepalive
+                        await self._send_frame(make_data(self.next_id, Op.PING, None, {}))
+                    except Exception as ex:
+                        logger.warning("[WS] Bad frame: %s", ex)
+                        await self._send_frame(make_error(self.next_id, None, "bad_request", "Invalid frame", 400))
             except WebSocketDisconnect:
-                logger.info("[WS] Disconnected")
+                logger.info("[WS] Disconnected - cancelling any running generation")
+                if self.current_generation_task and not self.current_generation_task.done():
+                    self.current_generation_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await self.current_generation_task
                 break
             except Exception as e:
                 logger.error("[WS] Unexpected error in loop: %s", e)
@@ -295,9 +351,15 @@ class LLMWebSocketSession:
             await self._send_frame(make_data(self.next_id, Op.PONG, frame.chat_id, {}))
             
         elif frame.op == Op.STOP:
+            logger.info("[WS] STOP received, cancelling generation")
             self.cancel_event.set()
+            # Cancel the running generation task if any
+            if self.current_generation_task and not self.current_generation_task.done():
+                self.current_generation_task.cancel()
+                logger.info("[WS] Cancelled current generation task")
             await self._send_frame(make_done(self.next_id, frame.chat_id, {"message": "stopped", "reason": "user_cancelled"}))
             self.cancel_event.clear()
+            self.current_generation_task = None
             
         elif frame.op == Op.DONE:
             await self._send_frame(make_data(self.next_id, Op.DONE, frame.chat_id, {"message": "bye"}))
@@ -308,7 +370,12 @@ class LLMWebSocketSession:
             await self.handle_model_change(frame)
             
         elif frame.op == Op.MESSAGE:
-            await self.handle_user_message(frame)
+            # Start generation as a background task - run_loop handles waiting for it
+            # This allows us to receive STOP frames while generation is running
+            if self.current_generation_task and not self.current_generation_task.done():
+                logger.warning("[WS] New message while generation is running - cancelling previous")
+                self.current_generation_task.cancel()
+            self.current_generation_task = asyncio.create_task(self.handle_user_message(frame))
             
         elif frame.op == Op.TOOLS:
             # Handle late TOOLS frame (e.g., from Go backend reconnection)
@@ -467,6 +534,7 @@ class LLMWebSocketSession:
                 elif evt_type == "reasoning":
                     content = event.get("content", "")
                     if content:
+                        logger.info("[WS] Sending reasoning frame: %s...", content[:100])
                         await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
                             "type": "reasoning",
                             "content": content,

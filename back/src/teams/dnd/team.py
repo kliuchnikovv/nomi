@@ -112,11 +112,19 @@ class DnDTeam(Team):
             - `load_state(key)` / `save_state(key, value)`
             - `suggest_actions(actions)` - list of 3-5 options
             
-            ## CRITICAL RULES
-            - YOUR text output is NOT shown to player
-            - ONLY Narrator's output reaches the player
-            - ALWAYS call Narrator as the last agent
-            - Call suggest_actions AFTER narrator finishes
+            ## ⛔ MANDATORY FINAL STEP - YOU MUST DO THIS! ⛔
+            
+            **EVERY SINGLE RESPONSE must end with a call to `suggest_actions()`!**
+            
+            This is NOT optional. After presenting narrative via Narrator:
+            1. Call `suggest_actions(["Option 1", "Option 2", "Option 3"])` with 3-5 Russian options
+            2. STOP generating - your turn is complete
+            
+            Examples:
+            - `suggest_actions(["Поговорить с барменом", "Осмотреть таверну", "Выйти на улицу"])`
+            - `suggest_actions(["🎲 Бросить кубик (Ловкость +5)", "Отступить", "Атаковать"])`
+            
+            If you don't call suggest_actions, THE PLAYER CANNOT RESPOND!
         """)
 
         # Initialize tools
