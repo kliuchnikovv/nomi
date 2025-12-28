@@ -79,10 +79,17 @@ class DnDTeam(Team):
             - If dice roll needed: `suggest_actions(["🎲 Бросить кубик (Ловкость +3)"])` - ONLY the roll button!
             - If no roll needed: `suggest_actions(["Option 1", "Option 2", "Option 3"])` - 3-5 contextual options
             
-            ### Step 9: NARRATOR - Final Output (ALWAYS LAST)
-            - ALWAYS CALL as the FINAL step
-            - Pass ALL gathered info: scene, rolls, NPC actions, companion actions
-            - `delegate_task_to_member("narrator", "Compile: [scene], [roll results], [NPC dialogue], [options]. Write in player's language.")`
+            ### ⛔ CRITICAL: STOP AFTER suggest_actions!
+            After calling `suggest_actions()`, you MUST STOP IMMEDIATELY.
+            - DO NOT continue to Step 9 (Narrator)
+            - DO NOT delegate any more tasks
+            - DO NOT generate more content
+            - Your turn is COMPLETE. Wait for player to choose an action.
+            
+            ### Step 9: NARRATOR - Final Output (ONLY if needed for translation)
+            - CALL ONLY if DungeonMaster output was in English and needs translation to player's language
+            - SKIP if DungeonMaster already responded in player's language (Russian)
+            - `delegate_task_to_member("narrator", "Translate and present: [scene description]")`
             
             ---
             
