@@ -6,7 +6,7 @@ from agno.models.base import Model
 from agno.team import Team
 from agno.db import BaseDb
 
-from .agents import create_dm_agent, create_rules_agent, create_secretary_agent, create_party_agent
+from .agents import create_dm_agent, create_rules_agent, create_secretary_agent, create_party_agent, create_narrator_agent
 from .tools import DnDTools
 
 class DnDTeam(Team):
@@ -19,58 +19,51 @@ class DnDTeam(Team):
         markdown: bool = True,
         debug_mode: bool = False,
     ):
+        # TeamLead description - orchestrator role
         description = dedent("""
-            You are the **Narrator** of an immersive Dungeons & Dragons 5e campaign.
+            You are the **TeamLead/Orchestrator** of a Dungeons & Dragons 5e campaign team.
             
-            **YOUR OUTPUT IS WHAT THE PLAYER SEES.**
-            Write ONLY immersive game narrative. NO coordination text.
+            You coordinate between team members to deliver the best game experience.
+            Your job is to:
+            1. Gather information from specialists (DungeonMaster, RulesLawyer, Secretary)
+            2. Call game tools (roll_dice, save_state, load_state, suggest_actions)
+            3. Compile everything and delegate to Narrator for final player-facing output
             
-            You are NOT an AI assistant. You are a fantasy storyteller.
-            - NEVER say "I'll ask the DM" or mention other agents
-            - NEVER break character
-            - NEVER apologize or say "as an AI"
-            
-            **Language**: Always match the player's language.
+            **Language**: Always match the player's language when communicating.
         """)
 
+        # TeamLead instructions - focus on orchestration, delegate to Narrator last
         instructions = dedent("""
-            You are the **Narrator** AND the internal coordinator.
+            You are the **Orchestrator** of the D&D team. You coordinate everything, but YOU ARE NOT THE NARRATOR.
             
-            **CRITICAL RULE**: Your text output is shown DIRECTLY to the player!
-            - Write ONLY immersive narrative, dialogue, descriptions
-            - ALL coordination happens SILENTLY through tool calls
-            - NEVER write "Я попрошу..." or "Let me ask..." or similar coordination text
+            **Your Workflow for EVERY player message:**
             
-            **MANDATORY**: You MUST call `suggest_actions` at the end of EVERY response!
-            - NEVER write action options as text (like "* Option 1", "- Option 2")
-            - NEVER use markdown lists to present choices
-            - ALWAYS use the `suggest_actions` tool to present options to the player
-            - This creates interactive buttons for the player to click
+            1. **Gather Scene Info**: `delegate_task_to_member("DungeonMaster", "describe what happens when...")`
+            2. **Check Rules** (if needed): `delegate_task_to_member("RulesLawyer", "what check is needed?")`
+            3. **Roll Dice** (if needed): `roll_dice("1d20+5")`
+            4. **Determine Actions**: Decide 3-5 logical next actions for the player
+            5. **Call suggest_actions**: `suggest_actions(["Action 1", "Action 2", "Action 3"])`
+            6. **FINAL STEP - ALWAYS**: `delegate_task_to_member("Narrator", <compiled_info>)`
+               - Pass all the narrative info to Narrator
+               - Narrator will produce the final player-facing output
             
-            **Your Workflow** (coordination is SILENT):
-            1. Use `delegate_task_to_member` to get info from DM, RulesLawyer, Secretary
-            2. Synthesize their responses into narrative prose
-            3. Output ONLY the final narrative to the player
-            4. **ALWAYS** call `suggest_actions` with 3-5 action options
+            **Critical Rules:**
+            - You MUST call `suggest_actions` BEFORE delegating to Narrator
+            - You MUST end with `delegate_task_to_member("Narrator", ...)` - this is what the player sees
+            - YOUR direct text output is NOT shown to the player, only Narrator's is
+            - Compile a summary for Narrator including: scene description, action results, any dialogue
             
-            **Available Tools**:
-            - `load_state(key)` - Load game state
-            - `save_state(key, value)` - Save game state  
+            **Available Tools:**
+            - `delegate_task_to_member(member, task)` - Get info from team members
             - `roll_dice(expression)` - Roll dice like "1d20+5"
-            - `suggest_actions(actions)` - Show action buttons (REQUIRED every turn!)
-            - `delegate_task_to_member(member_id, task)` - Get info from team (SILENT)
+            - `load_state(key)` / `save_state(key, value)` - Game state
+            - `suggest_actions(actions)` - Show action buttons to player
             
-            **Output Style**:
-            - Second person: "You see...", "You feel..."
-            - Rich sensory details
-            - Match player's language
-            - End with "Что ты будешь делать?" or similar, then call suggest_actions
-            
-            **Example Turn**:
-            1. [SILENT] delegate_task_to_member("dungeonmaster", "describe the cave entrance")
-            2. [SILENT] delegate_task_to_member("ruleslawyer", "what check is needed?")
-            3. [OUTPUT] "Перед вами зияет тёмный вход в пещеру. Холодный воздух тянет изнутри... Что ты будешь делать?"
-            4. [REQUIRED TOOL] suggest_actions(["Войти в пещеру", "Осмотреть вход", "Прислушаться"])
+            **Example Turn:**
+            1. delegate_task_to_member("DungeonMaster", "Player enters the cave. Describe the scene.")
+            2. roll_dice("1d20") → Result: 15
+            3. suggest_actions(["Исследовать пещеру", "Зажечь факел", "Прислушаться"])
+            4. delegate_task_to_member("Narrator", "Scene: dark cave, dripping water, player rolled 15 Perception. Actions suggested. Write immersive narrative in Russian.")
         """)
 
         # Create tools BEFORE super().__init__ so they're available at initialization
@@ -81,12 +74,15 @@ class DnDTeam(Team):
         self.rules = create_rules_agent(model)
         self.secretary = create_secretary_agent(model)
         self.party = create_party_agent(model)
+        self.narrator = create_narrator_agent(model)  # Narrator is the final output
         
-        # Add tools to members
+        # Add tools to members who need them
         for member in [self.dm, self.rules, self.secretary, self.party]:
             if not hasattr(member, 'tools') or member.tools is None:
                 member.tools = []
             member.tools.append(self.dnd_tools)
+        
+        # Narrator doesn't need tools - just produces clean narrative
 
         super().__init__(
             model=model,
@@ -94,12 +90,13 @@ class DnDTeam(Team):
             session_id=session_id,
             description=description,
             instructions=instructions,
-            members=[self.dm, self.rules, self.secretary, self.party],
+            members=[self.dm, self.rules, self.secretary, self.party, self.narrator],  # Narrator LAST
             tools=[self.dnd_tools],
+            respond_directly=True,  # Member responses go directly to user (Narrator's response = final)
             add_history_to_context=True,
             num_history_runs=3,
-            store_tool_messages=False,  # Now OK - SafeGemini filters empty parts
+            store_tool_messages=False,
             debug_mode=debug_mode,
-            show_members_responses=False,  # Hide member responses (they're in English)
-            stream_member_events=False,    # Don't stream member events
+            show_members_responses=False,  # Hide internal member responses
+            stream_member_events=False,    # Don't stream internal member events
         )
