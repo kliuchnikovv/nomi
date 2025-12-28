@@ -60,6 +60,8 @@ type Payload struct {
 	Sender uuid.UUID `json:"sender,omitempty"` // User ID who sent the message
 
 	Type             string      `json:"type,omitempty"`
+	Content          string      `json:"content,omitempty"` // Generic content field (e.g., reasoning text)
+	AgentName        string      `json:"agent_name,omitempty"` // For team member responses
 	CompletionTokens uint        `json:"completion_tokens,omitempty"`
 	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
 	Tool             interface{} `json:"tool,omitempty"`
