@@ -466,11 +466,12 @@ class LLMWebSocketSession:
 
                 elif evt_type == "reasoning":
                     content = event.get("content", "")
-                    await self._send_frame(make_meta(self.next_id, Op.MESSAGE, chat_id, {
-                        "type": "metadata",
-                        "reasoning_steps": [content],
-                        "message_id": message_id
-                    }))
+                    if content:
+                        await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
+                            "type": "reasoning",
+                            "content": content,
+                            "message_id": message_id
+                        }))
 
                 elif evt_type == "member_response":
                     # Team member agent response - send as system activity

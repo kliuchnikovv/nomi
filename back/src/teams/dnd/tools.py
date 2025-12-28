@@ -3,6 +3,7 @@ import json
 import logging
 import httpx
 from agno.tools import Toolkit
+from agno.tools.function import Function
 from typing import List
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,10 @@ class DnDTools(Toolkit):
         self.register(self.roll_dice)
         self.register(self.save_state)
         self.register(self.load_state)
-        self.register(self.suggest_actions)
+        # Register suggest_actions with stop_after_tool_call to stop generation after buttons
+        suggest_fn = Function.from_callable(self.suggest_actions)
+        suggest_fn.stop_after_tool_call = True
+        self.functions[suggest_fn.name] = suggest_fn
 
     def roll_dice(self, expression: str) -> str:
         """
