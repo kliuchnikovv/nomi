@@ -89,7 +89,10 @@ class DnDTeam(Team):
                 member.tools = []
             member.tools.append(self.dnd_tools)
         
-        # Narrator doesn't need tools - just produces clean narrative
+        # Narrator gets tools too - specifically needs suggest_actions to show translated action buttons
+        if not hasattr(self.narrator, 'tools') or self.narrator.tools is None:
+            self.narrator.tools = []
+        self.narrator.tools.append(self.dnd_tools)
 
         super().__init__(
             model=model,
