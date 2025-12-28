@@ -156,6 +156,17 @@ export default function MessageScreen(props: Props) {
     // Use content_parts for inline rendering, fallback to text + grouped tool_calls
     const hasContentParts = props.message.content_parts && props.message.content_parts.length > 0;
 
+    // Debug logging
+    if (props.message.role === 'assistant') {
+        console.log('[MessageScreen] Rendering assistant message:', {
+            id: props.message.id,
+            hasContentParts,
+            contentPartsLength: props.message.content_parts?.length || 0,
+            contentPartsTypes: props.message.content_parts?.map(p => p.type) || [],
+            textLength: props.message.text?.length || 0,
+        });
+    }
+
     return (
         <View style={containerStylesByType[props.message.role]}>
             {props.header && (

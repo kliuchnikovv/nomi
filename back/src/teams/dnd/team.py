@@ -115,8 +115,8 @@ class DnDTeam(Team):
             ## CRITICAL RULES
             - YOUR text output is NOT shown to player
             - ONLY Narrator's output reaches the player
-            - ALWAYS end with Narrator delegation
-            - suggest_actions BEFORE narrator
+            - ALWAYS call Narrator as the last agent
+            - Call suggest_actions AFTER narrator finishes
         """)
 
         # Initialize tools

@@ -743,7 +743,7 @@ export function ChatProvider({
 
                     newMessages[messageIdx] = {
                         ...newMessages[messageIdx],
-                        text: newMessages[messageIdx].text + memberText,
+                        // Don't add memberText to main text - it goes to content_parts only
                         content_parts: updatedParts,
                     };
                 }
