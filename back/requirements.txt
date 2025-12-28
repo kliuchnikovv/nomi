@@ -58,3 +58,4 @@ posthog>=3.0.0
 ddgs
 mcp
 PyGithub
+openai>=1.0.0

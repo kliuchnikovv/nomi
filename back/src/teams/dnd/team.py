@@ -52,9 +52,12 @@ class DnDTeam(Team):
             - SKIP if: Pure roleplay, exploration without risk, dialogue
             - `delegate_task_to_member("ruleslawyer", "Player attempts X. What check is needed? Set DC.")`
             
-            ### Step 4: ROLL DICE (if RulesLawyer requested)
-            - CALL if: RulesLawyer specified a check
-            - `roll_dice("1d20+5")` - use appropriate modifiers
+            ### Step 4: DICE ROLL - Player Action! 🎲
+            - If RulesLawyer says a check is needed, DO NOT roll automatically!
+            - Instead, STOP HERE and offer player a dice roll button
+            - Include the roll in suggest_actions: "🎲 Бросить кубик (Ловкость +3)"
+            - When player clicks the roll button, THEN call `roll_dice("1d20+3")`
+            - After roll, continue with remaining steps
             
             ### Step 5: NPCAGENT - World NPC Actions (conditional)
             - CALL if: Combat with enemies, talking to merchants/quest givers, NPC reactions
@@ -73,7 +76,8 @@ class DnDTeam(Team):
             
             ### Step 8: SUGGEST ACTIONS - Player Options
             - ALWAYS CALL before Narrator
-            - `suggest_actions(["Option 1", "Option 2", "Option 3"])` - 3-5 contextual options
+            - If dice roll needed: `suggest_actions(["🎲 Бросить кубик (Ловкость +3)"])` - ONLY the roll button!
+            - If no roll needed: `suggest_actions(["Option 1", "Option 2", "Option 3"])` - 3-5 contextual options
             
             ### Step 9: NARRATOR - Final Output (ALWAYS LAST)
             - ALWAYS CALL as the FINAL step
