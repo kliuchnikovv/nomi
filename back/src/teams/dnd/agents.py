@@ -28,9 +28,7 @@ def create_dm_agent(model: Model) -> Agent:
         markdown=True,
         add_history_to_context=True,
         num_history_messages=20,
-        reasoning=True,
-        reasoning_min_steps=1,
-        reasoning_max_steps=3,
+        # NOTE: reasoning=True removed - incompatible with Gemini function calling
         retries=2,
         tool_call_limit=5,
         expected_output="Vivid scene description with sensory details. NPC dialogue in character. Clear narrative of what happens next.",
@@ -53,9 +51,7 @@ def create_rules_agent(model: Model) -> Agent:
         markdown=True,
         add_history_to_context=True,
         num_history_messages=10,
-        reasoning=True,
-        reasoning_min_steps=1,
-        reasoning_max_steps=5,
+        # NOTE: reasoning=True removed - incompatible with Gemini function calling
         retries=2,
         additional_context="Use D&D 5e SRD rules. Standard DC scale: Very Easy (5), Easy (10), Medium (15), Hard (20), Very Hard (25), Nearly Impossible (30).",
         expected_output="JSON with: {valid: bool, roll_type: 'attack'|'ability_check'|'save'|'none', ability: str, dc: int, reasoning: str}",
@@ -142,9 +138,7 @@ def create_npc_agent(model: Model) -> Agent:
         markdown=True,
         add_history_to_context=True,
         num_history_messages=15,
-        reasoning=True,
-        reasoning_min_steps=1,
-        reasoning_max_steps=3,
+        # NOTE: reasoning=True removed - incompatible with Gemini function calling
         retries=2,
         expected_output="In-character NPC dialogue with distinct voice. Combat: tactical decisions with reasoning. Include NPC emotions and motivations.",
     )

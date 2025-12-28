@@ -427,10 +427,11 @@ class LLMWebSocketSession:
                     # Check if tool result contains action buttons (from suggest_actions)
                     result = safe_tool.get("result")
                     # Try additional sources if result not in safe_tool
-                    if result is None and hasattr(ev, 'tool') and hasattr(ev.tool, 'result'):
-                        result = ev.tool.result
-                    if result is None and hasattr(ev, 'result'):
-                        result = ev.result
+                    # Note: 'event' is the variable from the yield, not 'ev'
+                    if result is None and event.get("tool") and hasattr(event.get("tool"), 'result'):
+                        result = event.get("tool").result
+                    if result is None and event.get("result"):
+                        result = event.get("result")
                     
                     if result:
                         try:

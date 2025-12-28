@@ -25,7 +25,33 @@ class SafeGemini(Gemini):
     """
     A Gemini model wrapper that filters out empty parts from messages
     before sending them to the API, preventing 400 INVALID_ARGUMENT errors.
+    
+    Also supports native Gemini 2.5 thinking/reasoning via thinking_budget
+    and include_thoughts parameters (compatible with function calling).
     """
+    
+    def __init__(
+        self,
+        id: str = "gemini-2.0-flash-exp",
+        thinking_budget: int | None = None,
+        include_thoughts: bool = False,
+        **kwargs
+    ):
+        """
+        Initialize SafeGemini with optional thinking support.
+        
+        Args:
+            id: Model ID (e.g. "gemini-2.5-pro", "gemini-2.5-flash")
+            thinking_budget: Number of tokens for thinking (Gemini 2.5+ native reasoning)
+            include_thoughts: Whether to include thinking in output (Gemini 2.5+ native reasoning)
+            **kwargs: Other Gemini parameters
+        """
+        super().__init__(
+            id=id,
+            thinking_budget=thinking_budget,
+            include_thoughts=include_thoughts,
+            **kwargs
+        )
 
     def _filter_empty_parts(self, messages: List[Message]) -> List[Message]:
         """

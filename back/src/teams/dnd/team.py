@@ -142,12 +142,14 @@ class DnDTeam(Team):
             instructions=instructions,
             members=[self.dm, self.rules, self.secretary, self.party, self.npc, self.narrator],  # Narrator LAST
             tools=[self.dnd_tools],
-            respond_directly=True,  # Member responses go directly to user (Narrator's response = final)
+            respond_directly=False,  # TeamLead orchestrates, only Narrator's final output reaches user
             add_history_to_context=True,
             num_history_runs=3,
             store_tool_messages=False,
             debug_mode=debug_mode,
-            show_members_responses=False,  # Hide internal member responses
-            stream_member_events=False,    # Don't stream internal member events
-            reasoning=True,  # Enable reasoning/thinking for TeamLead
+            show_members_responses=True,   # Show member responses during streaming
+            stream_member_events=True,     # Stream member agent events
+            enable_agentic_context=True,   # Better orchestration context
+            # NOTE: reasoning=True is incompatible with Gemini function calling!
+            # It causes: "Function calling with a response mime type: 'application/json' is unsupported"
         )

@@ -65,7 +65,22 @@ class TeamFactory:
             model_id = command_desc.get('model') or getattr(self.model, 'id', None) or 'gemini-2.0-flash'
             logger.info("[WS] DnDTeam using model: %s", model_id)
             api_key = os.getenv("GOOGLE_API_KEY")
-            safe_model = SafeGemini(id=model_id, api_key=api_key)
+            
+            # Enable native Gemini 2.5 thinking (compatible with function calling!)
+            # This uses Gemini's native thinkingBudget, NOT agno's manual Chain-of-Thought
+            thinking_budget = None
+            include_thoughts = False
+            if "2.5" in model_id or "3-" in model_id:
+                thinking_budget = 1024  # Moderate thinking budget for D&D
+                include_thoughts = True
+                logger.info("[WS] Enabled native Gemini thinking: budget=%d", thinking_budget)
+            
+            safe_model = SafeGemini(
+                id=model_id, 
+                api_key=api_key,
+                thinking_budget=thinking_budget,
+                include_thoughts=include_thoughts
+            )
             
             team = DnDTeam(
                 model=safe_model,
