@@ -8,10 +8,11 @@ import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ThemeColors } from '../../../themes/types';
 import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { ToolCallsSection } from '../message/ToolCalls';
+import { ToolCallsSection, SingleToolCall, ReasoningBlock, MemberResponseBlock } from '../message/ToolCalls';
 import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
+import { ContentPart } from '../message/models';
 import { styles as messageStyles } from '../message/styles';
 import { useChat } from '../context';
 
@@ -49,6 +50,71 @@ function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
                 )}
             </View>
         </View>
+    );
+}
+
+// Render content parts (text + inline tool calls + reasoning + member responses)
+function ContentPartsRenderer({ parts, onLongPress, markdownStyles }: { parts: ContentPart[], onLongPress: (text: string) => void, markdownStyles: any }) {
+    const { showToolCalls, showReasoning, showMemberResponses } = useChat();
+
+    // Filter parts based on display settings
+    const filteredParts = useMemo(() => {
+        return parts.filter(part => {
+            if (part.type === 'tool_call' && !showToolCalls) return false;
+            if (part.type === 'reasoning' && !showReasoning) return false;
+            if ((part as any).type === 'member_response' && !showMemberResponses) return false;
+            return true;
+        });
+    }, [parts, showToolCalls, showReasoning, showMemberResponses]);
+
+    // Merge consecutive text parts for proper markdown rendering
+    const mergedParts = useMemo(() => {
+        const result: ContentPart[] = [];
+        for (const part of filteredParts) {
+            if (part.type === 'text') {
+                const last = result[result.length - 1];
+                if (last && last.type === 'text') {
+                    // Merge with previous text part
+                    last.text = (last.text || '') + (part.text || '');
+                } else {
+                    // Create new text part (copy to avoid mutation)
+                    result.push({ type: 'text', text: part.text || '' });
+                }
+            } else {
+                result.push(part);
+            }
+        }
+        return result;
+    }, [filteredParts]);
+
+    return (
+        <>
+            {mergedParts.map((part, index) => {
+                if (part.type === 'text') {
+                    return (
+                        <Pressable
+                            key={`text-${index}`}
+                            onLongPress={() => onLongPress(part.text)}
+                            delayLongPress={250}
+                            style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+                        >
+                            <Markdown style={markdownStyles as any}>
+                                {part.text || ''}
+                            </Markdown>
+                        </Pressable>
+                    );
+                } else if (part.type === 'tool_call') {
+                    return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
+                } else if (part.type === 'reasoning') {
+                    return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
+                } else if ((part as any).type === 'member_response') {
+                    // Team member response
+                    const memberPart = part as any;
+                    return <MemberResponseBlock key={`member-${index}`} agentName={memberPart.agent_name} text={memberPart.text} />;
+                }
+                return null;
+            })}
+        </>
     );
 }
 
@@ -278,6 +344,37 @@ export function useGiftedChatRenderers({
 
         const userMessageText = props.currentMessage?.text || '';
 
+        // Handle Content Parts (inline rendering for reasoning, tool calls, member responses)
+        if (props.currentMessage?.content_parts && props.currentMessage.content_parts.length > 0) {
+            return (
+                <View>
+                    {showAttachmentsInside && renderAttachments()}
+                    <ContentPartsRenderer
+                        parts={props.currentMessage.content_parts}
+                        onLongPress={handleTextLongPress}
+                        markdownStyles={markdownStyles}
+                    />
+                    <MessageActions
+                        actions={props.currentMessage?.actions}
+                        theme={theme}
+                        onActionPress={(action) => {
+                            if (action.url) {
+                                Linking.openURL(action.url).catch(err => console.error("Failed to open URL:", err));
+                            } else if (action.prompt) {
+                                onSend(action.prompt);
+                            } else {
+                                console.log('Action pressed:', action);
+                                if (onMessageAction && props.currentMessage?._id) {
+                                    onMessageAction(String(props.currentMessage._id), action);
+                                }
+                            }
+                        }}
+                    />
+                </View>
+            );
+        }
+
+        // Fallback to standard text + grouped tool calls (legacy)
         if (!isAssistant) {
             return (
                 <View>
@@ -346,7 +443,7 @@ export function useGiftedChatRenderers({
                         }
                     }}
                 />
-            </View > // Note: keeping View same but updating content
+            </View >
         );
     }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend, onMessageAction, showToolCalls]);
 
