@@ -263,6 +263,16 @@ export function useGiftedChatRenderers({
         const toolCalls = props.currentMessage?.tool_calls;
         const contentParts = props.currentMessage?.content_parts;
 
+        // Debug actions visibility
+        if (props.currentMessage?.actions) {
+            console.log('[useGiftedChatRenderers] Message has actions:', {
+                id: props.currentMessage.id || props.currentMessage._id,
+                actionsLen: props.currentMessage.actions.length,
+                hasContentParts: !!contentParts,
+            });
+        }
+
+
         const attachments = props.currentMessage?.attachments;
         const hasAttachments = attachments && attachments.length > 0;
         const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
