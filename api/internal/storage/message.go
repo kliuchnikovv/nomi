@@ -152,6 +152,7 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 		ChatID:    message.ChatID,
 		Role:      chat.Role(message.Role),
 		Text:      message.Text,
+		Reasoning: message.Reasoning,
 		Sender:    message.UserID,
 		Model:     message.Model,
 		CreatedAt: message.CreatedAt,
@@ -183,6 +184,36 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 		var contentParts interface{}
 		if err := json.Unmarshal(message.ContentParts, &contentParts); err == nil {
 			result.ContentParts = contentParts
+		}
+	}
+
+	// Backfill reasoning into ContentParts if missing but present in Reasoning column
+	if message.Reasoning != "" {
+		hasReasoning := false
+		if parts, ok := result.ContentParts.([]interface{}); ok {
+			for _, p := range parts {
+				if partMap, ok := p.(map[string]interface{}); ok {
+					if partMap["type"] == "reasoning" {
+						hasReasoning = true
+						break
+					}
+				}
+			}
+			if !hasReasoning {
+				// Append reasoning part
+				result.ContentParts = append(parts, map[string]interface{}{
+					"type":      "reasoning",
+					"reasoning": message.Reasoning,
+				})
+			}
+		} else if result.ContentParts == nil {
+			// Create new ContentParts with reasoning
+			result.ContentParts = []interface{}{
+				map[string]interface{}{
+					"type":      "reasoning",
+					"reasoning": message.Reasoning,
+				},
+			}
 		}
 	}
 
