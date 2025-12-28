@@ -38,32 +38,39 @@ class DnDTeam(Team):
             
             **Your Workflow for EVERY player message:**
             
-            1. **Gather Scene Info**: `delegate_task_to_member("DungeonMaster", "describe what happens when...")`
-            2. **Check Rules** (if needed): `delegate_task_to_member("RulesLawyer", "what check is needed?")`
+            1. **Gather Scene Info**: `delegate_task_to_member("dungeonmaster", "describe what happens when...")`
+            2. **Check Rules** (if needed): `delegate_task_to_member("ruleslawyer", "what check is needed?")`
             3. **Roll Dice** (if needed): `roll_dice("1d20+5")`
             4. **Determine Actions**: Decide 3-5 logical next actions for the player
             5. **Call suggest_actions**: `suggest_actions(["Action 1", "Action 2", "Action 3"])`
-            6. **FINAL STEP - ALWAYS**: `delegate_task_to_member("Narrator", <compiled_info>)`
+            6. **FINAL STEP - ALWAYS**: `delegate_task_to_member("narrator", <compiled_info>)`
                - Pass all the narrative info to Narrator
                - Narrator will produce the final player-facing output
             
             **Critical Rules:**
-            - You MUST call `suggest_actions` BEFORE delegating to Narrator
-            - You MUST end with `delegate_task_to_member("Narrator", ...)` - this is what the player sees
-            - YOUR direct text output is NOT shown to the player, only Narrator's is
-            - Compile a summary for Narrator including: scene description, action results, any dialogue
+            - You MUST call `suggest_actions` BEFORE delegating to narrator
+            - You MUST end with `delegate_task_to_member("narrator", ...)` - this is what the player sees
+            - YOUR direct text output is NOT shown to the player, only narrator's is
+            - Compile a summary for narrator including: scene description, action results, any dialogue
+            
+            **Member IDs (use lowercase):**
+            - `dungeonmaster` - Scene descriptions, NPCs, world details
+            - `ruleslawyer` - Rules, dice rolls, checks
+            - `secretary` - Game state management
+            - `partyagent` - NPC party members
+            - `narrator` - Final player-facing output (ALWAYS call last!)
             
             **Available Tools:**
-            - `delegate_task_to_member(member, task)` - Get info from team members
+            - `delegate_task_to_member(member_id, task)` - Get info from team members (use lowercase IDs!)
             - `roll_dice(expression)` - Roll dice like "1d20+5"
             - `load_state(key)` / `save_state(key, value)` - Game state
             - `suggest_actions(actions)` - Show action buttons to player
             
             **Example Turn:**
-            1. delegate_task_to_member("DungeonMaster", "Player enters the cave. Describe the scene.")
+            1. delegate_task_to_member("dungeonmaster", "Player enters the cave. Describe the scene.")
             2. roll_dice("1d20") → Result: 15
             3. suggest_actions(["Исследовать пещеру", "Зажечь факел", "Прислушаться"])
-            4. delegate_task_to_member("Narrator", "Scene: dark cave, dripping water, player rolled 15 Perception. Actions suggested. Write immersive narrative in Russian.")
+            4. delegate_task_to_member("narrator", "Scene: dark cave, dripping water, player rolled 15. Write immersive narrative in Russian.")
         """)
 
         # Create tools BEFORE super().__init__ so they're available at initialization
