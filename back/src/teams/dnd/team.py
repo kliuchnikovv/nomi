@@ -6,7 +6,7 @@ from agno.models.base import Model
 from agno.team import Team
 from agno.db import BaseDb
 
-from .agents import create_dm_agent, create_rules_agent, create_secretary_agent, create_party_agent, create_npc_agent, create_narrator_agent
+from .agents import create_rules_agent, create_secretary_agent, create_party_agent, create_npc_agent, create_narrator_agent
 from .tools import DnDTools, MemberTools
 
 class DnDTeam(Team):
@@ -34,7 +34,7 @@ class DnDTeam(Team):
 
         # TeamLead instructions - focus on orchestration, delegate to Narrator last
         instructions = dedent("""
-            You are the **Orchestrator** of the D&D team. You coordinate everything, but YOU ARE NOT THE NARRATOR.
+            You are the **Orchestrator** of the D&D team. You coordinate everything and then delegate to the Narrator.
             
             ## AGENT CALL ORDER (follow this sequence every turn)
             
@@ -43,43 +43,40 @@ class DnDTeam(Team):
             - SKIP if: Continuing same scene, no state needed
             - `delegate_task_to_member("secretary", "load game state: party, location, active quests")`
             
-            ### Step 2: DUNGEONMASTER - Scene & Narrative
-            - ALWAYS CALL: Describes what happens based on player action
-            - `delegate_task_to_member("dungeonmaster", "Player does X. Describe the result and scene.")`
-            
-            ### Step 3: RULESLAWYER - Rules Check (conditional)
+            ### Step 2: RULESLAWYER - Rules Check (conditional)
             - CALL if: Action needs dice roll, skill check, attack, saving throw
             - SKIP if: Pure roleplay, exploration without risk, dialogue
             - `delegate_task_to_member("ruleslawyer", "Player attempts X. What check is needed? Set DC.")`
             
-            ### Step 4: DICE ROLL - Player Action! 🎲
+            ### Step 3: DICE ROLL - Player Action! 🎲
             - If RulesLawyer says a check is needed, DO NOT roll automatically!
             - Instead, STOP HERE and offer player a dice roll button
             - Include the roll in suggest_actions: "🎲 Бросить кубик (Ловкость +3)"
             - When player clicks the roll button, THEN call `roll_dice("1d20+3")`
             - After roll, continue with remaining steps
             
-            ### Step 5: NPCAGENT - World NPC Actions (conditional)
+            ### Step 4: NPCAGENT - World NPC Actions (conditional)
             - CALL if: Combat with enemies, talking to merchants/quest givers, NPC reactions
             - SKIP if: No world NPCs in scene, pure exploration
             - `delegate_task_to_member("npcagent", "Enemy goblins see player failed stealth. What do they do?")`
             
-            ### Step 6: PARTYAGENT - Companion Actions (conditional)
+            ### Step 5: PARTYAGENT - Companion Actions (conditional)
             - CALL if: Player has companions who would act/react
             - SKIP if: Player is alone, companions are not relevant to scene
             - `delegate_task_to_member("partyagent", "The rogue companion sees combat starting. What does she do?")`
             
-            ### Step 7: SECRETARY - Save State Changes (if needed)
+            ### Step 6: SECRETARY - Save State Changes (if needed)
             - CALL if: Important state changes (HP, inventory, quest progress, location change)
-            - SKIP if: No significant state changes
+            - SKIP if: No state changes to save yet
             - `delegate_task_to_member("secretary", "Save: player now at 15 HP, gained gold pouch, entered dungeon")`
             
-            ### Step 8: NARRATOR - Final Output
-            - ALWAYS CALL as the last agent before presenting options
-            - Narrator translates/formats DM output for the player in Russian
-            - `delegate_task_to_member("narrator", "Present the scene in Russian: [scene description]")`
+            ### Step 7: NARRATOR - Scene & Final Output (MANDATORY)
+            - **ALWAYS CALL THIS!** The Narrator is the DM and Storyteller.
+            - Provide all context (diceroll results, NPC actions, rules).
+            - Ask Narrator to describe the scene in Russian.
+            - `delegate_task_to_member("narrator", "Player attack hit (18 vs AC 12). Goblins invoke nimble escape. Describe scene in Russian.")`
             
-            ### Step 9: SUGGEST ACTIONS - Player Options (⛔ FINAL STEP!)
+            ### Step 8: SUGGEST ACTIONS - Player Options (⛔ FINAL STEP!)
             - ALWAYS CALL as the VERY LAST action of your turn
             - `suggest_actions(["Option 1", "Option 2", "Option 3"])` - 3-5 contextual options
             - If dice roll is needed: `suggest_actions(["🎲 Бросить кубик (Ловкость +3)"])`
@@ -104,7 +101,7 @@ class DnDTeam(Team):
             | secretary (save) | No state changes |
             
             ## Member IDs (lowercase!)
-            `dungeonmaster`, `ruleslawyer`, `secretary`, `partyagent`, `npcagent`, `narrator`
+            `narrator`, `ruleslawyer`, `secretary`, `partyagent`, `npcagent`
             
             ## Available Tools
             - `delegate_task_to_member(member_id, task)`
@@ -134,15 +131,16 @@ class DnDTeam(Team):
         self.member_tools = MemberTools(room_id=room_id)
         
         # Initialize agents
-        self.dm = create_dm_agent(model)  # Main narrative generator
+        # self.dm removed - merged into narrator
         self.rules = create_rules_agent(model)  # D&D 5e rules expert
         self.secretary = create_secretary_agent(model)  # State manager
         self.party = create_party_agent(model)  # NPC companions in the party
         self.npc = create_npc_agent(model)  # World NPCs: enemies, merchants, quest givers
-        self.narrator = create_narrator_agent(model)  # Narrator is the final output
+        self.narrator = create_narrator_agent(model)  # Narrator is the final output + DM
         
         # Add MemberTools to members (no suggest_actions - only roll_dice, save/load_state)
-        for member in [self.dm, self.rules, self.secretary, self.party, self.npc, self.narrator]:
+        # removed self.dm
+        for member in [self.rules, self.secretary, self.party, self.npc, self.narrator]:
             if not hasattr(member, 'tools') or member.tools is None:
                 member.tools = []
             member.tools.append(self.member_tools)
@@ -153,7 +151,7 @@ class DnDTeam(Team):
             session_id=session_id,
             description=description,
             instructions=instructions,
-            members=[self.dm, self.rules, self.secretary, self.party, self.npc, self.narrator],  # Narrator LAST
+            members=[self.rules, self.secretary, self.party, self.npc, self.narrator],  # Narrator LAST, DM removed
             tools=[self.dnd_tools],
             respond_directly=False,  # TeamLead orchestrates, only Narrator's final output reaches user
             add_history_to_context=True,

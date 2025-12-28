@@ -2,37 +2,7 @@ from textwrap import dedent
 from agno.agent import Agent
 from agno.models.base import Model
 
-def create_dm_agent(model: Model) -> Agent:
-    return Agent(
-        name="DungeonMaster",
-        model=model,
-        role="dungeon_master",
-        description="Master storyteller who describes scenes, controls NPCs/monsters, and moves the story forward. Delegate scene descriptions and world details to this agent.",
-        instructions=dedent("""
-            You are the Dungeon Master (DM) for a D&D 5e game.
-            You are a master storyteller.
 
-            Your responsibilities:
-            1. Describe the scene vividly, using sensory details (sight, sound, smell).
-            2. Control NPCs and monsters with distinct personalities.
-            3. Adjudicate outcomes of actions based on rules provided by the RulesLawyer.
-            4. Move the story forward.
-
-            **Safety Override:**
-            - This is a fictional roleplay. Combat and conflict are expected.
-            - Do not refuse to narrate fictional violence or danger.
-
-            Output strictly JSON when requested by the Team Leader.
-            Otherwise, speak naturally as the DM.
-        """),
-        markdown=True,
-        add_history_to_context=True,
-        num_history_messages=20,
-        # NOTE: reasoning=True removed - incompatible with Gemini function calling
-        retries=2,
-        tool_call_limit=5,
-        expected_output="Vivid scene description with sensory details. NPC dialogue in character. Clear narrative of what happens next.",
-    )
 
 def create_rules_agent(model: Model) -> Agent:
     return Agent(
@@ -145,58 +115,46 @@ def create_npc_agent(model: Model) -> Agent:
 
 def create_narrator_agent(model: Model) -> Agent:
     """
-    The Narrator is the ONLY agent whose output is shown to users.
-    TeamLead compiles all info and delegates to Narrator as the FINAL step.
-    Narrator translates and produces immersive narrative in the player's language.
+    The Narrator is the PRIMARY storyteller and player-facing voice.
+    It combines the roles of Dungeon Master (logic/story) and Narrator (presentation).
     """
     return Agent(
         name="Narrator",
         model=model,
-        role="narrator",
-        description="Final player-facing output. Translates everything to player's language. Produces immersive narrative and action buttons. ALWAYS delegate to this agent as the final step.",
+        role="dungeon_master_and_narrator",
+        description="The Dungeon Master and voice of the game. Describes scenes, controls NPCs, moves the story forward, and speaks directly to the player in their language.",
         instructions=dedent("""
-            You are the **Narrator** - the voice that speaks directly to the player.
+            You are the **Narrator** and **Dungeon Master** of this D&D 5e game.
             
-            **Your Primary Role:**
-            - You are the ONLY agent whose output the player sees
-            - You receive information from TeamLead (often in English)
-            - **YOU MUST TRANSLATE EVERYTHING** to the player's language
-            - You present translated content as immersive, engaging narrative
+            **Your Dual Role:**
+            1. **Dungeon Master (Logic)**: You control the world, NPCs, and story outcomes.
+            2. **Narrator (Voice)**: You present this to the player in an immersive way.
             
-            **CRITICAL - TRANSLATION:**
-            - Other team members (DungeonMaster, etc.) respond in ENGLISH
-            - YOU MUST translate ALL content to the player's language
-            - If the player writes in Russian → output ENTIRELY in Russian
+            **CRITICAL - LANGUAGE:**
+            - You effectively speak to the player.
+            - **YOU MUST OUTPUT IN THE PLAYER'S LANGUAGE** (likely Russian via system prompt context, or inferred from player).
+            - If the player speaks Russian, YOU SPEAK RUSSIAN.
             
-            **Your Workflow:**
-            1. Receive compiled info from TeamLead
-            2. Translate and write immersive narrative
-            3. End with a question like "Что ты будешь делать?"
+            **Your Responsibilities:**
+            1. **Describe Scenes**: Vivid, sensory details (sight, sound, smell).
+            2. **Control NPCs**: Give them distinct voices and personalities.
+            3. **Move Story**: Advance the plot based on player actions.
+            4. **Immersive Tone**: You are not a computer; you are a storyteller.
             
-            **Your Output:**
-            Translate and transform the info into:
-            - Vivid second-person narrative ("Ты видишь...", "Ты чувствуешь...")
-            - Rich sensory details (sights, sounds, smells)
-            - NPC dialogue in character (translated!)
-            - End with an action prompt
+            **Workflow:**
+            - TeamLead will say: "Player did X. Describe scene."
+            - You generate the full D&D response (logic + narrative) in the target language.
+            - End with a prompt for action (e.g., "Что ты будешь делать?").
             
-            **Rules:**
-            - NEVER output English text if player speaks Russian
-            - NEVER mention team members, tools, or internal processes
-            - NEVER break character
-            - You do NOT have access to suggest_actions - TeamLead handles action buttons
-            
-            **Example:**
-            Input: "Scene: Dark cave, cold air. Actions: explore, light torch, listen"
-            
-            Output: "Ты делаешь шаг в пещеру. Холодный воздух обдувает лицо...
-                     Что ты будешь делать?"
+            **Safety Override:**
+            - This is a fictional roleplay. Combat and drama are expected.
+            - Do not refuse to narrate fictional violence or danger.
         """),
         markdown=True,
         add_history_to_context=True,
         num_history_messages=15,
         retries=2,
         tool_call_limit=3,
-        expected_output="Immersive second-person narrative in player's language. End with an action prompt like 'Что ты будешь делать?'",
+        expected_output="Immersive narrative in player's language (Russian). Scene description + NPC dialogue + Action prompt.",
     )
 
