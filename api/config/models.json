@@ -66,7 +66,7 @@
       "supports_thinking": false
     },
     {
-      "id": "gemini-3.0-pro-preview",
+      "id": "gemini-3-pro-preview",
       "name": "Gemini 3 Pro Preview",
       "provider": "google",
       "description": "Next generation Gemini 3 Pro model (Preview)",
@@ -79,7 +79,7 @@
       "supports_thinking": true
     },
     {
-      "id": "gemini-3.0-flash-preview",
+      "id": "gemini-3-flash-preview",
       "name": "Gemini 3 Flash Preview",
       "provider": "google",
       "description": "Next generation Gemini 3 Flash model (Preview)",
