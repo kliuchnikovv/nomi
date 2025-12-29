@@ -51,10 +51,10 @@ class DnDTeam(Team):
             
             ### Step 3: DICE ROLL - Player Action! 🎲
             - If RulesLawyer says a check is needed, DO NOT roll automatically!
-            - Instead, STOP HERE and offer player a dice roll button
-            - Include the roll in suggest_actions: "🎲 Бросить кубик (Ловкость +3)"
-            - When player clicks the roll button, THEN call `roll_dice("1d20+3", dc=15)`
-            - After roll, continue with remaining steps
+            - Instead, STOP HERE and call `roll_dice("1d20+3", dc=15)`
+            - This will prompt the user to roll physically/digitally
+            - WAIT for the user's response message with the result (e.g. "🎲 Result: 18")
+            - After receiving result, continue with remaining steps
             
             ### Step 4: NPCAGENT - World NPC Actions (conditional)
             - CALL if: Combat with enemies, talking to merchants/quest givers, NPC reactions
@@ -106,7 +106,7 @@ class DnDTeam(Team):
             
             ## Available Tools
             - `delegate_task_to_member(member_id, task)`
-            - `roll_dice(expression, dc=None)` - e.g. "1d20+5", dc=15. Always provide DC for checks!
+            - `roll_dice(expression, dc=None)` - Signals user to roll. Stop and wait for result.
             - `load_state(key)` / `save_state(key, value)`
             - `suggest_actions(actions)` - list of 3-5 options
             

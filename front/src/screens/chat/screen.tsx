@@ -84,7 +84,8 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
 
     // Dice Roll Logic
     const [diceOverlayVisible, setDiceOverlayVisible] = useState(false);
-    const [diceData, setDiceData] = useState<any>(null);
+    const [diceExpression, setDiceExpression] = useState<string | null>(null);
+    const [diceDC, setDiceDC] = useState<number | null>(null);
     // Track processed roll IDs to avoid showing the same roll twice
     const [processedRolls, setProcessedRolls] = useState<Set<string>>(new Set());
 
@@ -98,7 +99,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             for (const tool of lastMsg.tool_calls) {
                 if (tool.tool?.name === 'roll_dice' && !processedRolls.has(lastMsg.id)) {
                     // Try to parse result
-                    let resultData = null;
+                    let resultData: any = null;
                     if (tool.tool.result) {
                         try {
                             if (typeof tool.tool.result === 'string') {
@@ -108,18 +109,13 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                             }
                         } catch (e) {
                             console.warn('Failed to parse dice result', e);
-                            resultData = {
-                                __dice_roll__: true,
-                                total: parseInt(tool.tool.result?.split('=')?.pop()?.trim() || '0'),
-                                expression: tool.tool.arguments?.expression || '?',
-                                rolls: []
-                            };
                         }
                     }
 
-                    if (resultData && resultData.__dice_roll__) {
-                        console.log('Triggering dice overlay', resultData);
-                        setDiceData(resultData);
+                    if (resultData && resultData.__client_action__ === 'roll_dice') {
+                        console.log('Triggering client dice roll action', resultData);
+                        setDiceExpression(resultData.expression);
+                        setDiceDC(resultData.dc);
                         setDiceOverlayVisible(true);
                         setProcessedRolls(prev => new Set(prev).add(lastMsg.id));
                         break;
@@ -129,10 +125,16 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         }
     }, [messages, processedRolls]);
 
-    const handleDiceComplete = useCallback(() => {
+    const handleDiceComplete = useCallback((resultMessage: string) => {
         setDiceOverlayVisible(false);
-        setDiceData(null);
-    }, []);
+        setDiceExpression(null);
+        setDiceDC(null);
+
+        // Send the result back to the chat as a user message
+        if (resultMessage) {
+            sendMessage(resultMessage);
+        }
+    }, [sendMessage]);
 
 
 
@@ -568,8 +570,10 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             />
             <DiceRollOverlay
                 visible={diceOverlayVisible}
-                data={diceData}
+                expression={diceExpression}
+                dc={diceDC}
                 onComplete={handleDiceComplete}
+                onClose={() => setDiceOverlayVisible(false)}
             />
         </View>
     );

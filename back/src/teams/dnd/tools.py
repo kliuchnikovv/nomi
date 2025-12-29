@@ -29,35 +29,19 @@ class DnDTools(Toolkit):
 
     def roll_dice(self, expression: str, dc: int = None) -> str:
         """
-        Rolls dice based on an expression like '1d20+5' or '2d6'.
-        Returns a structured JSON result for the frontend to visualize.
+        Signals the frontend to prompt the user for a dice roll.
+        The result will be calculated on the client and sent back as a message.
         
         Args:
             expression: The dice expression, e.g., "1d20+3", "2d6".
             dc: Optional Difficulty Class. If provided, the frontend can show Success/Failure.
         """
-        import random
-        import re
-
-        # Simple parser for XdY+Z
-        match = re.match(r'(\d+)d(\d+)([\+\-]\d+)?', expression)
-        if not match:
-            return json.dumps({"error": f"Invalid dice expression: {expression}"})
-
-        count = int(match.group(1))
-        sides = int(match.group(2))
-        modifier = int(match.group(3)) if match.group(3) else 0
-
-        rolls = [random.randint(1, sides) for _ in range(count)]
-        total = sum(rolls) + modifier
-
-        # Construct structured result for visual frontend
+        import json
+        
+        # We don't roll here anymore. We ask the client to roll.
         result = {
-            "__dice_roll__": True,
+            "__client_action__": "roll_dice",
             "expression": expression,
-            "rolls": rolls,
-            "modifier": modifier,
-            "total": total,
             "dc": dc
         }
         

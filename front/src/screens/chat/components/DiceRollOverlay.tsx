@@ -21,29 +21,31 @@ import Svg, { Polygon, Text as SvgText } from 'react-native-svg';
 
 const { width, height } = Dimensions.get('window');
 
-interface DiceRollResult {
-    __dice_roll__: boolean;
-    rolls: number[];
-    total: number;
-    modifier: number;
-    dc?: number;
-    expression: string;
-}
-
 interface DiceRollOverlayProps {
     visible: boolean;
-    data: DiceRollResult | null;
-    onComplete: () => void;
+    expression: string | null;
+    dc?: number | null;
+    onComplete: (resultMessage: string) => void;
+    onClose: () => void;
+}
+
+interface RollResult {
+    total: number;
+    rolls: number[];
+    modifier: number;
+    success?: boolean;
 }
 
 export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
     visible,
-    data,
+    expression,
+    dc,
     onComplete,
+    onClose,
 }) => {
     const [step, setStep] = useState<'prompt' | 'rolling' | 'result'>('prompt');
     const [displayNumber, setDisplayNumber] = useState<number | string>('?');
-    const [showSuccess, setShowSuccess] = useState<boolean | null>(null);
+    const [result, setResult] = useState<RollResult | null>(null);
 
     // Animations
     const scale = useSharedValue(0.8);
@@ -52,21 +54,48 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
     const opacity = useSharedValue(0);
 
     useEffect(() => {
-        if (visible && data) {
+        if (visible && expression) {
             // Reset state on open
             setStep('prompt');
             setDisplayNumber('?');
-            setShowSuccess(null);
+            setResult(null);
             scale.value = withSpring(1);
             opacity.value = withTiming(1);
             rotation.value = 0;
         } else {
             opacity.value = 0;
         }
-    }, [visible, data]);
+    }, [visible, expression]);
+
+    const parseAndRoll = (expr: string): RollResult => {
+        // Simple parser for XdY+Z
+        const match = expr.match(/(\d+)d(\d+)([\+\-]\d+)?/);
+
+        let count = 1;
+        let sides = 20;
+        let modifier = 0;
+
+        if (match) {
+            count = parseInt(match[1], 10);
+            sides = parseInt(match[2], 10);
+            modifier = match[3] ? parseInt(match[3], 10) : 0;
+        } else {
+            console.warn("Invalid dice expression, defaulting to 1d20");
+        }
+
+        const rolls = [];
+        for (let i = 0; i < count; i++) {
+            rolls.push(Math.floor(Math.random() * sides) + 1);
+        }
+
+        const total = rolls.reduce((a, b) => a + b, 0) + modifier;
+        const isSuccess = dc ? total >= dc : undefined;
+
+        return { total, rolls, modifier, success: isSuccess };
+    };
 
     const handleRoll = () => {
-        if (!data) return;
+        if (!expression) return;
         setStep('rolling');
 
         // Animation: Shake and rotate
@@ -76,6 +105,10 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
             withTiming(0.9, { duration: 200 }),
             withTiming(1.1, { duration: 200 })
         );
+
+        // Pre-calculate result
+        const rollResult = parseAndRoll(expression);
+        setResult(rollResult);
 
         // Simulate cycling numbers
         let interval: any;
@@ -87,37 +120,32 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
             count++;
             if (count > cycles) {
                 clearInterval(interval);
-                finishRoll();
+                finishRoll(rollResult);
             }
         }, 100);
     };
 
-    const finishRoll = () => {
-        if (!data) return;
-
+    const finishRoll = (finalResult: RollResult) => {
         // Stop rotation and settle
         rotation.value = 0;
         scale.value = withSpring(1.5, { stiffness: 200, damping: 10 });
 
         setStep('result');
-        setDisplayNumber(data.total);
-
-        // Determine success/failure
-        if (data.dc) {
-            setShowSuccess(data.total >= data.dc);
-        }
-
-        // Auto close after result? Maybe wait for user to click "Close" or "Continue"
-        // Let's settle and then wait a bit or let user dismiss
-        setTimeout(() => {
-            // Optional: visual flair for success/fail
-        }, 500);
+        setDisplayNumber(finalResult.total);
     };
 
-    const handleClose = () => {
+    const handleContinue = () => {
+        if (!result || !expression) return;
+
+        // Construct result message
+        // "🎲 Result: 18 (Rolls: [15] + Mod: 3)"
+        const rollsStr = `[${result.rolls.join(', ')}]`;
+        const modStr = result.modifier >= 0 ? `+${result.modifier}` : `${result.modifier}`;
+        const msg = `🎲 Result: ${result.total} (Rolls: ${rollsStr} ${modStr}${dc ? `, DC: ${dc}` : ''})`;
+
         opacity.value = withTiming(0, { duration: 300 }, (finished) => {
             if (finished) {
-                runOnJS(onComplete)();
+                runOnJS(onComplete)(msg);
             }
         });
     };
@@ -164,15 +192,15 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
                     {/* Header Text */}
                     {step === 'prompt' && <Text style={styles.title}>Dice Check Required</Text>}
                     {step === 'rolling' && <Text style={styles.title}>Rolling...</Text>}
-                    {step === 'result' && (
-                        <Text style={[styles.title, showSuccess === true ? styles.success : showSuccess === false ? styles.failure : {}]}>
-                            {showSuccess === true ? 'SUCCESS!' : showSuccess === false ? 'FAILURE!' : 'RESULT'}
+                    {step === 'result' && result && (
+                        <Text style={[styles.title, result.success === true ? styles.success : result.success === false ? styles.failure : {}]}>
+                            {result.success === true ? 'SUCCESS!' : result.success === false ? 'FAILURE!' : 'RESULT'}
                         </Text>
                     )}
 
                     {/* DC info */}
-                    {data?.dc && step !== 'result' && (
-                        <Text style={styles.subtitle}>Difficulty Class: {data.dc}</Text>
+                    {dc && step !== 'result' && (
+                        <Text style={styles.subtitle}>Difficulty Class: {dc}</Text>
                     )}
 
                     {/* The Dice */}
@@ -197,7 +225,7 @@ export const DiceRollOverlay: React.FC<DiceRollOverlayProps> = ({
                     )}
 
                     {step === 'result' && (
-                        <TouchableOpacity style={styles.button} onPress={handleClose}>
+                        <TouchableOpacity style={styles.button} onPress={handleContinue}>
                             <Text style={styles.buttonText}>CONTINUE</Text>
                         </TouchableOpacity>
                     )}

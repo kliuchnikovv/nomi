@@ -730,7 +730,9 @@ class LLMWebSocketSession:
                 logger.info("[AGNO] Event type: %s", event_type)
                 if hasattr(ev, '__dict__'):
                     for key, value in ev.__dict__.items():
-                        val_str = str(value)[:500] if value else "None"
+                        if not value:
+                            continue
+                        val_str = str(value)[:500]
                         logger.info("[AGNO]   .%s = %s", key, val_str)
                 
                 # Check if this is a member agent event (not the leader)
