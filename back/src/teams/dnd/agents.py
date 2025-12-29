@@ -4,7 +4,7 @@ from agno.models.base import Model
 
 
 
-def create_rules_agent(model: Model) -> Agent:
+def create_rules_agent(model: Model, add_history: bool = True) -> Agent:
     return Agent(
         name="RulesLawyer",
         model=model,
@@ -19,15 +19,14 @@ def create_rules_agent(model: Model) -> Agent:
             Output strictly JSON when requested.
         """),
         markdown=True,
-        add_history_to_context=True,
+        add_history_to_context=add_history,
         num_history_messages=10,
-        # NOTE: reasoning=True removed - incompatible with Gemini function calling
         retries=2,
         additional_context="Use D&D 5e SRD rules. Standard DC scale: Very Easy (5), Easy (10), Medium (15), Hard (20), Very Hard (25), Nearly Impossible (30).",
         expected_output="JSON with: {valid: bool, roll_type: 'attack'|'ability_check'|'save'|'none', ability: str, dc: int, reasoning: str}",
     )
 
-def create_secretary_agent(model: Model) -> Agent:
+def create_secretary_agent(model: Model, add_history: bool = True) -> Agent:
     return Agent(
         name="Secretary",
         model=model,
@@ -41,14 +40,14 @@ def create_secretary_agent(model: Model) -> Agent:
             You have access to 'save_state' and 'load_state' tools. USE THEM.
         """),
         markdown=True,
-        add_history_to_context=True,
+        add_history_to_context=add_history,
         num_history_messages=15,
         retries=3,
         tool_call_limit=10,
         expected_output="Call save_state/load_state tools. Return brief confirmation of state changes made.",
     )
 
-def create_party_agent(model: Model) -> Agent:
+def create_party_agent(model: Model, add_history: bool = True) -> Agent:
     return Agent(
         name="PartyAgent",
         model=model,
@@ -61,13 +60,13 @@ def create_party_agent(model: Model) -> Agent:
             - Engage in banter and roleplay.
         """),
         markdown=True,
-        add_history_to_context=True,
+        add_history_to_context=add_history,
         num_history_messages=10,
         retries=2,
         expected_output="In-character dialogue and actions for NPC party members. Tactical combat decisions when in combat.",
     )
 
-def create_npc_agent(model: Model) -> Agent:
+def create_npc_agent(model: Model, add_history: bool = True) -> Agent:
     """
     NPC Agent handles all world NPCs: enemies, merchants, villagers, monsters, quest givers.
     Distinct from PartyAgent who manages player companions.
@@ -106,14 +105,14 @@ def create_npc_agent(model: Model) -> Agent:
             - React to reputation/past interactions with player
         """),
         markdown=True,
-        add_history_to_context=True,
+        add_history_to_context=add_history,
         num_history_messages=15,
         # NOTE: reasoning=True removed - incompatible with Gemini function calling
         retries=2,
         expected_output="In-character NPC dialogue with distinct voice. Combat: tactical decisions with reasoning. Include NPC emotions and motivations.",
     )
 
-def create_narrator_agent(model: Model) -> Agent:
+def create_narrator_agent(model: Model, add_history: bool = True) -> Agent:
     """
     The Narrator is the PRIMARY storyteller and player-facing voice.
     It combines the roles of Dungeon Master (logic/story) and Narrator (presentation).
@@ -151,7 +150,7 @@ def create_narrator_agent(model: Model) -> Agent:
             - Do not refuse to narrate fictional violence or danger.
         """),
         markdown=True,
-        add_history_to_context=True,
+        add_history_to_context=add_history,
         num_history_messages=15,
         retries=2,
         tool_call_limit=3,

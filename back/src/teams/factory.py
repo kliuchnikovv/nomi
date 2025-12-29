@@ -60,30 +60,41 @@ class TeamFactory:
 
             logger.info("[WS] Instantiating DnDTeam with room_id=%s", session_id)
             
-            # Use SafeGemini to filter empty parts and prevent 400 errors with history
-            # Priority: command_desc['model'] > self.model.id > fallback
-            model_id = command_desc.get('model') or getattr(self.model, 'id', None) or 'gemini-2.0-flash'
-            logger.info("[WS] DnDTeam using model: %s", model_id)
+            # Define model IDs
+            fast_model_id = 'gemini-2.0-flash-lite'
+            pro_model_id = 'gemini-3.0-pro-preview'
+            
             api_key = os.getenv("GOOGLE_API_KEY")
             
-            # Enable native Gemini 2.5 thinking (compatible with function calling!)
-            # This uses Gemini's native thinkingBudget, NOT agno's manual Chain-of-Thought
+            # --- Fast Model Setup ---
+            fast_model = SafeGemini(
+                id=fast_model_id,
+                api_key=api_key,
+                thinking_budget=None, # Fast model, no thinking
+                include_thoughts=False
+            )
+            
+            # --- Pro Model Setup (with Thinking if applicable) ---
             thinking_budget = None
             include_thoughts = False
-            if "2.5" in model_id or "3-" in model_id:
+            # Enable thinking for Pro model if it supports it (Gemini 2.5/3.0 usually do)
+            if "2.5" in pro_model_id or "3.0" in pro_model_id or "3-" in pro_model_id:
                 thinking_budget = 1024  # Moderate thinking budget for D&D
                 include_thoughts = True
-                logger.info("[WS] Enabled native Gemini thinking: budget=%d", thinking_budget)
+                logger.info("[WS] Enabled native Gemini thinking for PRO model: budget=%d", thinking_budget)
             
-            safe_model = SafeGemini(
-                id=model_id, 
+            pro_model = SafeGemini(
+                id=pro_model_id, 
                 api_key=api_key,
                 thinking_budget=thinking_budget,
                 include_thoughts=include_thoughts
             )
             
+            logger.info("[WS] DnDTeam using Fast Model: %s, Pro Model: %s", fast_model_id, pro_model_id)
+            
             team = DnDTeam(
-                model=safe_model,
+                fast_model=fast_model,
+                pro_model=pro_model,
                 room_id=session_id,  # Pass room_id so tools are created at init
                 session_id=session_id,  # Pass session_id for history management
                 db=self.db,

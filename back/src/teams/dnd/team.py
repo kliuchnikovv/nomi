@@ -12,7 +12,8 @@ from .tools import DnDTools, MemberTools
 class DnDTeam(Team):
     def __init__(
         self,
-        model: Model,
+        fast_model: Model,
+        pro_model: Model,
         room_id: str = "",  # Required for tools
         session_id: str = "",  # Required for history management
         db: BaseDb | None = None,
@@ -131,12 +132,20 @@ class DnDTeam(Team):
         self.member_tools = MemberTools(room_id=room_id)
         
         # Initialize agents
-        # self.dm removed - merged into narrator
-        self.rules = create_rules_agent(model)  # D&D 5e rules expert
-        self.secretary = create_secretary_agent(model)  # State manager
-        self.party = create_party_agent(model)  # NPC companions in the party
-        self.npc = create_npc_agent(model)  # World NPCs: enemies, merchants, quest givers
-        self.narrator = create_narrator_agent(model)  # Narrator is the final output + DM
+        # RulesLawyer: Fast model, NO history (pure rules lookup)
+        self.rules = create_rules_agent(fast_model, add_history=False)
+        
+        # Secretary: Fast model, WITH history (needs context of what happened)
+        self.secretary = create_secretary_agent(fast_model, add_history=True)
+        
+        # Party: Pro model, WITH history (complex persona)
+        self.party = create_party_agent(pro_model, add_history=True)
+        
+        # NPC: Pro model, WITH history (complex persona)
+        self.npc = create_npc_agent(pro_model, add_history=True)
+        
+        # Narrator: Pro model, WITH history (complex storytelling)
+        self.narrator = create_narrator_agent(pro_model, add_history=True)
         
         # Add MemberTools to members (no suggest_actions - only roll_dice, save/load_state)
         # removed self.dm
@@ -146,7 +155,7 @@ class DnDTeam(Team):
             member.tools.append(self.member_tools)
 
         super().__init__(
-            model=model,
+            model=pro_model,  # TeamLead uses Pro model for orchestration
             db=db,
             session_id=session_id,
             description=description,
