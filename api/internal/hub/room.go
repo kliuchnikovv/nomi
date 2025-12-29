@@ -466,7 +466,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				r.logger.Error("failed to update chat title", zap.Error(err))
 			} else {
 				r.logger.Info("updated chat title", zap.String("new_title", newTitle))
-				
+
 				// Broadcast title update to client
 				broadcast(Frame{
 					ID:        0,
@@ -686,9 +686,9 @@ func (r *Room) handleLLMMessage(frame Frame) {
 									normalizedActions = append(normalizedActions, act)
 								}
 							}
-							
+
 							r.currentMessageMetadata.Actions = normalizedActions
-							r.logger.Info("intercepted suggest_actions, saving normalized actions to metadata", 
+							r.logger.Info("intercepted suggest_actions, saving normalized actions to metadata",
 								zap.Int("count", len(normalizedActions)))
 						}
 					}
@@ -703,6 +703,77 @@ func (r *Room) handleLLMMessage(frame Frame) {
 				zap.String("msg_id", frame.Payload.MessageID.String()),
 				zap.Any("actions", frame.Payload.Actions),
 			)
+		} else if frame.Payload.Type == "reasoning" {
+			// Handle Reasoning
+			// ws.py sends reasoning in 'content' field
+			textDelta := frame.Payload.Content
+			if textDelta == "" {
+				textDelta = frame.Payload.Message // Fallback
+			}
+
+			if textDelta != "" {
+				r.currentMessageMetadata.Reasoning += textDelta
+
+				// Append/Update ContentParts
+				if len(parts) > 0 {
+					lastPart := parts[len(parts)-1].(map[string]interface{})
+					if lastPart["type"] == "reasoning" {
+						lastPart["reasoning"] = lastPart["reasoning"].(string) + textDelta
+						parts[len(parts)-1] = lastPart
+					} else {
+						parts = append(parts, map[string]interface{}{
+							"type":      "reasoning",
+							"reasoning": textDelta,
+						})
+					}
+				} else {
+					parts = append(parts, map[string]interface{}{
+						"type":      "reasoning",
+						"reasoning": textDelta,
+					})
+				}
+				r.currentMessageMetadata.ContentParts = parts
+				shouldUpsert = true
+				r.logger.Debug("accumulating reasoning",
+					zap.String("msg_id", frame.Payload.MessageID.String()),
+					zap.Int("delta_len", len(textDelta)),
+				)
+			}
+		} else if frame.Payload.Type == "member_response" {
+			// Handle Team Member Response
+			// ws.py sends content in 'message' field for member_response
+			textDelta := frame.Payload.Message
+			agentName := frame.Payload.AgentName
+
+			if textDelta != "" {
+				// Append/Update ContentParts
+				if len(parts) > 0 {
+					lastPart := parts[len(parts)-1].(map[string]interface{})
+					if lastPart["type"] == "member_response" && lastPart["agent_name"] == agentName {
+						lastPart["text"] = lastPart["text"].(string) + textDelta
+						parts[len(parts)-1] = lastPart
+					} else {
+						parts = append(parts, map[string]interface{}{
+							"type":       "member_response",
+							"agent_name": agentName,
+							"text":       textDelta,
+						})
+					}
+				} else {
+					parts = append(parts, map[string]interface{}{
+						"type":       "member_response",
+						"agent_name": agentName,
+						"text":       textDelta,
+					})
+				}
+				r.currentMessageMetadata.ContentParts = parts
+				shouldUpsert = true
+				r.logger.Debug("accumulating member response",
+					zap.String("msg_id", frame.Payload.MessageID.String()),
+					zap.String("agent", agentName),
+					zap.Int("delta_len", len(textDelta)),
+				)
+			}
 		} else {
 			// Handle Text
 			textDelta := frame.Payload.Message

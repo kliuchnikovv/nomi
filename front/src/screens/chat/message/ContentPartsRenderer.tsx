@@ -4,7 +4,7 @@ import Markdown from 'react-native-markdown-display';
 import { useChat } from '../context';
 import { ContentPart } from './models';
 import { styles, markdownStyles } from './styles';
-import { SingleToolCall, ReasoningBlock, MemberResponseBlock } from './ToolCalls';
+import { SingleToolCall, ReasoningBlock, MemberResponseBlock, CollapsibleSteps } from './ToolCalls';
 
 export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
     const { showToolCalls, showReasoning, showMemberResponses } = useChat();
@@ -46,13 +46,42 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
         return result;
     }, [filteredParts]);
 
+    // Group parts for rendering: consecutive "internal" parts (tool_call, reasoning, member_response) should be grouped
+    const groupedParts = useMemo(() => {
+        const result: { type: 'group' | 'text', parts?: ContentPart[], part?: ContentPart }[] = [];
+        let currentGroup: ContentPart[] = [];
+
+        const isInternal = (part: ContentPart) => {
+            return part.type === 'tool_call' || part.type === 'reasoning' || (part as any).type === 'member_response';
+        };
+
+        for (const part of mergedParts) {
+            if (isInternal(part)) {
+                currentGroup.push(part);
+            } else {
+                if (currentGroup.length > 0) {
+                    result.push({ type: 'group', parts: [...currentGroup] });
+                    currentGroup = [];
+                }
+                result.push({ type: 'text', part });
+            }
+        }
+        if (currentGroup.length > 0) {
+            result.push({ type: 'group', parts: [...currentGroup] });
+        }
+        return result;
+    }, [mergedParts]);
+
     return (
         <>
-            {mergedParts.map((part, index) => {
-                if (part.type === 'text') {
+            {groupedParts.map((group, groupIndex) => {
+                if (group.type === 'text' && group.part) {
+                    const part = group.part;
+                    // Ensure part is text type for TS
+                    if (part.type !== 'text') return null;
                     return (
                         <Pressable
-                            key={`text-${index}`}
+                            key={`text-${groupIndex}`}
                             onLongPress={() => onLongPress(part.text || '')}
                             delayLongPress={250}
                             style={({ pressed }) => [pressed && { opacity: 0.75 }]}
@@ -62,14 +91,22 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                             </Markdown>
                         </Pressable>
                     );
-                } else if (part.type === 'tool_call') {
-                    return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
-                } else if (part.type === 'reasoning') {
-                    return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
-                } else if ((part as any).type === 'member_response') {
-                    // Team member response
-                    const memberPart = part as any;
-                    return <MemberResponseBlock key={`member-${index}`} agentName={memberPart.agent_name} text={memberPart.text} />;
+                } else if (group.type === 'group' && group.parts) {
+                    return (
+                        <CollapsibleSteps key={`group-${groupIndex}`}>
+                            {group.parts.map((part, index) => {
+                                if (part.type === 'tool_call') {
+                                    return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
+                                } else if (part.type === 'reasoning') {
+                                    return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
+                                } else if ((part as any).type === 'member_response') {
+                                    const memberPart = part as any;
+                                    return <MemberResponseBlock key={`member-${index}`} agentName={memberPart.agent_name} text={memberPart.text} />;
+                                }
+                                return null;
+                            })}
+                        </CollapsibleSteps>
+                    );
                 }
                 return null;
             })}

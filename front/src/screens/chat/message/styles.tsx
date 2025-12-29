@@ -260,6 +260,28 @@ export const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 18,
     },
+    // Collapsible steps styles
+    collapsibleStepsContainer: {
+        marginTop: 8,
+        backgroundColor: withAlpha(palette.gutterGrey, 0.3),
+        borderRadius: 8,
+        overflow: 'hidden',
+    },
+    collapsibleStepsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 10,
+    },
+    collapsibleStepsHeaderText: {
+        color: theme.textSecondary,
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    collapsibleStepsContent: {
+        paddingHorizontal: 10,
+        paddingBottom: 10,
+    },
 });
 
 // Markdown styles - separate from StyleSheet.create() due to custom properties

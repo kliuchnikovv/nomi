@@ -169,3 +169,32 @@ export function MemberResponseBlock({ agentName, text }: { agentName: string; te
         </View>
     );
 }
+
+// Collapsible steps container for grouping internal parts
+export function CollapsibleSteps({ children, defaultExpanded = false }: { children: React.ReactNode, defaultExpanded?: boolean }) {
+    const [expanded, setExpanded] = useState(defaultExpanded);
+
+    return (
+        <View style={styles.collapsibleStepsContainer}>
+            <Pressable
+                onPress={() => setExpanded(!expanded)}
+                style={({ pressed }) => [
+                    styles.collapsibleStepsHeader,
+                    pressed && { opacity: 0.7 },
+                ]}
+            >
+                <Text style={styles.collapsibleStepsHeaderText}>
+                    Details
+                </Text>
+                <Text style={styles.toolCallsExpandIcon}>
+                    {expanded ? '▼' : '▶'}
+                </Text>
+            </Pressable>
+            {expanded && (
+                <View style={styles.collapsibleStepsContent}>
+                    {children}
+                </View>
+            )}
+        </View>
+    );
+}
