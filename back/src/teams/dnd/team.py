@@ -53,7 +53,7 @@ class DnDTeam(Team):
             - If RulesLawyer says a check is needed, DO NOT roll automatically!
             - Instead, STOP HERE and offer player a dice roll button
             - Include the roll in suggest_actions: "🎲 Бросить кубик (Ловкость +3)"
-            - When player clicks the roll button, THEN call `roll_dice("1d20+3")`
+            - When player clicks the roll button, THEN call `roll_dice("1d20+3", dc=15)`
             - After roll, continue with remaining steps
             
             ### Step 4: NPCAGENT - World NPC Actions (conditional)
@@ -106,7 +106,7 @@ class DnDTeam(Team):
             
             ## Available Tools
             - `delegate_task_to_member(member_id, task)`
-            - `roll_dice(expression)` - e.g. "1d20+5", "2d6+3"
+            - `roll_dice(expression, dc=None)` - e.g. "1d20+5", dc=15. Always provide DC for checks!
             - `load_state(key)` / `save_state(key, value)`
             - `suggest_actions(actions)` - list of 3-5 options
             

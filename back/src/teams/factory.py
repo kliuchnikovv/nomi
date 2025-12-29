@@ -62,7 +62,7 @@ class TeamFactory:
             
             # Define model IDs
             fast_model_id = 'gemini-2.0-flash-lite'
-            pro_model_id = 'gemini-3.0-pro-preview'
+            pro_model_id = 'gemini-2.5-pro'
             
             api_key = os.getenv("GOOGLE_API_KEY")
             

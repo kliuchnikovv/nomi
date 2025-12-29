@@ -25,6 +25,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { Attachment, MessageAction } from '../main/models';
 import { sidebarApi } from '../../apiClient';
 import { AVAILABLE_TEAMS } from './teams';
+import { DiceRollOverlay } from './components/DiceRollOverlay';
 
 function MessageListSkeleton() {
     return (
@@ -38,6 +39,7 @@ function MessageListSkeleton() {
             <View style={{ alignSelf: 'flex-end', alignItems: 'flex-end', marginBottom: 16, width: '50%' }}>
                 <Skeleton width="100%" height={40} borderRadius={16} style={{ borderBottomRightRadius: 4 }} />
             </View>
+
         </View>
     );
 }
@@ -79,6 +81,60 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
 
     const giftedMessages = useGiftedMessages(messages, user?.id);
+
+    // Dice Roll Logic
+    const [diceOverlayVisible, setDiceOverlayVisible] = useState(false);
+    const [diceData, setDiceData] = useState<any>(null);
+    // Track processed roll IDs to avoid showing the same roll twice
+    const [processedRolls, setProcessedRolls] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        // Scan for new tool calls that trigger dice rolls
+        if (!messages || messages.length === 0) return;
+
+        const lastMsg = messages[0];
+
+        if (lastMsg.tool_calls && lastMsg.tool_calls.length > 0) {
+            for (const tool of lastMsg.tool_calls) {
+                if (tool.tool?.name === 'roll_dice' && !processedRolls.has(lastMsg.id)) {
+                    // Try to parse result
+                    let resultData = null;
+                    if (tool.tool.result) {
+                        try {
+                            if (typeof tool.tool.result === 'string') {
+                                resultData = JSON.parse(tool.tool.result);
+                            } else {
+                                resultData = tool.tool.result;
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse dice result', e);
+                            resultData = {
+                                __dice_roll__: true,
+                                total: parseInt(tool.tool.result?.split('=')?.pop()?.trim() || '0'),
+                                expression: tool.tool.arguments?.expression || '?',
+                                rolls: []
+                            };
+                        }
+                    }
+
+                    if (resultData && resultData.__dice_roll__) {
+                        console.log('Triggering dice overlay', resultData);
+                        setDiceData(resultData);
+                        setDiceOverlayVisible(true);
+                        setProcessedRolls(prev => new Set(prev).add(lastMsg.id));
+                        break;
+                    }
+                }
+            }
+        }
+    }, [messages, processedRolls]);
+
+    const handleDiceComplete = useCallback(() => {
+        setDiceOverlayVisible(false);
+        setDiceData(null);
+    }, []);
+
+
 
     const handleSend = useCallback((newMessages: IMessage[] = []) => {
         if (newMessages.length > 0 && newMessages[0].text) {
@@ -509,6 +565,11 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                 visible={imageViewerVisible}
                 onRequestClose={() => setImageViewerVisible(false)}
                 keyExtractor={(imageSrc: any, index: number) => `${imageSrc.uri}${index}`}
+            />
+            <DiceRollOverlay
+                visible={diceOverlayVisible}
+                data={diceData}
+                onComplete={handleDiceComplete}
             />
         </View>
     );

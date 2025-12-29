@@ -27,10 +27,14 @@ class DnDTools(Toolkit):
         suggest_fn.stop_after_tool_call = True
         self.functions[suggest_fn.name] = suggest_fn
 
-    def roll_dice(self, expression: str) -> str:
+    def roll_dice(self, expression: str, dc: int = None) -> str:
         """
         Rolls dice based on an expression like '1d20+5' or '2d6'.
-        Returns the result as a string.
+        Returns a structured JSON result for the frontend to visualize.
+        
+        Args:
+            expression: The dice expression, e.g., "1d20+3", "2d6".
+            dc: Optional Difficulty Class. If provided, the frontend can show Success/Failure.
         """
         import random
         import re
@@ -38,7 +42,7 @@ class DnDTools(Toolkit):
         # Simple parser for XdY+Z
         match = re.match(r'(\d+)d(\d+)([\+\-]\d+)?', expression)
         if not match:
-            return f"Invalid dice expression: {expression}"
+            return json.dumps({"error": f"Invalid dice expression: {expression}"})
 
         count = int(match.group(1))
         sides = int(match.group(2))
@@ -47,7 +51,17 @@ class DnDTools(Toolkit):
         rolls = [random.randint(1, sides) for _ in range(count)]
         total = sum(rolls) + modifier
 
-        return f"Rolled {expression}: {rolls} {'+' if modifier >=0 else ''}{modifier} = {total}"
+        # Construct structured result for visual frontend
+        result = {
+            "__dice_roll__": True,
+            "expression": expression,
+            "rolls": rolls,
+            "modifier": modifier,
+            "total": total,
+            "dc": dc
+        }
+        
+        return json.dumps(result)
 
     def save_state(self, key: str, value) -> str:
         """
