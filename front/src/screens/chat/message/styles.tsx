@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Dimensions } from 'react-native';
 import { palette, theme } from '../../../themes';
 
 const withAlpha = (hex: string, alpha: number) => {
@@ -266,6 +266,8 @@ export const styles = StyleSheet.create({
         backgroundColor: withAlpha(palette.gutterGrey, 0.3),
         borderRadius: 8,
         overflow: 'hidden',
+        minWidth: Dimensions.get('window').width * 0.9, // Force expansion to ~90% of screen
+        alignSelf: 'stretch',
     },
     collapsibleStepsHeader: {
         flexDirection: 'row',

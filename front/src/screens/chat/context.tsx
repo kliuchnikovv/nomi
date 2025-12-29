@@ -679,7 +679,9 @@ export function ChatProvider({
                 chat_id: activeChatID,
                 sender: sender,
                 role: role,
-                text: role === 'user' ? (frame.payload.message || "") : "",
+                // Initialize with a space for assistant to ensure GiftedChat renders the bubble immediately
+                // This allows content_parts (thinking, tools) to be visible even before text arrives
+                text: role === 'user' ? (frame.payload.message || "") : " ",
                 created_at: Date.now(),
                 content_parts: role === 'user' ? undefined : [], // Initialize content_parts for assistant
             };

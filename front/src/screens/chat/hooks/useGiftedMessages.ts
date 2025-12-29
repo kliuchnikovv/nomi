@@ -41,7 +41,7 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
 
             return {
                 _id: String(msg.id || `${msg.created_at} -${msg.role} `),
-                text: msg.text.trimEnd() || '',
+                text: msg.text || '',
                 createdAt: new Date(msg.created_at || Date.now()),
                 user: {
                     _id: userIdMapped,

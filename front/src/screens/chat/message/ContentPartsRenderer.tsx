@@ -57,7 +57,17 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
 
         for (const part of mergedParts) {
             if (isInternal(part)) {
-                currentGroup.push(part);
+                // Special case: Narrator member_response should be treated as text
+                if ((part as any).type === 'member_response' && (part as any).agent_name === 'Narrator') {
+                    if (currentGroup.length > 0) {
+                        result.push({ type: 'group', parts: [...currentGroup] });
+                        currentGroup = [];
+                    }
+                    // Treat as text part for rendering purposes
+                    result.push({ type: 'text', part: { type: 'text', text: `**Narrator:** ${(part as any).text}` } });
+                } else {
+                    currentGroup.push(part);
+                }
             } else {
                 if (currentGroup.length > 0) {
                     result.push({ type: 'group', parts: [...currentGroup] });

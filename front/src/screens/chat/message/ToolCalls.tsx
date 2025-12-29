@@ -30,7 +30,7 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
                     {toolCalls.map((toolCall, index) => (
                         <View key={index} style={styles.toolCallItem}>
                             <Text style={styles.toolCallName}>
-                                {toolCall.name}
+                                {toolCall.name === 'delegate_task_to_member' ? 'Delegating...' : toolCall.name}
                             </Text>
                             {toolCall.arguments && (
                                 <Text style={styles.toolCallArgs}>
@@ -73,7 +73,7 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
                 ]}
             >
                 <Text style={styles.singleToolCallName}>
-                    {toolCall.name}
+                    {toolCall.name === 'delegate_task_to_member' ? 'Delegating...' : toolCall.name}
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
                     {expanded ? '▼' : '▶'}
@@ -120,7 +120,7 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
                 ]}
             >
                 <Text style={styles.reasoningHeaderText}>
-                    🧠 Thinking
+                    Thinking...
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
                     {expanded ? '▼' : '▶'}

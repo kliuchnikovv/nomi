@@ -61,6 +61,23 @@ class LLMWebSocketSession:
 
         # Pending frame from handshake
         self.pending_frame: Optional[Frame] = None
+        self._receive_task: Optional[asyncio.Task] = None
+
+    async def _cleanup_tasks(self):
+        """Cancel any pending tasks to avoid 'Task exception was never retrieved'."""
+        tasks = []
+        if self._receive_task and not self._receive_task.done():
+            self._receive_task.cancel()
+            tasks.append(self._receive_task)
+        
+        if self.current_generation_task and not self.current_generation_task.done():
+            self.current_generation_task.cancel()
+            tasks.append(self.current_generation_task)
+
+        if tasks:
+            # Wait for tasks to actually cancel so exceptions are retrieved/suppressed
+            await asyncio.gather(*tasks, return_exceptions=True)
+            logger.debug("[WS] Cleaned up %d pending tasks", len(tasks))
 
     async def _send_frame(self, frame: Frame) -> int:
         data = frame.marshal()
@@ -247,90 +264,93 @@ class LLMWebSocketSession:
         """Main event loop - handles frames concurrently with generation."""
         last_activity = time.monotonic()
 
-        # Initial build
         try:
-            await self.build_agent_instance()
-        except Exception as e:
-            await self._send_error(e, self.chat_id_param)
-            await self.websocket.close(code=1011)
-            return
-
-        while True:
-            # Check pending first
-            if self.pending_frame:
-                frame = self.pending_frame
-                self.pending_frame = None
-                await self.process_frame(frame)
-                continue
-
+            # Initial build
             try:
-                # Reuse existing receive task if it's still running
-                if not hasattr(self, '_receive_task') or self._receive_task is None or self._receive_task.done():
-                    self._receive_task = asyncio.create_task(self.websocket.receive_text())
-                
-                receive_task = self._receive_task
-                
-                # Determine what to wait for
-                tasks = [receive_task]
-                if self.current_generation_task and not self.current_generation_task.done():
-                    tasks.append(self.current_generation_task)
-
-                # Wait for FIRST_COMPLETED or timeout
-                done, pending = await asyncio.wait(
-                    tasks,
-                    timeout=30.0,
-                    return_when=asyncio.FIRST_COMPLETED
-                )
-
-                # Process receive_task if it finished
-                if receive_task in done:
-                    try:
-                        raw = receive_task.result()
-                        # Task finished successfully, clear it
-                        self._receive_task = None
-                        last_activity = time.monotonic()
-                        
-                        data = json.loads(raw)
-                        frame = Frame(**data)
-                        frame.validate_invariants()
-                        await self.process_frame(frame)
-                    except Exception as ex:
-                        logger.warning("[WS] Receive error/Bad frame: %s", ex)
-                        self._receive_task = None # It failed, clear it
-                        if isinstance(ex, WebSocketDisconnect):
-                            raise ex
-                        await self._send_frame(make_error(self.next_id, "bad_request", None, "Invalid frame", 400))
-
-                # Process generation_task if it finished
-                if self.current_generation_task and self.current_generation_task in done:
-                    try:
-                        self.current_generation_task.result()
-                    except asyncio.CancelledError:
-                        logger.info("[WS] Generation was cancelled")
-                    except Exception as e:
-                        logger.error("[WS] Generation task error: %s", e)
-                    self.current_generation_task = None
-
-                # Handle timeout (keepalive / idle)
-                if not done:
-                    idle_for = time.monotonic() - last_activity
-                    if idle_for >= 180:
-                        logger.info("[WS] Idle timeout")
-                        await self._send_frame(make_done(self.next_id, None, {"reason": "idle_timeout"}))
-                        await self.websocket.close(code=1000)
-                        break
-                    
-                    # Keepalive ping
-                    await self._send_frame(make_data(self.next_id, Op.PING, None, {}))
-
-            except WebSocketDisconnect:
-                logger.info("[WS] WebSocket disconnected")
-                break
+                await self.build_agent_instance()
             except Exception as e:
-                logger.error("[WS] Error in run_loop: %s", e)
-                if "cannot call recv" in str(e):
+                await self._send_error(e, self.chat_id_param)
+                await self.websocket.close(code=1011)
+                return
+
+            while True:
+                # Check pending first
+                if self.pending_frame:
+                    frame = self.pending_frame
+                    self.pending_frame = None
+                    await self.process_frame(frame)
+                    continue
+
+                try:
+                    # Reuse existing receive task if it's still running
+                    if self._receive_task is None or self._receive_task.done():
+                        self._receive_task = asyncio.create_task(self.websocket.receive_text())
+                    
+                    receive_task = self._receive_task
+                    
+                    # Determine what to wait for
+                    tasks = [receive_task]
+                    if self.current_generation_task and not self.current_generation_task.done():
+                        tasks.append(self.current_generation_task)
+
+                    # Wait for FIRST_COMPLETED or timeout
+                    done, pending = await asyncio.wait(
+                        tasks,
+                        timeout=30.0,
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+
+                    # Process receive_task if it finished
+                    if receive_task in done:
+                        try:
+                            raw = receive_task.result()
+                            # Task finished successfully, clear it
+                            self._receive_task = None
+                            last_activity = time.monotonic()
+                            
+                            data = json.loads(raw)
+                            frame = Frame(**data)
+                            frame.validate_invariants()
+                            await self.process_frame(frame)
+                        except Exception as ex:
+                            logger.warning("[WS] Receive error/Bad frame: %s", ex)
+                            self._receive_task = None # It failed, clear it
+                            if isinstance(ex, WebSocketDisconnect):
+                                raise ex
+                            await self._send_frame(make_error(self.next_id, "bad_request", None, "Invalid frame", 400))
+
+                    # Process generation_task if it finished
+                    if self.current_generation_task and self.current_generation_task in done:
+                        try:
+                            self.current_generation_task.result()
+                        except asyncio.CancelledError:
+                            logger.info("[WS] Generation was cancelled")
+                        except Exception as e:
+                            logger.error("[WS] Generation task error: %s", e)
+                        self.current_generation_task = None
+
+                    # Handle timeout (keepalive / idle)
+                    if not done:
+                        idle_for = time.monotonic() - last_activity
+                        if idle_for >= 180:
+                            logger.info("[WS] Idle timeout")
+                            await self._send_frame(make_done(self.next_id, None, {"reason": "idle_timeout"}))
+                            await self.websocket.close(code=1000)
+                            break
+                        
+                        # Keepalive ping
+                        await self._send_frame(make_data(self.next_id, Op.PING, None, {}))
+
+                except WebSocketDisconnect:
+                    logger.info("[WS] WebSocket disconnected")
                     break
-                await asyncio.sleep(0.1)
+                except Exception as e:
+                    logger.error("[WS] Error in run_loop: %s", e)
+                    if "cannot call recv" in str(e):
+                        break
+                    await asyncio.sleep(0.1)
+        finally:
+            await self._cleanup_tasks()
 
     async def process_frame(self, frame: Frame):
         if frame.op == Op.PING:
@@ -544,6 +564,35 @@ class LLMWebSocketSession:
                         "tool": safe_tool,
                         "message_id": message_id
                     }))
+
+                    # Helper logic: If this was a delegate_task_to_member call, expose the result as a member_response
+                    # This ensures that responses from sub-agents (like Narrator) are visible in the chat
+                    if safe_tool.get("name") == "delegate_task_to_member":
+                        try:
+                            args = safe_tool.get("arguments", {})
+                            agent_name = args.get("agent_name")
+                            result = safe_tool.get("result")
+                            
+                            # Clean up result if it's a JSON string wrapper (common in some agent frameworks)
+                            if result and isinstance(result, str):
+                                try:
+                                    # Sometimes result is "{\"content\": \"...\"}"
+                                    parsed = json.loads(result)
+                                    if isinstance(parsed, dict) and "content" in parsed:
+                                        result = parsed["content"]
+                                except (json.JSONDecodeError, TypeError):
+                                    pass
+
+                            if agent_name and result:
+                                logger.info("[WS] Exposing delegate result as member_response for %s", agent_name)
+                                await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
+                                    "type": "member_response",
+                                    "agent_name": agent_name,
+                                    "message": str(result),
+                                    "message_id": message_id
+                                }))
+                        except Exception as e:
+                            logger.error("[WS] Failed to expose delegate result: %s", e)
 
                 elif evt_type == "reasoning":
                     content = event.get("content", "")
