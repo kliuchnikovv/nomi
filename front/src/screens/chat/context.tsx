@@ -705,6 +705,24 @@ export function ChatProvider({
             return newMessages;
         }
 
+        if (frame.payload.type === 'actions') {
+            // Handle D&D action buttons from suggest_actions tool
+            const actions = frame.payload.actions || [];
+            console.log('[ChatContext] Received actions frame:', actions);
+            if (actions.length > 0) {
+                // Set actions on the message for button rendering
+                newMessages[messageIdx] = {
+                    ...newMessages[messageIdx],
+                    actions: actions.map((a: any) => ({
+                        ...a,
+                        message_id: frame.payload.message_id
+                    })),
+                };
+                console.log('[ChatContext] Set actions on message:', newMessages[messageIdx].actions);
+            }
+            return newMessages;
+        }
+
         // Only accumulate text for assistant messages (streaming)
         if (!frame.payload.eof) {
             const existingParts = newMessages[messageIdx].content_parts || [];
@@ -746,21 +764,6 @@ export function ChatProvider({
                         // Don't add memberText to main text - it goes to content_parts only
                         content_parts: updatedParts,
                     };
-                }
-            } else if (frame.payload.type === 'actions') {
-                // Handle D&D action buttons from suggest_actions tool
-                const actions = frame.payload.actions || [];
-                console.log('[ChatContext] Received actions frame:', actions);
-                if (actions.length > 0) {
-                    // Set actions on the message for button rendering
-                    newMessages[messageIdx] = {
-                        ...newMessages[messageIdx],
-                        actions: actions.map((a: any) => ({
-                            ...a,
-                            message_id: frame.payload.message_id
-                        })),
-                    };
-                    console.log('[ChatContext] Set actions on message:', newMessages[messageIdx].actions);
                 }
             } else if (frame.payload.type === 'reasoning') {
                 // Handle reasoning/thinking content from native Gemini thinking

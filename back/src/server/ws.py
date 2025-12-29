@@ -511,6 +511,34 @@ class LLMWebSocketSession:
                         except (json.JSONDecodeError, TypeError):
                             pass
                     
+                    # Fallback: check arguments for suggest_actions if result parsing failed
+                    if safe_tool.get("name") == "suggest_actions":
+                        try:
+                            args = safe_tool.get("arguments", {})
+                            if isinstance(args, dict) and "actions" in args:
+                                raw_actions = args["actions"]
+                                if isinstance(raw_actions, list):
+                                    logger.info("[WS] Sending action buttons from suggest_actions arguments: %s", raw_actions)
+                                    # Normalize strings to objects
+                                    normalized_actions = []
+                                    for act in raw_actions:
+                                        if isinstance(act, str):
+                                            normalized_actions.append({
+                                                "label": act,
+                                                "prompt": act,
+                                                "command": "dnd_action"
+                                            })
+                                        else:
+                                            normalized_actions.append(act)
+                                    
+                                    await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
+                                        "type": "actions",
+                                        "actions": normalized_actions,
+                                        "message_id": message_id
+                                    }))
+                        except Exception as e:
+                            logger.error("[WS] Failed to extract actions from arguments: %s", e)
+                    
                     await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
                         "type": "tool_call",
                         "tool": safe_tool,
