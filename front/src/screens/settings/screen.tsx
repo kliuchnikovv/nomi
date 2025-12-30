@@ -64,6 +64,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
     const themesList: { label: string; value: ThemeName }[] = [
         { label: 'Tokyo Night', value: 'tokyoNight' },
         { label: 'One Dark', value: 'oneDark' },
+        { label: 'Serika Dark', value: 'serikaDark' },
         { label: 'Light (Visual Studio)', value: 'visualStudioLight' },
     ];
 

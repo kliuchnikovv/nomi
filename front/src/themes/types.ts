@@ -1,4 +1,4 @@
-export type ThemeName = 'tokyoNight' | 'oneDark' | 'visualStudioLight';
+export type ThemeName = 'tokyoNight' | 'oneDark' | 'visualStudioLight' | 'serikaDark';
 
 export type ThemePalette = {
     red: string;
