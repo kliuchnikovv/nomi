@@ -107,6 +107,33 @@ func (s *Storage) UpdateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 	return s.GetChat(ctx, userID, c.ID)
 }
 
+// GetUserChatsModifiedAfter retrieves chats modified after the specified timestamp
+// Used for conditional GET requests to reduce unnecessary data transfer
+func (s *Storage) GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUID, since time.Time) ([]*chat.Chat, error) {
+	var chatModels []Chat
+	if err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND updated_at > ?", userID, since).
+		Order("updated_at DESC").
+		Find(&chatModels).Error; err != nil {
+		return nil, err
+	}
+
+	chats := make([]*chat.Chat, len(chatModels))
+	for i, model := range chatModels {
+		chats[i] = &chat.Chat{
+			ID:         model.ID,
+			Model:      model.Model,
+			Title:      model.Title,
+			Mode:       model.Mode,
+			TeamID:     model.TeamID,
+			CreatedAt:  model.CreatedAt,
+			UpdatedAt:  model.UpdatedAt,
+			ArchivedAt: model.ArchivedAt,
+		}
+	}
+	return chats, nil
+}
+
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {
 	result := s.DB.WithContext(ctx).Where("id = ? AND user_id = ?", chatID, userID).Delete(&Chat{})
 	if result.Error != nil {

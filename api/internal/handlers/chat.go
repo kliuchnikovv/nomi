@@ -91,10 +91,33 @@ func (h *ChatHandler) ListChats(c *gin.Context) {
 		return
 	}
 
-	chats, err := h.storage.GetUserChats(ctx, user.ID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
-		return
+	// Check for If-Modified-Since query param for conditional GET
+	ifModifiedSinceStr := c.Query("if_modified_since")
+	var chats []*chat.Chat
+
+	if ifModifiedSinceStr != "" {
+		since, err := time.Parse(time.RFC3339, ifModifiedSinceStr)
+		if err == nil {
+			chats, err = h.storage.GetUserChatsModifiedAfter(ctx, user.ID, since)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chats"})
+				return
+			}
+			// If no chats were modified, return 304 Not Modified
+			if len(chats) == 0 {
+				c.Status(http.StatusNotModified)
+				return
+			}
+		}
+	}
+
+	// Fallback to getting all chats if no timestamp or invalid timestamp
+	if chats == nil {
+		chats, err = h.storage.GetUserChats(ctx, user.ID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
+			return
+		}
 	}
 
 	for i := range chats {

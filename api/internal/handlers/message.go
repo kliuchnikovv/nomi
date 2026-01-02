@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -70,10 +71,33 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 		return
 	}
 
-	messages, err := h.storage.GetMessages(ctx, user.ID, chatID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+	// Check for If-Modified-Since query param for conditional GET
+	ifModifiedSinceStr := c.Query("if_modified_since")
+	var messages []*chat.Message
+
+	if ifModifiedSinceStr != "" {
+		since, err := time.Parse(time.RFC3339, ifModifiedSinceStr)
+		if err == nil {
+			messages, err = h.storage.GetMessagesAfter(ctx, user.ID, chatID, since)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch messages"})
+				return
+			}
+			// If no messages were created after timestamp, return 304 Not Modified
+			if len(messages) == 0 {
+				c.Status(http.StatusNotModified)
+				return
+			}
+		}
+	}
+
+	// Fallback to getting all messages if no timestamp or invalid timestamp
+	if messages == nil {
+		messages, err = h.storage.GetMessages(ctx, user.ID, chatID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, messages)

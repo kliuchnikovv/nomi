@@ -131,6 +131,13 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
+	// Update the chat's updated_at timestamp to reflect the new message
+	// This allows clients to sort chats by latest activity and sync only changed chats
+	s.DB.WithContext(ctx).
+		Model(&Chat{}).
+		Where("id = ?", m.ChatID).
+		Update("updated_at", messageModel.CreatedAt)
+
 	return result, nil
 }
 
@@ -331,6 +338,76 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 	return result, nil
 }
 
+// GetMessagesAfter retrieves messages created after the specified timestamp
+// Used for conditional GET requests to reduce unnecessary data transfer
+func (s *Storage) GetMessagesAfter(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, since time.Time) ([]*chat.Message, error) {
+	query := s.DB.WithContext(ctx).
+		Preload("Attachments").
+		Joins("JOIN chats ON messages.chat_id = chats.id").
+		Where("chats.user_id = ? AND messages.chat_id = ? AND messages.created_at > ?", userID, chatID, since).
+		Order("messages.created_at ASC")
+
+	var messages []Message
+	if err := query.Find(&messages).Error; err != nil {
+		return nil, err
+	}
+
+	// Convert to domain model (same as GetMessages)
+	result := make([]*chat.Message, len(messages))
+	for i, msg := range messages {
+		m := &chat.Message{
+			ID:        msg.ID,
+			ChatID:    msg.ChatID,
+			Role:      chat.Role(msg.Role),
+			Text:      msg.Text,
+			Reasoning: msg.Reasoning,
+			Sender:    msg.UserID,
+			Model:     msg.Model,
+			CreatedAt: msg.CreatedAt,
+		}
+
+		// Map attachments
+		if len(msg.Attachments) > 0 {
+			m.Attachments = make([]chat.Attachment, len(msg.Attachments))
+			for j, att := range msg.Attachments {
+				m.Attachments[j] = chat.Attachment{
+					ID:       att.ID,
+					FileName: att.FileName,
+					FileType: att.FileType,
+					Size:     att.Size,
+				}
+			}
+		}
+
+		// Unmarshal ToolCalls if present
+		if len(msg.ToolCalls) > 0 {
+			var toolCalls interface{}
+			if err := json.Unmarshal(msg.ToolCalls, &toolCalls); err == nil {
+				m.ToolCalls = toolCalls
+			}
+		}
+
+		// Unmarshal ContentParts if present
+		if len(msg.ContentParts) > 0 {
+			var contentParts interface{}
+			if err := json.Unmarshal(msg.ContentParts, &contentParts); err == nil {
+				m.ContentParts = contentParts
+			}
+		}
+
+		// Unmarshal Actions if present
+		if len(msg.Actions) > 0 {
+			var actions interface{}
+			if err := json.Unmarshal(msg.Actions, &actions); err == nil {
+				m.Actions = actions
+			}
+		}
+
+		result[i] = m
+	}
+	return result, nil
+}
+
 // UpdateMessageText updates message text ensuring the message belongs to the user's chat
 func (s *Storage) UpdateMessageText(ctx context.Context, userID uuid.UUID, messageID uuid.UUID, newText string) error {
 	// Use a subquery to scope update to messages belonging to user's chats
@@ -415,6 +492,12 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 	if result.RowsAffected == 0 {
 		fmt.Printf("[WARN] UpsertMessage: UPDATE affected 0 rows for msg_id=%s user_id=%s - possible user_id mismatch\n", m.ID, userID)
 	}
+
+	// Update the chat's updated_at timestamp
+	s.DB.WithContext(ctx).
+		Model(&Chat{}).
+		Where("id = ?", m.ChatID).
+		Update("updated_at", time.Now())
 
 	return nil
 }
