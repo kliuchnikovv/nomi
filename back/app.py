@@ -201,10 +201,30 @@ async def generate_briefing(request: BriefingRequest):
         
         # Extract structured output
         if response and response.content:
-            # response.content should be a BriefingResponse object due to response_model
-            if hasattr(response.content, "model_dump"):
-                return response.content.model_dump()
-            return response.content
+            content = response.content
+            # Handle string output (Agent returning JSON string)
+            if isinstance(content, str):
+                import json
+                try:
+                    # Strip markdown code blocks if present
+                    clean_content = content.strip()
+                    if clean_content.startswith("```json"):
+                        clean_content = clean_content[7:]
+                    elif clean_content.startswith("```"):
+                        clean_content = clean_content[3:]
+                    if clean_content.endswith("```"):
+                        clean_content = clean_content[:-3]
+                    clean_content = clean_content.strip()
+                    
+                    return json.loads(clean_content)
+                except json.JSONDecodeError:
+                    logging.error(f"Failed to parse JSON content: {content}")
+                    return {"error": "Failed to parse briefing JSON", "raw_content": content}
+
+            # Handle object output (if supported)
+            if hasattr(content, "model_dump"):
+                return content.model_dump()
+            return content
             
         return {"error": "No content generated"}
     except Exception as e:

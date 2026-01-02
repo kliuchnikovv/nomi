@@ -24,6 +24,13 @@ class BriefingResponse(BaseModel):
 
 BRIEFING_INSTRUCTIONS = """You are the Executive Morning Briefing Agent. Your goal is to prepare a concise, high-impact daily briefing.
 
+### OUTPUT FORMAT
+You must return a valid JSON object matching the following schema:
+{json_schema}
+
+Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
+
+
 ### PIPELINE STEPS:
 
 1.  **DATA GATHERING**:
@@ -62,15 +69,18 @@ class BriefingAgent(Agent):
         knowledge: Optional[Knowledge] = None,
         debug_mode: bool = False,
     ):
+        # Inject schema into instructions
+        instructions_with_schema = BRIEFING_INSTRUCTIONS.replace("{json_schema}", BriefingResponse.model_json_schema_json(indent=2))
+
         super().__init__(
             model=model,
             name="BriefingAgent",
-            instructions=BRIEFING_INSTRUCTIONS,
+            instructions=instructions_with_schema,
             tools=tools,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),
-            response_model=BriefingResponse,
-            structured_outputs=True,
+            # response_model=BriefingResponse,  # Not supported in this version
+            # structured_outputs=True,          # Not supported in this version
             debug_mode=debug_mode,
             description="Prepares the daily executive briefing with context.",
         )
