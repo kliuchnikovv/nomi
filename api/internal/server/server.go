@@ -91,7 +91,7 @@ func New(
 		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler         = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler       = handlers.NewStreamHandler(logger, hubInstance, db)
-// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
+		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
 		modelsHandler = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
 		uploadHandler = handlers.NewUploadHandler(db)
 		teamHandler   = team.NewHandler(db)
@@ -102,6 +102,7 @@ func New(
 			}
 			return h
 		}()
+		briefingHandler = handlers.NewBriefingHandler(db, llmService)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -214,20 +215,8 @@ func New(
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
 	manager.Mount(pluginGroup)
-	
-	r.POST("/api/briefing", wrapWithAuth(func(w http.ResponseWriter, r *http.Request) error {
-		userID := auth.GetUserID(r.Context())
-		if userID == "" {
-			return fmt.Errorf("unauthorized")
-		}
-		
-		briefing, err := llmService.GetBriefing(r.Context(), userID)
-		if err != nil {
-			return err
-		}
-		
-		return jsonResponse(w, briefing)
-	}, authMiddleware))
+
+	r.POST("/api/briefing", wrapWithAuth(briefingHandler.GetBriefing, authMiddleware))
 
 	return &Server{
 		httpServer: &http.Server{
