@@ -125,9 +125,13 @@ class AgentFactory:
                     logger.debug("[WS] tool appended: enabled")
                 else:
                     logger.debug("[WS] tool not appended: not enabled")
-            # Always add web search tool
-            config.add("web_search")
-            logger.info("[WS] Added web search tool (always enabled)")
+            
+            # Add web search tool if supported (Gemini only, not Gemma)
+            if model_name and model_name.startswith("gemma-"):
+                 logger.info("[WS] Skipping web_search for Gemma model %s (tools not supported)", model_name)
+            else:
+                config.add("web_search")
+                logger.info("[WS] Added web search tool (always enabled)")
             
             tools = await build_tools(config)
 
@@ -135,10 +139,13 @@ class AgentFactory:
         # We pass the actual Toolkit objects, not ToolSpec configs
         tools_for_scheduler = list(tools) if tools else []
         
-        # Always add SchedulerTools for Genie
-        if not agent_type or agent_type.lower() == "genie":
-            # Pass user_id, chat_id, AND built tools to SchedulerTools
-            tools.append(SchedulerTools(user_id=user_id, chat_id=chat_id, tools_list=tools_for_scheduler))
+        # Always add SchedulerTools for Genie (except for Gemma)
+        if (not agent_type or agent_type.lower() == "genie"):
+            if model_name and model_name.startswith("gemma-"):
+                logger.info("[WS] Skipping SchedulerTools for Gemma model %s (tools not supported)", model_name)
+            else:
+                # Pass user_id, chat_id, AND built tools to SchedulerTools
+                tools.append(SchedulerTools(user_id=user_id, chat_id=chat_id, tools_list=tools_for_scheduler))
         
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
         logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 

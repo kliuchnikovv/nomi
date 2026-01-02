@@ -90,6 +90,19 @@
       "supports_streaming": true,
       "supports_tools": false,
       "supports_thinking": false
+    },
+    {
+      "id": "gemini-2.5-flash-native-audio-dialog",
+      "name": "Gemini 2.5 Flash Audio",
+      "provider": "google",
+      "description": "Native Audio Dialog model (Live API)",
+      "context_window": 1048576,
+      "max_output_tokens": 8192,
+      "rpm_limit": 1000,
+      "rpd_limit": 100000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false
     }
   ]
 }
