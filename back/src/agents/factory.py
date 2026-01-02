@@ -22,6 +22,8 @@ from src.tools.scheduler import SchedulerTools
 from agno.tools import Toolkit
 from google.oauth2.credentials import Credentials
 
+logger = logging.getLogger(__name__)
+
 # ...
 
 class AgentFactory:

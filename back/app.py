@@ -180,7 +180,7 @@ async def generate_briefing(request: BriefingRequest):
     # 1. Fetch tools config for this user
     tools_specs = []
     try:
-        tools_specs = tool_config_client.fetch_tools(request.user_id)
+        tools_specs = await tool_config_client.fetch_tools(request.user_id)
         logging.info(f"Fetched {len(tools_specs)} tools for user {request.user_id}")
     except Exception as e:
         logging.warning(f"Failed to fetch tools for user {request.user_id}: {e}")
