@@ -54,7 +54,7 @@ class AgentFactory:
                 self._knowledge = build_knowledge_base()
                 logger.info("[Factory] Knowledge initialized successfully")
             except Exception as e:
-                logger.warning("[Factory] Failed to initialize Knowledge: %s", e)
+                logger.error("[Factory] Failed to initialize Knowledge: %s", e, exc_info=True)
                 # Don't raise - agents can work without knowledge
         return self._knowledge
 

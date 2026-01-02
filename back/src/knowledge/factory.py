@@ -79,7 +79,7 @@ def build_knowledge_base(
     # Create knowledge base
     knowledge = Knowledge(
         vector_db=vector_db,
-        num_documents=5,  # Number of documents to return on search
+        max_results=5,  # Number of documents to return on search
     )
     
     logger.info("[KnowledgeFactory] Knowledge created successfully")
