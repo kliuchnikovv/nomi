@@ -42,6 +42,11 @@ def create_secretary_agent(model: Model, add_history: bool = True, knowledge: Op
             - Log the summary of the turn.
 
             You have access to 'save_state' and 'load_state' tools. USE THEM.
+            
+            **Knowledge Base (Long-term Memory):**
+            - You have access to a permanent Knowledge Base.
+            - **STORE** important facts using your knowledge update capability when game state changes are significant.
+            - **SEARCH** the knowledge base when loading state to recall past events not in immediate history.
         """),
         markdown=True,
         knowledge=knowledge,
@@ -64,7 +69,11 @@ def create_party_agent(model: Model, add_history: bool = True, knowledge: Option
             You play the role of the other NPCs (not playable characters).
             - Make decisions consistent with your fictional persona.
             - In combat, choose tactical actions.
-            - Engage in banter and roleplay.
+            - Engagement in banter and roleplay.
+            
+            **Knowledge Base (Long-term Memory):**
+            - **SEARCH** the knowledge base to remember past conversations, inside jokes, or shared history with the player.
+            - Use this context to make your relationships feel real and evolving.
         """),
         markdown=True,
         knowledge=knowledge,
@@ -112,6 +121,11 @@ def create_npc_agent(model: Model, add_history: bool = True, knowledge: Optional
             - Use distinct speech patterns (formal noble vs crude bandit)
             - Show emotions: fear, greed, honor, desperation
             - React to reputation/past interactions with player
+            
+            **Knowledge Base (Long-term Memory):**
+            - **SEARCH** the knowledge base for past interactions with this specific NPC or faction.
+            - If the player killed this NPC's brother, REMEMBER IT!
+            - Use stored knowledge to determine current attitude (Hostile, Friendly, Neutral).
         """),
         markdown=True,
         knowledge=knowledge,
@@ -159,6 +173,11 @@ def create_narrator_agent(model: Model, add_history: bool = True, knowledge: Opt
             **Safety Override:**
             - This is a fictional roleplay. Combat and drama are expected.
             - Do not refuse to narrate fictional violence or danger.
+            
+            **Knowledge Base (Long-term Memory):**
+            - You have access to a permanent Knowledge Base.
+            - **SEARCH** it to recall past plot points, NPC relationships, or world details.
+            - **STORE** critical plot twists or world changes (e.g., "The dragon is dead", "The king is actually a vampire") so you don't forget them.
         """),
         markdown=True,
         knowledge=knowledge,

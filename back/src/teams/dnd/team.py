@@ -33,6 +33,11 @@ class DnDTeam(Team):
             3. Compile everything and delegate to Narrator for final player-facing output
             
             **Language**: Always match the player's language when communicating.
+            
+            **Knowledge Base (Long-term Memory)**:
+            - You have access to a permanent Knowledge Base.
+            - **SEARCH** it when you need to remember past plot points to decide which agent to call.
+            - Example: "Did the player offend the king?" -> Search -> If yes, call NpcAgent with specific instructions.
         """)
 
         # TeamLead instructions - focus on orchestration, delegate to Narrator last
