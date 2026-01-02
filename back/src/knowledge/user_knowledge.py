@@ -8,7 +8,8 @@ class UserScopedKnowledge(Knowledge):
     Knowledge Base wrapper that enforces user isolation using metadata filtering.
     """
     def __init__(self, user_id: str, vector_db: PgVector, num_documents: int = 5):
-        super().__init__(vector_db=vector_db, num_documents=num_documents)
+        super().__init__(vector_db=vector_db)
+        self.num_documents = num_documents
         self.user_id = user_id
 
     def search(self, query: str, num_documents: int | None = None, filter: dict | None = None) -> List[Document]:
