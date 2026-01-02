@@ -91,7 +91,7 @@ class LLMWebSocketSession:
 
     async def _send_error(self, e: Exception, chat_id: Optional[str]) -> int:
         http_status, status_text, user_msg = _classify_error(e)
-        logger.error("[WS] Agent failed: sessionId=%s status=%s detail=%s", self.session_id, status_text, e)
+        logger.error("[WS] Agent failed: sessionId=%s status=%s detail=%s", self.session_id, status_text, e, exc_info=True)
         return await self._send_frame(
             make_error(
                 id=self.next_id,
@@ -115,7 +115,11 @@ class LLMWebSocketSession:
         raw_cmd = qp.get("command") or qp.get("team") or qp.get("team_desc")
         if raw_cmd:
             try:
-                self.command_desc = json.loads(raw_cmd)
+                parsed = json.loads(raw_cmd)
+                if isinstance(parsed, dict):
+                    self.command_desc = parsed
+                else:
+                    logger.warning("[WS] Invalid command format (not a dict): type=%s value=%s", type(parsed), raw_cmd)
             except Exception:
                 logger.warning("[WS] Failed to parse json param: session_id=%s value=%s", self.session_id, raw_cmd)
 
