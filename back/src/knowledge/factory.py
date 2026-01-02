@@ -4,7 +4,7 @@ Knowledge Base Factory for Agno Agentic RAG.
 This module provides factory functions to create and configure:
 - PgVector vector database using existing Postgres connection
 - GeminiEmbedder for generating embeddings via Google Gemini API
-- Knowledge base with appropriate chunking strategies
+- Knowledge base for RAG functionality
 """
 import logging
 import os
@@ -12,7 +12,7 @@ from typing import Optional
 
 from agno.knowledge import Knowledge
 from agno.vectordb.pgvector import PgVector
-from agno.embedder.gemini import GeminiEmbedder
+from agno.knowledge.embedder.google import GeminiEmbedder
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,12 @@ def build_knowledge_base(
     embedder_model: str = DEFAULT_EMBEDDER_MODEL,
 ) -> Knowledge:
     """
-    Build an Knowledge instance with PgVector and GeminiEmbedder.
+    Build a Knowledge instance with PgVector and GeminiEmbedder.
     
     Args:
         db_url: PostgreSQL connection URL. If None, reads from DB_DSN env var.
         table_name: Name of the table to store vectors (default: agent_knowledge).
-        embedder_model: Google embedding model to use (default: text-embedding-004).
+        embedder_model: Gemini embedding model (default: models/text-embedding-004).
         
     Returns:
         Configured Knowledge instance.
@@ -57,18 +57,19 @@ def build_knowledge_base(
         raise ValueError("GOOGLE_API_KEY environment variable not set")
     
     logger.info(
-        "[KnowledgeFactory] Building Knowledge with PgVector (table=%s, embedder=%s)",
+        "[KnowledgeFactory] Building Knowledge with PgVector + GeminiEmbedder (table=%s, model=%s)",
         table_name,
         embedder_model,
     )
     
-    # Create embedder
+    # Create Gemini embedder
     embedder = GeminiEmbedder(
         model=embedder_model,
         api_key=api_key,
+        dimensions=768,  # Default for text-embedding-004
     )
     
-    # Create vector database
+    # Create vector database with Gemini embedder
     vector_db = PgVector(
         db_url=db_url,
         table_name=table_name,
@@ -78,8 +79,7 @@ def build_knowledge_base(
     # Create knowledge base
     knowledge = Knowledge(
         vector_db=vector_db,
-        # The number of documents to return on search (Agno default is 5)
-        num_documents=5,
+        num_documents=5,  # Number of documents to return on search
     )
     
     logger.info("[KnowledgeFactory] Knowledge created successfully")

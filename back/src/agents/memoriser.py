@@ -4,7 +4,8 @@ import logging
 from agno.agent import Agent
 from agno.models.base import Model
 from agno.db.postgres import PostgresDb
-from agno.knowledge import Knowledge, Document
+from agno.knowledge import Knowledge
+from agno.knowledge.document import Document
 from agno.tools import Toolkit, Function
 from src.knowledge.factory import build_knowledge_base
 
