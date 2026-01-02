@@ -56,27 +56,7 @@ class AgentFactory:
 
     # ... (build_model omitted)
 
-    async def build(
-        self,
-        session_id: str,
-        # ... args ...
-        user_id: Optional[str] = None,
-        chat_id: Optional[str] = None,
-    ) -> Agent:
-        # ...
-        
-        # Use provided user_id or fallback to session_id (chat room ID) for isolation
-        rag_user_id = user_id or session_id
-        
-        logger.info("[WS] Building agent: session_id=%s rag_user_id=%s model=%s type=%s", 
-                   session_id, rag_user_id, model_name or "default", agent_type)
 
-        try:
-            # Create user-scoped knowledge base
-            vector_db = self._get_or_create_vector_db()
-            knowledge = None
-            if vector_db:
-                knowledge = UserScopedKnowledge(user_id=rag_user_id, vector_db=vector_db)
 
 
     def build_model(self, model_name: str, web_search: bool = False, thinking: str = "off") -> Model:
