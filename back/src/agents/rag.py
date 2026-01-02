@@ -43,6 +43,6 @@ class RagAgent(Agent):
             send_media_to_model=True,
             store_media=True,
             stream=True,
-            show_tool_calls=True,  # Show when knowledge search is triggered
         )
+
 

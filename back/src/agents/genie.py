@@ -102,6 +102,5 @@ class GenieAgent(Agent):
             stream=True,
             stream_intermediate_steps=True,
             reasoning=(thinking != "off"),
-            show_tool_calls=True,  # Show when knowledge search is triggered
         )
 
