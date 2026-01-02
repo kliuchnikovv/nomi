@@ -77,3 +77,37 @@ func (s *Service) GenerateResponse(ctx context.Context, userQuery string) (strin
 func (s *Service) GenerateSimple(ctx context.Context, userID uuid.UUID, prompt string, agent string) (string, error) {
 	return s.GenerateResponse(ctx, prompt)
 }
+
+// GetBriefing calls the /api/briefing endpoint on the Python backend.
+func (s *Service) GetBriefing(ctx context.Context, userID string) (map[string]interface{}, error) {
+	requestBody, err := json.Marshal(map[string]string{
+		"user_id": userID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal briefing request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", s.agnoAPIURL+"/api/briefing", bytes.NewBuffer(requestBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for briefing: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call briefing endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errorBody map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errorBody)
+		return nil, fmt.Errorf("briefing endpoint returned non-200 status: %d, body: %v", resp.StatusCode, errorBody)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode briefing response: %w", err)
+	}
+	return result, nil
+}

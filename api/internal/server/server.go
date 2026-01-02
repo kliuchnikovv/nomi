@@ -214,6 +214,20 @@ func New(
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
 	manager.Mount(pluginGroup)
+	
+	r.POST("/api/briefing", wrapWithAuth(func(w http.ResponseWriter, r *http.Request) error {
+		userID := auth.GetUserID(r.Context())
+		if userID == "" {
+			return fmt.Errorf("unauthorized")
+		}
+		
+		briefing, err := llmService.GetBriefing(r.Context(), userID)
+		if err != nil {
+			return err
+		}
+		
+		return jsonResponse(w, briefing)
+	}, authMiddleware))
 
 	return &Server{
 		httpServer: &http.Server{
