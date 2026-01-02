@@ -51,6 +51,10 @@ def build_knowledge_base(
                 "Database URL not provided and DB_DSN environment variable not set"
             )
     
+    # Fix for SQLAlchemy 2.0+: convert postgres:// to postgresql://
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    
     # Get Google API key for embeddings
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -70,11 +74,21 @@ def build_knowledge_base(
     )
     
     # Create vector database with Gemini embedder
-    vector_db = PgVector(
-        db_url=db_url,
-        table_name=table_name,
-        embedder=embedder,
-    )
+    try:
+        vector_db = PgVector(
+            db_url=db_url,
+            table_name=table_name,
+            embedder=embedder,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        if "vector" in error_msg.lower() and "not available" in error_msg.lower():
+            logger.error(
+                "[KnowledgeFactory] PgVector extension not installed. "
+                "Please run: CREATE EXTENSION IF NOT EXISTS vector; "
+                "in your database. RAG features will be disabled."
+            )
+        raise
     
     # Create knowledge base
     knowledge = Knowledge(

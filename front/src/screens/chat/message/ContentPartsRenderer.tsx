@@ -3,11 +3,14 @@ import { View, Pressable } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useChat } from '../context';
 import { ContentPart } from './models';
-import { styles, markdownStyles } from './styles';
+import { useTheme } from '../../../context/ThemeContext';
+import { createMarkdownStyles } from './dynamicStyles';
 import { SingleToolCall, ReasoningBlock, MemberResponseBlock, CollapsibleSteps } from './ToolCalls';
 
 export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
     const { showToolCalls, showReasoning, showMemberResponses } = useChat();
+    const { theme } = useTheme();
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
     const filteredParts = useMemo(() => {
         // Optional debug logging, can be removed later

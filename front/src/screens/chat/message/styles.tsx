@@ -263,7 +263,7 @@ export const styles = StyleSheet.create({
     // Collapsible steps styles
     collapsibleStepsContainer: {
         marginTop: 8,
-        backgroundColor: withAlpha(palette.gutterGrey, 0.3),
+        backgroundColor: theme.surfaceHighlight,
         borderRadius: 8,
         overflow: 'hidden',
         minWidth: Dimensions.get('window').width * 0.9, // Force expansion to ~90% of screen
@@ -276,7 +276,7 @@ export const styles = StyleSheet.create({
         padding: 10,
     },
     collapsibleStepsHeaderText: {
-        color: theme.textSecondary,
+        color: withAlpha(theme.textSecondary, 0.6),
         fontSize: 13,
         fontWeight: '600',
     },

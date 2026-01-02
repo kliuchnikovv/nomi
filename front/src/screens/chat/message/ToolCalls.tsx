@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { styles } from './styles';
+import { useTheme } from '../../../context/ThemeContext';
+import { createStyles } from './dynamicStyles';
 
 export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
     const [expanded, setExpanded] = useState(false);
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
 
     if (!toolCalls || toolCalls.length === 0) {
         return null;
@@ -60,6 +63,8 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
 // Single tool call component for inline rendering
 export function SingleToolCall({ toolCall }: { toolCall: any }) {
     const [expanded, setExpanded] = useState(false);
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
 
     if (!toolCall) return null;
 
@@ -107,6 +112,8 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
 // Reasoning block component for inline thinking display
 export function ReasoningBlock({ reasoning }: { reasoning: string }) {
     const [expanded, setExpanded] = useState(false);
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
 
     if (!reasoning) return null;
 
@@ -140,6 +147,8 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
 // Team member response block for showing agent activity
 export function MemberResponseBlock({ agentName, text }: { agentName: string; text: string }) {
     const [expanded, setExpanded] = useState(false);
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
 
     if (!text) return null;
 
@@ -173,6 +182,8 @@ export function MemberResponseBlock({ agentName, text }: { agentName: string; te
 // Collapsible steps container for grouping internal parts
 export function CollapsibleSteps({ children, defaultExpanded = false }: { children: React.ReactNode, defaultExpanded?: boolean }) {
     const [expanded, setExpanded] = useState(defaultExpanded);
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
 
     return (
         <View style={styles.collapsibleStepsContainer}>

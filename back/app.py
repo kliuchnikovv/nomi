@@ -96,6 +96,10 @@ model=Gemini(
 db: PostgresDb | None = None
 db_dsn = os.getenv("DB_DSN")
 if db_dsn:
+    # Fix for SQLAlchemy 2.0+: convert postgres:// to postgresql://
+    # Railway's pgvector uses old format
+    if db_dsn.startswith("postgres://"):
+        db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
     db = PostgresDb(db_dsn)
 
 tool_config_url = os.getenv("TOOL_CONFIG_URL", "http://localhost:8080")
