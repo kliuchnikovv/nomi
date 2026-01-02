@@ -520,7 +520,7 @@ class LLMWebSocketSession:
                             else:
                                 result_data = None
                             
-                            if result_data and result_data.get("__action_buttons__"):
+                            if result_data and isinstance(result_data, dict) and result_data.get("__action_buttons__"):
                                 actions_list = result_data.get("actions", [])
                                 logger.info("[WS] Sending action buttons from suggest_actions: %s", actions_list)
                                 logger.info("[WS] Full result_data: %s", result_data)
