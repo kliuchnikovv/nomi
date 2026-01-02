@@ -1,10 +1,12 @@
 from textwrap import dedent
+from typing import Optional
 from agno.agent import Agent
 from agno.models.base import Model
+from agno.knowledge import Knowledge
 
 
 
-def create_rules_agent(model: Model, add_history: bool = True) -> Agent:
+def create_rules_agent(model: Model, add_history: bool = True, knowledge: Optional[Knowledge] = None) -> Agent:
     return Agent(
         name="RulesLawyer",
         model=model,
@@ -19,6 +21,8 @@ def create_rules_agent(model: Model, add_history: bool = True) -> Agent:
             Output strictly JSON when requested.
         """),
         markdown=True,
+        knowledge=knowledge,
+        search_knowledge=(knowledge is not None),
         add_history_to_context=add_history,
         num_history_messages=10,
         retries=2,
@@ -26,7 +30,7 @@ def create_rules_agent(model: Model, add_history: bool = True) -> Agent:
         expected_output="JSON with: {valid: bool, roll_type: 'attack'|'ability_check'|'save'|'none', ability: str, dc: int, reasoning: str}",
     )
 
-def create_secretary_agent(model: Model, add_history: bool = True) -> Agent:
+def create_secretary_agent(model: Model, add_history: bool = True, knowledge: Optional[Knowledge] = None) -> Agent:
     return Agent(
         name="Secretary",
         model=model,
@@ -40,6 +44,9 @@ def create_secretary_agent(model: Model, add_history: bool = True) -> Agent:
             You have access to 'save_state' and 'load_state' tools. USE THEM.
         """),
         markdown=True,
+        knowledge=knowledge,
+        search_knowledge=(knowledge is not None),
+        update_knowledge=(knowledge is not None),  # Secretary stores facts
         add_history_to_context=add_history,
         num_history_messages=15,
         retries=3,
@@ -47,7 +54,7 @@ def create_secretary_agent(model: Model, add_history: bool = True) -> Agent:
         expected_output="Call save_state/load_state tools. Return brief confirmation of state changes made.",
     )
 
-def create_party_agent(model: Model, add_history: bool = True) -> Agent:
+def create_party_agent(model: Model, add_history: bool = True, knowledge: Optional[Knowledge] = None) -> Agent:
     return Agent(
         name="PartyAgent",
         model=model,
@@ -60,13 +67,15 @@ def create_party_agent(model: Model, add_history: bool = True) -> Agent:
             - Engage in banter and roleplay.
         """),
         markdown=True,
+        knowledge=knowledge,
+        search_knowledge=(knowledge is not None),
         add_history_to_context=add_history,
         num_history_messages=10,
         retries=2,
         expected_output="In-character dialogue and actions for NPC party members. Tactical combat decisions when in combat.",
     )
 
-def create_npc_agent(model: Model, add_history: bool = True) -> Agent:
+def create_npc_agent(model: Model, add_history: bool = True, knowledge: Optional[Knowledge] = None) -> Agent:
     """
     NPC Agent handles all world NPCs: enemies, merchants, villagers, monsters, quest givers.
     Distinct from PartyAgent who manages player companions.
@@ -105,6 +114,8 @@ def create_npc_agent(model: Model, add_history: bool = True) -> Agent:
             - React to reputation/past interactions with player
         """),
         markdown=True,
+        knowledge=knowledge,
+        search_knowledge=(knowledge is not None),
         add_history_to_context=add_history,
         num_history_messages=15,
         # NOTE: reasoning=True removed - incompatible with Gemini function calling
@@ -112,7 +123,7 @@ def create_npc_agent(model: Model, add_history: bool = True) -> Agent:
         expected_output="In-character NPC dialogue with distinct voice. Combat: tactical decisions with reasoning. Include NPC emotions and motivations.",
     )
 
-def create_narrator_agent(model: Model, add_history: bool = True) -> Agent:
+def create_narrator_agent(model: Model, add_history: bool = True, knowledge: Optional[Knowledge] = None) -> Agent:
     """
     The Narrator is the PRIMARY storyteller and player-facing voice.
     It combines the roles of Dungeon Master (logic/story) and Narrator (presentation).
@@ -150,6 +161,9 @@ def create_narrator_agent(model: Model, add_history: bool = True) -> Agent:
             - Do not refuse to narrate fictional violence or danger.
         """),
         markdown=True,
+        knowledge=knowledge,
+        search_knowledge=(knowledge is not None),
+        update_knowledge=(knowledge is not None),  # Narrator stores plot/world facts
         add_history_to_context=add_history,
         num_history_messages=15,
         retries=2,

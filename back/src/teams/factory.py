@@ -96,12 +96,16 @@ class TeamFactory:
             
             logger.info("[WS] DnDTeam using Fast Model: %s, Pro Model: %s", fast_model_id, pro_model_id)
             
+            # Get Knowledge from agent_factory
+            knowledge = self.agent_factory._get_or_create_knowledge() if hasattr(self.agent_factory, '_get_or_create_knowledge') else None
+            
             team = DnDTeam(
                 fast_model=fast_model,
                 pro_model=pro_model,
                 room_id=session_id,  # Pass room_id so tools are created at init
                 session_id=session_id,  # Pass session_id for history management
                 db=self.db,
+                knowledge=knowledge,  # RAG support
                 debug_mode=self.debug_mode,
             )
 

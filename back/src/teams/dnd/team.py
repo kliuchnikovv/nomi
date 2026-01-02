@@ -5,6 +5,7 @@ from agno.agent import Agent
 from agno.models.base import Model
 from agno.team import Team
 from agno.db import BaseDb
+from agno.knowledge import Knowledge
 
 from .agents import create_rules_agent, create_secretary_agent, create_party_agent, create_npc_agent, create_narrator_agent
 from .tools import DnDTools, MemberTools
@@ -17,6 +18,7 @@ class DnDTeam(Team):
         room_id: str = "",  # Required for tools
         session_id: str = "",  # Required for history management
         db: BaseDb | None = None,
+        knowledge: Optional[Knowledge] = None,  # RAG support
         markdown: bool = True,
         debug_mode: bool = False,
     ):
@@ -131,21 +133,21 @@ class DnDTeam(Team):
         # Members get MemberTools (excludes suggest_actions - only TeamLead can offer actions)
         self.member_tools = MemberTools(room_id=room_id)
         
-        # Initialize agents
+        # Initialize agents with Knowledge support
         # RulesLawyer: Fast model, NO history (pure rules lookup)
-        self.rules = create_rules_agent(fast_model, add_history=False)
+        self.rules = create_rules_agent(fast_model, add_history=False, knowledge=knowledge)
         
         # Secretary: Fast model, WITH history (needs context of what happened)
-        self.secretary = create_secretary_agent(fast_model, add_history=True)
+        self.secretary = create_secretary_agent(fast_model, add_history=True, knowledge=knowledge)
         
         # Party: Pro model, WITH history (complex persona)
-        self.party = create_party_agent(pro_model, add_history=True)
+        self.party = create_party_agent(pro_model, add_history=True, knowledge=knowledge)
         
         # NPC: Pro model, WITH history (complex persona)
-        self.npc = create_npc_agent(pro_model, add_history=True)
+        self.npc = create_npc_agent(pro_model, add_history=True, knowledge=knowledge)
         
         # Narrator: Pro model, WITH history (complex storytelling)
-        self.narrator = create_narrator_agent(pro_model, add_history=True)
+        self.narrator = create_narrator_agent(pro_model, add_history=True, knowledge=knowledge)
         
         # Add MemberTools to members (no suggest_actions - only roll_dice, save/load_state)
         # removed self.dm
@@ -162,6 +164,8 @@ class DnDTeam(Team):
             instructions=instructions,
             members=[self.rules, self.secretary, self.party, self.npc, self.narrator],  # Narrator LAST, DM removed
             tools=[self.dnd_tools],
+            knowledge=knowledge,  # TeamLead also has knowledge access
+            search_knowledge=(knowledge is not None),
             respond_directly=False,  # TeamLead orchestrates, only Narrator's final output reaches user
             add_history_to_context=True,
             num_history_runs=3,

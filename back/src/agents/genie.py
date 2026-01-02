@@ -86,6 +86,7 @@ class GenieAgent(Agent):
             tools=tools,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             description="You are a helpful personal assistant.",
             instructions=instructions,
             # expected_output=expected_output,
@@ -95,7 +96,6 @@ class GenieAgent(Agent):
             # read_tool_call_history=True,  # DISABLED: returns incomplete data (only system msg)
             store_tool_messages=True,  # Store tool call results
             # read_chat_history=True,
-            # update_knowledge=True,
             send_media_to_model=True,
             store_media=True,
             # store_history_messages=True,
