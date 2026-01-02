@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     Pressable,
     ScrollView,
@@ -9,16 +9,16 @@ import {
 } from 'react-native';
 import { NavArrowRight } from 'iconoir-react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { styles } from './styles.tsx';
+import { getStyles } from './styles.tsx';
 import { Props, CONNECTORS, Connector, Tool, Integration } from './models.tsx';
 import { useConnectors } from './context.tsx';
-import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight';
-
-const palette = tokyoNightTheme.palette;
+import { useTheme } from '../../../context/ThemeContext';
 
 export default function ConnectorsDialog({ visible, onClose }: Props) {
     const { tools, integrations, toggleTool } = useConnectors();
     const [loadingId, setLoadingId] = useState<string | null>(null);
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => getStyles(theme, palette), [theme, palette]);
 
     const handleToggle = async (integrationId: string, enabled: boolean) => {
         setLoadingId(integrationId);
@@ -61,7 +61,7 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
 
         return (
             <View style={styles.row}>
-                <View style={[styles.iconBubble, { backgroundColor: c.color }]}>
+                <View style={[styles.iconBubble, { backgroundColor: palette[c.colorKey] }]}>
                     <Icon name={c.glyph} size={20} color={palette.bg} />
                 </View>
                 <View style={styles.titleBlock}>

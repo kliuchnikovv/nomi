@@ -9,20 +9,22 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
-import { styles } from './styles.tsx';
-import React from 'react';
+import { getStyles } from './styles.tsx';
+import React, { useMemo } from 'react';
 import { Props, CONNECTORS } from './models.tsx';
 import { NavArrowRight, Mail, Calendar, WarningCircle, Trash, Github, Sparks } from 'iconoir-react-native';
 import { useConnectors } from './context.tsx';
-import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight.ts';
-
-const palette = tokyoNightTheme.palette;
+import { useTheme } from '../../../context/ThemeContext';
 import { pluginsApi } from '../../../apiClient.ts';
 
 
 export default function ConnectorScreenDialog({ onClose }: Props) {
     const { integrations, startOAuth, deleteIntegration, getIntegrations } = useConnectors();
     const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
+
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => getStyles(theme, palette), [theme, palette]);
+
     const gmailIntegrations = React.useMemo(
         () => integrations.filter(p => p.provider === 'gmail'),
         [integrations],
@@ -156,7 +158,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                             name={integration.name}
                                             enabled={!!integration.connected}
                                             glyph={details?.glyph || 'application'}
-                                            color={details?.color || palette.blue}
+                                            color={details?.colorKey ? palette[details.colorKey] : palette.blue}
                                             configID={integration.id}
                                             statusText={getIntegrationStatus(integration)}
                                             onDelete={() => deleteIntegration(integration.id)}
@@ -195,7 +197,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                             name={integration.name}
                                             enabled={!!integration.connected}
                                             glyph={details?.glyph || 'calendar'}
-                                            color={details?.color || palette.green}
+                                            color={details?.colorKey ? palette[details.colorKey] : palette.green}
                                             configID={integration.id}
                                             statusText={getIntegrationStatus(integration)}
                                             onDelete={() => deleteIntegration(integration.id)}
@@ -234,7 +236,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                             name={integration.name}
                                             enabled={!!integration.connected}
                                             glyph={details?.glyph || 'github'}
-                                            color={details?.color || palette.magenta}
+                                            color={details?.colorKey ? palette[details.colorKey] : palette.magenta}
                                             configID={integration.id}
                                             statusText={getIntegrationStatus(integration)}
                                             onDelete={() => deleteIntegration(integration.id)}
@@ -312,7 +314,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                             name={integration.name}
                                             enabled={!!integration.connected}
                                             glyph={details?.glyph || 'jules'}
-                                            color={details?.color || palette.orange}
+                                            color={details?.colorKey ? palette[details.colorKey] : palette.orange}
                                             configID={integration.id}
                                             statusText={getIntegrationStatus(integration)}
                                             onDelete={() => deleteIntegration(integration.id)}
@@ -344,7 +346,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                     name={integration.name}
                                                     enabled={true}
                                                     glyph={details?.glyph || 'application'}
-                                                    color={details?.color || palette.blue}
+                                                    color={details?.colorKey ? palette[details.colorKey] : palette.blue}
                                                     configID={integration.id}
                                                     statusText={getIntegrationStatus(integration)}
                                                 />
@@ -372,7 +374,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
                                                     name={integration.name}
                                                     enabled={false}
                                                     glyph={details?.glyph || 'application'}
-                                                    color={details?.color || palette.blue}
+                                                    color={details?.colorKey ? palette[details.colorKey] : palette.blue}
                                                     configID={integration.id}
                                                     statusText={getIntegrationStatus(integration)}
                                                 />
@@ -420,6 +422,9 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
 }) => {
     const { toggleTool } = useConnectors();
     const [isLoading, setIsLoading] = React.useState(false);
+
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => getStyles(theme, palette), [theme, palette]);
 
     const handleToggle = async (newValue: boolean) => {
         if (isLoading) return;

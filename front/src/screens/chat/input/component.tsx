@@ -12,7 +12,7 @@ import {
     Check,
     Group,
     User,
-    Brain,
+
     Square,
     Eye,
     EyeClosed
@@ -50,7 +50,7 @@ export default function ChatInput(props: Props) {
     const [modelMenuVisible, setModelMenuVisible] = useState(false);
     const [teamMenuVisible, setTeamMenuVisible] = useState(false);
     const [plusMenuVisible, setPlusMenuVisible] = useState(false);
-    const [thinkingMenuVisible, setThinkingMenuVisible] = useState(false);
+
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
 
     const { theme, palette } = useTheme();
@@ -239,15 +239,7 @@ export default function ChatInput(props: Props) {
             icon: <Camera width={20} height={20} color="#fff" />,
             onPress: () => executeWithDelay(takePhoto),
         },
-        {
-            id: 'thinking',
-            label: `Thinking: ${thinkingLevel.charAt(0).toUpperCase() + thinkingLevel.slice(1)}`,
-            icon: <Brain width={20} height={20} color={thinkingLevel !== 'off' ? theme.accent : "#fff"} />,
-            onPress: () => {
-                setPlusMenuVisible(false);
-                setTimeout(() => setThinkingMenuVisible(true), 300);
-            }
-        },
+
         // Display settings - single toggle for all details
         {
             id: 'toggle_details',
@@ -261,7 +253,7 @@ export default function ChatInput(props: Props) {
                 setPlusMenuVisible(false);
             }
         },
-    ], [pickDocument, pickImage, takePhoto, executeWithDelay, thinkingLevel, theme.accent, showToolCalls, setShowToolCalls, setShowReasoning, setShowMemberResponses]);
+    ], [pickDocument, pickImage, takePhoto, executeWithDelay, theme.accent, showToolCalls, setShowToolCalls, setShowReasoning, setShowMemberResponses]);
 
     const removeAttachment = (id: string) => {
         setAttachments(prev => prev.filter(a => a.id !== id));
@@ -325,30 +317,7 @@ export default function ChatInput(props: Props) {
         }));
     }, [selectedTeamId, selectTeam, theme.accent]);
 
-    const thinkingMenuItems: ContextMenuItem[] = useMemo(() => {
-        const levels = ['off', 'low', 'medium', 'high'];
-        return levels.map(level => ({
-            id: level,
-            label: level.charAt(0).toUpperCase() + level.slice(1),
-            icon: level === thinkingLevel ? (
-                <Check width={20} height={20} color={theme.accent} />
-            ) : undefined,
-            onPress: () => {
-                setThinkingLevel(level);
-                setThinkingMenuVisible(false);
-                // If enabling thinking (not off) and current model doesn't support it, auto-select one that does
-                if (level !== 'off') {
-                    const currentModelObj = availableModels.find(m => m.id === selectedModel);
-                    if (!currentModelObj?.supports_thinking) {
-                        const thinkingModel = availableModels.find(m => m.supports_thinking === true);
-                        if (thinkingModel) {
-                            setSelectedModel(thinkingModel.id);
-                        }
-                    }
-                }
-            },
-        }));
-    }, [thinkingLevel, setThinkingLevel, theme.accent, availableModels, selectedModel, setSelectedModel]);
+
 
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const selectedModelName = useMemo(() => {
@@ -548,13 +517,7 @@ export default function ChatInput(props: Props) {
                 position="bottom-left"
             />
 
-            <ContextMenu
-                visible={thinkingMenuVisible}
-                onClose={() => setThinkingMenuVisible(false)}
-                items={thinkingMenuItems}
-                position="bottom-left"
-                title="Thinking Level"
-            />
+
 
 
         </View>

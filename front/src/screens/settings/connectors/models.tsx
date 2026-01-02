@@ -1,7 +1,4 @@
-import React from 'react';
-import { tokyoNight, tokyoNightTheme } from '../../../themes/tokyoNight.ts';
-
-const palette = tokyoNightTheme.palette;
+import { ThemePalette } from '../../../themes/types';
 import { Chat } from '../../main/models.tsx';
 
 function deepEqual(a: any, b: any): boolean {
@@ -57,7 +54,7 @@ export type Connector = {
     name: string;
     toolKey: string;
     oauthProvider: string;
-    color: string;
+    colorKey: keyof ThemePalette;
     glyph: string;
 };
 
@@ -95,7 +92,7 @@ export const CONNECTORS: Connector[] = [
         name: 'Gmail',
         toolKey: 'gmail',
         oauthProvider: 'gmail',
-        color: palette.red,
+        colorKey: 'red',
         glyph: 'gmail',
     },
     {
@@ -103,7 +100,7 @@ export const CONNECTORS: Connector[] = [
         name: 'GitHub',
         toolKey: 'github',
         oauthProvider: 'github',
-        color: palette.magenta,
+        colorKey: 'magenta',
         glyph: 'github',
     },
     {
@@ -111,7 +108,7 @@ export const CONNECTORS: Connector[] = [
         name: 'Jules',
         toolKey: 'jules',
         oauthProvider: 'jules',
-        color: palette.orange,
+        colorKey: 'orange',
         glyph: 'jules',
     },
 ];

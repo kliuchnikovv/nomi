@@ -1,7 +1,8 @@
-from typing import Sequence
+from typing import Sequence, Optional
 
 from agno.db.postgres import PostgresDb
 from agno.agent import Agent
+from agno.knowledge import Knowledge
 from agno.models.base import Model
 from agno.tools import Toolkit, Function
 # from src.teams.genie.prompt import system_prompt_travel_agent, expected_output, instruction
@@ -31,6 +32,16 @@ When you have access to web search tool, you MUST use it for:
 
 DO NOT rely on your training data for any time-sensitive questions. ALWAYS search first.
 After searching, cite your sources with URLs when providing information.
+
+Knowledge Base (IMPORTANT):
+When you have access to a knowledge base, you can search it for:
+1. **User preferences and facts** - Things the user has told you in the past
+2. **Personal context** - Information about the user's habits, likes, dislikes
+3. **Stored information** - Documents, notes, or data previously saved
+4. **Historical context** - Past conversations or decisions
+
+Use knowledge search when you need to recall information about the user or their preferences.
+After retrieving knowledge, cite the source to help the user understand where the information came from.
 
 General Rules:
 - Always use the tools provided to answer the user's questions accurately.
@@ -62,6 +73,7 @@ class GenieAgent(Agent):
         tools: Sequence[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
         thinking: str = "off",
+        knowledge: Optional[Knowledge] = None,
     ):
         instructions = BASE_INSTRUCTIONS
         # if thinking and thinking != "off":
@@ -72,6 +84,8 @@ class GenieAgent(Agent):
             name=name,
             model=model,
             tools=tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
             description="You are a helpful personal assistant.",
             instructions=instructions,
             # expected_output=expected_output,
@@ -81,12 +95,13 @@ class GenieAgent(Agent):
             # read_tool_call_history=True,  # DISABLED: returns incomplete data (only system msg)
             store_tool_messages=True,  # Store tool call results
             # read_chat_history=True,
-            # search_knowledge=True,
             # update_knowledge=True,
             send_media_to_model=True,
             store_media=True,
             # store_history_messages=True,
             stream=True,
             stream_intermediate_steps=True,
-            reasoning=(thinking != "off")
+            reasoning=(thinking != "off"),
+            show_tool_calls=True,  # Show when knowledge search is triggered
         )
+

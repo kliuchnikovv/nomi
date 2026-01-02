@@ -4,6 +4,7 @@ import os
 from typing import List, Optional
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
+from agno.knowledge import Knowledge
 from agno.models.base import Model
 from agno.models.google import Gemini
 from src.models.safe_gemini import SafeGemini
@@ -12,6 +13,7 @@ from src.agents.genie import GenieAgent
 from src.agents.rag import RagAgent
 from src.agents.memoriser import MemoriserAgent
 from src.agents.mailer import MailerAgent
+from src.knowledge.factory import build_knowledge_base
 from src.tools.config import ToolConfigClient
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
@@ -37,12 +39,24 @@ class AgentFactory:
         self._model = model
         self._config_client = config_client
         self._debug_mode = debug_mode
+        self._knowledge: Optional[Knowledge] = None  # Lazy initialization
 
 
     @property
     def config_client(self) -> ToolConfigClient:
         """Доступ к ToolConfigClient для запроса инструментов."""
         return self._config_client
+    
+    def _get_or_create_knowledge(self) -> Knowledge:
+        """Lazy initialization of shared Knowledge instance."""
+        if self._knowledge is None:
+            try:
+                self._knowledge = build_knowledge_base()
+                logger.info("[Factory] Knowledge initialized successfully")
+            except Exception as e:
+                logger.warning("[Factory] Failed to initialize Knowledge: %s", e)
+                # Don't raise - agents can work without knowledge
+        return self._knowledge
 
     def build_model(self, model_name: str, web_search: bool = False, thinking: str = "off") -> Model:
         """Build a model instance from model name.
@@ -152,6 +166,9 @@ class AgentFactory:
                    session_id, model_name or "default", agent_type or "genie", len(tools))
 
         try:
+            # Get or create shared knowledge base
+            knowledge = self._get_or_create_knowledge()
+            
             if command_desc and command_desc.get('type'):
                 agent_type = command_desc['type']
             if agent_type and agent_type.lower() == "mailer":
@@ -167,6 +184,7 @@ class AgentFactory:
                     model=model,
                     tools=tools,
                     debug_mode=self._debug_mode,
+                    knowledge=knowledge,
                 )
             elif agent_type and agent_type.lower() == "memoriser":
                 agent = MemoriserAgent(
@@ -174,6 +192,7 @@ class AgentFactory:
                     model=model,
                     tools=tools,
                     debug_mode=self._debug_mode,
+                    knowledge=knowledge,
                 )
             else:
                 # Default to Genie
@@ -183,6 +202,7 @@ class AgentFactory:
                     tools=tools,
                     debug_mode=self._debug_mode,
                     thinking=thinking,
+                    knowledge=knowledge,
                 )
 
             # _attach_tool_context removed - ChatHistoryTool is disabled
