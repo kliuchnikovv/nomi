@@ -96,6 +96,14 @@ export const CONNECTORS: Connector[] = [
         glyph: 'gmail',
     },
     {
+        id: 'calendar',
+        name: 'Google Calendar',
+        toolKey: 'calendar',
+        oauthProvider: 'calendar',
+        colorKey: 'green',
+        glyph: 'calendar',
+    },
+    {
         id: 'github',
         name: 'GitHub',
         toolKey: 'github',
