@@ -64,7 +64,7 @@ def build_knowledge_base(
     
     # Create Gemini embedder
     embedder = GeminiEmbedder(
-        model=embedder_model,
+        id=embedder_model,  # Use 'id' parameter, not 'model'
         api_key=api_key,
         dimensions=768,  # Default for text-embedding-004
     )
