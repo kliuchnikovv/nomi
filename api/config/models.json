@@ -27,10 +27,10 @@
       "supports_thinking": true
     },
     {
-      "id": "gemini-3-flash",
-      "name": "Gemini 3 Flash",
+      "id": "gemini-3-flash-preview",
+      "name": "Gemini 3 Flash Preview",
       "provider": "google",
-      "description": "Next generation Gemini 3 Flash model",
+      "description": "Next generation Gemini 3 Flash model (Preview)",
       "context_window": 1048576,
       "max_output_tokens": 65536,
       "rpm_limit": 10,
@@ -40,10 +40,10 @@
       "supports_thinking": true
     },
     {
-      "id": "gemma-3-1b",
-      "name": "Gemma 3 1B",
+      "id": "gemma-3-1b-it",
+      "name": "Gemma 3 1B IT",
       "provider": "google",
-      "description": "Gemma 3 1B model",
+      "description": "Gemma 3 1B Instruction Tuned",
       "context_window": 8192,
       "max_output_tokens": 8192,
       "rpm_limit": 30,
@@ -53,10 +53,10 @@
       "supports_thinking": false
     },
     {
-      "id": "gemma-3-2b",
-      "name": "Gemma 3 2B",
+      "id": "gemma-3-4b-it",
+      "name": "Gemma 3 4B IT",
       "provider": "google",
-      "description": "Gemma 3 2B model",
+      "description": "Gemma 3 4B Instruction Tuned",
       "context_window": 8192,
       "max_output_tokens": 8192,
       "rpm_limit": 30,
@@ -66,10 +66,10 @@
       "supports_thinking": false
     },
     {
-      "id": "gemma-3-4b",
-      "name": "Gemma 3 4B",
+      "id": "gemma-3-12b-it",
+      "name": "Gemma 3 12B IT",
       "provider": "google",
-      "description": "Gemma 3 4B model",
+      "description": "Gemma 3 12B Instruction Tuned",
       "context_window": 8192,
       "max_output_tokens": 8192,
       "rpm_limit": 30,
@@ -79,23 +79,10 @@
       "supports_thinking": false
     },
     {
-      "id": "gemma-3-12b",
-      "name": "Gemma 3 12B",
+      "id": "gemma-3-27b-it",
+      "name": "Gemma 3 27B IT",
       "provider": "google",
-      "description": "Gemma 3 12B model",
-      "context_window": 8192,
-      "max_output_tokens": 8192,
-      "rpm_limit": 30,
-      "rpd_limit": 14400,
-      "supports_streaming": true,
-      "supports_tools": false,
-      "supports_thinking": false
-    },
-    {
-      "id": "gemma-3-27b",
-      "name": "Gemma 3 27B",
-      "provider": "google",
-      "description": "Gemma 3 27B model",
+      "description": "Gemma 3 27B Instruction Tuned",
       "context_window": 8192,
       "max_output_tokens": 8192,
       "rpm_limit": 30,
