@@ -19,7 +19,7 @@ export function AuthScreen() {
         if (isLogin) {
             login(email, password);
         } else {
-            register(email, name, password);
+            register(email, password, name);
         }
     };
 

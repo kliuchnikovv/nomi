@@ -23,25 +23,14 @@ DEFAULT_CHUNK_SIZE = 3000  # Good for code and documents
 DEFAULT_CHUNK_OVERLAP = 300  # 10% overlap for context continuity
 
 
-def build_knowledge_base(
+
+def build_vector_db(
     db_url: Optional[str] = None,
     table_name: str = DEFAULT_TABLE_NAME,
     embedder_model: str = DEFAULT_EMBEDDER_MODEL,
-) -> Knowledge:
+) -> PgVector:
     """
-    Build a Knowledge instance with PgVector and GeminiEmbedder.
-    
-    Args:
-        db_url: PostgreSQL connection URL. If None, reads from DB_DSN env var.
-        table_name: Name of the table to store vectors (default: agent_knowledge).
-        embedder_model: Gemini embedding model (default: models/text-embedding-004).
-        
-    Returns:
-        Configured Knowledge instance.
-        
-    Raises:
-        ValueError: If db_url is not provided and DB_DSN is not set.
-        ValueError: If GOOGLE_API_KEY is not set.
+    Build a PgVector instance.
     """
     # Get database URL from environment if not provided
     if db_url is None:
@@ -61,7 +50,7 @@ def build_knowledge_base(
         raise ValueError("GOOGLE_API_KEY environment variable not set")
     
     logger.info(
-        "[KnowledgeFactory] Building Knowledge with PgVector + GeminiEmbedder (table=%s, model=%s)",
+        "[KnowledgeFactory] Building PgVector + GeminiEmbedder (table=%s, model=%s)",
         table_name,
         embedder_model,
     )
@@ -80,6 +69,7 @@ def build_knowledge_base(
             table_name=table_name,
             embedder=embedder,
         )
+        return vector_db
     except Exception as e:
         error_msg = str(e)
         if "vector" in error_msg.lower() and "not available" in error_msg.lower():
@@ -89,6 +79,18 @@ def build_knowledge_base(
                 "in your database. RAG features will be disabled."
             )
         raise
+
+def build_knowledge_base(
+    db_url: Optional[str] = None,
+    table_name: str = DEFAULT_TABLE_NAME,
+    embedder_model: str = DEFAULT_EMBEDDER_MODEL,
+) -> Knowledge:
+    """
+    Build a default Knowledge instance with PgVector and GeminiEmbedder.
+    Note: This returns a global knowledge base without user isolation.
+    Use UserScopedKnowledge with build_vector_db for multi-user support.
+    """
+    vector_db = build_vector_db(db_url, table_name, embedder_model)
     
     # Create knowledge base
     knowledge = Knowledge(
@@ -99,3 +101,4 @@ def build_knowledge_base(
     logger.info("[KnowledgeFactory] Knowledge created successfully")
     
     return knowledge
+

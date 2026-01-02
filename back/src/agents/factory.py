@@ -4,27 +4,24 @@ import os
 from typing import List, Optional
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
-from agno.knowledge import Knowledge
 from agno.models.base import Model
-from agno.models.google import Gemini
-from src.models.safe_gemini import SafeGemini
+from agno.vectordb.pgvector import PgVector
 
+from src.models.safe_gemini import SafeGemini
 from src.agents.genie import GenieAgent
 from src.agents.rag import RagAgent
 from src.agents.memoriser import MemoriserAgent
 from src.agents.mailer import MailerAgent
-from src.knowledge.factory import build_knowledge_base
+from src.knowledge.factory import build_vector_db
+from src.knowledge.user_knowledge import UserScopedKnowledge
 from src.tools.config import ToolConfigClient
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
 from src.tools.scheduler import SchedulerTools
-from agno.tools.gmail import GmailTools
-from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools import Toolkit
 from google.oauth2.credentials import Credentials
 
-
-logger = logging.getLogger(__name__)
+# ...
 
 class AgentFactory:
     def __init__(
@@ -39,24 +36,47 @@ class AgentFactory:
         self._model = model
         self._config_client = config_client
         self._debug_mode = debug_mode
-        self._knowledge: Optional[Knowledge] = None  # Lazy initialization
-
+        self._vector_db: Optional[PgVector] = None  # Lazy initialization of DB connection
 
     @property
     def config_client(self) -> ToolConfigClient:
         """Доступ к ToolConfigClient для запроса инструментов."""
         return self._config_client
     
-    def _get_or_create_knowledge(self) -> Knowledge:
-        """Lazy initialization of shared Knowledge instance."""
-        if self._knowledge is None:
+    def _get_or_create_vector_db(self) -> PgVector:
+        """Lazy initialization of shared Vector DB instance."""
+        if self._vector_db is None:
             try:
-                self._knowledge = build_knowledge_base()
-                logger.info("[Factory] Knowledge initialized successfully")
+                self._vector_db = build_vector_db()
+                logger.info("[Factory] Vector DB initialized successfully")
             except Exception as e:
-                logger.error("[Factory] Failed to initialize Knowledge: %s", e, exc_info=True)
-                # Don't raise - agents can work without knowledge
-        return self._knowledge
+                logger.error("[Factory] Failed to initialize Vector DB: %s", e, exc_info=True)
+        return self._vector_db
+
+    # ... (build_model omitted)
+
+    async def build(
+        self,
+        session_id: str,
+        # ... args ...
+        user_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
+    ) -> Agent:
+        # ...
+        
+        # Use provided user_id or fallback to session_id (chat room ID) for isolation
+        rag_user_id = user_id or session_id
+        
+        logger.info("[WS] Building agent: session_id=%s rag_user_id=%s model=%s type=%s", 
+                   session_id, rag_user_id, model_name or "default", agent_type)
+
+        try:
+            # Create user-scoped knowledge base
+            vector_db = self._get_or_create_vector_db()
+            knowledge = None
+            if vector_db:
+                knowledge = UserScopedKnowledge(user_id=rag_user_id, vector_db=vector_db)
+
 
     def build_model(self, model_name: str, web_search: bool = False, thinking: str = "off") -> Model:
         """Build a model instance from model name.
@@ -131,7 +151,7 @@ class AgentFactory:
         
         logger.debug("[WS] tools: %s", [t.name for t in tools_specs] if tools_specs else [])
         if tools_specs:
-            # Строим инструменты из полученных спецификаций
+            # Build tools from specs
             config = ToolsConfig()
             for tool_spec in tools_specs:
                 if tool_spec.enabled:
@@ -161,13 +181,20 @@ class AgentFactory:
                 # Pass user_id, chat_id, AND built tools to SchedulerTools
                 tools.append(SchedulerTools(user_id=user_id, chat_id=chat_id, tools_list=tools_for_scheduler))
         
+        # Setup RAG User ID: use user_id if explicit, or session_id if anonymous
+        rag_user_id = user_id or session_id
+        
         logger.debug("[WS] tools: %s", [t.name for t in tools ])
-        logger.info("[WS] Building agent: session_id=%s model=%s agent_type=%s tools_count=%d", 
-                   session_id, model_name or "default", agent_type or "genie", len(tools))
+        logger.info("[WS] Building agent: session_id=%s rag_user_id=%s model=%s agent_type=%s tools_count=%d", 
+                   session_id, rag_user_id, model_name or "default", agent_type or "genie", len(tools))
 
         try:
-            # Get or create shared knowledge base
-            knowledge = self._get_or_create_knowledge()
+            # Build User-Scoped Knowledge Base
+            vector_db = self._get_or_create_vector_db()
+            knowledge = None
+            if vector_db:
+                # Create a lightweight Knowledge wrapper for this user
+                knowledge = UserScopedKnowledge(user_id=rag_user_id, vector_db=vector_db)
             
             if command_desc and command_desc.get('type'):
                 agent_type = command_desc['type']
