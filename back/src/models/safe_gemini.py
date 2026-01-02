@@ -32,7 +32,7 @@ class SafeGemini(Gemini):
     
     def __init__(
         self,
-        id: str = "gemini-2.0-flash-exp",
+        id: str = "gemini-2.5-flash",
         thinking_budget: int | None = None,
         include_thoughts: bool = False,
         **kwargs
@@ -41,7 +41,7 @@ class SafeGemini(Gemini):
         Initialize SafeGemini with optional thinking support.
         
         Args:
-            id: Model ID (e.g. "gemini-2.5-pro", "gemini-2.5-flash")
+            id: Model ID (e.g. "gemini-2.5-flash", "gemini-2.5-flash-lite")
             thinking_budget: Number of tokens for thinking (Gemini 2.5+ native reasoning)
             include_thoughts: Whether to include thinking in output (Gemini 2.5+ native reasoning)
             **kwargs: Other Gemini parameters

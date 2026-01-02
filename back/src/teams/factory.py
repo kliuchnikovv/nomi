@@ -61,8 +61,12 @@ class TeamFactory:
             logger.info("[WS] Instantiating DnDTeam with room_id=%s", session_id)
             
             # Define model IDs
-            fast_model_id = 'gemini-2.0-flash-exp'
-            pro_model_id = 'gemini-3-pro-preview'
+            # fast_model_id = 'gemini-2.0-flash-exp'
+            # pro_model_id = 'gemini-1.5-pro'
+            
+            # Models from screenshot (Free Tier)
+            fast_model_id = 'gemini-2.5-flash-lite'
+            pro_model_id = 'gemini-2.5-flash'
             
             api_key = os.getenv("GOOGLE_API_KEY")
             
