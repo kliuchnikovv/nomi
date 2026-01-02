@@ -1,3 +1,5 @@
+import logging
+import json
 from typing import Optional, List
 from agno.agent import Agent
 from agno.models.base import Model
@@ -70,7 +72,7 @@ class BriefingAgent(Agent):
         debug_mode: bool = False,
     ):
         # Inject schema into instructions
-        instructions_with_schema = BRIEFING_INSTRUCTIONS.replace("{json_schema}", BriefingResponse.model_json_schema_json(indent=2))
+        instructions_with_schema = BRIEFING_INSTRUCTIONS.replace("{json_schema}", json.dumps(BriefingResponse.model_json_schema(), indent=2))
 
         super().__init__(
             model=model,
