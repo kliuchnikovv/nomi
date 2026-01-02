@@ -170,6 +170,47 @@ async def run_query(request: QueryRequest):
 
     return {"answer": answer, "reasoning": reasoning}
 
+class BriefingRequest(BaseModel):
+    user_id: str
+
+@app.post("/api/briefing")
+async def generate_briefing(request: BriefingRequest):
+    session_id = str(uuid.uuid4())
+    
+    # 1. Fetch tools config for this user
+    tools_specs = []
+    try:
+        tools_specs = tool_config_client.fetch_tools(request.user_id)
+        logging.info(f"Fetched {len(tools_specs)} tools for user {request.user_id}")
+    except Exception as e:
+        logging.warning(f"Failed to fetch tools for user {request.user_id}: {e}")
+
+    # 2. Build BriefingAgent with tools
+    agent = await agent_factory.build(
+        session_id=session_id,
+        user_id=request.user_id,
+        agent_type="briefing",
+        tools_specs=tools_specs
+    )
+    
+    # 3. Run agent to get briefing
+    # Since BriefingAgent.response_model is set, run() returns a RunResponse
+    # whose content should be the Pydantic object (BriefingResponse)
+    try:
+        response = await agent.arun("Generate the morning briefing.", stream=False)
+        
+        # Extract structured output
+        if response and response.content:
+            # response.content should be a BriefingResponse object due to response_model
+            if hasattr(response.content, "model_dump"):
+                return response.content.model_dump()
+            return response.content
+            
+        return {"error": "No content generated"}
+    except Exception as e:
+        logging.error(f"Briefing generation failed: {e}", exc_info=True)
+        return {"error": str(e)}
+
 # Sessions for OAuth state (required for request.session)
 session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")
 app.add_middleware(SessionMiddleware, secret_key=session_secret)

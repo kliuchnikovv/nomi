@@ -206,6 +206,7 @@ class AgentFactory:
                 agent = BriefingAgent(
                     model=model,
                     knowledge=knowledge,
+                    tools=tools,
                     debug_mode=self._debug_mode,
                 )
             else:

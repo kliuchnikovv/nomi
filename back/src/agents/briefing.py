@@ -5,7 +5,7 @@ from agno.knowledge import Knowledge
 from agno.tools import Toolkit
 from pydantic import BaseModel, Field
 
-from src.tools.mock_productivity import MockProductivityTools
+
 
 class BriefingItem(BaseModel):
     id: str = Field(..., description="Unique identifier for the item")
@@ -27,9 +27,9 @@ BRIEFING_INSTRUCTIONS = """You are the Executive Morning Briefing Agent. Your go
 ### PIPELINE STEPS:
 
 1.  **DATA GATHERING**:
-    - Call `get_upcoming_events` to see the day's schedule.
-    - Call `get_recent_emails` to check for urgent communications.
-    - Call `get_github_issues` to see high-priority tasks.
+    - Check your calendar for today's schedule.
+    - Check your emails for urgent communications.
+    - Check GitHub for high-priority tasks/issues.
 
 2.  **SANITIZATION & PRIORITIZATION**:
     - Classify items as `CRITICAL`, `INFO`, or `NOISE`.
@@ -58,6 +58,7 @@ class BriefingAgent(Agent):
     def __init__(
         self,
         model: Model,
+        tools: Optional[List[Toolkit]] = None,
         knowledge: Optional[Knowledge] = None,
         debug_mode: bool = False,
     ):
@@ -65,7 +66,7 @@ class BriefingAgent(Agent):
             model=model,
             name="BriefingAgent",
             instructions=BRIEFING_INSTRUCTIONS,
-            tools=[MockProductivityTools()],
+            tools=tools,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),
             response_model=BriefingResponse,

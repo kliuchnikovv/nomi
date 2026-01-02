@@ -19,6 +19,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Sidebar } from '../../components/Sidebar';
 import { Plugin, PluginChat } from './models';
 import { ThemePalette } from '../../themes/types';
+import { BriefingCard } from '../chat/components/BriefingCard';
 
 export interface RightSidebarProps {
     variant: 'inline' | 'overlay';
@@ -349,6 +350,7 @@ function RightSidebarContent({
             <View style={[styles.sectionHeader, { paddingTop: insets.top + 12 }]}>
                 <Text style={styles.sectionTitle}>Inbox Chats</Text>
             </View>
+            <BriefingCard />
             {loading && plugins.length === 0 ? (
                 <View style={styles.emptyState}>
                     <ActivityIndicator size="large" color={theme.accent} />

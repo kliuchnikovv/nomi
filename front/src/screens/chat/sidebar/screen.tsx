@@ -12,7 +12,6 @@ import { Skeleton } from '../../../components/Skeleton';
 import { Sidebar } from '../../../components/Sidebar';
 import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
-import { BriefingCard } from '../components/BriefingCard';
 
 const pad = (value: number) => value.toString().padStart(2, '0');
 
@@ -350,8 +349,8 @@ function ChatListContent({
                     data={visibleChats}
                     keyExtractor={(item) => item.id}
                     renderItem={renderItem}
+                    renderItem={renderItem}
                     ItemSeparatorComponent={() => <View style={styles.separator} />}
-                    ListHeaderComponent={<BriefingCard />}
                     ListFooterComponent={renderListFooter}
                     ListEmptyComponent={
                         <View style={{ padding: 32, alignItems: 'center' }}>

@@ -242,3 +242,8 @@ export const authApi = {
     getMe: () => apiClient.get<any>(`${API_URL()}/auth/me`),
     updateMe: (body: any) => apiClient.put<any>(`${API_URL()}/auth/me`, body),
 };
+
+export const briefingApi = {
+    getBriefing: (userId: string = "00000000-0000-0000-0000-000000000000") =>
+        apiClient.post<any>(`${API_URL()}/briefing`, { user_id: userId }),
+};

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
-import { useTheme } from '../../../../context/ThemeContext'; // Adjusted path
+import { useTheme } from '../../../context/ThemeContext'; // Adjusted path
 import { createStyles } from '../styles'; // Adjusted path, assuming reusing chat styles or create new ones
 import { Ionicons } from '@expo/vector-icons';
 
@@ -15,6 +15,8 @@ interface BriefingItem {
     source_link?: string;
 }
 
+import { briefingApi } from '../../../apiClient';
+
 interface BriefingData {
     headline: string;
     summary: string;
@@ -28,80 +30,70 @@ export const BriefingCard = () => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<BriefingData | null>(null);
 
-    // Mock loading for now, later hook up to agent
+    // Load real briefing data
     const loadBriefing = async () => {
         setLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            setData({
-                headline: "3 Critical blockers today",
-                summary: "You have a tight schedule with a boss meeting and urgent API issues to resolve.",
-                items: [
-                    {
-                        id: '1', type: 'meeting', priority: 'CRITICAL', title: 'Quarterly Review',
-                        description: 'Meeting with Boss to discuss Q1 results.',
-                        context: 'Last interaction: He asked for the budget report on Monday.',
-                        action_required: true
-                    },
-                    {
-                        id: '2', type: 'task', priority: 'INFO', title: 'Fix login timeout',
-                        description: 'Github Issue #402',
-                        context: 'See your notes on "Auth Optimization" in Obsidian.',
-                        action_required: false
-                    }
-                ]
-            });
+        try {
+            const result = await briefingApi.getBriefing();
+            if (result && !result.error) {
+                setData(result);
+                setExpanded(true);
+            } else {
+                console.error("Briefing error:", result?.error);
+            }
+        } catch (e) {
+            console.error("Failed to load briefing:", e);
+        } finally {
             setLoading(false);
-            setExpanded(true);
-        }, 1500);
+        }
     };
 
     if (!data && !loading) {
         return (
-            <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <TouchableOpacity onPress={loadBriefing} style={styles.header}>
                     <View style={styles.headerTitleContainer}>
-                        <Ionicons name="sunny" size={24} color={theme.colors.primary} />
-                        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Morning Briefing</Text>
+                        <Ionicons name="sunny" size={24} color={theme.primary} />
+                        <Text style={[styles.headerTitle, { color: theme.text }]}>Morning Briefing</Text>
                     </View>
-                    <Text style={[styles.actionText, { color: theme.colors.primary }]}>Prepare</Text>
+                    <Text style={[styles.actionText, { color: theme.primary }]}>Prepare</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
     return (
-        <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <TouchableOpacity onPress={() => setExpanded(!expanded)} style={styles.header}>
                 <View style={styles.headerTitleContainer}>
-                    <Ionicons name="sunny" size={24} color={theme.colors.primary} />
-                    <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+                    <Ionicons name="sunny" size={24} color={theme.primary} />
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>
                         {loading ? "Preparing..." : data?.headline || "Your Focus Today"}
                     </Text>
                 </View>
-                {loading ? <ActivityIndicator size="small" color={theme.colors.primary} /> :
-                    <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={theme.colors.textSecondary} />
+                {loading ? <ActivityIndicator size="small" color={theme.primary} /> :
+                    <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={theme.textSecondary} />
                 }
             </TouchableOpacity>
 
             {expanded && data && (
                 <View style={styles.content}>
-                    <Text style={[styles.summary, { color: theme.colors.textSecondary }]}>{data.summary}</Text>
+                    <Text style={[styles.summary, { color: theme.textSecondary }]}>{data.summary}</Text>
 
                     {data.items.map((item) => (
-                        <View key={item.id} style={[styles.itemContainer, { borderLeftColor: item.priority === 'CRITICAL' ? theme.colors.error : theme.colors.info }]}>
+                        <View key={item.id} style={[styles.itemContainer, { borderLeftColor: item.priority === 'CRITICAL' ? theme.error : theme.info }]}>
                             <View style={styles.itemHeader}>
-                                <Text style={[styles.itemTitle, { color: theme.colors.text }]}>{item.title}</Text>
+                                <Text style={[styles.itemTitle, { color: theme.text }]}>{item.title}</Text>
                                 {item.source_link && (
                                     <TouchableOpacity onPress={() => Linking.openURL(item.source_link!)}>
-                                        <Ionicons name="link" size={16} color={theme.colors.primary} />
+                                        <Ionicons name="link" size={16} color={theme.primary} />
                                     </TouchableOpacity>
                                 )}
                             </View>
-                            <Text style={[styles.itemDescription, { color: theme.colors.textSecondary }]}>{item.description}</Text>
+                            <Text style={[styles.itemDescription, { color: theme.textSecondary }]}>{item.description}</Text>
                             {item.context && (
-                                <View style={[styles.contextContainer, { backgroundColor: theme.colors.background }]}>
-                                    <Text style={[styles.contextText, { color: theme.colors.textSecondary }]}>
+                                <View style={[styles.contextContainer, { backgroundColor: theme.background }]}>
+                                    <Text style={[styles.contextText, { color: theme.textSecondary }]}>
                                         <Ionicons name="bulb-outline" size={14} /> {item.context}
                                     </Text>
                                 </View>

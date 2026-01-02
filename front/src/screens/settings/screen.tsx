@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/context.tsx';
 import { createStyles } from './styles.tsx';
@@ -26,11 +27,16 @@ export default function SettingsModal({ visible, onClose }: Props) {
     const [connectorsOpen, setConnectorsOpen] = useState(false);
     const [themeExpanded, setThemeExpanded] = useState(false);
     const [devExpanded, setDevExpanded] = useState(false);
+    const [briefingExpanded, setBriefingExpanded] = useState(false);
     const [apiUrl, setApiUrlState] = useState('');
+    const [briefingTime, setBriefingTime] = useState('09:00');
 
-    // Load current API URL on mount
+    // Load current API URL and Briefing Time on mount
     useEffect(() => {
         initApiUrl().then(url => setApiUrlState(url));
+        AsyncStorage.getItem('briefing_time').then(t => {
+            if (t) setBriefingTime(t);
+        });
     }, [visible]);
 
     // Get current theme palette
@@ -53,6 +59,21 @@ export default function SettingsModal({ visible, onClose }: Props) {
             Alert.alert('Saved', 'API URL updated. Restart the app for full effect.');
         } catch (e) {
             Alert.alert('Error', 'Failed to save API URL');
+        }
+    };
+
+    const handleSaveBriefingTime = async () => {
+        try {
+            // Simple validation
+            const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+            if (!timeRegex.test(briefingTime)) {
+                Alert.alert('Invalid Time', 'Please use HH:MM format (e.g., 09:00)');
+                return;
+            }
+            await AsyncStorage.setItem('briefing_time', briefingTime);
+            Alert.alert('Saved', `Morning Briefing set to ${briefingTime}`);
+        } catch (e) {
+            Alert.alert('Error', 'Failed to save Briefing Time');
         }
     };
 
@@ -132,6 +153,64 @@ export default function SettingsModal({ visible, onClose }: Props) {
                                             )}
                                         </Pressable>
                                     ))}
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Morning Briefing Section */}
+                        <View style={{ marginBottom: 16 }}>
+                            <Pressable
+                                onPress={() => setBriefingExpanded(!briefingExpanded)}
+                                style={styles.themeHeader}
+                            >
+                                <View>
+                                    <Text style={styles.label}>Daily Morning Briefing</Text>
+                                    <Text style={styles.themeCurrentValue}>
+                                        {briefingTime}
+                                    </Text>
+                                </View>
+                                <Text style={styles.chevron}>
+                                    {briefingExpanded ? '▼' : '▶'}
+                                </Text>
+                            </Pressable>
+                            {briefingExpanded && (
+                                <View style={{ marginTop: 12, gap: 8 }}>
+                                    <Text style={[styles.label, { marginBottom: 4 }]}>Briefing Time</Text>
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <TextInput
+                                            value={briefingTime}
+                                            onChangeText={setBriefingTime}
+                                            style={{
+                                                flex: 1,
+                                                borderWidth: 1,
+                                                borderColor: theme.border,
+                                                borderRadius: 8,
+                                                padding: 12,
+                                                color: theme.text,
+                                                backgroundColor: theme.background,
+                                                fontSize: 16,
+                                            }}
+                                            placeholder="HH:MM"
+                                            placeholderTextColor={theme.textSecondary}
+                                            keyboardType="numbers-and-punctuation"
+                                            maxLength={5}
+                                        />
+                                        <Pressable
+                                            onPress={handleSaveBriefingTime}
+                                            style={{
+                                                backgroundColor: theme.primary,
+                                                borderRadius: 8,
+                                                paddingHorizontal: 20,
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                            }}
+                                        >
+                                            <Text style={{ color: '#fff', fontWeight: '600' }}>Save</Text>
+                                        </Pressable>
+                                    </View>
+                                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>
+                                        Receive your daily digest at this time.
+                                    </Text>
                                 </View>
                             )}
                         </View>
