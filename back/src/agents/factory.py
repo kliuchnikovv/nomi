@@ -58,8 +58,8 @@ class AgentFactory:
         Raises:
             ValueError: If model name is not supported
         """
-        # Support Gemini models
-        if model_name.startswith("gemini-"):
+        # Support Gemini and Gemma models
+        if model_name.startswith("gemini-") or model_name.startswith("gemma-"):
             api_key = os.getenv("GOOGLE_API_KEY")
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable not set")
