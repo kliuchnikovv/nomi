@@ -245,5 +245,5 @@ export const authApi = {
 
 export const briefingApi = {
     getBriefing: () =>
-        apiClient.post<any>(`${API_URL()}/api/briefing`, {}),
+        apiClient.post<any>(`${API_URL()}/briefing`, {}),
 };

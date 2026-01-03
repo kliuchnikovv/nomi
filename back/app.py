@@ -13,6 +13,7 @@ from src.agents.genie import GenieAgent
 from src.server import ws as ws_server
 from src.agents.factory import AgentFactory
 from src.tools.config import ToolConfigClient
+from src.tools.factory import ToolsConfig
 
 from dotenv import load_dotenv
 
@@ -178,10 +179,10 @@ async def generate_briefing(request: BriefingRequest):
     session_id = str(uuid.uuid4())
     
     # 1. Fetch tools config for this user
-    tools_specs = []
+    tools_specs = ToolsConfig()
     try:
         tools_specs = await tool_config_client.fetch_tools(request.user_id)
-        logging.info(f"Fetched {len(tools_specs)} tools for user {request.user_id}")
+        logging.info(f"Fetched {len(tools_specs.entries)} tools for user {request.user_id}")
     except Exception as e:
         logging.warning(f"Failed to fetch tools for user {request.user_id}: {e}")
 
