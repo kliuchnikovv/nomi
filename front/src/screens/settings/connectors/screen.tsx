@@ -22,7 +22,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
             <Pressable style={styles.backdrop} onPress={onClose} />
             <View style={styles.sheet}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <Text style={styles.dialogTitle}>Apps & connectors</Text>
+                    <Text style={styles.dialogTitle}>Integrations</Text>
                     {/* Tab Selector */}
                     <View style={{ flexDirection: 'row', backgroundColor: theme.surfaceHighlight, borderRadius: 8, padding: 2 }}>
                         <Pressable
@@ -60,7 +60,7 @@ export default function ConnectorScreenDialog({ onClose }: Props) {
 
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                    style={{ flex: 1, maxHeight: 500 }}
+                    style={{ height: 500 }}
                 >
                     {activeTab === 'connected' ? <ConnectedTab /> : <BrowserTab />}
                 </KeyboardAvoidingView>

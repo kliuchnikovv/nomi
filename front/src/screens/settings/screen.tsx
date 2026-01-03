@@ -230,7 +230,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
                                 ]}
                             >
                                 <Text style={styles.logoutText}>
-                                    Connectors
+                                    Integrations
                                 </Text>
                             </Pressable>
                         </View>

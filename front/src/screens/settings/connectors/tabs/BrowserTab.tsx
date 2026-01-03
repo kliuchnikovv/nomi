@@ -27,6 +27,7 @@ export function BrowserTab() {
             flexWrap: 'wrap',
             gap: 16,
             paddingVertical: 8,
+            paddingHorizontal: 4,
         },
         card: {
             backgroundColor: theme.surfaceHighlight,
@@ -34,10 +35,10 @@ export function BrowserTab() {
             padding: 16,
             alignItems: 'center',
             justifyContent: 'center',
-            borderWidth: StyleSheet.hairlineWidth,
+            borderWidth: 1,
             borderColor: theme.border,
-            width: '47%', // roughly 2 columns with gap
-            aspectRatio: 1, // square cards
+            width: '47%',
+            height: 140,
         },
         cardPressed: {
             opacity: 0.8,
@@ -255,21 +256,19 @@ const ConnectorCard = ({ connector, onPress, styles, palette }: {
     onPress: () => void;
     styles: any;
     palette: any;
-}) => {
-    return (
-        <Pressable
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-            onPress={onPress}
-        >
-            <View style={[styles.iconBubble, { backgroundColor: palette[connector.colorKey] || palette.blue }]}>
-                {connector.glyph === 'mail' && <Mail width={32} height={32} color="#fff" strokeWidth={2} />}
-                {connector.glyph === 'gmail' && <Mail width={32} height={32} color="#fff" strokeWidth={2} />}
-                {connector.glyph === 'calendar' && <Calendar width={32} height={32} color="#fff" strokeWidth={2} />}
-                {connector.glyph === 'github' && <Github width={32} height={32} color="#fff" strokeWidth={2} />}
-                {connector.glyph === 'jules' && <Sparks width={32} height={32} color="#fff" strokeWidth={2} />}
-                {connector.glyph !== 'mail' && connector.glyph !== 'gmail' && connector.glyph !== 'calendar' && connector.glyph !== 'github' && connector.glyph !== 'jules' && <WarningCircle width={32} height={32} color="#fff" strokeWidth={2} />}
-            </View>
-            <Text style={styles.title}>{connector.name}</Text>
-        </Pressable>
-    );
-};
+}) => (
+    <Pressable
+        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        onPress={onPress}
+    >
+        <View style={[styles.iconBubble, { backgroundColor: palette[connector.colorKey] || palette.blue }]}>
+            {connector.glyph === 'mail' && <Mail width={32} height={32} color="#fff" strokeWidth={2} />}
+            {connector.glyph === 'gmail' && <Mail width={32} height={32} color="#fff" strokeWidth={2} />}
+            {connector.glyph === 'calendar' && <Calendar width={32} height={32} color="#fff" strokeWidth={2} />}
+            {connector.glyph === 'github' && <Github width={32} height={32} color="#fff" strokeWidth={2} />}
+            {connector.glyph === 'jules' && <Sparks width={32} height={32} color="#fff" strokeWidth={2} />}
+            {connector.glyph !== 'mail' && connector.glyph !== 'gmail' && connector.glyph !== 'calendar' && connector.glyph !== 'github' && connector.glyph !== 'jules' && <WarningCircle width={32} height={32} color="#fff" strokeWidth={2} />}
+        </View>
+        <Text style={styles.title}>{connector.name}</Text>
+    </Pressable>
+);

@@ -1,6 +1,32 @@
 {
   "models": [
     {
+      "id": "gemini-2.0-flash-lite",
+      "name": "Gemini 2.0 Flash-Lite",
+      "provider": "google",
+      "description": "Lightweight Gemini 2.0 for high throughput",
+      "context_window": 1048576,
+      "max_output_tokens": 8192,
+      "rpm_limit": 30,
+      "rpd_limit": 1500,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false
+    },
+    {
+      "id": "gemini-2.0-flash",
+      "name": "Gemini 2.0 Flash",
+      "provider": "google",
+      "description": "Gemini 2.0 Flash with large context window",
+      "context_window": 1048576,
+      "max_output_tokens": 8192,
+      "rpm_limit": 15,
+      "rpd_limit": 1500,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false
+    },
+    {
       "id": "gemini-2.5-flash-lite",
       "name": "Gemini 2.5 Flash-Lite",
       "provider": "google",
@@ -27,6 +53,19 @@
       "supports_thinking": true
     },
     {
+      "id": "gemini-2.5-pro",
+      "name": "Gemini 2.5 Pro",
+      "provider": "google",
+      "description": "Most capable Gemini model for complex tasks with thinking support",
+      "context_window": 1048576,
+      "max_output_tokens": 65536,
+      "rpm_limit": 5,
+      "rpd_limit": 100,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": true
+    },
+    {
       "id": "gemini-3-flash-preview",
       "name": "Gemini 3 Flash Preview",
       "provider": "google",
@@ -40,69 +79,17 @@
       "supports_thinking": true
     },
     {
-      "id": "gemma-3-1b-it",
-      "name": "Gemma 3 1B IT",
+      "id": "gemini-3-pro-preview",
+      "name": "Gemini 3 Pro Preview",
       "provider": "google",
-      "description": "Gemma 3 1B Instruction Tuned",
-      "context_window": 8192,
-      "max_output_tokens": 8192,
-      "rpm_limit": 30,
-      "rpd_limit": 14400,
-      "supports_streaming": true,
-      "supports_tools": false,
-      "supports_thinking": false
-    },
-    {
-      "id": "gemma-3-4b-it",
-      "name": "Gemma 3 4B IT",
-      "provider": "google",
-      "description": "Gemma 3 4B Instruction Tuned",
-      "context_window": 8192,
-      "max_output_tokens": 8192,
-      "rpm_limit": 30,
-      "rpd_limit": 14400,
-      "supports_streaming": true,
-      "supports_tools": false,
-      "supports_thinking": false
-    },
-    {
-      "id": "gemma-3-12b-it",
-      "name": "Gemma 3 12B IT",
-      "provider": "google",
-      "description": "Gemma 3 12B Instruction Tuned",
-      "context_window": 8192,
-      "max_output_tokens": 8192,
-      "rpm_limit": 30,
-      "rpd_limit": 14400,
-      "supports_streaming": true,
-      "supports_tools": false,
-      "supports_thinking": false
-    },
-    {
-      "id": "gemma-3-27b-it",
-      "name": "Gemma 3 27B IT",
-      "provider": "google",
-      "description": "Gemma 3 27B Instruction Tuned",
-      "context_window": 8192,
-      "max_output_tokens": 8192,
-      "rpm_limit": 30,
-      "rpd_limit": 14400,
-      "supports_streaming": true,
-      "supports_tools": false,
-      "supports_thinking": false
-    },
-    {
-      "id": "gemini-2.5-flash-native-audio-dialog",
-      "name": "Gemini 2.5 Flash Audio",
-      "provider": "google",
-      "description": "Native Audio Dialog model (Live API)",
+      "description": "Next generation Gemini 3 Pro model (Preview)",
       "context_window": 1048576,
-      "max_output_tokens": 8192,
-      "rpm_limit": 1000,
-      "rpd_limit": 100000,
+      "max_output_tokens": 65536,
+      "rpm_limit": 5,
+      "rpd_limit": 100,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": true
     }
   ]
 }
