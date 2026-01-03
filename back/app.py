@@ -103,7 +103,8 @@ if db_dsn:
         db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
     db = PostgresDb(db_dsn)
 
-tool_config_url = os.getenv("TOOL_CONFIG_URL", "http://localhost:8080")
+
+tool_config_url = os.getenv("GO_API_URL", "http://localhost:8080")
 tool_config_client = ToolConfigClient(tool_config_url)
 agent_factory = AgentFactory(
     db=db,
