@@ -103,6 +103,7 @@ func New(
 			return h
 		}()
 		briefingHandler = handlers.NewBriefingHandler(db, llmService)
+		dashboardHandler = handlers.NewDashboardHandler(db)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -220,6 +221,7 @@ func New(
 	manager.Mount(pluginGroup)
 
 	r.POST("/api/briefing", wrapWithAuth(briefingHandler.GetBriefing, authMiddleware))
+	r.GET("/api/dashboard", wrapWithAuth(dashboardHandler.GetDashboard, authMiddleware))
 
 	return &Server{
 		httpServer: &http.Server{
