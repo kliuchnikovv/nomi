@@ -28,14 +28,24 @@ export default function SettingsModal({ visible, onClose }: Props) {
     const [themeExpanded, setThemeExpanded] = useState(false);
     const [devExpanded, setDevExpanded] = useState(false);
     const [briefingExpanded, setBriefingExpanded] = useState(false);
+    const [weatherExpanded, setWeatherExpanded] = useState(false);
     const [apiUrl, setApiUrlState] = useState('');
     const [briefingTime, setBriefingTime] = useState('09:00');
+    const [weatherLat, setWeatherLat] = useState('55.75');
+    const [weatherLon, setWeatherLon] = useState('37.62');
 
     // Load current API URL and Briefing Time on mount
     useEffect(() => {
         initApiUrl().then(url => setApiUrlState(url));
         AsyncStorage.getItem('briefing_time').then(t => {
             if (t) setBriefingTime(t);
+        });
+        AsyncStorage.getItem('weather_location').then(loc => {
+            if (loc) {
+                const { lat, lon } = JSON.parse(loc);
+                setWeatherLat(String(lat));
+                setWeatherLon(String(lon));
+            }
         });
     }, [visible]);
 
@@ -74,6 +84,21 @@ export default function SettingsModal({ visible, onClose }: Props) {
             Alert.alert('Saved', `Morning Briefing set to ${briefingTime}`);
         } catch (e) {
             Alert.alert('Error', 'Failed to save Briefing Time');
+        }
+    };
+
+    const handleSaveWeatherLocation = async () => {
+        try {
+            const lat = parseFloat(weatherLat);
+            const lon = parseFloat(weatherLon);
+            if (isNaN(lat) || isNaN(lon)) {
+                Alert.alert('Invalid Coordinates', 'Please enter valid numbers');
+                return;
+            }
+            await AsyncStorage.setItem('weather_location', JSON.stringify({ lat, lon }));
+            Alert.alert('Saved', 'Weather location updated');
+        } catch (e) {
+            Alert.alert('Error', 'Failed to save location');
         }
     };
 
@@ -210,6 +235,89 @@ export default function SettingsModal({ visible, onClose }: Props) {
                                     </View>
                                     <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>
                                         Receive your daily digest at this time.
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Weather Location Section */}
+                        <View style={{ marginBottom: 16 }}>
+                            <Pressable
+                                onPress={() => setWeatherExpanded(!weatherExpanded)}
+                                style={styles.themeHeader}
+                            >
+                                <View>
+                                    <Text style={styles.label}>Weather Location</Text>
+                                    <Text style={styles.themeCurrentValue}>
+                                        {weatherLat}, {weatherLon}
+                                    </Text>
+                                </View>
+                                <Text style={styles.chevron}>
+                                    {weatherExpanded ? '▼' : '▶'}
+                                </Text>
+                            </Pressable>
+                            {weatherExpanded && (
+                                <View style={{ marginTop: 12, gap: 8 }}>
+                                    <Text style={[styles.label, { marginBottom: 4 }]}>Coordinates</Text>
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 4 }}>
+                                                Latitude
+                                            </Text>
+                                            <TextInput
+                                                value={weatherLat}
+                                                onChangeText={setWeatherLat}
+                                                style={{
+                                                    borderWidth: 1,
+                                                    borderColor: theme.border,
+                                                    borderRadius: 8,
+                                                    padding: 12,
+                                                    color: theme.text,
+                                                    backgroundColor: theme.background,
+                                                    fontSize: 14,
+                                                }}
+                                                placeholder="55.75"
+                                                placeholderTextColor={theme.textSecondary}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 4 }}>
+                                                Longitude
+                                            </Text>
+                                            <TextInput
+                                                value={weatherLon}
+                                                onChangeText={setWeatherLon}
+                                                style={{
+                                                    borderWidth: 1,
+                                                    borderColor: theme.border,
+                                                    borderRadius: 8,
+                                                    padding: 12,
+                                                    color: theme.text,
+                                                    backgroundColor: theme.background,
+                                                    fontSize: 14,
+                                                }}
+                                                placeholder="37.62"
+                                                placeholderTextColor={theme.textSecondary}
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
+                                    <Pressable
+                                        onPress={handleSaveWeatherLocation}
+                                        style={{
+                                            marginTop: 4,
+                                            backgroundColor: theme.primary,
+                                            borderRadius: 8,
+                                            paddingVertical: 10,
+                                            paddingHorizontal: 16,
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Text style={{ color: '#fff', fontWeight: '600' }}>Save</Text>
+                                    </Pressable>
+                                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>
+                                        Enter coordinates for your location (e.g., Moscow: 55.75, 37.62)
                                     </Text>
                                 </View>
                             )}

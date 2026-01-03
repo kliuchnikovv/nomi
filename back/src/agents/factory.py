@@ -144,7 +144,9 @@ class AgentFactory:
                     logger.info("[Factory] Skipping web_search for Gemma model %s", model_name)
                 else:
                     tools_config.add("web_search")
-                    logger.info("[Factory] Added web search tool")
+                    if agent_type == "briefing":
+                         tools_config.add("mock_productivity")
+                    logger.info("[Factory] Added web search tool (and mock_productivity for briefing)")
                 
                 tools = await build_tools(tools_config)
             except Exception as e:

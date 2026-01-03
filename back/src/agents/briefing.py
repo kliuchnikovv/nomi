@@ -36,22 +36,23 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
 ### PIPELINE STEPS:
 
 1.  **DATA GATHERING**:
-    Use the available tools to gather information. Not all tools may be available - use what's accessible:
+    Use the available tools to gather information. Look for functions like `get_recent_emails`, `get_upcoming_events`, `get_github_issues` or similar.
     
-    - **Gmail**: If available, check recent unread emails (last 24-48 hours). Look for:
+    - **Emails (Gmail/Mock)**: Use `get_recent_emails` or similar. Check for:
       * Urgent messages from managers/clients
       * Project updates requiring action
       * Meeting invitations or changes
     
-    - **Google Calendar**: If available, check today's and tomorrow's schedule. Look for:
+    - **Calendar (Google/Mock)**: Use `get_upcoming_events` or similar. Check:
       * Upcoming meetings (next 24 hours)
       * Meeting participants and topics
       * Time conflicts or back-to-back meetings
     
-    - **GitHub**: If available, check assigned issues and PRs. Look for:
-      * High-priority open issues assigned to the user
-      * Pull requests awaiting review
-      * Recent mentions or comments
+    - **GitHub (Real/Mock)**: Use `get_github_issues` or similar. DO NOT generalize. Check:
+      * High-priority open issues assigned to the user: List specific issue titles (e.g., "Fix login bug #123").
+      * Pull requests awaiting review: List specific PR names and valid actions (e.g., "Review PR #45: New API endpoint").
+      * Recent mentions or comments: Summarize specific feedback requiring response.
+      * DISCARD generic advice like "Review open pull requests" if you cannot list specific items. Only report items where you have data.
     
     - **Web Search**: Use for current events or context enrichment:
       * Breaking news relevant to user's work/industry

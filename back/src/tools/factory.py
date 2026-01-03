@@ -231,6 +231,13 @@ def _build_jules(params: Dict[str, Any]) -> Toolkit:
     return JulesTools(api_key=api_key)
 
 
+def _build_mock_productivity(_: Dict[str, Any]) -> Toolkit:
+    """Build MockProductivityTools."""
+    logger.info("[Mock] Building MockProductivityTools")
+    from src.tools.mock_productivity import MockProductivityTools
+    return MockProductivityTools()
+
+
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Gmail": _build_gmail,
     "Google Calendar": _build_google_calendar,
@@ -240,6 +247,7 @@ TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "web_search_mcp": _build_web_search_mcp,
     "web_search": _build_web_search,
     "Jules": _build_jules,
+    "mock_productivity": _build_mock_productivity,
 }
 
 

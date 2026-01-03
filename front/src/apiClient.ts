@@ -247,3 +247,21 @@ export const briefingApi = {
     getBriefing: () =>
         apiClient.post<any>(`${API_URL()}/briefing`, {}),
 };
+
+export const dashboardApi = {
+    getDashboard: () => apiClient.get<{
+        user: { name: string };
+        recent_chats: Array<any>;
+        stats: { unread_emails: number; today_events: number };
+    }>(`${API_URL()}/dashboard`),
+};
+
+export const weatherApi = {
+    getCurrentWeather: async (lat: number, lon: number) => {
+        const response = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`
+        );
+        return response.json();
+    },
+};
+

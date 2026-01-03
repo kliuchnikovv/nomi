@@ -66,6 +66,7 @@ func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.C
 	var chatModels []Chat
 	if err := s.DB.WithContext(ctx).
 		Where("user_id = ?", userID).
+		Order("updated_at DESC").
 		Find(&chatModels).Error; err != nil {
 		return nil, err
 	}

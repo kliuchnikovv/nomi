@@ -28,7 +28,7 @@ export function useMain() {
 export function MainProvider({ children }: { children: ReactNode }) {
     const [chats, setChats] = useState<Chat[]>([]);
     const [chatsLoading, setChatsLoading] = useState(false);
-    const [activeChatID, setActiveChatID] = useState<string | null>(emptyChatID);
+    const [activeChatID, setActiveChatID] = useState<string | null>(null);
 
     const { isAuthenticated } = useAuth();
 
@@ -41,14 +41,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
     // const API_URL = 'https://genie.com';
 
-    // Create a new chat if activeChatID is empty on initial load
-    useEffect(() => {
-        if (isAuthenticated) {
-            getChats();
-            createNewChat();
-        }
-    }, []); // Run once on mount
-
+    // Load chats on mount
     useEffect(() => {
         if (isAuthenticated) {
             getChats();
@@ -94,16 +87,19 @@ export function MainProvider({ children }: { children: ReactNode }) {
             setActiveChatID(prev => {
                 const stillExists = prev ? data.some(chat => chat.id === prev) : false;
 
+                // If preserveActiveChat flag is set, preserve the current state
                 if (preserveActiveChat && prev) {
                     if (prev === emptyChatID || stillExists) {
                         return prev;
                     }
                 }
 
-                if (!prev || prev === emptyChatID) {
+                // If prev is emptyChatID, switch to fallback
+                if (prev === emptyChatID) {
                     return fallbackChatID;
                 }
 
+                // Otherwise, keep existing chat if it still exists, or fallback
                 return stillExists ? prev : fallbackChatID;
             });
         } catch (error) {

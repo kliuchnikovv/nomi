@@ -26,6 +26,7 @@ import { Attachment, MessageAction } from '../main/models';
 import { sidebarApi } from '../../apiClient';
 import { AVAILABLE_TEAMS } from './teams';
 import { DiceRollOverlay } from './components/DiceRollOverlay';
+import { DashboardScreen } from '../dashboard/DashboardScreen';
 
 function MessageListSkeleton() {
     return (
@@ -414,7 +415,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             }
         });
 
-    const headerTitle = externalTitle || activeChat?.title || 'New Chat';
+    const headerTitle = externalTitle || activeChat?.title || (messages.length === 0 ? 'Dashboard' : 'New Chat');
     const headerSubtitle = useMemo(() => {
         if (chatMode === 'team') {
             const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
@@ -457,45 +458,59 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
 
 
 
-                    <KeyboardAvoidingView
-                        style={{ flex: 1 }}
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    >
-                        <GiftedChat
-                            messages={messagesLoading ? [] : giftedMessages}
-                            onSend={handleSend}
-                            user={currentUser}
-                            renderMessage={renderMessage}
-                            renderBubble={renderBubble}
-                            renderMessageText={renderMessageText}
-                            renderInputToolbar={renderInputToolbar}
-                            isTyping={assistantWorking}
-                            renderFooter={renderFooter}
-                            // @ts-ignore
-                            inverted={true}
-                            minInputToolbarHeight={60}
-                            maxComposerHeight={100}
-                            renderAvatar={null}
-                            messagesContainerStyle={styles.messagesContainer}
-                            placeholder="Type a message..."
-                            scrollToBottom
-                            alwaysShowSend
-                            isAlignedTop={false}
-                            isScrollToBottomEnabled={true}
-                            timeFormat="HH:mm"
-                            onLongPress={onLongPressMessage}
-                            renderChatEmpty={() => {
-                                if (messagesLoading) {
-                                    return (
-                                        <View style={{ flex: 1, transform: [{ scaleY: -1 }] }}>
-                                            <MessageListSkeleton />
-                                        </View>
-                                    );
-                                }
-                                return null;
-                            }}
-                        />
-                    </KeyboardAvoidingView>
+                    {/* Show Dashboard when no messages, Chat when there are messages */}
+                    {messages.length === 0 && !messagesLoading ? (
+                        <>
+                            <View style={{ flex: 1 }}>
+                                <DashboardScreen
+                                    onNavigateToChat={handleSelectChat}
+                                    onNewChatPress={handleNewChat}
+                                    showHeader={false}
+                                />
+                            </View>
+                            {renderInputToolbar()}
+                        </>
+                    ) : (
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                            style={{ flex: 1 }}
+                            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                        >
+                            <GiftedChat
+                                messages={messagesLoading ? [] : giftedMessages}
+                                onSend={handleSend}
+                                user={currentUser}
+                                renderMessage={renderMessage}
+                                renderBubble={renderBubble}
+                                renderMessageText={renderMessageText}
+                                renderInputToolbar={renderInputToolbar}
+                                isTyping={assistantWorking}
+                                renderFooter={renderFooter}
+                                inverted={true}
+                                minInputToolbarHeight={60}
+                                maxComposerHeight={100}
+                                renderAvatar={null}
+                                messagesContainerStyle={styles.messagesContainer}
+                                placeholder="Type a message..."
+                                scrollToBottom
+                                alwaysShowSend
+                                isAlignedTop={false}
+                                isScrollToBottomEnabled={true}
+                                timeFormat="HH:mm"
+                                onLongPress={onLongPressMessage}
+                                renderChatEmpty={() => {
+                                    if (messagesLoading) {
+                                        return (
+                                            <View style={{ flex: 1, transform: [{ scaleY: -1 }] }}>
+                                                <MessageListSkeleton />
+                                            </View>
+                                        );
+                                    }
+                                    return null;
+                                }}
+                            />
+                        </KeyboardAvoidingView>
+                    )}
 
                     {/* Edge Swipe Detector - Left */}
                     {!isWide && (
