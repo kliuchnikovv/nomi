@@ -179,20 +179,11 @@ class BriefingRequest(BaseModel):
 async def generate_briefing(request: BriefingRequest):
     session_id = str(uuid.uuid4())
     
-    # 1. Fetch tools config for this user
-    tools_specs = ToolsConfig()
-    try:
-        tools_specs = await tool_config_client.fetch_tools(request.user_id)
-        logging.info(f"Fetched {len(tools_specs.entries)} tools for user {request.user_id}")
-    except Exception as e:
-        logging.warning(f"Failed to fetch tools for user {request.user_id}: {e}")
-
-    # 2. Build BriefingAgent with tools
+    # Build BriefingAgent - it will fetch tools from user's integrations via AgentFactory
     agent = await agent_factory.build(
         session_id=session_id,
         user_id=request.user_id,
         agent_type="briefing",
-        tools_specs=tools_specs
     )
     
     # 3. Run agent to get briefing

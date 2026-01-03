@@ -132,9 +132,27 @@ class AgentFactory:
         
         tools: List[Toolkit] = []
         
-        logger.debug("[WS] tools: %s", [t.name for t in tools_specs] if tools_specs else [])
-        if tools_specs:
-            # Build tools from specs
+        # If user_id provided but no tools_specs, fetch tools from config_client
+        if not tools_specs and user_id:
+            try:
+                logger.debug("[Factory] Fetching tools for user_id=%s", user_id)
+                tools_config = await self._config_client.fetch_tools(user_id)
+                logger.info("[Factory] Fetched %d tools for user %s", len(tools_config.entries), user_id)
+                
+                # Add web search tool if supported
+                if model_name and model_name.startswith("gemma-"):
+                    logger.info("[Factory] Skipping web_search for Gemma model %s", model_name)
+                else:
+                    tools_config.add("web_search")
+                    logger.info("[Factory] Added web search tool")
+                
+                tools = await build_tools(tools_config)
+            except Exception as e:
+                logger.warning("[Factory] Failed to fetch tools for user %s: %s", user_id, e)
+                # Continue with empty tools list
+        elif tools_specs:
+            # Build tools from provided specs
+            logger.debug("[WS] tools: %s", [t.name for t in tools_specs])
             config = ToolsConfig()
             for tool_spec in tools_specs:
                 if tool_spec.enabled:
