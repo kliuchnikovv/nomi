@@ -57,6 +57,19 @@ class ToolConfigClient:
                 config.add(tool.name, **tool.params)
             return config
 
+        # Handle direct array response from /api/tools
+        if isinstance(payload, list):
+            for entry in payload:
+                if not isinstance(entry, dict):
+                    continue
+                name = entry.get("name") or entry.get("tool")
+                if not name:
+                    continue
+                params = entry.get("params") or entry.get("options") or {}
+                config.add(name, **params)
+            return config
+
+        # Handle object with "tools" field
         raw_tools = payload.get("tools")
         if isinstance(raw_tools, dict):
             for name, params in raw_tools.items():
