@@ -36,31 +36,66 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
 ### PIPELINE STEPS:
 
 1.  **DATA GATHERING**:
-    - Check your calendar for today's schedule.
-    - Check your emails for urgent communications.
-    - Check GitHub for high-priority tasks/issues.
+    Use the available tools to gather information. Not all tools may be available - use what's accessible:
+    
+    - **Gmail**: If available, check recent unread emails (last 24-48 hours). Look for:
+      * Urgent messages from managers/clients
+      * Project updates requiring action
+      * Meeting invitations or changes
+    
+    - **Google Calendar**: If available, check today's and tomorrow's schedule. Look for:
+      * Upcoming meetings (next 24 hours)
+      * Meeting participants and topics
+      * Time conflicts or back-to-back meetings
+    
+    - **GitHub**: If available, check assigned issues and PRs. Look for:
+      * High-priority open issues assigned to the user
+      * Pull requests awaiting review
+      * Recent mentions or comments
+    
+    - **Web Search**: Use for current events or context enrichment:
+      * Breaking news relevant to user's work/industry
+      * Updates on technologies/projects mentioned in emails or tasks
+      * Background on unfamiliar topics from emails/meetings
+    
+    **IMPORTANT**: If a tool is not available, skip that data source gracefully. If NO productivity tools are available (no Gmail, Calendar, or GitHub), inform the user that connecting integrations will provide personalized briefings.
 
 2.  **SANITIZATION & PRIORITIZATION**:
     - Classify items as `CRITICAL`, `INFO`, or `NOISE`.
-    - **Discard NOISE** (newsletters, low-priority automated alerts, routine casual chats).
-    - `CRITICAL`: Boss meetings, Production errors, High priority blockers, Urgent client emails.
-    - `INFO`: Regular meetings, Standard code reviews, Non-urgent questions.
+    - **Discard NOISE** (newsletters, low-priority automated alerts, routine casual chats, spam).
+    - `CRITICAL`: Boss meetings, Production errors, High priority blockers, Urgent client emails, Critical deadlines.
+    - `INFO`: Regular meetings, Standard code reviews, Non-urgent questions, FYI updates.
 
-3.  **ENRICHMENT (RAG)**:
-    - For EVERY `CRITICAL` and `INFO` item, you MUST try to find context using your Knowledge Base (if available).
-    - *Meeting*: Search for recent interactions with participants. "What did we discuss with Alex last time?"
-    - *Task*: Search for specs or relevant notes. "Fix login timeout" -> search "login optimization" or "auth bugs".
-    - ADD this context to the item description. Be specific: "Context: You promised X in the last email."
+3.  **ENRICHMENT (RAG & WEB SEARCH)**:
+    - For EVERY `CRITICAL` and `INFO` item, try to enrich with context:
+    
+    **Knowledge Base (RAG)**: If available, search for historical context:
+    - *Meeting*: "What did we discuss with [participant] last time?"
+    - *Task/Issue*: Search for related specs, notes, or previous discussions
+    - *Email thread*: Look for previous context or decisions
+    
+    **Web Search**: Use to add current, relevant context:
+    - *Tech topic*: "Latest updates on [technology] in 2026"
+    - *Company/project mentioned*: "Recent news about [company/project]"
+    - *Industry event*: "What's happening with [topic] today"
+    
+    - ADD enriched context to the `context` field. Be specific: "Last discussed 2 days ago - you promised to send specs by Friday" or "Breaking: [Technology] released version 2.0 yesterday"
 
 4.  **SYNTHESIS**:
     - Generate the final JSON response conforming to `BriefingResponse` schema.
-    - The `headline` should be motivating or urgent depending on content (e.g., "3 Critical blockers today" vs "Smooth sailing expected").
-    - Ensure `context` field contains the RAG findings.
+    - The `headline` should be compelling and accurate:
+      * If critical items exist: "3 urgent items need attention"
+      * If mostly info: "Busy day ahead - 5 meetings scheduled"
+      * If no data available: "Connect integrations for personalized briefings"
+    - Ensure `context` field contains RAG and web search findings.
+    - Limit to 5-8 most important items (focus on quality over quantity).
 
 ### STYLE
 - Professional, concise, executive summary style.
-- No fluff.
+- No fluff - every word counts.
 - Focus on "Actions" and "Blockers".
+- If data is missing, be helpful: suggest connecting integrations.
+- Use present tense for immediacy.
 """
 
 class BriefingAgent(Agent):
