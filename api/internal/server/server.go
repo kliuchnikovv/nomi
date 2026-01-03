@@ -199,6 +199,9 @@ func New(
 	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
 	r.PATCH("/api/integrations/:id", wrapWithAuth(integrationsHandler.UpdateIntegration, authMiddleware))
 	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
+	
+	// Tools endpoint for Python backend (no auth - uses user_id from query param)
+	r.GET("/api/tools", integrationsHandler.GetToolsForPython)
 
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)

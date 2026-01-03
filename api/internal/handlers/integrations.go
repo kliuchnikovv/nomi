@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -131,4 +132,59 @@ func (h *IntegrationsHandler) DeleteIntegration(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+}
+
+// GetToolsForPython returns integrations in the format expected by Python backend.
+// Maps integrations to ToolSpec format for agno tools.
+func (h *IntegrationsHandler) GetToolsForPython(c *gin.Context) {
+	ctx := c.Request.Context()
+	
+	// Extract user_id from query param (Python sends session_id which is user_id)
+	userIDStr := c.Query("session_id")
+	if userIDStr == "" {
+		userIDStr = c.Query("user_id")
+	}
+	if userIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id or session_id required"})
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	integrations, err := h.storage.GetIntegrations(ctx, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load integrations"})
+		return
+	}
+
+	// Transform integrations to tools format
+	tools := make([]map[string]interface{}, 0)
+	for _, it := range integrations {
+		if !it.Enabled {
+			continue
+		}
+
+		// Build tool spec
+		tool := map[string]interface{}{
+			"name":    it.Name,
+			"enabled": it.Enabled,
+			"params":  make(map[string]interface{}),
+		}
+
+		// Parse params JSON to map
+		var paramsMap map[string]interface{}
+		if it.Params != "" {
+			if err := json.Unmarshal([]byte(it.Params), &paramsMap); err == nil {
+				tool["params"] = paramsMap
+			}
+		}
+
+		tools = append(tools, tool)
+	}
+
+	c.JSON(http.StatusOK, tools)
 }
