@@ -83,7 +83,6 @@ export function MainProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            const fallbackChatID = data[data.length - 1].id;
             setActiveChatID(prev => {
                 const stillExists = prev ? data.some(chat => chat.id === prev) : false;
 
@@ -94,13 +93,13 @@ export function MainProvider({ children }: { children: ReactNode }) {
                     }
                 }
 
-                // If prev is emptyChatID, switch to fallback
+                // On initial load (prev is null), or if current chat deleted, or if currently on new chat
+                // Default to New Chat (Dashboard) instead of opening the latest chat
                 if (prev === emptyChatID) {
-                    return fallbackChatID;
+                    return emptyChatID;
                 }
 
-                // Otherwise, keep existing chat if it still exists, or fallback
-                return stillExists ? prev : fallbackChatID;
+                return stillExists ? prev : emptyChatID;
             });
         } catch (error) {
             alertError(`Can't get chats: ${error}`)

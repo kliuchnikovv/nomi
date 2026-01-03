@@ -460,7 +460,11 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
 
                     {/* Show Dashboard when no messages, Chat when there are messages */}
                     {messages.length === 0 && !messagesLoading ? (
-                        <>
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                            style={{ flex: 1 }}
+                            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                        >
                             <View style={{ flex: 1 }}>
                                 <DashboardScreen
                                     onNavigateToChat={handleSelectChat}
@@ -469,7 +473,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                 />
                             </View>
                             {renderInputToolbar()}
-                        </>
+                        </KeyboardAvoidingView>
                     ) : (
                         <KeyboardAvoidingView
                             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
