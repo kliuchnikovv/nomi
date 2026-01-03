@@ -85,8 +85,8 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
     - Generate the final JSON response conforming to `BriefingResponse` schema.
     - The `headline` should be compelling and accurate:
       * If critical items exist: "3 urgent items need attention"
-      * If mostly info: "Busy day ahead - 5 meetings scheduled"
-      * If no data available: "Connect integrations for personalized briefings"
+      * If tools were used successfully but no urgent items: "All clear - no urgent items today" or "Light day ahead"
+      * If NO tools available (no Gmail/Calendar/GitHub): "Connect integrations for personalized briefings"
     - Ensure `context` field contains RAG and web search findings.
     - Limit to 5-8 most important items (focus on quality over quantity).
 
