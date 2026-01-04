@@ -87,7 +87,7 @@ func (s *Service) GetBriefing(ctx context.Context, userID string) (map[string]in
 		return nil, fmt.Errorf("failed to marshal briefing request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", s.agnoAPIURL+"/api/briefing", bytes.NewBuffer(requestBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", s.agnoAPIURL+"/briefing", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for briefing: %w", err)
 	}

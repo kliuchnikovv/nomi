@@ -6,7 +6,7 @@ import { gmailClient } from '../../../services/integrations/clients/GmailClient'
 import { calendarClient } from '../../../services/integrations/clients/CalendarClient';
 import { githubClient } from '../../../services/integrations/clients/GitHubClient';
 import { julesClient } from '../../../services/integrations/clients/JulesClient';
-import apiClient from '../../../apiClient';
+import { briefingApi } from '../../../apiClient';
 
 interface BriefingItem {
   id: string;
@@ -41,35 +41,35 @@ export const BriefingCard: React.FC = () => {
 
       // Parallel fetch
       const promises = enabledIntegrations.map(async (integration) => {
-          const provider = integration.provider || integration.id; // fallback
-          try {
-              if (provider === 'gmail') {
-                  const emails = await gmailClient.getRecentEmails(integration.id, 10);
-                  if (!integrationData.emails) integrationData.emails = [];
-                  integrationData.emails.push(...emails);
-              } else if (provider === 'calendar') {
-                  const events = await calendarClient.getUpcomingEvents(integration.id, 10);
-                  if (!integrationData.events) integrationData.events = [];
-                  integrationData.events.push(...events);
-              } else if (provider === 'github') {
-                  const issues = await githubClient.getAssignedIssues(integration.id);
-                  if (!integrationData.issues) integrationData.issues = [];
-                  integrationData.issues.push(...issues);
-              } else if (provider === 'jules') {
-                  const tasks = await julesClient.getTasks(integration.id);
-                  if (!integrationData.tasks) integrationData.tasks = [];
-                  integrationData.tasks.push(...tasks);
-              }
-          } catch (e) {
-              console.warn(`Failed to fetch data for ${provider}`, e);
+        const provider = integration.provider || integration.id; // fallback
+        try {
+          if (provider === 'gmail') {
+            const emails = await gmailClient.getRecentEmails(integration.id, 10);
+            if (!integrationData.emails) integrationData.emails = [];
+            integrationData.emails.push(...emails);
+          } else if (provider === 'calendar') {
+            const events = await calendarClient.getUpcomingEvents(integration.id, 10);
+            if (!integrationData.events) integrationData.events = [];
+            integrationData.events.push(...events);
+          } else if (provider === 'github') {
+            const issues = await githubClient.getAssignedIssues(integration.id);
+            if (!integrationData.issues) integrationData.issues = [];
+            integrationData.issues.push(...issues);
+          } else if (provider === 'jules') {
+            const tasks = await julesClient.getTasks(integration.id);
+            if (!integrationData.tasks) integrationData.tasks = [];
+            integrationData.tasks.push(...tasks);
           }
+        } catch (e) {
+          console.warn(`Failed to fetch data for ${provider}`, e);
+        }
       });
 
       await Promise.all(promises);
 
       // 2. Send to Backend
-      const response = await apiClient.post('/briefing', {
-          integration_data: integrationData
+      const response = await briefingApi.getBriefing({
+        integration_data: integrationData
       });
 
       setData(response.data);
@@ -100,7 +100,7 @@ export const BriefingCard: React.FC = () => {
       <Card style={styles.container}>
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity onPress={loadBriefing} style={styles.retryButton}>
-            <Text>Retry</Text>
+          <Text>Retry</Text>
         </TouchableOpacity>
       </Card>
     );
@@ -117,12 +117,12 @@ export const BriefingCard: React.FC = () => {
         {data.items.map(item => (
           <View key={item.id} style={[styles.item, item.priority === 'CRITICAL' && styles.criticalItem]}>
             <View style={styles.itemHeader}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                {item.priority === 'CRITICAL' && <Text style={styles.badge}>!</Text>}
+              <Text style={styles.itemTitle}>{item.title}</Text>
+              {item.priority === 'CRITICAL' && <Text style={styles.badge}>!</Text>}
             </View>
             <Text style={styles.itemDesc}>{item.description}</Text>
             {item.context && (
-                <Text style={styles.context}>💡 {item.context}</Text>
+              <Text style={styles.context}>💡 {item.context}</Text>
             )}
           </View>
         ))}
