@@ -1,9 +1,7 @@
-```
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Centralized app configuration
-const DEFAULT_API_URL = 'http://localhost:8080/api';
-// const DEFAULT_API_URL = 'https://genie-api-production-7074.up.railway.app/api';
+const DEFAULT_API_URL = 'https://genie-api-production-7074.up.railway.app/api';
 const API_URL_KEY = '@genie_api_url';
 
 // In-memory cache for sync access
@@ -37,6 +35,6 @@ export const API_URL = DEFAULT_API_URL;
 
 // Deep link scheme for OAuth callback (make sure it's configured in iOS/Android)
 export const APP_SCHEME = 'genie';
-export const OAUTH_CALLBACK_URL = `${ APP_SCHEME }://oauth/callback`;
+export const OAUTH_CALLBACK_URL = `${APP_SCHEME}://oauth/callback`;
 
 //'http://localhost:8080/api'

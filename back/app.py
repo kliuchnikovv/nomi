@@ -25,7 +25,7 @@ def get_user(request: Request):
 
 # Agents
 # Using Gemini as default model
-llm = Gemini(id="gemini-1.5-flash", api_key=os.getenv("GOOGLE_API_KEY"))
+llm = Gemini(id="gemini-2.0-flash", api_key=os.getenv("GOOGLE_API_KEY"))
 briefing_agent = BriefingAgent(model=llm)
 
 @app.get("/health")
