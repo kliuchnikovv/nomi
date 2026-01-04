@@ -205,12 +205,18 @@ Do NOT say 'connect integrations' if valid data is present in the context.
 Analyze this data to identify critical items. Do not invent items not present in the data.
 """
     
+    
+    logging.info(f"Generated prompt (length: {len(prompt)}): {prompt[:200]}...")
+    
     # 3. Run agent to get briefing
     try:
+        logging.info("Running agent...")
         response = await agent.arun(prompt, stream=False)
+        logging.info(f"Agent response type: {type(response)}")
         
         # Extract structured output
         if response and response.content:
+            logging.info(f"Agent content (length: {len(response.content)}): {response.content[:200]}...")
             content = response.content
             # Handle string output (Agent returning JSON string)
             if isinstance(content, str):
