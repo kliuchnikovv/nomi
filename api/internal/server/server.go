@@ -95,14 +95,21 @@ func New(
 		modelsHandler = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
 		uploadHandler = handlers.NewUploadHandler(db)
 		teamHandler   = team.NewHandler(db)
-		oauthHandler  = func() *handlers.OAuthHandler {
+		oauthHandler = func() *handlers.OAuthHandler {
 			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
 			if err != nil {
 				logger.Fatal("failed to initialize oauth handler", zap.Error(err))
 			}
 			return h
 		}()
-		briefingHandler = handlers.NewBriefingHandler(db, llmService)
+		mobileOAuthHandler = func() *handlers.MobileOAuthHandler {
+			h, err := handlers.NewMobileOAuthHandler(logger, cfg, db)
+			if err != nil {
+				logger.Fatal("failed to initialize mobile oauth handler", zap.Error(err))
+			}
+			return h
+		}()
+		briefingHandler  = handlers.NewBriefingHandler(db, llmService)
 		dashboardHandler = handlers.NewDashboardHandler(db)
 	)
 
@@ -215,6 +222,11 @@ func New(
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
 	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)
 	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
+
+	// Mobile OAuth API (tokens returned to client, not stored on backend)
+	r.POST("/api/oauth/:provider/callback-mobile", wrapWithAuth(mobileOAuthHandler.CallbackMobile, authMiddleware))
+	r.POST("/api/oauth/refresh", mobileOAuthHandler.RefreshToken) // No auth needed, uses refresh_token
+	r.GET("/api/integrations/export", wrapWithAuth(mobileOAuthHandler.ExportIntegrations, authMiddleware))
 
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
