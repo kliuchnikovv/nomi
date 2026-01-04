@@ -40,6 +40,8 @@ async def get_briefing(request: BriefingRequest, user: dict = Depends(get_user))
             user_id=user["id"],
             integration_data=request.integration_data
         )
+        logger.info(f"Agent result type: {type(result)}")
+        logger.info(f"Agent result content: {result}")
 
         # Result is likely a JSON string if the agent followed instructions.
         # We try to parse it to ensure it's valid JSON before returning,
