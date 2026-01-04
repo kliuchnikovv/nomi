@@ -95,15 +95,17 @@ func New(
 		modelsHandler = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
 		uploadHandler = handlers.NewUploadHandler(db)
 		teamHandler   = team.NewHandler(db)
-		oauthHandler  = func() *handlers.OAuthHandler {
-			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
-			if err != nil {
-				logger.Fatal("failed to initialize oauth handler", zap.Error(err))
-			}
-			return h
-		}()
+		// oauthHandler  = func() *handlers.OAuthHandler {
+		// 	h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
+		// 	if err != nil {
+		// 		logger.Fatal("failed to initialize oauth handler", zap.Error(err))
+		// 	}
+		// 	return h
+		// }()
 		briefingHandler = handlers.NewBriefingHandler(db, llmService)
 		dashboardHandler = handlers.NewDashboardHandler(db)
+		oauthMobileHandler = handlers.NewMobileOAuthHandler(oauthConfigs)
+		exportHandler     = handlers.NewExportHandler(db)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -198,6 +200,7 @@ func New(
 
 	// Integrations API
 	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
+	r.GET("/api/integrations/export", wrapWithAuth(exportHandler.ExportIntegrations, authMiddleware)) // Temporary for migration
 	r.PATCH("/api/integrations/:id", wrapWithAuth(integrationsHandler.UpdateIntegration, authMiddleware))
 	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
 	
@@ -212,9 +215,12 @@ func New(
 	r.GET("/api/attachments/:id", wrapWithAuth(uploadHandler.GetAttachment, authMiddleware))
 
 	// OAuth API
-	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
-	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)
-	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
+	// r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware)) // Legacy
+	// r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect) // Legacy
+	// r.GET("/api/oauth/:provider/callback", oauthHandler.Callback) // Legacy
+
+	// Mobile OAuth Flow
+	r.POST("/api/oauth/:provider/callback-mobile", wrapWithAuth(oauthMobileHandler.HandleCallback, authMiddleware))
 
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))

@@ -16,6 +16,7 @@ import {
 
 import { MainProvider } from './src/screens/main/context';
 import { PluginChatsProvider } from './src/screens/rightsidebar/context';
+import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 
 import { AuthScreen } from './src/screens/auth/screen.tsx';
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
@@ -23,6 +24,8 @@ import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
+import { initDatabase } from './src/services/database/database';
+import { registerBackgroundSync } from './src/services/background/backgroundSyncService';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -30,7 +33,13 @@ function App() {
 
     // Initialize API URL from AsyncStorage before rendering
     useEffect(() => {
-        initApiUrl().then(() => setConfigReady(true));
+        const init = async () => {
+            await initApiUrl();
+            await initDatabase();
+            await registerBackgroundSync();
+            setConfigReady(true);
+        };
+        init();
     }, []);
 
     if (!configReady) {
@@ -46,11 +55,13 @@ function App() {
                             <StatusBar
                                 barStyle={isDarkMode ? 'light-content' : 'dark-content'}
                             />
-                            <PluginChatsProvider>
-                                <MainProvider>
-                                    <AppContent />
-                                </MainProvider>
-                            </PluginChatsProvider>
+                            <ConnectorsProvider>
+                                <PluginChatsProvider>
+                                    <MainProvider>
+                                        <AppContent />
+                                    </MainProvider>
+                                </PluginChatsProvider>
+                            </ConnectorsProvider>
                         </AuthProvider>
                     </ThemeProvider>
                 </SafeAreaProvider>

@@ -244,8 +244,8 @@ export const authApi = {
 };
 
 export const briefingApi = {
-    getBriefing: () =>
-        apiClient.post<any>(`${API_URL()}/briefing`, {}),
+    getBriefing: (data: any) =>
+        apiClient.post<any>(`${API_URL()}/briefing`, data),
 };
 
 export const dashboardApi = {
@@ -265,3 +265,4 @@ export const weatherApi = {
     },
 };
 
+export default apiClient;
