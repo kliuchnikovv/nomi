@@ -18,7 +18,6 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
-	"github.com/kliuchnikovv/genie-api/internal/plugins/jules"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
@@ -47,6 +46,8 @@ func New(
 	n := notifier.New()
 
 	// Plugin system initialization (Moved to top so handlers can use manager)
+	// Plugin system initialization (Moved to top so handlers can use manager)
+	/*
 	pluginState := map[string]plugins.PluginState{}
 	for name, st := range cfg.Plugins {
 		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
@@ -72,6 +73,8 @@ func New(
 	if err := manager.Register(jules.NewJulesPlugin()); err != nil {
 		logger.Error("failed to register jules plugin", zap.Error(err))
 	}
+	*/
+	var manager *plugins.Manager = nil
 
 	// Initialize Hub
 	hubInstance := hub.NewHub(db, logger, cfg.LLM.BaseURL)
@@ -228,9 +231,11 @@ func New(
 	r.POST("/api/oauth/refresh", mobileOAuthHandler.RefreshToken) // No auth needed, uses refresh_token
 	r.GET("/api/integrations/export", wrapWithAuth(mobileOAuthHandler.ExportIntegrations, authMiddleware))
 
+	/*
 	pluginGroup := r.Group("/api/plugins")
 	pluginGroup.Use(authGinMiddleware(authMiddleware))
 	manager.Mount(pluginGroup)
+	*/
 
 	r.POST("/api/briefing", wrapWithAuth(briefingHandler.GetBriefing, authMiddleware))
 	r.GET("/api/dashboard", wrapWithAuth(dashboardHandler.GetDashboard, authMiddleware))

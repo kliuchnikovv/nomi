@@ -1,4 +1,15 @@
 {
   "name": "genie",
-  "displayName": "genie"
+  "displayName": "genie",
+  "expo": {
+    "name": "genie",
+    "slug": "genie",
+    "ios": {
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "fetch"
+        ]
+      }
+    }
+  }
 }

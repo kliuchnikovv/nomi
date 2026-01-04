@@ -61,11 +61,14 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
     
     **IMPORTANT**: If a tool is not available, skip that data source gracefully. If NO productivity tools are available (no Gmail, Calendar, or GitHub), inform the user that connecting integrations will provide personalized briefings.
 
-    - Classify items as `CRITICAL`, `INFO`, or `NOISE`.
-    - **Discard ONLY obvious NOISE** (spam, marketing newsletters).
-    - **ALWAYS INCLUDE** at least the top 1-2 items from EACH tool source (Email, Calendar, GitHub) if any data is returned, even if they seem like low priority. We want to show the user that the integration is working.
-    - `CRITICAL`: Boss meetings, Production errors, High priority blockers, Urgent client emails.
-    - `INFO`: Everything else found by tools (Regular meetings, PRs, Emails from colleagues).
+    - Classify items as `CRITICAL` or `INFO`.
+    - **CRITICAL**: Requires immediate attention/action (e.g., Boss/Client email, Production error, Deadline today, Meeting conflict).
+    - **INFO**: Everything else (Newsletters, Routine updates, Low priority tickets, Calendar hold).
+    - **STRICT FILTERING RULES**:
+      * The `items` array MUST contain **ONLY** `CRITICAL` items.
+      * Do NOT include `INFO` items in the `items` array.
+      * Instead, mention the existence of `INFO` items in the `summary` text (e.g., "Received 5 routine emails and 2 PRs to review later").
+      * If NO `CRITICAL` items exist, return an empty `items` list.
 
 3.  **ENRICHMENT (RAG & WEB SEARCH)**:
     - For EVERY `CRITICAL` and `INFO` item, try to enrich with context:

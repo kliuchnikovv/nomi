@@ -81,7 +81,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             const localPlugins: Plugin[] = [];
 
             for (const integ of localIntegrations) {
-                if (integ.provider === 'gmail' && integ.enabled) {
+                if (integ.provider?.toLowerCase() === 'gmail' && integ.enabled) {
                     const cachedEmails = await integrationStorage.getCachedEmails(integ.id, 20);
 
                     // Group by threadId
@@ -155,7 +155,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
             for (const integ of parsedRemoteIntegrations) {
                 // Skip Gmail if it's coming from backend (we use local now)
-                if (integ.provider === 'gmail') continue;
+                if (integ.provider?.toLowerCase() === 'gmail') continue;
 
                 try {
                     // For Jules, we use the sidebar API which returns proper chat objects
@@ -261,7 +261,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         try {
             // Force sync for enabled Gmail integrations
             const integrations = await integrationStorage.getIntegrations();
-            const gmailIntegrations = integrations.filter(i => i.provider === 'gmail' && i.enabled);
+            const gmailIntegrations = integrations.filter(i => i.provider?.toLowerCase() === 'gmail' && i.enabled);
 
             await Promise.all(gmailIntegrations.map(async (integ) => {
                 try {

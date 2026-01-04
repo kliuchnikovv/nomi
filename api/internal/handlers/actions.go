@@ -118,6 +118,11 @@ func (h *ActionsHandler) ExecuteAction(c *gin.Context) {
 	}
 
 	// Delegate to plugin manager
+	if h.pluginManager == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Plugin system is disabled"})
+		return
+	}
+
 	if err := h.pluginManager.ExecuteAction(ctx, user.ID, rawInbox.Source, action, rawInbox); err != nil {
 		h.logger.Error("failed to execute action",
 			zap.Error(err),

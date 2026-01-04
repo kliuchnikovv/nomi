@@ -23,14 +23,27 @@ import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
+import { initDatabase } from './src/services/database/database';
+import { registerBackgroundSync } from './src/services/background/backgroundSyncService';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
     const [configReady, setConfigReady] = useState(false);
 
-    // Initialize API URL from AsyncStorage before rendering
+    // Initialize API URL and Database before rendering
     useEffect(() => {
-        initApiUrl().then(() => setConfigReady(true));
+        const init = async () => {
+            try {
+                await initApiUrl();
+                await initDatabase();
+                await registerBackgroundSync();
+            } catch (e) {
+                console.error("Failed to initialize app:", e);
+            } finally {
+                setConfigReady(true);
+            }
+        };
+        init();
     }, []);
 
     if (!configReady) {

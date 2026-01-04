@@ -4,6 +4,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { briefingApi } from '../../../apiClient';
 import { integrationStorage } from '../../../services/integrations/IntegrationStorage';
+import { gmailClient } from '../../../services/integrations/clients/GmailClient';
 
 interface BriefingItem {
   id: string;
@@ -37,48 +38,113 @@ const getIntegrationDetails = (type: string) => {
   }
 };
 
+// Global cache to prevent double-fetching from multiple instances (Dashboard + Sidebar)
+let globalBriefingPromise: Promise<BriefingData | null> | null = null;
+let cachedBriefingData: BriefingData | null = null;
+
 export const BriefingCard = () => {
   const { theme } = useTheme();
+  // Initialize state with cache if available
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<BriefingData | null>(null);
+  const [data, setData] = useState<BriefingData | null>(cachedBriefingData);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
+    // If we have cached data, use it immediately
+    if (cachedBriefingData && !data) {
+      setData(cachedBriefingData);
+    }
     loadBriefing();
   }, []);
 
-  const loadBriefing = async () => {
+  const loadBriefing = async (force: any = false) => {
+    // Treat event object as 'force=true' if clicked via UI
+    const isForce = typeof force === 'boolean' ? force : !!force;
+
+    if (!isForce && cachedBriefingData) {
+      setData(cachedBriefingData);
+      return;
+    }
+
+    if (globalBriefingPromise && !isForce) {
+      try {
+        setLoading(true);
+        const res = await globalBriefingPromise;
+        if (res) setData(res);
+      } catch (e) {
+        // Ignore error from shared promise here, handled in the creator
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     setLoading(true);
+
+    // Create new promise
+    const promise = (async () => {
+      try {
+        // Fetch local context (emails)
+        const integrations = await integrationStorage.getIntegrations();
+        const gmailIntegrations = integrations.filter(i => i.provider?.toLowerCase() === 'gmail' && i.enabled);
+
+        let emailContext: any[] = [];
+        for (const integ of gmailIntegrations) {
+          let emails = await integrationStorage.getCachedEmails(integ.id, 20); // Top 20 recent
+
+          // Fallback: If cache is empty, try to sync manually
+          if (emails.length === 0) {
+            try {
+              await gmailClient.syncEmails(integ.id);
+              emails = await integrationStorage.getCachedEmails(integ.id, 20);
+            } catch (syncErr) {
+              console.warn(`[Briefing] Manual sync failed for ${integ.id}:`, syncErr);
+            }
+          }
+
+          emailContext = [...emailContext, ...emails.map(e => ({
+            id: e.id,
+            subject: e.subject,
+            snippet: e.snippet,
+            from: e.fromName ? `${e.fromName} <${e.fromEmail}>` : e.fromEmail,
+            date: e.date,
+            body: e.bodyText?.slice(0, 500)
+          }))];
+        }
+
+        const context = {
+          emails: emailContext
+        };
+
+        const result = await briefingApi.getBriefing(context);
+
+        if (result && !result.error) {
+          cachedBriefingData = result;
+          return result;
+        } else {
+          if (result?.error) {
+            console.log("Briefing API returned error:", result.error);
+          }
+          return null;
+        }
+      } catch (e) {
+        console.error("Failed to load briefing:", e);
+        throw e;
+      } finally {
+        // Clear promise so next force refresh creates a new one
+        if (globalBriefingPromise === promise) {
+          globalBriefingPromise = null;
+        }
+      }
+    })();
+
+    globalBriefingPromise = promise;
+
     try {
-      // Fetch local context (emails)
-      const integrations = await integrationStorage.getIntegrations();
-      const gmailIntegrations = integrations.filter(i => i.provider === 'gmail' && i.enabled);
-
-      let emailContext: any[] = [];
-      for (const integ of gmailIntegrations) {
-        const emails = await integrationStorage.getCachedEmails(integ.id, 20); // Top 20 recent
-        emailContext = [...emailContext, ...emails.map(e => ({
-          id: e.id,
-          subject: e.subject,
-          snippet: e.snippet,
-          from: e.fromName ? `${e.fromName} <${e.fromEmail}>` : e.fromEmail,
-          date: e.date,
-          body: e.bodyText?.slice(0, 500) // Truncate body for context
-        }))];
-      }
-
-      const context = {
-        emails: emailContext
-      };
-
-      const result = await briefingApi.getBriefing(context);
-      if (result && !result.error) {
-        setData(result);
-      } else {
-        console.error("Briefing error:", result?.error);
-      }
+      const result = await promise;
+      if (result) setData(result);
     } catch (e) {
-      console.error("Failed to load briefing:", e);
+      // Error already logged
     } finally {
       setLoading(false);
     }
