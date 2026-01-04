@@ -178,12 +178,15 @@ class BriefingRequest(BaseModel):
     context: Optional[dict] = None
 
 @app.post("/api/briefing")
-async def generate_briefing(request: BriefingRequest):
-    session_id = str(uuid.uuid4())
+async def get_briefing(request: BriefingRequest):
+    logging.info(f"Received briefing request. User: {request.user_id} Context provided: {bool(request.context)}")
+    if request.context:
+         logging.info(f"Context keys: {request.context.keys()}")
+         if 'emails' in request.context:
+             logging.info(f"Context email count: {len(request.context['emails'])}")
     
+    session_id = str(uuid.uuid4())
     # Build BriefingAgent
-    # If user_id is provided, it might still fetch server-side tools/knowledge
-    # If context is provided, we prioritize that
     agent = await agent_factory.build(
         session_id=session_id,
         user_id=request.user_id,
