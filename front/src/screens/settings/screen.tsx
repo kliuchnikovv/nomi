@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, Text, TextInput, View, ActivityIndicator } from 'react-native';
+import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/context.tsx';
@@ -33,6 +34,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
     const [briefingTime, setBriefingTime] = useState('09:00');
     const [weatherLat, setWeatherLat] = useState('55.75');
     const [weatherLon, setWeatherLon] = useState('37.62');
+    const [locationLoading, setLocationLoading] = useState(false);
 
     // Load current API URL and Briefing Time on mount
     useEffect(() => {
@@ -87,18 +89,25 @@ export default function SettingsModal({ visible, onClose }: Props) {
         }
     };
 
-    const handleSaveWeatherLocation = async () => {
+
+
+    const handleUseMyLocation = async () => {
+        setLocationLoading(true);
         try {
-            const lat = parseFloat(weatherLat);
-            const lon = parseFloat(weatherLon);
-            if (isNaN(lat) || isNaN(lon)) {
-                Alert.alert('Invalid Coordinates', 'Please enter valid numbers');
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission to access location was denied');
                 return;
             }
-            await AsyncStorage.setItem('weather_location', JSON.stringify({ lat, lon }));
-            Alert.alert('Saved', 'Weather location updated');
-        } catch (e) {
-            Alert.alert('Error', 'Failed to save location');
+
+            const location = await Location.getCurrentPositionAsync({});
+            setWeatherLat(String(location.coords.latitude));
+            setWeatherLon(String(location.coords.longitude));
+            Alert.alert('Success', 'Location updated');
+        } catch (error) {
+            Alert.alert('Error', 'Failed to get current location');
+        } finally {
+            setLocationLoading(false);
         }
     };
 
@@ -258,67 +267,37 @@ export default function SettingsModal({ visible, onClose }: Props) {
                             </Pressable>
                             {weatherExpanded && (
                                 <View style={{ marginTop: 12, gap: 8 }}>
-                                    <Text style={[styles.label, { marginBottom: 4 }]}>Coordinates</Text>
+                                    <Text style={{ fontSize: 13, color: theme.textSecondary }}>
+                                        Weather is updated automatically based on your current location.
+                                    </Text>
                                     <View style={{ flexDirection: 'row', gap: 8 }}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 4 }}>
-                                                Latitude
-                                            </Text>
-                                            <TextInput
-                                                value={weatherLat}
-                                                onChangeText={setWeatherLat}
-                                                style={{
-                                                    borderWidth: 1,
-                                                    borderColor: theme.border,
-                                                    borderRadius: 8,
-                                                    padding: 12,
-                                                    color: theme.text,
-                                                    backgroundColor: theme.background,
-                                                    fontSize: 14,
-                                                }}
-                                                placeholder="55.75"
-                                                placeholderTextColor={theme.textSecondary}
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 4 }}>
-                                                Longitude
-                                            </Text>
-                                            <TextInput
-                                                value={weatherLon}
-                                                onChangeText={setWeatherLon}
-                                                style={{
-                                                    borderWidth: 1,
-                                                    borderColor: theme.border,
-                                                    borderRadius: 8,
-                                                    padding: 12,
-                                                    color: theme.text,
-                                                    backgroundColor: theme.background,
-                                                    fontSize: 14,
-                                                }}
-                                                placeholder="37.62"
-                                                placeholderTextColor={theme.textSecondary}
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
+                                        {/* Inputs removed as requested */}
                                     </View>
                                     <Pressable
-                                        onPress={handleSaveWeatherLocation}
+                                        onPress={handleUseMyLocation}
+                                        disabled={locationLoading}
                                         style={{
                                             marginTop: 4,
-                                            backgroundColor: theme.primary,
+                                            backgroundColor: theme.surface,
+                                            borderWidth: 1,
+                                            borderColor: theme.border,
                                             borderRadius: 8,
                                             paddingVertical: 10,
                                             paddingHorizontal: 16,
                                             alignItems: 'center',
+                                            flexDirection: 'row',
+                                            justifyContent: 'center',
+                                            gap: 8
                                         }}
                                     >
-                                        <Text style={{ color: '#fff', fontWeight: '600' }}>Save</Text>
+                                        {locationLoading ? (
+                                            <ActivityIndicator size="small" color={theme.text} />
+                                        ) : (
+                                            <Text style={{ color: theme.text, fontWeight: '500' }}>Use Current Location</Text>
+                                        )}
                                     </Pressable>
-                                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>
-                                        Enter coordinates for your location (e.g., Moscow: 55.75, 37.62)
-                                    </Text>
+
+
                                 </View>
                             )}
                         </View>
