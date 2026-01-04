@@ -29,7 +29,7 @@ func (h *BriefingHandler) GetBriefing(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-
+	//
 	// Parse request body to get context (optional)
 	var req struct {
 		Context map[string]interface{} `json:"context"`

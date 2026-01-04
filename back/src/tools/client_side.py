@@ -63,3 +63,4 @@ class ClientGmailTools(Toolkit):
             description=f"Send email to {to}"
         )
         return f"Action delegated: Sending email to {to} with subject '{subject}'. The client application will execute this."
+
