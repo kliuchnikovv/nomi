@@ -195,10 +195,13 @@ async def generate_briefing(request: BriefingRequest):
     if request.context:
         import json
         context_str = json.dumps(request.context, indent=2, default=str)
-        prompt = f"""Generate the morning briefing based on the following context data from user integrations:
+        prompt = f"""Generate the morning briefing based on the following context data from user integrations (TREAT THIS AS GATHERED DATA):
 
 {context_str}
 
+**IMPORTANT**: The data above comes from the user's local integrations (Gmail, etc.).
+Even if you do not have active server-side tools, USE THIS DATA to generate the briefing.
+Do NOT say 'connect integrations' if valid data is present in the context.
 Analyze this data to identify critical items. Do not invent items not present in the data.
 """
     
