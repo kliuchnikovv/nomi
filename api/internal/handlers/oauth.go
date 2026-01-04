@@ -220,16 +220,17 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 
 	var email string
 	if providerName == plugins.ProviderGmail {
-		user, err := h.storage.GetUserByID(ctx, session.UserID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
-			return
+		// NEW MOBILE FLOW: Forward code to app, don't process here
+		// App will call /callback-mobile to exchange code for tokens
+		if err := h.storage.DeleteOAuthSession(ctx, session.ID); err != nil {
+			// log but continue
 		}
-		email, err = h.gmailIntegration.HandleCallback(ctx, code, user)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
+		setOAuthSessionCookie(c, "", -1)
+		
+		// Send code to app via deep link
+		deepLink := fmt.Sprintf("genie://oauth/callback?provider=%s&code=%s", providerName, url.QueryEscape(code))
+		c.Redirect(http.StatusFound, deepLink)
+		return
 	} else if providerName == plugins.ProviderCalendar {
 		user, err := h.storage.GetUserByID(ctx, session.UserID)
 		if err != nil {
