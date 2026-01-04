@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Linking, Platform } from 'react-native';
+import * as Location from 'expo-location';
 import { useTheme } from '../../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { weatherApi } from '../../../apiClient';
@@ -22,11 +23,31 @@ export const GreetingCard = ({ userName }: { userName?: string }) => {
     const loadWeather = async () => {
         setLoading(true);
         try {
-            // Get location from AsyncStorage
-            const location = await AsyncStorage.getItem('weather_location');
-            if (location) {
-                const coords = JSON.parse(location);
-                const data = await weatherApi.getCurrentWeather(coords.lat, coords.lon);
+            // Try to get current location
+            const { status } = await Location.requestForegroundPermissionsAsync();
+
+            let lat: number | null = null;
+            let lon: number | null = null;
+
+            if (status === 'granted') {
+                const location = await Location.getCurrentPositionAsync({});
+                lat = location.coords.latitude;
+                lon = location.coords.longitude;
+                // Update storage for consistency
+                await AsyncStorage.setItem('weather_location', JSON.stringify({ lat, lon }));
+            } else {
+                // Try fallback to stored location if permission denied (or just don't show)
+                // User requested: "if location not allowed - do not show weather"
+                // So we just return if no permission/location.
+                // However, we can check if we have previously stored location? 
+                // The requirement says: "if not allowed location - do not show weather".
+                // So strictly speaking, we should stop here.
+                setLoading(false);
+                return;
+            }
+
+            if (lat !== null && lon !== null) {
+                const data = await weatherApi.getCurrentWeather(lat, lon);
                 if (data?.current_weather) {
                     setWeather({
                         temperature: data.current_weather.temperature,
@@ -38,6 +59,19 @@ export const GreetingCard = ({ userName }: { userName?: string }) => {
             console.error('Failed to load weather:', e);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleWeatherPress = () => {
+        const scheme = Platform.select({
+            ios: 'weather://',
+            android: 'https://www.google.com/search?q=weather'
+        });
+
+        if (scheme) {
+            Linking.openURL(scheme).catch(() => {
+                Linking.openURL('https://www.google.com/search?q=weather');
+            });
         }
     };
 
@@ -83,7 +117,7 @@ export const GreetingCard = ({ userName }: { userName?: string }) => {
                 {loading ? (
                     <ActivityIndicator size="small" color={theme.primary} />
                 ) : weather ? (
-                    <View style={styles.weatherContainer}>
+                    <TouchableOpacity onPress={handleWeatherPress} style={styles.weatherContainer}>
                         <Ionicons
                             name={getWeatherIcon(weather.weathercode) as any}
                             size={32}
@@ -92,7 +126,7 @@ export const GreetingCard = ({ userName }: { userName?: string }) => {
                         <Text style={[styles.temperature, { color: theme.text }]}>
                             {Math.round(weather.temperature)}°
                         </Text>
-                    </View>
+                    </TouchableOpacity>
                 ) : null}
             </View>
         </View>
