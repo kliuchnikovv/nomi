@@ -195,7 +195,15 @@ async def get_briefing(request: BriefingRequest):
     
     # Construct prompt with context
     prompt = "Generate the morning briefing."
+    
+    context_has_data = False
     if request.context:
+        for key, value in request.context.items():
+            if value and isinstance(value, list) and len(value) > 0:
+                context_has_data = True
+                break
+    
+    if context_has_data:
         import json
         context_str = json.dumps(request.context, indent=2, default=str)
         prompt = f"""Generate the morning briefing based on the following context data from user integrations (TREAT THIS AS GATHERED DATA):
