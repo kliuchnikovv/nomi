@@ -1,265 +1,200 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
-import { useTheme } from '../../../context/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
-import { briefingApi } from '../../../apiClient';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity } from 'react-native';
+import { Card } from '../../../components/Card';
+import { useConnectors } from '../../settings/connectors/context';
+import { gmailClient } from '../../../services/integrations/clients/GmailClient';
+import { calendarClient } from '../../../services/integrations/clients/CalendarClient';
+import { githubClient } from '../../../services/integrations/clients/GitHubClient';
+import { julesClient } from '../../../services/integrations/clients/JulesClient';
+import apiClient from '../../../apiClient';
 
 interface BriefingItem {
-    id: string;
-    type: 'meeting' | 'email' | 'task' | 'alert';
-    priority: 'CRITICAL' | 'INFO';
-    title: string;
-    description: string;
-    context?: string;
-    action_required: boolean;
-    source_link?: string;
+  id: string;
+  type: string;
+  priority: 'CRITICAL' | 'INFO';
+  title: string;
+  description: string;
+  context?: string;
+  source_link?: string;
 }
 
 interface BriefingData {
-    headline: string;
-    summary: string;
-    items: BriefingItem[];
+  headline: string;
+  summary: string;
+  items: BriefingItem[];
 }
 
-const getIntegrationDetails = (type: string) => {
-    switch (type) {
-        case 'meeting':
-            return { icon: 'calendar', title: 'Calendar', color: '#4285F4' }; // Google Blue
-        case 'email':
-            return { icon: 'mail', title: 'Gmail', color: '#EA4335' }; // Google Red
-        case 'task':
-            return { icon: 'git-pull-request', title: 'GitHub', color: '#333333' }; // GitHub Black (adaptable)
-        case 'alert':
-            return { icon: 'alert-circle', title: 'Alerts', color: '#F4B400' }; // Google Yellow
-        default:
-            return { icon: 'apps', title: 'Other', color: '#888888' };
+export const BriefingCard: React.FC = () => {
+  const { integrations } = useConnectors();
+  const [data, setData] = useState<BriefingData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadBriefing = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. Collect Data locally
+      const integrationData: any = {};
+
+      const enabledIntegrations = integrations.filter(i => i.connected || i.enabled); // Handle both models
+
+      // Parallel fetch
+      const promises = enabledIntegrations.map(async (integration) => {
+          const provider = integration.provider || integration.id; // fallback
+          try {
+              if (provider === 'gmail') {
+                  const emails = await gmailClient.getRecentEmails(integration.id, 10);
+                  if (!integrationData.emails) integrationData.emails = [];
+                  integrationData.emails.push(...emails);
+              } else if (provider === 'calendar') {
+                  const events = await calendarClient.getUpcomingEvents(integration.id, 10);
+                  if (!integrationData.events) integrationData.events = [];
+                  integrationData.events.push(...events);
+              } else if (provider === 'github') {
+                  const issues = await githubClient.getAssignedIssues(integration.id);
+                  if (!integrationData.issues) integrationData.issues = [];
+                  integrationData.issues.push(...issues);
+              } else if (provider === 'jules') {
+                  const tasks = await julesClient.getTasks(integration.id);
+                  if (!integrationData.tasks) integrationData.tasks = [];
+                  integrationData.tasks.push(...tasks);
+              }
+          } catch (e) {
+              console.warn(`Failed to fetch data for ${provider}`, e);
+          }
+      });
+
+      await Promise.all(promises);
+
+      // 2. Send to Backend
+      const response = await apiClient.post('/briefing', {
+          integration_data: integrationData
+      });
+
+      setData(response.data);
+
+    } catch (e) {
+      console.error("Failed to load briefing:", e);
+      setError("Failed to generate briefing. Please try again.");
+    } finally {
+      setLoading(false);
     }
-};
+  };
 
-export const BriefingCard = () => {
-    const { theme } = useTheme();
-    const [loading, setLoading] = useState(false);
-    const [data, setData] = useState<BriefingData | null>(null);
-    const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    loadBriefing();
+  }, []); // Run once on mount
 
-    useEffect(() => {
-        loadBriefing();
-    }, []);
-
-    const loadBriefing = async () => {
-        setLoading(true);
-        try {
-            const result = await briefingApi.getBriefing();
-            if (result && !result.error) {
-                setData(result);
-            } else {
-                console.error("Briefing error:", result?.error);
-            }
-        } catch (e) {
-            console.error("Failed to load briefing:", e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const toggleSection = (section: string) => {
-        setCollapsedSections(prev => ({
-            ...prev,
-            [section]: !prev[section]
-        }));
-    };
-
-    if (!data && !loading) {
-        return (
-            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <TouchableOpacity onPress={loadBriefing} style={styles.header}>
-                    <View style={styles.headerTitleContainer}>
-                        <Ionicons name="sunny" size={24} color={theme.primary} />
-                        <Text style={[styles.headerTitle, { color: theme.text }]}>Morning Briefing</Text>
-                    </View>
-                    <Text style={[styles.actionText, { color: theme.primary }]}>Prepare</Text>
-                </TouchableOpacity>
-            </View>
-        );
-    }
-
-    if (loading && !data) {
-        return (
-            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={styles.header}>
-                    <View style={styles.headerTitleContainer}>
-                        <ActivityIndicator size="small" color={theme.primary} />
-                        <Text style={[styles.headerTitle, { color: theme.text, marginLeft: 8 }]}>Preparing your briefing...</Text>
-                    </View>
-                </View>
-            </View>
-        )
-    }
-
-    const groupedItems = data?.items.reduce((acc, item) => {
-        const key = item.type;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(item);
-        return acc;
-    }, {} as Record<string, BriefingItem[]>) || {};
-
+  if (loading) {
     return (
-        <View>
-            {/* Overall Card */}
-            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={styles.header}>
-                    <View style={styles.headerTitleContainer}>
-                        <Ionicons name="sunny" size={24} color={theme.primary} />
-                        <Text style={[styles.headerTitle, { color: theme.text }]}>Overview</Text>
-                    </View>
-                </View>
-                <View style={styles.content}>
-                    <Text style={[styles.headline, { color: theme.text }]}>{data.headline}</Text>
-                    <Text style={[styles.summary, { color: theme.textSecondary }]}>{data.summary}</Text>
-                </View>
-            </View>
-
-            {/* Integration Cards */}
-            {Object.entries(groupedItems).map(([type, items]) => {
-                const details = getIntegrationDetails(type);
-                const isCollapsed = collapsedSections[type];
-
-                return (
-                    <View key={type} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                        <TouchableOpacity
-                            style={styles.header}
-                            onPress={() => toggleSection(type)}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.headerTitleContainer}>
-                                <Ionicons name={details.icon as any} size={22} color={theme.text} />
-                                <Text style={[styles.headerTitle, { color: theme.text }]}>{details.title}</Text>
-                                <View style={[styles.badge, { backgroundColor: theme.background }]}>
-                                    <Text style={[styles.badgeText, { color: theme.textSecondary }]}>{items.length}</Text>
-                                </View>
-                            </View>
-                            <Ionicons
-                                name={isCollapsed ? "chevron-down" : "chevron-up"}
-                                size={20}
-                                color={theme.textSecondary}
-                            />
-                        </TouchableOpacity>
-
-                        {!isCollapsed && (
-                            <View style={styles.content}>
-                                {items.map((item, index) => (
-                                    <View key={item.id} style={[
-                                        styles.itemContainer,
-                                        {
-                                            borderLeftColor: item.priority === 'CRITICAL' ? theme.error : theme.info,
-                                            marginBottom: index === items.length - 1 ? 0 : 12
-                                        }
-                                    ]}>
-                                        <View style={styles.itemHeader}>
-                                            <Text style={[styles.itemTitle, { color: theme.text }]}>{item.title}</Text>
-                                            {item.source_link && (
-                                                <TouchableOpacity onPress={() => Linking.openURL(item.source_link!)}>
-                                                    <Ionicons name="link" size={16} color={theme.primary} />
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-                                        <Text style={[styles.itemDescription, { color: theme.textSecondary }]}>{item.description}</Text>
-                                        {item.context && (
-                                            <View style={[styles.contextContainer, { backgroundColor: theme.background }]}>
-                                                <Text style={[styles.contextText, { color: theme.textSecondary }]}>
-                                                    <Ionicons name="bulb-outline" size={14} /> {item.context}
-                                                </Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                ))}
-                            </View>
-                        )}
-                    </View>
-                );
-            })}
-        </View>
+      <Card style={styles.container}>
+        <ActivityIndicator size="large" color="#0000ff" />
+        <Text style={styles.loadingText}>Generating your daily briefing...</Text>
+      </Card>
     );
+  }
+
+  if (error) {
+    return (
+      <Card style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity onPress={loadBriefing} style={styles.retryButton}>
+            <Text>Retry</Text>
+        </TouchableOpacity>
+      </Card>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <Card style={styles.container}>
+      <Text style={styles.headline}>{data.headline}</Text>
+      <Text style={styles.summary}>{data.summary}</Text>
+
+      <ScrollView style={styles.list}>
+        {data.items.map(item => (
+          <View key={item.id} style={[styles.item, item.priority === 'CRITICAL' && styles.criticalItem]}>
+            <View style={styles.itemHeader}>
+                <Text style={styles.itemTitle}>{item.title}</Text>
+                {item.priority === 'CRITICAL' && <Text style={styles.badge}>!</Text>}
+            </View>
+            <Text style={styles.itemDesc}>{item.description}</Text>
+            {item.context && (
+                <Text style={styles.context}>💡 {item.context}</Text>
+            )}
+          </View>
+        ))}
+      </ScrollView>
+    </Card>
+  );
 };
 
 const styles = StyleSheet.create({
-    card: {
-        marginHorizontal: 16,
-        marginBottom: 8,
-        borderRadius: 16,
-        borderWidth: 1,
-        overflow: 'hidden',
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 16,
-        // paddingBottom: 12, // Adjusted for cleaner look when collapsed
-    },
-    headerTitleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    headerTitle: {
-        fontSize: 17,
-        fontWeight: '600',
-    },
-    headline: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 8,
-    },
-    actionText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    content: {
-        padding: 16,
-        paddingTop: 0,
-        paddingBottom: 16,
-    },
-    summary: {
-        fontSize: 14,
-        lineHeight: 20,
-    },
-    itemContainer: {
-        paddingLeft: 12,
-        borderLeftWidth: 3,
-    },
-    itemHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    itemTitle: {
-        fontSize: 15,
-        fontWeight: '500',
-    },
-    itemDescription: {
-        fontSize: 14,
-        marginBottom: 6,
-        lineHeight: 18,
-    },
-    contextContainer: {
-        padding: 8,
-        borderRadius: 8,
-        marginTop: 4,
-    },
-    contextText: {
-        fontSize: 12,
-        fontStyle: 'italic',
-    },
-    badge: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 12,
-        marginLeft: 8,
-    },
-    badgeText: {
-        fontSize: 12,
-        fontWeight: '600',
-    }
+  container: {
+    padding: 16,
+    maxHeight: 400,
+  },
+  loadingText: {
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  headline: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  summary: {
+    fontSize: 16,
+    marginBottom: 16,
+    color: '#444',
+  },
+  list: {
+    maxHeight: 300,
+  },
+  item: {
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    marginBottom: 8,
+    borderRadius: 8,
+  },
+  criticalItem: {
+    borderLeftWidth: 4,
+    borderLeftColor: 'red',
+    backgroundColor: '#fff0f0',
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  itemTitle: {
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  badge: {
+    color: 'red',
+    fontWeight: 'bold',
+  },
+  itemDesc: {
+    fontSize: 14,
+    color: '#333',
+  },
+  context: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  errorText: {
+    color: 'red',
+    marginBottom: 10,
+  },
+  retryButton: {
+    padding: 10,
+    backgroundColor: '#ddd',
+    alignItems: 'center',
+    borderRadius: 8,
+  }
 });

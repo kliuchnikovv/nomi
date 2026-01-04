@@ -5,13 +5,17 @@ import React, {
     useState,
     useEffect,
     useRef,
+    useCallback,
 } from 'react';
 import { Linking } from 'react-native';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
+import { v4 as uuidv4 } from 'uuid';
 
 import { ConnectorContextType, Tool, Integration } from './models';
-import { integrationsApi, pluginsApi } from '../../../apiClient.ts';
-import { OAUTH_CALLBACK_URL } from '../../../config.ts';
+import apiClient from '../../../apiClient';
+import { integrationStorage } from '../../../services/integrations/IntegrationStorage';
+import { migrationService } from '../../../services/migration/migrationService';
+import { OAUTH_CALLBACK_URL } from '../../../config';
 
 const ConnectorsContext = createContext<ConnectorContextType | undefined>(undefined);
 
@@ -31,48 +35,35 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
     const lastHandledUrl = useRef<string | null>(null);
 
     useEffect(() => {
-        getIntegrations();
-    }, [getIntegrations]);
+        // Run migration once on mount
+        migrationService.migrateFromBackend().then(() => {
+            getIntegrations();
+        });
+    }, []);
 
-    async function getTools() {
-        // For backward compatibility: tools mirror the plugins list
-        await getIntegrations();
-    }
-
-    const getIntegrations = React.useCallback(async () => {
+    const getIntegrations = useCallback(async () => {
         try {
-            const response = await integrationsApi.list();
-            const items = Array.isArray(response) ? response : (response?.items || []);
-            const normalized: Integration[] = (items || []).map(p => {
-                const parsedParams = (() => {
-                    if (!p?.params) return undefined;
-                    if (typeof p.params === 'object') return p.params;
-                    try {
-                        return JSON.parse(String(p.params));
-                    } catch {
-                        return undefined;
-                    }
-                })();
-                const provider = p.provider || p.name;
-                const integrationId = p.id;
-                const displayName =
-                    (p.info && (p.info.title || p.info.name)) ||
-                    p.name ||
-                    parsedParams?.account_email ||
-                    provider;
+            const localIntegrations = await integrationStorage.getIntegrations();
 
-                return {
-                    id: integrationId,
-                    name: displayName,
-                    provider,
-                    connected: !!p.enabled,
-                    info: p.info,
-                    state: p.state,
-                    params: parsedParams,
-                };
-            });
-            setConfigs(normalized);
-            setTools(normalized.map(p => ({
+            // Map local storage format to UI model
+            const uiIntegrations: Integration[] = localIntegrations.map(local => ({
+                id: local.id,
+                name: local.name,
+                provider: local.provider,
+                connected: local.enabled,
+                info: {
+                    name: local.name,
+                    title: local.name,
+                    // Map other fields if needed
+                },
+                state: local.enabled ? 'connected' : 'disabled',
+                params: {
+                    account_email: local.accountEmail
+                }
+            }));
+
+            setConfigs(uiIntegrations);
+            setTools(uiIntegrations.map(p => ({
                 id: p.id,
                 name: p.name,
                 provider: p.provider,
@@ -87,29 +78,57 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    const handleOAuthUrl = React.useCallback(async (url: string) => {
-        if (!url || !url.startsWith(OAUTH_CALLBACK_URL)) return;
+    const getTools = async () => {
+        await getIntegrations();
+    }
+
+    const handleOAuthUrl = useCallback(async (url: string) => {
+        if (!url) return;
         if (lastHandledUrl.current === url) return;
         lastHandledUrl.current = url;
+
         try {
             const parsed = new URL(url);
-            const provider = parsed.searchParams.get('provider');
-            const status = parsed.searchParams.get('status');
-            const email = parsed.searchParams.get('email');
-            const accountEmail = parsed.searchParams.get('account_email');
-            if (provider && pendingProvider && provider !== pendingProvider) {
+            const code = parsed.searchParams.get('code');
+            const error = parsed.searchParams.get('error');
+
+            if (error) {
+                setAuthStatus(`OAuth failed: ${error}`);
                 return;
             }
-            if (status === 'ok' && provider) {
-                const labelEmail = accountEmail || email;
-                setAuthStatus(`Connected ${provider}${labelEmail ? ` (${labelEmail})` : ''}`);
-                await getIntegrations();
-            } else {
-                setAuthStatus(`OAuth failed${provider ? ` for ${provider}` : ''}`);
+
+            let provider = pendingProvider;
+            if (!provider) {
+                if (url.includes('google') || url.includes('gmail')) provider = 'gmail';
+                else if (url.includes('github')) provider = 'github';
             }
+
+            if (code && provider) {
+                const tokenResponse = await apiClient.post(`/oauth/${provider}/callback-mobile`, { code });
+                const data = tokenResponse.data;
+
+                await integrationStorage.createIntegration({
+                    id: uuidv4(),
+                    provider: data.provider || provider,
+                    name: `${data.provider} (${data.account_email || 'Connected'})`,
+                    enabled: true,
+                    accountEmail: data.account_email,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                }, {
+                    accessToken: data.access_token,
+                    refreshToken: data.refresh_token,
+                    tokenExpiry: new Date(data.token_expiry * 1000),
+                });
+
+                setAuthStatus(`Connected ${provider}`);
+                await getIntegrations();
+            }
+        } catch (e) {
+            console.error('OAuth callback handling failed', e);
+            setAuthStatus('OAuth failed');
         } finally {
             setPendingProvider(null);
-            await getIntegrations();
         }
     }, [pendingProvider, getIntegrations]);
 
@@ -126,11 +145,9 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         };
     }, [handleOAuthUrl]);
 
-    const openOAuthFlow = React.useCallback(async (authUrl: string) => {
-        console.log('Opening OAuth flow', authUrl);
+    const openOAuthFlow = useCallback(async (authUrl: string) => {
         try {
             const isAvailable = await InAppBrowser.isAvailable();
-            console.log('InAppBrowser available:', isAvailable);
             if (isAvailable) {
                 const result = await InAppBrowser.openAuth(authUrl, OAUTH_CALLBACK_URL, {
                     ephemeralWebSession: false,
@@ -138,30 +155,25 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                     showTitle: false,
                     enableDefaultShare: false,
                 });
+
                 if (result.type === 'success' && result.url) {
                     await handleOAuthUrl(result.url);
-                }
-                if (result.type === 'cancel') {
-                    setAuthStatus('OAuth flow cancelled');
-                    setPendingProvider(null);
                 }
                 return;
             }
         } catch (e) {
-            console.warn('Failed to open OAuth flow in InAppBrowser', e);
-            console.log('Falling back to Linking.openURL');
-            try {
-                await Linking.openURL(authUrl);
-            } catch (err) {
-                console.warn('Failed to open OAuth URL', err);
-            }
+            console.warn('InAppBrowser failed, falling back to Linking', e);
         }
+
+        await Linking.openURL(authUrl);
     }, [handleOAuthUrl]);
 
-    const startOAuth = React.useCallback(async (provider: string) => {
+    const startOAuth = useCallback(async (provider: string) => {
         try {
             setPendingProvider(provider);
-            const redirectUrl = await pluginsApi.startOAuthLogin(provider);
+            const response = await apiClient.post(`/oauth/${provider}/login`);
+            const redirectUrl = response.data.url;
+
             if (redirectUrl) {
                 await openOAuthFlow(redirectUrl);
             }
@@ -169,28 +181,29 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             console.warn('Failed to start OAuth login', authError);
             setPendingProvider(null);
             setAuthStatus('Failed to start OAuth login');
-            throw authError;
         }
     }, [openOAuthFlow]);
 
     async function toggleTool(configID: string, enabled: boolean) {
-        const integration = configs.find(c => c.id === configID || c.provider === configID);
-        if (!integration) {
-            console.warn(`Integration not found for ID: ${configID}`);
-            return;
-        }
-
         try {
-            await integrationsApi.update(integration.id, { enabled });
-            await getIntegrations();
+             let integration = await integrationStorage.getIntegration(configID);
+             if (!integration) {
+                 const list = await integrationStorage.getIntegrations();
+                 integration = list.find(i => i.provider === configID || i.id === configID);
+             }
+
+             if (integration) {
+                 await integrationStorage.updateIntegration(integration.id, { enabled });
+                 await getIntegrations();
+             }
         } catch (e) {
             console.warn('Failed to update integration', e);
         }
     }
 
-    const deleteIntegration = React.useCallback(async (id: string) => {
+    const deleteIntegration = useCallback(async (id: string) => {
         try {
-            await integrationsApi.delete(id);
+            await integrationStorage.deleteIntegration(id);
             await getIntegrations();
         } catch (e) {
             console.warn('Failed to delete integration', e);
@@ -208,9 +221,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <ConnectorsContext.Provider
-            value={value}
-        >
+        <ConnectorsContext.Provider value={value}>
             {children}
         </ConnectorsContext.Provider>
     );
