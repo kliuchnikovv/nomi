@@ -2,6 +2,7 @@ import os
 import logging
 import uuid
 import inspect
+from typing import Optional, Any
 from pydantic import BaseModel
 
 from agno.db.postgres import PostgresDb
@@ -173,24 +174,37 @@ async def run_query(request: QueryRequest):
     return {"answer": answer, "reasoning": reasoning}
 
 class BriefingRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
+    context: Optional[dict] = None
 
 @app.post("/api/briefing")
 async def generate_briefing(request: BriefingRequest):
     session_id = str(uuid.uuid4())
     
-    # Build BriefingAgent - it will fetch tools from user's integrations via AgentFactory
+    # Build BriefingAgent
+    # If user_id is provided, it might still fetch server-side tools/knowledge
+    # If context is provided, we prioritize that
     agent = await agent_factory.build(
         session_id=session_id,
         user_id=request.user_id,
         agent_type="briefing",
     )
     
+    # Construct prompt with context
+    prompt = "Generate the morning briefing."
+    if request.context:
+        import json
+        context_str = json.dumps(request.context, indent=2, default=str)
+        prompt = f"""Generate the morning briefing based on the following context data from user integrations:
+
+{context_str}
+
+Analyze this data to identify critical items. Do not invent items not present in the data.
+"""
+    
     # 3. Run agent to get briefing
-    # Since BriefingAgent.response_model is set, run() returns a RunResponse
-    # whose content should be the Pydantic object (BriefingResponse)
     try:
-        response = await agent.arun("Generate the morning briefing.", stream=False)
+        response = await agent.arun(prompt, stream=False)
         
         # Extract structured output
         if response and response.content:
