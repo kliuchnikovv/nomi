@@ -23,6 +23,8 @@ import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
+import { initDatabase } from './src/store/db';
+import { configureBackgroundFetch } from './src/tasks/backgroundRefresh';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -30,6 +32,8 @@ function App() {
 
     // Initialize API URL from AsyncStorage before rendering
     useEffect(() => {
+        initDatabase();
+        configureBackgroundFetch();
         initApiUrl().then(() => setConfigReady(true));
     }, []);
 
