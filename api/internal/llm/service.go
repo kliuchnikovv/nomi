@@ -79,9 +79,10 @@ func (s *Service) GenerateSimple(ctx context.Context, userID uuid.UUID, prompt s
 }
 
 // GetBriefing calls the /api/briefing endpoint on the Python backend.
-func (s *Service) GetBriefing(ctx context.Context, userID string) (map[string]interface{}, error) {
-	requestBody, err := json.Marshal(map[string]string{
+func (s *Service) GetBriefing(ctx context.Context, userID string, contextData map[string]interface{}) (map[string]interface{}, error) {
+	requestBody, err := json.Marshal(map[string]interface{}{
 		"user_id": userID,
+		"context": contextData,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal briefing request: %w", err)

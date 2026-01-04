@@ -30,7 +30,19 @@ func (h *BriefingHandler) GetBriefing(c *gin.Context) {
 		return
 	}
 
-	briefing, err := h.llm.GetBriefing(ctx, user.ID.String())
+	// Parse request body to get context (optional)
+	var req struct {
+		Context map[string]interface{} `json:"context"`
+	}
+	// We use ShouldBindJSON to allow empty body (though frontend usually sends it)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Log specific error if needed, but for now we proceed with empty context if binding fails
+		// because body might be empty for legacy reasons.
+		// However, if body IS present but invalid JSON, we might want to return error.
+		// For now, assume empty context on error.
+	}
+
+	briefing, err := h.llm.GetBriefing(ctx, user.ID.String(), req.Context)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get briefing: %v", err)})
 		return
