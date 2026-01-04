@@ -61,8 +61,8 @@ func (g *gmailBackend) Init(ctx context.Context, rt *Runtime, state map[string]i
 		g.logger.Warn("gmail/google oauth config not found in runtime")
 	}
 
-	// Start auto-sync loop
-	go g.runSyncLoop()
+	// Start auto-sync loop (disabled)
+	// go g.runSyncLoop()
 
 	return nil
 }

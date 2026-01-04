@@ -10,8 +10,10 @@ import { Linking } from 'react-native';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 
 import { ConnectorContextType, Tool, Integration } from './models';
-import { integrationsApi, pluginsApi } from '../../../apiClient.ts';
-import { OAUTH_CALLBACK_URL } from '../../../config.ts';
+import { pluginsApi, authStore } from '../../../apiClient.ts';
+import { OAUTH_CALLBACK_URL, getApiUrl } from '../../../config.ts';
+import { initDatabase } from '../../../services/database/database';
+import { integrationStorage, Integration as LocalIntegration } from '../../../services/integrations/IntegrationStorage';
 
 const ConnectorsContext = createContext<ConnectorContextType | undefined>(undefined);
 
@@ -27,79 +29,89 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
     const [tools, setTools] = useState<Tool[]>([])
     const [configs, setConfigs] = useState<Integration[]>([])
     const [pendingProvider, setPendingProvider] = useState<string | null>(null);
+    const [pendingCode, setPendingCode] = useState<string | null>(null);
     const [authStatus, setAuthStatus] = useState<string | null>(null);
+    const [dbReady, setDbReady] = useState(false);
     const lastHandledUrl = useRef<string | null>(null);
 
+    // Initialize database on mount
     useEffect(() => {
-        getIntegrations();
-    }, [getIntegrations]);
+        initDatabase()
+            .then(() => {
+                console.log('[ConnectorsProvider] Database initialized');
+                setDbReady(true);
+            })
+            .catch(e => {
+                console.error('[ConnectorsProvider] Failed to initialize database:', e);
+            });
+    }, []);
+
+    // Load integrations once database is ready
+    useEffect(() => {
+        if (dbReady) {
+            getIntegrations();
+        }
+    }, [dbReady]);
 
     async function getTools() {
-        // For backward compatibility: tools mirror the plugins list
         await getIntegrations();
     }
 
     const getIntegrations = React.useCallback(async () => {
-        try {
-            const response = await integrationsApi.list();
-            const items = Array.isArray(response) ? response : (response?.items || []);
-            const normalized: Integration[] = (items || []).map(p => {
-                const parsedParams = (() => {
-                    if (!p?.params) return undefined;
-                    if (typeof p.params === 'object') return p.params;
-                    try {
-                        return JSON.parse(String(p.params));
-                    } catch {
-                        return undefined;
-                    }
-                })();
-                const provider = p.provider || p.name;
-                const integrationId = p.id;
-                const displayName =
-                    (p.info && (p.info.title || p.info.name)) ||
-                    p.name ||
-                    parsedParams?.account_email ||
-                    provider;
+        if (!dbReady) return;
 
-                return {
-                    id: integrationId,
-                    name: displayName,
-                    provider,
-                    connected: !!p.enabled,
-                    info: p.info,
-                    state: p.state,
-                    params: parsedParams,
-                };
-            });
+        try {
+            // Load from local SQLite
+            const localIntegrations = await integrationStorage.getIntegrations();
+
+            const normalized: Integration[] = localIntegrations.map(p => ({
+                id: p.id,
+                name: p.name,
+                provider: p.provider,
+                connected: p.enabled,
+                params: { account_email: p.accountEmail },
+            }));
+
             setConfigs(normalized);
             setTools(normalized.map(p => ({
                 id: p.id,
                 name: p.name,
                 provider: p.provider,
                 enabled: p.connected,
-                info: p.info,
-                state: p.state,
             })));
+
+            console.log(`[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`);
         } catch (e) {
             console.warn('Failed to load integrations', e);
             setConfigs([]);
             setTools([]);
         }
-    }, []);
+    }, [dbReady]);
 
     const handleOAuthUrl = React.useCallback(async (url: string) => {
         if (!url || !url.startsWith(OAUTH_CALLBACK_URL)) return;
         if (lastHandledUrl.current === url) return;
         lastHandledUrl.current = url;
+
         try {
             const parsed = new URL(url);
             const provider = parsed.searchParams.get('provider');
             const status = parsed.searchParams.get('status');
+            const code = parsed.searchParams.get('code');
             const email = parsed.searchParams.get('email');
             const accountEmail = parsed.searchParams.get('account_email');
+
             if (provider && pendingProvider && provider !== pendingProvider) {
                 return;
             }
+
+            // If we got a code, exchange it for tokens using mobile endpoint
+            if (code && provider) {
+                await exchangeCodeForTokens(provider, code);
+                return;
+            }
+
+            // Legacy flow: backend already handled tokens
             if (status === 'ok' && provider) {
                 const labelEmail = accountEmail || email;
                 setAuthStatus(`Connected ${provider}${labelEmail ? ` (${labelEmail})` : ''}`);
@@ -109,9 +121,62 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             }
         } finally {
             setPendingProvider(null);
+            setPendingCode(null);
             await getIntegrations();
         }
     }, [pendingProvider, getIntegrations]);
+
+    /**
+     * Exchange OAuth code for tokens and save locally
+     */
+    const exchangeCodeForTokens = async (provider: string, code: string) => {
+        try {
+            console.log(`[ConnectorsProvider] Exchanging code for tokens (${provider})...`);
+
+            const apiUrl = getApiUrl();
+            const token = authStore.getToken();
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const response = await fetch(`${apiUrl}/oauth/${provider}/callback-mobile`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ code }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error || 'Token exchange failed');
+            }
+
+            const data = await response.json();
+
+            // Save integration and credentials locally
+            await integrationStorage.createIntegration({
+                provider: data.provider as LocalIntegration['provider'],
+                name: `${data.provider.charAt(0).toUpperCase() + data.provider.slice(1)} (${data.account_email})`,
+                enabled: true,
+                accountEmail: data.account_email,
+            }, {
+                accessToken: data.access_token,
+                refreshToken: data.refresh_token,
+                tokenExpiry: new Date(data.token_expiry * 1000),
+            });
+
+            console.log(`[ConnectorsProvider] Integration saved locally: ${data.account_email}`);
+            setAuthStatus(`Connected ${provider} (${data.account_email})`);
+
+            await getIntegrations();
+        } catch (e) {
+            console.error('[ConnectorsProvider] Token exchange failed:', e);
+            setAuthStatus(`Failed to connect ${provider}`);
+            throw e;
+        }
+    };
 
     useEffect(() => {
         const subscription = Linking.addEventListener('url', ({ url }) => handleOAuthUrl(url));
@@ -119,7 +184,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             if (initialUrl) {
                 handleOAuthUrl(initialUrl);
             }
-        }).catch(() => {});
+        }).catch(() => { });
 
         return () => {
             subscription.remove();
@@ -181,7 +246,8 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         }
 
         try {
-            await integrationsApi.update(integration.id, { enabled });
+            // Update in local storage
+            await integrationStorage.updateIntegration(integration.id, { enabled });
             await getIntegrations();
         } catch (e) {
             console.warn('Failed to update integration', e);
@@ -190,7 +256,8 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
     const deleteIntegration = React.useCallback(async (id: string) => {
         try {
-            await integrationsApi.delete(id);
+            // Delete from local storage
+            await integrationStorage.deleteIntegration(id);
             await getIntegrations();
         } catch (e) {
             console.warn('Failed to delete integration', e);

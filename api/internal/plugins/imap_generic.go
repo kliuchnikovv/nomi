@@ -48,8 +48,8 @@ func (g *genericIMAPBackend) Init(ctx context.Context, rt *Runtime, state map[st
 	g.syncer = NewEmailSyncer(rt.Logger, rt.Storage, rt.LLMService, "imap")
 	g.done = make(chan struct{})
 
-	// Start auto-sync loop
-	go g.runSyncLoop()
+	// Start auto-sync loop (disabled)
+	// go g.runSyncLoop()
 
 	return nil
 }

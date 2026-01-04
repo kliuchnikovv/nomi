@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { inboxApi, integrationsApi, sidebarApi } from '../../apiClient';
+import { integrationStorage, Email } from '../../services/integrations/IntegrationStorage';
+import { gmailClient } from '../../services/integrations/clients/GmailClient';
 import { InboxMessage, Plugin, PluginChat, PluginChatMessage } from './models';
 
 interface PluginChatsContextType {
@@ -74,12 +76,68 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const mapInboxItemsToPlugins = async (): Promise<Plugin[]> => {
         try {
+            // 1. Load local integrations (Gmail)
+            const localIntegrations = await integrationStorage.getIntegrations();
+            const localPlugins: Plugin[] = [];
+
+            for (const integ of localIntegrations) {
+                if (integ.provider === 'gmail' && integ.enabled) {
+                    const cachedEmails = await integrationStorage.getCachedEmails(integ.id, 20);
+
+                    // Group by threadId
+                    const threadsMap = new Map<string, Email[]>();
+                    cachedEmails.forEach(email => {
+                        const threadId = email.threadId || email.id;
+                        const existing = threadsMap.get(threadId) || [];
+                        existing.push(email);
+                        threadsMap.set(threadId, existing);
+                    });
+
+                    const chats: PluginChat[] = Array.from(threadsMap.entries()).map(([threadId, emails]) => {
+                        const sortedEmails = emails.sort((a, b) =>
+                            new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
+                        );
+                        const latest = sortedEmails[0];
+                        const count = emails.length;
+
+                        return {
+                            id: `${integ.id}:${threadId}`,
+                            pluginId: integ.id,
+                            title: latest.subject || '(No subject)',
+                            lastMessage: latest.snippet,
+                            lastMessageAt: latest.date ? new Date(latest.date).getTime() : undefined,
+                            unreadCount: emails.filter(e => !e.isRead).length,
+                            metadata: {
+                                provider: integ.provider,
+                                integrationId: integ.id,
+                                threadId: threadId,
+                                messages: sortedEmails.map(e => ({
+                                    id: e.id,
+                                    text: e.bodyText || e.snippet || '',
+                                    sender: e.fromName || e.fromEmail,
+                                    timestamp: e.date ? new Date(e.date).getTime() : Date.now(),
+                                    isMe: false, // Gmail incoming are usually not me, unless sent
+                                })),
+                            },
+                        };
+                    });
+
+                    localPlugins.push({
+                        id: integ.id,
+                        provider: integ.provider,
+                        name: integ.name,
+                        chats: chats,
+                    });
+                }
+            }
+
+            // 2. Load remote plugins (IMAP, Jules)
             const integrationsResponse = await integrationsApi.list();
-            const integrations = Array.isArray(integrationsResponse)
+            const remoteIntegrations = Array.isArray(integrationsResponse)
                 ? integrationsResponse
                 : (integrationsResponse?.items || []);
 
-            const parsedIntegrations = integrations.map((p: any) => {
+            const parsedRemoteIntegrations = remoteIntegrations.map((p: any) => {
                 let params: Record<string, any> | undefined;
                 if (typeof p?.params === 'object') params = p.params;
                 else if (p?.params) {
@@ -93,17 +151,18 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 };
             });
 
-            const plugins: Plugin[] = [];
+            const remotePlugins: Plugin[] = [];
 
-            for (const integ of parsedIntegrations) {
+            for (const integ of parsedRemoteIntegrations) {
+                // Skip Gmail if it's coming from backend (we use local now)
+                if (integ.provider === 'gmail') continue;
+
                 try {
                     // For Jules, we use the sidebar API which returns proper chat objects
                     if (integ.provider === 'jules') {
                         console.log('[PluginChatsContext] Loading Jules chats for integration:', integ.id);
                         const response = await sidebarApi.getChats(integ.provider, integ.id);
-                        console.log('[PluginChatsContext] Jules API response:', response);
                         const items = response?.chats || [];
-                        console.log('[PluginChatsContext] Jules chats count:', items.length);
 
                         const mappedChats: PluginChat[] = items.map((chatItem) => ({
                             id: `${integ.id}:${chatItem.chat_id}`,
@@ -120,7 +179,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
                             },
                         }));
 
-                        plugins.push({
+                        remotePlugins.push({
                             id: integ.id,
                             provider: integ.provider,
                             name: integ.name,
@@ -159,7 +218,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
                         });
                     });
 
-                    plugins.push({
+                    remotePlugins.push({
                         id: integ.id,
                         provider: integ.provider,
                         name: integ.name,
@@ -167,7 +226,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     });
                 } catch (err) {
                     console.error(`Failed to load ${integ.provider === 'jules' ? 'chats' : 'inbox'} for integration ${integ.id}`, err);
-                    plugins.push({
+                    remotePlugins.push({
                         id: integ.id,
                         provider: integ.provider,
                         name: integ.name,
@@ -176,7 +235,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 }
             }
 
-            return plugins;
+            return [...localPlugins, ...remotePlugins];
         } catch (err) {
             console.error('Failed to load integrations for inbox', err);
             return [];
@@ -200,6 +259,19 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const refresh = useCallback(async () => {
         setRefreshing(true);
         try {
+            // Force sync for enabled Gmail integrations
+            const integrations = await integrationStorage.getIntegrations();
+            const gmailIntegrations = integrations.filter(i => i.provider === 'gmail' && i.enabled);
+
+            await Promise.all(gmailIntegrations.map(async (integ) => {
+                try {
+                    console.log(`[PluginChatsContext] Syncing gmail integration ${integ.id}...`);
+                    await gmailClient.syncEmails(integ.id);
+                } catch (e) {
+                    console.error(`[PluginChatsContext] Failed to sync integration ${integ.id}`, e);
+                }
+            }));
+
             await loadPlugins();
             // Reset pagination state
             setPluginPages({});

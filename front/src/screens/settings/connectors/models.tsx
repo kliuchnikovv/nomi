@@ -95,30 +95,31 @@ export const CONNECTORS: Connector[] = [
         colorKey: 'red',
         glyph: 'gmail',
     },
-    {
-        id: 'calendar',
-        name: 'Google Calendar',
-        toolKey: 'calendar',
-        oauthProvider: 'calendar',
-        colorKey: 'green',
-        glyph: 'calendar',
-    },
-    {
-        id: 'github',
-        name: 'GitHub',
-        toolKey: 'github',
-        oauthProvider: 'github',
-        colorKey: 'magenta',
-        glyph: 'github',
-    },
-    {
-        id: 'jules',
-        name: 'Jules',
-        toolKey: 'jules',
-        oauthProvider: 'jules',
-        colorKey: 'orange',
-        glyph: 'jules',
-    },
+    // Temporarily disabled - pending migration to client-side storage:
+    // {
+    //     id: 'calendar',
+    //     name: 'Google Calendar',
+    //     toolKey: 'calendar',
+    //     oauthProvider: 'calendar',
+    //     colorKey: 'green',
+    //     glyph: 'calendar',
+    // },
+    // {
+    //     id: 'github',
+    //     name: 'GitHub',
+    //     toolKey: 'github',
+    //     oauthProvider: 'github',
+    //     colorKey: 'magenta',
+    //     glyph: 'github',
+    // },
+    // {
+    //     id: 'jules',
+    //     name: 'Jules',
+    //     toolKey: 'jules',
+    //     oauthProvider: 'jules',
+    //     colorKey: 'orange',
+    //     glyph: 'jules',
+    // },
 ];
 
 export interface ConnectorContextType {
