@@ -16,6 +16,7 @@ import { getApiUrl, API_URL } from '../../config.ts';
 import { modelsApi, sidebarApi } from '../../apiClient';
 import { AVAILABLE_TEAMS } from './teams';
 import { useMain } from '../main/context';
+import { gmailClient } from '../../services/integrations/clients/GmailClient';
 
 function generateUUID() {
     // RFC4122 version 4 compliant enough for client-side ids
@@ -795,29 +796,75 @@ export function ChatProvider({
                     };
                     console.log('[ChatContext] Received reasoning:', reasoningText.substring(0, 50) + '...');
                 }
+            } else if (frame.payload.type === 'client_action') {
+                // Handle client-side action delegation
+                const { tool, method, params, description } = frame.payload;
+                console.log(`[ChatContext] Received client action: ${tool}.${method}`, params);
+
+                // Execute the action
+                // TODO: Show a UI indicator/toast?
+                (async () => {
+                    try {
+                        if (tool === 'gmail' && method === 'send_email') {
+                            // We need integrationId. Since we don't have it in the action params (yet), 
+                            // we might need to find a way to get it. 
+                            // For now, assume we find the enabled gmail integration or use a default.
+                            // OR the backend passed it? Backend only knows token is missing.
+                            // The client needs to lookup the integration ID.
+
+                            // Quick fix: Try to find ANY enabled Gmail integration
+                            const integrationsRaw = await import('../../apiClient').then(m => m.integrationsApi.list());
+                            const integrations = Array.isArray(integrationsRaw) ? integrationsRaw : (integrationsRaw.items || []);
+
+                            const gmailInt = integrations.find((i: any) => i.provider === 'gmail' && i.enabled);
+
+                            if (gmailInt) {
+                                console.log(`[ChatContext] Executing Gmail Send with integration ${gmailInt.id}`);
+                                await gmailClient.sendEmail(gmailInt.id, params.to, params.subject, params.body);
+                                console.log(`[ChatContext] Email sent successfully via client delegation`);
+                                // TODO: Maybe send a "Action Completed" message back to chat?
+                            } else {
+                                console.error('[ChatContext] No enabled Gmail integration found for client action');
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[ChatContext] Failed to execute client action:', e);
+                    }
+                })();
+
+                // Add a system message or tool call part to show it happened?
+                // For now, we can add a 'tool_call' part to the assistant message to visualize it.
+                updatedParts.push({
+                    type: 'tool_call',
+                    tool_call: {
+                        name: `${tool}:${method}`,
+                        arguments: params,
+                        result: "Executed on client"
+                    }
+                });
+                newMessages[messageIdx] = {
+                    ...newMessages[messageIdx],
+                    content_parts: updatedParts
+                };
             } else {
-                // Handle text streaming
                 const newText = frame.payload.message || '';
                 if (newText) {
-                    // Append to last text part or create new one
-                    if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === 'text') {
-                        // Append to existing text part
-                        const lastPart = updatedParts[updatedParts.length - 1] as { type: 'text'; text: string };
-                        updatedParts[updatedParts.length - 1] = { type: 'text', text: lastPart.text + newText };
-                    } else {
-                        // Create new text part
-                        updatedParts.push({ type: 'text', text: newText });
-                    }
+                    updatedParts.push({ type: 'text', text: newText });
 
+                    // Append text to main message text for backward compatibility
                     newMessages[messageIdx] = {
                         ...newMessages[messageIdx],
-                        text: newMessages[messageIdx].text + newText,
+                        text: (newMessages[messageIdx].text === " " ? "" : newMessages[messageIdx].text) + newText,
                         content_parts: updatedParts,
                     };
                 }
             }
-            // console.log("frame captured", frame.payload.type || "text", frame);
-        } else {
+        }
+
+
+
+        // console.log("frame captured", frame.payload.type || "text", frame);
+        else {
             setAssistantWorking(false);
         }
 

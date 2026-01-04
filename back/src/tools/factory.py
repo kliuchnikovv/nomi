@@ -12,7 +12,9 @@ from src.tools.duckduckgo_custom import DuckDuckGoTools as WebSearchTools  # Use
 from google.oauth2.credentials import Credentials
 from src.tools.memory_writer import MemoryWriter
 from src.tools.rag_tool import RagTool
+from src.tools.rag_tool import RagTool
 from src.tools.jules import JulesTools
+from src.tools.client_side import ClientGmailTools
 
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
@@ -91,10 +93,13 @@ def _build_gmail(params: Dict[str, Any]) -> Toolkit:
     creds = _make_credentials(params)
     if creds:
         variants.append({**base, "creds": creds})
+        tool = _instantiate_tool(GmailTools, variants, "gmail")
+    else:
+        # If no credentials, use Client Side Tools
+        logger.info("[Gmail] No credentials provided, using ClientGmailTools")
+        tool = ClientGmailTools()
 
-    variants.append(base)
-
-    tool = _instantiate_tool(GmailTools, variants, "gmail")
+    # Add account context for multi-account support
     
     # Add account context for multi-account support
     account_email = params.get("account_email", "")

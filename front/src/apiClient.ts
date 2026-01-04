@@ -246,6 +246,8 @@ export const authApi = {
 export const briefingApi = {
     getBriefing: (context?: any) =>
         apiClient.post<any>(`${API_URL()}/briefing`, { context }),
+    analyze: (text: string) =>
+        apiClient.post<{ events: any[]; tasks: any[] }>(`${API_URL()}/analyze`, { text }),
 };
 
 export const dashboardApi = {

@@ -15,6 +15,7 @@ from src.server import ws as ws_server
 from src.agents.factory import AgentFactory
 from src.tools.config import ToolConfigClient
 from src.tools.factory import ToolsConfig
+from src.tools.client_side import start_action_tracking, get_client_actions
 
 from dotenv import load_dotenv
 
@@ -141,6 +142,7 @@ class QueryRequest(BaseModel):
 
 @app.post("/query")
 async def run_query(request: QueryRequest):
+    start_action_tracking()
     session_id = str(uuid.uuid4())
     # AgentFactory is already configured
     agent = await agent_factory.build(session_id=session_id)
@@ -171,7 +173,11 @@ async def run_query(request: QueryRequest):
     elif hasattr(response, "reasoning_steps") and response.reasoning_steps:
          reasoning = "\n".join([str(step) for step in response.reasoning_steps])
 
-    return {"answer": answer, "reasoning": reasoning}
+    return {
+        "answer": answer, 
+        "reasoning": reasoning,
+        "client_actions": [action.model_dump() for action in get_client_actions()]
+    }
 
 class BriefingRequest(BaseModel):
     user_id: Optional[str] = None
@@ -185,6 +191,9 @@ async def get_briefing(request: BriefingRequest):
          if 'emails' in request.context:
              logging.info(f"Context email count: {len(request.context['emails'])}")
     
+             logging.info(f"Context email count: {len(request.context['emails'])}")
+    
+    start_action_tracking()
     session_id = str(uuid.uuid4())
     # Build BriefingAgent
     agent = await agent_factory.build(
@@ -250,13 +259,63 @@ Analyze this data to identify critical items. Do not invent items not present in
 
             # Handle object output (if supported)
             if hasattr(content, "model_dump"):
-                return content.model_dump()
-            return content
+                result = content.model_dump()
+            else:
+                 result = content
             
+            # Attach client actions if result is a dict
+            if isinstance(result, dict):
+                result["client_actions"] = [action.model_dump() for action in get_client_actions()]
+                
+            return result
+        
         return {"error": "No content generated"}
     except Exception as e:
         logging.error(f"Briefing generation failed: {e}", exc_info=True)
         return {"error": str(e)}
+
+# ...
+class AnalysisRequest(BaseModel):
+    text: str
+
+@app.post("/api/analyze")
+async def analyze_text(request: AnalysisRequest):
+    session_id = str(uuid.uuid4())
+    agent = await agent_factory.build(
+        session_id=session_id,
+        agent_type="extraction"
+    )
+    
+    prompt = f"Extract events and tasks from this text:\n\n{request.text}"
+    
+    try:
+        response = await agent.arun(prompt, stream=False)
+        if response and response.content:
+            content = response.content
+            # Handle object output
+            if hasattr(content, "model_dump"):
+                return content.model_dump()
+            
+            # Handle string output
+            if isinstance(content, str):
+                import json
+                try:
+                    clean_content = content.strip()
+                    if clean_content.startswith("```json"):
+                        clean_content = clean_content[7:]
+                    elif clean_content.startswith("```"):
+                        clean_content = clean_content[3:]
+                    if clean_content.endswith("```"):
+                        clean_content = clean_content[:-3]
+                    return json.loads(clean_content.strip())
+                except json.JSONDecodeError:
+                    return {"events": [], "tasks": [], "error": "Failed to parse JSON"}
+            
+            return content
+        return {"events": [], "tasks": []}
+    except Exception as e:
+        logging.error(f"Analysis failed: {e}", exc_info=True)
+        return {"events": [], "tasks": [], "error": str(e)}
 
 # Sessions for OAuth state (required for request.session)
 session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")

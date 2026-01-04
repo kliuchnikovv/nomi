@@ -58,9 +58,9 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
     if (currentVersion < 1) {
         await migrateV1(database);
     }
-
-    // Future migrations will go here:
-    // if (currentVersion < 2) await migrateV2(database);
+    if (currentVersion < 2) {
+        await migrateV2(database);
+    }
 }
 
 /**
@@ -134,6 +134,49 @@ async function migrateV1(database: SQLite.SQLiteDatabase): Promise<void> {
 }
 
 /**
+ * Migration V2: Events and Tasks extraction
+ */
+async function migrateV2(database: SQLite.SQLiteDatabase): Promise<void> {
+    await database.execAsync(`
+        -- Events extracted from source documents
+        CREATE TABLE IF NOT EXISTS events (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            start_date INTEGER NOT NULL,
+            end_date INTEGER,
+            location TEXT,
+            status TEXT DEFAULT 'confirmed',
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (source_id) REFERENCES emails(id) ON DELETE CASCADE
+        );
+
+        -- Tasks/Action Items
+        CREATE TABLE IF NOT EXISTS tasks (
+            id TEXT PRIMARY KEY,
+            source_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            due_date INTEGER,
+            priority TEXT DEFAULT 'normal',
+            is_completed INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (source_id) REFERENCES emails(id) ON DELETE CASCADE
+        );
+
+        -- Track analysis status
+        ALTER TABLE emails ADD COLUMN analyzed_at INTEGER;
+        
+        -- Indexes
+        CREATE INDEX IF NOT EXISTS idx_events_date ON events(start_date);
+        CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
+        CREATE INDEX IF NOT EXISTS idx_emails_analyzed ON emails(analyzed_at);
+
+        INSERT INTO migrations (version, applied_at) VALUES (2, ${Date.now()});
+    `);
+    console.log('[Database] Migration V2 applied');
+}
+
+/**
  * Close the database connection
  */
 export async function closeDatabase(): Promise<void> {
@@ -149,6 +192,8 @@ export async function closeDatabase(): Promise<void> {
 export async function clearDatabase(): Promise<void> {
     const database = getDatabase();
     await database.execAsync(`
+        DELETE FROM events;
+        DELETE FROM tasks;
         DELETE FROM generated_content;
         DELETE FROM emails;
         DELETE FROM integration_credentials;

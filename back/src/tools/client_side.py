@@ -1,0 +1,65 @@
+import logging
+from typing import Any, Dict, List, Optional
+from contextvars import ContextVar
+from pydantic import BaseModel, Field
+
+from agno.tools import Toolkit
+
+logger = logging.getLogger(__name__)
+
+class ClientAction(BaseModel):
+    tool: str = Field(..., description="Name of the tool (e.g. 'gmail')")
+    method: str = Field(..., description="Method to execute (e.g. 'send_email')")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Parameters for the method")
+    description: str = Field(..., description="Human readable description")
+
+# Context-local storage for actions
+_client_actions: ContextVar[List[ClientAction]] = ContextVar("client_actions", default=[])
+
+def start_action_tracking():
+    """Initialize a fresh list of actions for the current context.
+    Must be called at the start of a request/agent run.
+    """
+    _client_actions.set([])
+
+def add_client_action(tool: str, method: str, params: Dict[str, Any], description: str):
+    """Record a client-side action."""
+    # Ensure we have a list in the current context, if not (e.g. testing), create one but warn
+    try:
+        actions = _client_actions.get()
+    except LookupError:
+        actions = []
+        _client_actions.set(actions)
+        
+    action = ClientAction(tool=tool, method=method, params=params, description=description)
+    actions.append(action)
+    logger.info(f"[ClientSide] Recorded action: {tool}.{method} - {description}")
+
+def get_client_actions() -> List[ClientAction]:
+    """Retrieve recorded actions."""
+    try:
+        return _client_actions.get()
+    except LookupError:
+        return []
+
+
+class ClientGmailTools(Toolkit):
+    def __init__(self):
+        super().__init__(name="gmail_client")
+        self.register(self.send_email)
+    
+    def send_email(self, to: str, subject: str, body: str) -> str:
+        """Sends an email to the specified recipient.
+        
+        Args:
+            to: Email address of the recipient
+            subject: Subject line of the email
+            body: Body text of the email
+        """
+        add_client_action(
+            tool="gmail",
+            method="send_email",
+            params={"to": to, "subject": subject, "body": body},
+            description=f"Send email to {to}"
+        )
+        return f"Action delegated: Sending email to {to} with subject '{subject}'. The client application will execute this."

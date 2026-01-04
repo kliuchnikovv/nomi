@@ -59,6 +59,27 @@ export interface GeneratedContent {
     createdAt: Date;
 }
 
+export interface ExtractedEvent {
+    id: string;
+    sourceId: string;
+    title: string;
+    startDate: Date;
+    endDate?: Date;
+    location?: string;
+    status: string;
+    createdAt: Date;
+}
+
+export interface ExtractedTask {
+    id: string;
+    sourceId: string;
+    title: string;
+    dueDate?: Date;
+    priority: string;
+    isCompleted: boolean;
+    createdAt: Date;
+}
+
 class IntegrationStorage {
     // ==================== Integration CRUD ====================
 
@@ -355,6 +376,83 @@ class IntegrationStorage {
     async clearEmailCache(integrationId: string): Promise<void> {
         const db = getDatabase();
         await db.runAsync('DELETE FROM emails WHERE integration_id = ?', [integrationId]);
+    }
+
+    // ==================== Analysis & Extraction ====================
+
+    async getUnanalyzedEmails(limit: number = 10): Promise<Email[]> {
+        const db = getDatabase();
+        const rows = await db.getAllAsync<any>(
+            'SELECT * FROM emails WHERE analyzed_at IS NULL ORDER BY date DESC LIMIT ?',
+            [limit]
+        );
+
+        return rows.map(row => ({
+            id: row.id,
+            integrationId: row.integration_id,
+            gmailId: row.gmail_id,
+            threadId: row.thread_id ?? undefined,
+            subject: row.subject ?? undefined,
+            snippet: row.snippet ?? undefined,
+            fromEmail: row.from_email ?? undefined,
+            fromName: row.from_name ?? undefined,
+            toEmails: row.to_emails ? JSON.parse(row.to_emails) : undefined,
+            date: row.date ? new Date(row.date) : undefined,
+            labels: row.labels ? JSON.parse(row.labels) : undefined,
+            bodyText: row.body_text ?? undefined,
+            bodyHtml: row.body_html ?? undefined,
+            isRead: row.is_read === 1,
+            fetchedAt: new Date(row.fetched_at),
+        }));
+    }
+
+    async saveExtractedData(
+        sourceId: string,
+        events: Partial<ExtractedEvent>[],
+        tasks: Partial<ExtractedTask>[]
+    ): Promise<void> {
+        const db = getDatabase();
+        const now = Date.now();
+
+        for (const event of events) {
+            const id = generateUUID();
+            await db.runAsync(
+                `INSERT INTO events (id, source_id, title, start_date, end_date, location, status, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    id,
+                    sourceId,
+                    event.title!,
+                    new Date(event.startDate!).getTime(),
+                    event.endDate ? new Date(event.endDate).getTime() : null,
+                    event.location ?? null,
+                    event.status ?? 'confirmed',
+                    now
+                ]
+            );
+        }
+
+        for (const task of tasks) {
+            const id = generateUUID();
+            await db.runAsync(
+                `INSERT INTO tasks (id, source_id, title, due_date, priority, is_completed, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    id,
+                    sourceId,
+                    task.title!,
+                    task.dueDate ? new Date(task.dueDate).getTime() : null,
+                    task.priority ?? 'normal',
+                    0,
+                    now
+                ]
+            );
+        }
+    }
+
+    async markAnalyzed(emailId: string): Promise<void> {
+        const db = getDatabase();
+        await db.runAsync('UPDATE emails SET analyzed_at = ? WHERE id = ?', [Date.now(), emailId]);
     }
 }
 

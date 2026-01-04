@@ -215,6 +215,51 @@ class GmailClient {
             return data;
         }
     }
+
+    /**
+     * Send an email
+     */
+    async sendEmail(integrationId: string, to: string, subject: string, body: string): Promise<void> {
+        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+
+        // Create email message
+        // Headers + Body need to be base64url encoded
+
+        const utf8Subject = unescape(encodeURIComponent(subject));
+        const utf8Body = unescape(encodeURIComponent(body));
+
+        const message = [
+            `To: ${to}`,
+            `Subject: ${utf8Subject}`,
+            'Content-Type: text/plain; charset="UTF-8"',
+            'MIME-Version: 1.0',
+            '',
+            utf8Body
+        ].join('\n');
+
+        const encodedMessage = btoa(message).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        const response = await fetch(
+            `${GMAIL_API_BASE}/messages/send`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    raw: encodedMessage
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error?.message || 'Failed to send email');
+        }
+
+        console.log(`[GmailClient] Sent email to ${to}`);
+    }
 }
 
 export const gmailClient = new GmailClient();

@@ -13,6 +13,7 @@ from src.agents.rag import RagAgent
 from src.agents.memoriser import MemoriserAgent
 from src.agents.mailer import MailerAgent
 from src.agents.briefing import BriefingAgent
+from src.agents.extractor import ExtractionAgent
 from src.knowledge.factory import build_vector_db
 from src.knowledge.user_knowledge import UserScopedKnowledge
 from src.tools.config import ToolConfigClient
@@ -227,6 +228,11 @@ class AgentFactory:
                     model=model,
                     knowledge=knowledge,
                     tools=tools,
+                    debug_mode=self._debug_mode,
+                )
+            elif agent_type and agent_type.lower() == "extraction":
+                agent = ExtractionAgent(
+                    model=model,
                     debug_mode=self._debug_mode,
                 )
             else:

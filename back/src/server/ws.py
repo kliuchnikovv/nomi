@@ -14,7 +14,9 @@ from src.agents.factory import AgentFactory
 from src.server.models import Frame, Op
 from src.server.utils import make_meta, make_error, make_done, make_data
 from src.teams import TeamFactory
+from src.teams import TeamFactory
 from src.tools.models import ToolSpec
+from src.tools.client_side import start_action_tracking, get_client_actions
 
 logger = logging.getLogger(__name__)
 
@@ -273,9 +275,13 @@ class LLMWebSocketSession:
             try:
                 await self.build_agent_instance()
             except Exception as e:
+            except Exception as e:
                 await self._send_error(e, self.chat_id_param)
                 await self.websocket.close(code=1011)
                 return
+            
+            # Start tracking for initial build
+            start_action_tracking()
 
             while True:
                 # Check pending first
@@ -427,7 +433,11 @@ class LLMWebSocketSession:
         chat_id = frame.chat_id
 
         # Allow empty messages when there's history - Team agents need this for continuation
+        # Allow empty messages when there's history - Team agents need this for continuation
         # The agno library will handle validation
+        
+        # Start tracking actions for this message
+        start_action_tracking()
 
         # Check settings changes in payload
         msg_model = payload.get("model")
@@ -619,6 +629,20 @@ class LLMWebSocketSession:
                             "message": chunk,
                             "message_id": message_id
                         }))
+            
+            # 4. Check for Client Actions (that were collected in context)
+            client_actions = get_client_actions()
+            if client_actions:
+                logger.info("[WS] Sending %d client actions", len(client_actions))
+                for action in client_actions:
+                    await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
+                        "type": "client_action",
+                        "tool": action.tool,
+                        "method": action.method,
+                        "params": action.params,
+                        "description": action.description,
+                        "message_id": message_id
+                    }))
 
         except Exception as e:
             await self._send_error(e, chat_id)

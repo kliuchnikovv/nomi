@@ -1,36 +1,62 @@
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
-import { integrationStorage } from '../integrations/IntegrationStorage';
+import { briefingApi } from '../../apiClient';
 import { gmailClient } from '../integrations/clients/GmailClient';
+import { integrationStorage } from '../integrations/IntegrationStorage';
 
-const BACKGROUND_EMAIL_SYNC_TASK = 'BACKGROUND_EMAIL_SYNC';
+const BACKGROUND_EMAIL_SYNC_TASK = 'background-email-sync';
 
 TaskManager.defineTask(BACKGROUND_EMAIL_SYNC_TASK, async () => {
-    const now = new Date();
-    console.log(`[BackgroundSync] Starting sync at ${now.toISOString()}`);
-
     try {
-        const integrations = await integrationStorage.getIntegrations();
+        let hasNewData = false;
+        const integrations = await integrationStorage.getAll();
         const gmailIntegrations = integrations.filter(i => i.provider === 'gmail' && i.enabled);
 
-        if (gmailIntegrations.length === 0) {
-            console.log('[BackgroundSync] No enabled Gmail integrations found.');
-            return BackgroundFetch.BackgroundFetchResult.NoData;
-        }
-
-        let hasNewData = false;
-
         for (const integration of gmailIntegrations) {
-            console.log(`[BackgroundSync] Syncing integration: ${integration.name} (${integration.id})`);
             try {
+
                 const emails = await gmailClient.syncEmails(integration.id);
                 if (emails.length > 0) {
                     hasNewData = true;
                 }
+
+                // Analyze pending emails (incremental)
+                // Limit to small batch to respect background execution time limits
+                const unanalyzed = await integrationStorage.getUnanalyzedEmails(5);
+                if (unanalyzed.length > 0) {
+                    console.log(`[BackgroundSync] Analyzing ${unanalyzed.length} new emails...`);
+                    for (const email of unanalyzed) {
+                        try {
+                            const textToAnalyze = (email.bodyText || email.snippet || "").substring(0, 5000); // Limit context
+                            if (textToAnalyze.length < 50) {
+                                // Skip too short
+                                await integrationStorage.markAnalyzed(email.id);
+                                continue;
+                            }
+
+                            const analysis = await briefingApi.analyze(textToAnalyze);
+
+                            if (analysis && (analysis.events?.length > 0 || analysis.tasks?.length > 0)) {
+                                await integrationStorage.saveExtractedData(
+                                    email.id,
+                                    analysis.events || [],
+                                    analysis.tasks || []
+                                );
+                                hasNewData = true;
+                            }
+
+                            await integrationStorage.markAnalyzed(email.id);
+                        } catch (e) {
+                            console.error(`[BackgroundSync] Analysis error for ${email.id}:`, e);
+                        }
+                    }
+                }
+
             } catch (error) {
                 console.error(`[BackgroundSync] Failed to sync integration ${integration.id}:`, error);
             }
-        }
+        } // End for loop
+
 
         console.log(`[BackgroundSync] Sync completed. New data: ${hasNewData}`);
         return hasNewData
