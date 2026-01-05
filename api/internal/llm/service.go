@@ -112,3 +112,45 @@ func (s *Service) GetBriefing(ctx context.Context, userID string, contextData ma
 	}
 	return result, nil
 }
+
+// EmailAnalysisRequest represents the request body for email analysis.
+type EmailAnalysisRequest struct {
+	EmailID   string `json:"email_id"`
+	Subject   string `json:"subject,omitempty"`
+	FromEmail string `json:"from_email,omitempty"`
+	FromName  string `json:"from_name,omitempty"`
+	Body      string `json:"body"`
+	Date      string `json:"date,omitempty"`
+}
+
+// AnalyzeEmail calls the /api/analyze-email endpoint on the Python backend.
+func (s *Service) AnalyzeEmail(ctx context.Context, req EmailAnalysisRequest) (map[string]interface{}, error) {
+	requestBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal email analysis request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", s.agnoAPIURL+"/api/analyze-email", bytes.NewBuffer(requestBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for email analysis: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call email analysis endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errorBody map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errorBody)
+		return nil, fmt.Errorf("email analysis endpoint returned non-200 status: %d, body: %v", resp.StatusCode, errorBody)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode email analysis response: %w", err)
+	}
+	return result, nil
+}

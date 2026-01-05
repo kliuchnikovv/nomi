@@ -112,8 +112,9 @@ func New(
 			}
 			return h
 		}()
-		briefingHandler  = handlers.NewBriefingHandler(db, llmService)
-		dashboardHandler = handlers.NewDashboardHandler(db)
+		briefingHandler       = handlers.NewBriefingHandler(db, llmService)
+		emailAnalysisHandler  = handlers.NewEmailAnalysisHandler(db, llmService)
+		dashboardHandler      = handlers.NewDashboardHandler(db)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -238,6 +239,7 @@ func New(
 	*/
 
 	r.POST("/api/briefing", wrapWithAuth(briefingHandler.GetBriefing, authMiddleware))
+	r.POST("/api/analyze-email", emailAnalysisHandler.AnalyzeEmail) // No auth - frontend calls with email data
 	r.GET("/api/dashboard", wrapWithAuth(dashboardHandler.GetDashboard, authMiddleware))
 
 	return &Server{

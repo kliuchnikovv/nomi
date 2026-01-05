@@ -3,7 +3,7 @@
  * Generates daily briefings from analyzed emails, events, and tasks
  */
 
-import { briefingApi } from '../../apiClient';
+import { getApiUrl } from '../../config';
 import {
     integrationStorage,
     Briefing,
@@ -14,8 +14,12 @@ import {
     ExtractedTask
 } from '../integrations/IntegrationStorage';
 
-// API endpoint URL (must match backend)
-const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:7777';
+// Helper to get API base URL (without /api suffix for /api/analyze-email endpoint)
+function getBackendUrl(): string {
+    const apiUrl = getApiUrl(); // e.g., 'https://...railway.app/api'
+    // Remove trailing /api if present to get base URL
+    return apiUrl.replace(/\/api\/?$/, '');
+}
 
 interface EmailAnalysisResult {
     email_id: string;
@@ -35,7 +39,7 @@ class BriefingGenerator {
      */
     async analyzeEmail(email: Email): Promise<EmailAnalysisResult | null> {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/analyze-email`, {
+            const response = await fetch(`${getBackendUrl()}/api/analyze-email`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
