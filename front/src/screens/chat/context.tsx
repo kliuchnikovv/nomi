@@ -586,6 +586,7 @@ export function ChatProvider({
 
     const handleClientAction = useCallback(async (payload: any) => {
         console.log('[ChatContext] Handling client action:', payload);
+        console.log('[ChatContext] Raw payload string:', JSON.stringify(payload));
         const { tool, method, params } = payload;
 
         try {

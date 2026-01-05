@@ -633,19 +633,14 @@ class LLMWebSocketSession:
             if client_actions:
                 logger.info("[WS] Sending %d client actions", len(client_actions))
                 for action in client_actions:
-                    logger.info(f"[WS] Action detail: tool={action.tool} method={action.method} params={action.params.keys()} desc={action.description}")
-                    payload = {
+                    await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
                         "type": "client_action",
                         "tool": action.tool,
                         "method": action.method,
                         "params": action.params,
                         "description": action.description,
                         "message_id": message_id
-                    }
-                    if action.method is None:
-                        logger.error(f"[WS] ALERT: Method is None for tool {action.tool}!")
-                        
-                    await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, payload))
+                    }))
 
         except Exception as e:
             await self._send_error(e, chat_id)
