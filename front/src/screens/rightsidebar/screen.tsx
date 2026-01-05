@@ -19,6 +19,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Sidebar } from '../../components/Sidebar';
 import { Plugin, PluginChat } from './models';
 import { ThemePalette } from '../../themes/types';
+import { CalendarSidebar } from '../chat/sidebar/CalendarSidebar';
 
 
 export interface RightSidebarProps {
@@ -373,21 +374,28 @@ function RightSidebarContent({
                             colors={[theme.accent]}
                         />
                     }
-                    renderItem={({ item: plugin }) => (
-                        <PluginSection
-                            plugin={plugin}
-                            expandedPlugins={expandedPlugins}
-                            onTogglePlugin={togglePlugin}
-                            expandedChats={expandedChats}
-                            onToggleChat={toggleChat}
-                            onThreadSelect={handleThreadSelect}
-                            onLoadMore={() => loadMoreForPlugin(plugin.id)}
-                            hasMore={hasMoreForPlugin(plugin.id)}
-                            isLoadingMore={loadingMorePlugins.has(plugin.id)}
-                            styles={styles}
-                            palette={palette}
-                        />
-                    )}
+                    renderItem={({ item: plugin }) => {
+                        if (plugin.provider === 'calendar') {
+                            // Cast to any to avoid type mismatch if models differ slightly, though id is present.
+                            // We disable scrolling so the outer FlatList handles it.
+                            return <CalendarSidebar integration={plugin as any} scrollEnabled={false} />;
+                        }
+                        return (
+                            <PluginSection
+                                plugin={plugin}
+                                expandedPlugins={expandedPlugins}
+                                onTogglePlugin={togglePlugin}
+                                expandedChats={expandedChats}
+                                onToggleChat={toggleChat}
+                                onThreadSelect={handleThreadSelect}
+                                onLoadMore={() => loadMoreForPlugin(plugin.id)}
+                                hasMore={hasMoreForPlugin(plugin.id)}
+                                isLoadingMore={loadingMorePlugins.has(plugin.id)}
+                                styles={styles}
+                                palette={palette}
+                            />
+                        );
+                    }}
                 />
             )}
         </View>

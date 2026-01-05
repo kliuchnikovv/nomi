@@ -117,7 +117,7 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 		Version:        1,
 	}
 
-	existing, err := c.storage.GetOAuthTokenByUser(ctx, user.ID, ProviderCalendar)
+	existing, err := c.storage.GetOAuthTokenByUserAndEmail(ctx, user.ID, ProviderCalendar, claims.Email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", fmt.Errorf("failed to check existing token: %w", err)
 	}
@@ -138,6 +138,7 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 	}
 
 	params := map[string]any{
+		"account_email": claims.Email,
 		"creds": map[string]any{
 			"token":         token.AccessToken,
 			"refresh_token": token.RefreshToken,
@@ -160,7 +161,8 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 
 	var existingTool *storage.Integration
 	for _, t := range tools {
-		if t.Provider == ProviderCalendar {
+		accountEmail, _ := extractAccountEmail(t.Params)
+		if t.Provider == ProviderCalendar && accountEmail == claims.Email {
 			existingTool = &t
 			break
 		}
@@ -168,14 +170,14 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 
 	if existingTool != nil {
 		existingTool.Params = string(paramsJSON)
-		existingTool.Name = "Google Calendar"
+		existingTool.Name = fmt.Sprintf("Google Calendar (%s)", claims.Email)
 		if _, err := c.storage.UpdateIntegration(ctx, user.ID, existingTool); err != nil {
 			return "", fmt.Errorf("failed to update integration: %w", err)
 		}
 	} else {
 		newTool := &storage.Integration{
 			UserID:   user.ID,
-			Name:     "Google Calendar",
+			Name:     fmt.Sprintf("Google Calendar (%s)", claims.Email),
 			Provider: ProviderCalendar,
 			Params:   string(paramsJSON),
 			Enabled:  true,
@@ -186,4 +188,17 @@ func (c *CalendarIntegration) HandleCallback(ctx context.Context, code string, u
 	}
 
 	return claims.Email, nil
+}
+
+func extractAccountEmail(params string) (string, error) {
+	if params == "" {
+		return "", fmt.Errorf("params empty")
+	}
+	var parsed struct {
+		AccountEmail string `json:"account_email"`
+	}
+	if err := json.Unmarshal([]byte(params), &parsed); err != nil {
+		return "", err
+	}
+	return parsed.AccountEmail, nil
 }

@@ -183,19 +183,22 @@ export const BriefingCard = () => {
         >
           <View style={styles.headerTitleContainer}>
             <Ionicons name="sunny" size={24} color={theme.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.headerTitle, { color: theme.text }]}>Briefing</Text>
-              {collapsedSections['overview'] && (
-                <Text style={[styles.collapsedHeadline, { color: theme.textSecondary }]} numberOfLines={1}>
-                  {briefing?.headline}
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              {collapsedSections['overview'] ? (
+                <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
+                  {briefing?.headline || 'Briefing'}
                 </Text>
+              ) : (
+                <Text style={[styles.headerTitle, { color: theme.text }]}>Briefing</Text>
               )}
             </View>
-            <View style={[styles.badge, { backgroundColor: theme.background }]}>
-              <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
-                {progress.completed}/{progress.total}
-              </Text>
-            </View>
+            {!collapsedSections['overview'] && (
+              <View style={[styles.badge, { backgroundColor: theme.background }]}>
+                <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
+                  {progress.completed}/{progress.total}
+                </Text>
+              </View>
+            )}
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => loadBriefing(true)} disabled={loading} style={{ marginRight: 8 }}>
@@ -219,12 +222,12 @@ export const BriefingCard = () => {
             <Text style={[styles.summary, { color: theme.textSecondary }]}>{briefing?.summary}</Text>
 
             {/* Progress Bar */}
-            <View style={[styles.progressContainer, { backgroundColor: theme.background }]}>
+            <View style={styles.progressContainer}>
               <View
                 style={[
                   styles.progressBar,
                   {
-                    backgroundColor: progressPercent === 100 ? '#34A853' : theme.primary,
+                    backgroundColor: progressPercent === 100 ? '#34A853' : '#4285F4',
                     width: `${progressPercent}%`
                   }
                 ]}
@@ -306,7 +309,7 @@ export const BriefingCard = () => {
                           {item.title}
                         </Text>
                       </TouchableOpacity>
-                      {item.suggestedActions && item.suggestedActions.length > 0 && (
+                      {((item.suggestedActions && item.suggestedActions.length > 0) || item.description) && (
                         <TouchableOpacity onPress={() => toggleItemExpanded(item.id)}>
                           <Ionicons
                             name={expandedItems.has(item.id) ? 'chevron-up' : 'chevron-down'}
@@ -318,7 +321,7 @@ export const BriefingCard = () => {
                     </View>
 
                     {/* Description */}
-                    {item.description && (
+                    {expandedItems.has(item.id) && item.description && (
                       <Text style={[styles.itemDescription, { color: theme.textSecondary }]}>
                         {item.description}
                       </Text>
@@ -331,18 +334,16 @@ export const BriefingCard = () => {
                           <TouchableOpacity
                             key={action.id}
                             style={[styles.actionButton, {
-                              backgroundColor: theme.primary + '20',
-                              borderColor: theme.primary,
-                              borderWidth: 1
+                              borderColor: theme.border,
                             }]}
                             onPress={() => handleActionPress(action)}
                           >
                             <Ionicons
                               name={getActionIcon(action.actionType)}
                               size={14}
-                              color={theme.primary}
+                              color={theme.text}
                             />
-                            <Text style={[styles.actionLabel, { color: theme.primary }]}>
+                            <Text style={[styles.actionLabel, { color: theme.text }]}>
                               {action.label}
                             </Text>
                           </TouchableOpacity>
@@ -378,6 +379,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
+    paddingRight: 8,
   },
   headerTitle: {
     fontSize: 17,
@@ -415,6 +418,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 4,
+    backgroundColor: 'rgba(150, 150, 150, 0.2)',
   },
   progressBar: {
     height: '100%',
@@ -460,16 +464,18 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 6,
+    borderWidth: 1,
     maxWidth: '100%',
     flexShrink: 1,
   },
   actionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
+    flexShrink: 1,
   },
   badge: {
     paddingHorizontal: 8,

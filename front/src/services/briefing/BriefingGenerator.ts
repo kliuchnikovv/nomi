@@ -13,6 +13,7 @@ import {
     ExtractedEvent,
     ExtractedTask
 } from '../integrations/IntegrationStorage';
+import { calendarClient } from '../integrations/clients/CalendarClient';
 
 // Helper to get API base URL (without /api suffix for /api/analyze-email endpoint)
 function getBackendUrl(): string {
@@ -97,6 +98,9 @@ class BriefingGenerator {
         // Check if briefing already exists
         let briefing = await integrationStorage.getBriefingForDate(dateStr);
 
+        // Helper to track completion status of existing items
+        const completionMap = new Map<string, boolean>();
+
         if (!briefing) {
             briefing = await integrationStorage.createBriefing(
                 dateStr,
@@ -104,12 +108,38 @@ class BriefingGenerator {
                 'Generating...'
             );
         } else {
+            // Save existing completion status
+            const existingItems = await integrationStorage.getBriefingItems(briefing.id);
+            existingItems.forEach(item => {
+                if (item.sourceId) {
+                    completionMap.set(item.sourceId, item.isCompleted);
+                }
+            });
+
             // Clear existing items to prevent duplicates on refresh
             await integrationStorage.clearBriefingItems(briefing.id);
         }
 
         // Get analyzed emails from the last 24 hours with high/asap urgency
         const asapEmails = await integrationStorage.getAsapEmails();
+
+        // Sync calendar events
+        try {
+            const integrations = await integrationStorage.getIntegrations();
+            const calendarIntegrations = integrations.filter(i => i.provider === 'calendar' && i.enabled);
+
+            const startOfDay = new Date(date);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(date);
+            endOfDay.setHours(23, 59, 59, 999);
+
+            await Promise.all(calendarIntegrations.map(integration =>
+                calendarClient.syncEvents(integration.id, startOfDay, endOfDay)
+                    .catch(err => console.error(`[BriefingGenerator] Failed to sync calendar ${integration.id}:`, err))
+            ));
+        } catch (error) {
+            console.error('[BriefingGenerator] Failed to sync calendars:', error);
+        }
 
         // Get today's events
         const events = await integrationStorage.getEventsForDate(date);
@@ -127,6 +157,8 @@ class BriefingGenerator {
             const analysis = await this.analyzeEmail(email);
             if (!analysis) continue;
 
+            const isCompleted = completionMap.get(analyzed.emailId) ?? false;
+
             const item = await integrationStorage.addBriefingItem(briefing.id, {
                 sourceType: 'email',
                 sourceId: analyzed.emailId,
@@ -134,6 +166,7 @@ class BriefingGenerator {
                 description: email.snippet,
                 priority: analyzed.urgency,
                 displayOrder: order++,
+                isCompleted,
             });
 
             // Add suggested actions
@@ -150,6 +183,7 @@ class BriefingGenerator {
 
         // Add today's events
         for (const event of events) {
+            const isCompleted = completionMap.get(event.sourceId) ?? false;
             await integrationStorage.addBriefingItem(briefing.id, {
                 sourceType: 'event',
                 sourceId: event.id,
@@ -166,6 +200,7 @@ class BriefingGenerator {
         ).slice(0, 5);
 
         for (const task of highPriorityTasks) {
+            const isCompleted = completionMap.get(task.id) ?? false;
             await integrationStorage.addBriefingItem(briefing.id, {
                 sourceType: 'task',
                 sourceId: task.id,
@@ -173,6 +208,7 @@ class BriefingGenerator {
                 description: task.dueDate ? `Due: ${task.dueDate.toLocaleDateString()}` : undefined,
                 priority: task.priority === 'critical' ? 'asap' : 'high',
                 displayOrder: order++,
+                isCompleted,
             });
         }
 

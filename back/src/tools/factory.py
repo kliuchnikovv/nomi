@@ -119,11 +119,16 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
 
     creds = _make_credentials(params)
     
-    # GoogleCalendarTools не принимает creds в __init__, но использует их в _auth
-    # Поэтому создаем тул и проставляем creds вручную
-    tool = _instantiate_tool(GoogleCalendarTools, variants, "google_calendar")
     if creds:
+        # GoogleCalendarTools не принимает creds в __init__, но использует их в _auth
+        # Поэтому создаем тул и проставляем creds вручную
+        tool = _instantiate_tool(GoogleCalendarTools, variants, "google_calendar")
         tool.creds = creds
+    else:
+        # If no credentials, use Client Side Tools
+        from src.tools.client_side import ClientCalendarTools
+        logger.info("[GC] No credentials provided, using ClientCalendarTools")
+        tool = ClientCalendarTools()
 
     now = datetime.now(timezone.utc)
     
@@ -143,7 +148,7 @@ Treat current time as {now}.
 - If additional access is required or permissions are missing, say so and request reauthorization.
 - If there are multiple calendar accounts available, clarify which one to use before proceeding."""
 
-    logger.debug("[GC] instructions are: {tool.instructions}")
+    logger.debug(f"[GC] instructions are: {tool.instructions}")
     
     return tool
 

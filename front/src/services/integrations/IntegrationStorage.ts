@@ -554,6 +554,25 @@ class IntegrationStorage {
         }));
     }
 
+    async getEventsRange(startDate: Date, endDate: Date): Promise<ExtractedEvent[]> {
+        const db = getDatabase();
+        const rows = await db.getAllAsync<any>(
+            `SELECT * FROM events WHERE start_date >= ? AND start_date <= ? ORDER BY start_date ASC`,
+            [startDate.getTime(), endDate.getTime()]
+        );
+
+        return rows.map(row => ({
+            id: row.id,
+            sourceId: row.source_id,
+            title: row.title,
+            startDate: new Date(row.start_date),
+            endDate: row.end_date ? new Date(row.end_date) : undefined,
+            location: row.location ?? undefined,
+            status: row.status,
+            createdAt: new Date(row.created_at)
+        }));
+    }
+
     async getPendingTasks(): Promise<ExtractedTask[]> {
         const db = getDatabase();
         const rows = await db.getAllAsync<any>(
@@ -581,7 +600,13 @@ class IntegrationStorage {
         }
     ): Promise<AnalyzedEmail> {
         const db = getDatabase();
-        const id = generateUUID();
+        // Check if analysis already exists for this email
+        const existing = await db.getFirstAsync<any>(
+            'SELECT id FROM analyzed_emails WHERE email_id = ?',
+            [emailId]
+        );
+
+        const id = existing?.id || generateUUID();
         const now = Date.now();
 
         await db.runAsync(
@@ -622,7 +647,10 @@ class IntegrationStorage {
     async getAsapEmails(): Promise<AnalyzedEmail[]> {
         const db = getDatabase();
         const rows = await db.getAllAsync<any>(
-            `SELECT * FROM analyzed_emails WHERE urgency IN ('asap', 'high') ORDER BY 
+            `SELECT * FROM analyzed_emails 
+             WHERE urgency IN ('asap', 'high') 
+             GROUP BY email_id
+             ORDER BY 
              CASE urgency WHEN 'asap' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,
              analyzed_at DESC`
         );
@@ -717,15 +745,16 @@ class IntegrationStorage {
 
     async addBriefingItem(
         briefingId: string,
-        item: Omit<BriefingItem, 'id' | 'briefingId' | 'isCompleted' | 'completedAt' | 'suggestedActions'>
+        item: Omit<BriefingItem, 'id' | 'briefingId' | 'completedAt' | 'suggestedActions'> & { isCompleted?: boolean }
     ): Promise<BriefingItem> {
         const db = getDatabase();
         const id = generateUUID();
+        const isCompleted = item.isCompleted ? 1 : 0;
 
         await db.runAsync(
             `INSERT INTO briefing_items (id, briefing_id, source_type, source_id, title, description, priority, is_completed, display_order)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-            [id, briefingId, item.sourceType, item.sourceId, item.title, item.description ?? null, item.priority, item.displayOrder]
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, briefingId, item.sourceType, item.sourceId, item.title, item.description ?? null, item.priority, isCompleted, item.displayOrder]
         );
 
         return {

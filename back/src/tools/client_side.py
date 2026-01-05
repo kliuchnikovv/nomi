@@ -64,3 +64,33 @@ class ClientGmailTools(Toolkit):
         )
         return f"Action delegated: Sending email to {to} with subject '{subject}'. The client application will execute this."
 
+
+class ClientCalendarTools(Toolkit):
+    def __init__(self):
+        super().__init__(name="calendar_client")
+        self.register(self.create_event)
+
+    def create_event(self, title: str, start_time: str, end_time: str, description: str = "", attendees: List[str] = []) -> str:
+        """Schedules a meeting/event on the calendar.
+
+        Args:
+            title: Title of the event
+            start_time: Start time in ISO format
+            end_time: End time in ISO format
+            description: Description of the event
+            attendees: List of email addresses of attendees
+        """
+        add_client_action(
+            tool="calendar",
+            method="create_event",
+            params={
+                "title": title,
+                "start": start_time,
+                "end": end_time,
+                "description": description,
+                "attendees": attendees
+            },
+            description=f"Schedule event '{title}'"
+        )
+        return f"Action delegated: Scheduling event '{title}' from {start_time} to {end_time}. The client application will execute this."
+
