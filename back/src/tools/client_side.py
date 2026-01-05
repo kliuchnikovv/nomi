@@ -149,7 +149,7 @@ class ClientCalendarTools(Toolkit):
 
         Args:
             title: Title of the event
-            start_time: Start time in ISO format
+            start_time: Start time in ISO format (e.g. '2023-10-27T10:00:00'). Agent must calculate this from relative time (e.g. 'in 1 hour') using the Current User Time.
             end_time: End time in ISO format. If not provided, defaults to 30 minutes after start_time.
             description: Description of the event
             attendees: List of email addresses of attendees

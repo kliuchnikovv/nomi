@@ -81,8 +81,9 @@ class GenieAgent(Agent):
         debug_mode: bool = False,
         thinking: str = "off",
         knowledge: Optional[Knowledge] = None,
+        instructions: str | None = None,
     ):
-        instructions = BASE_INSTRUCTIONS
+        base_instructions = instructions if instructions else BASE_INSTRUCTIONS
         # if thinking and thinking != "off":
         #     instructions += THINKING_INSTRUCTIONS
             
@@ -95,7 +96,7 @@ class GenieAgent(Agent):
             search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
             update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             description="You are a helpful personal assistant.",
-            instructions=instructions,
+            instructions=base_instructions,
             # expected_output=expected_output,
             add_history_to_context=True,  # Agno automatically adds session history to context
             add_datetime_to_context=True,

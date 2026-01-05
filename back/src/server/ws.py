@@ -115,6 +115,11 @@ class LLMWebSocketSession:
         self.chat_id_param = qp.get("chat_id")
         self.timezone = qp.get("timezone")
         
+        if self.timezone:
+            logger.info(f"[WS] Received client timezone: {self.timezone}")
+        else:
+            logger.info("[WS] No client timezone received")
+        
         raw_cmd = qp.get("command") or qp.get("team") or qp.get("team_desc")
         if raw_cmd:
             try:

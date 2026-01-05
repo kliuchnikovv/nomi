@@ -246,23 +246,29 @@ class AgentFactory:
                 # Default to Genie
                 # Default to Genie
                 
+                # Default to Genie
+                
                 # Add Timezone Context
-                genie_thinking = thinking
-                genie_instructions = None # Use default
+                genie_instructions = None
+                add_datetime = True
                 
                 if timezone:
                     try:
+                        from zoneinfo import ZoneInfo
                         from datetime import datetime
-                        import pytz
-                        tz = pytz.timezone(timezone)
+                        # Use ZoneInfo from standard library
+                        tz = ZoneInfo(timezone)
                         local_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
-                        genie_instructions = f"Current User Time: {local_time} ({timezone}).\nUse this time for all relative time calculations (e.g. 'in one hour').\n\n"
-                        # We prepend this to base instructions inside GenieAgent if strict needed, 
-                        # or just rely on Agno's instructions parameter which GenieAgent accepts.
-                        # GenieAgent takes instructions=BASE_INSTRUCTIONS in init.
-                        # Let's override it or append it.
-                        # Actually GenieAgent constructor sets instructions=BASE_INSTRUCTIONS.
-                        # We should pass it explicitly if we want to override.
+                        
+                        # Get BASE_INSTRUCTIONS from GenieAgent module or define it here if not accessible easily, 
+                        # but better to import it or just let GenieAgent prepend it found in props.
+                        # Since we modified GenieAgent to take instructions, we need to combine them here 
+                        # OR if GenieAgent uses passed instructions INSTEAD of default, we need to include default.
+                        from src.agents.genie import BASE_INSTRUCTIONS
+                        
+                        genie_instructions = f"Current User Time: {local_time} ({timezone}).\nUse this time for all relative time calculations (e.g. 'in one hour').\n\n" + BASE_INSTRUCTIONS
+                        add_datetime = False # Disable default UTC datetime
+                        logger.info(f"[Factory] Injected local time: {local_time} for timezone: {timezone}")
                     except Exception as e:
                         logger.warning("Failed to parse timezone %s: %s", timezone, e)
 
@@ -273,13 +279,11 @@ class AgentFactory:
                     debug_mode=self._debug_mode,
                     thinking=thinking,
                     knowledge=knowledge,
-                    # If we computed local time, pass it as instructions prefix or explicit instruction
-                    # Note: GenieAgent init logic needs to handle this or we pass modified instructions
+                    instructions=genie_instructions, # Pass combined or None (GenieAgent defaults to BASE)
                 )
-                if genie_instructions:
-                    agent.instructions = genie_instructions + agent.instructions
-                    # Disable default datetime to avoiding confusion
-                    agent.add_datetime_to_context = False
+                
+                if not add_datetime:
+                     agent.add_datetime_to_context = False
 
             # _attach_tool_context removed - ChatHistoryTool is disabled
             # self._attach_tool_context(agent, tools)
