@@ -182,15 +182,23 @@ class BriefingGenerator {
         }
 
         // Add today's events
+        const now = new Date();
         for (const event of events) {
-            const isCompleted = completionMap.get(event.sourceId) ?? false;
+            const isCompleted = completionMap.get(event.sourceId) ?? (event.endDate ? now > event.endDate : false);
+            
+            let timeString = `Starts: ${event.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            if (event.endDate) {
+                timeString += ` - Ends: ${event.endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            }
+
             await integrationStorage.addBriefingItem(briefing.id, {
                 sourceType: 'event',
                 sourceId: event.id,
                 title: event.title,
-                description: event.location || `Starts: ${event.startDate.toLocaleTimeString()}`,
+                description: event.location || timeString,
                 priority: 'normal',
                 displayOrder: order++,
+                isCompleted,
             });
         }
 
@@ -230,6 +238,28 @@ class BriefingGenerator {
 
         console.log(`[BriefingGenerator] Generated briefing for ${dateStr} with ${itemCount} items`);
         return briefing;
+    }
+
+    /**
+     * Check for past events and mark them as completed
+     */
+    async checkPastEvents(briefingId: string): Promise<void> {
+        const items = await integrationStorage.getBriefingItems(briefingId);
+        const eventItems = items.filter(item => item.sourceType === 'event' && !item.isCompleted);
+
+        if (eventItems.length === 0) return;
+
+        // Get today's events to check end times
+        const events = await integrationStorage.getEventsForDate(new Date());
+        const now = new Date();
+
+        for (const item of eventItems) {
+            const event = events.find(e => e.id === item.sourceId);
+            if (event && event.endDate && now > event.endDate) {
+                await integrationStorage.markBriefingItemComplete(item.id, true);
+                console.log(`[BriefingGenerator] Auto-completed past event: ${item.title}`);
+            }
+        }
     }
 
     /**
@@ -330,6 +360,9 @@ class BriefingGenerator {
         if (!briefing) {
             return { briefing: null, items: [], progress: { total: 0, completed: 0 } };
         }
+
+        // Auto-complete past events
+        await this.checkPastEvents(briefing.id);
 
         const items = await integrationStorage.getBriefingItems(briefing.id);
         const progress = await integrationStorage.getBriefingProgress(briefing.id);

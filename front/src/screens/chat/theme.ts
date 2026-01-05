@@ -19,7 +19,7 @@ export const createChatTheme = (theme: ThemeColors) => ({
     errorButtonText: '#FFFFFF',
 });
 
-export const ASSISTANT_BUBBLE_WIDTH_RATIO = 0.95;
+export const ASSISTANT_BUBBLE_WIDTH_RATIO = 1.0;
 
 export const createMarkdownStyles = (chatTheme: ReturnType<typeof createChatTheme>) => ({
     body: {

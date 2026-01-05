@@ -136,7 +136,7 @@ export function useGiftedChatRenderers({
         const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
 
         return (
-            <View>
+            <View style={{ width: '100%' }}>
                 {/*
                    If using custom logic inside Bubble, we can inject children or modify content.
                    GiftedChat Bubble is a bit rigid.
@@ -169,9 +169,12 @@ export function useGiftedChatRenderers({
                         left: {
                             backgroundColor: chatTheme.background,
                             borderRadius: 18,
-                            padding: 4,
-                            paddingLeft: 10,
+                            paddingVertical: 12,
+                            paddingHorizontal: 16,
                             marginBottom: 0,
+                            width: '95%',
+                            flex: 1,
+                            alignSelf: 'stretch',
                         },
                     }}
                     textStyle={{
@@ -226,11 +229,12 @@ export function useGiftedChatRenderers({
 
         // Check for system message (Tool Call style)
         if (currentMessage.user._id === 'system') {
+            if (!showToolCalls) return null;
             return <SystemMessageBubble text={currentMessage.text} theme={theme} />;
         }
 
         return (
-            <View>
+            <View style={{ width: '100%' }}>
                 {showAttachmentsOutside && (
                     <View style={{
                         marginLeft: currentMessage.user._id === 'assistant' ? 0 : 'auto',
@@ -249,7 +253,7 @@ export function useGiftedChatRenderers({
                 <Message
                     {...props}
                     containerStyle={{
-                        left: [{ maxWidth: assistantContainerMaxWidth }],
+                        left: [{ maxWidth: assistantContainerMaxWidth, width: '100%' }],
                     }}
                 />
             </View>
@@ -311,7 +315,7 @@ export function useGiftedChatRenderers({
         // EXCLUSIVE PATH: If we have content parts, use ContentPartsRenderer ONLY.
         if (contentParts && contentParts.length > 0) {
             return (
-                <View>
+                <View style={{ width: '100%' }}>
                     {showAttachmentsInside && renderAttachments()}
                     <ContentPartsRenderer
                         parts={contentParts}
@@ -341,7 +345,7 @@ export function useGiftedChatRenderers({
 
         // Fallback Assistant (Legacy)
         return (
-            <View>
+            <View style={{ width: '100%' }}>
                 {showAttachmentsInside && renderAttachments()}
                 <Pressable
                     onLongPress={() => handleTextLongPress(messageText)}

@@ -23,7 +23,7 @@ export class VectorStore {
     private async generateEmbedding(text: string): Promise<number[]> {
         try {
             const response = await apiClient.post<{ embedding: number[] }>(
-                `${getApiUrl()}/api/embeddings`,
+                `${getApiUrl()}/embeddings`,
                 { text }
             );
             if (response && response.embedding) {

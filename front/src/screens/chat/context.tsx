@@ -411,7 +411,7 @@ export function ChatProvider({
                 }
 
                 if (!reuseMessageId) {
-                    messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch);
+                    messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch, role);
                     if (!messageID) {
                         console.error('Failed to create message before sending via WebSocket');
                         setError('Не удалось создать сообщение');
@@ -543,7 +543,7 @@ export function ChatProvider({
         return chatID;
     }
 
-    async function createMessage(text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean) {
+    async function createMessage(text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean, role: string = 'user') {
         let messageID: string;
 
         try {
@@ -554,7 +554,7 @@ export function ChatProvider({
                 `${getApiUrl()}/chats/${chatID}/messages`,
                 {
                     chat_id: chatID,
-                    role: 'user',
+                    role: role,
                     text: text,
                     model: model,
                     attachment_ids: attachmentIDs,

@@ -49,8 +49,9 @@ export const styles = StyleSheet.create({
     },
     assistantBubble: {
         backgroundColor: theme.surfaceHighlight,
-        alignSelf: 'flex-start',
+        alignSelf: 'stretch',
         borderBottomLeftRadius: 4,
+        maxWidth: '100%',
     },
     systemBubble: {
         backgroundColor: 'rgba(255, 255, 255, 0.05)',
