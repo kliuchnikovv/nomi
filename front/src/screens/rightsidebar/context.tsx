@@ -3,7 +3,17 @@ import { inboxApi, integrationsApi, sidebarApi } from '../../apiClient';
 import { integrationStorage, Email } from '../../services/integrations/IntegrationStorage';
 import { gmailClient } from '../../services/integrations/clients/GmailClient';
 import { InboxMessage, Plugin, PluginChat, PluginChatMessage } from './models';
-import { isDatabaseReady } from '../../services/database/database';
+import * as DatabaseModule from '../../services/database/database';
+
+// Safe wrapper to check database status - handles edge cases during startup
+function checkDatabaseReady(): boolean {
+    try {
+        return typeof DatabaseModule.isDatabaseReady === 'function' && DatabaseModule.isDatabaseReady();
+    } catch (e) {
+        console.warn('[PluginChatsContext] Database module not ready:', e);
+        return false;
+    }
+}
 
 interface PluginChatsContextType {
     plugins: Plugin[];
@@ -78,13 +88,13 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const mapInboxItemsToPlugins = async (): Promise<Plugin[]> => {
         try {
             // Skip local integrations if database not ready yet
-            if (!isDatabaseReady()) {
+            if (!checkDatabaseReady()) {
                 console.log('[PluginChatsContext] Database not ready, skipping local integrations');
                 // Fall through to load remote plugins only
             }
 
             // 1. Load local integrations (Gmail) - only if database is ready
-            const localIntegrations = isDatabaseReady()
+            const localIntegrations = checkDatabaseReady()
                 ? await integrationStorage.getIntegrations()
                 : [];
             const localPlugins: Plugin[] = [];
@@ -193,7 +203,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setRefreshing(true);
         try {
             // Force sync for enabled Gmail integrations - only if database is ready
-            if (isDatabaseReady()) {
+            if (checkDatabaseReady()) {
                 const integrations = await integrationStorage.getIntegrations();
                 const gmailIntegrations = integrations.filter(i => i.provider?.toLowerCase() === 'gmail' && i.enabled);
 

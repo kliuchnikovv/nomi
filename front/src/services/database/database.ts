@@ -37,6 +37,14 @@ export function getDatabase(): SQLite.SQLiteDatabase {
 }
 
 /**
+ * Get the database instance safely (returns null if not initialized)
+ * Use this in contexts where early access may occur before init
+ */
+export function getDatabaseSafe(): SQLite.SQLiteDatabase | null {
+    return db;
+}
+
+/**
  * Check if the database has been initialized
  */
 export function isDatabaseReady(): boolean {

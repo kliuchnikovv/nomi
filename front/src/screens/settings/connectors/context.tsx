@@ -12,8 +12,22 @@ import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ConnectorContextType, Tool, Integration } from './models';
 import { pluginsApi, authStore } from '../../../apiClient.ts';
 import { OAUTH_CALLBACK_URL, getApiUrl } from '../../../config.ts';
-import { initDatabase } from '../../../services/database/database';
+import * as DatabaseModule from '../../../services/database/database';
 import { integrationStorage, Integration as LocalIntegration } from '../../../services/integrations/IntegrationStorage';
+
+// Safe wrapper for initDatabase that handles edge cases during startup
+async function safeInitDatabase(): Promise<void> {
+    try {
+        if (typeof DatabaseModule.initDatabase === 'function') {
+            await DatabaseModule.initDatabase();
+        } else {
+            console.warn('[ConnectorsProvider] initDatabase not available');
+        }
+    } catch (e) {
+        console.error('[ConnectorsProvider] Failed to init database:', e);
+        throw e;
+    }
+}
 
 const ConnectorsContext = createContext<ConnectorContextType | undefined>(undefined);
 
@@ -36,7 +50,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
     // Initialize database on mount
     useEffect(() => {
-        initDatabase()
+        safeInitDatabase()
             .then(() => {
                 console.log('[ConnectorsProvider] Database initialized');
                 setDbReady(true);
