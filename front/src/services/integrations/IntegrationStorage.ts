@@ -210,6 +210,31 @@ class IntegrationStorage {
         };
     }
 
+    async getIntegrationByEmail(provider: string, email: string): Promise<Integration | null> {
+        const db = getDatabase();
+        const row = await db.getFirstAsync<{
+            id: string;
+            provider: string;
+            name: string;
+            enabled: number;
+            account_email: string | null;
+            created_at: number;
+            updated_at: number;
+        }>('SELECT * FROM integrations WHERE provider = ? AND account_email = ?', [provider, email]);
+
+        if (!row) return null;
+
+        return {
+            id: row.id,
+            provider: row.provider as Integration['provider'],
+            name: row.name,
+            enabled: row.enabled === 1,
+            accountEmail: row.account_email ?? undefined,
+            createdAt: new Date(row.created_at),
+            updatedAt: new Date(row.updated_at),
+        };
+    }
+
     async updateIntegration(id: string, updates: Partial<Pick<Integration, 'name' | 'enabled'>>): Promise<void> {
         const db = getDatabase();
         const now = Date.now();

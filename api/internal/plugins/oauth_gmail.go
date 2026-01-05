@@ -117,37 +117,18 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 		Version:        1,
 	}
 
+	// Existing check:
 	existing, err := g.storage.GetOAuthTokenByUserAndEmail(ctx, user.ID, ProviderGmail, claims.Email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", fmt.Errorf("failed to check existing token: %w", err)
 	}
 
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		if err := g.storage.SaveOAuthToken(ctx, newToken); err != nil {
-			return "", fmt.Errorf("failed to save token: %w", err)
-		}
-	} else {
-		existing.AccountEmail = newToken.AccountEmail
-		existing.ExternalUserID = newToken.ExternalUserID
-		existing.TokenEncrypted = newToken.TokenEncrypted
-		existing.Scopes = newToken.Scopes
-		existing.ProfileID = newToken.ProfileID
-		if err := g.storage.UpdateOAuthToken(ctx, existing); err != nil {
-			return "", fmt.Errorf("failed to update token: %w", err)
-		}
-	}
+	// We NO LONGER save the token to the database or update it.
+	// We only want to ensure the integration metadata exists.
 
 	params := map[string]any{
 		"account_email": claims.Email,
-		"creds": map[string]any{
-			"token":         token.AccessToken,
-			"refresh_token": token.RefreshToken,
-			"token_type":    token.TokenType,
-			"expiry":        token.Expiry,
-			"client_id":     g.oauthConfig.ClientID,
-			"client_secret": g.oauthConfig.ClientSecret,
-			"token_uri":     g.oauthConfig.Endpoint.TokenURL,
-		},
+		// No credentials here anymore
 	}
 	paramsJSON, err := json.Marshal(params)
 	if err != nil {

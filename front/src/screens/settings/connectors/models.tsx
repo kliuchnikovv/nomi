@@ -97,13 +97,14 @@ export const CONNECTORS: Connector[] = [
     },
     // Temporarily disabled - pending migration to client-side storage:
     // {
-    //     id: 'calendar',
-    //     name: 'Google Calendar',
-    //     toolKey: 'calendar',
-    //     oauthProvider: 'calendar',
-    //     colorKey: 'green',
-    //     glyph: 'calendar',
-    // },
+    {
+        id: 'calendar',
+        name: 'Google Calendar',
+        toolKey: 'calendar',
+        oauthProvider: 'calendar',
+        colorKey: 'orange',
+        glyph: 'calendar',
+    },
     // {
     //     id: 'github',
     //     name: 'GitHub',
