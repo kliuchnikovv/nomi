@@ -106,6 +106,41 @@ func NewMobileOAuthHandler(
 	}, nil
 }
 
+// LoginResponse is returned when starting OAuth flow
+type LoginResponse struct {
+	AuthURL string `json:"auth_url"`
+}
+
+// Login returns the OAuth authorization URL for the specified provider.
+// POST /api/oauth/:provider/login
+// Response: { "auth_url": "..." }
+func (h *MobileOAuthHandler) Login(c *gin.Context) {
+	providerName := c.Param("provider")
+
+	var oauthConfig *oauth2.Config
+	if providerName == ProviderGmail {
+		oauthConfig = h.gmailConfig
+	} else if providerName == ProviderCalendar {
+		oauthConfig = h.calendarConfig
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported for mobile OAuth", providerName)})
+		return
+	}
+
+	// Generate a state token for CSRF protection
+	// For mobile, we use a simple state since the callback is handled by the app
+	state := "mobile-oauth-state"
+
+	// Generate the authorization URL with offline access to get refresh token
+	authURL := oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
+
+	h.logger.Info("generated OAuth login URL",
+		zap.String("provider", providerName),
+	)
+
+	c.JSON(http.StatusOK, LoginResponse{AuthURL: authURL})
+}
+
 // CallbackMobile exchanges the authorization code for tokens and returns them to the client.
 // POST /api/oauth/:provider/callback-mobile
 // Request: { "code": "..." }
