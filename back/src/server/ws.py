@@ -271,10 +271,8 @@ class LLMWebSocketSession:
         last_activity = time.monotonic()
 
         try:
-            # Initial build
             try:
                 await self.build_agent_instance()
-            except Exception as e:
             except Exception as e:
                 await self._send_error(e, self.chat_id_param)
                 await self.websocket.close(code=1011)
