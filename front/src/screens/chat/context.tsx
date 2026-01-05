@@ -17,6 +17,8 @@ import { modelsApi, sidebarApi } from '../../apiClient';
 import { AVAILABLE_TEAMS } from './teams';
 import { useMain } from '../main/context';
 import { gmailClient } from '../../services/integrations/clients/GmailClient';
+import { calendarClient } from '../../services/integrations/clients/CalendarClient';
+import { useConnectors } from '../settings/connectors/context';
 
 function generateUUID() {
     // RFC4122 version 4 compliant enough for client-side ids
@@ -46,6 +48,7 @@ export function ChatProvider({
 }: Props) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [messagesLoading, setMessagesLoading] = useState(false);
+    const { tools } = useConnectors();
     const [externalTitle, setExternalTitle] = useState<string | null>(null);
     const socketRef = useRef<ChatSocket | null>(null); // Declare socketRef
     const seededChatRef = useRef<string | null>(null);
@@ -320,13 +323,15 @@ export function ChatProvider({
         }
 
         console.log(`WebSocket useEffect: socket ready`)
+        // Send current tools configuration to the backend
+        socketRef.current?.sendTools(tools);
 
         return () => {
             console.log('WS cleanup: deps changed', { activeChatID, token: !!token });
             socketRef.current?.close();
             socketRef.current = null;
         };
-    }, [activeChatID, token, refreshToken, chatMode, teamCommand]); // Dependencies for WebSocket lifecycle
+    }, [activeChatID, token, refreshToken, chatMode, teamCommand, tools]); // Dependencies for WebSocket lifecycle
     const refreshPluginThread = useCallback(async () => {
         if (!pluginThreadMeta) return;
         try {
@@ -805,26 +810,58 @@ export function ChatProvider({
                 // TODO: Show a UI indicator/toast?
                 (async () => {
                     try {
-                        if (tool === 'gmail' && method === 'send_email') {
-                            // We need integrationId. Since we don't have it in the action params (yet), 
-                            // we might need to find a way to get it. 
-                            // For now, assume we find the enabled gmail integration or use a default.
-                            // OR the backend passed it? Backend only knows token is missing.
-                            // The client needs to lookup the integration ID.
-
-                            // Quick fix: Try to find ANY enabled Gmail integration
+                        if (tool === 'gmail') {
+                            // Find ANY enabled Gmail integration
                             const integrationsRaw = await import('../../apiClient').then(m => m.integrationsApi.list());
                             const integrations = Array.isArray(integrationsRaw) ? integrationsRaw : (integrationsRaw.items || []);
-
                             const gmailInt = integrations.find((i: any) => i.provider === 'gmail' && i.enabled);
 
-                            if (gmailInt) {
+                            if (!gmailInt) {
+                                console.error('[ChatContext] No enabled Gmail integration found for client action');
+                                // sendMessage("I couldn't find an enabled Gmail integration on your device.", [], false, false);
+                                return;
+                            }
+
+                            if (method === 'send_email') {
                                 console.log(`[ChatContext] Executing Gmail Send with integration ${gmailInt.id}`);
                                 await gmailClient.sendEmail(gmailInt.id, params.to, params.subject, params.body);
                                 console.log(`[ChatContext] Email sent successfully via client delegation`);
-                                // TODO: Maybe send a "Action Completed" message back to chat?
+                            } else if (method === 'get_recent_emails') {
+                                console.log(`[ChatContext] Fetching recent emails for integration ${gmailInt.id}`);
+                                const limit = params.limit || 5;
+                                const emails = await gmailClient.getRecentEmails(gmailInt.id, limit);
+
+                                const emailText = emails.map((e, i) =>
+                                    `${i + 1}. [${e.date?.toLocaleString()}] From: ${e.fromName || e.fromEmail}\nSubject: ${e.subject}\nSnippet: ${e.snippet}`
+                                ).join('\n\n');
+
+                                const responseText = `[System: Email Fetch Result]\nHere are the recent emails:\n\n${emailText}`;
+
+                                // Send back to chat as a new message to drive the conversation forward
+                                sendMessage(responseText, [], false, false);
+                                console.log(`[ChatContext] Fetched and sent ${emails.length} emails to chat`);
+                            }
+                        } else if (tool === 'calendar' && method === 'create_event') {
+                        } else if (tool === 'calendar' && method === 'create_event') {
+                            // Find enabled Calendar integration
+                            const integrationsRaw = await import('../../apiClient').then(m => m.integrationsApi.list());
+                            const integrations = Array.isArray(integrationsRaw) ? integrationsRaw : (integrationsRaw.items || []);
+
+                            const calendarInt = integrations.find((i: any) => i.provider === 'calendar' && i.enabled);
+
+                            if (calendarInt) {
+                                console.log(`[ChatContext] Executing Calendar Create Event with integration ${calendarInt.id}`);
+                                await calendarClient.createEvent(
+                                    calendarInt.id,
+                                    params.title,
+                                    params.start,
+                                    params.end,
+                                    params.description,
+                                    params.attendees
+                                );
+                                console.log(`[ChatContext] Event created successfully via client delegation`);
                             } else {
-                                console.error('[ChatContext] No enabled Gmail integration found for client action');
+                                console.error('[ChatContext] No enabled Calendar integration found for client action');
                             }
                         }
                     } catch (e) {

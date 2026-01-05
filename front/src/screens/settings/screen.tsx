@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/context.tsx';
 import { createStyles } from './styles.tsx';
-import { ConnectorsProvider } from './connectors/context.tsx';
+
 import ConnectorScreenDialog from './connectors/screen.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeName, themes } from '../../themes';
@@ -408,12 +408,10 @@ export default function SettingsModal({ visible, onClose }: Props) {
                         </Pressable>
                     </View>
                     {connectorsOpen && (
-                        <ConnectorsProvider>
-                            <ConnectorScreenDialog
-                                visible={true}
-                                onClose={() => setConnectorsOpen(false)}
-                            />
-                        </ConnectorsProvider>
+                        <ConnectorScreenDialog
+                            visible={true}
+                            onClose={() => setConnectorsOpen(false)}
+                        />
                         // <ConnectorsDialog
                         //     visible={connectorsOpen}
                         //     onClose={() => setConnectorsOpen(false)}

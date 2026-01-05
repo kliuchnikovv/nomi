@@ -7,25 +7,29 @@ import SettingsModal from '../settings/screen';
 import { emptyChatID, useMain } from './context';
 import { ChatProvider } from '../chat/context.tsx';
 
+import { ConnectorsProvider } from '../settings/connectors/context';
+
 function MainScreenContent() {
     const { activeChatID, setActiveChatID } = useMain();
     const [settingsOpen, setSettingsOpen] = useState(false);
 
     return (
-        <View style={styles.root}>
-            <ChatProvider
-                activeChatID={activeChatID ? activeChatID : emptyChatID}
-                setActiveChatID={setActiveChatID}
-            >
-                <View style={styles.content}>
-                    <ChatScreen onSettingsPress={() => setSettingsOpen(true)} />
-                </View>
-            </ChatProvider>
-            <SettingsModal
-                visible={settingsOpen}
-                onClose={() => setSettingsOpen(false)}
-            />
-        </View>
+        <ConnectorsProvider>
+            <View style={styles.root}>
+                <ChatProvider
+                    activeChatID={activeChatID ? activeChatID : emptyChatID}
+                    setActiveChatID={setActiveChatID}
+                >
+                    <View style={styles.content}>
+                        <ChatScreen onSettingsPress={() => setSettingsOpen(true)} />
+                    </View>
+                </ChatProvider>
+                <SettingsModal
+                    visible={settingsOpen}
+                    onClose={() => setSettingsOpen(false)}
+                />
+            </View>
+        </ConnectorsProvider>
     );
 }
 

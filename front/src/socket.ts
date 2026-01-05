@@ -420,6 +420,32 @@ export class ChatSocket {
         this.outbox.unshift(frame);
     }
 
+    sendTools(tools: any[]) {
+        const chatID = this.getChatId();
+        const frame = {
+            id: 0,
+            kind: 'meta',
+            op: 'tools',
+            chat_id: chatID,
+            payload: {
+                tools: tools,
+            },
+        };
+
+        if (this.isReady()) {
+            try {
+                // console.log('Sending tools frame:', JSON.stringify(frame));
+                this.ws.send(JSON.stringify(frame));
+            } catch (err) {
+                console.error('Failed to send tools frame:', err);
+            }
+        } else {
+            // Queue it? Ideally yes, but tools are usually sent on connect.
+            // If we put it in outbox, it will be sent on open.
+            this.outbox.push(frame);
+        }
+    }
+
     sendStop() {
         const chatID = this.getChatId();
         const frame = {

@@ -64,6 +64,20 @@ class ClientGmailTools(Toolkit):
         )
         return f"Action delegated: Sending email to {to} with subject '{subject}'. The client application will execute this."
 
+    def get_recent_emails(self, limit: int = 5) -> str:
+        """Fetches the most recent emails from the user's inbox.
+        
+        Args:
+            limit: Number of emails to fetch (default: 5)
+        """
+        add_client_action(
+            tool="gmail",
+            method="get_recent_emails",
+            params={"limit": limit},
+            description=f"Fetch last {limit} emails"
+        )
+        return f"Action delegated: Fetching last {limit} emails. The client application will display them."
+
 
 class ClientCalendarTools(Toolkit):
     def __init__(self):
