@@ -100,9 +100,12 @@ class BriefingGenerator {
         if (!briefing) {
             briefing = await integrationStorage.createBriefing(
                 dateStr,
-                'Ваш брифинг на день',
-                'Генерация...'
+                'Your daily briefing',
+                'Generating...'
             );
+        } else {
+            // Clear existing items to prevent duplicates on refresh
+            await integrationStorage.clearBriefingItems(briefing.id);
         }
 
         // Get analyzed emails from the last 24 hours with high/asap urgency
@@ -127,7 +130,7 @@ class BriefingGenerator {
             const item = await integrationStorage.addBriefingItem(briefing.id, {
                 sourceType: 'email',
                 sourceId: analyzed.emailId,
-                title: email.subject || 'Без темы',
+                title: email.subject || 'No subject',
                 description: email.snippet,
                 priority: analyzed.urgency,
                 displayOrder: order++,
@@ -151,7 +154,7 @@ class BriefingGenerator {
                 sourceType: 'event',
                 sourceId: event.id,
                 title: event.title,
-                description: event.location || `Начало: ${event.startDate.toLocaleTimeString()}`,
+                description: event.location || `Starts: ${event.startDate.toLocaleTimeString()}`,
                 priority: 'normal',
                 displayOrder: order++,
             });
@@ -167,7 +170,7 @@ class BriefingGenerator {
                 sourceType: 'task',
                 sourceId: task.id,
                 title: task.title,
-                description: task.dueDate ? `Срок: ${task.dueDate.toLocaleDateString()}` : undefined,
+                description: task.dueDate ? `Due: ${task.dueDate.toLocaleDateString()}` : undefined,
                 priority: task.priority === 'critical' ? 'asap' : 'high',
                 displayOrder: order++,
             });
@@ -177,11 +180,11 @@ class BriefingGenerator {
         const itemCount = order;
         const asapCount = asapEmails.length;
 
-        let headline = 'Спокойный день';
+        let headline = 'Quiet day';
         if (asapCount > 0) {
-            headline = `${asapCount} срочных элементов требуют внимания`;
+            headline = `${asapCount} urgent items need attention`;
         } else if (itemCount > 0) {
-            headline = `${itemCount} элементов на сегодня`;
+            headline = `${itemCount} items for today`;
         }
 
         await integrationStorage.updateBriefing(briefing.id, {
@@ -230,7 +233,7 @@ class BriefingGenerator {
         const item = await integrationStorage.addBriefingItem(briefing.id, {
             sourceType: 'email',
             sourceId: emailId,
-            title: `🔴 СРОЧНОЕ: ${email.subject || 'Без темы'}`,
+            title: `🔴 URGENT: ${email.subject || 'No subject'}`,
             description: email.snippet,
             priority: 'asap',
             displayOrder: 0, // Put at top
@@ -252,7 +255,7 @@ class BriefingGenerator {
         // Update briefing headline
         const progress = await integrationStorage.getBriefingProgress(briefing.id);
         await integrationStorage.updateBriefing(briefing.id, {
-            headline: `🔴 Новое срочное сообщение! ${progress.total} элементов на сегодня`,
+            headline: `🔴 New urgent message! ${progress.total} items for today`,
         });
 
         console.log(`[BriefingGenerator] Injected ASAP email into today's briefing: ${emailId}`);

@@ -13,13 +13,13 @@ import {
 const getSourceDetails = (sourceType: string) => {
   switch (sourceType) {
     case 'event':
-      return { icon: 'calendar', title: 'Календарь', color: '#4285F4' };
+      return { icon: 'calendar', title: 'Calendar', color: '#4285F4' };
     case 'email':
-      return { icon: 'mail', title: 'Почта', color: '#EA4335' };
+      return { icon: 'mail', title: 'Email', color: '#EA4335' };
     case 'task':
-      return { icon: 'checkmark-circle', title: 'Задачи', color: '#34A853' };
+      return { icon: 'checkmark-circle', title: 'Tasks', color: '#34A853' };
     default:
-      return { icon: 'apps', title: 'Другое', color: '#888888' };
+      return { icon: 'apps', title: 'Other', color: '#888888' };
   }
 };
 
@@ -137,9 +137,9 @@ export const BriefingCard = () => {
         <TouchableOpacity onPress={() => loadBriefing(true)} style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Ionicons name="sunny" size={24} color={theme.primary} />
-            <Text style={[styles.headerTitle, { color: theme.text }]}>Утренний брифинг</Text>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>Morning Briefing</Text>
           </View>
-          <Text style={[styles.actionText, { color: theme.primary }]}>Сгенерировать</Text>
+          <Text style={[styles.actionText, { color: theme.primary }]}>Generate</Text>
         </TouchableOpacity>
       </View>
     );
@@ -152,7 +152,7 @@ export const BriefingCard = () => {
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <ActivityIndicator size="small" color={theme.primary} />
-            <Text style={[styles.headerTitle, { color: theme.text, marginLeft: 8 }]}>Подготовка брифинга...</Text>
+            <Text style={[styles.headerTitle, { color: theme.text, marginLeft: 8 }]}>Preparing briefing...</Text>
           </View>
         </View>
       </View>
@@ -183,16 +183,34 @@ export const BriefingCard = () => {
         >
           <View style={styles.headerTitleContainer}>
             <Ionicons name="sunny" size={24} color={theme.primary} />
-            <Text style={[styles.headerTitle, { color: theme.text }]}>Брифинг</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>Briefing</Text>
+              {collapsedSections['overview'] && (
+                <Text style={[styles.collapsedHeadline, { color: theme.textSecondary }]} numberOfLines={1}>
+                  {briefing?.headline}
+                </Text>
+              )}
+            </View>
             <View style={[styles.badge, { backgroundColor: theme.background }]}>
               <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
                 {progress.completed}/{progress.total}
               </Text>
             </View>
           </View>
-          <TouchableOpacity onPress={() => loadBriefing(true)}>
-            <Ionicons name="refresh" size={20} color={theme.textSecondary} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => loadBriefing(true)} disabled={loading} style={{ marginRight: 8 }}>
+              {loading ? (
+                <ActivityIndicator size="small" color={theme.textSecondary} />
+              ) : (
+                <Ionicons name="refresh" size={20} color={theme.textSecondary} />
+              )}
+            </TouchableOpacity>
+            <Ionicons
+              name={collapsedSections['overview'] ? 'chevron-down' : 'chevron-up'}
+              size={20}
+              color={theme.textSecondary}
+            />
+          </View>
         </TouchableOpacity>
 
         {!collapsedSections['overview'] && (
@@ -213,7 +231,7 @@ export const BriefingCard = () => {
               />
             </View>
             <Text style={[styles.progressText, { color: theme.textSecondary }]}>
-              {progress.completed} из {progress.total} выполнено
+              {progress.completed} of {progress.total} completed
             </Text>
           </View>
         )}
@@ -312,7 +330,11 @@ export const BriefingCard = () => {
                         {item.suggestedActions.map((action) => (
                           <TouchableOpacity
                             key={action.id}
-                            style={[styles.actionButton, { backgroundColor: theme.background }]}
+                            style={[styles.actionButton, {
+                              backgroundColor: theme.primary + '20',
+                              borderColor: theme.primary,
+                              borderWidth: 1
+                            }]}
                             onPress={() => handleActionPress(action)}
                           >
                             <Ionicons
@@ -360,6 +382,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: '600',
+  },
+  collapsedHeadline: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headline: {
     fontSize: 16,
@@ -425,6 +455,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 8,
     marginLeft: 30,
+    marginRight: 16,
   },
   actionButton: {
     flexDirection: 'row',
@@ -433,6 +464,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 12,
     gap: 4,
+    maxWidth: '100%',
+    flexShrink: 1,
   },
   actionLabel: {
     fontSize: 12,

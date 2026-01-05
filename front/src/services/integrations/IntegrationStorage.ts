@@ -622,7 +622,9 @@ class IntegrationStorage {
     async getAsapEmails(): Promise<AnalyzedEmail[]> {
         const db = getDatabase();
         const rows = await db.getAllAsync<any>(
-            `SELECT * FROM analyzed_emails WHERE urgency = 'asap' ORDER BY analyzed_at DESC`
+            `SELECT * FROM analyzed_emails WHERE urgency IN ('asap', 'high') ORDER BY 
+             CASE urgency WHEN 'asap' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,
+             analyzed_at DESC`
         );
 
         return rows.map(row => ({
@@ -697,6 +699,21 @@ class IntegrationStorage {
     }
 
     // ==================== V3: Briefing Items ====================
+
+    async clearBriefingItems(briefingId: string): Promise<void> {
+        const db = getDatabase();
+        // First delete suggested actions for all items in this briefing
+        await db.runAsync(
+            `DELETE FROM suggested_actions WHERE briefing_item_id IN 
+             (SELECT id FROM briefing_items WHERE briefing_id = ?)`,
+            [briefingId]
+        );
+        // Then delete the items
+        await db.runAsync(
+            'DELETE FROM briefing_items WHERE briefing_id = ?',
+            [briefingId]
+        );
+    }
 
     async addBriefingItem(
         briefingId: string,
