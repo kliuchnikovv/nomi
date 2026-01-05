@@ -584,6 +584,26 @@ export function ChatProvider({
         [sendStreamingMessage],
     );
 
+    const handleClientAction = useCallback(async (payload: any) => {
+        console.log('[ChatContext] Handling client action:', payload);
+        const { tool, method, params } = payload;
+
+        try {
+            const { clientToolExecutor } = await import('../../services/tools/ClientToolExecutor');
+            const result = await clientToolExecutor.execute({ tool, method, params });
+
+            console.log('[ChatContext] Action executed, sending result:', result);
+
+            // Send result back to the agent as a user message (invisible or system-like)
+            // We use a prefix to help the agent understand it's a tool result
+            await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`);
+
+        } catch (error) {
+            console.error('[ChatContext] Action failed:', error);
+            await sendMessage(`[System] Tool ${tool}.${method} Failed: ${error}`);
+        }
+    }, [sendMessage]);
+
     function newWebSocket(tkn: string, chatID: string) {
         console.log('Creating new WebSocket with model:', selectedModel);
         const sock = new ChatSocket(
@@ -607,6 +627,13 @@ export function ChatProvider({
                 if (frame.payload?.type === 'actions') {
                     console.log('>>> ACTIONS FRAME RECEIVED:', frame.payload);
                 }
+
+                // Handle Client Actions (Remote Brain -> Local Hands)
+                if (frame.payload?.type === 'client_action') {
+                    handleClientAction(frame.payload);
+                    return; // Don't add to messages list as a display message
+                }
+
                 setMessages(prevMessages =>
                     onReceivedMessage(frame, prevMessages)
                 );

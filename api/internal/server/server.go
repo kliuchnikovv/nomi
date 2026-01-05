@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -202,6 +203,51 @@ func New(
 	r.POST("/api/briefing", wrapWithAuth(briefingHandler.GetBriefing, authMiddleware))
 	r.POST("/api/analyze-email", emailAnalysisHandler.AnalyzeEmail) // No auth - frontend calls with email data
 	r.GET("/api/dashboard", wrapWithAuth(dashboardHandler.GetDashboard, authMiddleware))
+
+	// Proxy for Embeddings (transient) - forwards to Python backend
+	r.POST("/api/embeddings", func(c *gin.Context) {
+		// Use LLM BaseURL from config, or default to internal Python service URL
+		// Using 'http://127.0.0.1:7777' as default since app.py listens on 7777
+		targetURL := cfg.LLM.BaseURL
+		if targetURL == "" {
+			targetURL = "http://127.0.0.1:7777"
+		}
+		
+		// Create proxy request
+		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+"/api/embeddings", c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create proxy request"})
+			return
+		}
+
+		// Copy headers
+		for name, values := range c.Request.Header {
+			for _, value := range values {
+				proxyReq.Header.Add(name, value)
+			}
+		}
+
+		// Send request
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(proxyReq)
+		if err != nil {
+			logger.Error("Failed to proxy embeddings request", zap.Error(err))
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to contact AI service"})
+			return
+		}
+		defer resp.Body.Close()
+
+		// Copy response headers
+		for name, values := range resp.Header {
+			for _, value := range values {
+				c.Writer.Header().Add(name, value)
+			}
+		}
+		c.Status(resp.StatusCode)
+		
+		// Stream response body
+		_, _ = io.Copy(c.Writer, resp.Body)
+	})
 
 	return &Server{
 		httpServer: &http.Server{

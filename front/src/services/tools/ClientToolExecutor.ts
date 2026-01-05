@@ -66,14 +66,26 @@ export class ClientToolExecutor {
                 })));
 
             case 'search_emails':
-                const searchResults = await gmailClient.searchEmails(integrationId, params.query, params.max_results || 5);
-                return JSON.stringify(searchResults.map(e => ({
-                    id: e.gmailId,
-                    from: e.fromEmail,
-                    subject: e.subject,
-                    date: e.date,
-                    snippet: e.snippet,
-                    body: e.bodyText?.substring(0, 200) // Truncate body for RAG context
+                // Use Local RAG (Vector Search)
+                const { vectorStore } = await import('../database/VectorStore');
+                const searchResults = await vectorStore.search(params.query, params.max_results || 5, 'email');
+
+                if (searchResults.length === 0) {
+                    // Fallback to API search if no local results (optional, but good for UX)
+                    // For now, let's stick to strict Local RAG as requested or maybe fallback?
+                    // Let's implement fallback: if RAG empty, try API (or maybe API is forbidden?)
+                    // "Local Hands" implies we CAN use API, but "Remote Brain" wants to avoid sending data to backend.
+                    // But here we are on Client. Client CAN search API.
+                    // The "Local RAG" requirement specifically asked for vector search.
+                    // Let's stick to vector search results to prove the architecture.
+                    return "No relevant emails found in local cache.";
+                }
+
+                return JSON.stringify(searchResults.map(r => ({
+                    id: r.id,
+                    content: r.content,
+                    score: r.score,
+                    metadata: r.metadata
                 })));
 
             case 'get_email':

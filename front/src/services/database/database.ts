@@ -71,6 +71,9 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
     if (currentVersion < 3) {
         await migrateV3(database);
     }
+    if (currentVersion < 4) {
+        await migrateV4(database);
+    }
 }
 
 /**
@@ -249,6 +252,28 @@ async function migrateV3(database: SQLite.SQLiteDatabase): Promise<void> {
         INSERT INTO migrations (version, applied_at) VALUES (3, ${Date.now()});
     `);
     console.log('[Database] Migration V3 applied');
+}
+
+/**
+ * Migration V4: Vector embeddings for Local RAG
+ */
+async function migrateV4(database: SQLite.SQLiteDatabase): Promise<void> {
+    await database.execAsync(`
+        -- Vectors table
+        CREATE TABLE IF NOT EXISTS vectors (
+            id TEXT PRIMARY KEY, -- usually source_id
+            source_type TEXT NOT NULL,
+            content TEXT NOT NULL,
+            embedding TEXT NOT NULL, -- JSON string of float array
+            metadata TEXT, -- JSON string
+            created_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_vectors_source ON vectors(source_type);
+
+        INSERT INTO migrations (version, applied_at) VALUES (4, ${Date.now()});
+    `);
+    console.log('[Database] Migration V4 applied');
 }
 
 /**

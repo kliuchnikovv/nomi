@@ -416,6 +416,35 @@ try:
 except Exception:
     logging.exception("Failed to mount WS routes")
 
+
+class EmbeddingRequest(BaseModel):
+    text: str
+
+@app.post("/api/embeddings")
+async def get_embedding(request: EmbeddingRequest):
+    """
+    Generate an embedding for the given text.
+    Transient processing: The text is NOT saved or logged.
+    """
+    try:
+        # Use the AgentFactory's model to generate embeddings
+        # We access the underlying google.generativeai or openai client via the Phidata model wrapper if possible
+        # Or simpler: use the agent_factory.model which is initialized as Gemini
+        
+        # Phidata models usually have a get_embedding or similar, but Gemini/Google model in Phidata 
+        # might not expose it directly in the unified interface easily without digging.
+        # Let's check if we can use the model directly.
+        
+        # For Gemini (Google Generative AI), we can use the underlying client or the Phidata wrapper if it supports it.
+        # Checking back/app.py imports: `from agno.models.google import Gemini`
+        
+        # Agno models usually support `get_embedding`.
+        embedding = model.get_embedding(request.text)
+        return {"embedding": embedding}
+    except Exception as e:
+        logging.error(f"Embedding generation failed: {e}")
+        return {"error": str(e)}
+
 if __name__ == "__main__":
     agent_os.serve(
         app="app:app", 

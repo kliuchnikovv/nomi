@@ -5,6 +5,7 @@
 
 import { tokenRefreshService } from '../tokenRefreshService';
 import { integrationStorage, Email } from '../IntegrationStorage';
+import { vectorStore } from '../../database/VectorStore';
 
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
@@ -84,6 +85,32 @@ class GmailClient {
             bodyHtml: e.bodyHtml,
             isRead: e.isRead,
         })));
+
+        // Index emails in VectorStore
+        for (const email of emails) {
+            try {
+                // Construct a meaningful text representation for the embedding
+                const content = `From: ${email.fromName || email.fromEmail}
+Subject: ${email.subject}
+Date: ${email.date ? new Date(email.date).toLocaleDateString() : 'Unknown'}
+
+${email.snippet || ''}
+${email.bodyText || ''}`;
+
+                await vectorStore.addDocument({
+                    id: email.gmailId,
+                    sourceType: 'email',
+                    content: content,
+                    metadata: {
+                        subject: email.subject,
+                        from: email.fromEmail,
+                        date: email.date
+                    }
+                });
+            } catch (err) {
+                console.warn(`[GmailClient] Failed to index email ${email.gmailId}:`, err);
+            }
+        }
 
         console.log(`[GmailClient] Synced ${emails.length} emails`);
 
