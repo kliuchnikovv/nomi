@@ -70,6 +70,7 @@ class CalendarClient {
             endDate: item.end.dateTime ? new Date(item.end.dateTime) : (item.end.date ? new Date(item.end.date) : undefined),
             location: item.location,
             status: item.status || 'confirmed',
+            externalId: item.id,
         }));
 
         // Cache the events

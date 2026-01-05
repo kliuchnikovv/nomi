@@ -74,6 +74,9 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
     if (currentVersion < 4) {
         await migrateV4(database);
     }
+    if (currentVersion < 5) {
+        await migrateV5(database);
+    }
 }
 
 /**
@@ -274,6 +277,22 @@ async function migrateV4(database: SQLite.SQLiteDatabase): Promise<void> {
         INSERT INTO migrations (version, applied_at) VALUES (4, ${Date.now()});
     `);
     console.log('[Database] Migration V4 applied');
+}
+
+/**
+ * Migration V5: External ID for events to prevent duplication
+ */
+async function migrateV5(database: SQLite.SQLiteDatabase): Promise<void> {
+    await database.execAsync(`
+        -- Add external_id to events
+        ALTER TABLE events ADD COLUMN external_id TEXT;
+        
+        -- Index for looking up events by source and external ID
+        CREATE INDEX IF NOT EXISTS idx_events_external ON events(source_id, external_id);
+
+        INSERT INTO migrations (version, applied_at) VALUES (5, ${Date.now()});
+    `);
+    console.log('[Database] Migration V5 applied');
 }
 
 /**

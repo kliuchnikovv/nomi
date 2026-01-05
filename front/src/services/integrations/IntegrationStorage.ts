@@ -67,6 +67,7 @@ export interface ExtractedEvent {
     endDate?: Date;
     location?: string;
     status: string;
+    externalId?: string;
     createdAt: Date;
 }
 
@@ -515,21 +516,51 @@ class IntegrationStorage {
         const now = Date.now();
 
         for (const event of events) {
-            const id = generateUUID();
-            await db.runAsync(
-                `INSERT INTO events (id, source_id, title, start_date, end_date, location, status, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    id,
-                    sourceId,
-                    event.title!,
-                    new Date(event.startDate!).getTime(),
-                    event.endDate ? new Date(event.endDate).getTime() : null,
-                    event.location ?? null,
-                    event.status ?? 'confirmed',
-                    now
-                ]
-            );
+            let existingId: string | null = null;
+
+            // Check if already exists by external_id
+            if (event.externalId) {
+                const existing = await db.getFirstAsync<{ id: string }>(
+                    'SELECT id FROM events WHERE source_id = ? AND external_id = ?',
+                    [sourceId, event.externalId]
+                );
+                existingId = existing?.id ?? null;
+            }
+
+            if (existingId) {
+                // Update existing event
+                await db.runAsync(
+                    `UPDATE events SET 
+                     title = ?, start_date = ?, end_date = ?, location = ?, status = ?
+                     WHERE id = ?`,
+                    [
+                        event.title!,
+                        new Date(event.startDate!).getTime(),
+                        event.endDate ? new Date(event.endDate).getTime() : null,
+                        event.location ?? null,
+                        event.status ?? 'confirmed',
+                        existingId
+                    ]
+                );
+            } else {
+                // Insert new event
+                const id = generateUUID();
+                await db.runAsync(
+                    `INSERT INTO events (id, source_id, title, start_date, end_date, location, status, external_id, created_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        id,
+                        sourceId,
+                        event.title!,
+                        new Date(event.startDate!).getTime(),
+                        event.endDate ? new Date(event.endDate).getTime() : null,
+                        event.location ?? null,
+                        event.status ?? 'confirmed',
+                        event.externalId ?? null,
+                        now
+                    ]
+                );
+            }
         }
 
         for (const task of tasks) {
@@ -575,6 +606,7 @@ class IntegrationStorage {
             endDate: row.end_date ? new Date(row.end_date) : undefined,
             location: row.location ?? undefined,
             status: row.status,
+            externalId: row.external_id ?? undefined,
             createdAt: new Date(row.created_at)
         }));
     }
@@ -594,6 +626,7 @@ class IntegrationStorage {
             endDate: row.end_date ? new Date(row.end_date) : undefined,
             location: row.location ?? undefined,
             status: row.status,
+            externalId: row.external_id ?? undefined,
             createdAt: new Date(row.created_at)
         }));
     }
