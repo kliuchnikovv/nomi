@@ -75,6 +75,11 @@ type Payload struct {
 	Command interface{} `json:"command,omitempty"`
 	Team    interface{} `json:"team,omitempty"`
 	
+	// Client Action fields
+	Method      string                 `json:"method,omitempty"`
+	Params      map[string]interface{} `json:"params,omitempty"`
+	Description string                 `json:"description,omitempty"`
+
 	// Actions for action buttons
 	Actions interface{} `json:"actions,omitempty"`
 }
