@@ -630,17 +630,23 @@ class LLMWebSocketSession:
             
             # 4. Check for Client Actions (that were collected in context)
             client_actions = get_client_actions()
+            # 4. Check for Client Actions (that were collected in context)
+            client_actions = get_client_actions()
+            logger.info(f"[WS] get_client_actions return count: {len(client_actions)}")
             if client_actions:
                 logger.info("[WS] Sending %d client actions", len(client_actions))
                 for action in client_actions:
-                    await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, {
+                    logger.info(f"[WS] Payload prep: {action.tool}.{action.method}")
+                    payload = {
                         "type": "client_action",
                         "tool": action.tool,
                         "method": action.method,
                         "params": action.params,
                         "description": action.description,
                         "message_id": message_id
-                    }))
+                    }
+                    logger.info(f"[WS] Final Payload: {payload}")
+                    await self._send_frame(make_data(self.next_id, Op.MESSAGE, chat_id, payload))
 
         except Exception as e:
             await self._send_error(e, chat_id)
