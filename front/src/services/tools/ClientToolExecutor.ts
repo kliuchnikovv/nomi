@@ -143,13 +143,15 @@ export class ClientToolExecutor {
                     params.end_time,
                     params.max_results
                 );
-                return JSON.stringify(events.map(e => ({
+                const eventsJson = JSON.stringify(events.map(e => ({
                     id: e.id,
                     summary: e.summary,
                     start: e.start,
                     end: e.end,
                     status: e.status
-                })));
+                })), null, 2);
+
+                return `<details><summary>Calendar Events</summary>\n\n\`\`\`json\n${eventsJson}\n\`\`\`\n</details>`;
 
             case 'update_event':
                 await calendarClient.updateEvent(

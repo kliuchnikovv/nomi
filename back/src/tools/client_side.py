@@ -179,7 +179,7 @@ class ClientCalendarTools(Toolkit):
         return f"Action delegated: Scheduling event '{title}' from {start_time} to {end_time}. The client application will execute this."
 
     def list_events(self, start_time: str = "", end_time: str = "", max_results: int = 10) -> str:
-        """Lists events from the calendar.
+        """Lists events from the calendar. Use this tool BEFORE updating or deleting events to get their IDs.
         
         Args:
             start_time: Start time in ISO format. Defaults to now.
@@ -202,7 +202,7 @@ class ClientCalendarTools(Toolkit):
         """Updates an existing calendar event.
         
         Args:
-            event_id: The ID of the event to update.
+            event_id: The ID of the event to update. IMPORTANT: This must be the actual event ID returned by 'list_events', NOT the event title.
             title: New title (optional).
             start_time: New start time ISO (optional).
             end_time: New end time ISO (optional).
@@ -230,7 +230,7 @@ class ClientCalendarTools(Toolkit):
         """Deletes a calendar event.
         
         Args:
-            event_id: The ID of the event to delete.
+            event_id: The ID of the event to delete. IMPORTANT: This must be the actual event ID returned by 'list_events', NOT the event title.
         """
         add_client_action(
             tool="calendar",
