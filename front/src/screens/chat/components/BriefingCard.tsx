@@ -9,6 +9,7 @@ import {
   BriefingItem,
   SuggestedAction
 } from '../../../services/integrations/IntegrationStorage';
+import { useChat } from '../context';
 
 const getSourceDetails = (sourceType: string) => {
   switch (sourceType) {
@@ -65,6 +66,7 @@ interface BriefingCardData {
 
 export const BriefingCard = () => {
   const { theme } = useTheme();
+  const { sendMessage } = useChat();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<BriefingCardData | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
@@ -106,9 +108,81 @@ export const BriefingCard = () => {
     }
   };
 
-  const handleActionPress = (action: SuggestedAction) => {
+  const handleActionPress = async (action: SuggestedAction, item: BriefingItem) => {
     console.log('[BriefingCard] Action pressed:', action.actionType, action.params);
-    // TODO: Implement action handlers (reply, forward, schedule, etc.)
+
+    // Build prompt based on action type with metadata
+    let prompt = '';
+    const params = action.params || {};
+
+    // Get user's timezone
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    // For email items, get the actual Gmail ID from storage
+    let messageId = item.sourceId;
+    if (item.sourceType === 'email') {
+      try {
+        const email = await integrationStorage.getEmail(item.sourceId);
+        if (email?.gmailId) {
+          messageId = email.gmailId;
+        }
+      } catch (error) {
+        console.error('[BriefingCard] Failed to get email gmailId:', error);
+      }
+    }
+
+    switch (action.actionType) {
+      case 'reply':
+        if (params.suggested_text) {
+          prompt = `Reply to the email "${item.title}" (Message ID: ${messageId}) with the following message:\n\n${params.suggested_text}`;
+        } else {
+          prompt = `Help me reply to the email: "${item.title}" (Message ID: ${messageId})`;
+        }
+        break;
+
+      case 'forward':
+        prompt = `Forward the email "${item.title}" (Message ID: ${messageId})${params.to ? ` to ${params.to}` : ''}`;
+        break;
+
+      case 'schedule':
+        if (params.event_title || params.date || params.time) {
+          prompt = `Schedule an event: "${params.event_title || item.title}"${params.date ? ` on ${params.date}` : ''}${params.time ? ` at ${params.time}` : ''} (Timezone: ${timezone})`;
+        } else {
+          prompt = `Create a calendar event for: "${item.title}" (Timezone: ${timezone})`;
+        }
+        break;
+
+      case 'delegate':
+        prompt = `Delegate the task "${item.title}" (ID: ${messageId})${params.to ? ` to ${params.to}` : ''}`;
+        break;
+
+      case 'archive':
+        prompt = `Archive the email: "${item.title}" (Message ID: ${messageId})`;
+        break;
+
+      case 'followup':
+        if (params.reminder_date) {
+          prompt = `Set a follow-up reminder for "${item.title}" (ID: ${messageId}) on ${params.reminder_date} (Timezone: ${timezone})`;
+        } else {
+          prompt = `Set a follow-up reminder for: "${item.title}" (ID: ${messageId}) (Timezone: ${timezone})`;
+        }
+        break;
+
+      default:
+        prompt = `Help me with: "${item.title}" (ID: ${messageId})`;
+    }
+
+    // Add context if available
+    if (item.description) {
+      prompt += `\n\nContext: ${item.description}`;
+    }
+
+    // Send to chat
+    try {
+      await sendMessage(prompt);
+    } catch (error) {
+      console.error('[BriefingCard] Failed to send message:', error);
+    }
   };
 
   const toggleSection = (section: string) => {
@@ -336,7 +410,7 @@ export const BriefingCard = () => {
                             style={[styles.actionButton, {
                               borderColor: theme.border,
                             }]}
-                            onPress={() => handleActionPress(action)}
+                            onPress={() => handleActionPress(action, item)}
                           >
                             <Ionicons
                               name={getActionIcon(action.actionType)}

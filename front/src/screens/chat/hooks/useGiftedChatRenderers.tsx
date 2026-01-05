@@ -383,23 +383,8 @@ export function useGiftedChatRenderers({
                 {showToolCalls && contentParts && contentParts.length > 0 && (
                     <ContentPartsRenderer parts={contentParts} onLongPress={handleTextLongPress} />
                 )}
-                <MessageActions
-                    actions={props.currentMessage?.actions}
-                    theme={theme}
-                    onActionPress={(action) => {
-                        if (action.url) {
-                            Linking.openURL(action.url).catch(err => console.error("Failed to open URL:", err));
-                        } else if (action.prompt) {
-                            onSend(action.prompt);
-                        } else {
-                            console.log('Action pressed:', action);
-                            if (onMessageAction && props.currentMessage?._id) {
-                                onMessageAction(String(props.currentMessage._id), action);
-                            }
-                        }
-                    }}
-                />
-            </View > // Note: keeping View same but updating content
+                {renderActions()}
+            </View>
         );
     }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend, onMessageAction, showToolCalls]);
 

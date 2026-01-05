@@ -18,7 +18,7 @@ export interface SearchResult {
 
 export class VectorStore {
     /**
-     * Generate embedding for text using Backend API (Transient)
+     * Generate embedding for single text using Backend API (Transient)
      */
     private async generateEmbedding(text: string): Promise<number[]> {
         try {
@@ -37,7 +37,28 @@ export class VectorStore {
     }
 
     /**
-     * Add a document to the vector store
+     * Generate embeddings for multiple texts in a single API call (Batch mode)
+     */
+    private async generateEmbeddings(texts: string[]): Promise<number[][]> {
+        if (texts.length === 0) return [];
+
+        try {
+            const response = await apiClient.post<{ embeddings: number[][] }>(
+                `${getApiUrl()}/embeddings`,
+                { texts }
+            );
+            if (response && response.embeddings) {
+                return response.embeddings;
+            }
+            throw new Error('No embeddings returned from backend');
+        } catch (error) {
+            console.error('Failed to generate embeddings:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Add a single document to the vector store
      */
     async addDocument(doc: VectorDocument): Promise<void> {
         const db = getDatabase();
@@ -59,6 +80,39 @@ export class VectorStore {
             ]
         );
         console.log(`[VectorStore] Added document ${doc.id} (${doc.sourceType})`);
+    }
+
+    /**
+     * Add multiple documents to the vector store in batch (more efficient)
+     */
+    async addDocuments(docs: VectorDocument[]): Promise<void> {
+        if (docs.length === 0) return;
+
+        const db = getDatabase();
+
+        // 1. Generate all embeddings in one API call
+        const texts = docs.map(doc => doc.content);
+        const embeddings = await this.generateEmbeddings(texts);
+
+        // 2. Store all in SQLite
+        const now = Date.now();
+        for (let i = 0; i < docs.length; i++) {
+            const doc = docs[i];
+            const embedding = embeddings[i];
+            await db.runAsync(
+                `INSERT OR REPLACE INTO vectors (id, source_type, content, embedding, metadata, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [
+                    doc.id,
+                    doc.sourceType,
+                    doc.content,
+                    JSON.stringify(embedding),
+                    doc.metadata ? JSON.stringify(doc.metadata) : null,
+                    now
+                ]
+            );
+        }
+        console.log(`[VectorStore] Added ${docs.length} documents in batch`);
     }
 
     /**

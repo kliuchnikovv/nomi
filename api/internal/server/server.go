@@ -230,7 +230,7 @@ func New(
 		}
 
 		// Send request
-		client := &http.Client{Timeout: 10 * time.Second}
+		client := &http.Client{Timeout: 60 * time.Second} // Higher timeout for batch requests
 		resp, err := client.Do(proxyReq)
 		if err != nil {
 			logger.Error("Failed to proxy embeddings request", zap.Error(err))

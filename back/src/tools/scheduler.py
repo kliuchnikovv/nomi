@@ -100,7 +100,14 @@ class SchedulerTools(Toolkit):
                 "Authorization": f"Bearer {self.api_key}",
                 "X-Internal-Secret": self.api_key # Support both or specific internal header
             }
-            response = requests.post(f"{self.api_url}/tasks", json=payload, headers=headers)
+            # Ensure we hit /api/tasks even if api_url doesn't include /api suffix
+            base_url = self.api_url.rstrip('/')
+            if not base_url.endswith('/api'):
+                tasks_url = f"{base_url}/api/tasks"
+            else:
+                tasks_url = f"{base_url}/tasks"
+            
+            response = requests.post(tasks_url, json=payload, headers=headers)
             response.raise_for_status()
             return f"Task scheduled successfully. ID: {response.json().get('task_id')}"
         except Exception as e:

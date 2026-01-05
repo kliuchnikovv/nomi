@@ -418,29 +418,37 @@ except Exception:
 
 
 class EmbeddingRequest(BaseModel):
-    text: str
+    text: Optional[str] = None  # Single text (backward compatible)
+    texts: Optional[list[str]] = None  # Batch of texts
 
 @app.post("/api/embeddings")
 async def get_embedding(request: EmbeddingRequest):
     """
-    Generate an embedding for the given text.
+    Generate embeddings for text(s).
     Transient processing: The text is NOT saved or logged.
+    
+    Accepts either:
+    - `text`: Single string → returns `embedding`
+    - `texts`: Array of strings → returns `embeddings`
     """
     try:
-        # Use the AgentFactory's model to generate embeddings
-        # We access the underlying google.generativeai or openai client via the Phidata model wrapper if possible
-        # Or simpler: use the agent_factory.model which is initialized as Gemini
+        # Batch mode
+        if request.texts is not None:
+            if len(request.texts) == 0:
+                return {"embeddings": []}
+            
+            embeddings = []
+            for text in request.texts:
+                embedding = model.get_embedding(text)
+                embeddings.append(embedding)
+            return {"embeddings": embeddings}
         
-        # Phidata models usually have a get_embedding or similar, but Gemini/Google model in Phidata 
-        # might not expose it directly in the unified interface easily without digging.
-        # Let's check if we can use the model directly.
+        # Single mode (backward compatible)
+        if request.text is not None:
+            embedding = model.get_embedding(request.text)
+            return {"embedding": embedding}
         
-        # For Gemini (Google Generative AI), we can use the underlying client or the Phidata wrapper if it supports it.
-        # Checking back/app.py imports: `from agno.models.google import Gemini`
-        
-        # Agno models usually support `get_embedding`.
-        embedding = model.get_embedding(request.text)
-        return {"embedding": embedding}
+        return {"error": "Either 'text' or 'texts' must be provided"}
     except Exception as e:
         logging.error(f"Embedding generation failed: {e}")
         return {"error": str(e)}
