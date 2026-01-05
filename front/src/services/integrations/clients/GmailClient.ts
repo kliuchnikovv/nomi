@@ -310,6 +310,166 @@ class GmailClient {
 
         console.log(`[GmailClient] Sent email to ${to}`);
     }
+    /**
+     * Search emails
+     */
+    async searchEmails(integrationId: string, query: string, maxResults: number = 20): Promise<Email[]> {
+        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+
+        // Get list of message IDs
+        const listResponse = await fetch(
+            `${GMAIL_API_BASE}/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
+            {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            }
+        );
+
+        if (!listResponse.ok) {
+            const error = await listResponse.json().catch(() => ({}));
+            throw new Error(error.error?.message || 'Failed to search Gmail messages');
+        }
+
+        const listData: GmailListResponse = await listResponse.json();
+
+        if (!listData.messages || listData.messages.length === 0) {
+            return [];
+        }
+
+        // Fetch full message details for each
+        const emails: Email[] = [];
+        for (const msg of listData.messages) {
+            try {
+                const email = await this.fetchEmail(integrationId, msg.id, accessToken);
+                if (email) {
+                    emails.push(email);
+                }
+            } catch (e) {
+                console.warn(`[GmailClient] Failed to fetch email ${msg.id}:`, e);
+            }
+        }
+
+        return emails;
+    }
+
+    /**
+     * Create a draft email
+     */
+    async createDraft(integrationId: string, to: string, subject: string, body: string): Promise<void> {
+        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+
+        const utf8Subject = unescape(encodeURIComponent(subject));
+        const utf8Body = unescape(encodeURIComponent(body));
+
+        const message = [
+            `To: ${to}`,
+            `Subject: ${utf8Subject}`,
+            'Content-Type: text/plain; charset="UTF-8"',
+            'MIME-Version: 1.0',
+            '',
+            utf8Body
+        ].join('\n');
+
+        const encodedMessage = btoa(message).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        const response = await fetch(
+            `${GMAIL_API_BASE}/drafts`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: {
+                        raw: encodedMessage
+                    }
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error?.message || 'Failed to create draft');
+        }
+
+        console.log(`[GmailClient] Created draft to ${to}`);
+    }
+
+    /**
+     * Reply to an email
+     */
+    async replyToEmail(integrationId: string, messageId: string, body: string): Promise<void> {
+        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+
+        // First fetch the original message to get references and threadId
+        const original = await this.fetchEmail(integrationId, messageId, accessToken);
+        if (!original) {
+            throw new Error('Original message not found');
+        }
+
+        // Construct reply headers
+        const references = original.gmailId; // Simplified, ideally should get References header
+        // Ideally we should look at existing headers but for basic reply:
+        // In-Reply-To: <original-msg-id>
+        // References: <original-msg-id>
+
+        // NOTE: The Gmail API takes care of threading if we provide threadId.
+        // But for correct email headers we should check 'Message-ID' header of original.
+        // For simplicity let's rely on threadId and Subject RE: prefix.
+
+        let subject = original.subject || '';
+        if (!subject.toLowerCase().startsWith('re:')) {
+            subject = `Re: ${subject}`;
+        }
+
+        // Add quoted text to body
+        const quotedBody = `\n\nOn ${original.date?.toLocaleString()}, ${original.fromName || original.fromEmail} wrote:\n> ${original.snippet}`;
+        const fullBody = body + quotedBody;
+
+        const utf8Subject = unescape(encodeURIComponent(subject));
+        const utf8Body = unescape(encodeURIComponent(fullBody));
+
+        // Attempting to construct a valid RFC 2822 message
+        // Important: 'In-Reply-To' and 'References' headers are needed for proper threading clients.
+        // But we need the actual Message-ID header value (e.g. <abc@xyz.com>), not the Gmail ID.
+        // We didn't parse Message-ID in fetchEmail.
+        // We'll proceed with basic send + threadId, which Gmail usually handles well enough for grouping.
+
+        const to = original.fromEmail || '';
+
+        const message = [
+            `To: ${to}`,
+            `Subject: ${utf8Subject}`,
+            'Content-Type: text/plain; charset="UTF-8"',
+            'MIME-Version: 1.0',
+            '',
+            utf8Body
+        ].join('\n');
+
+        const encodedMessage = btoa(message).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        const response = await fetch(
+            `${GMAIL_API_BASE}/messages/send`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    raw: encodedMessage,
+                    threadId: original.threadId
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error?.message || 'Failed to reply to email');
+        }
+
+        console.log(`[GmailClient] Replied to email ${messageId}`);
+    }
 }
 
 export const gmailClient = new GmailClient();

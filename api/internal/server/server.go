@@ -17,7 +17,6 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
-	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
@@ -25,7 +24,6 @@ import (
 
 type Server struct {
 	httpServer    *http.Server
-	pluginManager *plugins.Manager
 }
 
 func New(
@@ -74,37 +72,25 @@ func New(
 		logger.Error("failed to register jules plugin", zap.Error(err))
 	}
 	*/
-	var manager *plugins.Manager = nil
-
 	// Initialize Hub
 	hubInstance := hub.NewHub(db, logger, cfg.LLM.BaseURL)
 	go hubInstance.Run()
 
 	// Инициализация обработчиков
 	var (
-		// oauthHandler   = handlers.NewOAuth(cfg, db)
 		chatHandler         = handlers.NewChatHandler(db)
 		messageHandler      = handlers.NewMessageHandler(db)
 		sidebarHandler      = handlers.NewSidebarHandler(db, llmService)
-		actionsHandler      = handlers.NewActionsHandler(db, logger, manager) // Delegates to plugins
-		integrationsHandler = handlers.NewIntegrationsHandler(db)
 		pluginChatsHandler  = handlers.NewPluginChatsHandler(db)
 		inboxHandler        = handlers.NewInboxHandler(db, logger)
 		tokenManager        = auth.NewTokenManager(cfg.Token.JWTSecret)
 		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
 		authHandler         = handlers.NewAuthHandler(db, tokenManager)
 		streamHandler       = handlers.NewStreamHandler(logger, hubInstance, db)
-		// toolsHandler   = handlers.NewToolsHandler(db, oauthConfigs, imapDaemon) // OLD: commented out
-		modelsHandler = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
-		uploadHandler = handlers.NewUploadHandler(db)
-		teamHandler   = team.NewHandler(db)
-		oauthHandler = func() *handlers.OAuthHandler {
-			h, err := handlers.NewOAuthHandler(logger, cfg, db, oauthConfigs, oidcProviders)
-			if err != nil {
-				logger.Fatal("failed to initialize oauth handler", zap.Error(err))
-			}
-			return h
-		}()
+		modelsHandler       = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
+		uploadHandler       = handlers.NewUploadHandler(db)
+		teamHandler         = team.NewHandler(db)
+
 		mobileOAuthHandler = func() *handlers.MobileOAuthHandler {
 			h, err := handlers.NewMobileOAuthHandler(logger, cfg, db)
 			if err != nil {
@@ -112,13 +98,12 @@ func New(
 			}
 			return h
 		}()
-		briefingHandler       = handlers.NewBriefingHandler(db, llmService)
-		emailAnalysisHandler  = handlers.NewEmailAnalysisHandler(db, llmService)
-		dashboardHandler      = handlers.NewDashboardHandler(db)
+		briefingHandler      = handlers.NewBriefingHandler(db, llmService)
+		emailAnalysisHandler = handlers.NewEmailAnalysisHandler(db, llmService)
+		dashboardHandler     = handlers.NewDashboardHandler(db)
 	)
 
 	// Initialize Scheduler (Task Manager)
-	// We start it here.
 	scheduler := hub.NewScheduler(db, hubInstance, logger)
 	go scheduler.Start()
 
@@ -138,7 +123,6 @@ func New(
 	// Auth API
 	r.POST("/api/auth/register", wrap(http.HandlerFunc(authHandler.Register)))
 	r.POST("/api/auth/login", wrap(http.HandlerFunc(authHandler.Login)))
-	// r.POST("/api/auth/logout", wrapWithAuth(authHandler.Logout, authMiddleware))
 	r.POST("/api/auth/refresh", wrap(http.HandlerFunc(authHandler.Refresh)))
 	r.POST("/api/auth/google", wrap(http.HandlerFunc(authHandler.GoogleLogin)))
 	r.GET("/api/auth/me", gin.WrapH(
@@ -187,7 +171,6 @@ func New(
 	r.POST("/api/tasks", taskAuth, gin.WrapH(http.HandlerFunc(tasksHandler.CreateTask)))
 
 	// Team State API
-	// Allow INTERNAL_API_KEY for system calls
 	r.POST("/api/team/state", taskAuth, teamHandler.SetState)
 	r.GET("/api/team/state", taskAuth, teamHandler.GetState)
 
@@ -196,8 +179,6 @@ func New(
 	r.GET("/api/sidebar/:provider/chats", wrapWithAuth(sidebarHandler.ListChats, authMiddleware))
 	r.GET("/api/sidebar/:provider/chats/:chat_id", wrapWithAuth(sidebarHandler.GetChat, authMiddleware))
 	r.POST("/api/sidebar/:provider/chats/:chat_id/messages", wrapWithAuth(sidebarHandler.PostChatMessage, authMiddleware))
-	// Actions API - Delegates to plugins
-	r.POST("/api/sidebar/:provider/messages/:id/actions", wrapWithAuth(actionsHandler.ExecuteAction, authMiddleware))
 
 	// Inbox (chat -> thread -> message) API
 	r.GET("/api/inbox", wrapWithAuth(inboxHandler.ListInbox, authMiddleware))
@@ -207,14 +188,6 @@ func New(
 	r.PATCH("/api/plugin_chats/:id", wrapWithAuth(pluginChatsHandler.UpdatePluginChat, authMiddleware))
 	r.DELETE("/api/plugin_chats/:id", wrapWithAuth(pluginChatsHandler.DeletePluginChat, authMiddleware))
 
-	// Integrations API
-	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
-	r.PATCH("/api/integrations/:id", wrapWithAuth(integrationsHandler.UpdateIntegration, authMiddleware))
-	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
-	
-	// Tools endpoint for Python backend (no auth - uses user_id from query param)
-	r.GET("/api/tools", integrationsHandler.GetToolsForPython)
-
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
 
@@ -222,21 +195,9 @@ func New(
 	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))
 	r.GET("/api/attachments/:id", wrapWithAuth(uploadHandler.GetAttachment, authMiddleware))
 
-	// OAuth API
-	r.POST("/api/oauth/:provider/login", wrapWithAuth(oauthHandler.Login, authMiddleware))
-	r.GET("/api/oauth/:provider/redirect", oauthHandler.Redirect)
-	r.GET("/api/oauth/:provider/callback", oauthHandler.Callback)
-
 	// Mobile OAuth API (tokens returned to client, not stored on backend)
 	r.POST("/api/oauth/:provider/callback-mobile", wrapWithAuth(mobileOAuthHandler.CallbackMobile, authMiddleware))
 	r.POST("/api/oauth/refresh", mobileOAuthHandler.RefreshToken) // No auth needed, uses refresh_token
-	r.GET("/api/integrations/export", wrapWithAuth(mobileOAuthHandler.ExportIntegrations, authMiddleware))
-
-	/*
-	pluginGroup := r.Group("/api/plugins")
-	pluginGroup.Use(authGinMiddleware(authMiddleware))
-	manager.Mount(pluginGroup)
-	*/
 
 	r.POST("/api/briefing", wrapWithAuth(briefingHandler.GetBriefing, authMiddleware))
 	r.POST("/api/analyze-email", emailAnalysisHandler.AnalyzeEmail) // No auth - frontend calls with email data
@@ -247,7 +208,6 @@ func New(
 			Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
 			Handler: r,
 		},
-		pluginManager: manager,
 	}
 }
 
@@ -256,9 +216,6 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	if s.pluginManager != nil {
-		_ = s.pluginManager.Shutdown(ctx)
-	}
 	return s.httpServer.Shutdown(ctx)
 }
 

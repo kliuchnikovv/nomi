@@ -3,7 +3,8 @@
  * Handles automatic token refresh before expiry
  */
 
-import { integrationStorage, IntegrationCredentials } from './IntegrationStorage';
+import { integrationStorage } from './IntegrationStorage';
+import { secureTokenStorage } from '../auth/SecureTokenStorage';
 import { getApiUrl } from '../../config';
 
 // Refresh tokens 5 minutes before expiry
@@ -14,14 +15,34 @@ class TokenRefreshService {
      * Get a valid access token, refreshing if needed
      */
     async getValidToken(integrationId: string): Promise<string> {
-        const creds = await integrationStorage.getCredentials(integrationId);
-        if (!creds) {
+        // Try secure storage first
+        let tokens = await secureTokenStorage.getToken(integrationId);
+
+        // Fallback to database (during migration)
+        if (!tokens) {
+            const creds = await integrationStorage.getCredentials(integrationId);
+            if (creds) {
+                // Migrate to secure storage
+                await secureTokenStorage.saveToken(integrationId, {
+                    accessToken: creds.accessToken,
+                    refreshToken: creds.refreshToken,
+                    expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0
+                });
+                tokens = {
+                    accessToken: creds.accessToken,
+                    refreshToken: creds.refreshToken,
+                    expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0
+                };
+            }
+        }
+
+        if (!tokens) {
             throw new Error('No credentials found for integration');
         }
 
         // Check if token is still valid (with buffer)
-        if (creds.tokenExpiry && creds.tokenExpiry.getTime() > Date.now() + REFRESH_BUFFER_MS) {
-            return creds.accessToken;
+        if (tokens.expiry && tokens.expiry > Date.now() + REFRESH_BUFFER_MS) {
+            return tokens.accessToken;
         }
 
         // Token expired or about to expire - refresh it
@@ -37,8 +58,20 @@ class TokenRefreshService {
             throw new Error('Integration not found');
         }
 
-        const creds = await integrationStorage.getCredentials(integrationId);
-        if (!creds?.refreshToken) {
+        let tokens = await secureTokenStorage.getToken(integrationId);
+        // Fallback check
+        if (!tokens) {
+            const creds = await integrationStorage.getCredentials(integrationId);
+            if (creds) {
+                tokens = {
+                    accessToken: creds.accessToken,
+                    refreshToken: creds.refreshToken,
+                    expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0
+                };
+            }
+        }
+
+        if (!tokens?.refreshToken) {
             throw new Error('No refresh token available - please re-authenticate');
         }
 
@@ -52,7 +85,7 @@ class TokenRefreshService {
             },
             body: JSON.stringify({
                 provider: integration.provider,
-                refresh_token: creds.refreshToken,
+                refresh_token: tokens.refreshToken,
             }),
         });
 
@@ -64,13 +97,22 @@ class TokenRefreshService {
         const data = await response.json();
 
         // Update stored credentials
-        const newExpiry = new Date(data.token_expiry * 1000);
-        await integrationStorage.updateCredentials(integrationId, {
+        const newExpiry = data.token_expiry * 1000;
+
+        await secureTokenStorage.saveToken(integrationId, {
             accessToken: data.access_token,
-            tokenExpiry: newExpiry,
+            refreshToken: tokens.refreshToken, // Reuse existing refresh token unless new one provided
+            expiry: newExpiry,
         });
 
-        console.log(`[TokenRefresh] Token refreshed, expires at ${newExpiry.toISOString()}`);
+        // Also update legacy DB for compatibility if needed, or just clear it?
+        // Ideally we wipe creds from DB to force usage of SecureStore
+        await integrationStorage.updateCredentials(integrationId, {
+            accessToken: data.access_token,
+            tokenExpiry: new Date(newExpiry),
+        });
+
+        console.log(`[TokenRefresh] Token refreshed, expires at ${new Date(newExpiry).toISOString()}`);
 
         return data.access_token;
     }
@@ -79,11 +121,11 @@ class TokenRefreshService {
      * Check if credentials need refresh
      */
     async needsRefresh(integrationId: string): Promise<boolean> {
-        const creds = await integrationStorage.getCredentials(integrationId);
-        if (!creds?.tokenExpiry) {
+        const tokens = await secureTokenStorage.getToken(integrationId);
+        if (!tokens?.expiry) {
             return true;
         }
-        return creds.tokenExpiry.getTime() <= Date.now() + REFRESH_BUFFER_MS;
+        return tokens.expiry <= Date.now() + REFRESH_BUFFER_MS;
     }
 }
 

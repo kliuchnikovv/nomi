@@ -220,53 +220,7 @@ func (r *Room) connectLLM() {
 func (r *Room) initLLMContext() {
 	ctx := context.Background() // Use background context for DB ops
 
-	// 1. Send Tools (Integrations)
-	tools, err := r.store.GetIntegrations(ctx, r.initiatorID)
-	if err != nil {
-		r.logger.Error("failed to fetch integrations", zap.Error(err))
-	} else {
-		toolsPayload := make([]map[string]interface{}, 0, len(tools))
-		for _, integration := range tools {
-			toolsPayload = append(toolsPayload, map[string]interface{}{
-				"name":    integration.Name,
-				"enabled": integration.Enabled,
-				"params":  integration.Params,
-			})
-		}
-
-		// user, err := r.store.GetUserByID(ctx, r.initiatorID)
-		// if err == nil && user.WebSearchEnabled {
-		// 	// Web search is enabled via Python side directly
-		// }
-
-		frame := Frame{
-			ID:        0,
-			ChatID:    r.ID,
-			Kind:      TokenKind,
-			Operation: ToolsOperation,
-			Timestamp: time.Now().UTC(),
-			Payload: Payload{
-				Tools: map[string]interface{}{
-					"tools": toolsPayload,
-				},
-			},
-		}
-		if err := r.llmSocket.Write(context.Background(), frame); err != nil {
-			r.logger.Error("failed to send tools", zap.Error(err))
-		} else {
-			r.logger.Info("sent tools to model",
-				zap.Int("count", len(toolsPayload)),
-				zap.Any("tools_names", func() []string {
-					names := make([]string, len(toolsPayload))
-					for i, t := range toolsPayload {
-						if name, ok := t["name"].(string); ok {
-							names[i] = name
-						}
-					}
-					return names
-				}()))
-		}
-	}
+	// 1. Send Tools (Integrations) - REMOVED (Client-side keys only)
 
 	// 2. Send History
 	// We load history for the chat.

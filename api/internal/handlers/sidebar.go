@@ -64,52 +64,8 @@ type SidebarChatMessage struct {
 
 // ListSidebar aggregates all inbox messages grouped by integration for sidebar consumption.
 func (h *SidebarHandler) ListSidebar(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	user, err := userFromCtx(ctx)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	integrations, err := h.storage.GetIntegrations(ctx, user.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load integrations"})
-		return
-	}
-
-	var inboxes []storage.Inbox
-	if err := h.storage.DB.WithContext(ctx).
-		Where("user_id = ?", user.ID).
-		Order("received_at DESC").
-		Find(&inboxes).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load messages"})
-		return
-	}
-
-	// Group messages by integration (account)
-	byIntegration := make(map[uuid.UUID][]SidebarMessage)
-	for _, msg := range inboxes {
-		byIntegration[msg.IntegrationID] = append(byIntegration[msg.IntegrationID], SidebarMessage{
-			ID:       msg.ID,
-			ThreadID: msg.ThreadID,
-			Title:    msg.Header,
-			Preview:  msg.Summary,
-			Sender:   msg.Sender,
-		})
-	}
-
-	items := make([]SidebarIntegration, 0, len(integrations))
-	for _, integ := range integrations {
-		items = append(items, SidebarIntegration{
-			IntegrationID: integ.ID,
-			Name:          integ.Name,
-			Provider:      integ.Provider,
-			Entries:       byIntegration[integ.ID],
-		})
-	}
-
-	c.JSON(http.StatusOK, SidebarResponse{Items: items})
+	// Integrations removed from backend. Return empty list.
+	c.JSON(http.StatusOK, SidebarResponse{Items: []SidebarIntegration{}})
 }
 
 // ListChats returns chats (threads) for a given provider.

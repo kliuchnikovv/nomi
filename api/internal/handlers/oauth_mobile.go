@@ -2,21 +2,24 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/providers"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+)
+
+const (
+	ProviderGmail    = "gmail"
+	ProviderCalendar = "calendar"
+	ProviderGitHub   = "github"
 )
 
 // MobileOAuthHandler handles OAuth flows for mobile clients.
@@ -70,7 +73,7 @@ func NewMobileOAuthHandler(
 	gmailConfig := &oauth2.Config{
 		ClientID:     providerCfg.ClientID,
 		ClientSecret: providerCfg.ClientSecret,
-		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, plugins.ProviderGmail),
+		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderGmail),
 		Scopes:       gmailScopes,
 		Endpoint:     google.Endpoint,
 	}
@@ -83,7 +86,7 @@ func NewMobileOAuthHandler(
 	calendarConfig := &oauth2.Config{
 		ClientID:     providerCfg.ClientID,
 		ClientSecret: providerCfg.ClientSecret,
-		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, plugins.ProviderCalendar),
+		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderCalendar),
 		Scopes:       calScopes,
 		Endpoint:     google.Endpoint,
 	}
@@ -112,9 +115,9 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	providerName := c.Param("provider")
 
 	var oauthConfig *oauth2.Config
-	if providerName == plugins.ProviderGmail {
+	if providerName == ProviderGmail {
 		oauthConfig = h.gmailConfig
-	} else if providerName == plugins.ProviderCalendar {
+	} else if providerName == ProviderCalendar {
 		oauthConfig = h.calendarConfig
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported for mobile OAuth", providerName)})
@@ -192,9 +195,9 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	var oauthConfig *oauth2.Config
-	if req.Provider == plugins.ProviderGmail {
+	if req.Provider == ProviderGmail {
 		oauthConfig = h.gmailConfig
-	} else if req.Provider == plugins.ProviderCalendar {
+	} else if req.Provider == ProviderCalendar {
 		oauthConfig = h.calendarConfig
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", req.Provider)})
@@ -224,79 +227,6 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 
 	h.logger.Debug("token refreshed successfully", zap.String("provider", req.Provider))
 	c.JSON(http.StatusOK, response)
-}
-
-// ExportIntegrations exports all integrations for migration to client-side storage.
-// This is a one-time migration endpoint.
-// GET /api/integrations/export
-func (h *MobileOAuthHandler) ExportIntegrations(c *gin.Context) {
-	ctx := c.Request.Context()
-	user, err := userFromCtx(ctx)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		return
-	}
-
-	integrations, err := h.storage.GetIntegrations(ctx, user.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load integrations"})
-		return
-	}
-
-	// Filter to Gmail only and return with decrypted credentials
-	type ExportedIntegration struct {
-		ID           uuid.UUID `json:"id"`
-		Provider     string    `json:"provider"`
-		Name         string    `json:"name"`
-		AccountEmail string    `json:"account_email,omitempty"`
-		Enabled      bool      `json:"enabled"`
-		Credentials  *struct {
-			AccessToken  string `json:"access_token,omitempty"`
-			RefreshToken string `json:"refresh_token,omitempty"`
-			Expiry       int64  `json:"expiry,omitempty"`
-		} `json:"credentials,omitempty"`
-	}
-
-	var exported []ExportedIntegration
-	for _, integ := range integrations {
-		if integ.Provider != plugins.ProviderGmail {
-			continue
-		}
-
-		exp := ExportedIntegration{
-			ID:       integ.ID,
-			Provider: integ.Provider,
-			Name:     integ.Name,
-			Enabled:  integ.Enabled,
-		}
-
-		// Parse credentials from params
-		if integ.Params != "" {
-			var params struct {
-				AccountEmail string `json:"account_email"`
-				Creds        struct {
-					Token        string `json:"token"`
-					RefreshToken string `json:"refresh_token"`
-					Expiry       string `json:"expiry"`
-				} `json:"creds"`
-			}
-			if err := json.Unmarshal([]byte(integ.Params), &params); err == nil {
-				exp.AccountEmail = params.AccountEmail
-				exp.Credentials = &struct {
-					AccessToken  string `json:"access_token,omitempty"`
-					RefreshToken string `json:"refresh_token,omitempty"`
-					Expiry       int64  `json:"expiry,omitempty"`
-				}{
-					AccessToken:  params.Creds.Token,
-					RefreshToken: params.Creds.RefreshToken,
-				}
-			}
-		}
-
-		exported = append(exported, exp)
-	}
-
-	c.JSON(http.StatusOK, exported)
 }
 
 // userFromCtx is duplicated from oauth.go - consider refactoring

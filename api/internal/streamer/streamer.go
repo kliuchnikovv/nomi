@@ -98,62 +98,8 @@ func (streamer *Streamer) Stream(
 	}
 	chatID := resolveChatID()
 
-	// Send integrations to model immediately upon connection
 	if modelReader != nil {
-		tools, err := streamer.storage.GetIntegrations(ctx, streamer.userID)
-		if err != nil {
-			streamer.logger.Error("failed to fetch integrations for initial send", zap.Error(err))
-		} else {
-			// Convert integrations to response format
-			toolsPayload := make([]map[string]interface{}, 0, len(tools))
-			for _, integration := range tools {
-				toolsPayload = append(toolsPayload, map[string]interface{}{
-					"name":    integration.Name,
-					"enabled": integration.Enabled,
-					"params":  integration.Params,
-				})
-			}
-
-			// Send integrations to model (AgnoProject) immediately
-			toolsFrame := Frame{
-				ID:        0,
-				ChatID:    chatID,
-				Kind:      TokenKind,
-				Operation: ToolsOperation,
-				Timestamp: time.Now().UTC(),
-				Payload: Payload{
-					Tools: func() map[string]interface{} {
-						payload := map[string]interface{}{
-							"tools": toolsPayload,
-						}
-
-						// Fetch user to check web search preference
-						// user, err := streamer.storage.GetUserByID(ctx, streamer.userID)
-						// if err == nil && user.WebSearchEnabled {
-						// 	// Web search is enabled via Python side directly
-						// }
-
-						if streamer.commandPayload != nil {
-							payload["command"] = streamer.commandPayload
-							payload["team"] = streamer.commandPayload
-						}
-						return payload
-					}(),
-				},
-			}
-			if err := modelReader.Write(ctx, toolsFrame); err != nil {
-				streamer.logger.Error("failed to send initial tools frame to model", zap.Error(err))
-			} else {
-				toolCount := len(tools)
-				// Simplified counting for log
-				if toolsMap, ok := toolsFrame.Payload.Tools.(map[string]interface{}); ok {
-					if t, ok := toolsMap["tools"].([]map[string]interface{}); ok {
-						toolCount = len(t)
-					}
-				}
-				streamer.logger.Info("sent initial tools to model", zap.Int("count", toolCount))
-			}
-		}
+		// Tools sending removed (client-side only)
 
 		// Send chat history to model if available
 		if len(streamer.chatHistory) > 0 {

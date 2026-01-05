@@ -36,13 +36,11 @@ func New(cfg *config.Config) (*Storage, error) {
 	if err := gdb.AutoMigrate(
 		&OAuthToken{},
 		&OAuthSession{},
-		&IntegrationLog{},
 		&AuditSecurity{},
 		&User{},
 		&Chat{},
 		&Message{},
 		&RefreshToken{},
-		&Integration{},
 		&Inbox{},
 		&PluginChat{},
 		&Attachment{},
