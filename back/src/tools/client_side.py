@@ -78,6 +78,66 @@ class ClientGmailTools(Toolkit):
         )
         return f"Action delegated: Fetching last {limit} emails. The client application will display them."
 
+    def search_emails(self, query: str, max_results: int = 10) -> str:
+        """Searches for emails matching the query.
+        
+        Args:
+            query: The search query (e.g., 'from:boss', 'subject:meeting')
+            max_results: Maximum number of results to return (default: 10)
+        """
+        add_client_action(
+            tool="gmail",
+            method="search_emails",
+            params={"query": query, "max_results": max_results},
+            description=f"Search emails: '{query}'"
+        )
+        return f"Action delegated: Searching emails for '{query}'. The client application will display the results."
+
+    def get_email(self, message_id: str) -> str:
+        """Gets the full content of a specific email.
+        
+        Args:
+            message_id: The ID of the message to retrieve.
+        """
+        add_client_action(
+            tool="gmail",
+            method="get_email",
+            params={"message_id": message_id},
+            description=f"Read email {message_id}"
+        )
+        return f"Action delegated: Reading email {message_id}. The client application will display the content."
+
+    def reply_email(self, message_id: str, body: str) -> str:
+        """Replies to a specific email.
+        
+        Args:
+            message_id: The ID of the message to reply to.
+            body: The body of the reply.
+        """
+        add_client_action(
+            tool="gmail",
+            method="reply_email",
+            params={"message_id": message_id, "body": body},
+            description=f"Reply to email {message_id}"
+        )
+        return f"Action delegated: Replying to email {message_id}. The client application will execute this."
+
+    def create_draft(self, to: str, subject: str, body: str) -> str:
+        """Creates a draft email.
+        
+        Args:
+            to: Recipient email address.
+            subject: Email subject.
+            body: Email body.
+        """
+        add_client_action(
+            tool="gmail",
+            method="create_draft",
+            params={"to": to, "subject": subject, "body": body},
+            description=f"Create draft to {to}"
+        )
+        return f"Action delegated: Creating draft email to {to}. The client application will execute this."
+
 
 class ClientCalendarTools(Toolkit):
     def __init__(self):
