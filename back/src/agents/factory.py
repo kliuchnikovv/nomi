@@ -125,6 +125,7 @@ class AgentFactory:
         user_id: Optional[str] = None,
         chat_id: Optional[str] = None,
         timezone: Optional[str] = None,
+        timezone_offset: Optional[str] = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -132,6 +133,19 @@ class AgentFactory:
             model_name = command_desc["model"]
 
         model = self.build_model(model_name, web_search=False, thinking=thinking) if model_name else self._model
+        
+        # ... (Tool fetching logic unchanged) ...
+        # NOTE: Since I am replacing a huge chunk, I need to be careful to include the tools logic or skip it if I can target specific lines.
+        # But wait, the file content shows `tools` fetching is before this.
+        # I only need to change the `build` method signature and the agent creation part.
+        # This implementation below is targeting the method signature and skipping to the end where agent is created.
+        
+        # ... (Skipping tools fetching logic for brevity in replace block if possible, but replace_file_content works on contiguous blocks)
+        # It's better to do 2 separate edits: 1 for signature, 1 for logic.
+        pass
+
+    # Splitting into two calls for safety. First call: Update signature.
+
         
         tools: List[Toolkit] = []
         
@@ -252,6 +266,7 @@ class AgentFactory:
                 genie_instructions = None
                 add_datetime = True
                 
+                # Determine timezone to use
                 if timezone:
                     try:
                         from zoneinfo import ZoneInfo
@@ -260,10 +275,6 @@ class AgentFactory:
                         tz = ZoneInfo(timezone)
                         local_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
                         
-                        # Get BASE_INSTRUCTIONS from GenieAgent module or define it here if not accessible easily, 
-                        # but better to import it or just let GenieAgent prepend it found in props.
-                        # Since we modified GenieAgent to take instructions, we need to combine them here 
-                        # OR if GenieAgent uses passed instructions INSTEAD of default, we need to include default.
                         from src.agents.genie import BASE_INSTRUCTIONS
                         
                         genie_instructions = f"Current User Time: {local_time} ({timezone}).\nUse this time for all relative time calculations (e.g. 'in one hour').\n\n" + BASE_INSTRUCTIONS
@@ -271,6 +282,28 @@ class AgentFactory:
                         logger.info(f"[Factory] Injected local time: {local_time} for timezone: {timezone}")
                     except Exception as e:
                         logger.warning("Failed to parse timezone %s: %s", timezone, e)
+                elif timezone_offset:
+                    try:
+                        from datetime import datetime, timedelta, timezone as dt_timezone
+                        # timezone_offset is in minutes from UTC (e.g. -120 for GMT+2 in JS getTimezoneOffset() returns positive for West, negative for East? 
+                        # Wait, JS new Date().getTimezoneOffset() returns positive minutes for zones West of UTC, negative for East.
+                        # e.g. UTC+2 returns -120.
+                        # Python timezone(timedelta(minutes=...)) expects offset from UTC.
+                        # So we need to negate JS offset.
+                        offset_mins = int(timezone_offset)
+                        # Invert sign because JS returns (UTC - Local) in minutes, Python wants (Local - UTC)
+                        tz_offset = timedelta(minutes=-offset_mins) 
+                        tz = dt_timezone(tz_offset)
+                        
+                        local_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %z")
+                        
+                        from src.agents.genie import BASE_INSTRUCTIONS
+                        
+                        genie_instructions = f"Current User Time: {local_time} (UTC offset {tz_offset}).\nUse this time for all relative time calculations (e.g. 'in one hour').\n\n" + BASE_INSTRUCTIONS
+                        add_datetime = False
+                        logger.info(f"[Factory] Injected local time: {local_time} for offset: {offset_mins}")
+                    except Exception as e:
+                        logger.warning("Failed to use timezone_offset %s: %s", timezone_offset, e)
 
                 agent = GenieAgent(
                     db=self._db,

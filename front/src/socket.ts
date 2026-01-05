@@ -108,12 +108,20 @@ export class ChatSocket {
         const mode = this.getMode?.() || 'agent';
         if (mode) qs.append('mode', mode);
 
-        // Add user's timezone
+        // Add user's timezone information
         try {
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            if (tz) qs.append('timezone', tz);
+            if (tz) {
+                qs.append('timezone', tz);
+                console.log('[Socket] Detected timezone:', tz);
+            }
+
+            // Fallback: Send raw offset (in minutes)
+            const offset = new Date().getTimezoneOffset();
+            qs.append('timezone_offset', String(offset));
+            console.log('[Socket] Detected timezone offset:', offset);
         } catch (e) {
-            console.warn('Failed to get timezone', e);
+            console.warn('[Socket] Failed to get timezone info', e);
         }
 
         const command = this.getCommand?.();

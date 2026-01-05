@@ -140,12 +140,15 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 }
             }
 
-            // 2. Load remote plugins (IMAP, Jules)
-            const integrationsResponse = await integrationsApi.list();
-            const remoteIntegrations = Array.isArray(integrationsResponse)
-                ? integrationsResponse
-                : (integrationsResponse?.items || []);
+            // 2. Load remote plugins (IMAP, Jules) - DEPRECATED/REMOVED
+            // const integrationsResponse = await integrationsApi.list();
+            // const remoteIntegrations = Array.isArray(integrationsResponse)
+            //     ? integrationsResponse
+            //     : (integrationsResponse?.items || []);
+            const remotePlugins: Plugin[] = [];
 
+            // Commented out as integrationsApi is removed
+            /*
             const parsedRemoteIntegrations = remoteIntegrations.map((p: any) => {
                 let params: Record<string, any> | undefined;
                 if (typeof p?.params === 'object') params = p.params;
@@ -160,89 +163,10 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 };
             });
 
-            const remotePlugins: Plugin[] = [];
-
             for (const integ of parsedRemoteIntegrations) {
-                // Skip Gmail if it's coming from backend (we use local now)
-                if (integ.provider?.toLowerCase() === 'gmail') continue;
-
-                try {
-                    // For Jules, we use the sidebar API which returns proper chat objects
-                    if (integ.provider === 'jules') {
-                        console.log('[PluginChatsContext] Loading Jules chats for integration:', integ.id);
-                        const response = await sidebarApi.getChats(integ.provider, integ.id);
-                        const items = response?.chats || [];
-
-                        const mappedChats: PluginChat[] = items.map((chatItem) => ({
-                            id: `${integ.id}:${chatItem.chat_id}`,
-                            pluginId: integ.id,
-                            title: chatItem.title || `Chat`,
-                            lastMessage: chatItem.count ? `${chatItem.count} messages` : undefined,
-                            lastMessageAt: chatItem.last_received ? new Date(chatItem.last_received).getTime() : undefined,
-                            unreadCount: 0,
-                            metadata: {
-                                provider: integ.provider,
-                                integrationId: integ.id,
-                                chatId: chatItem.chat_id,
-                                threads: [], // Jules chats are linear for now
-                            },
-                        }));
-
-                        remotePlugins.push({
-                            id: integ.id,
-                            provider: integ.provider,
-                            name: integ.name,
-                            chats: mappedChats,
-                        });
-                        continue;
-                    }
-
-                    const inbox = await inboxApi.getInbox({
-                        provider: integ.provider,
-                        integrationId: integ.id,
-                    });
-                    const items = inbox?.items || [];
-                    const chats: PluginChat[] = [];
-
-                    items.forEach((chatItem: any, chatIdx: number) => {
-                        const chatId = chatItem.chat_id ?? `chat-${chatIdx}`;
-                        const threads = chatItem.threads || [];
-                        chats.push({
-                            id: `${integ.id}:${chatId}`,
-                            pluginId: integ.id,
-                            title: chatItem.sender || `Chat ${chatId}`,
-                            lastMessage: chatItem.count ? `${chatItem.count} messages` : undefined,
-                            lastMessageAt: chatItem.last_received ? new Date(chatItem.last_received).getTime() : undefined,
-                            unreadCount: 0,
-                            metadata: {
-                                provider: integ.provider,
-                                integrationId: integ.id,
-                                chatId,
-                                threads: threads.map((thread: any, idx: number) => ({
-                                    ...thread,
-                                    thread_id: thread.thread_id ?? `${chatId}-thread-${idx}`,
-                                    messages: thread.messages || [],
-                                })),
-                            },
-                        });
-                    });
-
-                    remotePlugins.push({
-                        id: integ.id,
-                        provider: integ.provider,
-                        name: integ.name,
-                        chats,
-                    });
-                } catch (err) {
-                    console.error(`Failed to load ${integ.provider === 'jules' ? 'chats' : 'inbox'} for integration ${integ.id}`, err);
-                    remotePlugins.push({
-                        id: integ.id,
-                        provider: integ.provider,
-                        name: integ.name,
-                        chats: [],
-                    });
-                }
+                // ... existing logic ...
             }
+            */
 
             return [...localPlugins, ...remotePlugins];
         } catch (err) {
@@ -305,6 +229,8 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setLoadingMorePlugins(prev => new Set(prev).add(pluginId));
 
         try {
+            // Backend /inbox endpoint is removed. Local pagination to be implemented.
+            /*
             const inbox = await inboxApi.getInbox({
                 provider: plugin.provider,
                 integrationId: pluginId,
@@ -353,6 +279,11 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setPluginPages(prev => ({ ...prev, [pluginId]: nextPage }));
             // Use total_pages from API response to determine if there are more pages
             setPluginHasMore(prev => ({ ...prev, [pluginId]: nextPage < totalPages }));
+            */
+
+            // Mark as no more items for now since backend is gone
+            setPluginHasMore(prev => ({ ...prev, [pluginId]: false }));
+
         } catch (err) {
             console.error(`Failed to load more for plugin ${pluginId}`, err);
         } finally {
