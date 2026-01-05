@@ -348,7 +348,7 @@ export function ChatProvider({
     }, [pluginThreadMeta, mapPluginMessage]);
 
     const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string) => {
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string, role: string = 'user') => {
             if (!text.trim() && attachments.length === 0) return;
             if (!user?.id) return;
 
@@ -389,7 +389,7 @@ export function ChatProvider({
                         id: messageID,
                         chat_id: chatIdToUse,
                         sender: user.id,
-                        role: 'user',
+                        role: role,
                         text: text.trim(),
                         created_at: timestamp,
                         attachments: modelAttachments,
@@ -426,7 +426,7 @@ export function ChatProvider({
                         id: messageID!,
                         chat_id: chatIdToUse!,
                         sender: user.id,
-                        role: 'user',
+                        role: role,
                         text: text.trim(),
                         created_at: timestamp,
                         attachments: modelAttachments,
@@ -464,7 +464,7 @@ export function ChatProvider({
                 setError('Ошибка отправки сообщения');
                 return;
             }
-            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch, thinking);
+            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch, thinking, role);
             console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
         },
         [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token],
@@ -578,8 +578,8 @@ export function ChatProvider({
     }
 
     const sendMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string) => {
-            await sendStreamingMessage(text, attachments, webSearch, thinking);
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, role: string = 'user') => {
+            await sendStreamingMessage(text, attachments, webSearch, thinking, undefined, role);
         },
         [sendStreamingMessage],
     );
@@ -595,13 +595,13 @@ export function ChatProvider({
 
             console.log('[ChatContext] Action executed, sending result:', result);
 
-            // Send result back to the agent as a user message (invisible or system-like)
+            // Send result back to the agent as a system message
             // We use a prefix to help the agent understand it's a tool result
-            await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`);
+            await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`, [], false, undefined, 'system');
 
         } catch (error) {
             console.error('[ChatContext] Action failed:', error);
-            await sendMessage(`[System] Tool ${tool}.${method} Failed: ${error}`);
+            await sendMessage(`[System] Tool ${tool}.${method} Failed: ${error}`, [], false, undefined, 'system');
         }
     }, [sendMessage]);
 

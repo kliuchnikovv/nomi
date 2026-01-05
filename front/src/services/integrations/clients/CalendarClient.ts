@@ -116,49 +116,57 @@ class CalendarClient {
         start: string,
         end: string,
         description?: string,
-        attendees?: string[]
+        attendees?: string[],
+        timezone?: string
     ): Promise<CalendarEvent> {
         const accessToken = await tokenRefreshService.getValidToken(integrationId);
+
+        const timeZoneToUse = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
         const eventData: any = {
             summary: title,
             description: description,
             start: {
                 dateTime: start,
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timeZone: timeZoneToUse,
             },
             end: {
                 dateTime: end,
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timeZone: timeZoneToUse,
             },
         };
+        end: {
+            dateTime: end,
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            },
+    };
 
-        if (attendees && attendees.length > 0) {
-            eventData.attendees = attendees.map(email => ({ email }));
-        }
+    if(attendees && attendees.length > 0) {
+    eventData.attendees = attendees.map(email => ({ email }));
+}
 
-        const response = await fetch(
-            `${CALENDAR_API_BASE}/events`,
-            {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(eventData),
-            }
-        );
+const response = await fetch(
+    `${CALENDAR_API_BASE}/events`,
+    {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+    }
+);
 
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            const errorMessage = error.error?.message || 'Failed to create Calendar event';
-            console.error('[CalendarClient] Create event failed:', errorMessage);
-            throw new Error(errorMessage);
-        }
+if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    const errorMessage = error.error?.message || 'Failed to create Calendar event';
+    console.error('[CalendarClient] Create event failed:', errorMessage);
+    throw new Error(errorMessage);
+}
 
-        const createdEvent: CalendarEvent = await response.json();
-        console.log(`[CalendarClient] Created event: ${createdEvent.id} - ${createdEvent.summary}`);
-        return createdEvent;
+const createdEvent: CalendarEvent = await response.json();
+console.log(`[CalendarClient] Created event: ${createdEvent.id} - ${createdEvent.summary}`);
+return createdEvent;
     }
 }
 

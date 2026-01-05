@@ -125,13 +125,15 @@ export class ClientToolExecutor {
 
         switch (method) {
             case 'create_event':
-                await calendarClient.createEvent(integrationId, {
-                    summary: params.title,
-                    start: { dateTime: params.start },
-                    end: { dateTime: params.end },
-                    description: params.description,
-                    attendees: params.attendees?.map((email: string) => ({ email }))
-                });
+                await calendarClient.createEvent(
+                    integrationId,
+                    params.title,
+                    params.start,
+                    params.end,
+                    params.description,
+                    params.attendees,
+                    params.timezone
+                );
                 return `Event '${params.title}' created`;
             default:
                 throw new Error(`Unknown Calendar method: ${method}`);

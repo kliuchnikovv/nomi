@@ -352,7 +352,7 @@ export class ChatSocket {
         }
     }
 
-    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: string) {
+    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: string, role: string = 'user') {
         // console.log('Sending message:', message, sessionId, attachmentIDs, webSearch, thinking);
         const chatID = this.getChatId();
         const model = this.getModel();
@@ -369,6 +369,7 @@ export class ChatSocket {
             payload: {
                 message_id: messageID,
                 message: message,
+                role: role, // Use provided role
                 model: model, // Include user's model choice
                 sessionId: sessionId, // Keep sending for server-side logging if needed
                 attachment_ids: attachmentIDs,

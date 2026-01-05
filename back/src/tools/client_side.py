@@ -144,15 +144,16 @@ class ClientCalendarTools(Toolkit):
         super().__init__(name="calendar_client")
         self.register(self.create_event)
 
-    def create_event(self, title: str, start_time: str, end_time: str, description: str = "", attendees: List[str] = []) -> str:
+    def create_event(self, title: str, start_time: str, end_time: str = "", description: str = "", attendees: List[str] = [], timezone: str = "") -> str:
         """Schedules a meeting/event on the calendar.
 
         Args:
             title: Title of the event
             start_time: Start time in ISO format
-            end_time: End time in ISO format
+            end_time: End time in ISO format. If not provided, defaults to 30 minutes after start_time.
             description: Description of the event
             attendees: List of email addresses of attendees
+            timezone: Optional timezone for the event (e.g. 'America/New_York'). If not provided, recipient's local time will be used.
         """
         add_client_action(
             tool="calendar",
@@ -162,7 +163,8 @@ class ClientCalendarTools(Toolkit):
                 "start": start_time,
                 "end": end_time,
                 "description": description,
-                "attendees": attendees
+                "attendees": attendees,
+                "timezone": timezone
             },
             description=f"Schedule event '{title}'"
         )
