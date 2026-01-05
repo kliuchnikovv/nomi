@@ -232,16 +232,16 @@ func (h *OAuthHandler) Callback(c *gin.Context) {
 		c.Redirect(http.StatusFound, deepLink)
 		return
 	} else if providerName == plugins.ProviderCalendar {
-		user, err := h.storage.GetUserByID(ctx, session.UserID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "user not found"})
-			return
+		// NEW MOBILE FLOW: Forward code to app, don't process here
+		if err := h.storage.DeleteOAuthSession(ctx, session.ID); err != nil {
+			// log but continue
 		}
-		email, err = h.calendarIntegration.HandleCallback(ctx, code, user)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
+		setOAuthSessionCookie(c, "", -1)
+
+		// Send code to app via deep link
+		deepLink := fmt.Sprintf("genie://oauth/callback?provider=%s&code=%s", providerName, url.QueryEscape(code))
+		c.Redirect(http.StatusFound, deepLink)
+		return
 	} else if providerName == plugins.ProviderGitHub {
 		if h.githubIntegration == nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "GitHub OAuth not configured"})

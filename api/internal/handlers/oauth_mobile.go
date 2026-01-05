@@ -22,11 +22,12 @@ import (
 // MobileOAuthHandler handles OAuth flows for mobile clients.
 // Unlike regular OAuth, tokens are returned to the client instead of being stored on the backend.
 type MobileOAuthHandler struct {
-	cfg          *config.Config
-	storage      *storage.Storage
-	logger       *zap.Logger
-	gmailConfig  *oauth2.Config
-	oidcProvider *oidc.Provider
+	cfg            *config.Config
+	storage        *storage.Storage
+	logger         *zap.Logger
+	gmailConfig    *oauth2.Config
+	calendarConfig *oauth2.Config
+	oidcProvider   *oidc.Provider
 }
 
 // MobileOAuthResponse contains tokens returned to the mobile client
@@ -61,15 +62,29 @@ func NewMobileOAuthHandler(
 		return nil, fmt.Errorf("google provider config not found")
 	}
 
-	scopes := []string{oidc.ScopeOpenID, "email", "profile"}
-	scopes = append(scopes, providers.GetGoogleScope("gmail:read")...)
-	scopes = append(scopes, providers.GetGoogleScope("gmail:write")...)
+	// Gmail Config
+	gmailScopes := []string{oidc.ScopeOpenID, "email", "profile"}
+	gmailScopes = append(gmailScopes, providers.GetGoogleScope("gmail:read")...)
+	gmailScopes = append(gmailScopes, providers.GetGoogleScope("gmail:write")...)
 
 	gmailConfig := &oauth2.Config{
 		ClientID:     providerCfg.ClientID,
 		ClientSecret: providerCfg.ClientSecret,
 		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, plugins.ProviderGmail),
-		Scopes:       scopes,
+		Scopes:       gmailScopes,
+		Endpoint:     google.Endpoint,
+	}
+
+	// Calendar Config
+	calScopes := []string{oidc.ScopeOpenID, "email", "profile"}
+	calScopes = append(calScopes, providers.GetGoogleScope("calendar:read")...)
+	calScopes = append(calScopes, providers.GetGoogleScope("calendar:write")...)
+
+	calendarConfig := &oauth2.Config{
+		ClientID:     providerCfg.ClientID,
+		ClientSecret: providerCfg.ClientSecret,
+		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, plugins.ProviderCalendar),
+		Scopes:       calScopes,
 		Endpoint:     google.Endpoint,
 	}
 
@@ -79,11 +94,12 @@ func NewMobileOAuthHandler(
 	}
 
 	return &MobileOAuthHandler{
-		cfg:          cfg,
-		storage:      db,
-		logger:       logger,
-		gmailConfig:  gmailConfig,
-		oidcProvider: provider,
+		cfg:            cfg,
+		storage:        db,
+		logger:         logger,
+		gmailConfig:    gmailConfig,
+		calendarConfig: calendarConfig,
+		oidcProvider:   provider,
 	}, nil
 }
 
@@ -95,8 +111,12 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	ctx := c.Request.Context()
 	providerName := c.Param("provider")
 
-	// Only Gmail is supported for now
-	if providerName != plugins.ProviderGmail {
+	var oauthConfig *oauth2.Config
+	if providerName == plugins.ProviderGmail {
+		oauthConfig = h.gmailConfig
+	} else if providerName == plugins.ProviderCalendar {
+		oauthConfig = h.calendarConfig
+	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported for mobile OAuth", providerName)})
 		return
 	}
@@ -110,7 +130,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	}
 
 	// Exchange code for tokens
-	token, err := h.gmailConfig.Exchange(ctx, req.Code)
+	token, err := oauthConfig.Exchange(ctx, req.Code)
 	if err != nil {
 		h.logger.Error("token exchange failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token exchange failed"})
@@ -124,7 +144,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		return
 	}
 
-	verifier := h.oidcProvider.Verifier(&oidc.Config{ClientID: h.gmailConfig.ClientID})
+	verifier := h.oidcProvider.Verifier(&oidc.Config{ClientID: oauthConfig.ClientID})
 	idToken, err := verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		h.logger.Error("failed to verify id_token", zap.Error(err))
@@ -171,14 +191,18 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Only Gmail is supported for now
-	if req.Provider != plugins.ProviderGmail {
+	var oauthConfig *oauth2.Config
+	if req.Provider == plugins.ProviderGmail {
+		oauthConfig = h.gmailConfig
+	} else if req.Provider == plugins.ProviderCalendar {
+		oauthConfig = h.calendarConfig
+	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", req.Provider)})
 		return
 	}
 
 	// Create a token source from the refresh token
-	tokenSource := h.gmailConfig.TokenSource(ctx, &oauth2.Token{
+	tokenSource := oauthConfig.TokenSource(ctx, &oauth2.Token{
 		RefreshToken: req.RefreshToken,
 	})
 
