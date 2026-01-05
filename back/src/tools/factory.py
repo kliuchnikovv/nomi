@@ -247,6 +247,7 @@ def _build_jules(params: Dict[str, Any]) -> Toolkit:
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Gmail": _build_gmail,
     "Google Calendar": _build_google_calendar,
+    "Calendar": _build_google_calendar,
     "GitHub": _build_github,
     "rag": _build_rag,
     "memory_writer": _build_memory_writer,
