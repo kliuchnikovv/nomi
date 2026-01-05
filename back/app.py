@@ -317,6 +317,95 @@ async def analyze_text(request: AnalysisRequest):
         logging.error(f"Analysis failed: {e}", exc_info=True)
         return {"events": [], "tasks": [], "error": str(e)}
 
+
+class EmailAnalysisRequest(BaseModel):
+    email_id: str  # ID of the email for tracking
+    subject: Optional[str] = None
+    from_email: Optional[str] = None
+    from_name: Optional[str] = None
+    body: str  # Email body text
+    date: Optional[str] = None
+
+
+@app.post("/api/analyze-email")
+async def analyze_email(request: EmailAnalysisRequest):
+    """Analyze an email to extract urgency, connections, time frames, and suggest actions."""
+    logging.info(f"Analyzing email: {request.email_id} subject='{request.subject}'")
+    
+    session_id = str(uuid.uuid4())
+    agent = await agent_factory.build(
+        session_id=session_id,
+        agent_type="email_analyzer"
+    )
+    
+    # Construct prompt with email details
+    prompt = f"""Analyze the following email:
+
+From: {request.from_name or 'Unknown'} <{request.from_email or 'unknown'}>
+Subject: {request.subject or '(no subject)'}
+Date: {request.date or 'Unknown'}
+
+Body:
+{request.body}
+
+Extract urgency, connections, time frames, and suggest 2-5 actions."""
+    
+    try:
+        response = await agent.arun(prompt, stream=False)
+        if response and response.content:
+            content = response.content
+            
+            # Handle object output
+            if hasattr(content, "model_dump"):
+                result = content.model_dump()
+                result["email_id"] = request.email_id
+                return result
+            
+            # Handle string output (JSON)
+            if isinstance(content, str):
+                import json
+                try:
+                    clean_content = content.strip()
+                    if clean_content.startswith("```json"):
+                        clean_content = clean_content[7:]
+                    elif clean_content.startswith("```"):
+                        clean_content = clean_content[3:]
+                    if clean_content.endswith("```"):
+                        clean_content = clean_content[:-3]
+                    result = json.loads(clean_content.strip())
+                    result["email_id"] = request.email_id
+                    return result
+                except json.JSONDecodeError:
+                    logging.error(f"Failed to parse email analysis JSON: {content}")
+                    return {
+                        "email_id": request.email_id,
+                        "urgency": "normal",
+                        "connections": [],
+                        "time_frame": None,
+                        "suggested_actions": [],
+                        "error": "Failed to parse JSON"
+                    }
+            
+            return content
+        
+        return {
+            "email_id": request.email_id,
+            "urgency": "normal",
+            "connections": [],
+            "time_frame": None,
+            "suggested_actions": []
+        }
+    except Exception as e:
+        logging.error(f"Email analysis failed: {e}", exc_info=True)
+        return {
+            "email_id": request.email_id,
+            "urgency": "normal",
+            "connections": [],
+            "time_frame": None,
+            "suggested_actions": [],
+            "error": str(e)
+        }
+
 # Sessions for OAuth state (required for request.session)
 session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")
 app.add_middleware(SessionMiddleware, secret_key=session_secret)

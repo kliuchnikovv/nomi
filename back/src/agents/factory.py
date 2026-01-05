@@ -14,6 +14,7 @@ from src.agents.memoriser import MemoriserAgent
 from src.agents.mailer import MailerAgent
 from src.agents.briefing import BriefingAgent
 from src.agents.extractor import ExtractionAgent
+from src.agents.email_analyzer import EmailAnalyzerAgent
 from src.knowledge.factory import build_vector_db
 from src.knowledge.user_knowledge import UserScopedKnowledge
 from src.tools.config import ToolConfigClient
@@ -232,6 +233,11 @@ class AgentFactory:
                 )
             elif agent_type and agent_type.lower() == "extraction":
                 agent = ExtractionAgent(
+                    model=model,
+                    debug_mode=self._debug_mode,
+                )
+            elif agent_type and agent_type.lower() == "email_analyzer":
+                agent = EmailAnalyzerAgent(
                     model=model,
                     debug_mode=self._debug_mode,
                 )

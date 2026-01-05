@@ -9,7 +9,7 @@ const BACKGROUND_EMAIL_SYNC_TASK = 'background-email-sync';
 TaskManager.defineTask(BACKGROUND_EMAIL_SYNC_TASK, async () => {
     try {
         let hasNewData = false;
-        const integrations = await integrationStorage.getAll();
+        const integrations = await integrationStorage.getIntegrations();
         const gmailIntegrations = integrations.filter(i => i.provider === 'gmail' && i.enabled);
 
         for (const integration of gmailIntegrations) {

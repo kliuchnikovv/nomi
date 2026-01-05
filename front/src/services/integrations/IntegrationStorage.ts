@@ -80,6 +80,48 @@ export interface ExtractedTask {
     createdAt: Date;
 }
 
+// V3: Briefing System Types
+export interface AnalyzedEmail {
+    id: string;
+    emailId: string;
+    urgency: 'asap' | 'high' | 'normal' | 'low';
+    connections: string[];
+    timeFrame?: string;
+    analyzedAt: Date;
+}
+
+export interface Briefing {
+    id: string;
+    date: string; // YYYY-MM-DD
+    headline?: string;
+    summary?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface BriefingItem {
+    id: string;
+    briefingId: string;
+    sourceType: 'email' | 'event' | 'task';
+    sourceId: string;
+    title: string;
+    description?: string;
+    priority: 'asap' | 'high' | 'normal' | 'low';
+    isCompleted: boolean;
+    completedAt?: Date;
+    displayOrder: number;
+    suggestedActions?: SuggestedAction[];
+}
+
+export interface SuggestedAction {
+    id: string;
+    briefingItemId: string;
+    actionType: 'reply' | 'forward' | 'schedule' | 'delegate' | 'archive' | 'followup';
+    label: string;
+    params?: Record<string, any>;
+    displayOrder: number;
+}
+
 class IntegrationStorage {
     // ==================== Integration CRUD ====================
 
@@ -251,30 +293,63 @@ class IntegrationStorage {
         const now = Date.now();
 
         for (const email of emails) {
-            const id = generateUUID();
-            await db.runAsync(
-                `INSERT OR REPLACE INTO emails 
-                 (id, integration_id, gmail_id, thread_id, subject, snippet, from_email, from_name, 
-                  to_emails, date, labels, body_text, body_html, is_read, fetched_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    id,
-                    integrationId,
-                    email.gmailId,
-                    email.threadId ?? null,
-                    email.subject ?? null,
-                    email.snippet ?? null,
-                    email.fromEmail ?? null,
-                    email.fromName ?? null,
-                    email.toEmails ? JSON.stringify(email.toEmails) : null,
-                    email.date ? email.date.getTime() : null,
-                    email.labels ? JSON.stringify(email.labels) : null,
-                    email.bodyText ?? null,
-                    email.bodyHtml ?? null,
-                    email.isRead ? 1 : 0,
-                    now,
-                ]
+            // Check if email already exists
+            const existing = await db.getFirstAsync<{ id: string }>(
+                'SELECT id FROM emails WHERE integration_id = ? AND gmail_id = ?',
+                [integrationId, email.gmailId]
             );
+
+            if (existing) {
+                // Update existing email
+                await db.runAsync(
+                    `UPDATE emails SET 
+                     thread_id = ?, subject = ?, snippet = ?, from_email = ?, from_name = ?, 
+                     to_emails = ?, date = ?, labels = ?, body_text = ?, body_html = ?, 
+                     is_read = ?, fetched_at = ?
+                     WHERE id = ?`,
+                    [
+                        email.threadId ?? null,
+                        email.subject ?? null,
+                        email.snippet ?? null,
+                        email.fromEmail ?? null,
+                        email.fromName ?? null,
+                        email.toEmails ? JSON.stringify(email.toEmails) : null,
+                        email.date ? email.date.getTime() : null,
+                        email.labels ? JSON.stringify(email.labels) : null,
+                        email.bodyText ?? null,
+                        email.bodyHtml ?? null,
+                        email.isRead ? 1 : 0,
+                        now,
+                        existing.id
+                    ]
+                );
+            } else {
+                // Insert new email
+                const id = generateUUID();
+                await db.runAsync(
+                    `INSERT INTO emails 
+                     (id, integration_id, gmail_id, thread_id, subject, snippet, from_email, from_name, 
+                      to_emails, date, labels, body_text, body_html, is_read, fetched_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        id,
+                        integrationId,
+                        email.gmailId,
+                        email.threadId ?? null,
+                        email.subject ?? null,
+                        email.snippet ?? null,
+                        email.fromEmail ?? null,
+                        email.fromName ?? null,
+                        email.toEmails ? JSON.stringify(email.toEmails) : null,
+                        email.date ? email.date.getTime() : null,
+                        email.labels ? JSON.stringify(email.labels) : null,
+                        email.bodyText ?? null,
+                        email.bodyHtml ?? null,
+                        email.isRead ? 1 : 0,
+                        now,
+                    ]
+                );
+            }
         }
     }
 
@@ -453,6 +528,288 @@ class IntegrationStorage {
     async markAnalyzed(emailId: string): Promise<void> {
         const db = getDatabase();
         await db.runAsync('UPDATE emails SET analyzed_at = ? WHERE id = ?', [Date.now(), emailId]);
+    }
+
+    async getEventsForDate(date: Date): Promise<ExtractedEvent[]> {
+        const db = getDatabase();
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const rows = await db.getAllAsync<any>(
+            `SELECT * FROM events WHERE start_date >= ? AND start_date <= ? ORDER BY start_date ASC`,
+            [startOfDay.getTime(), endOfDay.getTime()]
+        );
+
+        return rows.map(row => ({
+            id: row.id,
+            sourceId: row.source_id,
+            title: row.title,
+            startDate: new Date(row.start_date),
+            endDate: row.end_date ? new Date(row.end_date) : undefined,
+            location: row.location ?? undefined,
+            status: row.status,
+            createdAt: new Date(row.created_at)
+        }));
+    }
+
+    async getPendingTasks(): Promise<ExtractedTask[]> {
+        const db = getDatabase();
+        const rows = await db.getAllAsync<any>(
+            `SELECT * FROM tasks WHERE is_completed = 0 ORDER BY priority DESC, due_date ASC`
+        );
+        return rows.map(row => ({
+            id: row.id,
+            sourceId: row.source_id,
+            title: row.title,
+            dueDate: row.due_date ? new Date(row.due_date) : undefined,
+            priority: row.priority,
+            isCompleted: row.is_completed === 1,
+            createdAt: new Date(row.created_at)
+        }));
+    }
+
+    // ==================== V3: Email Analysis ====================
+
+    async saveEmailAnalysis(
+        emailId: string,
+        analysis: {
+            urgency: string;
+            connections: string[];
+            timeFrame?: string;
+        }
+    ): Promise<AnalyzedEmail> {
+        const db = getDatabase();
+        const id = generateUUID();
+        const now = Date.now();
+
+        await db.runAsync(
+            `INSERT OR REPLACE INTO analyzed_emails (id, email_id, urgency, connections, time_frame, analyzed_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, emailId, analysis.urgency, JSON.stringify(analysis.connections), analysis.timeFrame ?? null, now]
+        );
+
+        return {
+            id,
+            emailId,
+            urgency: analysis.urgency as AnalyzedEmail['urgency'],
+            connections: analysis.connections,
+            timeFrame: analysis.timeFrame,
+            analyzedAt: new Date(now)
+        };
+    }
+
+    async getEmailAnalysis(emailId: string): Promise<AnalyzedEmail | null> {
+        const db = getDatabase();
+        const row = await db.getFirstAsync<any>(
+            'SELECT * FROM analyzed_emails WHERE email_id = ?',
+            [emailId]
+        );
+
+        if (!row) return null;
+
+        return {
+            id: row.id,
+            emailId: row.email_id,
+            urgency: row.urgency,
+            connections: row.connections ? JSON.parse(row.connections) : [],
+            timeFrame: row.time_frame ?? undefined,
+            analyzedAt: new Date(row.analyzed_at)
+        };
+    }
+
+    async getAsapEmails(): Promise<AnalyzedEmail[]> {
+        const db = getDatabase();
+        const rows = await db.getAllAsync<any>(
+            `SELECT * FROM analyzed_emails WHERE urgency = 'asap' ORDER BY analyzed_at DESC`
+        );
+
+        return rows.map(row => ({
+            id: row.id,
+            emailId: row.email_id,
+            urgency: row.urgency,
+            connections: row.connections ? JSON.parse(row.connections) : [],
+            timeFrame: row.time_frame ?? undefined,
+            analyzedAt: new Date(row.analyzed_at)
+        }));
+    }
+
+    // ==================== V3: Briefings ====================
+
+    async createBriefing(date: string, headline?: string, summary?: string): Promise<Briefing> {
+        const db = getDatabase();
+        const id = generateUUID();
+        const now = Date.now();
+
+        await db.runAsync(
+            `INSERT OR REPLACE INTO briefings (id, date, headline, summary, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, date, headline ?? null, summary ?? null, now, now]
+        );
+
+        return {
+            id,
+            date,
+            headline,
+            summary,
+            createdAt: new Date(now),
+            updatedAt: new Date(now)
+        };
+    }
+
+    async getBriefingForDate(date: string): Promise<Briefing | null> {
+        const db = getDatabase();
+        const row = await db.getFirstAsync<any>(
+            'SELECT * FROM briefings WHERE date = ?',
+            [date]
+        );
+
+        if (!row) return null;
+
+        return {
+            id: row.id,
+            date: row.date,
+            headline: row.headline ?? undefined,
+            summary: row.summary ?? undefined,
+            createdAt: new Date(row.created_at),
+            updatedAt: new Date(row.updated_at)
+        };
+    }
+
+    async updateBriefing(id: string, updates: Partial<Pick<Briefing, 'headline' | 'summary'>>): Promise<void> {
+        const db = getDatabase();
+        const now = Date.now();
+        const fields: string[] = ['updated_at = ?'];
+        const values: any[] = [now];
+
+        if (updates.headline !== undefined) {
+            fields.push('headline = ?');
+            values.push(updates.headline);
+        }
+        if (updates.summary !== undefined) {
+            fields.push('summary = ?');
+            values.push(updates.summary);
+        }
+
+        values.push(id);
+        await db.runAsync(`UPDATE briefings SET ${fields.join(', ')} WHERE id = ?`, values);
+    }
+
+    // ==================== V3: Briefing Items ====================
+
+    async addBriefingItem(
+        briefingId: string,
+        item: Omit<BriefingItem, 'id' | 'briefingId' | 'isCompleted' | 'completedAt' | 'suggestedActions'>
+    ): Promise<BriefingItem> {
+        const db = getDatabase();
+        const id = generateUUID();
+
+        await db.runAsync(
+            `INSERT INTO briefing_items (id, briefing_id, source_type, source_id, title, description, priority, is_completed, display_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+            [id, briefingId, item.sourceType, item.sourceId, item.title, item.description ?? null, item.priority, item.displayOrder]
+        );
+
+        return {
+            id,
+            briefingId,
+            ...item,
+            isCompleted: false
+        };
+    }
+
+    async getBriefingItems(briefingId: string): Promise<BriefingItem[]> {
+        const db = getDatabase();
+        const rows = await db.getAllAsync<any>(
+            'SELECT * FROM briefing_items WHERE briefing_id = ? ORDER BY display_order ASC',
+            [briefingId]
+        );
+
+        const items: BriefingItem[] = [];
+        for (const row of rows) {
+            const actions = await this.getSuggestedActions(row.id);
+            items.push({
+                id: row.id,
+                briefingId: row.briefing_id,
+                sourceType: row.source_type,
+                sourceId: row.source_id,
+                title: row.title,
+                description: row.description ?? undefined,
+                priority: row.priority,
+                isCompleted: row.is_completed === 1,
+                completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
+                displayOrder: row.display_order,
+                suggestedActions: actions
+            });
+        }
+
+        return items;
+    }
+
+    async markBriefingItemComplete(itemId: string, isCompleted: boolean = true): Promise<void> {
+        const db = getDatabase();
+        const completedAt = isCompleted ? Date.now() : null;
+        await db.runAsync(
+            'UPDATE briefing_items SET is_completed = ?, completed_at = ? WHERE id = ?',
+            [isCompleted ? 1 : 0, completedAt, itemId]
+        );
+    }
+
+    async getBriefingProgress(briefingId: string): Promise<{ total: number; completed: number }> {
+        const db = getDatabase();
+        const total = await db.getFirstAsync<{ count: number }>(
+            'SELECT COUNT(*) as count FROM briefing_items WHERE briefing_id = ?',
+            [briefingId]
+        );
+        const completed = await db.getFirstAsync<{ count: number }>(
+            'SELECT COUNT(*) as count FROM briefing_items WHERE briefing_id = ? AND is_completed = 1',
+            [briefingId]
+        );
+
+        return {
+            total: total?.count ?? 0,
+            completed: completed?.count ?? 0
+        };
+    }
+
+    // ==================== V3: Suggested Actions ====================
+
+    async addSuggestedAction(
+        briefingItemId: string,
+        action: Omit<SuggestedAction, 'id' | 'briefingItemId'>
+    ): Promise<SuggestedAction> {
+        const db = getDatabase();
+        const id = generateUUID();
+
+        await db.runAsync(
+            `INSERT INTO suggested_actions (id, briefing_item_id, action_type, label, params, display_order)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, briefingItemId, action.actionType, action.label, JSON.stringify(action.params ?? {}), action.displayOrder]
+        );
+
+        return {
+            id,
+            briefingItemId,
+            ...action
+        };
+    }
+
+    async getSuggestedActions(briefingItemId: string): Promise<SuggestedAction[]> {
+        const db = getDatabase();
+        const rows = await db.getAllAsync<any>(
+            'SELECT * FROM suggested_actions WHERE briefing_item_id = ? ORDER BY display_order ASC',
+            [briefingItemId]
+        );
+
+        return rows.map(row => ({
+            id: row.id,
+            briefingItemId: row.briefing_item_id,
+            actionType: row.action_type,
+            label: row.label,
+            params: row.params ? JSON.parse(row.params) : undefined,
+            displayOrder: row.display_order
+        }));
     }
 }
 

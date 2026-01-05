@@ -91,6 +91,56 @@ class GmailClient {
     }
 
     /**
+     * Sync emails and trigger analysis for new unread emails
+     * This is the recommended method if you want automatic briefing integration
+     */
+    async syncAndAnalyze(
+        integrationId: string,
+        maxResults: number = 20,
+        onAsapDetected?: (emailId: string) => void
+    ): Promise<Email[]> {
+        const emails = await this.syncEmails(integrationId, maxResults);
+
+        // Trigger background analysis for unread emails
+        this.analyzeNewEmailsInBackground(onAsapDetected).catch(err => {
+            console.warn('[GmailClient] Background analysis failed:', err);
+        });
+
+        return emails;
+    }
+
+    /**
+     * Analyze new emails in background and handle ASAP detection
+     */
+    private async analyzeNewEmailsInBackground(
+        onAsapDetected?: (emailId: string) => void
+    ): Promise<void> {
+        try {
+            // Lazy import to avoid circular dependencies
+            const { briefingGenerator } = await import('../../briefing/BriefingGenerator');
+
+            // Analyze unanalyzed emails (up to 5 at a time for performance)
+            const analyzed = await briefingGenerator.analyzeUnanalyzedEmails(5);
+
+            if (analyzed > 0 && onAsapDetected) {
+                // Check for new ASAP emails
+                const { integrationStorage } = await import('../IntegrationStorage');
+                const asapEmails = await integrationStorage.getAsapEmails();
+
+                for (const asap of asapEmails) {
+                    // Inject into today's briefing
+                    const injected = await briefingGenerator.handleAsapEmail(asap.emailId);
+                    if (injected) {
+                        onAsapDetected(asap.emailId);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[GmailClient] Background analysis error:', error);
+        }
+    }
+
+    /**
      * Fetch a single email by ID
      */
     async fetchEmail(integrationId: string, gmailId: string, accessToken?: string): Promise<Email | null> {

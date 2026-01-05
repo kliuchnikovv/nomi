@@ -1,153 +1,114 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import { briefingApi } from '../../../apiClient';
-import { integrationStorage } from '../../../services/integrations/IntegrationStorage';
-import { gmailClient } from '../../../services/integrations/clients/GmailClient';
+import { briefingGenerator } from '../../../services/briefing/BriefingGenerator';
+import {
+  integrationStorage,
+  Briefing,
+  BriefingItem,
+  SuggestedAction
+} from '../../../services/integrations/IntegrationStorage';
 
-interface BriefingItem {
-  id: string;
-  type: 'meeting' | 'email' | 'task' | 'alert';
-  priority: 'CRITICAL' | 'INFO';
-  title: string;
-  description: string;
-  context?: string;
-  action_required: boolean;
-  source_link?: string;
-}
-
-interface BriefingData {
-  headline: string;
-  summary: string;
-  items: BriefingItem[];
-}
-
-const getIntegrationDetails = (type: string) => {
-  switch (type) {
-    case 'meeting':
-      return { icon: 'calendar', title: 'Calendar', color: '#4285F4' }; // Google Blue
+const getSourceDetails = (sourceType: string) => {
+  switch (sourceType) {
+    case 'event':
+      return { icon: 'calendar', title: 'Календарь', color: '#4285F4' };
     case 'email':
-      return { icon: 'mail', title: 'Gmail', color: '#EA4335' }; // Google Red
+      return { icon: 'mail', title: 'Почта', color: '#EA4335' };
     case 'task':
-      return { icon: 'git-pull-request', title: 'GitHub', color: '#333333' }; // GitHub Black (adaptable)
-    case 'alert':
-      return { icon: 'alert-circle', title: 'Alerts', color: '#F4B400' }; // Google Yellow
+      return { icon: 'checkmark-circle', title: 'Задачи', color: '#34A853' };
     default:
-      return { icon: 'apps', title: 'Other', color: '#888888' };
+      return { icon: 'apps', title: 'Другое', color: '#888888' };
   }
 };
 
-// Global cache to prevent double-fetching from multiple instances (Dashboard + Sidebar)
-let globalBriefingPromise: Promise<BriefingData | null> | null = null;
-let cachedBriefingData: BriefingData | null = null;
+const getPriorityColor = (priority: string, theme: any) => {
+  switch (priority) {
+    case 'asap':
+      return theme.error || '#FF3B30';
+    case 'high':
+      return theme.warning || '#FF9500';
+    case 'normal':
+      return theme.info || '#007AFF';
+    case 'low':
+      return theme.textSecondary || '#8E8E93';
+    default:
+      return theme.textSecondary;
+  }
+};
+
+const getActionIcon = (actionType: string): keyof typeof Ionicons.glyphMap => {
+  switch (actionType) {
+    case 'reply':
+      return 'arrow-undo';
+    case 'forward':
+      return 'arrow-redo';
+    case 'schedule':
+      return 'calendar-outline';
+    case 'delegate':
+      return 'people-outline';
+    case 'archive':
+      return 'archive-outline';
+    case 'followup':
+      return 'time-outline';
+    default:
+      return 'ellipsis-horizontal';
+  }
+};
+
+interface BriefingCardData {
+  briefing: Briefing | null;
+  items: BriefingItem[];
+  progress: { total: number; completed: number };
+}
 
 export const BriefingCard = () => {
   const { theme } = useTheme();
-  // Initialize state with cache if available
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<BriefingData | null>(cachedBriefingData);
+  const [data, setData] = useState<BriefingCardData | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    // If we have cached data, use it immediately
-    if (cachedBriefingData && !data) {
-      setData(cachedBriefingData);
-    }
-    loadBriefing();
-  }, []);
-
-  const loadBriefing = async (force: any = false) => {
-    // Treat event object as 'force=true' if clicked via UI
-    const isForce = typeof force === 'boolean' ? force : !!force;
-
-    if (!isForce && cachedBriefingData) {
-      setData(cachedBriefingData);
-      return;
-    }
-
-    if (globalBriefingPromise && !isForce) {
-      try {
-        setLoading(true);
-        const res = await globalBriefingPromise;
-        if (res) setData(res);
-      } catch (e) {
-        // Ignore error from shared promise here, handled in the creator
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
+  const loadBriefing = useCallback(async (force: boolean = false) => {
     setLoading(true);
-
-    // Create new promise
-    const promise = (async () => {
-      try {
-        // Fetch local context (emails)
-        const integrations = await integrationStorage.getIntegrations();
-        const gmailIntegrations = integrations.filter(i => i.provider?.toLowerCase() === 'gmail' && i.enabled);
-
-        let emailContext: any[] = [];
-        for (const integ of gmailIntegrations) {
-          let emails = await integrationStorage.getCachedEmails(integ.id, 20); // Top 20 recent
-
-          // Fallback: If cache is empty, try to sync manually
-          if (emails.length === 0) {
-            try {
-              await gmailClient.syncEmails(integ.id);
-              emails = await integrationStorage.getCachedEmails(integ.id, 20);
-            } catch (syncErr) {
-              console.warn(`[Briefing] Manual sync failed for ${integ.id}:`, syncErr);
-            }
-          }
-
-          emailContext = [...emailContext, ...emails.map(e => ({
-            id: e.id,
-            subject: e.subject,
-            snippet: e.snippet,
-            from: e.fromName ? `${e.fromName} <${e.fromEmail}>` : e.fromEmail,
-            date: e.date,
-            body: e.bodyText?.slice(0, 500)
-          }))];
-        }
-
-        const context = {
-          emails: emailContext
-        };
-
-        const result = await briefingApi.getBriefing(context);
-
-        if (result && !result.error) {
-          cachedBriefingData = result;
-          return result;
-        } else {
-          if (result?.error) {
-            console.log("Briefing API returned error:", result.error);
-          }
-          return null;
-        }
-      } catch (e) {
-        console.error("Failed to load briefing:", e);
-        throw e;
-      } finally {
-        // Clear promise so next force refresh creates a new one
-        if (globalBriefingPromise === promise) {
-          globalBriefingPromise = null;
-        }
-      }
-    })();
-
-    globalBriefingPromise = promise;
-
     try {
-      const result = await promise;
-      if (result) setData(result);
-    } catch (e) {
-      // Error already logged
+      // Check if we need to regenerate
+      if (force || await briefingGenerator.shouldRegenerateBriefing()) {
+        // Analyze any new emails first
+        await briefingGenerator.analyzeUnanalyzedEmails(10);
+        // Generate briefing
+        await briefingGenerator.generateDailyBriefing();
+      }
+
+      // Load current briefing data
+      const briefingData = await briefingGenerator.getCurrentBriefing();
+      setData(briefingData);
+    } catch (error) {
+      console.error('[BriefingCard] Failed to load briefing:', error);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    loadBriefing();
+  }, [loadBriefing]);
+
+  const handleToggleComplete = async (itemId: string, currentState: boolean) => {
+    try {
+      await integrationStorage.markBriefingItemComplete(itemId, !currentState);
+      // Refresh data
+      const briefingData = await briefingGenerator.getCurrentBriefing();
+      setData(briefingData);
+    } catch (error) {
+      console.error('[BriefingCard] Failed to toggle complete:', error);
+    }
+  };
+
+  const handleActionPress = (action: SuggestedAction) => {
+    console.log('[BriefingCard] Action pressed:', action.actionType, action.params);
+    // TODO: Implement action handlers (reply, forward, schedule, etc.)
   };
 
   const toggleSection = (section: string) => {
@@ -157,77 +118,128 @@ export const BriefingCard = () => {
     }));
   };
 
-  if (!data && !loading) {
+  const toggleItemExpanded = (itemId: string) => {
+    setExpandedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  // No data state
+  if (!data?.briefing && !loading) {
     return (
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <TouchableOpacity onPress={loadBriefing} style={styles.header}>
+        <TouchableOpacity onPress={() => loadBriefing(true)} style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Ionicons name="sunny" size={24} color={theme.primary} />
-            <Text style={[styles.headerTitle, { color: theme.text }]}>Morning Briefing</Text>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>Утренний брифинг</Text>
           </View>
-          <Text style={[styles.actionText, { color: theme.primary }]}>Prepare</Text>
+          <Text style={[styles.actionText, { color: theme.primary }]}>Сгенерировать</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  if (loading && !data) {
+  // Loading state
+  if (loading && !data?.briefing) {
     return (
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <ActivityIndicator size="small" color={theme.primary} />
-            <Text style={[styles.headerTitle, { color: theme.text, marginLeft: 8 }]}>Preparing your briefing...</Text>
+            <Text style={[styles.headerTitle, { color: theme.text, marginLeft: 8 }]}>Подготовка брифинга...</Text>
           </View>
         </View>
       </View>
-    )
+    );
   }
 
-  const groupedItems = data?.items.reduce((acc, item) => {
-    const key = item.type;
+  if (!data) return null;
+
+  const { briefing, items, progress } = data;
+  const progressPercent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
+
+  // Group items by source type
+  const groupedItems = items.reduce((acc, item) => {
+    const key = item.sourceType;
     if (!acc[key]) acc[key] = [];
     acc[key].push(item);
     return acc;
-  }, {} as Record<string, BriefingItem[]>) || {};
+  }, {} as Record<string, BriefingItem[]>);
 
   return (
     <View>
-      {/* Overall Card */}
+      {/* Overview Card with Progress */}
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.header}
+          onPress={() => toggleSection('overview')}
+          activeOpacity={0.7}
+        >
           <View style={styles.headerTitleContainer}>
             <Ionicons name="sunny" size={24} color={theme.primary} />
-            <Text style={[styles.headerTitle, { color: theme.text }]}>Overview</Text>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>Брифинг</Text>
+            <View style={[styles.badge, { backgroundColor: theme.background }]}>
+              <Text style={[styles.badgeText, { color: theme.textSecondary }]}>
+                {progress.completed}/{progress.total}
+              </Text>
+            </View>
           </View>
-        </View>
-        <View style={styles.content}>
-          <Text style={[styles.headline, { color: theme.text }]}>{data.headline}</Text>
-          <Text style={[styles.summary, { color: theme.textSecondary }]}>{data.summary}</Text>
-        </View>
+          <TouchableOpacity onPress={() => loadBriefing(true)}>
+            <Ionicons name="refresh" size={20} color={theme.textSecondary} />
+          </TouchableOpacity>
+        </TouchableOpacity>
+
+        {!collapsedSections['overview'] && (
+          <View style={styles.content}>
+            <Text style={[styles.headline, { color: theme.text }]}>{briefing?.headline}</Text>
+            <Text style={[styles.summary, { color: theme.textSecondary }]}>{briefing?.summary}</Text>
+
+            {/* Progress Bar */}
+            <View style={[styles.progressContainer, { backgroundColor: theme.background }]}>
+              <View
+                style={[
+                  styles.progressBar,
+                  {
+                    backgroundColor: progressPercent === 100 ? '#34A853' : theme.primary,
+                    width: `${progressPercent}%`
+                  }
+                ]}
+              />
+            </View>
+            <Text style={[styles.progressText, { color: theme.textSecondary }]}>
+              {progress.completed} из {progress.total} выполнено
+            </Text>
+          </View>
+        )}
       </View>
 
-      {/* Integration Cards */}
-      {Object.entries(groupedItems).map(([type, items]) => {
-        const details = getIntegrationDetails(type);
-        const isCollapsed = collapsedSections[type];
+      {/* Grouped Items */}
+      {Object.entries(groupedItems).map(([sourceType, groupItems]) => {
+        const details = getSourceDetails(sourceType);
+        const isCollapsed = collapsedSections[sourceType];
 
         return (
-          <View key={type} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View key={sourceType} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <TouchableOpacity
               style={styles.header}
-              onPress={() => toggleSection(type)}
+              onPress={() => toggleSection(sourceType)}
               activeOpacity={0.7}
             >
               <View style={styles.headerTitleContainer}>
                 <Ionicons name={details.icon as any} size={22} color={theme.text} />
                 <Text style={[styles.headerTitle, { color: theme.text }]}>{details.title}</Text>
                 <View style={[styles.badge, { backgroundColor: theme.background }]}>
-                  <Text style={[styles.badgeText, { color: theme.textSecondary }]}>{items.length}</Text>
+                  <Text style={[styles.badgeText, { color: theme.textSecondary }]}>{groupItems.length}</Text>
                 </View>
               </View>
               <Ionicons
-                name={isCollapsed ? "chevron-down" : "chevron-up"}
+                name={isCollapsed ? 'chevron-down' : 'chevron-up'}
                 size={20}
                 color={theme.textSecondary}
               />
@@ -235,28 +247,84 @@ export const BriefingCard = () => {
 
             {!isCollapsed && (
               <View style={styles.content}>
-                {items.map((item, index) => (
-                  <View key={item.id} style={[
-                    styles.itemContainer,
-                    {
-                      borderLeftColor: item.priority === 'CRITICAL' ? theme.error : theme.info,
-                      marginBottom: index === items.length - 1 ? 0 : 12
-                    }
-                  ]}>
+                {groupItems.map((item, index) => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.itemContainer,
+                      {
+                        borderLeftColor: getPriorityColor(item.priority, theme),
+                        marginBottom: index === groupItems.length - 1 ? 0 : 12,
+                        opacity: item.isCompleted ? 0.6 : 1
+                      }
+                    ]}
+                  >
+                    {/* Item Header with Checkbox */}
                     <View style={styles.itemHeader}>
-                      <Text style={[styles.itemTitle, { color: theme.text }]}>{item.title}</Text>
-                      {item.source_link && (
-                        <TouchableOpacity onPress={() => Linking.openURL(item.source_link!)}>
-                          <Ionicons name="link" size={16} color={theme.primary} />
+                      <TouchableOpacity
+                        onPress={() => handleToggleComplete(item.id, item.isCompleted)}
+                        style={styles.checkbox}
+                      >
+                        <Ionicons
+                          name={item.isCompleted ? 'checkbox' : 'square-outline'}
+                          size={22}
+                          color={item.isCompleted ? '#34A853' : theme.textSecondary}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.itemTitleContainer}
+                        onPress={() => toggleItemExpanded(item.id)}
+                      >
+                        <Text
+                          style={[
+                            styles.itemTitle,
+                            {
+                              color: theme.text,
+                              textDecorationLine: item.isCompleted ? 'line-through' : 'none'
+                            }
+                          ]}
+                          numberOfLines={2}
+                        >
+                          {item.title}
+                        </Text>
+                      </TouchableOpacity>
+                      {item.suggestedActions && item.suggestedActions.length > 0 && (
+                        <TouchableOpacity onPress={() => toggleItemExpanded(item.id)}>
+                          <Ionicons
+                            name={expandedItems.has(item.id) ? 'chevron-up' : 'chevron-down'}
+                            size={18}
+                            color={theme.textSecondary}
+                          />
                         </TouchableOpacity>
                       )}
                     </View>
-                    <Text style={[styles.itemDescription, { color: theme.textSecondary }]}>{item.description}</Text>
-                    {item.context && (
-                      <View style={[styles.contextContainer, { backgroundColor: theme.background }]}>
-                        <Text style={[styles.contextText, { color: theme.textSecondary }]}>
-                          <Ionicons name="bulb-outline" size={14} /> {item.context}
-                        </Text>
+
+                    {/* Description */}
+                    {item.description && (
+                      <Text style={[styles.itemDescription, { color: theme.textSecondary }]}>
+                        {item.description}
+                      </Text>
+                    )}
+
+                    {/* Suggested Actions */}
+                    {expandedItems.has(item.id) && item.suggestedActions && item.suggestedActions.length > 0 && (
+                      <View style={styles.actionsContainer}>
+                        {item.suggestedActions.map((action) => (
+                          <TouchableOpacity
+                            key={action.id}
+                            style={[styles.actionButton, { backgroundColor: theme.background }]}
+                            onPress={() => handleActionPress(action)}
+                          >
+                            <Ionicons
+                              name={getActionIcon(action.actionType)}
+                              size={14}
+                              color={theme.primary}
+                            />
+                            <Text style={[styles.actionLabel, { color: theme.primary }]}>
+                              {action.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     )}
                   </View>
@@ -283,7 +351,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
-    // paddingBottom: 12, // Adjusted for cleaner look when collapsed
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -311,6 +378,21 @@ const styles = StyleSheet.create({
   summary: {
     fontSize: 14,
     lineHeight: 20,
+    marginBottom: 12,
+  },
+  progressContainer: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 12,
+    textAlign: 'center',
   },
   itemContainer: {
     paddingLeft: 12,
@@ -318,9 +400,14 @@ const styles = StyleSheet.create({
   },
   itemHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
+  },
+  checkbox: {
+    marginRight: 8,
+  },
+  itemTitleContainer: {
+    flex: 1,
   },
   itemTitle: {
     fontSize: 15,
@@ -329,16 +416,27 @@ const styles = StyleSheet.create({
   itemDescription: {
     fontSize: 14,
     marginBottom: 6,
+    marginLeft: 30,
     lineHeight: 18,
   },
-  contextContainer: {
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 4,
+  actionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    marginLeft: 30,
   },
-  contextText: {
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  actionLabel: {
     fontSize: 12,
-    fontStyle: 'italic',
+    fontWeight: '500',
   },
   badge: {
     paddingHorizontal: 8,

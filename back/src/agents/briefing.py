@@ -69,6 +69,10 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
       * Do NOT include `INFO` items in the `items` array.
       * Instead, mention the existence of `INFO` items in the `summary` text (e.g., "Received 5 routine emails and 2 PRs to review later").
       * If NO `CRITICAL` items exist, return an empty `items` list.
+    
+    - **DEDUPLICATION**: 
+      * If multiple source items (e.g., emails/events) refer to the exact same topic, thread, or are duplicates, COMBINE them into a single `BriefingItem`.
+      * Do not output duplicate items.
 
 3.  **ENRICHMENT (RAG & WEB SEARCH)**:
     - For EVERY `CRITICAL` and `INFO` item, try to enrich with context:

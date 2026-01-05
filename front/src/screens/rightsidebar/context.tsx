@@ -3,6 +3,7 @@ import { inboxApi, integrationsApi, sidebarApi } from '../../apiClient';
 import { integrationStorage, Email } from '../../services/integrations/IntegrationStorage';
 import { gmailClient } from '../../services/integrations/clients/GmailClient';
 import { InboxMessage, Plugin, PluginChat, PluginChatMessage } from './models';
+import { isDatabaseReady } from '../../services/database/database';
 
 interface PluginChatsContextType {
     plugins: Plugin[];
@@ -76,8 +77,16 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const mapInboxItemsToPlugins = async (): Promise<Plugin[]> => {
         try {
-            // 1. Load local integrations (Gmail)
-            const localIntegrations = await integrationStorage.getIntegrations();
+            // Skip local integrations if database not ready yet
+            if (!isDatabaseReady()) {
+                console.log('[PluginChatsContext] Database not ready, skipping local integrations');
+                // Fall through to load remote plugins only
+            }
+
+            // 1. Load local integrations (Gmail) - only if database is ready
+            const localIntegrations = isDatabaseReady()
+                ? await integrationStorage.getIntegrations()
+                : [];
             const localPlugins: Plugin[] = [];
 
             for (const integ of localIntegrations) {
@@ -259,18 +268,20 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const refresh = useCallback(async () => {
         setRefreshing(true);
         try {
-            // Force sync for enabled Gmail integrations
-            const integrations = await integrationStorage.getIntegrations();
-            const gmailIntegrations = integrations.filter(i => i.provider?.toLowerCase() === 'gmail' && i.enabled);
+            // Force sync for enabled Gmail integrations - only if database is ready
+            if (isDatabaseReady()) {
+                const integrations = await integrationStorage.getIntegrations();
+                const gmailIntegrations = integrations.filter(i => i.provider?.toLowerCase() === 'gmail' && i.enabled);
 
-            await Promise.all(gmailIntegrations.map(async (integ) => {
-                try {
-                    console.log(`[PluginChatsContext] Syncing gmail integration ${integ.id}...`);
-                    await gmailClient.syncEmails(integ.id);
-                } catch (e) {
-                    console.error(`[PluginChatsContext] Failed to sync integration ${integ.id}`, e);
-                }
-            }));
+                await Promise.all(gmailIntegrations.map(async (integ) => {
+                    try {
+                        console.log(`[PluginChatsContext] Syncing gmail integration ${integ.id}...`);
+                        await gmailClient.syncEmails(integ.id);
+                    } catch (e) {
+                        console.error(`[PluginChatsContext] Failed to sync integration ${integ.id}`, e);
+                    }
+                }));
+            }
 
             await loadPlugins();
             // Reset pagination state
