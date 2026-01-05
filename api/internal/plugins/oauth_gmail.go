@@ -10,11 +10,9 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/providers"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
-	"github.com/lib/pq"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"gorm.io/gorm"
 )
 
 const (
@@ -101,27 +99,8 @@ func (g *GmailIntegration) HandleCallback(ctx context.Context, code string, user
 		return "", fmt.Errorf("failed to read claims: %w", err)
 	}
 
-	tokenBytes, err := json.Marshal(token)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode token: %w", err)
-	}
-
-	newToken := &storage.OAuthToken{
-		UserID:         user.ID,
-		ProfileID:      user.ID.String(),
-		Provider:       ProviderGmail,
-		AccountEmail:   claims.Email,
-		ExternalUserID: claims.Sub,
-		Scopes:         pq.StringArray(g.oauthConfig.Scopes),
-		TokenEncrypted: tokenBytes,
-		Version:        1,
-	}
-
-	// Existing check:
-	existing, err := g.storage.GetOAuthTokenByUserAndEmail(ctx, user.ID, ProviderGmail, claims.Email)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", fmt.Errorf("failed to check existing token: %w", err)
-	}
+	// We NO LONGER save the token to the database or update it.
+	// We only want to ensure the integration metadata exists.
 
 	// We NO LONGER save the token to the database or update it.
 	// We only want to ensure the integration metadata exists.
