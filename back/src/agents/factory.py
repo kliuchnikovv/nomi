@@ -124,6 +124,7 @@ class AgentFactory:
         thinking: str = "off",
         user_id: Optional[str] = None,
         chat_id: Optional[str] = None,
+        timezone: Optional[str] = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -243,6 +244,28 @@ class AgentFactory:
                 )
             else:
                 # Default to Genie
+                # Default to Genie
+                
+                # Add Timezone Context
+                genie_thinking = thinking
+                genie_instructions = None # Use default
+                
+                if timezone:
+                    try:
+                        from datetime import datetime
+                        import pytz
+                        tz = pytz.timezone(timezone)
+                        local_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
+                        genie_instructions = f"Current User Time: {local_time} ({timezone}).\nUse this time for all relative time calculations (e.g. 'in one hour').\n\n"
+                        # We prepend this to base instructions inside GenieAgent if strict needed, 
+                        # or just rely on Agno's instructions parameter which GenieAgent accepts.
+                        # GenieAgent takes instructions=BASE_INSTRUCTIONS in init.
+                        # Let's override it or append it.
+                        # Actually GenieAgent constructor sets instructions=BASE_INSTRUCTIONS.
+                        # We should pass it explicitly if we want to override.
+                    except Exception as e:
+                        logger.warning("Failed to parse timezone %s: %s", timezone, e)
+
                 agent = GenieAgent(
                     db=self._db,
                     model=model,
@@ -250,7 +273,13 @@ class AgentFactory:
                     debug_mode=self._debug_mode,
                     thinking=thinking,
                     knowledge=knowledge,
+                    # If we computed local time, pass it as instructions prefix or explicit instruction
+                    # Note: GenieAgent init logic needs to handle this or we pass modified instructions
                 )
+                if genie_instructions:
+                    agent.instructions = genie_instructions + agent.instructions
+                    # Disable default datetime to avoiding confusion
+                    agent.add_datetime_to_context = False
 
             # _attach_tool_context removed - ChatHistoryTool is disabled
             # self._attach_tool_context(agent, tools)

@@ -108,6 +108,14 @@ export class ChatSocket {
         const mode = this.getMode?.() || 'agent';
         if (mode) qs.append('mode', mode);
 
+        // Add user's timezone
+        try {
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            if (tz) qs.append('timezone', tz);
+        } catch (e) {
+            console.warn('Failed to get timezone', e);
+        }
+
         const command = this.getCommand?.();
         if (command) {
             try {

@@ -113,6 +113,7 @@ class LLMWebSocketSession:
         self.agent_type = qp.get("agent")
         self.build_mode = (qp.get("mode") or "agent").lower()
         self.chat_id_param = qp.get("chat_id")
+        self.timezone = qp.get("timezone")
         
         raw_cmd = qp.get("command") or qp.get("team") or qp.get("team_desc")
         if raw_cmd:
@@ -260,6 +261,7 @@ class LLMWebSocketSession:
                     thinking=self.current_thinking,
                     user_id=self.session_id,
                     chat_id=self.chat_id_param,
+                    timezone=self.timezone,
                 )
             logger.info("[WS] Agent built successfully")
         except Exception as e:
