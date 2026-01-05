@@ -135,6 +135,41 @@ export class ClientToolExecutor {
                     params.timezone
                 );
                 return `Event '${params.title}' created`;
+
+            case 'list_events':
+                const events = await calendarClient.listEvents(
+                    integrationId,
+                    params.start_time,
+                    params.end_time,
+                    params.max_results
+                );
+                return JSON.stringify(events.map(e => ({
+                    id: e.id,
+                    summary: e.summary,
+                    start: e.start,
+                    end: e.end,
+                    status: e.status
+                })));
+
+            case 'update_event':
+                await calendarClient.updateEvent(
+                    integrationId,
+                    params.event_id,
+                    {
+                        title: params.title,
+                        start: params.start,
+                        end: params.end,
+                        description: params.description,
+                        attendees: params.attendees,
+                        timezone: params.timezone
+                    }
+                );
+                return `Event ${params.event_id} updated`;
+
+            case 'delete_event':
+                await calendarClient.deleteEvent(integrationId, params.event_id);
+                return `Event ${params.event_id} deleted`;
+
             default:
                 throw new Error(`Unknown Calendar method: ${method}`);
         }

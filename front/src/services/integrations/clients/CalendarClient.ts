@@ -170,6 +170,122 @@ class CalendarClient {
         console.log(`[CalendarClient] Created event: ${createdEvent.id} - ${createdEvent.summary}`);
         return createdEvent;
     }
+
+    /**
+     * Delete an event
+     */
+    async deleteEvent(integrationId: string, eventId: string): Promise<void> {
+        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+
+        const response = await fetch(
+            `${CALENDAR_API_BASE}/events/${eventId}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error?.message || 'Failed to delete Calendar event');
+        }
+
+        console.log(`[CalendarClient] Deleted event: ${eventId}`);
+    }
+
+    /**
+     * Update an event
+     */
+    async updateEvent(
+        integrationId: string,
+        eventId: string,
+        updates: {
+            title?: string;
+            start?: string;
+            end?: string;
+            description?: string;
+            attendees?: string[];
+            timezone?: string;
+        }
+    ): Promise<CalendarEvent> {
+        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+
+        // First fetch existing event to patch it (or use PATCH if API supports it nicely, usually PUT resource semantic or PATCH)
+        // Google Calendar API supports PATCH.
+
+        const patchBody: any = {};
+        if (updates.title) patchBody.summary = updates.title;
+        if (updates.description) patchBody.description = updates.description;
+
+        const timeZoneToUse = updates.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        if (updates.start) {
+            patchBody.start = { dateTime: updates.start, timeZone: timeZoneToUse };
+        }
+        if (updates.end) {
+            patchBody.end = { dateTime: updates.end, timeZone: timeZoneToUse };
+        }
+
+        if (updates.attendees) {
+            patchBody.attendees = updates.attendees.map(email => ({ email }));
+        }
+
+        const response = await fetch(
+            `${CALENDAR_API_BASE}/events/${eventId}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(patchBody),
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error?.message || 'Failed to update Calendar event');
+        }
+
+        const updatedEvent: CalendarEvent = await response.json();
+        console.log(`[CalendarClient] Updated event: ${updatedEvent.id}`);
+        return updatedEvent;
+    }
+
+    /**
+     * List events for a specific range (wrapper for sync but returning raw for tool usage)
+     */
+    async listEvents(integrationId: string, start?: string, end?: string, maxResults: number = 10): Promise<CalendarEvent[]> {
+        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+
+        const timeMin = start ? new Date(start).toISOString() : new Date().toISOString();
+        const timeMax = end ? new Date(end).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        const params = new URLSearchParams({
+            timeMin,
+            timeMax,
+            singleEvents: 'true',
+            orderBy: 'startTime',
+            maxResults: maxResults.toString()
+        });
+
+        const response = await fetch(
+            `${CALENDAR_API_BASE}/events?${params.toString()}`,
+            {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error?.message || 'Failed to list Calendar events');
+        }
+
+        const data: CalendarListResponse = await response.json();
+        return data.items || [];
+    }
 }
 
 export const calendarClient = new CalendarClient();
