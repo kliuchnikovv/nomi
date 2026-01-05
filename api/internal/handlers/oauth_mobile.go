@@ -111,6 +111,45 @@ type LoginResponse struct {
 	AuthURL string `json:"auth_url"`
 }
 
+// Callback handles the OAuth callback from Google and redirects to the mobile app.
+// GET /api/oauth/:provider/callback
+// Redirects to: genie://oauth/callback?provider=...&code=...
+func (h *MobileOAuthHandler) Callback(c *gin.Context) {
+	providerName := c.Param("provider")
+	code := c.Query("code")
+	state := c.Query("state")
+	errorParam := c.Query("error")
+
+	// Check for errors from Google
+	if errorParam != "" {
+		errorDesc := c.Query("error_description")
+		h.logger.Error("OAuth callback error",
+			zap.String("provider", providerName),
+			zap.String("error", errorParam),
+			zap.String("description", errorDesc),
+		)
+		// Redirect to app with error
+		redirectURL := fmt.Sprintf("genie://oauth/callback?provider=%s&error=%s", providerName, errorParam)
+		c.Redirect(http.StatusFound, redirectURL)
+		return
+	}
+
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "code is required"})
+		return
+	}
+
+	h.logger.Info("OAuth callback received",
+		zap.String("provider", providerName),
+		zap.String("state", state),
+	)
+
+	// Redirect to the mobile app with the code
+	// The app will then call /callback-mobile to exchange the code for tokens
+	redirectURL := fmt.Sprintf("genie://oauth/callback?provider=%s&code=%s", providerName, code)
+	c.Redirect(http.StatusFound, redirectURL)
+}
+
 // Login returns the OAuth authorization URL for the specified provider.
 // POST /api/oauth/:provider/login
 // Response: { "auth_url": "..." }
