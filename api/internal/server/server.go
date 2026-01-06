@@ -102,6 +102,7 @@ func New(
 		briefingHandler      = handlers.NewBriefingHandler(db, llmService)
 		emailAnalysisHandler = handlers.NewEmailAnalysisHandler(db, llmService)
 		dashboardHandler     = handlers.NewDashboardHandler(db)
+		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -136,6 +137,9 @@ func New(
 			http.HandlerFunc(authHandler.UpdateMe),
 		),
 	))
+
+	// Jules Integration
+	r.POST("/api/jules/connect", wrapWithAuth(julesHandler.Connect, authMiddleware))
 
 	// Chat API (protected)
 	r.POST("/api/chats", wrapWithAuth(chatHandler.CreateChat, authMiddleware))

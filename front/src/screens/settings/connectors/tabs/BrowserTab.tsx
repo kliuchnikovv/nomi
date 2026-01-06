@@ -14,6 +14,7 @@ import { useTheme } from '../../../../context/ThemeContext';
 import { getStyles } from '../styles';
 import { CONNECTORS, Connector } from '../models';
 import { pluginsApi } from '../../../../apiClient';
+import { integrationStorage } from '../../../../services/integrations/IntegrationStorage';
 
 export function BrowserTab() {
     const { integrations, startOAuth, toggleTool, getIntegrations } = useConnectors();
@@ -120,8 +121,28 @@ export function BrowserTab() {
         setIsConnectingJules(true);
         setErrorMsg(null);
         try {
-            await pluginsApi.connectJules(julesApiKey);
-            await pluginsApi.syncJules();
+            await integrationStorage.createIntegration(
+                {
+                    provider: 'jules',
+                    name: 'Jules',
+                    enabled: true,
+                    accountEmail: 'API Key',
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    id: 'jules', // Use fixed ID for singleton service
+                },
+                {
+                    accessToken: julesApiKey,
+                }
+            );
+
+            // Optionally try to sync with backend if needed, but it's not critical for client-side tool
+            try {
+                await pluginsApi.connectJules(julesApiKey);
+            } catch (e) {
+                console.log('Backend sync for Jules failed (expected if moving to local-only):', e);
+            }
+
             await getIntegrations();
             setShowJulesInput(false);
             setJulesApiKey('');

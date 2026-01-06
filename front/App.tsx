@@ -16,11 +16,10 @@ import {
 
 import { MainProvider } from './src/screens/main/context';
 import * as PCPModel from './src/screens/rightsidebar/PluginChatsProviderImpl';
-console.log('DEBUG: PluginChatsProviderImpl Module exports:', Object.keys(PCPModel));
-console.log('DEBUG: PluginChatsProviderImpl value:', PCPModel.PluginChatsProvider);
 const { PluginChatsProvider } = PCPModel;
 
 import { AuthScreen } from './src/screens/auth/screen.tsx';
+import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
 
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -63,9 +62,11 @@ function App() {
                                 barStyle={isDarkMode ? 'light-content' : 'dark-content'}
                             />
                             <PluginChatsProvider>
-                                <MainProvider>
-                                    <AppContent />
-                                </MainProvider>
+                                <ConnectorsProvider>
+                                    <MainProvider>
+                                        <AppContent />
+                                    </MainProvider>
+                                </ConnectorsProvider>
                             </PluginChatsProvider>
                         </AuthProvider>
                     </ThemeProvider>

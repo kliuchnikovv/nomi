@@ -150,21 +150,41 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             // Load from local SQLite
             const localIntegrations = await integrationStorage.getIntegrations();
 
-            const normalized: Integration[] = localIntegrations.map(p => ({
-                id: p.id,
-                name: p.name,
-                provider: p.provider,
-                connected: p.enabled,
-                params: { account_email: p.accountEmail },
-            }));
+            const normalized: Integration[] = [];
+            const toolsList: Tool[] = [];
+
+            for (const p of localIntegrations) {
+                // Fetch credentials
+                const creds = await integrationStorage.getCredentials(p.id);
+                const params: any = { account_email: p.accountEmail };
+
+                if (creds) {
+                    if (p.provider === 'jules') {
+                        params.api_key = creds.accessToken;
+                    } else if (p.provider === 'github') {
+                        params.access_token = creds.accessToken;
+                    }
+                }
+
+                normalized.push({
+                    id: p.id,
+                    name: p.name,
+                    provider: p.provider,
+                    connected: p.enabled,
+                    params: params,
+                });
+
+                toolsList.push({
+                    id: p.id,
+                    name: p.name,
+                    provider: p.provider,
+                    enabled: p.enabled,
+                    params: params,
+                });
+            }
 
             setConfigs(normalized);
-            setTools(normalized.map(p => ({
-                id: p.id,
-                name: p.name,
-                provider: p.provider,
-                enabled: p.connected,
-            })));
+            setTools(toolsList);
 
             console.log(`[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`);
         } catch (e) {

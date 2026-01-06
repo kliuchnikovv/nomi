@@ -76,6 +76,7 @@ export type Tool = {
     created_at?: string;
     info?: Record<string, any>;
     state?: Record<string, any>;
+    params?: Record<string, any>;
 };
 
 export type OAuthStatus = {
@@ -105,22 +106,22 @@ export const CONNECTORS: Connector[] = [
         colorKey: 'orange',
         glyph: 'calendar',
     },
-    // {
-    //     id: 'github',
-    //     name: 'GitHub',
-    //     toolKey: 'github',
-    //     oauthProvider: 'github',
-    //     colorKey: 'magenta',
-    //     glyph: 'github',
-    // },
-    // {
-    //     id: 'jules',
-    //     name: 'Jules',
-    //     toolKey: 'jules',
-    //     oauthProvider: 'jules',
-    //     colorKey: 'orange',
-    //     glyph: 'jules',
-    // },
+    {
+        id: 'github',
+        name: 'GitHub',
+        toolKey: 'github',
+        oauthProvider: 'github',
+        colorKey: 'magenta',
+        glyph: 'github',
+    },
+    {
+        id: 'jules',
+        name: 'Jules',
+        toolKey: 'jules',
+        oauthProvider: 'jules',
+        colorKey: 'orange',
+        glyph: 'jules',
+    },
 ];
 
 export interface ConnectorContextType {

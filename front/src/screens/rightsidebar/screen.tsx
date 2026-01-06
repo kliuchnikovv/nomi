@@ -17,7 +17,6 @@ import { usePluginChats } from './context';
 import { useChat } from '../chat/context';
 import { useTheme } from '../../context/ThemeContext';
 import { Sidebar } from '../../components/Sidebar';
-import { Plugin, PluginChat } from './models';
 import { ThemePalette } from '../../themes/types';
 import { CalendarSidebar } from '../chat/sidebar/CalendarSidebar';
 
@@ -356,16 +355,12 @@ function RightSidebarContent({
                 <View style={styles.emptyState}>
                     <ActivityIndicator size="large" color={theme.accent} />
                 </View>
-            ) : plugins.length === 0 ? (
-                <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>No inbox chats</Text>
-                </View>
             ) : (
                 <FlatList
                     data={plugins}
                     keyExtractor={plugin => plugin.id}
                     style={{ flex: 1 }}
-                    contentContainerStyle={styles.pluginsList}
+                    contentContainerStyle={[styles.pluginsList, plugins.length === 0 && { flex: 1 }]}
                     refreshControl={
                         <RefreshControl
                             refreshing={refreshing}
@@ -373,6 +368,11 @@ function RightSidebarContent({
                             tintColor={theme.accent}
                             colors={[theme.accent]}
                         />
+                    }
+                    ListEmptyComponent={
+                        <View style={[styles.emptyState, { flex: 1 }]}>
+                            <Text style={styles.emptyText}>No inbox chats</Text>
+                        </View>
                     }
                     renderItem={({ item: plugin }) => {
                         if (plugin.provider === 'calendar') {
