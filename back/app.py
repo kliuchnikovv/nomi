@@ -447,13 +447,13 @@ async def get_embedding(request: EmbeddingRequest):
             
             embeddings = []
             for text in request.texts:
-                embedding = embedder.get_embedding_vec(text)
+                embedding = embedder.get_embedding(text)
                 embeddings.append(embedding)
             return {"embeddings": embeddings}
         
         # Single mode (backward compatible)
         if request.text is not None:
-            embedding = embedder.get_embedding_vec(request.text)
+            embedding = embedder.get_embedding(request.text)
             return {"embedding": embedding}
         
         return {"error": "Either 'text' or 'texts' must be provided"}
