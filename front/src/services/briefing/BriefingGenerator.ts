@@ -27,6 +27,7 @@ interface EmailAnalysisResult {
     urgency: 'asap' | 'high' | 'normal' | 'low';
     connections: string[];
     time_frame?: string;
+    target_date?: string;
     suggested_actions: Array<{
         action_type: string;
         label: string;
@@ -79,6 +80,7 @@ class BriefingGenerator {
                     urgency: result.urgency,
                     connections: result.connections,
                     timeFrame: result.time_frame,
+                    targetDate: result.target_date,
                 });
                 await integrationStorage.markAnalyzed(email.id);
                 analyzed++;
@@ -120,8 +122,9 @@ class BriefingGenerator {
             await integrationStorage.clearBriefingItems(briefing.id);
         }
 
-        // Get analyzed emails from the last 24 hours with high/asap urgency
-        const asapEmails = await integrationStorage.getAsapEmails();
+        // Get emails for this date (accumulated + overdue)
+        // This includes items with target_date=today, OR past items that are not completed
+        const briefingEmails = await integrationStorage.getBriefingEmails(dateStr);
 
         // Sync calendar events
         try {
@@ -141,28 +144,45 @@ class BriefingGenerator {
             console.error('[BriefingGenerator] Failed to sync calendars:', error);
         }
 
-        // Get today's events
-        const events = await integrationStorage.getEventsForDate(date);
+        // Get today's events, filtering for actual meetings (end date > now if date is today)
+        const allEvents = await integrationStorage.getEventsForDate(date);
+        const now = new Date();
+        const isToday = this.formatDate(now) === dateStr;
+
+        const events = allEvents.filter(event => {
+             if (isToday && event.endDate) {
+                 return event.endDate > now;
+             }
+             return true;
+        });
 
         // Get pending tasks
         const tasks = await integrationStorage.getPendingTasks();
 
         let order = 0;
 
-        // Add ASAP/high urgency emails
-        for (const analyzed of asapEmails) {
+        // Add emails
+        for (const analyzed of briefingEmails) {
             const email = await integrationStorage.getEmail(analyzed.emailId);
             if (!email) continue;
 
+            // Re-analyze to fetch suggested actions which are not currently cached.
+            // Note: This operation can be resource intensive. Future optimization could cache actions.
             const analysis = await this.analyzeEmail(email);
             if (!analysis) continue;
 
-            const isCompleted = completionMap.get(analyzed.emailId) ?? false;
+            const isCompleted = completionMap.get(analyzed.emailId) ?? analyzed.isCompleted;
+
+            // Check if overdue
+            const isOverdue = analyzed.targetDate && analyzed.targetDate < dateStr;
+            let titlePrefix = '';
+            if (isOverdue) titlePrefix = '[Overdue] ';
+            if (analyzed.urgency === 'asap') titlePrefix += '🔴 ';
 
             const item = await integrationStorage.addBriefingItem(briefing.id, {
                 sourceType: 'email',
                 sourceId: analyzed.emailId,
-                title: email.subject || 'No subject',
+                title: `${titlePrefix}${email.subject || 'No subject'}`,
                 description: email.snippet,
                 priority: analyzed.urgency,
                 displayOrder: order++,
@@ -182,7 +202,6 @@ class BriefingGenerator {
         }
 
         // Add today's events
-        const now = new Date();
         for (const event of events) {
             const isCompleted = completionMap.get(event.sourceId) ?? (event.endDate ? now > event.endDate : false);
             
@@ -222,18 +241,18 @@ class BriefingGenerator {
 
         // Update briefing with summary
         const itemCount = order;
-        const asapCount = asapEmails.length;
+        const emailCount = briefingEmails.length;
 
         let headline = 'Quiet day';
-        if (asapCount > 0) {
-            headline = `${asapCount} urgent items need attention`;
+        if (emailCount > 0) {
+            headline = `${emailCount} items need attention`;
         } else if (itemCount > 0) {
             headline = `${itemCount} items for today`;
         }
 
         await integrationStorage.updateBriefing(briefing.id, {
             headline,
-            summary: `Emails: ${asapEmails.length}, Events: ${events.length}, Tasks: ${highPriorityTasks.length}`
+            summary: `Emails: ${emailCount}, Events: ${events.length}, Tasks: ${highPriorityTasks.length}`
         });
 
         console.log(`[BriefingGenerator] Generated briefing for ${dateStr} with ${itemCount} items`);
@@ -275,10 +294,21 @@ class BriefingGenerator {
         const today = this.formatDate(new Date());
         let briefing = await integrationStorage.getBriefingForDate(today);
 
+        // If no briefing exists, generating one will pick up this email (if date matches or fallback)
         if (!briefing) {
-            // No briefing for today yet, just generate one
             await this.generateDailyBriefing();
             return true;
+        }
+
+        // If briefing exists, we check if this email should be in it
+        // Check date logic
+        const targetDate = analysis.targetDate;
+        const isToday = targetDate === today;
+        const isOverdue = targetDate && targetDate < today && !analysis.isCompleted;
+        const isFallback = !targetDate; // ASAP/High fallback
+
+        if (!isToday && !isOverdue && !isFallback) {
+             return false;
         }
 
         // Add to existing briefing
@@ -296,10 +326,14 @@ class BriefingGenerator {
         // Analyze to get actions
         const emailAnalysis = await this.analyzeEmail(email);
 
+        let titlePrefix = '';
+        if (isOverdue) titlePrefix = '[Overdue] ';
+        titlePrefix += '🔴 URGENT: ';
+
         const item = await integrationStorage.addBriefingItem(briefing.id, {
             sourceType: 'email',
             sourceId: emailId,
-            title: `🔴 URGENT: ${email.subject || 'No subject'}`,
+            title: `${titlePrefix}${email.subject || 'No subject'}`,
             description: email.snippet,
             priority: 'asap',
             displayOrder: 0, // Put at top
