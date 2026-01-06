@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/a8m/envsubst"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 type Config struct {
