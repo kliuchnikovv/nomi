@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from agno.db.postgres import PostgresDb
 from agno.os import AgentOS
 from agno.models.google import Gemini
+from agno.knowledge.embedder.google import GeminiEmbedder
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.agents.genie import GenieAgent
@@ -94,6 +95,13 @@ _init_logging()
 model=Gemini(
     id="gemini-2.0-flash",
     api_key=os.getenv("GOOGLE_API_KEY"),
+)
+
+# Initialize embedder for /api/embeddings endpoint
+embedder = GeminiEmbedder(
+    id="text-embedding-004",
+    api_key=os.getenv("GOOGLE_API_KEY"),
+    dimensions=768,
 )
 
 db: PostgresDb | None = None
@@ -439,13 +447,13 @@ async def get_embedding(request: EmbeddingRequest):
             
             embeddings = []
             for text in request.texts:
-                embedding = model.get_embedding(text)
+                embedding = embedder.get_embedding_vec(text)
                 embeddings.append(embedding)
             return {"embeddings": embeddings}
         
         # Single mode (backward compatible)
         if request.text is not None:
-            embedding = model.get_embedding(request.text)
+            embedding = embedder.get_embedding_vec(request.text)
             return {"embedding": embedding}
         
         return {"error": "Either 'text' or 'texts' must be provided"}
