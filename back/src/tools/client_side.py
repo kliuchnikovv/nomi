@@ -240,3 +240,28 @@ class ClientCalendarTools(Toolkit):
         )
         return f"Action delegated: Deleting event {event_id}. The client application will execute this."
 
+
+class ClientRagTools(Toolkit):
+    def __init__(self):
+        super().__init__(name="rag_client")
+        self.register(self.search_knowledge)
+
+    def search_knowledge(self, query: str, limit: int = 5, source_type: str = "") -> str:
+        """Search the user's local knowledge base (emails, documents, notes) using vector similarity.
+        
+        Use this tool to find relevant information from the user's synced data when answering questions
+        or providing context. This searches locally stored content, not the internet.
+        
+        Args:
+            query: The search query or question to find relevant information for
+            limit: Maximum number of results to return (default: 5)
+            source_type: Optional filter by source type (e.g., 'email', 'task', 'event'). Leave empty to search all.
+        """
+        add_client_action(
+            tool="rag",
+            method="search",
+            params={"query": query, "limit": limit, "source_type": source_type},
+            description=f"Search local knowledge: '{query}'"
+        )
+        return f"Action delegated: Searching local knowledge base for '{query}'. The client application will return relevant results."
+

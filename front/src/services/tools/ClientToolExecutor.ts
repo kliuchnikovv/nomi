@@ -20,6 +20,8 @@ export class ClientToolExecutor {
                     return await this.executeGmailAction(action.method, action.params);
                 case 'calendar':
                     return await this.executeCalendarAction(action.method, action.params);
+                case 'rag':
+                    return await this.executeRagAction(action.method, action.params);
                 default:
                     throw new Error(`Unknown tool: ${action.tool}`);
             }
@@ -174,6 +176,34 @@ export class ClientToolExecutor {
 
             default:
                 throw new Error(`Unknown Calendar method: ${method}`);
+        }
+    }
+
+    private async executeRagAction(method: string, params: Record<string, any>): Promise<string> {
+        const { vectorStore } = await import('../database/VectorStore');
+
+        switch (method) {
+            case 'search':
+                const results = await vectorStore.search(
+                    params.query,
+                    params.limit || 5,
+                    params.source_type || undefined
+                );
+
+                if (results.length === 0) {
+                    return 'No relevant information found in local knowledge base.';
+                }
+
+                // Format results for agent
+                const formattedResults = results.map((r, idx) => {
+                    const meta = r.metadata ? ` (${Object.entries(r.metadata).map(([k, v]) => `${k}: ${v}`).join(', ')})` : '';
+                    return `${idx + 1}. [Score: ${r.score.toFixed(3)}]${meta}\n${r.content}`;
+                }).join('\n\n---\n\n');
+
+                return `Found ${results.length} relevant items:\n\n${formattedResults}`;
+
+            default:
+                throw new Error(`Unknown RAG method: ${method}`);
         }
     }
 }

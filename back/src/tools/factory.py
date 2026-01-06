@@ -10,11 +10,8 @@ from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools.github import GithubTools
 from src.tools.duckduckgo_custom import DuckDuckGoTools as WebSearchTools  # Use our custom version
 from google.oauth2.credentials import Credentials
-from src.tools.memory_writer import MemoryWriter
-from src.tools.rag_tool import RagTool
-from src.tools.rag_tool import RagTool
 from src.tools.jules import JulesTools
-from src.tools.client_side import ClientGmailTools
+from src.tools.client_side import ClientGmailTools, ClientRagTools
 
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
@@ -153,24 +150,11 @@ Treat current time as {now}.
     return tool
 
 
+
 def _build_rag(_: Dict[str, Any]) -> Toolkit:
-    # Placeholder builder; params are ignored for now
-    return RagTool()
-
-
-def _build_memory_writer(_: Dict[str, Any]) -> Toolkit:
-    # Placeholder builder; params are ignored for now
-    return MemoryWriter()
-
-
-def _build_web_search_mcp(_: Dict[str, Any]) -> Toolkit:
-    # URL is hardcoded or can be passed in params if needed, but for now hardcoded as per req
-    from agno.tools.mcp import MCPTools
-    return MCPTools(
-        transport="streamable-http",
-        url="https://remote.mcpservers.org/fetch/mcp"
-    )
-
+    """Build client-side RAG tool for local vector search."""
+    logger.info("[RAG] Using ClientRagTools for local knowledge search")
+    return ClientRagTools()
 
 def _build_github(params: Dict[str, Any]) -> Toolkit:
     """Build GithubTools with access token from integration."""
@@ -250,12 +234,10 @@ TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Calendar": _build_google_calendar,
     "GitHub": _build_github,
     "rag": _build_rag,
-    "memory_writer": _build_memory_writer,
-    "web_search_mcp": _build_web_search_mcp,
     "web_search": _build_web_search,
     "Jules": _build_jules,
-
 }
+
 
 
 def register_tool(name: str, builder: ToolBuilder) -> None:
