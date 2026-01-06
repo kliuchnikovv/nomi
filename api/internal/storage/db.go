@@ -46,6 +46,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Attachment{},
 		&Task{},
 		&TeamKVStore{},
+		&WebhookEvent{},
 	); err != nil {
 		return nil, err
 	}
