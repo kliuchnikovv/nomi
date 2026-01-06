@@ -21,6 +21,7 @@ class EmailAnalysisResponse(BaseModel):
     urgency: str = Field("normal", description="Urgency level: 'asap', 'high', 'normal', 'low'")
     connections: List[str] = Field(default_factory=list, description="Related people, projects, or topics")
     time_frame: Optional[str] = Field(None, description="Deadline or time reference (ISO date if applicable)")
+    target_date: Optional[str] = Field(None, description="The specific date (YYYY-MM-DD) this email is relevant for or should be acted upon.")
     suggested_actions: List[SuggestedAction] = Field(default_factory=list, description="2-5 suggested actions")
 
 
@@ -47,11 +48,13 @@ Extract:
 - Project, product, or team names
 - Key topics/themes
 
-#### 3. TIME FRAME
-If the email mentions:
-- A specific date/time → return in ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
-- "tomorrow", "on Friday", "next week" → calculate relative to current date: {current_date}
-- No deadline → null
+#### 3. TIME FRAME & TARGET DATE
+- **time_frame**: Text description of the deadline (e.g. "Tomorrow 5pm", "Next Friday").
+- **target_date**: The specific calendar date (YYYY-MM-DD) when this item should appear in the user's briefing.
+  - If the email says "can you do this by Friday?", target_date is this Friday's date.
+  - If it's for a meeting on date X, target_date is X.
+  - If it's just general info, target_date is null.
+  - If "ASAP" or "Today", target_date is {current_date}.
 
 #### 4. SUGGESTED ACTIONS
 Suggest 2-5 actions. Action types:
@@ -71,10 +74,25 @@ Suggest 2-5 actions. Action types:
   "urgency": "asap",
   "connections": ["John", "Alpha project"],
   "time_frame": "{current_date}T23:59:00",
+  "target_date": "{current_date}",
   "suggested_actions": [
     {"action_type": "reply", "label": "Acknowledge receipt", "params": {"suggested_text": "Received, report will be ready by EOD"}},
     {"action_type": "schedule", "label": "Set reminder", "params": {"title": "Alpha report for John", "date": "{current_date}T17:00:00"}},
     {"action_type": "delegate", "label": "Delegate data collection", "params": {"to": "team", "task": "gather metrics for report"}}
+  ]
+}
+```
+
+**Email**: "Can we meet next Monday regarding the budget?" (Assuming next Monday is 2023-10-23)
+**Analysis**:
+```
+{
+  "urgency": "normal",
+  "connections": ["Budget"],
+  "time_frame": "Next Monday",
+  "target_date": "2023-10-23",
+  "suggested_actions": [
+    {"action_type": "reply", "label": "Reply to schedule", "params": {"suggested_text": "Sure, what time works for you?"}}
   ]
 }
 ```
@@ -86,6 +104,7 @@ Suggest 2-5 actions. Action types:
   "urgency": "low",
   "connections": [],
   "time_frame": null,
+  "target_date": null,
   "suggested_actions": [
     {"action_type": "archive", "label": "Archive", "params": {}}
   ]

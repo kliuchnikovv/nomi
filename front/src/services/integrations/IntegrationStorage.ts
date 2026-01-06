@@ -88,6 +88,9 @@ export interface AnalyzedEmail {
     urgency: 'asap' | 'high' | 'normal' | 'low';
     connections: string[];
     timeFrame?: string;
+    targetDate?: string; // YYYY-MM-DD
+    isCompleted: boolean;
+    completedAt?: Date;
     analyzedAt: Date;
 }
 
@@ -649,28 +652,50 @@ class IntegrationStorage {
 
     // ==================== V3: Email Analysis ====================
 
+    /**
+     * Helper to ensure database schema columns exist
+     */
+    private async _ensureColumnsExist(db: any): Promise<void> {
+         try {
+            await db.runAsync('ALTER TABLE analyzed_emails ADD COLUMN target_date TEXT');
+        } catch (e) { /* ignore if exists */ }
+        try {
+            await db.runAsync('ALTER TABLE analyzed_emails ADD COLUMN is_completed INTEGER DEFAULT 0');
+        } catch (e) { /* ignore if exists */ }
+        try {
+            await db.runAsync('ALTER TABLE analyzed_emails ADD COLUMN completed_at INTEGER');
+        } catch (e) { /* ignore if exists */ }
+    }
+
     async saveEmailAnalysis(
         emailId: string,
         analysis: {
             urgency: string;
             connections: string[];
             timeFrame?: string;
+            targetDate?: string;
         }
     ): Promise<AnalyzedEmail> {
         const db = getDatabase();
+        await this._ensureColumnsExist(db);
+
         // Check if analysis already exists for this email
         const existing = await db.getFirstAsync<any>(
-            'SELECT id FROM analyzed_emails WHERE email_id = ?',
+            'SELECT * FROM analyzed_emails WHERE email_id = ?',
             [emailId]
         );
 
         const id = existing?.id || generateUUID();
         const now = Date.now();
 
+        // Preserve existing completion status
+        const isCompleted = existing?.is_completed ?? 0;
+        const completedAt = existing?.completed_at ?? null;
+
         await db.runAsync(
-            `INSERT OR REPLACE INTO analyzed_emails (id, email_id, urgency, connections, time_frame, analyzed_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [id, emailId, analysis.urgency, JSON.stringify(analysis.connections), analysis.timeFrame ?? null, now]
+            `INSERT OR REPLACE INTO analyzed_emails (id, email_id, urgency, connections, time_frame, target_date, is_completed, completed_at, analyzed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, emailId, analysis.urgency, JSON.stringify(analysis.connections), analysis.timeFrame ?? null, analysis.targetDate ?? null, isCompleted, completedAt, now]
         );
 
         return {
@@ -679,6 +704,9 @@ class IntegrationStorage {
             urgency: analysis.urgency as AnalyzedEmail['urgency'],
             connections: analysis.connections,
             timeFrame: analysis.timeFrame,
+            targetDate: analysis.targetDate,
+            isCompleted: isCompleted === 1,
+            completedAt: completedAt ? new Date(completedAt) : undefined,
             analyzedAt: new Date(now)
         };
     }
@@ -698,12 +726,17 @@ class IntegrationStorage {
             urgency: row.urgency,
             connections: row.connections ? JSON.parse(row.connections) : [],
             timeFrame: row.time_frame ?? undefined,
+            targetDate: row.target_date ?? undefined,
+            isCompleted: row.is_completed === 1,
+            completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
             analyzedAt: new Date(row.analyzed_at)
         };
     }
 
     async getAsapEmails(): Promise<AnalyzedEmail[]> {
         const db = getDatabase();
+        await this._ensureColumnsExist(db);
+
         const rows = await db.getAllAsync<any>(
             `SELECT * FROM analyzed_emails 
              WHERE urgency IN ('asap', 'high') 
@@ -719,6 +752,43 @@ class IntegrationStorage {
             urgency: row.urgency,
             connections: row.connections ? JSON.parse(row.connections) : [],
             timeFrame: row.time_frame ?? undefined,
+            targetDate: row.target_date ?? undefined,
+            isCompleted: row.is_completed === 1,
+            completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
+            analyzedAt: new Date(row.analyzed_at)
+        }));
+    }
+
+    // Get emails relevant for a specific date (accumulated + overdue)
+    async getBriefingEmails(date: string): Promise<AnalyzedEmail[]> {
+        const db = getDatabase();
+        await this._ensureColumnsExist(db);
+
+        // Logic:
+        // 1. Emails specifically targeting this date
+        // 2. Emails from past dates that are NOT completed (overdue)
+        // 3. ASAP/High urgency emails without a target date (fallback) created in last 24h
+
+        const rows = await db.getAllAsync<any>(
+            `SELECT * FROM analyzed_emails
+             WHERE
+                (target_date = ?) OR
+                (target_date < ? AND is_completed = 0) OR
+                (target_date IS NULL AND urgency IN ('asap', 'high') AND analyzed_at > ?)
+             GROUP BY email_id
+             ORDER BY target_date ASC, urgency DESC`,
+            [date, date, Date.now() - 86400000] // Last 24h for fallback
+        );
+
+        return rows.map(row => ({
+            id: row.id,
+            emailId: row.email_id,
+            urgency: row.urgency,
+            connections: row.connections ? JSON.parse(row.connections) : [],
+            timeFrame: row.time_frame ?? undefined,
+            targetDate: row.target_date ?? undefined,
+            isCompleted: row.is_completed === 1,
+            completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
             analyzedAt: new Date(row.analyzed_at)
         }));
     }
@@ -854,10 +924,31 @@ class IntegrationStorage {
     async markBriefingItemComplete(itemId: string, isCompleted: boolean = true): Promise<void> {
         const db = getDatabase();
         const completedAt = isCompleted ? Date.now() : null;
+
+        // Update briefing item
         await db.runAsync(
             'UPDATE briefing_items SET is_completed = ?, completed_at = ? WHERE id = ?',
             [isCompleted ? 1 : 0, completedAt, itemId]
         );
+
+        // Also update underlying source status if it's an analyzed email
+        try {
+            const item = await db.getFirstAsync<any>(
+                'SELECT source_type, source_id FROM briefing_items WHERE id = ?',
+                [itemId]
+            );
+
+            if (item && item.source_type === 'email') {
+                await this._ensureColumnsExist(db);
+                await db.runAsync(
+                    'UPDATE analyzed_emails SET is_completed = ?, completed_at = ? WHERE email_id = ?',
+                    [isCompleted ? 1 : 0, completedAt, item.source_id]
+                );
+                console.log(`[IntegrationStorage] Synced completion status for email ${item.source_id}`);
+            }
+        } catch (e) {
+            console.warn('[IntegrationStorage] Failed to sync email completion status:', e);
+        }
     }
 
     async getBriefingProgress(briefingId: string): Promise<{ total: number; completed: number }> {
