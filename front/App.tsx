@@ -15,7 +15,10 @@ import {
 } from 'react-native-safe-area-context';
 
 import { MainProvider } from './src/screens/main/context';
-import { PluginChatsProvider } from './src/screens/rightsidebar/context';
+import * as PCPModel from './src/screens/rightsidebar/PluginChatsProviderImpl';
+console.log('DEBUG: PluginChatsProviderImpl Module exports:', Object.keys(PCPModel));
+console.log('DEBUG: PluginChatsProviderImpl value:', PCPModel.PluginChatsProvider);
+const { PluginChatsProvider } = PCPModel;
 
 import { AuthScreen } from './src/screens/auth/screen.tsx';
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
