@@ -2,7 +2,10 @@ package config
 
 import (
 	"log"
+	"net/url"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/a8m/envsubst"
 	yaml "gopkg.in/yaml.v3"
@@ -52,9 +55,9 @@ func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		// Fallback to default path if not found (e.g. for tests)
-		// Try to look in standard locations if the provided path fails? 
+		// Try to look in standard locations if the provided path fails?
 		// Or just fail? The original code had a fallback.
-		// Let's keep the fallback logic if path is specific, or maybe just try the fallback if the specific one fails 
+		// Let's keep the fallback logic if path is specific, or maybe just try the fallback if the specific one fails
 		// ONLY if the error is IsNotExist?
 		// But simpler to just respect the path for now as main.go decides the path.
 		// However, to match the previous robustness:
@@ -77,6 +80,31 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(expandedData, &cfg); err != nil {
 		log.Printf("Failed to unmarshal config: %v", err)
 		return nil, err
+	}
+
+	// Helper to parse DATABASE_URL if individual fields are missing
+	// This supports deployments where only DATABASE_URL is provided (e.g. Railway plugins)
+	if cfg.Database.Host == "" || cfg.Database.Port == 0 {
+		dbURL := os.Getenv("DATABASE_URL")
+		if dbURL != "" {
+			u, err := url.Parse(dbURL)
+			if err == nil {
+				cfg.Database.Host = u.Hostname()
+				portStr := u.Port()
+				if portStr != "" {
+					p, _ := strconv.Atoi(portStr)
+					cfg.Database.Port = p
+				}
+				if u.User != nil {
+					cfg.Database.User = u.User.Username()
+					p, ok := u.User.Password()
+					if ok {
+						cfg.Database.Password = p
+					}
+				}
+				cfg.Database.DBName = strings.TrimPrefix(u.Path, "/")
+			}
+		}
 	}
 
 	return &cfg, nil
