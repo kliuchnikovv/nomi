@@ -22,7 +22,7 @@ type Config struct {
 		Password string `yaml:"password"`
 		DBName   string `yaml:"dbname"`
 		SSLMode  string `yaml:"sslmode"`
-	} `yaml:"db"`
+	} `yaml:"database"`
 	Token struct {
 		JWTSecret string `yaml:"jwt_secret"`
 	} `yaml:"token"`
