@@ -360,11 +360,3 @@ func (h *ProjectHandler) DeleteTask(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
-
-// Delegate UpdateStatus to the existing logic, or re-implement here?
-// Since `project_tasks.go` already has the logic with state machine and notification,
-// I can just reuse `h.taskHandler.UpdateStatus` if I expose it or just wrap it.
-//
-// Alternatively, I can move the logic here.
-// For now, I'll let the router use `taskHandler.UpdateStatus` for that specific endpoint,
-// effectively keeping the "Project Handler" focused on CRUD.
