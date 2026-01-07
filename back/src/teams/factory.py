@@ -52,7 +52,8 @@ class TeamFactory:
             return DevelopmentTeam(
                 model=self.model,
                 db=self.db,
-                debug_mode=self.debug_mode
+                debug_mode=self.debug_mode,
+                user_id=session_id
             )
 
         elif team_type == "dnd_team":
