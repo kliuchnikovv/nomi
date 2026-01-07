@@ -1,5 +1,6 @@
 from textwrap import dedent
 from typing import Optional
+import os
 
 from agno.agent import Agent
 from agno.knowledge import Knowledge
@@ -11,6 +12,8 @@ from agno.tools.github import GithubTools
 from src.agents.genie import GenieAgent
 from src.teams.development.models import AnalystOutput
 from src.rag_service import KnowledgeSearchTool
+from src.tools.jules import JulesTools
+from src.tools.task_manager import TaskManagementTool
 
 # --- Instructions for each role ---
 
@@ -356,6 +359,29 @@ Only use emojis if explicitly requested.
 - [ ] Linters pass without errors
 ''')
 
+worker_instructions = dedent('''
+You are the **Worker** (Jules Operator). Your job is to execute the **ArchitectPlan** using the Jules API.
+You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
+
+# Role
+1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
+2. **Execute**: Use `jules_api` to create a session and execute the plan.
+3. **Monitor**: Wait for the session to complete and a Pull Request to be created.
+4. **Sync State**: Update the task status in the Go API to `REVIEW` upon success.
+
+# Workflow
+1. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
+   - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
+2. **Wait**: Call `wait_for_pr` to block until Jules finishes.
+3. **Finish**:
+   - If successful (PR created), call `update_task_status(task_id, "REVIEW", pr_url="...")` to update the task and log the PR link.
+   - If failed/timeout, report error to the Team Leader.
+
+# Tools
+- `jules_api`: Create sessions, list activities.
+- `task_management_tool`: Update task status in Genie.
+''')
+
 
 class DevelopmentTeam(Team):
     def __init__(
@@ -372,6 +398,13 @@ class DevelopmentTeam(Team):
         if github_token:
             architect_tools.append(GithubTools(access_token=github_token))
 
+        # Initialize Jules Tools
+        jules_api_key = os.getenv("JULES_API_KEY", "")
+        worker_tools = [
+            JulesTools(api_key=jules_api_key),
+            TaskManagementTool()
+        ]
+
         description = dedent('''
 <identity>
 You are the **Team Leader** of a Development Team, a powerful agentic AI coding assistant for the Genie project.
@@ -381,7 +414,8 @@ This information may or may not be relevant to the coding task, it is up for you
 Your team consists of:
 - **Analyst** — clarifies requirements, identifies ambiguities
 - **Architect** — designs technical solutions, defines components
-- **Developer** — implements code and tests
+- **Worker** — executes implementation plans via Jules API
+- **Developer** — implements code and tests (manual/interactive mode)
 - **Reviewer** — validates correctness, security, and quality
 </identity>
 <project_context>
@@ -567,7 +601,7 @@ You are responsible for coordinating your team members to deliver high-quality s
    - Create implementation_plan.md and get user approval
 
 2. **EXECUTION Phase**
-   - Instruct the **Developer** to implement the solution
+   - Instruct the **Developer** (manual) or **Worker** (auto) to implement the solution
    - Ensure code follows existing patterns in each directory
    - Have the **Developer** write comprehensive tests
    - NEVER assume a library is available — check package files first
@@ -585,8 +619,9 @@ You are responsible for coordinating your team members to deliver high-quality s
 
 - **Analyst**: Assign when requirements are unclear or need clarification
 - **Architect**: Assign when technical design decisions are needed
-- **Developer**: Assign for all code implementation and testing tasks
-- **Reviewer**: Assign after Developer completes implementation
+- **Worker**: Assign for fully automated implementation using Jules API (Requires ArchitectPlan).
+- **Developer**: Assign for interactive code implementation and testing tasks
+- **Reviewer**: Assign after Developer/Worker completes implementation
 
 ## Communication
 
@@ -644,6 +679,14 @@ If a team member encounters issues:
                     model=model,
                     tools=architect_tools,
                     instructions=architect_instructions,
+                    markdown=markdown,
+                    debug_mode=debug_mode,
+                ),
+                Agent(
+                    name="Worker",
+                    model=model,
+                    tools=worker_tools,
+                    instructions=worker_instructions,
                     markdown=markdown,
                     debug_mode=debug_mode,
                 ),

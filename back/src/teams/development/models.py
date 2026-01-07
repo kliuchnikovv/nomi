@@ -42,7 +42,7 @@ class UserScenario(BaseModel):
 
 class AnalystOutput(BaseModel):
     project_id: str = Field(..., description="ID проекта из БД. Use 'unknown' if not clear from context.")
-    task_id: int = Field(..., description="ID задачи в очереди. Use 0 if not applicable.")
+    task_id: str = Field(..., description="ID задачи в очереди (UUID). Use '00000000-0000-0000-0000-000000000000' if not applicable.")
 
     summary: str = Field(..., description="Высокоуровневое резюме того, что должно измениться")
 
@@ -65,3 +65,15 @@ class AnalystOutput(BaseModel):
         default_factory=list,
         description="Ограничения (например: 'не изменять API эндпоинты' или 'сохранить обратную совместимость')"
     )
+
+class ArchitectPlanContext(BaseModel):
+    repository_name: str = Field(..., description="Full repository name (e.g., 'owner/repo')")
+    branch_name: str = Field(..., description="Target branch name for the feature")
+    task_id: str = Field(..., description="UUID of the task in the database")
+
+class ArchitectPlan(BaseModel):
+    context: ArchitectPlanContext = Field(..., description="Context identifiers for the task")
+
+    steps: List[str] = Field(..., description="List of atomic implementation steps")
+    style_guide_rules: List[str] = Field(..., description="Coding standards from AGENTS.md")
+    reference_snippets: List[str] = Field(..., description="Relevant code snippets from the codebase")
