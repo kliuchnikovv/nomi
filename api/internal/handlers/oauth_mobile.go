@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
 )
 
@@ -24,12 +26,15 @@ const (
 
 // MobileOAuthHandler handles OAuth flows for mobile clients.
 // Unlike regular OAuth, tokens are returned to the client instead of being stored on the backend.
+// MobileOAuthHandler handles OAuth flows for mobile clients.
+// Unlike regular OAuth, tokens are returned to the client instead of being stored on the backend.
 type MobileOAuthHandler struct {
 	cfg            *config.Config
 	storage        *storage.Storage
 	logger         *zap.Logger
 	gmailConfig    *oauth2.Config
 	calendarConfig *oauth2.Config
+	githubConfig   *oauth2.Config
 	oidcProvider   *oidc.Provider
 }
 
@@ -60,7 +65,7 @@ func NewMobileOAuthHandler(
 	cfg *config.Config,
 	db *storage.Storage,
 ) (*MobileOAuthHandler, error) {
-	providerCfg, ok := cfg.OAuth2.Providers["google"]
+	googleCfg, ok := cfg.OAuth2.Providers["google"]
 	if !ok {
 		return nil, fmt.Errorf("google provider config not found")
 	}
@@ -71,8 +76,8 @@ func NewMobileOAuthHandler(
 	gmailScopes = append(gmailScopes, providers.GetGoogleScope("gmail:write")...)
 
 	gmailConfig := &oauth2.Config{
-		ClientID:     providerCfg.ClientID,
-		ClientSecret: providerCfg.ClientSecret,
+		ClientID:     googleCfg.ClientID,
+		ClientSecret: googleCfg.ClientSecret,
 		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderGmail),
 		Scopes:       gmailScopes,
 		Endpoint:     google.Endpoint,
@@ -84,11 +89,27 @@ func NewMobileOAuthHandler(
 	calScopes = append(calScopes, providers.GetGoogleScope("calendar:write")...)
 
 	calendarConfig := &oauth2.Config{
-		ClientID:     providerCfg.ClientID,
-		ClientSecret: providerCfg.ClientSecret,
+		ClientID:     googleCfg.ClientID,
+		ClientSecret: googleCfg.ClientSecret,
 		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderCalendar),
 		Scopes:       calScopes,
 		Endpoint:     google.Endpoint,
+	}
+
+	// GitHub Config
+	var githubConfig *oauth2.Config
+	if githubCfg, ok := cfg.OAuth2.Providers["github"]; ok {
+		githubConfig = &oauth2.Config{
+			ClientID:     githubCfg.ClientID,
+			ClientSecret: githubCfg.ClientSecret,
+			RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderGitHub),
+			Scopes:       []string{"repo", "user", "read:org"},
+			Endpoint:     github.Endpoint,
+		}
+	} else {
+		// Log warning or just skip? User might not have configured it.
+		// For now, we allow it to be nil, but Login will fail if used.
+		logger.Warn("github provider config not found")
 	}
 
 	provider, err := oidc.NewProvider(context.Background(), "https://accounts.google.com")
@@ -102,6 +123,7 @@ func NewMobileOAuthHandler(
 		logger:         logger,
 		gmailConfig:    gmailConfig,
 		calendarConfig: calendarConfig,
+		githubConfig:   githubConfig,
 		oidcProvider:   provider,
 	}, nil
 }
@@ -161,6 +183,12 @@ func (h *MobileOAuthHandler) Login(c *gin.Context) {
 		oauthConfig = h.gmailConfig
 	} else if providerName == ProviderCalendar {
 		oauthConfig = h.calendarConfig
+	} else if providerName == ProviderGitHub {
+		if h.githubConfig == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "github provider not configured"})
+			return
+		}
+		oauthConfig = h.githubConfig
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported for mobile OAuth", providerName)})
 		return
@@ -193,8 +221,15 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		oauthConfig = h.gmailConfig
 	} else if providerName == ProviderCalendar {
 		oauthConfig = h.calendarConfig
+	} else if providerName == ProviderGitHub {
+		oauthConfig = h.githubConfig
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported for mobile OAuth", providerName)})
+		return
+	}
+
+	if oauthConfig == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "provider configuration missing"})
 		return
 	}
 
@@ -214,27 +249,83 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		return
 	}
 
-	// Get user email from ID token
-	rawIDToken, ok := token.Extra("id_token").(string)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "id_token missing from response"})
-		return
-	}
+	var accountEmail string
+	
+	if providerName == ProviderGitHub {
+		// GitHub does not return ID Token. Fetch user email manually.
+		client := oauthConfig.Client(ctx, token)
+		userResp, err := client.Get("https://api.github.com/user")
+		if err != nil {
+			h.logger.Error("failed to get github user", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get github user"})
+			return
+		}
+		defer userResp.Body.Close()
+		// TODO: parse JSON to get login/email.
+		// For now, let's use a simpler approach or struct.
+		// But I need to define the struct or use a map.
+		var ghUser struct {
+			Email string `json:"email"`
+			Login string `json:"login"`
+		}
+		if err := json.NewDecoder(userResp.Body).Decode(&ghUser); err != nil {
+			h.logger.Error("failed to decode github user", zap.Error(err))
+		}
+		accountEmail = ghUser.Email
+		if accountEmail == "" {
+			// Email might be private. Try /user/emails
+			emailsResp, err := client.Get("https://api.github.com/user/emails")
+			if err == nil {
+				defer emailsResp.Body.Close()
+				var emails []struct {
+					Email    string `json:"email"`
+					Primary  bool   `json:"primary"`
+					Verified bool   `json:"verified"`
+				}
+				if err := json.NewDecoder(emailsResp.Body).Decode(&emails); err == nil {
+					for _, e := range emails {
+						if e.Primary && e.Verified {
+							accountEmail = e.Email
+							break
+						}
+					}
+					// If no primary/verified found, use first one?
+					if accountEmail == "" && len(emails) > 0 {
+						accountEmail = emails[0].Email
+					}
+				}
+			}
+			// If still empty, use login
+			if accountEmail == "" {
+				accountEmail = ghUser.Login
+			}
+		}
 
-	verifier := h.oidcProvider.Verifier(&oidc.Config{ClientID: oauthConfig.ClientID})
-	idToken, err := verifier.Verify(ctx, rawIDToken)
-	if err != nil {
-		h.logger.Error("failed to verify id_token", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify id_token"})
-		return
-	}
+	} else {
+		// OIDC Providers (Google)
+		// Get user email from ID token
+		rawIDToken, ok := token.Extra("id_token").(string)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "id_token missing from response"})
+			return
+		}
 
-	var claims struct {
-		Email string `json:"email"`
-	}
-	if err := idToken.Claims(&claims); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read email claim"})
-		return
+		verifier := h.oidcProvider.Verifier(&oidc.Config{ClientID: oauthConfig.ClientID})
+		idToken, err := verifier.Verify(ctx, rawIDToken)
+		if err != nil {
+			h.logger.Error("failed to verify id_token", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify id_token"})
+			return
+		}
+
+		var claims struct {
+			Email string `json:"email"`
+		}
+		if err := idToken.Claims(&claims); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read email claim"})
+			return
+		}
+		accountEmail = claims.Email
 	}
 
 	// Return tokens to client WITHOUT saving to backend database
@@ -242,13 +333,13 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
 		TokenExpiry:  token.Expiry.Unix(),
-		AccountEmail: claims.Email,
+		AccountEmail: accountEmail,
 		Provider:     providerName,
 	}
 
 	h.logger.Info("mobile OAuth callback successful",
 		zap.String("provider", providerName),
-		zap.String("email", claims.Email),
+		zap.String("email", accountEmail),
 	)
 
 	c.JSON(http.StatusOK, response)
