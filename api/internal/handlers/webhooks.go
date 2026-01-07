@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -16,16 +18,18 @@ import (
 )
 
 type WebhooksHandler struct {
-	store  *storage.Storage
-	logger *zap.Logger
-	secret string
+	store         *storage.Storage
+	logger        *zap.Logger
+	secret        string
+	pythonBaseURL string
 }
 
-func NewWebhooksHandler(store *storage.Storage, logger *zap.Logger, secret string) *WebhooksHandler {
+func NewWebhooksHandler(store *storage.Storage, logger *zap.Logger, secret string, pythonBaseURL string) *WebhooksHandler {
 	return &WebhooksHandler{
-		store:  store,
-		logger: logger,
-		secret: secret,
+		store:         store,
+		logger:        logger,
+		secret:        secret,
+		pythonBaseURL: pythonBaseURL,
 	}
 }
 
@@ -47,11 +51,16 @@ type githubPR struct {
 	User    githubUser `json:"user"`
 }
 
+type githubInstallation struct {
+	ID int64 `json:"id"`
+}
+
 type githubPayload struct {
-	Action      string     `json:"action"`
-	PullRequest githubPR   `json:"pull_request"`
-	Repository  githubRepo `json:"repository"`
-	Sender      githubUser `json:"sender"`
+	Action       string             `json:"action"`
+	PullRequest  githubPR           `json:"pull_request"`
+	Repository   githubRepo         `json:"repository"`
+	Sender       githubUser         `json:"sender"`
+	Installation githubInstallation `json:"installation"`
 }
 
 func (h *WebhooksHandler) HandleGitHub(c *gin.Context) {
@@ -104,17 +113,18 @@ func (h *WebhooksHandler) HandleGitHub(c *gin.Context) {
 	rawPayload := datatypes.JSON(body)
 
 	event := &storage.WebhookEvent{
-		Source:       "github",
-		EventType:    eventType,
-		Action:       payload.Action,
-		RepoFullName: payload.Repository.FullName,
-		PRNumber:     payload.PullRequest.Number,
-		PRTitle:      payload.PullRequest.Title,
-		PRURL:        payload.PullRequest.HTMLURL,
-		DiffURL:      payload.PullRequest.DiffURL,
-		Sender:       payload.Sender.Login,
-		Status:       "pending",
-		Payload:      rawPayload,
+		Source:         "github",
+		EventType:      eventType,
+		Action:         payload.Action,
+		RepoFullName:   payload.Repository.FullName,
+		PRNumber:       payload.PullRequest.Number,
+		PRTitle:        payload.PullRequest.Title,
+		PRURL:          payload.PullRequest.HTMLURL,
+		DiffURL:        payload.PullRequest.DiffURL,
+		Sender:         payload.Sender.Login,
+		InstallationID: payload.Installation.ID,
+		Status:         "pending",
+		Payload:        rawPayload,
 	}
 
 	if err := h.store.DB.Create(event).Error; err != nil {
@@ -127,7 +137,11 @@ func (h *WebhooksHandler) HandleGitHub(c *gin.Context) {
 		zap.Int("pr_number", payload.PullRequest.Number),
 		zap.String("repo", payload.Repository.FullName),
 		zap.String("sender", payload.Sender.Login),
+		zap.Int64("installation_id", payload.Installation.ID),
 	)
+
+	// 6. Trigger Python Backend (Development Team)
+	go h.triggerReviewAgent(event)
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "event_id": event.ID})
 }
@@ -154,4 +168,45 @@ func (h *WebhooksHandler) validateSignature(payload []byte, signatureHeader stri
 	expectedMAC := mac.Sum(nil)
 
 	return hmac.Equal(signatureBytes, expectedMAC)
+}
+
+func (h *WebhooksHandler) triggerReviewAgent(event *storage.WebhookEvent) {
+	if h.pythonBaseURL == "" {
+		h.logger.Warn("Python Base URL not configured, skipping review agent trigger")
+		return
+	}
+
+	url := fmt.Sprintf("%s/api/teams/development/review", h.pythonBaseURL)
+	payload := map[string]interface{}{
+		"event_id":        event.ID,
+		"repo_full_name":  event.RepoFullName,
+		"pr_number":       event.PRNumber,
+		"installation_id": event.InstallationID,
+		"diff_url":        event.DiffURL,
+		"action":          event.Action,
+	}
+
+	jsonPayload, _ := json.Marshal(payload)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		h.logger.Error("Failed to create review request", zap.Error(err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// TODO: Add internal auth header if needed
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		h.logger.Error("Failed to trigger review agent", zap.Error(err))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		h.logger.Error("Review agent returned error", zap.Int("status", resp.StatusCode))
+		return
+	}
+
+	h.logger.Info("Successfully triggered review agent", zap.String("event_id", event.ID.String()))
 }

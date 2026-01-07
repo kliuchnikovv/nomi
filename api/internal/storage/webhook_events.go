@@ -19,6 +19,7 @@ type WebhookEvent struct {
 	PRURL        string         `gorm:"type:text"`
 	DiffURL      string         `gorm:"type:text"`
 	Sender       string         `gorm:"type:varchar(100)"`                  // "jules-bot"
+	InstallationID int64        `gorm:"type:bigint"`                        // GitHub App Installation ID
 	Status       string         `gorm:"type:varchar(20);default:'pending'"` // pending, processing, reviewed
 	Payload      datatypes.JSON `gorm:"type:jsonb"`                         // Raw payload for debugging
 	ReviewResult datatypes.JSON `gorm:"type:jsonb"`                         // AI review result (Stage 2)

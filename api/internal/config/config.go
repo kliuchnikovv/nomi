@@ -2,13 +2,10 @@ package config
 
 import (
 	"log"
-	"net/url"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/a8m/envsubst"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -20,9 +17,9 @@ type Config struct {
 		Port     int    `yaml:"port"`
 		User     string `yaml:"user"`
 		Password string `yaml:"password"`
-		DBName   string `yaml:"dbname"`
+		DBName   string `yaml:"name"`
 		SSLMode  string `yaml:"sslmode"`
-	} `yaml:"database"`
+	} `yaml:"db"`
 	Token struct {
 		JWTSecret string `yaml:"jwt_secret"`
 	} `yaml:"token"`
@@ -31,8 +28,8 @@ type Config struct {
 		Providers    map[string]OAuthProviderCfg `yaml:"providers"`
 	} `yaml:"oauth2"`
 	Plugins map[string]struct {
-		Enabled bool           `yaml:"enabled"`
-		State   map[string]any `yaml:"state"` // Plugin configuration parameters
+		Enabled bool   `yaml:"enabled"`
+		State   string `yaml:"state"` // e.g. "active", "beta", "disabled"
 	} `yaml:"plugins"`
 	LLM struct {
 		BaseURL string `yaml:"base_url"` // URL for the python backend
@@ -50,18 +47,11 @@ type OAuthProviderCfg struct {
 	IssuerURL    string   `yaml:"issuer_url,omitempty"`
 }
 
-func Load(path string) (*Config, error) {
+func Load() (*Config, error) {
 	// Read the config file
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile("config/config.yaml")
 	if err != nil {
 		// Fallback to default path if not found (e.g. for tests)
-		// Try to look in standard locations if the provided path fails?
-		// Or just fail? The original code had a fallback.
-		// Let's keep the fallback logic if path is specific, or maybe just try the fallback if the specific one fails
-		// ONLY if the error is IsNotExist?
-		// But simpler to just respect the path for now as main.go decides the path.
-		// However, to match the previous robustness:
-		log.Printf("Failed to read config at %s: %v. Trying ../../config/config.yaml", path, err)
 		data, err = os.ReadFile("../../config/config.yaml")
 		if err != nil {
 			log.Printf("Failed to read config file: %v", err)
@@ -80,31 +70,6 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(expandedData, &cfg); err != nil {
 		log.Printf("Failed to unmarshal config: %v", err)
 		return nil, err
-	}
-
-	// Helper to parse DATABASE_URL if individual fields are missing
-	// This supports deployments where only DATABASE_URL is provided (e.g. Railway plugins)
-	if cfg.Database.Host == "" || cfg.Database.Port == 0 {
-		dbURL := os.Getenv("DATABASE_URL")
-		if dbURL != "" {
-			u, err := url.Parse(dbURL)
-			if err == nil {
-				cfg.Database.Host = u.Hostname()
-				portStr := u.Port()
-				if portStr != "" {
-					p, _ := strconv.Atoi(portStr)
-					cfg.Database.Port = p
-				}
-				if u.User != nil {
-					cfg.Database.User = u.User.Username()
-					p, ok := u.User.Password()
-					if ok {
-						cfg.Database.Password = p
-					}
-				}
-				cfg.Database.DBName = strings.TrimPrefix(u.Path, "/")
-			}
-		}
 	}
 
 	return &cfg, nil

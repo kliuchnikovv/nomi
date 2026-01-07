@@ -31,11 +31,7 @@ func TestWebhooksHandler_HandleGitHub(t *testing.T) {
 	// However, for signature validation and filtering, we don't hit the DB yet.
 
 	secret := "test-secret"
-	handler := &WebhooksHandler{
-		store:  &storage.Storage{}, // Empty storage, will panic if accessed, so we only test up to DB call or error
-		logger: logger,
-		secret: secret,
-	}
+	handler := NewWebhooksHandler(&storage.Storage{}, logger, secret, "http://python-backend")
 
 	t.Run("Invalid Signature", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -94,6 +90,7 @@ func TestWebhooksHandler_HandleGitHub(t *testing.T) {
 		payload := githubPayload{
 			Action: "opened",
 			Sender: githubUser{Login: "random-user"},
+			Installation: githubInstallation{ID: 12345},
 		}
 		body, _ := json.Marshal(payload)
 		signature := computeSignature(body, secret)
