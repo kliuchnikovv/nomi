@@ -42,7 +42,7 @@ class UserScenario(BaseModel):
 
 class AnalystOutput(BaseModel):
     project_id: str = Field(..., description="ID проекта из БД. Use 'unknown' if not clear from context.")
-    task_id: int = Field(..., description="ID задачи в очереди. Use 0 if not applicable.")
+    task_id: str = Field(..., description="ID задачи в очереди (UUID string).")
 
     summary: str = Field(..., description="Высокоуровневое резюме того, что должно измениться")
 
@@ -65,3 +65,31 @@ class AnalystOutput(BaseModel):
         default_factory=list,
         description="Ограничения (например: 'не изменять API эндпоинты' или 'сохранить обратную совместимость')"
     )
+
+class ArchitectPlan(BaseModel):
+    # Context
+    project_id: str
+    task_id: str
+
+    # Decisions
+    adr_title: str
+    adr_decision: str
+    adr_consequences: List[str]
+
+    # Implementation Plan
+    files_to_create: List[str]
+    files_to_modify: List[str]
+
+    technical_approach: str = Field(..., description="Detailed technical approach for the developer")
+
+    # Validation
+    verification_steps: List[str]
+
+class ReviewVerdict(BaseModel):
+    approved: bool
+    comments: List[str]
+    required_changes: List[str]
+
+class FinalAcceptance(BaseModel):
+    accepted: bool
+    reason: str

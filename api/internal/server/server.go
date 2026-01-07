@@ -105,6 +105,7 @@ func New(
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
 		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg)
 		projectHandler       = handlers.NewProjectHandler(db, logger, cfg)
+		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -191,7 +192,7 @@ func New(
 	r.PUT("/api/project-tasks/:id", wrapWithAuth(projectHandler.UpdateTask, authMiddleware))
 	r.DELETE("/api/project-tasks/:id", wrapWithAuth(projectHandler.DeleteTask, authMiddleware))
 	// State Machine Transition
-	r.PATCH("/api/project-tasks/:id/status", wrapWithAuth(projectTaskHandler.UpdateStatus, authMiddleware))
+	r.PATCH("/api/project-tasks/:id/status", taskAuth, projectTaskHandler.UpdateStatus)
 
 	// Team State API
 	r.POST("/api/team/state", taskAuth, teamHandler.SetState)
@@ -217,6 +218,9 @@ func New(
 	// File Upload API
 	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))
 	r.GET("/api/attachments/:id", wrapWithAuth(uploadHandler.GetAttachment, authMiddleware))
+
+	// Webhooks
+	r.POST("/api/webhooks/github", webhooksHandler.HandleGitHubWebhook)
 
 	// Mobile OAuth API (tokens returned to client, not stored on backend)
 	r.GET("/api/oauth/:provider/callback", mobileOAuthHandler.Callback) // Web callback from Google, redirects to app
