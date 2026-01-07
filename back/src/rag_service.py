@@ -7,90 +7,109 @@ from agno.knowledge.document import Document
 # Adjusted import to be relative or absolute based on running from root/back
 # Since we are running from root, and PYTHONPATH includes '.',
 # back.src.knowledge.factory should work, but src... fails if src is not in python path directly
-from back.src.knowledge.factory import build_vector_db
+from src.knowledge.factory import build_vector_db
+from src.knowledge.user_knowledge import UserScopedKnowledge
 
 logger = logging.getLogger(__name__)
 
-class ProjectKnowledgeManager:
+class KnowledgeManager:
     """
-    Manages project-specific knowledge using a shared vector database
-    with metadata filtering for isolation.
+    Manages user knowledge using a shared vector database
+    with metadata filtering for isolation and optional project scoping.
     """
 
-    def __init__(self, db_url: Optional[str] = None):
+    def __init__(self, user_id: str, db_url: Optional[str] = None):
+        self.user_id = user_id
         self.vector_db = build_vector_db(db_url=db_url)
-        # We use a generic Knowledge base here because filtering is applied per-call
-        self.knowledge = Knowledge(vector_db=self.vector_db)
+        # Use UserScopedKnowledge to enforce user_id isolation automatically
+        self.knowledge = UserScopedKnowledge(user_id=user_id, vector_db=self.vector_db)
 
-    def add_document_to_project(self, project_id: str, content: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+    def add_document(self, content: str, project_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> None:
         """
-        Add a document to the knowledge base with project_id in metadata.
+        Add a document to the knowledge base.
+        If project_id is provided, it's added to metadata.
+        If project_id is None, it's treated as general knowledge.
         """
-        if metadata is None:
-            metadata = {}
+        # Create a copy to avoid side effects on the passed dictionary
+        meta = metadata.copy() if metadata else {}
 
-        # Enforce project_id in metadata
-        metadata["project_id"] = project_id
+        if project_id:
+            meta["project_id"] = project_id
+        else:
+            meta["project_id"] = "general"
 
-        logger.info(f"Adding document to project {project_id}")
-        self.knowledge.load_text(text=content, meta_data=metadata)
+        logger.info(f"Adding document for user {self.user_id} (project: {meta.get('project_id')})")
+        # UserScopedKnowledge.load_text enforces user_id
+        self.knowledge.load_text(text=content, meta_data=meta)
 
-    def search_project(self, project_id: str, query: str, num_documents: int = 5) -> List[Document]:
+    def search(self, query: str, project_id: Optional[str] = None, num_documents: int = 5) -> List[Document]:
         """
-        Search for documents within a specific project's scope.
+        Search for documents.
+        If project_id is provided, filters by that project.
+        If project_id is None, searches general knowledge (project_id="general").
+        To search EVERYTHING for the user regardless of project, pass project_id="*" (or we could change design).
+        Current requirement: "Project A search shouldn't return Project B data".
+        So we enforce strict filtering.
         """
-        # PgVector uses the 'filter' argument for metadata filtering
-        filters = {"project_id": project_id}
+        filters = {}
+        if project_id:
+             filters["project_id"] = project_id
+        else:
+             filters["project_id"] = "general"
 
-        logger.info(f"Searching project {project_id} with query: {query}")
-        return self.knowledge.search(query=query, num_documents=num_documents, filter=filters)
+        logger.info(f"Searching user {self.user_id} (project: {filters['project_id']}) with query: {query}")
+        # UserScopedKnowledge.search adds user_id to filter.
+        # Fixed UserScopedKnowledge to use 'filters' as well.
+        return self.knowledge.search(query=query, num_documents=num_documents, filters=filters)
 
 
-class ProjectSearchTool(Toolkit):
+class KnowledgeSearchTool(Toolkit):
     """
-    Tool for agents to search project-specific knowledge.
+    Tool for agents to search knowledge (project-specific or general).
     """
 
-    def __init__(self, manager: Optional[ProjectKnowledgeManager] = None):
-        super().__init__(name="project_search_tool")
+    def __init__(self, user_id: str, manager: Optional[KnowledgeManager] = None):
+        super().__init__(name="knowledge_search_tool")
+
         if manager is None:
-            # Fallback to default initialization if not provided
             try:
-                manager = ProjectKnowledgeManager()
+                manager = KnowledgeManager(user_id=user_id)
             except Exception as e:
-                logger.warning(f"Failed to initialize ProjectKnowledgeManager in tool: {e}")
+                logger.warning(f"Failed to initialize KnowledgeManager in tool: {e}")
                 self.manager = None
                 return
 
         self.manager = manager
-        self.register(self.search_project_knowledge)
+        self.register(self.search_knowledge)
 
-    def search_project_knowledge(self, project_id: str, query: str) -> str:
+    def search_knowledge(self, query: str, project_id: Optional[str] = None) -> str:
         """
-        Search for information within a specific project's knowledge base.
+        Search for information in the knowledge base.
 
         Args:
-            project_id (str): The ID of the project to search in.
             query (str): The search query or question.
+            project_id (Optional[str]): The ID of the project to search in.
+                                      If not provided, searches general knowledge.
 
         Returns:
             str: A string containing the relevant information found.
         """
         if not self.manager:
-            return "Error: ProjectKnowledgeManager is not initialized."
+            return "Error: KnowledgeManager is not initialized."
 
         try:
-            results = self.manager.search_project(project_id, query)
+            results = self.manager.search(query=query, project_id=project_id)
             if not results:
-                return f"No information found for query '{query}' in project '{project_id}'."
+                scope = f"project '{project_id}'" if project_id else "general knowledge"
+                return f"No information found for query '{query}' in {scope}."
 
             # Format results
             formatted_results = []
             for doc in results:
-                # Document object usually has 'content'
-                formatted_results.append(f"---\n{doc.content}\n---")
+                content = getattr(doc, "content", str(doc))
+                formatted_results.append(f"---\n{content}\n---")
 
             return "\n".join(formatted_results)
         except Exception as e:
-            logger.error(f"Error searching project knowledge: {e}")
+            logger.error(f"Error searching knowledge: {e}")
             return f"Error occurred while searching: {str(e)}"
