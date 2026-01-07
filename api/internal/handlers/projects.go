@@ -177,7 +177,7 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 
 // --- Task Handlers ---
 
-type CreateTaskRequest struct {
+type CreateProjectTaskRequest struct {
 	Title       string `json:"title" binding:"required"`
 	Description string `json:"description"`
 	Priority    string `json:"priority"`
@@ -190,7 +190,7 @@ func (h *ProjectHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	var req CreateTaskRequest
+	var req CreateProjectTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
