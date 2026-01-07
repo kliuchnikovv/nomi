@@ -206,7 +206,7 @@ func New(
 	r.POST("/api/briefing", wrapWithAuth(briefingHandler.GetBriefing, authMiddleware))
 	r.POST("/api/analyze-email", emailAnalysisHandler.AnalyzeEmail) // No auth - frontend calls with email data
 	r.GET("/api/dashboard", wrapWithAuth(dashboardHandler.GetDashboard, authMiddleware))
-
+	
 	// GitHub Webhooks (no auth - uses signature validation)
 	r.POST("/api/webhooks/github", webhooksHandler.HandleGitHub)
 
