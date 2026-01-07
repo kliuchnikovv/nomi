@@ -1,131 +1,115 @@
-"""Helpers for interacting with a remote LightRAG deployment.
+from typing import Optional, Dict, Any, List
+import logging
 
-The local API layer only proxies CRUD operations to the LightRAG server:
-* POST /documents/text             — store text chunks
-* GET  /documents/track_status/:id — poll ingestion status
-* POST /query                      — run hybrid/local/global queries
-"""
+from agno.knowledge import Knowledge
+from agno.tools import Toolkit
+from agno.knowledge.document import Document
+# Adjusted import to be relative or absolute based on running from root/back
+# Since we are running from root, and PYTHONPATH includes '.',
+# back.src.knowledge.factory should work, but src... fails if src is not in python path directly
+from src.knowledge.factory import build_vector_db
+from src.knowledge.user_knowledge import UserScopedKnowledge
 
-from __future__ import annotations
+logger = logging.getLogger(__name__)
 
-import os
-import time
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+class KnowledgeManager:
+    """
+    Manages user knowledge using a shared vector database
+    with metadata filtering for isolation and optional project scoping.
+    """
 
-import httpx
-from lightrag.core import Component
+    def __init__(self, user_id: str, db_url: Optional[str] = None):
+        self.user_id = user_id
+        self.vector_db = build_vector_db(db_url=db_url)
+        # Use UserScopedKnowledge to enforce user_id isolation automatically
+        self.knowledge = UserScopedKnowledge(user_id=user_id, vector_db=self.vector_db)
 
+    def add_document(self, content: str, project_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Add a document to the knowledge base.
+        If project_id is provided, it's added to metadata.
+        If project_id is None, it's treated as general knowledge.
+        """
+        # Create a copy to avoid side effects on the passed dictionary
+        meta = metadata.copy() if metadata else {}
 
-DEFAULT_BASE_URL = os.getenv("LIGHTRAG_BASE_URL") or os.getenv("LIGHTRAG_ENDPOINT") or "http://localhost:9621"
-DEFAULT_MODE = os.getenv("LIGHTRAG_QUERY_MODE", "hybrid")
-LIGHTRAG_API_KEY = os.getenv("LIGHTRAG_API_KEY")
-AUTH_HEADER_NAME = os.getenv("LIGHTRAG_AUTH_HEADER", "X-API-KEY")
-AUTH_HEADER_FORMAT = os.getenv("LIGHTRAG_AUTH_TEMPLATE", "{api_key}")
-TRACK_TIMEOUT = float(os.getenv("LIGHTRAG_TRACK_TIMEOUT", "30"))
-TRACK_POLL_INTERVAL = float(os.getenv("LIGHTRAG_TRACK_POLL_INTERVAL", "1.0"))
+        if project_id:
+            meta["project_id"] = project_id
+        else:
+            meta["project_id"] = "general"
 
+        logger.info(f"Adding document for user {self.user_id} (project: {meta.get('project_id')})")
+        # UserScopedKnowledge.load_text enforces user_id
+        self.knowledge.load_text(text=content, meta_data=meta)
 
-def _build_headers(json: bool = True) -> Dict[str, str]:
-    headers: Dict[str, str] = {}
-    if json:
-        headers["Content-Type"] = "application/json"
-    if LIGHTRAG_API_KEY:
-        headers[AUTH_HEADER_NAME] = AUTH_HEADER_FORMAT.format(api_key=LIGHTRAG_API_KEY)
-    return headers
+    def search(self, query: str, project_id: Optional[str] = None, num_documents: int = 5) -> List[Document]:
+        """
+        Search for documents.
+        If project_id is provided, filters by that project.
+        If project_id is None, searches general knowledge (project_id="general").
+        To search EVERYTHING for the user regardless of project, pass project_id="*" (or we could change design).
+        Current requirement: "Project A search shouldn't return Project B data".
+        So we enforce strict filtering.
+        """
+        filters = {}
+        if project_id:
+             filters["project_id"] = project_id
+        else:
+             filters["project_id"] = "general"
 
-
-@dataclass
-class RAGCallResult:
-    """Compatibility wrapper that mimics previous RAG pipeline responses."""
-
-    data: str
-    raw: Any
-
-
-class RemoteLightRAG(Component):
-    """Minimal pipeline that proxies operations to an external LightRAG server."""
-
-    def __init__(self, base_url: str = DEFAULT_BASE_URL, mode: str = DEFAULT_MODE):
-        super().__init__()
-        self.base_url = base_url.rstrip("/")
-        self.mode = mode
-
-    def _post(self, path: str, *, json: Optional[Dict[str, Any]] = None) -> httpx.Response:
-        url = f"{self.base_url}{path}"
-        response = httpx.post(url, json=json, headers=_build_headers())
-        response.raise_for_status()
-        return response
-
-    def _get(self, path: str) -> httpx.Response:
-        url = f"{self.base_url}{path}"
-        response = httpx.get(url, headers=_build_headers(json=False))
-        response.raise_for_status()
-        return response
-
-    def _wait_for_track(self, track_id: str) -> Optional[str]:
-        """Poll LightRAG until the asynchronous ingestion job completes."""
-        if not track_id:
-            return None
-
-        deadline = time.monotonic() + TRACK_TIMEOUT
-        while time.monotonic() < deadline:
-            status = self._get(f"/documents/track_status/{track_id}").json()
-            documents = status.get("documents") or []
-            if documents:
-                return documents[0].get("id")
-            time.sleep(TRACK_POLL_INTERVAL)
-        return None
-
-    def index(self, documents: List[Dict[str, Any]]) -> None:
-        for doc in documents:
-            payload: Dict[str, Any] = {
-                "text": doc.get("text", ""),
-                "file_source": doc.get("id"),
-            }
-            metadata = doc.get("metadata")
-            if metadata:
-                payload["metadata"] = metadata
-
-            if not payload["text"]:
-                continue
-
-            track_info = self._post("/documents/text", json=payload).json()
-            track_id = track_info.get("track_id")
-            self._wait_for_track(track_id)
-
-    def call(self, query: str, *, mode: Optional[str] = None) -> RAGCallResult:
-        payload = {"query": query, "mode": mode or self.mode}
-        response = self._post("/query", json=payload).json()
-
-        if isinstance(response, dict):
-            answer = response.get("response") or response.get("data")
-            if isinstance(answer, str):
-                return RAGCallResult(data=answer, raw=response)
-            return RAGCallResult(data=str(response), raw=response)
-        if isinstance(response, list) and response:
-            # Server sometimes returns a list of objects; join their textual parts.
-            sections = []
-            for item in response:
-                if isinstance(item, str):
-                    sections.append(item)
-                elif isinstance(item, dict):
-                    sections.append(item.get("response") or item.get("content") or str(item))
-            data = "\n\n".join(sections) if sections else str(response)
-            return RAGCallResult(data=data, raw=response)
-        return RAGCallResult(data=str(response), raw=response)
+        logger.info(f"Searching user {self.user_id} (project: {filters['project_id']}) with query: {query}")
+        # UserScopedKnowledge.search adds user_id to filter.
+        # Fixed UserScopedKnowledge to use 'filters' as well.
+        return self.knowledge.search(query=query, num_documents=num_documents, filters=filters)
 
 
-rag_pipeline = RemoteLightRAG()
+class KnowledgeSearchTool(Toolkit):
+    """
+    Tool for agents to search knowledge (project-specific or general).
+    """
 
+    def __init__(self, user_id: str, manager: Optional[KnowledgeManager] = None):
+        super().__init__(name="knowledge_search_tool")
 
-def index_document(document_id: str, text: str, metadata: Dict[str, Any] | None) -> None:
-    """Send a single document to LightRAG for indexing."""
-    doc = {"id": document_id, "text": text, "metadata": metadata or {}}
-    rag_pipeline.index([doc])
+        if manager is None:
+            try:
+                manager = KnowledgeManager(user_id=user_id)
+            except Exception as e:
+                logger.warning(f"Failed to initialize KnowledgeManager in tool: {e}")
+                self.manager = None
+                return
 
+        self.manager = manager
+        self.register(self.search_knowledge)
 
-def query_rag(user_query: str) -> str:
-    """Proxy the question to LightRAG and return the model response."""
-    result = rag_pipeline.call(user_query)
-    return result.data
+    def search_knowledge(self, query: str, project_id: Optional[str] = None) -> str:
+        """
+        Search for information in the knowledge base.
+
+        Args:
+            query (str): The search query or question.
+            project_id (Optional[str]): The ID of the project to search in.
+                                      If not provided, searches general knowledge.
+
+        Returns:
+            str: A string containing the relevant information found.
+        """
+        if not self.manager:
+            return "Error: KnowledgeManager is not initialized."
+
+        try:
+            results = self.manager.search(query=query, project_id=project_id)
+            if not results:
+                scope = f"project '{project_id}'" if project_id else "general knowledge"
+                return f"No information found for query '{query}' in {scope}."
+
+            # Format results
+            formatted_results = []
+            for doc in results:
+                content = getattr(doc, "content", str(doc))
+                formatted_results.append(f"---\n{content}\n---")
+
+            return "\n".join(formatted_results)
+        except Exception as e:
+            logger.error(f"Error searching knowledge: {e}")
+            return f"Error occurred while searching: {str(e)}"

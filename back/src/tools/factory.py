@@ -12,6 +12,7 @@ from src.tools.duckduckgo_custom import DuckDuckGoTools as WebSearchTools  # Use
 from google.oauth2.credentials import Credentials
 from src.tools.jules import JulesTools
 from src.tools.client_side import ClientGmailTools, ClientRagTools
+from src.rag_service import KnowledgeSearchTool
 
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
@@ -225,7 +226,17 @@ def _build_jules(params: Dict[str, Any]) -> Toolkit:
     return JulesTools(api_key=api_key)
 
 
+def _build_knowledge_search(params: Dict[str, Any]) -> Toolkit:
+    """Build KnowledgeSearchTool with user_id context."""
+    user_id = params.get("user_id")
+    if not user_id:
+        # Try to find user_id in creds or other params if structure varies,
+        # but typically it should be top-level or injected by caller
+        logger.warning("[Knowledge] No user_id provided for KnowledgeSearchTool")
+        raise ValueError("user_id is required for KnowledgeSearchTool")
 
+    logger.info("[Knowledge] Building KnowledgeSearchTool for user: %s", user_id)
+    return KnowledgeSearchTool(user_id=user_id)
 
 
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
@@ -236,6 +247,7 @@ TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "rag": _build_rag,
     "web_search": _build_web_search,
     "Jules": _build_jules,
+    "knowledge_search": _build_knowledge_search,
 }
 
 
