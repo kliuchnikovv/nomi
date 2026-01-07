@@ -103,6 +103,8 @@ func New(
 		emailAnalysisHandler = handlers.NewEmailAnalysisHandler(db, llmService)
 		dashboardHandler     = handlers.NewDashboardHandler(db)
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
+		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg)
+		projectHandler       = handlers.NewProjectHandler(db, logger, cfg)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -174,6 +176,22 @@ func New(
 	}
 
 	r.POST("/api/tasks", taskAuth, gin.WrapH(http.HandlerFunc(tasksHandler.CreateTask)))
+
+	// Projects API
+	r.POST("/api/projects", wrapWithAuth(projectHandler.CreateProject, authMiddleware))
+	r.GET("/api/projects", wrapWithAuth(projectHandler.ListProjects, authMiddleware))
+	r.GET("/api/projects/:id", wrapWithAuth(projectHandler.GetProject, authMiddleware))
+	r.PUT("/api/projects/:id", wrapWithAuth(projectHandler.UpdateProject, authMiddleware))
+	r.DELETE("/api/projects/:id", wrapWithAuth(projectHandler.DeleteProject, authMiddleware))
+
+	// Project Tasks API (CRUD)
+	r.POST("/api/projects/:id/tasks", wrapWithAuth(projectHandler.CreateTask, authMiddleware))
+	r.GET("/api/projects/:id/tasks", wrapWithAuth(projectHandler.ListTasks, authMiddleware))
+	r.GET("/api/project-tasks/:id", wrapWithAuth(projectHandler.GetTask, authMiddleware))
+	r.PUT("/api/project-tasks/:id", wrapWithAuth(projectHandler.UpdateTask, authMiddleware))
+	r.DELETE("/api/project-tasks/:id", wrapWithAuth(projectHandler.DeleteTask, authMiddleware))
+	// State Machine Transition
+	r.PATCH("/api/project-tasks/:id/status", wrapWithAuth(projectTaskHandler.UpdateStatus, authMiddleware))
 
 	// Team State API
 	r.POST("/api/team/state", taskAuth, teamHandler.SetState)

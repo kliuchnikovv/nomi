@@ -46,6 +46,8 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Attachment{},
 		&Task{},
 		&TeamKVStore{},
+		&Project{},
+		&ProjectTask{},
 	); err != nil {
 		return nil, err
 	}
