@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/a8m/envsubst"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -20,7 +20,7 @@ type Config struct {
 		Port     int    `yaml:"port"`
 		User     string `yaml:"user"`
 		Password string `yaml:"password"`
-		DBName   string `yaml:"name"`
+		DBName   string `yaml:"dbname"`
 		SSLMode  string `yaml:"sslmode"`
 	} `yaml:"db"`
 	Token struct {
