@@ -47,11 +47,18 @@ type OAuthProviderCfg struct {
 	IssuerURL    string   `yaml:"issuer_url,omitempty"`
 }
 
-func Load() (*Config, error) {
+func Load(path string) (*Config, error) {
 	// Read the config file
-	data, err := os.ReadFile("config/config.yaml")
+	data, err := os.ReadFile(path)
 	if err != nil {
 		// Fallback to default path if not found (e.g. for tests)
+		// Try to look in standard locations if the provided path fails? 
+		// Or just fail? The original code had a fallback.
+		// Let's keep the fallback logic if path is specific, or maybe just try the fallback if the specific one fails 
+		// ONLY if the error is IsNotExist?
+		// But simpler to just respect the path for now as main.go decides the path.
+		// However, to match the previous robustness:
+		log.Printf("Failed to read config at %s: %v. Trying ../../config/config.yaml", path, err)
 		data, err = os.ReadFile("../../config/config.yaml")
 		if err != nil {
 			log.Printf("Failed to read config file: %v", err)
