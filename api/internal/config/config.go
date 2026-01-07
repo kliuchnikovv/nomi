@@ -28,8 +28,8 @@ type Config struct {
 		Providers    map[string]OAuthProviderCfg `yaml:"providers"`
 	} `yaml:"oauth2"`
 	Plugins map[string]struct {
-		Enabled bool   `yaml:"enabled"`
-		State   string `yaml:"state"` // e.g. "active", "beta", "disabled"
+		Enabled bool           `yaml:"enabled"`
+		State   map[string]any `yaml:"state"` // Plugin configuration parameters
 	} `yaml:"plugins"`
 	LLM struct {
 		BaseURL string `yaml:"base_url"` // URL for the python backend
