@@ -15,8 +15,10 @@ type ProjectTaskStatus string
 const (
 	ProjectTaskStatusBacklog  ProjectTaskStatus = "BACKLOG"
 	ProjectTaskStatusAnalysis ProjectTaskStatus = "ANALYSIS"
+	ProjectTaskStatusPlanning ProjectTaskStatus = "PLANNING"
 	ProjectTaskStatusCoding   ProjectTaskStatus = "CODING"
 	ProjectTaskStatusReview   ProjectTaskStatus = "REVIEW"
+	ProjectTaskStatusVerify   ProjectTaskStatus = "VERIFY"
 	ProjectTaskStatusDone     ProjectTaskStatus = "DONE"
 	ProjectTaskStatusCancelled ProjectTaskStatus = "CANCELLED"
 )

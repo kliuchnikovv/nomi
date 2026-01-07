@@ -66,14 +66,40 @@ class AnalystOutput(BaseModel):
         description="Ограничения (например: 'не изменять API эндпоинты' или 'сохранить обратную совместимость')"
     )
 
-class ArchitectPlanContext(BaseModel):
-    repository_name: str = Field(..., description="Full repository name (e.g., 'owner/repo')")
-    branch_name: str = Field(..., description="Target branch name for the feature")
-    task_id: str = Field(..., description="UUID of the task in the database")
-
 class ArchitectPlan(BaseModel):
+    # Context
+    project_id: str
+    task_id: str
+
+    # Decisions
+    adr_title: str
+    adr_decision: str
+    adr_consequences: List[str]
+
+    # Implementation Plan
+    files_to_create: List[str]
+    files_to_modify: List[str]
+
+    technical_approach: str = Field(..., description="Detailed technical approach for the developer")
+
+    # Validation
+    verification_steps: List[str]
+      
     context: ArchitectPlanContext = Field(..., description="Context identifiers for the task")
 
     steps: List[str] = Field(..., description="List of atomic implementation steps")
     style_guide_rules: List[str] = Field(..., description="Coding standards from AGENTS.md")
     reference_snippets: List[str] = Field(..., description="Relevant code snippets from the codebase")
+
+class ReviewVerdict(BaseModel):
+    approved: bool
+    comments: List[str]
+    required_changes: List[str]
+
+class FinalAcceptance(BaseModel):
+    accepted: bool
+    reason: str
+class ArchitectPlanContext(BaseModel):
+    repository_name: str = Field(..., description="Full repository name (e.g., 'owner/repo')")
+    branch_name: str = Field(..., description="Target branch name for the feature")
+    task_id: str = Field(..., description="UUID of the task in the database")

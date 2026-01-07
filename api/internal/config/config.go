@@ -37,6 +37,9 @@ type Config struct {
 		RefreshBeforeMinutes int    `yaml:"refresh_before_minutes"`
 		JWTSecret            string `yaml:"jwt_secret"`
 	} `yaml:"token"`
+	GitHub struct {
+		WebhookSecret string `yaml:"webhook_secret"`
+	} `yaml:"github"`
 }
 
 func Load(path string) (*Config, error) {

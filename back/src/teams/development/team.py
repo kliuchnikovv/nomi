@@ -1,6 +1,7 @@
 from textwrap import dedent
 from typing import Optional
 import os
+import json
 
 from agno.agent import Agent
 from agno.knowledge import Knowledge
@@ -8,10 +9,12 @@ from agno.db import BaseDb
 from agno.models.base import Model
 from agno.team import Team
 from agno.tools.github import GithubTools
+import requests
 
 from src.agents.genie import GenieAgent
-from src.teams.development.models import AnalystOutput
+from src.teams.development.models import AnalystOutput, ArchitectPlan, ReviewVerdict, FinalAcceptance
 from src.rag_service import KnowledgeSearchTool
+from src.workflow.agent import PgWorkflowStorage, WorkflowAgent
 from src.tools.jules import JulesTools
 from src.tools.task_manager import TaskManagementTool
 
@@ -392,12 +395,16 @@ class DevelopmentTeam(Team):
         markdown: bool = True,
         debug_mode: bool = False,
         user_id: Optional[str] = None,
+        db_url: Optional[str] = None, # Added to support Workflow Storage
     ):
         # Initialize GitHub tools if token is provided
         architect_tools = []
         if github_token:
             architect_tools.append(GithubTools(access_token=github_token))
 
+        # Workflow Storage
+        self.workflow_storage = PgWorkflowStorage(db_url) if db_url else None
+        self.user_id = user_id
         # Initialize Jules Tools
         jules_api_key = os.getenv("JULES_API_KEY", "")
         worker_tools = [
@@ -665,7 +672,7 @@ If a team member encounters issues:
             description=description,
             instructions=instructions,
             members=[
-                Agent(
+                WorkflowAgent(
                     name="Analyst",
                     model=model,
                     instructions=analyst_instructions,
@@ -673,38 +680,129 @@ If a team member encounters issues:
                     debug_mode=debug_mode,
                     tools=analyst_tools,
                     response_model=AnalystOutput,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
-                Agent(
+                WorkflowAgent(
                     name="Architect",
                     model=model,
                     tools=architect_tools,
                     instructions=architect_instructions,
                     markdown=markdown,
                     debug_mode=debug_mode,
+                    response_model=ArchitectPlan,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
-                Agent(
+                WorkflowAgent(
                     name="Worker",
                     model=model,
                     tools=worker_tools,
                     instructions=worker_instructions,
                     markdown=markdown,
                     debug_mode=debug_mode,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
-                Agent(
-                    name="Developer",
-                    model=model,
-                    instructions=developer_instructions,
-                    markdown=markdown,
-                    debug_mode=debug_mode,
-                ),
-                Agent(
+                WorkflowAgent(
                     name="Reviewer",
                     model=model,
                     instructions=reviewer_instructions,
                     markdown=markdown,
                     debug_mode=debug_mode,
+                    response_model=ReviewVerdict,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
+                ),
+                WorkflowAgent(
+                    name="Verifier",
+                    model=model,
+                    instructions=analyst_instructions, # Re-use Analyst instructions
+                    markdown=markdown,
+                    debug_mode=debug_mode,
+                    tools=analyst_tools,
+                    response_model=FinalAcceptance, # Different model
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
             ],
             add_history_to_context=True,
             debug_mode=debug_mode,
         )
+
+    def transition_to_next_step(self, task_id: str, current_role: str, output: any, session_id: str):
+        """
+        Orchestrates the workflow state machine.
+        Called after an agent completes its task.
+        """
+        if not self.workflow_storage:
+            return
+
+        # 1. Save Artifact
+        artifact_type = type(output).__name__ if not isinstance(output, dict) else "Dict"
+        content = output.model_dump() if hasattr(output, "model_dump") else output
+        self.workflow_storage.save_artifact(session_id, task_id, current_role, artifact_type, content)
+
+        # 2. Update Status & Determine Next Step
+        next_status = None
+        next_role = None
+
+        if current_role == "Analyst":
+            next_status = "PLANNING"
+            next_role = "Architect"
+        elif current_role == "Architect":
+            next_status = "CODING"
+            next_role = "Developer"
+        elif current_role == "Reviewer":
+             if hasattr(output, 'approved') and output.approved:
+                 next_status = "VERIFY"
+                 next_role = "Verifier"
+             else:
+                 next_status = "CODING"
+                 next_role = "Developer" # Loop back for fixes
+
+        if next_status:
+            self._update_task_status(task_id, next_status)
+
+        # 3. Trigger Next Agent Automatically
+        if next_role:
+            # Find the agent
+            next_agent = next((m for m in self.members if m.name == next_role), None)
+            if next_agent:
+                print(f"[Workflow] Activating {next_role} for Task {task_id}")
+                # Pass previous output as context/message
+                # We need to construct a prompt.
+                # WorkflowAgent.run() handles context inheritance via storage, so we just need to wake it up.
+                # We pass task_id/session_id so it finds the context.
+                message = f"Previous step completed. Proceed with {next_role} phase for Task {task_id}."
+
+                # Execute synchronously
+                try:
+                    next_agent.run(message=message, task_id=task_id, session_id=session_id)
+                except Exception as e:
+                    print(f"Failed to auto-activate {next_role}: {e}")
+
+    def run_component(self, role: str, task_id: str):
+        """
+        Public method to manually trigger a specific agent (e.g. from Webhook).
+        """
+        agent = next((m for m in self.members if m.name == role), None)
+        if agent:
+            # We might not have session_id here if called from webhook (new context).
+            # But WorkflowAgent.run looks up by task_id too.
+            print(f"[Workflow] Manually triggering {role} for Task {task_id}")
+            agent.run(message=f"External trigger for {role}.", task_id=task_id, session_id=None)
+        else:
+            print(f"Agent role {role} not found.")
+
+    def _update_task_status(self, task_id: str, status: str):
+        # Call Go API
+        base_url = os.getenv("API_BASE_URL", "http://api:8080")
+        url = f"{base_url}/api/project-tasks/{task_id}/status"
+        try:
+             # We need a way to authenticate or use internal secret
+             secret = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+             headers = {"X-Internal-Secret": secret}
+             requests.patch(url, json={"status": status}, headers=headers)
+        except Exception as e:
+            print(f"Failed to update task status: {e}")

@@ -61,7 +61,8 @@ class TeamFactory:
                 db=self.db,
                 github_token=github_token,
                 debug_mode=self.debug_mode,
-                user_id=user_id
+                user_id=user_id,
+                db_url=self.db.db_url if self.db else None # Use existing DB connection URL
             )
 
         elif team_type == "dnd_team":
