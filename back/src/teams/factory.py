@@ -49,9 +49,14 @@ class TeamFactory:
         elif team_type == "development_team":
             from src.teams.development.team import DevelopmentTeam
             logger.info("[WS] Instantiating DevelopmentTeam")
+
+            # Try to get GitHub token from command_desc or environment
+            github_token = command_desc.get("github_token") or os.getenv("GITHUB_TOKEN")
+
             return DevelopmentTeam(
                 model=self.model,
                 db=self.db,
+                github_token=github_token,
                 debug_mode=self.debug_mode
             )
 
