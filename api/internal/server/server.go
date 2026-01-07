@@ -103,6 +103,7 @@ func New(
 		emailAnalysisHandler = handlers.NewEmailAnalysisHandler(db, llmService)
 		dashboardHandler     = handlers.NewDashboardHandler(db)
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
+		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -174,6 +175,9 @@ func New(
 	}
 
 	r.POST("/api/tasks", taskAuth, gin.WrapH(http.HandlerFunc(tasksHandler.CreateTask)))
+
+	// Project Tasks API
+	r.PATCH("/api/project-tasks/:id/status", wrapWithAuth(projectTaskHandler.UpdateStatus, authMiddleware))
 
 	// Team State API
 	r.POST("/api/team/state", taskAuth, teamHandler.SetState)

@@ -461,6 +461,26 @@ async def get_embedding(request: EmbeddingRequest):
         logging.error(f"Embedding generation failed: {e}")
         return {"error": str(e)}
 
+class ProjectTaskNotification(BaseModel):
+    user_id: str
+    project_id: str
+    task_id: str
+    old_status: str
+    new_status: str
+    timestamp: str
+
+@app.post("/api/notify-lead")
+async def notify_team_lead(notification: ProjectTaskNotification):
+    """
+    Mock endpoint to receive task status change notifications.
+    In the future, this will trigger the Team Lead Agent.
+    """
+    logging.info(f"Received ProjectTask update: Task {notification.task_id} transitioned from {notification.old_status} to {notification.new_status}")
+
+    # Logic to route to the correct agent would go here.
+    # For now, we just acknowledge receipt.
+    return {"status": "received", "task_id": notification.task_id}
+
 if __name__ == "__main__":
     agent_os.serve(
         app="app:app", 
