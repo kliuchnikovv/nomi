@@ -62,7 +62,7 @@ class TeamFactory:
                 github_token=github_token,
                 debug_mode=self.debug_mode,
                 user_id=user_id,
-                db_url=os.getenv("DB_DSN") # Pass DB_DSN for PgWorkflowStorage
+                db_url=self.db.db_url if self.db else None # Use existing DB connection URL
             )
 
         elif team_type == "dnd_team":
