@@ -1,5 +1,6 @@
 from typing import Optional, Dict, List, Any
 import json
+import time
 import requests
 from agno.tools import Toolkit
 from agno.utils.log import logger
@@ -24,6 +25,7 @@ class JulesTools(Toolkit):
         self.register(self.approve_plan)
         self.register(self.list_activities)
         self.register(self.send_message)
+        self.register(self.wait_for_pr)
 
     def _get(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         url = f"{self.base_url}/{endpoint}"
@@ -152,3 +154,65 @@ class JulesTools(Toolkit):
         """
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
         return json.dumps(self._post(f"{resource_path}:sendMessage", data={"prompt": prompt}))
+
+    def wait_for_pr(self, session_id: str, timeout_minutes: int = 10) -> str:
+        """Polls the session activities for a Pull Request creation event.
+
+        This method blocks the agent execution until a PR is created or the timeout is reached.
+
+        Args:
+            session_id (str): The ID of the session to monitor.
+            timeout_minutes (int): Maximum time to wait in minutes (default: 10).
+
+        Returns:
+            str: JSON string containing 'status' and 'pr_url' if found, or 'error' if timed out.
+        """
+        start_time = time.time()
+        end_time = start_time + (timeout_minutes * 60)
+        resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
+
+        logger.info(f"Starting to poll Jules session {session_id} for PR creation (timeout: {timeout_minutes}m)")
+
+        while time.time() < end_time:
+            try:
+                # Fetch recent activities
+                activities_data = self._get(f"{resource_path}/activities", params={"pageSize": 20})
+                activities = activities_data.get("activities", [])
+
+                for activity in activities:
+                    # Look for activities that indicate a PR was created.
+                    # This relies on the specific payload structure of Jules activities.
+                    # Usually, there's a type or kind, or we search text content.
+                    # Assumption: Jules returns an activity with 'githubPr' or similar metadata,
+                    # or the 'reasoning' / 'text' contains the link.
+                    # Let's inspect 'activityType' or specific fields if documented.
+                    # Without strict docs, we look for 'pullRequest' in payload or text.
+
+                    # Common structure might be activity -> detail -> pullRequest -> url
+
+                    # 1. Check direct metadata if available (hypothetical based on standard Google Cloud APIs)
+                    if "metadata" in activity:
+                        metadata = activity["metadata"]
+                        if "pullRequest" in metadata:
+                            pr_url = metadata["pullRequest"].get("url")
+                            if pr_url:
+                                return json.dumps({"status": "success", "pr_url": pr_url})
+
+                    # 2. Check text content for "Pull Request created" + URL
+                    text_content = activity.get("text", "")
+                    if "github.com" in text_content and "/pull/" in text_content:
+                         # Simple extraction (naive)
+                         words = text_content.split()
+                         for word in words:
+                             if "github.com" in word and "/pull/" in word:
+                                 # Clean up trailing punctuation
+                                 url = word.rstrip(".,;:)")
+                                 return json.dumps({"status": "success", "pr_url": url})
+
+            except Exception as e:
+                logger.warning(f"Error polling Jules activities: {e}")
+
+            # Wait before next poll
+            time.sleep(15)
+
+        return json.dumps({"status": "timeout", "error": f"No PR created within {timeout_minutes} minutes."})
