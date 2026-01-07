@@ -13,6 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from src.agents.genie import GenieAgent
 from src.server import ws as ws_server
+from src.server import webhooks
 from src.agents.factory import AgentFactory
 from src.tools.config import ToolConfigClient
 from src.tools.factory import ToolsConfig
@@ -423,6 +424,12 @@ try:
     logging.info("WS route mounted at /llm/ws")
 except Exception:
     logging.exception("Failed to mount WS routes")
+
+try:
+    app.include_router(webhooks.router)
+    logging.info("Webhooks route mounted at /webhooks")
+except Exception:
+    logging.exception("Failed to mount Webhooks routes")
 
 
 class EmbeddingRequest(BaseModel):

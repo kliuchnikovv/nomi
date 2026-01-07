@@ -105,6 +105,7 @@ func New(
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
 		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg)
 		projectHandler       = handlers.NewProjectHandler(db, logger, cfg)
+		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -227,6 +228,9 @@ func New(
 	r.POST("/api/briefing", wrapWithAuth(briefingHandler.GetBriefing, authMiddleware))
 	r.POST("/api/analyze-email", emailAnalysisHandler.AnalyzeEmail) // No auth - frontend calls with email data
 	r.GET("/api/dashboard", wrapWithAuth(dashboardHandler.GetDashboard, authMiddleware))
+
+	// Webhooks
+	r.POST("/api/webhooks/github", webhooksHandler.HandleGithubWebhook)
 
 	// Proxy for Embeddings (transient) - forwards to Python backend
 	r.POST("/api/embeddings", func(c *gin.Context) {
