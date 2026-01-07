@@ -49,10 +49,13 @@ class TeamFactory:
         elif team_type == "development_team":
             from src.teams.development.team import DevelopmentTeam
             logger.info("[WS] Instantiating DevelopmentTeam")
+            # Use user_id from command description if available, otherwise fallback to session_id
+            user_id = command_desc.get("user_id") or session_id
             return DevelopmentTeam(
                 model=self.model,
                 db=self.db,
-                debug_mode=self.debug_mode
+                debug_mode=self.debug_mode,
+                user_id=user_id
             )
 
         elif team_type == "dnd_team":

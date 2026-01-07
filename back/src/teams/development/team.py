@@ -1,12 +1,15 @@
 from textwrap import dedent
 from typing import Optional
 
-from agno.agent import Agent, Knowledge
+from agno.agent import Agent
+from agno.knowledge import Knowledge
 from agno.db import BaseDb
 from agno.models.base import Model
 from agno.team import Team
 
-from src.teams.genie.agent import GenieAgent
+from src.agents.genie import GenieAgent
+from src.teams.development.models import AnalystOutput
+from src.rag_service import KnowledgeSearchTool
 
 # --- Instructions for each role ---
 
@@ -37,13 +40,11 @@ The **Genie** project is a monorepo containing:
 - **`api/`** — Go REST API & WebSocket server (Gin + GORM)
 
 # Your Role as Analyst
-1. Read the user's request carefully and identify the target component(s).
-2. Identify any ambiguities, missing information, or conflicting requirements.
-3. Ask clarifying questions — do NOT assume. Batch questions together.
-4. Consider edge cases, error scenarios, and integration points.
-5. Suggest necessary clarifications or refinements to requirements.
-6. Ensure requirements are complete and atomic before passing to the Architect.
-7. Reference existing code patterns when applicable using `file_path:line_number` format.
+1. **Analyze Request**: Read the user's request carefully to understand the desired feature or change.
+2. **Check RAG**: Use the `knowledge_search_tool` to check the current state of the project and avoid duplicating existing functionality. Search for relevant code patterns, existing APIs, or similar features.
+3. **Identify Requirements**: Break down the request into atomic functional requirements.
+4. **Define Acceptance Criteria**: For each requirement, define clear, testable acceptance criteria.
+5. **Structure Output**: You MUST return the result in the `AnalystOutput` format.
 
 # Key Questions to Consider
 - Which component(s) are affected: `api/`, `back/`, or `front/`?
@@ -51,6 +52,8 @@ The **Genie** project is a monorepo containing:
 - What are the error handling requirements?
 - Are there security implications?
 - What tests are needed?
+
+You must always output a structured `AnalystOutput` object when you have completed your analysis.
 ''')
 
 architect_instructions = dedent('''
@@ -373,8 +376,9 @@ class DevelopmentTeam(Team):
         db: BaseDb | None = None,
         markdown: bool = True,
         debug_mode: bool = False,
+        user_id: Optional[str] = None,
     ):
-description = dedent('''
+        description = dedent('''
 <identity>
 You are the **Team Leader** of a Development Team, a powerful agentic AI coding assistant for the Genie project.
 You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.
@@ -622,6 +626,10 @@ If a team member encounters issues:
 - Present final result to the user
         ''')
 
+        analyst_tools = []
+        if user_id:
+             analyst_tools.append(KnowledgeSearchTool(user_id=user_id))
+
         super().__init__(
             model=model,
             db=db,
@@ -634,6 +642,8 @@ If a team member encounters issues:
                     instructions=analyst_instructions,
                     markdown=markdown,
                     debug_mode=debug_mode,
+                    tools=analyst_tools,
+                    response_model=AnalystOutput,
                 ),
                 Agent(
                     name="Architect",
