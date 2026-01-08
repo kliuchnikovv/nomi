@@ -10,6 +10,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// ProjectStatus defines the state of repository analysis
+type ProjectStatus string
+
+const (
+	ProjectStatusPending   ProjectStatus = "PENDING"
+	ProjectStatusAnalyzing ProjectStatus = "ANALYZING"
+	ProjectStatusReady     ProjectStatus = "READY"
+	ProjectStatusFailed    ProjectStatus = "FAILED"
+)
+
 // ProjectTaskStatus defines the state of a project task
 type ProjectTaskStatus string
 
@@ -30,10 +40,12 @@ type Project struct {
 	UserID      uuid.UUID      `gorm:"type:uuid;not null;index"`
 	Name        string         `gorm:"type:text;not null"`
 	Description string         `gorm:"type:text"`
-	Repository  string         `gorm:"type:text"` // e.g. "owner/repo"
-	CreatedAt   time.Time      `gorm:"not null"`
-	UpdatedAt   time.Time      `gorm:"not null"`
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	Repository      string         `gorm:"type:text"` // e.g. "owner/repo"
+	Status          ProjectStatus  `gorm:"type:varchar(20);default:'READY';not null"`
+	LastIndexedAt   *time.Time     `gorm:"type:timestamp"`
+	CreatedAt       time.Time      `gorm:"not null"`
+	UpdatedAt       time.Time      `gorm:"not null"`
+	DeletedAt       gorm.DeletedAt `gorm:"index"`
 }
 
 // ProjectTask represents a task within a project
@@ -111,6 +123,19 @@ func (s *Storage) UpdateProject(ctx context.Context, project *Project) error {
 // DeleteProject deletes a project (soft delete)
 func (s *Storage) DeleteProject(ctx context.Context, id uuid.UUID) error {
 	return s.DB.WithContext(ctx).Delete(&Project{}, id).Error
+}
+
+// UpdateProjectStatus updates only the status and last_indexed_at fields
+func (s *Storage) UpdateProjectStatus(ctx context.Context, id uuid.UUID, status ProjectStatus) error {
+	updates := map[string]interface{}{
+		"status":     status,
+		"updated_at": time.Now().UTC(),
+	}
+	if status == ProjectStatusReady {
+		now := time.Now().UTC()
+		updates["last_indexed_at"] = &now
+	}
+	return s.DB.WithContext(ctx).Model(&Project{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // GetProjectTasks retrieves all tasks for a project

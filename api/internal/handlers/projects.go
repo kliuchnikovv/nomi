@@ -55,8 +55,13 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 		Name:        req.Name,
 		Description: req.Description,
 		Repository:  req.Repository,
+		Status:      storage.ProjectStatusReady,
 		CreatedAt:   time.Now().UTC(),
 		UpdatedAt:   time.Now().UTC(),
+	}
+
+	if project.Repository != "" {
+		project.Status = storage.ProjectStatusAnalyzing
 	}
 
 	if err := h.store.CreateProject(c.Request.Context(), project); err != nil {
@@ -198,6 +203,32 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+type UpdateProjectStatusRequest struct {
+	Status storage.ProjectStatus `json:"status" binding:"required"`
+}
+
+func (h *ProjectHandler) UpdateStatus(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+
+	var req UpdateProjectStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.store.UpdateProjectStatus(c.Request.Context(), id, req.Status); err != nil {
+		h.logger.Error("failed to update project status", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update project status"})
+		return
+	}
+
+	c.Status(http.StatusOK)
 }
 
 // --- Task Handlers ---

@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import Dialog from '../../components/Dialog';
 import { tokyoNight } from '../../themes/tokyoNight';
-import { projectsApi } from '../../apiClient';
+import { projectsApi, Project } from '../../apiClient';
 
 interface AddProjectModalProps {
     visible: boolean;
     onClose: () => void;
-    onProjectCreated: (project: any) => void;
+    onProjectCreated: (project: Project) => void;
 }
 
 export default function AddProjectModal({ visible, onClose, onProjectCreated }: AddProjectModalProps) {

@@ -267,13 +267,27 @@ export const weatherApi = {
     },
 };
 
+export interface Project {
+    ID: string;
+    UserID: string;
+    Name: string;
+    Description?: string;
+    Repository?: string;
+    Status: 'PENDING' | 'ANALYZING' | 'READY' | 'FAILED';
+    LastIndexedAt?: string;
+    CreatedAt: string;
+    UpdatedAt: string;
+}
+
 export const projectsApi = {
-    list: () => apiClient.get<Array<any>>(`${API_URL()}/projects`),
-    get: (id: string) => apiClient.get<any>(`${API_URL()}/projects/${id}`),
+    list: () => apiClient.get<Array<Project>>(`${API_URL()}/projects`),
+    get: (id: string) => apiClient.get<Project>(`${API_URL()}/projects/${id}`),
     create: (body: { name: string; description?: string; repository?: string }) =>
-        apiClient.post<any>(`${API_URL()}/projects`, body),
+        apiClient.post<Project>(`${API_URL()}/projects`, body),
     update: (id: string, body: { name?: string; description?: string; repository?: string }) =>
-        apiClient.put<any>(`${API_URL()}/projects/${id}`, body),
+        apiClient.put<Project>(`${API_URL()}/projects/${id}`, body),
     delete: (id: string) => apiClient.delete<void>(`${API_URL()}/projects/${id}`),
+    updateStatus: (id: string, status: Project['Status']) =>
+        apiClient.patch<void>(`${API_URL()}/projects/${id}/status`, { status }),
 };
 

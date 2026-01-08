@@ -2,6 +2,8 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
+import requests
 import time
 import uuid
 from typing import Optional, List, Any, AsyncGenerator, Dict
@@ -458,11 +460,25 @@ class LLMWebSocketSession:
             logger.warning("[WS] Unknown signal type: %s", sig_type)
 
     async def analyze_project(self, project_id: str, repository: str):
+        def update_status(status: str):
+            api_url = os.getenv("GO_API_URL", "http://localhost:8080/api")
+            url = f"{api_url}/projects/{project_id}/status"
+            headers = {}
+            internal_key = os.getenv("INTERNAL_API_KEY")
+            if internal_key:
+                headers["X-Internal-Secret"] = internal_key
+            try:
+                requests.patch(url, json={"status": status}, headers=headers)
+                logger.debug("[WS] Updated project %s status to %s", project_id, status)
+            except Exception as e:
+                logger.error("[WS] Failed to update project status: %s", e)
+
         try:
             from src.rag_service import ProjectKnowledgeManager
-            import os
             
             logger.info("[WS] Starting analysis for project %s (repo: %s)", project_id, repository)
+            # Already set to ANALYZING by Go at creation, but let's be explicit if needed
+            # update_status("ANALYZING") 
             
             # Use user_id from session (which is user_id for this room)
             # In LLMWebSocketSession, we usually have user_id in session_id or chat_id?
@@ -486,6 +502,7 @@ class LLMWebSocketSession:
             await asyncio.to_thread(manager.ingest_repository, repository, project_id, github_token)
             
             logger.info("[WS] Completed analysis for project %s", project_id)
+            await asyncio.to_thread(update_status, "READY")
             
             # Notify user about completion via a system message in the chat
             await self._send_frame(make_data(self.next_id, Op.MESSAGE, self.chat_id_param, {
@@ -496,6 +513,7 @@ class LLMWebSocketSession:
             
         except Exception as e:
             logger.error("[WS] Failed to analyze project %s: %s", project_id, e)
+            await asyncio.to_thread(update_status, "FAILED")
             await self._send_frame(make_error(self.next_id, "analysis_failed", self.chat_id_param, str(e), 500))
 
     async def handle_user_message(self, frame: Frame):
