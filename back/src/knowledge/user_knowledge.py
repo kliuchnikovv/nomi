@@ -12,14 +12,14 @@ class UserScopedKnowledge(Knowledge):
         self.num_documents = num_documents
         self.user_id = user_id
 
-    def search(self, query: str, num_documents: int | None = None, filter: dict | None = None) -> List[Document]:
+    def search(self, query: str, num_documents: int | None = None, filters: dict | None = None) -> List[Document]:
         """
         Search with enforced user_id filter.
         """
-        effective_filter = filter or {}
-        # PgVector in Agno treats 'filter' as a metadata filter dictionary
+        effective_filter = filters or {}
+        # PgVector in Agno treats 'filters' as a metadata filter dictionary
         effective_filter["user_id"] = self.user_id
-        return super().search(query, num_documents, filter=effective_filter)
+        return super().search(query, num_documents, filters=effective_filter)
 
     def load_text(self, text: str, meta_data: dict = None):
         """
