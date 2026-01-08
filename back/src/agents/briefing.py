@@ -124,8 +124,8 @@ class BriefingAgent(Agent):
             tools=tools,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),
-            # response_model=BriefingResponse,  # Not supported in this version
-            # structured_outputs=True,          # Not supported in this version
+            output_schema=BriefingResponse,
+            structured_outputs=True,
             debug_mode=debug_mode,
             description="Prepares the daily executive briefing with context.",
         )

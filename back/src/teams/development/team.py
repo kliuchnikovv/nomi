@@ -679,7 +679,8 @@ If a team member encounters issues:
                     markdown=markdown,
                     debug_mode=debug_mode,
                     tools=analyst_tools,
-                    response_model=AnalystOutput,
+                    output_schema=AnalystOutput,
+                    structured_outputs=True,
                     workflow_storage=self.workflow_storage,
                     on_completion=self.transition_to_next_step
                 ),
@@ -690,7 +691,8 @@ If a team member encounters issues:
                     instructions=architect_instructions,
                     markdown=markdown,
                     debug_mode=debug_mode,
-                    response_model=ArchitectPlan,
+                    output_schema=ArchitectPlan,
+                    structured_outputs=True,
                     workflow_storage=self.workflow_storage,
                     on_completion=self.transition_to_next_step
                 ),
@@ -710,7 +712,8 @@ If a team member encounters issues:
                     instructions=reviewer_instructions,
                     markdown=markdown,
                     debug_mode=debug_mode,
-                    response_model=ReviewVerdict,
+                    output_schema=ReviewVerdict,
+                    structured_outputs=True,
                     workflow_storage=self.workflow_storage,
                     on_completion=self.transition_to_next_step
                 ),
@@ -721,7 +724,8 @@ If a team member encounters issues:
                     markdown=markdown,
                     debug_mode=debug_mode,
                     tools=analyst_tools,
-                    response_model=FinalAcceptance, # Different model
+                    output_schema=FinalAcceptance, # Different model
+                    structured_outputs=True,
                     workflow_storage=self.workflow_storage,
                     on_completion=self.transition_to_next_step
                 ),
