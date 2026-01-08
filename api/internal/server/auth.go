@@ -29,6 +29,13 @@ func wrapWithAuth(h gin.HandlerFunc, authMiddleware *auth.AuthMiddleware) gin.Ha
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Восстанавливаем gin.Context из http.Request
 				c.Request = r
+				
+				// Extract user from request context and set in Gin context
+				if user, ok := auth.GetUserFromContext(r.Context()); ok {
+					c.Set("userID", user.ID)
+					c.Set("user", user)
+				}
+				
 				h(c)
 			}),
 		))

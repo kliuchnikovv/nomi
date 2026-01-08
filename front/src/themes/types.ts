@@ -35,6 +35,9 @@ export type ThemeColors = {
     surface: string;
     surfaceAlt: string;
     surfaceHighlight: string;
+    primary?: string;
+    error?: string;
+    card?: string;
 };
 
 export type ThemeDescriptor = {

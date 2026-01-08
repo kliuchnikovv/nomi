@@ -8,11 +8,12 @@ import {
     View,
     ScrollView,
 } from 'react-native';
-import { NavArrowDown, NavArrowRight, Mail, Calendar, Sparks, Plus, Trash, GitHub, Play, CheckCircle, WarningTriangle, Folder } from 'iconoir-react-native';
+import { NavArrowDown, NavArrowRight, Mail, Calendar, Sparks, Plus, Trash, Github, Play, Check, XmarkCircle, Folder } from 'iconoir-react-native';
 import { SharedValue } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createRightSidebarStyles, RightSidebarStyles } from './styles';
+import { Plugin, PluginChat } from './models';
 import { usePluginChats } from './context';
 import { useChat } from '../chat/context';
 import { useTheme } from '../../context/ThemeContext';
@@ -306,9 +307,9 @@ function ProjectCard({
             case 'ANALYZING':
                 return { label: 'Analyzing', color: palette.blue, Icon: Play };
             case 'READY':
-                return { label: 'Ready', color: palette.green, Icon: CheckCircle };
+                return { label: 'Ready', color: palette.green, Icon: Check };
             case 'FAILED':
-                return { label: 'Failed', color: palette.red, Icon: WarningTriangle };
+                return { label: 'Failed', color: palette.red, Icon: XmarkCircle };
             default:
                 return { label: 'Pending', color: palette.commentGrey, Icon: Play };
         }
@@ -356,7 +357,7 @@ function ProjectCard({
 
                     {project.Repository && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                            <GitHub width={12} height={12} color={theme.textSecondary} style={{ marginRight: 4 }} />
+                            <Github width={12} height={12} color={theme.textSecondary} style={{ marginRight: 4 }} />
                             <Text style={{ color: theme.textSecondary, fontSize: 12 }} numberOfLines={1}>
                                 {project.Repository}
                             </Text>

@@ -40,7 +40,11 @@ export const tokyoNightTheme: ThemeDescriptor = {
         surface: '#24283b', // Slightly lighter background for cards/sidebars
         surfaceAlt: '#1f2335',
         surfaceHighlight: '#2f3549', // Hover/Active state
+        primary: palette.blue,
+        error: palette.red,
+        card: '#24283b',
     },
 };
 
 export const tokyoNight = tokyoNightTheme.colors;
+export const tokyoNightPalette = palette;

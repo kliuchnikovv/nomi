@@ -6,7 +6,7 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { apiClient, setupApiClient } from '../../apiClient';
 import { getApiUrl, API_URL } from '../../config';
 import { AuthContextType, User, alertError } from "./models";
-import { secureTokenStorage } from '../services/auth/SecureTokenStorage';
+import { secureTokenStorage } from '../../services/auth/SecureTokenStorage';
 
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -265,19 +265,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const integrations = await integrationStorage.getIntegrations();
                 let gmailInteg = integrations.find(i => i.provider === 'gmail');
                 if (!gmailInteg) {
-                    gmailInteg = await integrationStorage.addIntegration({
+                    gmailInteg = await integrationStorage.createIntegration({
                         provider: 'gmail',
                         name: userInfo.data?.user.email || 'Gmail',
+                        enabled: true,
                         accountEmail: userInfo.data?.user.email,
+                    }, {
+                        accessToken: tokens.accessToken,
+                        refreshToken: 'google-signin-managed',
+                        tokenExpiry: new Date(Date.now() + 3500 * 1000),
                     });
                 }
 
                 let calendarInteg = integrations.find(i => i.provider === 'calendar');
                 if (!calendarInteg) {
-                    calendarInteg = await integrationStorage.addIntegration({
+                    calendarInteg = await integrationStorage.createIntegration({
                         provider: 'calendar',
                         name: userInfo.data?.user.email || 'Calendar',
+                        enabled: true,
                         accountEmail: userInfo.data?.user.email,
+                    }, {
+                        accessToken: tokens.accessToken,
+                        refreshToken: 'google-signin-managed',
+                        tokenExpiry: new Date(Date.now() + 3500 * 1000),
                     });
                 }
 
@@ -289,8 +299,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     expiry: Date.now() + 3500 * 1000,
                 };
 
-                await secureTokenStorage.saveToken(gmailInteg.id, tokenData);
-                await secureTokenStorage.saveToken(calendarInteg.id, tokenData);
+                await secureTokenStorage.saveToken(gmailInteg!.id, tokenData);
+                await secureTokenStorage.saveToken(calendarInteg!.id, tokenData);
 
                 console.log('[Auth] Google tokens saved locally for Remote Brain usage');
 

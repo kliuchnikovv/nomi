@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     errorText: {
-        color: tokyoNight.red || '#ff4444',
+        color: tokyoNight.error || tokyoNight.attention || '#ff4444',
         fontSize: 13,
         marginTop: 12,
     },
