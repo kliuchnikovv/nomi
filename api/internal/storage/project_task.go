@@ -45,7 +45,7 @@ type ProjectTask struct {
 	Description string            `gorm:"type:text"`
 	Status      ProjectTaskStatus `gorm:"type:varchar(20);default:'BACKLOG';not null"`
 	Priority    string            `gorm:"type:varchar(20);default:'medium'"`
-	Specs       pgtype.JSONB      `gorm:"type:jsonb;default:'{}'"` // AnalystOutput + ArchitectPlan
+	Artifacts   pgtype.JSONB      `gorm:"type:jsonb;default:'{}'"` // AnalystOutput + ArchitectPlan
 	CreatedAt   time.Time         `gorm:"not null"`
 	UpdatedAt   time.Time         `gorm:"not null"`
 	DeletedAt   gorm.DeletedAt    `gorm:"index"`
