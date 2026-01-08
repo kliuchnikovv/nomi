@@ -4,6 +4,7 @@ from agno.models.base import Model
 from agno.db.postgres import PostgresDb
 from agno.tools import Toolkit, Function
 from src.models.safe_gemini import SafeGemini
+from src.tools.models import ToolSpec
 import logging
 import os
 
@@ -17,7 +18,7 @@ class TeamFactory:
         self.model = model
         self.debug_mode = debug_mode
 
-    async def build(self, command_desc: dict, session_id: str) -> Team:
+    async def build(self, command_desc: dict, session_id: str, tools_specs: Optional[List[ToolSpec]] = None) -> Team:
         logger.info("[WS] Building Team from command description: %s", command_desc)
         
         team_type = command_desc.get("type", "").lower()
@@ -48,6 +49,7 @@ class TeamFactory:
 
         elif team_type == "development_team":
             from src.teams.development.team import DevelopmentTeam
+            from src.tools.factory import build as build_tools, ToolsConfig
             logger.info("[WS] Instantiating DevelopmentTeam")
             
             # Use user_id from command description if available, otherwise fallback to session_id
@@ -56,13 +58,24 @@ class TeamFactory:
             # Try to get GitHub token from command_desc or environment
             github_token = command_desc.get("github_token") or os.getenv("GITHUB_TOKEN")
 
+            # Build client tools if specs provided
+            client_tools = []
+            if tools_specs:
+                config = ToolsConfig()
+                for spec in tools_specs:
+                    if spec.enabled:
+                        config.add(spec.name, **spec.params)
+                client_tools = await build_tools(config)
+
             return DevelopmentTeam(
                 model=self.model,
                 db=self.db,
                 github_token=github_token,
                 debug_mode=self.debug_mode,
                 user_id=user_id,
-                db_url=self.db.db_url if self.db else None # Use existing DB connection URL
+                db_url=self.db.db_url if self.db else None, # Use existing DB connection URL
+                tools_specs=tools_specs,
+                client_tools=client_tools
             )
 
         elif team_type == "dnd_team":
@@ -132,7 +145,8 @@ class TeamFactory:
                     session_id=session_id,
                     model_name=p_model,
                     agent_type=p_type,
-                    command_desc=p_data
+                    command_desc=p_data,
+                    tools_specs=tools_specs
                 )
                 members.append(member)
         

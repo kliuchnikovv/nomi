@@ -1,5 +1,5 @@
 from textwrap import dedent
-from typing import Optional
+from typing import Optional, List
 import os
 import json
 
@@ -8,6 +8,7 @@ from agno.knowledge import Knowledge
 from agno.db import BaseDb
 from agno.models.base import Model
 from agno.team import Team
+from agno.tools import Toolkit
 from agno.tools.github import GithubTools
 import requests
 
@@ -396,21 +397,46 @@ class DevelopmentTeam(Team):
         debug_mode: bool = False,
         user_id: Optional[str] = None,
         db_url: Optional[str] = None, # Added to support Workflow Storage
+        client_tools: Optional[List[Toolkit]] = None,
     ):
         # Initialize GitHub tools if token is provided
-        architect_tools = []
-        if github_token:
-            architect_tools.append(GithubTools(access_token=github_token))
-
-        # Workflow Storage
-        self.workflow_storage = PgWorkflowStorage(db_url) if db_url else None
-        self.user_id = user_id
-        # Initialize Jules Tools
+        # 1. Server-side Tools
+        github_tool = GithubTools(access_token=github_token) if github_token else None
+        
+        architect_tools = [github_tool] if github_tool else []
+        
         jules_api_key = os.getenv("JULES_API_KEY", "")
         worker_tools = [
             JulesTools(api_key=jules_api_key),
             TaskManagementTool()
         ]
+
+        # Analyst and Verifier tools
+        analyst_tools = []
+        if user_id:
+             analyst_tools.append(KnowledgeSearchTool(user_id=user_id))
+        if github_tool:
+             analyst_tools.append(github_tool)
+             
+        # Add client tools to all agents (or specific ones)
+        if client_tools:
+            analyst_tools.extend(client_tools)
+            architect_tools.extend(client_tools)
+            # Worker might not need all client tools, but let's be inclusive if they are generic
+            worker_tools.extend(client_tools)
+
+        # Team Lead tools (the team itself will have these)
+        team_tools = []
+        if github_tool:
+            team_tools.append(github_tool)
+        if user_id:
+            team_tools.append(KnowledgeSearchTool(user_id=user_id))
+        if client_tools:
+            team_tools.extend(client_tools)
+
+        # Workflow Storage
+        self.workflow_storage = PgWorkflowStorage(db_url) if db_url else None
+        self.user_id = user_id
 
         description = dedent('''
 <identity>
@@ -662,9 +688,7 @@ If a team member encounters issues:
 - Present final result to the user
         ''')
 
-        analyst_tools = []
-        if user_id:
-             analyst_tools.append(KnowledgeSearchTool(user_id=user_id))
+        # analyst_tools already defined above
 
         super().__init__(
             model=model,
@@ -731,6 +755,7 @@ If a team member encounters issues:
                 ),
             ],
             add_history_to_context=True,
+            tools=team_tools,
             debug_mode=debug_mode,
         )
 

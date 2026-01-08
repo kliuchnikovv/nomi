@@ -257,6 +257,7 @@ class LLMWebSocketSession:
                 self.agent = await team_factory.build(
                     command_desc=self.command_desc,
                     session_id=self.session_id,
+                    tools_specs=self.tools_specs,
                 )
             else:
                 self.agent = await self.agent_factory.build(
