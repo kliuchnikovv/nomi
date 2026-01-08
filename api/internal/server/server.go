@@ -24,7 +24,7 @@ import (
 )
 
 type Server struct {
-	httpServer    *http.Server
+	httpServer *http.Server
 }
 
 func New(
@@ -47,31 +47,31 @@ func New(
 	// Plugin system initialization (Moved to top so handlers can use manager)
 	// Plugin system initialization (Moved to top so handlers can use manager)
 	/*
-	pluginState := map[string]plugins.PluginState{}
-	for name, st := range cfg.Plugins {
-		pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
-	}
-	// Force enable 'jules' if not configured (it uses per-user auth, safe to be globally enabled)
-	if _, ok := pluginState["jules"]; !ok {
-		pluginState["jules"] = plugins.PluginState{Enabled: true}
-	}
-	runtime := plugins.NewRuntime(
-		plugins.NewNotifierAdapter(n),
-		plugins.NewStorageAdapter(db),
-		logger,
-		plugins.NewLLMAdapter(llmService),
-		oauthConfigs,
-	)
-	manager := plugins.NewManager(runtime, pluginState)
-	if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
-		logger.Error("failed to register imap plugin", zap.Error(err))
-	}
-	if err := manager.Register(plugins.NewGmailPlugin()); err != nil {
-		logger.Error("failed to register gmail plugin", zap.Error(err))
-	}
-	if err := manager.Register(jules.NewJulesPlugin()); err != nil {
-		logger.Error("failed to register jules plugin", zap.Error(err))
-	}
+		pluginState := map[string]plugins.PluginState{}
+		for name, st := range cfg.Plugins {
+			pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
+		}
+		// Force enable 'jules' if not configured (it uses per-user auth, safe to be globally enabled)
+		if _, ok := pluginState["jules"]; !ok {
+			pluginState["jules"] = plugins.PluginState{Enabled: true}
+		}
+		runtime := plugins.NewRuntime(
+			plugins.NewNotifierAdapter(n),
+			plugins.NewStorageAdapter(db),
+			logger,
+			plugins.NewLLMAdapter(llmService),
+			oauthConfigs,
+		)
+		manager := plugins.NewManager(runtime, pluginState)
+		if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
+			logger.Error("failed to register imap plugin", zap.Error(err))
+		}
+		if err := manager.Register(plugins.NewGmailPlugin()); err != nil {
+			logger.Error("failed to register gmail plugin", zap.Error(err))
+		}
+		if err := manager.Register(jules.NewJulesPlugin()); err != nil {
+			logger.Error("failed to register jules plugin", zap.Error(err))
+		}
 	*/
 	// Initialize Hub
 	hubInstance := hub.NewHub(db, logger, cfg.LLM.BaseURL)
@@ -79,18 +79,18 @@ func New(
 
 	// Инициализация обработчиков
 	var (
-		chatHandler         = handlers.NewChatHandler(db)
-		messageHandler      = handlers.NewMessageHandler(db)
-		sidebarHandler      = handlers.NewSidebarHandler(db, llmService)
-		pluginChatsHandler  = handlers.NewPluginChatsHandler(db)
-		inboxHandler        = handlers.NewInboxHandler(db, logger)
-		tokenManager        = auth.NewTokenManager(cfg.Token.JWTSecret)
-		authMiddleware      = auth.NewAuthMiddleware(tokenManager, db)
-		authHandler         = handlers.NewAuthHandler(db, tokenManager)
-		streamHandler       = handlers.NewStreamHandler(logger, hubInstance, db)
-		modelsHandler       = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
-		uploadHandler       = handlers.NewUploadHandler(db)
-		teamHandler         = team.NewHandler(db)
+		chatHandler        = handlers.NewChatHandler(db)
+		messageHandler     = handlers.NewMessageHandler(db)
+		sidebarHandler     = handlers.NewSidebarHandler(db, llmService)
+		pluginChatsHandler = handlers.NewPluginChatsHandler(db)
+		inboxHandler       = handlers.NewInboxHandler(db, logger)
+		tokenManager       = auth.NewTokenManager(cfg.Token.JWTSecret)
+		authMiddleware     = auth.NewAuthMiddleware(tokenManager, db)
+		authHandler        = handlers.NewAuthHandler(db, tokenManager)
+		streamHandler      = handlers.NewStreamHandler(logger, hubInstance, db)
+		modelsHandler      = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
+		uploadHandler      = handlers.NewUploadHandler(db)
+		teamHandler        = team.NewHandler(db)
 
 		mobileOAuthHandler = func() *handlers.MobileOAuthHandler {
 			h, err := handlers.NewMobileOAuthHandler(logger, cfg, db)
@@ -240,7 +240,7 @@ func New(
 		if targetURL == "" {
 			targetURL = "http://127.0.0.1:7777"
 		}
-		
+
 		// Create proxy request
 		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+"/api/embeddings", c.Request.Body)
 		if err != nil {
@@ -272,7 +272,7 @@ func New(
 			}
 		}
 		c.Status(resp.StatusCode)
-		
+
 		// Stream response body
 		_, _ = io.Copy(c.Writer, resp.Body)
 	})

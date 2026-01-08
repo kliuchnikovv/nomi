@@ -66,6 +66,11 @@ class AnalystOutput(BaseModel):
         description="Ограничения (например: 'не изменять API эндпоинты' или 'сохранить обратную совместимость')"
     )
 
+class ArchitectPlanContext(BaseModel):
+    repository_name: str = Field(..., description="Full repository name (e.g., 'owner/repo')")
+    branch_name: str = Field(..., description="Target branch name for the feature")
+    task_id: str = Field(..., description="UUID of the task in the database")
+
 class ArchitectPlan(BaseModel):
     # Context
     project_id: str
@@ -99,7 +104,4 @@ class ReviewVerdict(BaseModel):
 class FinalAcceptance(BaseModel):
     accepted: bool
     reason: str
-class ArchitectPlanContext(BaseModel):
-    repository_name: str = Field(..., description="Full repository name (e.g., 'owner/repo')")
-    branch_name: str = Field(..., description="Target branch name for the feature")
-    task_id: str = Field(..., description="UUID of the task in the database")
+
