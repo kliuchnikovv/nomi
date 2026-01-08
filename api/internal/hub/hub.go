@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"net/http"
 	"sync"
 
@@ -61,6 +62,23 @@ func (h *Hub) GetOrCreateRoom(chatID uuid.UUID, userID uuid.UUID, mode string, c
 		h.logger.Info("room created", zap.String("room_id", chatID.String()), zap.String("mode", mode))
 	}
 	return room, nil
+}
+
+func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	payload, err := json.Marshal(frame)
+	if err != nil {
+		h.logger.Error("failed to marshal broadcast frame", zap.Error(err))
+		return
+	}
+
+	for _, room := range h.rooms {
+		if room.initiatorID == userID {
+			room.InjectMessage(userID, payload)
+		}
+	}
 }
 
 func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, chatID uuid.UUID, user *storage.User, mode string, command string) {

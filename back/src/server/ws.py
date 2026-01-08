@@ -413,6 +413,9 @@ class LLMWebSocketSession:
             logger.info("[WS] Received late HISTORY frame, re-parsing history")
             self._parse_history(frame.payload)
             
+        elif frame.op == Op.SIGNAL:
+            await self.handle_signal(frame)
+            
         else:
             logger.warning("[WS] Unexpected op: %s", frame.op)
 
@@ -435,6 +438,65 @@ class LLMWebSocketSession:
             await self._send_frame(make_data(self.next_id, Op.ACK, frame.chat_id, {"model": new_model}))
         except Exception as e:
             await self._send_frame(make_error(self.next_id, "model_change_failed", frame.chat_id, str(e), 500))
+
+    async def handle_signal(self, frame: Frame):
+        payload = frame.payload or {}
+        sig_type = payload.get("type")
+        params = payload.get("params", {})
+        
+        logger.info("[WS] Received signal: %s with params %s", sig_type, params)
+        
+        if sig_type == "analyze_project":
+            project_id = params.get("project_id")
+            repository = params.get("repository")
+            if project_id and repository:
+                # Run ingestion in background
+                asyncio.create_task(self.analyze_project(project_id, repository))
+            else:
+                logger.warning("[WS] analyze_project signal missing project_id or repository")
+        else:
+            logger.warning("[WS] Unknown signal type: %s", sig_type)
+
+    async def analyze_project(self, project_id: str, repository: str):
+        try:
+            from src.rag_service import ProjectKnowledgeManager
+            import os
+            
+            logger.info("[WS] Starting analysis for project %s (repo: %s)", project_id, repository)
+            
+            # Use user_id from session (which is user_id for this room)
+            # In LLMWebSocketSession, we usually have user_id in session_id or chat_id?
+            # Actually, Hub passes userID as initiatorID.
+            # In back/src/server/ws.py, self.session_id is the user_id (see AgentFactory.build call in initialize)
+            # Wait, let's verify what session_id is.
+            
+            manager = ProjectKnowledgeManager(user_id=self.session_id)
+            
+            # We need a github token. For now, let's try to get it from environment or user context.
+            # In the future, we might want to pass it in the signal if Go has it.
+            # For now, using GITHUB_TOKEN from env as a fallback.
+            github_token = os.environ.get("GITHUB_TOKEN")
+            if not github_token:
+                logger.error("[WS] GITHUB_TOKEN not found for analysis")
+                return
+                
+            # Run ingestion
+            # ingestion is synchronous? Let's check rag_service.py
+            # ingest_repository uses PyGithub so it's blocking.
+            await asyncio.to_thread(manager.ingest_repository, repository, project_id, github_token)
+            
+            logger.info("[WS] Completed analysis for project %s", project_id)
+            
+            # Notify user about completion via a system message in the chat
+            await self._send_frame(make_data(self.next_id, Op.MESSAGE, self.chat_id_param, {
+                "message": f"Project {repository} has been analyzed and indexed.",
+                "type": "system",
+                "message_id": str(uuid.uuid4())
+            }))
+            
+        except Exception as e:
+            logger.error("[WS] Failed to analyze project %s: %s", project_id, e)
+            await self._send_frame(make_error(self.next_id, "analysis_failed", self.chat_id_param, str(e), 500))
 
     async def handle_user_message(self, frame: Frame):
         payload = frame.payload or {}

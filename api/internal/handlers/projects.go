@@ -4,11 +4,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"encoding/json"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
@@ -19,14 +21,16 @@ type ProjectHandler struct {
 	llmBaseURL string
 	// Helper logic from project_tasks.go
 	taskHandler *ProjectTaskHandler
+	hub         *hub.Hub
 }
 
-func NewProjectHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config) *ProjectHandler {
+func NewProjectHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hub *hub.Hub) *ProjectHandler {
 	return &ProjectHandler{
 		store:       store,
 		logger:      logger.With(zap.String("component", "project_handler")),
 		llmBaseURL:  cfg.LLM.BaseURL,
 		taskHandler: NewProjectTaskHandler(store, logger, cfg), // Re-use notification logic
+		hub:         hub,
 	}
 }
 
@@ -59,6 +63,25 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 		h.logger.Error("failed to create project", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create project"})
 		return
+	}
+
+	// Trigger repository analysis if provided
+	if project.Repository != "" && h.hub != nil {
+		go func() {
+			frame := hub.Frame{
+				Kind:      hub.SignalKind,
+				Operation: hub.SignalOperation,
+				Timestamp: time.Now().UTC(),
+				Payload: hub.Payload{
+					Type: "analyze_project",
+					Params: map[string]interface{}{
+						"project_id": project.ID.String(),
+						"repository": project.Repository,
+					},
+				},
+			}
+			h.hub.BroadcastToUser(userID, frame)
+		}()
 	}
 
 	c.JSON(http.StatusCreated, project)

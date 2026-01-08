@@ -8,7 +8,7 @@ import {
     View,
     ScrollView,
 } from 'react-native';
-import { NavArrowDown, NavArrowRight, Mail, Calendar, Sparks } from 'iconoir-react-native';
+import { NavArrowDown, NavArrowRight, Mail, Calendar, Sparks, Plus, Trash } from 'iconoir-react-native';
 import { SharedValue } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +19,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { Sidebar } from '../../components/Sidebar';
 import { ThemePalette } from '../../themes/types';
 import { CalendarSidebar } from '../chat/sidebar/CalendarSidebar';
+import AddProjectModal from './AddProjectModal';
+import { projectsApi } from '../../apiClient';
 
 
 export interface RightSidebarProps {
@@ -284,6 +286,34 @@ function RightSidebarContent({
     const { startPluginThread } = useChat();
     const [expandedPlugins, setExpandedPlugins] = useState<Set<string>>(new Set());
     const [expandedChats, setExpandedChats] = useState<Set<string>>(new Set());
+    const [projects, setProjects] = useState<any[]>([]);
+    const [projectsLoading, setProjectsLoading] = useState(false);
+    const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+
+    const fetchProjects = async () => {
+        setProjectsLoading(true);
+        try {
+            const data = await projectsApi.list();
+            if (data) setProjects(data);
+        } catch (err) {
+            console.error('Failed to fetch projects', err);
+        } finally {
+            setProjectsLoading(false);
+        }
+    };
+
+    const handleDeleteProject = async (id: string) => {
+        try {
+            await projectsApi.delete(id);
+            setProjects(prev => prev.filter(p => p.ID !== id));
+        } catch (err) {
+            console.error('Failed to delete project', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchProjects();
+    }, []);
 
     const togglePlugin = (pluginId: string) => {
         setExpandedPlugins(prev => {
@@ -348,8 +378,70 @@ function RightSidebarContent({
     return (
         <View style={styles.root}>
             <View style={[styles.sectionHeader, { paddingTop: insets.top + 12 }]}>
+                <Text style={styles.sectionTitle}>Projects</Text>
+                <Pressable
+                    style={({ pressed }) => [
+                        { opacity: pressed ? 0.6 : 1, padding: 4 },
+                    ]}
+                    onPress={() => setIsAddModalVisible(true)}
+                >
+                    <Plus width={20} height={20} color={theme.textSecondary} />
+                </Pressable>
+            </View>
+
+            {projectsLoading && projects.length === 0 ? (
+                <View style={{ padding: 16 }}>
+                    <ActivityIndicator size="small" color={theme.accent} />
+                </View>
+            ) : (
+                <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                    {projects.length === 0 ? (
+                        <Text style={{ color: theme.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
+                            No projects yet
+                        </Text>
+                    ) : (
+                        projects.map(project => (
+                            <View key={project.ID} style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                paddingVertical: 8,
+                                borderBottomWidth: StyleSheet.hairlineWidth,
+                                borderBottomColor: theme.border,
+                            }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: theme.text, fontWeight: '600', fontSize: 14 }}>
+                                        {project.Name}
+                                    </Text>
+                                    {project.Repository && (
+                                        <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+                                            {project.Repository}
+                                        </Text>
+                                    )}
+                                </View>
+                                <Pressable
+                                    onPress={() => handleDeleteProject(project.ID)}
+                                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                                >
+                                    <Trash width={16} height={16} color={theme.textSecondary} />
+                                </Pressable>
+                            </View>
+                        ))
+                    )}
+                </View>
+            )}
+
+            <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Inbox Chats</Text>
             </View>
+
+            <AddProjectModal
+                visible={isAddModalVisible}
+                onClose={() => setIsAddModalVisible(false)}
+                onProjectCreated={(project) => {
+                    setProjects(prev => [...prev, project]);
+                }}
+            />
 
             {loading && plugins.length === 0 ? (
                 <View style={styles.emptyState}>
@@ -401,6 +493,8 @@ function RightSidebarContent({
         </View>
     );
 }
+
+import { StyleSheet } from 'react-native';
 
 export default function RightSidebar({
     variant,

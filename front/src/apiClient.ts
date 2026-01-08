@@ -267,3 +267,13 @@ export const weatherApi = {
     },
 };
 
+export const projectsApi = {
+    list: () => apiClient.get<Array<any>>(`${API_URL()}/projects`),
+    get: (id: string) => apiClient.get<any>(`${API_URL()}/projects/${id}`),
+    create: (body: { name: string; description?: string; repository?: string }) =>
+        apiClient.post<any>(`${API_URL()}/projects`, body),
+    update: (id: string, body: { name?: string; description?: string; repository?: string }) =>
+        apiClient.put<any>(`${API_URL()}/projects/${id}`, body),
+    delete: (id: string) => apiClient.delete<void>(`${API_URL()}/projects/${id}`),
+};
+

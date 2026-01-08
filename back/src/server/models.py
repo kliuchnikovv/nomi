@@ -7,6 +7,7 @@ class Kind(str, Enum):
     DATA = "data"
     META = "meta"
     ERROR = "error"
+    SIGNAL = "signal"
 
 class Op(str, Enum):
     MESSAGE = "message"
@@ -22,6 +23,7 @@ class Op(str, Enum):
     HISTORY = "history"
     MODEL = "model"
     STOP = "stop"
+    SIGNAL = "signal"
 
 class StreamInfo(BaseModel):
     id: str

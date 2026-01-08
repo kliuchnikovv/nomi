@@ -12,6 +12,7 @@ const (
 	TokenKind Kind = "data"
 	MetaKind  Kind = "meta"
 	ErrorKind Kind = "error"
+	SignalKind Kind = "signal"
 )
 
 type Operation string
@@ -31,6 +32,7 @@ const (
 	JoinOperation  Operation = "join"
 	LeaveOperation Operation = "leave"
 	PongOperation  Operation = "pong"
+	SignalOperation Operation = "signal"
 )
 
 type Frame struct {

@@ -104,7 +104,7 @@ func New(
 		dashboardHandler     = handlers.NewDashboardHandler(db)
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
 		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg)
-		projectHandler       = handlers.NewProjectHandler(db, logger, cfg)
+		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance)
 		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
 	)
 
