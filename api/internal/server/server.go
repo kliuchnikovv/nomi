@@ -232,6 +232,9 @@ func New(
 	r.POST("/api/analyze-email", emailAnalysisHandler.AnalyzeEmail) // No auth - frontend calls with email data
 	r.GET("/api/dashboard", wrapWithAuth(dashboardHandler.GetDashboard, authMiddleware))
 
+	// Webhooks
+	r.POST("/api/webhooks/github", webhooksHandler.HandleGithubWebhook)
+
 	// Proxy for Embeddings (transient) - forwards to Python backend
 	r.POST("/api/embeddings", func(c *gin.Context) {
 		// Use LLM BaseURL from config, or default to internal Python service URL

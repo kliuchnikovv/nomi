@@ -105,3 +105,20 @@ class FinalAcceptance(BaseModel):
     accepted: bool
     reason: str
 
+class ArchitectureDecisionRecord(BaseModel):
+    title: str = Field(..., description="Short name of the decision")
+    status: Literal["Proposed", "Accepted", "Rejected", "Deprecated"] = Field("Proposed")
+    context: str = Field(..., description="Why are we doing this?")
+    decision: str = Field(..., description="What is the technical solution?")
+    consequences: str = Field(..., description="Trade-offs")
+
+class ImplementationStep(BaseModel):
+    file_path: str = Field(..., description="Path to the file")
+    description: str = Field(..., description="Description of changes")
+    action: Literal["create", "modify", "delete"] = Field(..., description="Type of action")
+
+class ArchitectOutput(BaseModel):
+    context_analysis: str = Field(..., description="Analysis of affected components and constraints")
+    adr: ArchitectureDecisionRecord = Field(..., description="Architecture Decision Record")
+    implementation_plan: List[ImplementationStep] = Field(..., description="List of files and changes")
+    definition_of_done: List[str] = Field(..., description="Checklist of required artifacts and tests")
