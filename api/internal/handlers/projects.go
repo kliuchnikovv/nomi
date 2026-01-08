@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"net/http"
+	"os"
 	"time"
 
 	"encoding/json"
@@ -71,21 +73,37 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	}
 
 	// Trigger repository analysis if provided
-	if project.Repository != "" && h.hub != nil {
+	if project.Repository != "" {
 		go func() {
-			frame := hub.Frame{
-				Kind:      hub.SignalKind,
-				Operation: hub.SignalOperation,
-				Timestamp: time.Now().UTC(),
-				Payload: hub.Payload{
-					Type: "analyze_project",
-					Params: map[string]interface{}{
-						"project_id": project.ID.String(),
-						"repository": project.Repository,
-					},
-				},
+			// Call Python backend directly via HTTP
+			pythonURL := os.Getenv("LLM_BASE_URL")
+			if pythonURL == "" {
+				pythonURL = "http://localhost:7777"
 			}
-			h.hub.BroadcastToUser(userID, frame)
+
+			payload := map[string]interface{}{
+				"project_id": project.ID.String(),
+				"repository": project.Repository,
+			}
+			
+			payloadBytes, err := json.Marshal(payload)
+			if err != nil {
+				h.logger.Error("failed to marshal analyze request", zap.Error(err))
+				return
+			}
+
+			resp, err := http.Post(pythonURL+"/api/analyze-project", "application/json", bytes.NewBuffer(payloadBytes))
+			if err != nil {
+				h.logger.Error("failed to trigger project analysis", zap.Error(err))
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				h.logger.Error("project analysis request failed", zap.Int("status", resp.StatusCode))
+			} else {
+				h.logger.Info("project analysis triggered", zap.String("project_id", project.ID.String()))
+			}
 		}()
 	}
 

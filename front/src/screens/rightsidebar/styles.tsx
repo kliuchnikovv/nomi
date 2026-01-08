@@ -6,6 +6,9 @@ export const createRightSidebarStyles = (theme: ThemeColors, palette: ThemePalet
         flex: 1,
     },
     sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         paddingHorizontal: 12,
         paddingVertical: 12,
         borderBottomWidth: StyleSheet.hairlineWidth,

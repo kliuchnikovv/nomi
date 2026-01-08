@@ -567,7 +567,7 @@ function RightSidebarContent({
                 </View>
             )}
 
-            <View style={[styles.sectionHeader, { marginTop: 8 }]}>
+            <View style={[styles.sectionHeader, { marginTop: 16 }]}>
                 <Text style={styles.sectionTitle}>Inbox Chats</Text>
             </View>
 

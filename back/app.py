@@ -433,6 +433,68 @@ except Exception:
     logging.exception("Failed to mount Webhooks routes")
 
 
+class ProjectAnalysisRequest(BaseModel):
+    project_id: str
+    repository: str
+    github_token: Optional[str] = None
+
+
+@app.post("/api/analyze-project")
+async def analyze_project(request: ProjectAnalysisRequest):
+    """
+    Trigger repository analysis and indexing for a project.
+    This endpoint is called by Go backend when a project with repository is created.
+    """
+    import asyncio
+    import requests
+
+    logging.info(f"Received project analysis request: {request.project_id} repo={request.repository}")
+
+    def update_status(status: str):
+        api_url = os.getenv("GO_API_URL", "http://localhost:8080/api")
+        url = f"{api_url}/projects/{request.project_id}/status"
+        headers = {}
+        internal_key = os.getenv("INTERNAL_API_KEY")
+        if internal_key:
+            headers["X-Internal-Secret"] = internal_key
+        try:
+            resp = requests.patch(url, json={"status": status}, headers=headers)
+            logging.info(f"Updated project {request.project_id} status to {status}, response: {resp.status_code}")
+        except Exception as e:
+            logging.error(f"Failed to update project status: {e}")
+
+    async def run_analysis():
+        try:
+            from src.rag_service import ProjectKnowledgeManager
+
+            # Use github token from request or fallback to env
+            github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
+            if not github_token:
+                logging.error("GITHUB_TOKEN not found for analysis")
+                await asyncio.to_thread(update_status, "FAILED")
+                return
+
+            manager = ProjectKnowledgeManager(user_id="system")
+            await asyncio.to_thread(
+                manager.ingest_repository,
+                request.repository,
+                request.project_id,
+                github_token
+            )
+
+            logging.info(f"Completed analysis for project {request.project_id}")
+            await asyncio.to_thread(update_status, "READY")
+
+        except Exception as e:
+            logging.error(f"Failed to analyze project {request.project_id}: {e}", exc_info=True)
+            await asyncio.to_thread(update_status, "FAILED")
+
+    # Run analysis in background
+    asyncio.create_task(run_analysis())
+
+    return {"status": "started", "project_id": request.project_id}
+
+
 class EmbeddingRequest(BaseModel):
     text: Optional[str] = None  # Single text (backward compatible)
     texts: Optional[list[str]] = None  # Batch of texts
