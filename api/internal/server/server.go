@@ -233,7 +233,7 @@ func New(
 	r.GET("/api/dashboard", wrapWithAuth(dashboardHandler.GetDashboard, authMiddleware))
 
 	// Webhooks
-	r.POST("/api/webhooks/github", webhooksHandler.HandleGithubWebhook)
+	r.POST("/api/webhooks/github", webhooksHandler.HandleGitHubWebhook)
 
 	// Proxy for Embeddings (transient) - forwards to Python backend
 	r.POST("/api/embeddings", func(c *gin.Context) {
