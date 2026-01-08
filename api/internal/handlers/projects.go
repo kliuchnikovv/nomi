@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"encoding/json"
+
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -283,9 +285,10 @@ func (h *ProjectHandler) GetTask(c *gin.Context) {
 }
 
 type UpdateTaskRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Priority    string `json:"priority"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Priority    string                 `json:"priority"`
+	Artifacts   map[string]interface{} `json:"artifacts"`
 }
 
 func (h *ProjectHandler) UpdateTask(c *gin.Context) {
@@ -321,6 +324,17 @@ func (h *ProjectHandler) UpdateTask(c *gin.Context) {
 	}
 	if req.Priority != "" {
 		task.Priority = req.Priority
+	}
+	if req.Artifacts != nil {
+		artifactsBytes, err := json.Marshal(req.Artifacts)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid artifacts JSON"})
+			return
+		}
+		if err := task.Artifacts.Set(artifactsBytes); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process artifacts"})
+			return
+		}
 	}
 	task.UpdatedAt = time.Now().UTC()
 
