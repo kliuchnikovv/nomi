@@ -74,7 +74,6 @@ class TeamFactory:
                 debug_mode=self.debug_mode,
                 user_id=user_id,
                 db_url=self.db.db_url if self.db else None, # Use existing DB connection URL
-                tools_specs=tools_specs,
                 client_tools=client_tools
             )
 
