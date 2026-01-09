@@ -210,7 +210,7 @@ export const BriefingCard = () => {
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <TouchableOpacity onPress={() => loadBriefing(true)} style={styles.header}>
           <View style={styles.headerTitleContainer}>
-            <Ionicons name="sunny" size={24} color={theme.primary} />
+            <Ionicons name="sunny" size={24} color="#FFB800" />
             <Text style={[styles.headerTitle, { color: theme.text }]}>Morning Briefing</Text>
           </View>
           <Text style={[styles.actionText, { color: theme.primary }]}>Generate</Text>
@@ -256,7 +256,7 @@ export const BriefingCard = () => {
           activeOpacity={0.7}
         >
           <View style={styles.headerTitleContainer}>
-            <Ionicons name="sunny" size={24} color={theme.primary} />
+            <Ionicons name="sunny" size={24} color="#FFB800" />
             <View style={{ flex: 1, justifyContent: 'center' }}>
               {collapsedSections['overview'] ? (
                 <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>

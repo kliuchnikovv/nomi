@@ -93,6 +93,7 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 				"project_id":   project.ID.String(),
 				"repository":   project.Repository,
 				"github_token": req.GithubToken,
+				"user_id":      userID.String(),
 			}
 
 			payloadBytes, err := json.Marshal(payload)
@@ -236,12 +237,18 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 			pythonURL = "http://localhost:7777"
 		}
 
+		payload := map[string]interface{}{
+			"user_id": userID.String(),
+		}
+		payloadBytes, _ := json.Marshal(payload)
+
 		client := &http.Client{Timeout: 10 * time.Second}
-		req, err := http.NewRequest("DELETE", pythonURL+"/api/projects/"+id.String(), nil)
+		req, err := http.NewRequest("DELETE", pythonURL+"/api/projects/"+id.String(), bytes.NewBuffer(payloadBytes))
 		if err != nil {
 			h.logger.Error("failed to create delete knowledge request", zap.Error(err))
 			return
 		}
+		req.Header.Set("Content-Type", "application/json")
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -332,6 +339,7 @@ func (h *ProjectHandler) ReindexProject(c *gin.Context) {
 		payload := map[string]interface{}{
 			"repository":   project.Repository,
 			"github_token": req.GithubToken,
+			"user_id":      userID.String(),
 		}
 
 		payloadBytes, err := json.Marshal(payload)

@@ -78,15 +78,24 @@ function ChatListContent({
     const [listLimit, setListLimit] = useState(20);
 
     const filters = useMemo(() => {
-        const list = [
-            { id: 'all', title: 'All' },
-            { id: 'agent', title: 'Agent' },
+        const list: { id: string; title: string; color?: string }[] = [
+            { id: 'all', title: 'All', color: theme.accent },
+            { id: 'agent', title: 'Agent', color: theme.success || '#9ECE6A' },
         ];
         AVAILABLE_TEAMS.forEach(t => {
-            list.push({ id: t.id, title: t.name });
+            let color = theme.info;
+            switch (t.id) {
+                case 'development_team':
+                    color = theme.warning || '#FF9500';
+                    break;
+                case 'dnd_team':
+                    color = theme.accent || '#BB9AF7';
+                    break;
+            }
+            list.push({ id: t.id, title: t.name, color });
         });
         return list;
-    }, []);
+    }, [theme]);
 
     const filteredChats = useMemo(() => {
         let data = chats;
@@ -253,11 +262,29 @@ function ChatListContent({
         const isActive = item.id === activeChatID;
 
         const subtitle = formatDateTime(item.updated_at || item.created_at);
+
+        // Get colorful category badge
         let category: string | null = null;
+        let categoryColor: string | null = null;
         if (selectedFilter === 'all') {
-            category = item.mode === 'team'
-                ? (AVAILABLE_TEAMS.find(t => t.id === item.team_id)?.name || 'Team')
-                : 'Agent';
+            if (item.mode === 'team') {
+                const team = AVAILABLE_TEAMS.find(t => t.id === item.team_id);
+                category = team?.name || 'Team';
+                // Assign distinct colors per team
+                switch (item.team_id) {
+                    case 'development_team':
+                        categoryColor = theme.warning || '#FF9500';
+                        break;
+                    case 'dnd_team':
+                        categoryColor = theme.accent || '#BB9AF7';
+                        break;
+                    default:
+                        categoryColor = theme.info || '#7DCFFF';
+                }
+            } else {
+                category = 'Agent';
+                categoryColor = theme.success || '#9ECE6A';
+            }
         }
 
         return (
@@ -274,8 +301,17 @@ function ChatListContent({
                     <Text style={[styles.itemTitle, isActive && { color: styles.title.color }, { flex: 1, marginRight: 8 }]} numberOfLines={1}>
                         {item.title || 'Untitled'}
                     </Text>
-                    {category && (
-                        <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '500' }}>
+                    {category && categoryColor && (
+                        <Text style={{
+                            fontSize: 11,
+                            color: categoryColor,
+                            fontWeight: '600',
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 10,
+                            backgroundColor: `${categoryColor}20`,
+                            overflow: 'hidden',
+                        }}>
                             {category}
                         </Text>
                     )}
@@ -325,20 +361,33 @@ function ChatListContent({
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.filterContent}
                 >
-                    {filters.map(filter => (
-                        <Pressable
-                            key={filter.id}
-                            style={[styles.filterItem, selectedFilter === filter.id && styles.filterItemActive]}
-                            onPress={() => {
-                                setSelectedFilter(filter.id);
-                                setListLimit(20);
-                            }}
-                        >
-                            <Text style={[styles.filterText, selectedFilter === filter.id && styles.filterTextActive]}>
-                                {filter.title}
-                            </Text>
-                        </Pressable>
-                    ))}
+                    {filters.map(filter => {
+                        const isActive = selectedFilter === filter.id;
+                        const filterColor = filter.color || theme.accent;
+                        return (
+                            <Pressable
+                                key={filter.id}
+                                style={[
+                                    styles.filterItem,
+                                    isActive && {
+                                        borderColor: filterColor,
+                                        backgroundColor: `${filterColor}15`
+                                    }
+                                ]}
+                                onPress={() => {
+                                    setSelectedFilter(filter.id);
+                                    setListLimit(20);
+                                }}
+                            >
+                                <Text style={[
+                                    styles.filterText,
+                                    isActive && { color: filterColor }
+                                ]}>
+                                    {filter.title}
+                                </Text>
+                            </Pressable>
+                        );
+                    })}
                 </ScrollView>
             </View>
 

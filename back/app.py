@@ -483,6 +483,7 @@ class ProjectAnalysisRequest(BaseModel):
     project_id: str
     repository: str
     github_token: Optional[str] = None
+    user_id: Optional[str] = None  # Owner of the project
 
 
 @app.post("/api/analyze-project")
@@ -518,7 +519,7 @@ async def analyze_project(request: ProjectAnalysisRequest):
             github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
             # Token is now optional - public repos work without it (with rate limits)
 
-            manager = ProjectKnowledgeManager(user_id="system")
+            manager = ProjectKnowledgeManager(user_id=request.user_id or "system")
             await asyncio.to_thread(
                 manager.ingest_repository,
                 request.repository,
@@ -539,30 +540,34 @@ async def analyze_project(request: ProjectAnalysisRequest):
     return {"status": "started", "project_id": request.project_id}
 
 
+class DeleteProjectRequest(BaseModel):
+    user_id: Optional[str] = None
+
+
 @app.delete("/api/projects/{project_id}")
-async def delete_project_knowledge_endpoint(project_id: str):
+async def delete_project_knowledge_endpoint(project_id: str, request: Optional[DeleteProjectRequest] = None):
     """
     Delete RAG knowledge for a project.
     """
     import asyncio
     try:
         from src.rag_service import ProjectKnowledgeManager
-        logging.info(f"Received request to delete knowledge for project {project_id}")
+        user_id = request.user_id if request else None
+        logging.info(f"Received request to delete knowledge for project {project_id} (user: {user_id})")
         
-        # Use "system" user_id as that's what ingest_repository uses
-        manager = ProjectKnowledgeManager(user_id="system")
+        manager = ProjectKnowledgeManager(user_id=user_id or "system")
         await asyncio.to_thread(manager.delete_project_knowledge, project_id)
         
         return {"status": "deleted", "project_id": project_id}
     except Exception as e:
         logging.error(f"Failed to delete project knowledge: {e}", exc_info=True)
-        # We return error but maybe not 500 to avoid confusing potential callers if they don't handle it
         return {"error": str(e), "status": "failed"}
 
 
 class ReindexProjectRequest(BaseModel):
     repository: str
     github_token: Optional[str] = None
+    user_id: Optional[str] = None  # Owner of the project
 
 
 @app.post("/api/projects/{project_id}/reindex")
@@ -596,7 +601,7 @@ async def reindex_project(project_id: str, request: ReindexProjectRequest):
 
             github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
 
-            manager = ProjectKnowledgeManager(user_id="system")
+            manager = ProjectKnowledgeManager(user_id=request.user_id or "system")
             await asyncio.to_thread(
                 manager.reindex_repository,
                 request.repository,

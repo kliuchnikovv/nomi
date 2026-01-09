@@ -121,7 +121,7 @@ function ProjectCard({
                                 </Pressable>
                             )}
                             <Pressable onPress={(e) => { e.stopPropagation(); onDelete(project.ID); }}>
-                                <Trash width={14} height={14} color={theme.textSecondary} />
+                                <Trash width={14} height={14} color={palette.red} />
                             </Pressable>
                         </View>
                     </View>
@@ -266,14 +266,13 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            marginBottom: 8,
-            marginTop: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 12,
         },
         sectionTitle: {
             fontSize: 14,
-            fontWeight: '700',
-            color: theme.textSecondary,
+            fontWeight: '600',
+            color: theme.textPrimary,
         },
     });
 
