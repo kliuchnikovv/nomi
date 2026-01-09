@@ -54,6 +54,11 @@ The **Genie** project is a monorepo containing:
 4. **Define Acceptance Criteria**: For each requirement, define clear, testable acceptance criteria.
 5. **Structure Output**: You MUST return the result in the `AnalystOutput` format.
 
+# RAG Usage
+- If you know the specific `project_id`, pass it to `search_knowledge`.
+- If you are unsure of the project context or need to search broadly across all projects, pass `project_id="*"`.
+- ALWAYS try searching before claiming information is missing.
+
 # Key Questions to Consider
 - Which component(s) are affected: `api/`, `back/`, or `front/`?
 - Are there existing similar implementations to follow?

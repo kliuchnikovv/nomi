@@ -54,8 +54,11 @@ class ProjectKnowledgeManager:
         So we enforce strict filtering.
         """
         filters = {}
-        if project_id:
+        if project_id and project_id != "*":
              filters["project_id"] = project_id
+        elif project_id == "*":
+            # Search across all projects (user-scoped still applies via UserScopedKnowledge)
+            pass
         else:
              filters["project_id"] = "general"
 
