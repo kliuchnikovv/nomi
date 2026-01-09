@@ -13,6 +13,8 @@ export interface MainContextType {
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
     deleteChat: (chatId: string) => void;
     setActiveChatID: (id: string | null) => void;
+    sidebarFilter: string;
+    setSidebarFilter: (filter: string) => void;
     pendingChatMode?: { mode: 'agent' | 'team'; teamId: string | null } | null;
     clearPendingChatMode?: () => void;
 }

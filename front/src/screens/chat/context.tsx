@@ -131,10 +131,11 @@ export function ChatProvider({
     const [thinkingLevel, setThinkingLevel] = useState<string>('off');
 
     // Display settings (persists within chat session)
-    const [showToolCalls, setShowToolCalls] = useState<boolean>(true);
-    const [showReasoning, setShowReasoning] = useState<boolean>(true);
-    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(true);
-    const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('all');
+    const [showToolCalls, setShowToolCalls] = useState<boolean>(false);
+    const [showReasoning, setShowReasoning] = useState<boolean>(false);
+    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(false);
+    const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('hide');
+
 
     const setDetailLevel = useCallback((level: DetailLevel) => {
         setDetailLevelInternal(level);
@@ -210,7 +211,7 @@ export function ChatProvider({
         }
     }, [setSelectedModel]);
 
-    const { activeChat, pendingChatMode, clearPendingChatMode } = useMain();
+    const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter } = useMain();
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
@@ -233,13 +234,17 @@ export function ChatProvider({
         manualModelSelectionRef.current = false;
 
         // Sync mode from active chat or pending state
-        if (activeChatID === emptyChatID && pendingChatMode) {
-            // New chat with specific mode requested
-            setChatMode(pendingChatMode.mode);
-            if (pendingChatMode.teamId) {
-                selectTeam(pendingChatMode.teamId);
+        if (activeChatID === emptyChatID) {
+            const modeToUse = pendingChatMode?.mode ?? (sidebarFilter === 'all' || sidebarFilter === 'agent' ? 'agent' : 'team');
+            const teamIdToUse = pendingChatMode?.teamId ?? (modeToUse === 'team' ? sidebarFilter : null);
+
+            setChatMode(modeToUse);
+            if (teamIdToUse) {
+                selectTeam(teamIdToUse);
             }
-            clearPendingChatMode?.();
+            if (pendingChatMode) {
+                clearPendingChatMode?.();
+            }
         } else if (activeChat) {
             // Existing chat - restore mode
             if (activeChat.mode) {
@@ -258,7 +263,7 @@ export function ChatProvider({
             return;
         }
         getMessages(activeChatID);
-    }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode]);
+    }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode, sidebarFilter]);
 
     // Fetch available models on mount with retry
     useEffect(() => {
@@ -495,7 +500,7 @@ export function ChatProvider({
             socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch, thinking, role);
             console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
         },
-        [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token],
+        [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token, createChat, createMessage],
     ); // Dependencies for sendStreamingMessage
 
     const executeMessageAction = useCallback(async (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => {
@@ -542,7 +547,7 @@ export function ChatProvider({
         setMessages([]);
     }, []);
 
-    async function createChat(title: string) {
+    const createChat = useCallback(async (title: string) => {
         let chatID: string;
 
         try {
@@ -569,9 +574,9 @@ export function ChatProvider({
         }
 
         return chatID;
-    }
+    }, [chatMode, selectedTeamId, setActiveChatID]);
 
-    async function createMessage(text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean, role: string = 'user') {
+    const createMessage = useCallback(async (text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean, role: string = 'user') => {
         let messageID: string;
 
         try {
@@ -603,7 +608,7 @@ export function ChatProvider({
         }
 
         return messageID;
-    }
+    }, []);
 
     const sendMessage = useCallback(
         async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, role: string = 'user') => {

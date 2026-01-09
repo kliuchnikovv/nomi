@@ -70,8 +70,6 @@ export function ChatHeader({
 
     const iconElement = renderIcon();
 
-    const iconElement = renderIcon();
-
 
     return (
         <View style={[

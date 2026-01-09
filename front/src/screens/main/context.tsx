@@ -29,6 +29,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     const [chats, setChats] = useState<Chat[]>([]);
     const [chatsLoading, setChatsLoading] = useState(false);
     const [activeChatID, setActiveChatID] = useState<string | null>(null);
+    const [sidebarFilter, setSidebarFilter] = useState<string>('all');
 
     const { isAuthenticated } = useAuth();
 
@@ -237,6 +238,14 @@ export function MainProvider({ children }: { children: ReactNode }) {
             setActiveChatID(emptyChatID);
             return;
         }
+
+        // Use current filter as the default mode/team for the new chat
+        if (sidebarFilter === 'all' || sidebarFilter === 'agent') {
+            setPendingChatMode({ mode: 'agent', teamId: null });
+        } else {
+            setPendingChatMode({ mode: 'team', teamId: sidebarFilter });
+        }
+
         setActiveChatID(emptyChatID);
     }
 
@@ -265,6 +274,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         renameChat,
         deleteChat,
         setActiveChatID,
+        sidebarFilter,
+        setSidebarFilter,
         pendingChatMode,
         clearPendingChatMode,
     };

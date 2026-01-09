@@ -12,6 +12,7 @@ import { Skeleton } from '../../../components/Skeleton';
 import { Sidebar } from '../../../components/Sidebar';
 import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
+import { useMain } from '../../main/context';
 
 
 const pad = (value: number) => value.toString().padStart(2, '0');
@@ -69,11 +70,11 @@ function ChatListContent({
 }) {
     const insets = useSafeAreaInsets();
     const { theme } = useTheme();
+    const { sidebarFilter, setSidebarFilter } = useMain();
     const [highlightedChatID, setHighlightedChatID] = useState<string | null>(null);
     const flatListRef = React.useRef<FlatList<Chat>>(null);
     const pendingScrollRef = React.useRef<{ index: number; animated: boolean; viewPosition: number; retries: number } | null>(null);
 
-    const [selectedFilter, setSelectedFilter] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [listLimit, setListLimit] = useState(20);
 
@@ -100,11 +101,11 @@ function ChatListContent({
     const filteredChats = useMemo(() => {
         let data = chats;
 
-        if (selectedFilter === 'agent') {
+        if (sidebarFilter === 'agent') {
             data = chats.filter(c => !c.mode || c.mode === 'agent');
-        } else if (selectedFilter !== 'all') {
+        } else if (sidebarFilter !== 'all') {
             // Team filter
-            data = chats.filter(c => c.mode === 'team' && c.team_id === selectedFilter);
+            data = chats.filter(c => c.mode === 'team' && c.team_id === sidebarFilter);
         }
 
         if (searchQuery.trim()) {
@@ -113,7 +114,7 @@ function ChatListContent({
         }
 
         return data.sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0));
-    }, [chats, selectedFilter, searchQuery]);
+    }, [chats, sidebarFilter, searchQuery]);
 
     const visibleChats = useMemo(() => {
         return filteredChats.slice(0, listLimit);
@@ -134,22 +135,22 @@ function ChatListContent({
 
             // Auto-switch filter ONLY if we are syncing to active chat (on open or change)
             // preventing the effect from reverting manual user selection
-            let effectiveFilter = selectedFilter;
+            let effectiveFilter = sidebarFilter;
 
-            if (selectedFilter !== 'all' && selectedFilter !== requiredFilter) {
-                setSelectedFilter(requiredFilter);
+            if (sidebarFilter !== 'all' && sidebarFilter !== requiredFilter) {
+                setSidebarFilter(requiredFilter);
                 effectiveFilter = requiredFilter;
                 // Proceed to scroll after render? 
                 // We can rely on next render cycle or force it if we want instant.
                 // But simply setting state will trigger re-render and re-run THIS effect if we don't be careful.
                 // Actually this effect depends on [isOpen, activeChatID].
-                // If those didn't change, setting selectedFilter won't re-trigger this effect (since selectedFilter is NOT in deps).
+                // If those didn't change, setting sidebarFilter won't re-trigger this effect (since sidebarFilter is NOT in deps).
                 // GOOD.
             }
 
             // Find index in filtered list
-            // Note: filteredChats is derived from selectedFilter. 
-            // If we just changed selectedFilter, filteredChats is STALE in this closure.
+            // Note: filteredChats is derived from sidebarFilter. 
+            // If we just changed sidebarFilter, filteredChats is STALE in this closure.
             // We cannot scroll immediately if we switched filter.
             // We should split this logic? 
             // Or let the re-render handle the scroll?
@@ -167,7 +168,7 @@ function ChatListContent({
 
             // Let's stick to current structure but fix stale data issue.
             // If we switched filter, we CANNOT calculate index yet.
-            if (selectedFilter !== 'all' && selectedFilter !== requiredFilter) {
+            if (sidebarFilter !== 'all' && sidebarFilter !== requiredFilter) {
                 // We rely on the fact that switching filter will re-render list.
                 // We just need to ensure we scroll AFTER that.
                 // Maybe set a flag 'pendingScrollToActive'?
@@ -204,7 +205,7 @@ function ChatListContent({
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, activeChatID]); // Removed selectedFilter, filteredChats, listLimit to prevent interaction loops
+    }, [isOpen, activeChatID]); // Removed sidebarFilter, filteredChats, listLimit to prevent interaction loops
 
     const openChatMenu = (chatId: string, chatTitle: string) => {
         if (!onChatDelete && !onChatRename) return;
@@ -250,13 +251,13 @@ function ChatListContent({
             return;
         }
 
-        if (selectedFilter === 'all' || selectedFilter === 'agent') {
+        if (sidebarFilter === 'all' || sidebarFilter === 'agent') {
             onNewChatWithMode('agent', null);
         } else {
             // Team ID
-            onNewChatWithMode('team', selectedFilter);
+            onNewChatWithMode('team', sidebarFilter);
         }
-    }, [onNewChat, onNewChatWithMode, selectedFilter]);
+    }, [onNewChat, onNewChatWithMode, sidebarFilter]);
 
     const renderItem = ({ item }: { item: Chat }) => {
         const isActive = item.id === activeChatID;
@@ -266,7 +267,7 @@ function ChatListContent({
         // Get colorful category badge
         let category: string | null = null;
         let categoryColor: string | null = null;
-        if (selectedFilter === 'all') {
+        if (sidebarFilter === 'all') {
             if (item.mode === 'team') {
                 const team = AVAILABLE_TEAMS.find(t => t.id === item.team_id);
                 category = team?.name || 'Team';
@@ -362,7 +363,7 @@ function ChatListContent({
                     contentContainerStyle={styles.filterContent}
                 >
                     {filters.map(filter => {
-                        const isActive = selectedFilter === filter.id;
+                        const isActive = sidebarFilter === filter.id;
                         const filterColor = filter.color || theme.accent;
                         return (
                             <Pressable
@@ -375,7 +376,7 @@ function ChatListContent({
                                     }
                                 ]}
                                 onPress={() => {
-                                    setSelectedFilter(filter.id);
+                                    setSidebarFilter(filter.id);
                                     setListLimit(20);
                                 }}
                             >

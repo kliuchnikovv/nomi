@@ -159,7 +159,7 @@ class ProjectKnowledgeManager:
             structure_lines = [f"# Project Structure: {repo_name}\n"]
             
             def describe_dir(path: str, depth: int = 0):
-                if depth > 3:
+                if depth > 5:
                     return
                 try:
                     contents = repo.get_contents(path)
@@ -385,6 +385,9 @@ class ProjectKnowledgeManager:
         api_patterns = [
             ("api/internal/http", "go", "API routes and handlers"),
             ("api/internal/handlers", "go", "HTTP handlers"),
+            ("api/internal/storage", "go", "Data storage and models"),
+            ("api/internal/models", "go", "Domain models"),
+            ("api/internal/hub", "go", "Communication hub"),
             ("back/src/agents", "py", "AI agents"),
             ("back/src/teams", "py", "Agent teams"),
             ("front/src/screens", "tsx", "App screens"),
@@ -397,28 +400,26 @@ class ProjectKnowledgeManager:
                 if not isinstance(contents, list):
                     contents = [contents]
                 
-                summaries = []
                 for item in contents:
                     if item.type == "file" and item.name.endswith(f".{ext}"):
                         try:
-                            decoded = base64.b64decode(item.content).decode('utf-8')
+                            # Use decoded_content for better safety than base64
+                            decoded = item.decoded_content.decode('utf-8')
                             summary = self._extract_file_summary(decoded, ext, item.name)
                             if summary:
-                                summaries.append(f"## {item.name}\n{summary}\n")
-                        except Exception:
+                                documents.append(Document(
+                                    content=f"# {description}: {item.name}\n\n{summary}",
+                                    meta_data={
+                                        "project_id": project_id,
+                                        "doc_type": "components",
+                                        "source": f"github://{repo_name}/{path}/{item.name}",
+                                        "filename": item.name
+                                    }
+                                ))
+                                logger.debug(f"Indexed component: {path}/{item.name}")
+                        except Exception as e:
+                            logger.error(f"Error extracting summary from {item.name}: {e}")
                             pass
-                
-                if summaries:
-                    documents.append(Document(
-                        content=f"# {description}\n\n" + "\n".join(summaries),
-                        meta_data={
-                            "project_id": project_id,
-                            "doc_type": "components",
-                            "source": f"github://{repo_name}/{path}",
-                            "filename": f"_{path.replace('/', '_')}_summary.md"
-                        }
-                    ))
-                    logger.debug(f"Indexed components from: {path}")
                     
             except GithubException:
                 pass
@@ -432,13 +433,45 @@ class ProjectKnowledgeManager:
         lines = []
         
         if ext == "go":
-            for line in content.split("\n"):
-                line = line.strip()
-                if line.startswith("func ") and "(" in line:
-                    sig = line.split("{")[0].strip()
-                    lines.append(f"- `{sig}`")
-                elif line.startswith("type ") and ("struct" in line or "interface" in line):
-                    lines.append(f"- `{line.split('{')[0].strip()}`")
+            # Special handling for models.go to include struct fields
+            if "models.go" in filename.lower():
+                import re
+                # Match: type Name struct { ... }
+                # Note: This is a simple regex that works for most Go model files
+                struct_matches = re.finditer(r'type\s+(\w+)\s+struct\s+\{([^}]+)\}', content)
+                for match in struct_matches:
+                    name = match.group(1)
+                    fields_raw = match.group(2)
+                    # Clean up fields: remove tags like `json:"..."`, remove comments, join lines
+                    clean_fields = []
+                    for f in fields_raw.split("\n"):
+                        f = f.split("//")[0].split("/*")[0].strip()
+                        if not f: continue
+                        # Remove json tags
+                        f = re.sub(r'`[^`]+`', '', f).strip()
+                        if f:
+                            # Collapse multiple spaces
+                            f = re.sub(r'\s+', ' ', f)
+                            clean_fields.append(f)
+                    
+                    lines.append(f"- `type {name} struct` {{ {', '.join(clean_fields[:15])} }}")
+                
+                # Also include regular signatures for anything missed
+                if not lines:
+                    for line in content.split("\n"):
+                        line = line.strip()
+                        if line.startswith("type ") and "struct" in line:
+                            lines.append(f"- `{line.split('{')[0].strip()}`")
+
+            else:
+                # Standard signature extraction for Go files
+                for line in content.split("\n"):
+                    line = line.strip()
+                    if line.startswith("func ") and "(" in line:
+                        sig = line.split("{")[0].strip()
+                        lines.append(f"- `{sig}`")
+                    elif line.startswith("type ") and ("struct" in line or "interface" in line):
+                        lines.append(f"- `{line.split('{')[0].strip()}`")
         
         elif ext in ("py", "python"):
             for line in content.split("\n"):
