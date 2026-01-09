@@ -274,6 +274,52 @@ func New(
 		}
 		c.Status(resp.StatusCode)
 
+
+		// Stream response body
+		_, _ = io.Copy(c.Writer, resp.Body)
+	})
+
+	// Proxy for GitHub Repos (transient) - forwards to Python backend
+	r.POST("/api/github/repos", func(c *gin.Context) {
+		// Use LLM BaseURL from config, or default to internal Python service URL
+		// Using 'http://127.0.0.1:7777' as default since app.py listens on 7777
+		targetURL := cfg.LLM.BaseURL
+		if targetURL == "" {
+			targetURL = "http://127.0.0.1:7777"
+		}
+
+		// Create proxy request
+		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+"/api/github/repos", c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create proxy request"})
+			return
+		}
+
+		// Copy headers
+		for name, values := range c.Request.Header {
+			for _, value := range values {
+				proxyReq.Header.Add(name, value)
+			}
+		}
+
+		// Send request
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(proxyReq)
+		if err != nil {
+			logger.Error("Failed to proxy github repos request", zap.Error(err))
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to contact AI service"})
+			return
+		}
+		defer resp.Body.Close()
+
+		// Copy response headers
+		for name, values := range resp.Header {
+			for _, value := range values {
+				c.Writer.Header().Add(name, value)
+			}
+		}
+		c.Status(resp.StatusCode)
+
 		// Stream response body
 		_, _ = io.Copy(c.Writer, resp.Body)
 	})

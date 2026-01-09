@@ -13,6 +13,7 @@ import { Sidebar } from '../../../components/Sidebar';
 import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
 
+
 const pad = (value: number) => value.toString().padStart(2, '0');
 
 const formatDateTime = (value?: string | number | null) => {
@@ -340,6 +341,7 @@ function ChatListContent({
                     ))}
                 </ScrollView>
             </View>
+
 
             {chatsLoading ? (
                 <ChatListSkeleton styles={styles} />

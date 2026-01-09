@@ -1,4 +1,8 @@
 from typing import List, Optional, Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
+
 from agno.knowledge import Knowledge
 from agno.knowledge.document import Document
 from agno.vectordb.pgvector import PgVector
@@ -39,4 +43,18 @@ class UserScopedKnowledge(Knowledge):
             if doc.meta_data is None:
                 doc.meta_data = {}
             doc.meta_data["user_id"] = self.user_id
-        super().load_documents(documents, upsert)
+        if self.vector_db:
+            try:
+                # Try explicit load_documents if available on API, otherwise use upsert on vector_db
+                # Agno/Phidata Knowledge might not have load_documents, so we try vector_db.upsert directly
+                if hasattr(self.vector_db, "upsert"):
+                    self.vector_db.upsert(documents)
+                elif hasattr(self.vector_db, "add_documents"):
+                    self.vector_db.add_documents(documents)
+                else:
+                    # Fallback or re-raise if we can't find a way to add
+                    logger.warning("Could not find method to add documents to vector_db")
+            except Exception as e:
+                # If specifically AttributeError from 'super', we handled it by not calling super
+                # But if vector_db call fails, we rely on standard error handling
+                raise e

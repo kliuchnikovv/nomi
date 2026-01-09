@@ -280,9 +280,10 @@ export interface Project {
 }
 
 export const projectsApi = {
+    listRepositories: (githubToken?: string) => apiClient.post<{ repos: Array<{ id: number; name: string; url: string; private: boolean; description?: string }> }>(`${API_URL()}/github/repos`, { github_token: githubToken }),
     list: () => apiClient.get<Array<Project>>(`${API_URL()}/projects`),
     get: (id: string) => apiClient.get<Project>(`${API_URL()}/projects/${id}`),
-    create: (body: { name: string; description?: string; repository?: string }) =>
+    create: (body: { name: string; description?: string; repository?: string; github_token?: string }) =>
         apiClient.post<Project>(`${API_URL()}/projects`, body),
     update: (id: string, body: { name?: string; description?: string; repository?: string }) =>
         apiClient.put<Project>(`${API_URL()}/projects/${id}`, body),

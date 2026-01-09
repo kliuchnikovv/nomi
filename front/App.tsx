@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import { StatusBar, StyleSheet, useColorScheme, View, Text } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ChatLayout from './src/screens/main/screen.tsx';
 import {
@@ -31,16 +31,33 @@ import { registerBackgroundSync } from './src/services/background/backgroundSync
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
     const [configReady, setConfigReady] = useState(false);
+    const [initStatus, setInitStatus] = useState('Initializing...');
 
     // Initialize API URL and Database before rendering
     useEffect(() => {
         const init = async () => {
             try {
-                await initApiUrl();
-                await initDatabase();
-                await registerBackgroundSync();
+                // Timeout promise
+                const timeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Initialization timed out')), 5000)
+                );
+
+                setInitStatus('Initializing API...');
+                await Promise.race([initApiUrl(), timeout]);
+                console.log('[App] API URL initialized');
+
+                setInitStatus('Initializing Database...');
+                await Promise.race([initDatabase(), timeout]);
+                console.log('[App] Database initialized');
+
+                setInitStatus('Registering Background Sync...');
+                // Don't let background sync block app load
+                registerBackgroundSync().catch(e => console.error('[App] Background sync failed:', e));
+                console.log('[App] Background sync registered (async)');
+
             } catch (e) {
                 console.error("Failed to initialize app:", e);
+                setInitStatus('Initialization completed with errors');
             } finally {
                 setConfigReady(true);
             }
@@ -49,7 +66,12 @@ function App() {
     }, []);
 
     if (!configReady) {
-        return null; // Wait for config to load
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDarkMode ? '#000' : '#fff' }}>
+                <Text style={{ color: isDarkMode ? '#fff' : '#000', fontSize: 20 }}>{initStatus}</Text>
+                <Text style={{ color: isDarkMode ? '#888' : '#666', marginTop: 10 }}>Genie App v0.0.1</Text>
+            </View>
+        );
     }
 
     return (

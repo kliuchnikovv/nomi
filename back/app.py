@@ -433,6 +433,44 @@ except Exception:
     logging.exception("Failed to mount Webhooks routes")
 
 
+class RepoListRequest(BaseModel):
+    github_token: Optional[str] = None
+
+@app.post("/api/github/repos")
+async def list_github_repos(request: RepoListRequest):
+    """List repositories for the authenticated user."""
+    from github import Github, GithubException
+    import asyncio
+
+    token = request.github_token or os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return {"error": "No GitHub token provided"}
+
+    def fetch_repos():
+        g = Github(token)
+        user = g.get_user()
+        repos = []
+        # sort by updated to show most relevant first
+        for repo in user.get_repos(sort="updated", direction="desc"): 
+            repos.append({
+                "id": repo.id,
+                "name": repo.full_name, # owner/repo
+                "private": repo.private,
+                "url": repo.html_url,
+                "description": repo.description
+            })
+            if len(repos) >= 50: # Limit to 50 recent repos to avoid slow response
+                break
+        return repos
+
+    try:
+        repos = await asyncio.to_thread(fetch_repos)
+        return {"repos": repos}
+    except Exception as e:
+        logging.error(f"Failed to fetch GitHub repos: {e}")
+        return {"error": str(e), "repos": []}
+
+
 class ProjectAnalysisRequest(BaseModel):
     project_id: str
     repository: str
