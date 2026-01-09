@@ -1,7 +1,9 @@
 import { oneDarkTheme } from './oneDark';
+import { retroSunsetTheme } from './retroSunset';
 import { serikaDarkTheme } from './serikaDark';
 import { tokyoNightTheme } from './tokyoNight';
 import { visualStudioLightTheme } from './visualStudioLight';
+import { retroPastelTheme } from './retroPastel';
 import { ThemeDescriptor, ThemeName } from './types';
 
 export const themes: Record<ThemeName, ThemeDescriptor> = {
@@ -9,9 +11,11 @@ export const themes: Record<ThemeName, ThemeDescriptor> = {
     oneDark: oneDarkTheme,
     visualStudioLight: visualStudioLightTheme,
     serikaDark: serikaDarkTheme,
+    retroSunset: retroSunsetTheme,
+    retroPastel: retroPastelTheme,
 };
 
-export const defaultThemeName: ThemeName = 'tokyoNight';
+export const defaultThemeName: ThemeName = 'retroSunset';
 
 export const activeTheme = themes[defaultThemeName];
 export const theme = activeTheme.colors;

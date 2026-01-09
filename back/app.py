@@ -560,6 +560,63 @@ async def delete_project_knowledge_endpoint(project_id: str):
         return {"error": str(e), "status": "failed"}
 
 
+class ReindexProjectRequest(BaseModel):
+    repository: str
+    github_token: Optional[str] = None
+
+
+@app.post("/api/projects/{project_id}/reindex")
+async def reindex_project(project_id: str, request: ReindexProjectRequest):
+    """
+    Re-index project: delete old RAG knowledge and re-ingest from repository.
+    Called when user wants to refresh project knowledge.
+    """
+    import asyncio
+    import requests
+
+    logging.info(f"Received reindex request: project={project_id} repo={request.repository}")
+
+    def update_status(status: str):
+        api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+        if not api_url.endswith("/api"):
+            api_url = f"{api_url}/api"
+        url = f"{api_url}/projects/{project_id}/status"
+        headers = {}
+        internal_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+        headers["X-Internal-Secret"] = internal_key
+        try:
+            resp = requests.patch(url, json={"status": status}, headers=headers)
+            logging.info(f"Updated project {project_id} status to {status}, response: {resp.status_code}")
+        except Exception as e:
+            logging.error(f"Failed to update project status: {e}")
+
+    async def run_reindex():
+        try:
+            from src.rag_service import ProjectKnowledgeManager
+
+            github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
+
+            manager = ProjectKnowledgeManager(user_id="system")
+            await asyncio.to_thread(
+                manager.reindex_repository,
+                request.repository,
+                project_id,
+                github_token
+            )
+
+            logging.info(f"Completed reindex for project {project_id}")
+            await asyncio.to_thread(update_status, "READY")
+
+        except Exception as e:
+            logging.error(f"Failed to reindex project {project_id}: {e}", exc_info=True)
+            await asyncio.to_thread(update_status, "FAILED")
+
+    # Run reindex in background
+    asyncio.create_task(run_reindex())
+
+    return {"status": "started", "project_id": project_id}
+
+
 class EmbeddingRequest(BaseModel):
     text: Optional[str] = None  # Single text (backward compatible)
     texts: Optional[list[str]] = None  # Batch of texts

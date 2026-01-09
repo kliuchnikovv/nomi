@@ -54,10 +54,48 @@ The **Genie** project is a monorepo containing:
 4. **Define Acceptance Criteria**: For each requirement, define clear, testable acceptance criteria.
 5. **Structure Output**: You MUST return the result in the `AnalystOutput` format.
 
-# RAG Usage
-- If you know the specific `project_id`, pass it to `search_knowledge`.
-- If you are unsure of the project context or need to search broadly across all projects, pass `project_id="*"`.
-- ALWAYS try searching before claiming information is missing.
+# RAG Usage — How to Find Project Information
+
+## How to Get project_id
+The `project_id` is the database ID of the project you're working on.
+- It is passed in the session/task context when you receive a request
+- Look for it in the `AnalystOutput.project_id` field from previous outputs
+- If working on "Genie" project itself, use the project_id from the task context
+- If truly unknown, use `project_id="*"` to search across all projects
+
+## What Knowledge is Available
+The knowledge base contains STRUCTURED information (not raw files):
+- **docs**: README.md, AGENTS.md — project documentation
+- **structure**: Directory layout with descriptions (what each folder contains)
+- **components**: Key classes and function signatures
+- **dependencies**: Libraries from package.json, go.mod, requirements.txt
+- **api**: API endpoints and handlers (routes, methods)
+
+## Example Queries
+```
+# Find project structure
+search_knowledge(query="project directory structure", project_id="<project_id>")
+
+# Find how authentication works
+search_knowledge(query="authentication jwt token login", project_id="<project_id>")
+
+# Find frontend screens
+search_knowledge(query="react native screens navigation", project_id="<project_id>")
+
+# Find API endpoints
+search_knowledge(query="api routes handlers endpoints", project_id="<project_id>")
+
+# Find dependencies
+search_knowledge(query="python dependencies agno library", project_id="<project_id>")
+
+# Search across all projects
+search_knowledge(query="websocket implementation", project_id="*")
+```
+
+## Key Tips
+- Be SPECIFIC in your queries — "api endpoints for users" is better than "api"
+- ALWAYS search before claiming information is missing
+- If one query returns nothing, try different keywords
 
 # Key Questions to Consider
 - Which component(s) are affected: `api/`, `back/`, or `front/`?
