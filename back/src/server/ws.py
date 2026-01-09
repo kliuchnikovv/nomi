@@ -70,13 +70,29 @@ class LLMWebSocketSession:
     async def _cleanup_tasks(self):
         """Cancel any pending tasks to avoid 'Task exception was never retrieved'."""
         tasks = []
-        if self._receive_task and not self._receive_task.done():
-            self._receive_task.cancel()
-            tasks.append(self._receive_task)
         
-        if self.current_generation_task and not self.current_generation_task.done():
-            self.current_generation_task.cancel()
-            tasks.append(self.current_generation_task)
+        # Handle receive task
+        if self._receive_task:
+            if not self._receive_task.done():
+                self._receive_task.cancel()
+                tasks.append(self._receive_task)
+            else:
+                # If done but still associated, ensure exception is retrieved
+                try:
+                    self._receive_task.result()
+                except Exception:
+                    pass
+        
+        # Handle generation task
+        if self.current_generation_task:
+            if not self.current_generation_task.done():
+                self.current_generation_task.cancel()
+                tasks.append(self.current_generation_task)
+            else:
+                try:
+                    self.current_generation_task.result()
+                except Exception:
+                    pass
 
         if tasks:
             # Wait for tasks to actually cancel so exceptions are retrieved/suppressed

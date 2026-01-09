@@ -494,9 +494,8 @@ async def analyze_project(request: ProjectAnalysisRequest):
             api_url = f"{api_url}/api"
         url = f"{api_url}/projects/{request.project_id}/status"
         headers = {}
-        internal_key = os.getenv("INTERNAL_API_KEY")
-        if internal_key:
-            headers["X-Internal-Secret"] = internal_key
+        internal_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+        headers["X-Internal-Secret"] = internal_key
         try:
             resp = requests.patch(url, json={"status": status}, headers=headers)
             logging.info(f"Updated project {request.project_id} status to {status}, response: {resp.status_code}")
