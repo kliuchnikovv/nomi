@@ -211,7 +211,7 @@ export function ChatProvider({
         }
     }, [setSelectedModel]);
 
-    const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter } = useMain();
+    const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter, getChats } = useMain();
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
@@ -563,7 +563,8 @@ export function ChatProvider({
             if (created?.id) {
                 chatID = created.id;
                 setActiveChatID(created.id);
-                // getChats();
+                // Refresh chats list to update sidebar immediately
+                getChats();
             } else {
                 console.error('Chat create returned no id', created);
                 return;
