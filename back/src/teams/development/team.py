@@ -439,6 +439,7 @@ class DevelopmentTeam(Team):
         markdown: bool = True,
         debug_mode: bool = False,
         user_id: Optional[str] = None,
+        auth_token: Optional[str] = None,
         db_url: Optional[str] = None, # Added to support Workflow Storage
         client_tools: Optional[List[Toolkit]] = None,
     ):
@@ -457,7 +458,7 @@ class DevelopmentTeam(Team):
         # Analyst and Verifier tools
         analyst_tools = []
         if user_id:
-             analyst_tools.append(KnowledgeSearchTool(user_id=user_id))
+             analyst_tools.append(KnowledgeSearchTool(user_id=user_id, auth_token=auth_token))
         if github_tool:
              analyst_tools.append(github_tool)
              
@@ -473,7 +474,7 @@ class DevelopmentTeam(Team):
         if github_tool:
             team_tools.append(github_tool)
         if user_id:
-            team_tools.append(KnowledgeSearchTool(user_id=user_id))
+            team_tools.append(KnowledgeSearchTool(user_id=user_id, auth_token=auth_token))
         if client_tools:
             team_tools.extend(client_tools)
 

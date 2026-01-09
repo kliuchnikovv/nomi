@@ -14,6 +14,8 @@ interface ChatHeaderProps {
     showInbox?: boolean;
     isInboxMode?: boolean;
     icon?: string;
+    chatMode?: 'agent' | 'team' | 'plugin';
+    teamId?: string | null;
 }
 
 export function ChatHeader({
@@ -25,23 +27,41 @@ export function ChatHeader({
     showInbox = true,
     isInboxMode = false,
     icon,
+    chatMode,
+    teamId,
 }: ChatHeaderProps) {
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    // Change accent color based on mode
-    const accentColor = isInboxMode ? palette.orange : theme.accent;
+    // Determine team/mode color
+    const getTeamColor = () => {
+        if (isInboxMode) return palette.orange;
+        if (chatMode === 'agent') return theme.success; // Robot icon usually green
+        if (chatMode === 'team') {
+            if (teamId === 'development_team') return theme.warning;
+            if (teamId === 'dnd_team') return theme.accent;
+            return theme.info;
+        }
+        return theme.accent;
+    };
+
+    const teamColor = getTeamColor();
+    // Use team color for header tint if not in inbox mode
+    const accentColor = isInboxMode ? palette.orange : teamColor;
 
     const renderIcon = () => {
-        if (!icon) return null;
-        const color = theme.textPrimary;
         const size = 20; // Slightly smaller than container
+        if (!icon) return null;
+
+        // Use either teamColor or default text color based on background
+        const iconColor = theme.background; // Reverse for better visibility on colored background
+
         switch (icon) {
-            case 'sparkles': return <MagicWand width={size} height={size} color={color} strokeWidth={2} />;
-            case 'code': return <Code width={size} height={size} color={color} strokeWidth={2} />;
-            case 'plane': return <Airplane width={size} height={size} color={color} strokeWidth={2} />;
-            case 'd20': return <Cube width={size} height={size} color={color} strokeWidth={2} />;
+            case 'sparkles': return <MagicWand width={size} height={size} color={iconColor} strokeWidth={2.5} />;
+            case 'code': return <Code width={size} height={size} color={iconColor} strokeWidth={2.5} />;
+            case 'plane': return <Airplane width={size} height={size} color={iconColor} strokeWidth={2.5} />;
+            case 'd20': return <Cube width={size} height={size} color={iconColor} strokeWidth={2.5} />;
             default: return null;
         }
     };
@@ -66,11 +86,13 @@ export function ChatHeader({
                     <Menu width={22} height={22} color={theme.textPrimary} strokeWidth={2} />
                 </TouchableOpacity>
             )}
-            <View style={styles.headerAvatar}>
+            <View style={[styles.headerAvatar, { backgroundColor: teamColor }]}>
                 {iconElement ? (
                     iconElement
                 ) : (
-                    <Text style={styles.headerAvatarText}>{isInboxMode ? 'I' : 'G'}</Text>
+                    <Text style={[styles.headerAvatarText, { color: theme.icon }]}>
+                        {isInboxMode ? 'I' : chatMode === 'agent' ? 'G' : 'T'}
+                    </Text>
                 )}
             </View>
             <View style={[styles.headerBody, { flex: 1, minWidth: 0 }]}>

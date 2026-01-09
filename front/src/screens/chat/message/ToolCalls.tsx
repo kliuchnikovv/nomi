@@ -44,7 +44,7 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
                             )}
                             {toolCall.result && (
                                 <View style={{ marginTop: 8 }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 4 }}>Result:</Text>
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 4 }}>Result:</Text>
                                     <Text style={styles.toolCallArgs}>
                                         {typeof toolCall.result === 'string'
                                             ? toolCall.result
@@ -95,7 +95,7 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
                     )}
                     {toolCall.result && (
                         <View style={{ marginTop: 4 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#888', marginBottom: 2 }}>Result:</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary, marginBottom: 2 }}>Result:</Text>
                             <Text style={styles.toolCallArgs}>
                                 {typeof toolCall.result === 'string'
                                     ? toolCall.result

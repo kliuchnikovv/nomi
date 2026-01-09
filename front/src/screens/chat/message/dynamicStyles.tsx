@@ -154,9 +154,10 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             marginBottom: 4,
         },
         toolCallArgs: {
-            color: withAlpha(theme.textPrimary, 0.9),
-            fontSize: 11,
+            color: theme.text,
+            fontSize: 12,
             fontFamily: 'Menlo',
+            lineHeight: 18,
         },
         modelText: {
             color: theme.textSecondary,

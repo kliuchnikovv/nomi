@@ -57,6 +57,9 @@ class TeamFactory:
 
             # Try to get GitHub token from command_desc or environment
             github_token = command_desc.get("github_token") or os.getenv("GITHUB_TOKEN")
+            
+            # Get auth token for API calls
+            auth_token = command_desc.get("auth_token")
 
             # Build client tools if specs provided
             client_tools = []
@@ -73,6 +76,7 @@ class TeamFactory:
                 github_token=github_token,
                 debug_mode=self.debug_mode,
                 user_id=user_id,
+                auth_token=auth_token,
                 db_url=self.db.db_url if self.db else None, # Use existing DB connection URL
                 client_tools=client_tools
             )

@@ -13,6 +13,7 @@ import { projectsApi, Project } from '../apiClient';
 import { useTheme } from '../context/ThemeContext';
 import { ThemePalette } from '../themes/types';
 import AddProjectModal from '../screens/rightsidebar/AddProjectModal';
+import { integrationStorage } from '../services/integrations';
 
 const formatTimestamp = (timestamp?: number) => {
     if (!timestamp) return '';
@@ -224,11 +225,20 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
                     text: 'Re-index',
                     onPress: async () => {
                         try {
+                            // Get GitHub token for private repos
+                            let githubToken: string | undefined;
+                            const integrations = await integrationStorage.getIntegrations();
+                            const githubInteg = integrations.find(i => i.provider === 'github' && i.enabled);
+                            if (githubInteg) {
+                                const creds = await integrationStorage.getCredentials(githubInteg.id);
+                                githubToken = creds?.accessToken;
+                            }
+
                             // Optimistic update
                             setProjects(prev => prev.map(p =>
                                 p.ID === id ? { ...p, Status: 'ANALYZING' as const } : p
                             ));
-                            await projectsApi.reindex(id);
+                            await projectsApi.reindex(id, githubToken);
                         } catch (err) {
                             console.error('Failed to reindex project', err);
                             Alert.alert('Error', 'Failed to start re-indexing');

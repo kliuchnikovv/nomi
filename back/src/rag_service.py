@@ -1,6 +1,8 @@
 from typing import Optional, Dict, Any, List
 import logging
 import base64
+import os
+import httpx
 
 from agno.knowledge import Knowledge
 from agno.tools import Toolkit
@@ -490,8 +492,10 @@ class KnowledgeSearchTool(Toolkit):
     Tool for agents to search knowledge (project-specific or general).
     """
 
-    def __init__(self, user_id: str, manager: Optional[ProjectKnowledgeManager] = None):
+    def __init__(self, user_id: str, auth_token: Optional[str] = None, manager: Optional[ProjectKnowledgeManager] = None):
         super().__init__(name="knowledge_search_tool")
+        self.user_id = user_id
+        self.auth_token = auth_token
 
         if manager is None:
             try:
@@ -499,10 +503,12 @@ class KnowledgeSearchTool(Toolkit):
             except Exception as e:
                 logger.warning(f"Failed to initialize ProjectKnowledgeManager in tool: {e}")
                 self.manager = None
+                self.register(self.list_projects)
                 return
 
         self.manager = manager
         self.register(self.search_knowledge)
+        self.register(self.list_projects)
 
     def search_knowledge(self, query: str, project_id: Optional[str] = None) -> str:
         """
@@ -560,3 +566,66 @@ class KnowledgeSearchTool(Toolkit):
         except Exception as e:
             logger.error(f"Error searching knowledge: {e}")
             return f"Error occurred while searching: {str(e)}"
+
+    def list_projects(self) -> str:
+        """
+        List all available projects for the current user.
+        
+        Use this tool when you need to discover which projects exist and get their IDs.
+        This is especially useful when the user asks about a project by name but you don't
+        know its ID.
+        
+        Returns:
+            str: A formatted list of projects with their IDs, names, descriptions, and repo URLs.
+        
+        Example Usage:
+            - User asks: "What do you know about genie?"
+            - Call list_projects() to find the project ID for "genie"
+            - Then use search_knowledge(query="...", project_id="<found_id>")
+        """
+        try:
+            api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+            headers = {}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+            
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(f"{api_url}/api/projects", headers=headers)
+                
+                if response.status_code == 401:
+                    return "Error: Not authorized. Please ensure you are logged in."
+                
+                if response.status_code != 200:
+                    logger.error(f"Failed to list projects: {response.status_code} - {response.text}")
+                    return f"Error fetching projects: HTTP {response.status_code}"
+                
+                projects = response.json()
+                
+                if not projects:
+                    return "No projects found. The user hasn't added any projects yet."
+                
+                # Format projects list
+                lines = ["# Available Projects\n"]
+                for project in projects:
+                    project_id = project.get("id", "unknown")
+                    name = project.get("name", "Unnamed")
+                    description = project.get("description", "No description")
+                    repo_url = project.get("repo_url", "")
+                    status = project.get("status", "unknown")
+                    
+                    lines.append(f"## {name}")
+                    lines.append(f"- **Project ID**: `{project_id}`")
+                    lines.append(f"- **Description**: {description}")
+                    if repo_url:
+                        lines.append(f"- **Repository**: {repo_url}")
+                    lines.append(f"- **Status**: {status}")
+                    lines.append("")
+                
+                return "\n".join(lines)
+                
+        except httpx.TimeoutException:
+            logger.error("Timeout while fetching projects list")
+            return "Error: Timeout while fetching projects. Please try again."
+        except Exception as e:
+            logger.error(f"Error listing projects: {e}")
+            return f"Error listing projects: {str(e)}"

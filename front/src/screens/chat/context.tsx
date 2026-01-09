@@ -275,6 +275,7 @@ export function ChatProvider({
         const next = {
             ...baseCommand,
             model: selectedModel || baseCommand.model,
+            auth_token: token,
             // For dynamic teams, we might want to update participants' models too, 
             // but let's keep it simple: model picker overrides the main team/conductor model.
         };
@@ -285,7 +286,7 @@ export function ChatProvider({
             } catch { /* ignore */ }
             return next;
         });
-    }, [chatMode, selectedModel, selectedTeamId]);
+    }, [chatMode, selectedModel, selectedTeamId, token]);
 
     useEffect(() => {
         console.log('WebSocket useEffect: activeChatID:', activeChatID);

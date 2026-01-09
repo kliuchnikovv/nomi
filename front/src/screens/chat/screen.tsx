@@ -454,6 +454,8 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         showInbox={!isWide}
                         isInboxMode={isPluginThread}
                         icon={activeChat?.icon}
+                        chatMode={chatMode}
+                        teamId={selectedTeamId}
                     />
 
 
