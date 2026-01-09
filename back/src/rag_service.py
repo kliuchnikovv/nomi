@@ -25,6 +25,8 @@ class ProjectKnowledgeManager:
         self.vector_db = build_vector_db(db_url=db_url)
         # Use UserScopedKnowledge to enforce user_id isolation automatically
         self.knowledge = UserScopedKnowledge(user_id=user_id, vector_db=self.vector_db)
+        # Base knowledge for searching without user_id enforcement (for project-scoped search)
+        self.base_knowledge = Knowledge(vector_db=self.vector_db)
 
     def add_document(self, content: str, project_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> None:
         """
