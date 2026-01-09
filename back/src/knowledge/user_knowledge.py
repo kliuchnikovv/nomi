@@ -72,3 +72,23 @@ class UserScopedKnowledge(Knowledge):
                 # Log detailed error to help debugging if it fails again
                 logger.error(f"Failed to upsert documents: {e}", exc_info=True)
                 raise e
+
+    def delete(self, filters: Dict[str, Any] | None = None) -> None:
+        """
+        Delete documents with enforced user_id in metadata.
+        """
+        effective_filter = filters or {}
+        effective_filter["user_id"] = self.user_id
+        
+        if self.vector_db:
+            try:
+                # Try explicit delete/delete_documents if available
+                if hasattr(self.vector_db, "delete"):
+                     self.vector_db.delete(filters=effective_filter)
+                elif hasattr(self.vector_db, "delete_documents"):
+                     self.vector_db.delete_documents(filters=effective_filter)
+                else:
+                    logger.warning("Could not find method to delete documents from vector_db")
+            except Exception as e:
+                logger.error(f"Failed to delete documents: {e}", exc_info=True)
+                raise e

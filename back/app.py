@@ -128,11 +128,19 @@ agent_factory = AgentFactory(
 result = tool_config_client.fetch_tools("00000000-0000-0000-0000-000000000000")
 
 agent_os = AgentOS(
-    agents=[GenieAgent(
-        db=db,
-        model=model,
-        debug_mode=debug_mode,
-    )]
+    agents=[
+        GenieAgent(
+            db=db,
+            model=model,
+            debug_mode=debug_mode,
+        ),
+        DevelopmentTeam(
+            model=model,
+            db=db,
+            debug_mode=debug_mode,
+            github_token=os.getenv("GITHUB_TOKEN"),
+        )
+    ]
 )
 global app
 app = agent_os.get_app()
@@ -529,6 +537,27 @@ async def analyze_project(request: ProjectAnalysisRequest):
     asyncio.create_task(run_analysis())
 
     return {"status": "started", "project_id": request.project_id}
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project_knowledge_endpoint(project_id: str):
+    """
+    Delete RAG knowledge for a project.
+    """
+    import asyncio
+    try:
+        from src.rag_service import ProjectKnowledgeManager
+        logging.info(f"Received request to delete knowledge for project {project_id}")
+        
+        # Use "system" user_id as that's what ingest_repository uses
+        manager = ProjectKnowledgeManager(user_id="system")
+        await asyncio.to_thread(manager.delete_project_knowledge, project_id)
+        
+        return {"status": "deleted", "project_id": project_id}
+    except Exception as e:
+        logging.error(f"Failed to delete project knowledge: {e}", exc_info=True)
+        # We return error but maybe not 500 to avoid confusing potential callers if they don't handle it
+        return {"error": str(e), "status": "failed"}
 
 
 class EmbeddingRequest(BaseModel):

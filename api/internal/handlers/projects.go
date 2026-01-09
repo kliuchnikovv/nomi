@@ -229,6 +229,34 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 		return
 	}
 
+	// Trigger knowledge deletion
+	go func() {
+		pythonURL := os.Getenv("LLM_BASE_URL")
+		if pythonURL == "" {
+			pythonURL = "http://localhost:7777"
+		}
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		req, err := http.NewRequest("DELETE", pythonURL+"/api/projects/"+id.String(), nil)
+		if err != nil {
+			h.logger.Error("failed to create delete knowledge request", zap.Error(err))
+			return
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			h.logger.Error("failed to trigger knowledge deletion", zap.Error(err))
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			h.logger.Error("knowledge deletion request failed", zap.Int("status", resp.StatusCode))
+		} else {
+			h.logger.Info("knowledge deletion triggered", zap.String("project_id", id.String()))
+		}
+	}()
+
 	c.Status(http.StatusNoContent)
 }
 

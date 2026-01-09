@@ -155,6 +155,15 @@ class ProjectKnowledgeManager:
             logger.error(f"Failed to ingest repository {repo_name}: {e}")
             raise
 
+    def delete_project_knowledge(self, project_id: str) -> None:
+        """
+        Delete all knowledge associated with a project.
+        """
+        logger.info(f"Deleting knowledge for user {self.user_id} (project: {project_id})")
+        # Ensure we filter by project_id. UserScopedKnowledge ensures user_id.
+        self.knowledge.delete(filters={"project_id": project_id})
+
+
 
 # Alias for backward compatibility if needed, though we updated usage below
 KnowledgeManager = ProjectKnowledgeManager

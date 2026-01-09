@@ -691,6 +691,7 @@ If a team member encounters issues:
         # analyst_tools already defined above
 
         super().__init__(
+            name="Development Team",
             model=model,
             db=db,
             description=description,
