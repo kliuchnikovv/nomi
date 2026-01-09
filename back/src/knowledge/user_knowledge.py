@@ -45,16 +45,26 @@ class UserScopedKnowledge(Knowledge):
             doc.meta_data["user_id"] = self.user_id
         if self.vector_db:
             try:
+                # Debug logging to identify the correct method signature
+                # logger.info(f"Vector DB Type: {type(self.vector_db)}")
+                # logger.info(f"Vector DB Dir: {dir(self.vector_db)}")
+
                 # Try explicit load_documents if available on API, otherwise use upsert on vector_db
-                # Agno/Phidata Knowledge might not have load_documents, so we try vector_db.upsert directly
                 if hasattr(self.vector_db, "upsert"):
-                    self.vector_db.upsert(documents)
+                    # The error "missing 1 required positional argument: 'documents'" suggests we might need to use value as kwarg
+                    # or it might be an instance method called on class (unlikely here as we init it)
+                    # Let's try passing as keyword argument first, as that's safer if positions are mixed up
+                    try:
+                        self.vector_db.upsert(documents=documents)
+                    except TypeError as te:
+                         logger.warning(f"upsert(documents=...) failed: {te}. Retrying with positional.")
+                         self.vector_db.upsert(documents)
+
                 elif hasattr(self.vector_db, "add_documents"):
                     self.vector_db.add_documents(documents)
                 else:
-                    # Fallback or re-raise if we can't find a way to add
                     logger.warning("Could not find method to add documents to vector_db")
             except Exception as e:
-                # If specifically AttributeError from 'super', we handled it by not calling super
-                # But if vector_db call fails, we rely on standard error handling
+                # Log detailed error to help debugging if it fails again
+                logger.error(f"Failed to upsert documents: {e}", exc_info=True)
                 raise e
