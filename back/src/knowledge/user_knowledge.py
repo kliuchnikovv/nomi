@@ -27,7 +27,9 @@ class UserScopedKnowledge(Knowledge):
         """
         meta_data = meta_data or {}
         meta_data["user_id"] = self.user_id
-        super().load_text(text, meta_data)
+        
+        doc = Document(content=text, meta_data=meta_data)
+        self.load_documents([doc])
         
     def load_documents(self, documents: List[Document], upsert: bool = False):
         """

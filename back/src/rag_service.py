@@ -104,35 +104,38 @@ class ProjectKnowledgeManager:
                      logger.error(f"Error processing {file_path}: {e}")
 
             # Recursively fetch src/
-            try:
-                contents = repo.get_contents("src")
-                # Handle single file vs list logic if 'src' is a file (unlikely but possible)
-                queue = contents if isinstance(contents, list) else [contents]
+            # Recursively fetch source directories
+            source_dirs = ["src", "back", "front"]
+            for src_dir in source_dirs:
+                try:
+                    contents = repo.get_contents(src_dir)
+                    # Handle single file vs list logic if dir is actually a file (unlikely)
+                    queue = contents if isinstance(contents, list) else [contents]
 
-                while queue:
-                    file_content = queue.pop(0)
-                    if file_content.type == "dir":
-                        queue.extend(repo.get_contents(file_content.path))
+                    while queue:
+                        file_content = queue.pop(0)
+                        if file_content.type == "dir":
+                            queue.extend(repo.get_contents(file_content.path))
+                        else:
+                            try:
+                                # Skip binary or non-text files if needed, for now assuming text
+                                # PyGithub get_contents for a file usually returns ContentFile
+                                if file_content.encoding == "base64":
+                                    decoded = base64.b64decode(file_content.content).decode('utf-8')
+                                    self.add_document(
+                                        content=decoded,
+                                        project_id=project_id,
+                                        metadata={"source": f"github://{repo_name}/{file_content.path}", "filename": file_content.path}
+                                    )
+                                    logger.debug(f"Ingested {file_content.path}")
+                            except Exception as e:
+                                logger.warning(f"Skipping file {file_content.path}: {e}")
+
+                except GithubException as e:
+                    if e.status == 404:
+                         logger.debug(f"'{src_dir}' directory not found in {repo_name}")
                     else:
-                        try:
-                            # Skip binary or non-text files if needed, for now assuming text
-                            # PyGithub get_contents for a file usually returns ContentFile
-                            if file_content.encoding == "base64":
-                                decoded = base64.b64decode(file_content.content).decode('utf-8')
-                                self.add_document(
-                                    content=decoded,
-                                    project_id=project_id,
-                                    metadata={"source": f"github://{repo_name}/{file_content.path}", "filename": file_content.path}
-                                )
-                                logger.debug(f"Ingested {file_content.path}")
-                        except Exception as e:
-                            logger.warning(f"Skipping file {file_content.path}: {e}")
-
-            except GithubException as e:
-                if e.status == 404:
-                     logger.warning(f"'src' directory not found in {repo_name}")
-                else:
-                    logger.error(f"Error accessing 'src' directory: {e}")
+                        logger.error(f"Error accessing '{src_dir}' directory: {e}")
 
             logger.info(f"Ingestion complete for {repo_name}")
 

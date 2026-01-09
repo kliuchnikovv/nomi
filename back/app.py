@@ -451,7 +451,9 @@ async def analyze_project(request: ProjectAnalysisRequest):
     logging.info(f"Received project analysis request: {request.project_id} repo={request.repository}")
 
     def update_status(status: str):
-        api_url = os.getenv("GO_API_URL", "http://localhost:8080/api")
+        api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+        if not api_url.endswith("/api"):
+            api_url = f"{api_url}/api"
         url = f"{api_url}/projects/{request.project_id}/status"
         headers = {}
         internal_key = os.getenv("INTERNAL_API_KEY")
