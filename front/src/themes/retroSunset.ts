@@ -43,6 +43,14 @@ export const retroSunsetTheme: ThemeDescriptor = {
         primary: palette.cyan,
         error: palette.red,
         card: '#1F4F68',
+        // Extended semantic colors
+        warning: palette.orange,
+        success: palette.green,
+        info: palette.cyan,
+        // Source-specific colors
+        calendar: palette.cyan,
+        email: palette.red,
+        task: palette.green,
     },
 };
 

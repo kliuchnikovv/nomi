@@ -40,6 +40,17 @@ export const oneDarkTheme: ThemeDescriptor = {
         surface: '#2c313a',
         surfaceAlt: '#262b33',
         surfaceHighlight: palette.selection ?? '#3e4451',
+        primary: palette.blue,
+        error: palette.red,
+        card: '#2c313a',
+        // Extended semantic colors
+        warning: palette.orange,
+        success: palette.green,
+        info: palette.cyan,
+        // Source-specific colors
+        calendar: palette.blue,
+        email: palette.red,
+        task: palette.green,
     },
 };
 

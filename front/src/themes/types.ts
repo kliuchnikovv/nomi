@@ -38,6 +38,14 @@ export type ThemeColors = {
     primary?: string;
     error?: string;
     card?: string;
+    // Extended semantic colors
+    warning?: string;
+    success?: string;
+    info?: string;
+    // Source-specific colors for visual diversity
+    calendar?: string;
+    email?: string;
+    task?: string;
 };
 
 export type ThemeDescriptor = {

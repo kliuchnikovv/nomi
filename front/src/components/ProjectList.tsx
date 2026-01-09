@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Pressable,
     Text,
     View,
     StyleSheet
 } from 'react-native';
-import { Plus, Trash, Github, Play, Check, XmarkCircle, Folder } from 'iconoir-react-native';
+import { Plus, Trash, Github, Play, Check, XmarkCircle, Folder, RefreshDouble } from 'iconoir-react-native';
 import Animated, { useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import { projectsApi, Project } from '../apiClient';
 import { useTheme } from '../context/ThemeContext';
@@ -37,6 +38,7 @@ function ProjectCard({
     isActive,
     onPress,
     onDelete,
+    onReindex,
     theme,
     palette
 }: {
@@ -44,6 +46,7 @@ function ProjectCard({
     isActive: boolean;
     onPress: () => void;
     onDelete: (id: string) => void;
+    onReindex: (id: string) => void;
     theme: any;
     palette: ThemePalette;
 }) {
@@ -108,12 +111,19 @@ function ProjectCard({
                 </View>
                 <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ color: theme.text, fontWeight: '700', fontSize: 15 }} numberOfLines={1}>
+                        <Text style={{ color: theme.text, fontWeight: '700', fontSize: 15, flex: 1, marginRight: 8 }} numberOfLines={1}>
                             {project.Name}
                         </Text>
-                        <Pressable onPress={(e) => { e.stopPropagation(); onDelete(project.ID); }}>
-                            <Trash width={14} height={14} color={theme.textSecondary} />
-                        </Pressable>
+                        <View style={{ flexDirection: 'row', gap: 16 }}>
+                            {project.Repository && project.Status !== 'ANALYZING' && (
+                                <Pressable onPress={(e) => { e.stopPropagation(); onReindex(project.ID); }}>
+                                    <RefreshDouble width={14} height={14} color={theme.textSecondary} />
+                                </Pressable>
+                            )}
+                            <Pressable onPress={(e) => { e.stopPropagation(); onDelete(project.ID); }}>
+                                <Trash width={14} height={14} color={theme.textSecondary} />
+                            </Pressable>
+                        </View>
                     </View>
 
                     {project.Repository && (
@@ -175,13 +185,60 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
     };
 
     const handleDeleteProject = async (id: string) => {
-        try {
-            await projectsApi.delete(id);
-            setProjects(prev => prev.filter(p => p.ID !== id));
-            if (activeProjectId === id) setActiveProjectId(null);
-        } catch (err) {
-            console.error('Failed to delete project', err);
-        }
+        const project = projects.find(p => p.ID === id);
+        if (!project) return;
+
+        Alert.alert(
+            'Delete Project',
+            `Are you sure you want to delete "${project.Name}"? This will also remove all indexed knowledge.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await projectsApi.delete(id);
+                            setProjects(prev => prev.filter(p => p.ID !== id));
+                            if (activeProjectId === id) setActiveProjectId(null);
+                        } catch (err) {
+                            console.error('Failed to delete project', err);
+                            Alert.alert('Error', 'Failed to delete project');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleReindexProject = async (id: string) => {
+        const project = projects.find(p => p.ID === id);
+        if (!project) return;
+
+        Alert.alert(
+            'Re-index Project',
+            `This will delete existing knowledge and re-analyze the repository "${project.Repository}". Continue?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Re-index',
+                    onPress: async () => {
+                        try {
+                            // Optimistic update
+                            setProjects(prev => prev.map(p =>
+                                p.ID === id ? { ...p, Status: 'ANALYZING' as const } : p
+                            ));
+                            await projectsApi.reindex(id);
+                        } catch (err) {
+                            console.error('Failed to reindex project', err);
+                            Alert.alert('Error', 'Failed to start re-indexing');
+                            // Revert on error
+                            fetchProjects(true);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     // Load projects only when sidebar becomes visible (or component mounted if always visible)
@@ -266,6 +323,7 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
                                 isActive={activeProjectId === project.ID}
                                 onPress={() => setActiveProjectId(activeProjectId === project.ID ? null : project.ID)}
                                 onDelete={handleDeleteProject}
+                                onReindex={handleReindexProject}
                                 theme={theme}
                                 palette={palette}
                             />

@@ -286,6 +286,77 @@ func (h *ProjectHandler) UpdateStatus(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
+type ReindexProjectRequest struct {
+	GithubToken string `json:"github_token"`
+}
+
+func (h *ProjectHandler) ReindexProject(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+
+	project, err := h.store.GetProject(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+		return
+	}
+
+	userID := c.MustGet("userID").(uuid.UUID)
+	if project.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
+	if project.Repository == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Project has no repository to reindex"})
+		return
+	}
+
+	var req ReindexProjectRequest
+	_ = c.ShouldBindJSON(&req) // Optional body
+
+	// Update status to ANALYZING
+	if err := h.store.UpdateProjectStatus(c.Request.Context(), id, storage.ProjectStatusAnalyzing); err != nil {
+		h.logger.Error("failed to update project status", zap.Error(err))
+	}
+
+	// Call Python backend to reindex
+	go func() {
+		pythonURL := os.Getenv("LLM_BASE_URL")
+		if pythonURL == "" {
+			pythonURL = "http://localhost:7777"
+		}
+
+		payload := map[string]interface{}{
+			"repository":   project.Repository,
+			"github_token": req.GithubToken,
+		}
+
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			h.logger.Error("failed to marshal reindex request", zap.Error(err))
+			return
+		}
+
+		resp, err := http.Post(pythonURL+"/api/projects/"+id.String()+"/reindex", "application/json", bytes.NewBuffer(payloadBytes))
+		if err != nil {
+			h.logger.Error("failed to trigger project reindex", zap.Error(err))
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			h.logger.Error("project reindex request failed", zap.Int("status", resp.StatusCode))
+		} else {
+			h.logger.Info("project reindex triggered", zap.String("project_id", id.String()))
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{"status": "started", "project_id": id.String()})
+}
+
 // --- Task Handlers ---
 
 type CreateProjectTaskRequest struct {

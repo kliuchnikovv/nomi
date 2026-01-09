@@ -45,6 +45,14 @@ export const retroPastelTheme: ThemeDescriptor = {
         primary: palette.cyan,
         error: palette.red,
         card: '#FFFFFF',
+        // Extended semantic colors
+        warning: palette.orange,
+        success: palette.green,
+        info: palette.cyan,
+        // Source-specific colors
+        calendar: palette.magenta,
+        email: palette.red,
+        task: palette.green,
     },
 };
 

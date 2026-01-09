@@ -185,6 +185,7 @@ func New(
 	r.PUT("/api/projects/:id", wrapWithAuth(projectHandler.UpdateProject, authMiddleware))
 	r.DELETE("/api/projects/:id", wrapWithAuth(projectHandler.DeleteProject, authMiddleware))
 	r.PATCH("/api/projects/:id/status", taskAuth, projectHandler.UpdateStatus)
+	r.POST("/api/projects/:id/reindex", wrapWithAuth(projectHandler.ReindexProject, authMiddleware))
 
 	// Project Tasks API (CRUD)
 	r.POST("/api/projects/:id/tasks", wrapWithAuth(projectHandler.CreateTask, authMiddleware))

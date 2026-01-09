@@ -290,5 +290,7 @@ export const projectsApi = {
     delete: (id: string) => apiClient.delete<void>(`${API_URL()}/projects/${id}`),
     updateStatus: (id: string, status: Project['Status']) =>
         apiClient.patch<void>(`${API_URL()}/projects/${id}/status`, { status }),
+    reindex: (id: string, githubToken?: string) =>
+        apiClient.post<{ status: string; project_id: string }>(`${API_URL()}/projects/${id}/reindex`, { github_token: githubToken }),
 };
 

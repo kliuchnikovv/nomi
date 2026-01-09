@@ -34,12 +34,23 @@ export const visualStudioLightTheme: ThemeDescriptor = {
         fadedText: 'rgba(0, 0, 0, 0.7)',
         accent: palette.blue,
         accentAlt: palette.cyan,
-        border: '#e5e5e5', // Lighter border for light theme
-        textSecondary: '#666666', // Darker grey for secondary text on light background
+        border: '#e5e5e5',
+        textSecondary: '#666666',
         textPrimary: palette.fg,
-        surface: '#f3f3f3', // Light grey for cards/sidebars
+        surface: '#f3f3f3',
         surfaceAlt: '#e5e5e5',
-        surfaceHighlight: '#d4d4d4', // Hover/Active state
+        surfaceHighlight: '#d4d4d4',
+        primary: palette.blue,
+        error: palette.red,
+        card: '#ffffff',
+        // Extended semantic colors
+        warning: '#d97706',
+        success: palette.green,
+        info: palette.cyan,
+        // Source-specific colors
+        calendar: '#4285F4',
+        email: '#EA4335',
+        task: '#34A853',
     },
 };
 

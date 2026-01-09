@@ -40,6 +40,17 @@ export const serikaDarkTheme: ThemeDescriptor = {
         surface: '#3b3e42',
         surfaceAlt: '#2c2e31',
         surfaceHighlight: palette.selection ?? '#4e5157',
+        primary: palette.yellow,
+        error: palette.red,
+        card: '#3b3e42',
+        // Extended semantic colors
+        warning: palette.orange,
+        success: palette.green,
+        info: palette.cyan,
+        // Source-specific colors
+        calendar: palette.blue,
+        email: palette.red,
+        task: palette.green,
     },
 };
 
