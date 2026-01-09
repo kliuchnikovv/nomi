@@ -47,8 +47,8 @@ class ProjectKnowledgeManager:
     def search(self, query: str, project_id: Optional[str] = None, num_documents: int = 5) -> List[Document]:
         """
         Search for documents.
-        If project_id is provided, filters by that project.
-        If project_id is None, searches general knowledge (project_id="general").
+        If project_id is provided, filters by that project using base knowledge (ignores user_id).
+        If project_id is None, searches general knowledge using user-scoped knowledge.
         To search EVERYTHING for the user regardless of project, pass project_id="*" (or we could change design).
         Current requirement: "Project A search shouldn't return Project B data".
         So we enforce strict filtering.
@@ -56,15 +56,17 @@ class ProjectKnowledgeManager:
         filters = {}
         if project_id and project_id != "*":
              filters["project_id"] = project_id
+             logger.info(f"Searching project {project_id} (using base knowledge) with query: {query}")
+             return self.base_knowledge.search(query=query, num_documents=num_documents, filters=filters)
+        
         elif project_id == "*":
             # Search across all projects (user-scoped still applies via UserScopedKnowledge)
             pass
         else:
              filters["project_id"] = "general"
 
-        logger.info(f"Searching user {self.user_id} (project: {filters['project_id']}) with query: {query}")
+        logger.info(f"Searching user {self.user_id} (project: {filters.get('project_id', '*')}) with query: {query}")
         # UserScopedKnowledge.search adds user_id to filter.
-        # Fixed UserScopedKnowledge to use 'filters' as well.
         return self.knowledge.search(query=query, num_documents=num_documents, filters=filters)
 
     def ingest_repository(self, repo_name: str, project_id: str, github_token: Optional[str] = None) -> None:
