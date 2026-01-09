@@ -46,21 +46,25 @@ class TestProjectRAG(unittest.TestCase):
         self.assertEqual(call_args.kwargs["meta_data"]["project_id"], "general")
 
     @patch("src.rag_service.build_vector_db")
+    @patch("src.rag_service.Knowledge")
     @patch("src.rag_service.UserScopedKnowledge")
-    def test_search_filters(self, mock_knowledge_cls, mock_build_db):
+    def test_search_filters(self, mock_user_knowledge_cls, mock_knowledge_cls, mock_build_db):
         """Test search filters for project and general scopes."""
+        mock_user_knowledge = MagicMock()
+        mock_user_knowledge_cls.return_value = mock_user_knowledge
+        
         mock_knowledge = MagicMock()
         mock_knowledge_cls.return_value = mock_knowledge
 
         manager = KnowledgeManager(user_id="user_123", db_url="mock://")
 
-        # Test Project Search
+        # Test Project Search (uses base_knowledge which is Knowledge)
         manager.search("query", project_id="proj_A")
-        mock_knowledge.search.assert_called_with(query="query", num_documents=5, filters={"project_id": "proj_A"})
+        mock_knowledge.search.assert_called_with(query="query", max_results=5, filters={"project_id": "proj_A"})
 
-        # Test General Search
+        # Test General Search (uses knowledge which is UserScopedKnowledge)
         manager.search("query", project_id=None)
-        mock_knowledge.search.assert_called_with(query="query", num_documents=5, filters={"project_id": "general"})
+        mock_user_knowledge.search.assert_called_with(query="query", max_results=5, filters={"project_id": "general"})
 
     def test_tool_delegation(self):
         """Test tool delegates with correct IDs."""

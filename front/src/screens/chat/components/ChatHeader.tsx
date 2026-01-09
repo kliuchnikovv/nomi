@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from '../styles';
 import { useTheme } from '../../../context/ThemeContext';
 
+
 interface ChatHeaderProps {
     title: string;
     subtitle: string;
@@ -33,6 +34,7 @@ export function ChatHeader({
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
+
 
     // Determine team/mode color
     const getTeamColor = () => {
@@ -68,13 +70,16 @@ export function ChatHeader({
 
     const iconElement = renderIcon();
 
+    const iconElement = renderIcon();
+
+
     return (
         <View style={[
             styles.header,
             {
                 paddingTop: insets.top,
                 height: 60 + insets.top,
-                backgroundColor: `${accentColor}1F`,
+                backgroundColor: `${theme.accent}1F`,
                 borderBottomLeftRadius: 24,
                 borderBottomRightRadius: 24,
                 borderBottomWidth: 1,
@@ -115,6 +120,8 @@ export function ChatHeader({
                     />
                 </TouchableOpacity>
             )}
+
+
 
         </View>
     );

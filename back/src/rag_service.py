@@ -48,7 +48,7 @@ class ProjectKnowledgeManager:
         # UserScopedKnowledge.load_text enforces user_id
         self.knowledge.load_text(text=content, meta_data=meta)
 
-    def search(self, query: str, project_id: Optional[str] = None, num_documents: int = 5) -> List[Document]:
+    def search(self, query: str, project_id: Optional[str] = None, max_results: int = 5) -> List[Document]:
         """
         Search for documents.
         If project_id is provided, filters by that project using base knowledge (ignores user_id).
@@ -61,7 +61,7 @@ class ProjectKnowledgeManager:
         if project_id and project_id != "*":
              filters["project_id"] = project_id
              logger.info(f"Searching project {project_id} (using base knowledge) with query: {query}")
-             return self.base_knowledge.search(query=query, num_documents=num_documents, filters=filters)
+             return self.base_knowledge.search(query=query, max_results=max_results, filters=filters)
         
         elif project_id == "*":
             # Search across all projects (user-scoped still applies via UserScopedKnowledge)
@@ -71,7 +71,7 @@ class ProjectKnowledgeManager:
 
         logger.info(f"Searching user {self.user_id} (project: {filters.get('project_id', '*')}) with query: {query}")
         # UserScopedKnowledge.search adds user_id to filter.
-        return self.knowledge.search(query=query, num_documents=num_documents, filters=filters)
+        return self.knowledge.search(query=query, max_results=max_results, filters=filters)
 
     def ingest_repository(self, repo_name: str, project_id: str, github_token: Optional[str] = None) -> None:
         """
@@ -607,11 +607,11 @@ class KnowledgeSearchTool(Toolkit):
                 # Format projects list
                 lines = ["# Available Projects\n"]
                 for project in projects:
-                    project_id = project.get("id", "unknown")
-                    name = project.get("name", "Unnamed")
-                    description = project.get("description", "No description")
-                    repo_url = project.get("repo_url", "")
-                    status = project.get("status", "unknown")
+                    project_id = project.get("id") or project.get("ID") or "unknown"
+                    name = project.get("name") or project.get("Name") or "Unnamed"
+                    description = project.get("description") or project.get("Description") or "No description"
+                    repo_url = project.get("repo_url") or project.get("Repository") or ""
+                    status = project.get("status") or project.get("Status") or "unknown"
                     
                     lines.append(f"## {name}")
                     lines.append(f"- **Project ID**: `{project_id}`")

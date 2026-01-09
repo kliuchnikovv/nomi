@@ -15,8 +15,11 @@ import {
 
     Square,
     Eye,
-    EyeClosed
+    EyeClosed,
+    MagicWand,
+    Code
 } from 'iconoir-react-native';
+
 
 import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,6 +53,8 @@ export default function ChatInput(props: Props) {
     const [modelMenuVisible, setModelMenuVisible] = useState(false);
     const [teamMenuVisible, setTeamMenuVisible] = useState(false);
     const [plusMenuVisible, setPlusMenuVisible] = useState(false);
+    const [detailMenuVisible, setDetailMenuVisible] = useState(false);
+
 
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
 
@@ -58,7 +63,7 @@ export default function ChatInput(props: Props) {
     const styles = useMemo(() => createStyles(theme), [theme]);
 
 
-    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration, showToolCalls, setShowToolCalls, showReasoning, setShowReasoning, showMemberResponses, setShowMemberResponses } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration, detailLevel, setDetailLevel, showToolCalls } = useChat();
     const { user, updateUser } = useAuth();
     const { activeChatID } = useMain();
 
@@ -240,20 +245,46 @@ export default function ChatInput(props: Props) {
             onPress: () => executeWithDelay(takePhoto),
         },
 
-        // Display settings - single toggle for all details
+        // Detail levels - single item to open sub-menu
         {
-            id: 'toggle_details',
-            label: `Details: ${showToolCalls ? 'Show' : 'Hide'}`,
-            icon: showToolCalls ? <Eye width={20} height={20} color={theme.accent} /> : <EyeClosed width={20} height={20} color="#fff" />,
+            id: 'detail_level',
+            label: 'Detail Level',
+            icon: <Eye width={20} height={20} color={theme.accent} />,
             onPress: () => {
-                const newValue = !showToolCalls;
-                setShowToolCalls(newValue);
-                setShowReasoning(newValue);
-                setShowMemberResponses(newValue);
                 setPlusMenuVisible(false);
+                // Mini delay to ensure first menu closes before second opens (optional but smoother)
+                setTimeout(() => setDetailMenuVisible(true), 300);
             }
         },
-    ], [pickDocument, pickImage, takePhoto, executeWithDelay, theme.accent, showToolCalls, setShowToolCalls, setShowReasoning, setShowMemberResponses]);
+    ], [pickDocument, pickImage, takePhoto, executeWithDelay, theme.accent, detailLevel, setDetailLevel]);
+
+    const detailMenuItems: ContextMenuItem[] = useMemo(() => [
+        {
+            id: 'hide',
+            label: 'Hide Details',
+            icon: <EyeClosed width={20} height={20} color={detailLevel === 'hide' ? theme.accent : "#fff"} />,
+            onPress: () => { setDetailLevel('hide'); setDetailMenuVisible(false); }
+        },
+        {
+            id: 'tool_calls',
+            label: 'Tool Calls Only',
+            icon: <Code width={20} height={20} color={detailLevel === 'tool_calls' ? theme.accent : "#fff"} />,
+            onPress: () => { setDetailLevel('tool_calls'); setDetailMenuVisible(false); }
+        },
+        {
+            id: 'think',
+            label: 'Thinking Only',
+            icon: <MagicWand width={20} height={20} color={detailLevel === 'think' ? theme.accent : "#fff"} />,
+            onPress: () => { setDetailLevel('think'); setDetailMenuVisible(false); }
+        },
+        {
+            id: 'all',
+            label: 'Show Everything',
+            icon: <Eye width={20} height={20} color={detailLevel === 'all' ? theme.accent : "#fff"} />,
+            onPress: () => { setDetailLevel('all'); setDetailMenuVisible(false); }
+        },
+    ], [detailLevel, setDetailLevel, theme.accent]);
+
 
     const removeAttachment = (id: string) => {
         setAttachments(prev => prev.filter(a => a.id !== id));
@@ -516,6 +547,15 @@ export default function ChatInput(props: Props) {
                 items={plusMenuItems}
                 position="bottom-left"
             />
+
+            <ContextMenu
+                visible={detailMenuVisible}
+                onClose={() => setDetailMenuVisible(false)}
+                items={detailMenuItems}
+                position="bottom-left"
+                title="Select Detail Level"
+            />
+
 
 
 

@@ -2,6 +2,9 @@ import { Chat, GetChatsOptions, Message } from '../main/models';
 import { ReactNode } from 'react';
 import { PluginChatMessage } from '../rightsidebar/models';
 
+export type DetailLevel = 'hide' | 'tool_calls' | 'think' | 'all';
+
+
 export type Props = {
     children: ReactNode;
     activeChatID: string;
@@ -59,7 +62,10 @@ export interface ChatContextType {
     setShowReasoning: (show: boolean) => void;
     showMemberResponses: boolean;
     setShowMemberResponses: (show: boolean) => void;
+    detailLevel: DetailLevel;
+    setDetailLevel: (level: DetailLevel) => void;
 }
+
 
 export interface Model {
     id: string;

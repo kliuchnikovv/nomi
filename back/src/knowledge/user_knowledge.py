@@ -11,19 +11,19 @@ class UserScopedKnowledge(Knowledge):
     """
     Knowledge Base wrapper that enforces user isolation using metadata filtering.
     """
-    def __init__(self, user_id: str, vector_db: PgVector, num_documents: int = 5):
+    def __init__(self, user_id: str, vector_db: PgVector, max_results: int = 5):
         super().__init__(vector_db=vector_db)
-        self.num_documents = num_documents
+        self.max_results = max_results
         self.user_id = user_id
 
-    def search(self, query: str, num_documents: int | None = None, filters: dict | None = None) -> List[Document]:
+    def search(self, query: str, max_results: int | None = None, filters: dict | None = None) -> List[Document]:
         """
         Search with enforced user_id filter.
         """
         effective_filter = filters or {}
         # PgVector in Agno treats 'filters' as a metadata filter dictionary
         effective_filter["user_id"] = self.user_id
-        return super().search(query, num_documents, filters=effective_filter)
+        return super().search(query, max_results, filters=effective_filter)
 
     def load_text(self, text: str, meta_data: dict = None):
         """

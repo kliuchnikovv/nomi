@@ -131,9 +131,36 @@ export function ChatProvider({
     const [thinkingLevel, setThinkingLevel] = useState<string>('off');
 
     // Display settings (persists within chat session)
-    const [showToolCalls, setShowToolCalls] = useState<boolean>(false);
-    const [showReasoning, setShowReasoning] = useState<boolean>(false);
-    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(false);
+    const [showToolCalls, setShowToolCalls] = useState<boolean>(true);
+    const [showReasoning, setShowReasoning] = useState<boolean>(true);
+    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(true);
+    const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('all');
+
+    const setDetailLevel = useCallback((level: DetailLevel) => {
+        setDetailLevelInternal(level);
+        switch (level) {
+            case 'hide':
+                setShowToolCalls(false);
+                setShowReasoning(false);
+                setShowMemberResponses(false);
+                break;
+            case 'tool_calls':
+                setShowToolCalls(true);
+                setShowReasoning(false);
+                setShowMemberResponses(false);
+                break;
+            case 'think':
+                setShowToolCalls(false);
+                setShowReasoning(true);
+                setShowMemberResponses(false);
+                break;
+            case 'all':
+                setShowToolCalls(true);
+                setShowReasoning(true);
+                setShowMemberResponses(true);
+                break;
+        }
+    }, []);
 
     const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
 
@@ -1035,7 +1062,10 @@ export function ChatProvider({
         setShowReasoning,
         showMemberResponses,
         setShowMemberResponses,
+        detailLevel,
+        setDetailLevel,
     };
+
 
     return (
         <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
