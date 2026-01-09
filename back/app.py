@@ -42,25 +42,23 @@ class RailwayJsonFormatter(logging.Formatter):
         import json
         from datetime import datetime
         
-        # Clean message without timestamp and level
-        message = record.getMessage()
-        
-        # Build Railway-compatible JSON structure
+        # Base JSON structure with top-level severity for Railway
         log_entry = {
-            "message": message,
-            "attributes": {
-                "level": self.LEVEL_MAP.get(record.levelno, "info"),
-            },
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "level": self.LEVEL_MAP.get(record.levelno, "info").upper(), 
+            "message": record.getMessage(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "logger": record.name
         }
-        
-        # Add logger name if not root
-        if record.name and record.name != "root":
-            log_entry["attributes"]["logger"] = record.name
-        
+
         # Add exception info if present
         if record.exc_info:
-            log_entry["attributes"]["exception"] = self.formatException(record.exc_info)
+            log_entry["exception"] = self.formatException(record.exc_info)
+            # Duplicate error message in attributes for backward compat if needed, 
+            # but primary "level" must be at root.
+
+        # Add extra attributes from record if they exist (custom args)
+        if hasattr(record, "custom_attrs"):
+             log_entry.update(record.custom_attrs)
         
         return json.dumps(log_entry, ensure_ascii=False)
 

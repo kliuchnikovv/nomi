@@ -82,11 +82,23 @@ class UserScopedKnowledge(Knowledge):
         
         if self.vector_db:
             try:
-                # Try explicit delete/delete_documents if available
-                if hasattr(self.vector_db, "delete"):
-                     self.vector_db.delete(filters=effective_filter)
+                # Try explicit delete method suitable for metadata filtering
+                if hasattr(self.vector_db, "delete_by_metadata"):
+                     self.vector_db.delete_by_metadata(metadata=effective_filter)
                 elif hasattr(self.vector_db, "delete_documents"):
+                     # Some implementations might use delete_documents with filters
                      self.vector_db.delete_documents(filters=effective_filter)
+                elif hasattr(self.vector_db, "delete"):
+                     # Fallback to delete if it accepts filters (older versions might, but recent inspection showed it takes no args)
+                     # Attempting to call with filters if signature allows, or log warning
+                     import inspect
+                     sig = inspect.signature(self.vector_db.delete)
+                     if "filters" in sig.parameters:
+                        self.vector_db.delete(filters=effective_filter)
+                     elif "metadata" in sig.parameters:
+                        self.vector_db.delete(metadata=effective_filter)
+                     else:
+                        logger.warning(f"PgVector.delete signature {sig} does not appear to support filters/metadata. Skipping delete.")
                 else:
                     logger.warning("Could not find method to delete documents from vector_db")
             except Exception as e:
