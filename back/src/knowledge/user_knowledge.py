@@ -51,14 +51,18 @@ class UserScopedKnowledge(Knowledge):
 
                 # Try explicit load_documents if available on API, otherwise use upsert on vector_db
                 if hasattr(self.vector_db, "upsert"):
-                    # The error "missing 1 required positional argument: 'documents'" suggests we might need to use value as kwarg
-                    # or it might be an instance method called on class (unlikely here as we init it)
-                    # Let's try passing as keyword argument first, as that's safer if positions are mixed up
+                    # The error "missing 1 required positional argument: 'documents'" or 'content_hash'
+                    # suggests differing signatures in versions.
+                    # We try providing content_hash as None, and use kwargs to be safe.
                     try:
-                        self.vector_db.upsert(documents=documents)
+                        self.vector_db.upsert(documents=documents, content_hash=None)
                     except TypeError as te:
-                         logger.warning(f"upsert(documents=...) failed: {te}. Retrying with positional.")
-                         self.vector_db.upsert(documents)
+                         logger.warning(f"upsert(documents=..., content_hash=None) failed: {te}. Retrying with positional args.")
+                         # Try pure positional: upsert(documents) or upsert(documents, content_hash)
+                         try:
+                             self.vector_db.upsert(documents)
+                         except TypeError:
+                             self.vector_db.upsert(documents, None)
 
                 elif hasattr(self.vector_db, "add_documents"):
                     self.vector_db.add_documents(documents)

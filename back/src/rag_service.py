@@ -67,77 +67,89 @@ class ProjectKnowledgeManager:
     def ingest_repository(self, repo_name: str, project_id: str, github_token: Optional[str] = None) -> None:
         """
         Ingest files from a GitHub repository.
-        Fetches README, AGENTS.md, and recursively everything in src/.
-        
-        github_token is optional - without it, rate limits are 60 req/hour (vs 5000 with token).
+        Fetches README, AGENTS.md, and recursively everything in src/ and other source dirs.
         """
         logger.info(f"Starting ingestion for repo {repo_name} (project: {project_id})")
+
+        documents = []
 
         try:
             if github_token:
                 g = Github(github_token)
             else:
                 logger.warning("No GitHub token provided - using unauthenticated access (60 requests/hour limit)")
-                g = Github()  # Unauthenticated - works for public repos
+                g = Github()
             repo = g.get_repo(repo_name)
 
-            # List of specific files to try fetching
+            # 1. Fetch specific target files
             target_files = ["README.md", "AGENTS.md"]
-
             for file_path in target_files:
                 try:
                     content = repo.get_contents(file_path)
-                    if not isinstance(content, list): # Ensure it's a file
+                    if not isinstance(content, list):
                         decoded_content = content.decoded_content.decode('utf-8')
-                        self.add_document(
+                        documents.append(Document(
                             content=decoded_content,
-                            project_id=project_id,
-                            metadata={"source": f"github://{repo_name}/{file_path}", "filename": file_path}
-                        )
-                        logger.info(f"Ingested {file_path}")
+                            meta_data={
+                                "project_id": project_id,
+                                "source": f"github://{repo_name}/{file_path}",
+                                "filename": file_path
+                            }
+                        ))
+                        logger.debug(f"Queued {file_path}")
                 except GithubException as e:
-                    if e.status == 404:
-                        logger.debug(f"{file_path} not found in {repo_name}")
-                    else:
-                        logger.error(f"Error fetching {file_path}: {e}")
+                    if e.status != 404:
+                         logger.error(f"Error fetching {file_path}: {e}")
                 except Exception as e:
                      logger.error(f"Error processing {file_path}: {e}")
 
-            # Recursively fetch src/
-            # Recursively fetch source directories
+            # 2. Recursively fetch source directories
             source_dirs = ["src", "back", "front"]
             for src_dir in source_dirs:
                 try:
                     contents = repo.get_contents(src_dir)
-                    # Handle single file vs list logic if dir is actually a file (unlikely)
                     queue = contents if isinstance(contents, list) else [contents]
 
                     while queue:
                         file_content = queue.pop(0)
                         if file_content.type == "dir":
-                            queue.extend(repo.get_contents(file_content.path))
+                            try:
+                                queue.extend(repo.get_contents(file_content.path))
+                            except Exception as e:
+                                logger.warning(f"Error reading dir {file_content.path}: {e}")
                         else:
                             try:
-                                # Skip binary or non-text files if needed, for now assuming text
-                                # PyGithub get_contents for a file usually returns ContentFile
+                                # Simple filter for likely text files
                                 if file_content.encoding == "base64":
+                                    # Try to decode, if fails or binary like image, skip
+                                    # For now assume mostly code/text
                                     decoded = base64.b64decode(file_content.content).decode('utf-8')
-                                    self.add_document(
+                                    documents.append(Document(
                                         content=decoded,
-                                        project_id=project_id,
-                                        metadata={"source": f"github://{repo_name}/{file_content.path}", "filename": file_content.path}
-                                    )
-                                    logger.debug(f"Ingested {file_content.path}")
+                                        meta_data={
+                                            "project_id": project_id,
+                                            "source": f"github://{repo_name}/{file_content.path}",
+                                            "filename": file_content.path
+                                        }
+                                    ))
+                            except UnicodeDecodeError:
+                                logger.debug(f"Skipping binary file {file_content.path}")
                             except Exception as e:
                                 logger.warning(f"Skipping file {file_content.path}: {e}")
 
                 except GithubException as e:
-                    if e.status == 404:
-                         logger.debug(f"'{src_dir}' directory not found in {repo_name}")
-                    else:
-                        logger.error(f"Error accessing '{src_dir}' directory: {e}")
+                    if e.status != 404:
+                        logger.error(f"Error accessing '{src_dir}': {e}")
+                except Exception as e:
+                    logger.error(f"Error accessing '{src_dir}' directory: {e}")
 
-            logger.info(f"Ingestion complete for {repo_name}")
+            # 3. Batch upsert
+            if documents:
+                logger.info(f"Upserting {len(documents)} documents for {repo_name}")
+                self.knowledge.load_documents(documents)
+                logger.info(f"Ingestion complete for {repo_name}")
+            else:
+                logger.warning(f"No documents found to ingest for {repo_name}")
 
         except Exception as e:
             logger.error(f"Failed to ingest repository {repo_name}: {e}")
