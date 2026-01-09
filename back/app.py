@@ -134,6 +134,8 @@ agent_os = AgentOS(
             model=model,
             debug_mode=debug_mode,
         ),
+    ],
+    teams=[
         DevelopmentTeam(
             model=model,
             db=db,
