@@ -44,14 +44,22 @@ type CreateProjectRequest struct {
 	Repository  string `json:"repository"`
 }
 
+// CreateProject creates a new project
 func (h *ProjectHandler) CreateProject(c *gin.Context) {
-	var req CreateProjectRequest
+	userID := c.MustGet("userID").(uuid.UUID)
+
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Repository  string `json:"repository"`
+		GithubToken string `json:"github_token"`
+	}
+
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	userID := c.MustGet("userID").(uuid.UUID)
 	project := &storage.Project{
 		UserID:      userID,
 		Name:        req.Name,
@@ -82,10 +90,11 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 			}
 
 			payload := map[string]interface{}{
-				"project_id": project.ID.String(),
-				"repository": project.Repository,
+				"project_id":   project.ID.String(),
+				"repository":   project.Repository,
+				"github_token": req.GithubToken,
 			}
-			
+
 			payloadBytes, err := json.Marshal(payload)
 			if err != nil {
 				h.logger.Error("failed to marshal analyze request", zap.Error(err))

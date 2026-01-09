@@ -64,15 +64,21 @@ class ProjectKnowledgeManager:
         # Fixed UserScopedKnowledge to use 'filters' as well.
         return self.knowledge.search(query=query, num_documents=num_documents, filters=filters)
 
-    def ingest_repository(self, repo_name: str, project_id: str, github_token: str) -> None:
+    def ingest_repository(self, repo_name: str, project_id: str, github_token: Optional[str] = None) -> None:
         """
         Ingest files from a GitHub repository.
         Fetches README, AGENTS.md, and recursively everything in src/.
+        
+        github_token is optional - without it, rate limits are 60 req/hour (vs 5000 with token).
         """
         logger.info(f"Starting ingestion for repo {repo_name} (project: {project_id})")
 
         try:
-            g = Github(github_token)
+            if github_token:
+                g = Github(github_token)
+            else:
+                logger.warning("No GitHub token provided - using unauthenticated access (60 requests/hour limit)")
+                g = Github()  # Unauthenticated - works for public repos
             repo = g.get_repo(repo_name)
 
             # List of specific files to try fetching

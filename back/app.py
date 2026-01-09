@@ -467,19 +467,16 @@ async def analyze_project(request: ProjectAnalysisRequest):
         try:
             from src.rag_service import ProjectKnowledgeManager
 
-            # Use github token from request or fallback to env
+            # Use github token from request or fallback to env (optional for public repos)
             github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
-            if not github_token:
-                logging.error("GITHUB_TOKEN not found for analysis")
-                await asyncio.to_thread(update_status, "FAILED")
-                return
+            # Token is now optional - public repos work without it (with rate limits)
 
             manager = ProjectKnowledgeManager(user_id="system")
             await asyncio.to_thread(
                 manager.ingest_repository,
                 request.repository,
                 request.project_id,
-                github_token
+                github_token  # Can be None for public repos
             )
 
             logging.info(f"Completed analysis for project {request.project_id}")
