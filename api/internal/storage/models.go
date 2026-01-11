@@ -136,7 +136,7 @@ const (
 
 // Project represents a project context
 type Project struct {
-	ID            uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ID            uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
 	UserID        uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
 	Name          string         `gorm:"type:text;not null" json:"name"`
 	Description   string         `gorm:"type:text" json:"description"`
@@ -150,7 +150,7 @@ type Project struct {
 
 // ProjectTask represents a task within a project
 type ProjectTask struct {
-	ID          uuid.UUID         `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ID          uuid.UUID         `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
 	UserID      uuid.UUID         `gorm:"type:uuid;not null;index" json:"user_id"`
 	ProjectID   uuid.UUID         `gorm:"type:uuid;not null;index" json:"project_id"`
 	Title       string            `gorm:"type:text;not null" json:"title"`

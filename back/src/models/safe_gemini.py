@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional, Iterator, AsyncIterator
 from agno.models.google import Gemini
 from agno.models.message import Message
 from agno.models.response import ModelResponse
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
+import google.api_core.exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -102,24 +104,72 @@ class SafeGemini(Gemini):
         
         return filtered_messages
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((
+            google.api_core.exceptions.InternalServerError,
+            google.api_core.exceptions.ServiceUnavailable,
+            google.api_core.exceptions.ResourceExhausted,
+            google.api_core.exceptions.DeadlineExceeded,
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True
+    )
     def invoke(self, messages: List[Message], **kwargs) -> ModelResponse:
         """Override invoke to filter empty parts before calling parent."""
         filtered = self._filter_empty_parts(messages)
         logger.debug("[SafeGemini] Filtered %d -> %d messages", len(messages), len(filtered))
         return super().invoke(filtered, **kwargs)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((
+            google.api_core.exceptions.InternalServerError,
+            google.api_core.exceptions.ServiceUnavailable,
+            google.api_core.exceptions.ResourceExhausted,
+            google.api_core.exceptions.DeadlineExceeded,
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True
+    )
     async def ainvoke(self, messages: List[Message], **kwargs) -> ModelResponse:
         """Override ainvoke to filter empty parts before calling parent."""
         filtered = self._filter_empty_parts(messages)
         logger.debug("[SafeGemini] Filtered %d -> %d messages", len(messages), len(filtered))
         return await super().ainvoke(filtered, **kwargs)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((
+            google.api_core.exceptions.InternalServerError,
+            google.api_core.exceptions.ServiceUnavailable,
+            google.api_core.exceptions.ResourceExhausted,
+            google.api_core.exceptions.DeadlineExceeded,
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True
+    )
     def invoke_stream(self, messages: List[Message], **kwargs) -> Iterator[ModelResponse]:
         """Override invoke_stream to filter empty parts before calling parent."""
         filtered = self._filter_empty_parts(messages)
         logger.debug("[SafeGemini] Filtered %d -> %d messages (stream)", len(messages), len(filtered))
         return super().invoke_stream(filtered, **kwargs)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((
+            google.api_core.exceptions.InternalServerError,
+            google.api_core.exceptions.ServiceUnavailable,
+            google.api_core.exceptions.ResourceExhausted,
+            google.api_core.exceptions.DeadlineExceeded,
+        )),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True
+    )
     async def ainvoke_stream(self, messages: List[Message], **kwargs) -> AsyncIterator[ModelResponse]:
         """Override ainvoke_stream to filter empty parts before calling parent."""
         filtered = self._filter_empty_parts(messages)

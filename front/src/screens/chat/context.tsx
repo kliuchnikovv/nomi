@@ -52,6 +52,7 @@ export function ChatProvider({
     const [externalTitle, setExternalTitle] = useState<string | null>(null);
     const socketRef = useRef<ChatSocket | null>(null); // Declare socketRef
     const seededChatRef = useRef<string | null>(null);
+    const newChatInitializedRef = useRef<boolean>(false);
     const [pluginThreadMeta, setPluginThreadMeta] = useState<{ provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null>(null);
     const mapPluginMessage = useCallback((msg: any, provider: string, fallbackRole: 'assistant' | 'user' = 'assistant'): Message => {
         const roleFromMsg = msg.role
@@ -235,17 +236,30 @@ export function ChatProvider({
 
         // Sync mode from active chat or pending state
         if (activeChatID === emptyChatID) {
-            const modeToUse = pendingChatMode?.mode ?? (sidebarFilter === 'all' || sidebarFilter === 'agent' ? 'agent' : 'team');
-            const teamIdToUse = pendingChatMode?.teamId ?? (modeToUse === 'team' ? sidebarFilter : null);
+            // If we already initialized this new chat session and no new pending mode is provided, skip
+            if (newChatInitializedRef.current && !pendingChatMode) {
+                return;
+            }
+
+            let modeToUse: 'agent' | 'team';
+            let teamIdToUse: string | null = null;
+
+            if (pendingChatMode) {
+                modeToUse = pendingChatMode.mode;
+                teamIdToUse = pendingChatMode.teamId;
+                clearPendingChatMode?.();
+            } else {
+                modeToUse = (sidebarFilter === 'all' || sidebarFilter === 'agent' ? 'agent' : 'team');
+                teamIdToUse = (modeToUse === 'team' ? sidebarFilter : null);
+            }
 
             setChatMode(modeToUse);
             if (teamIdToUse) {
                 selectTeam(teamIdToUse);
             }
-            if (pendingChatMode) {
-                clearPendingChatMode?.();
-            }
+            newChatInitializedRef.current = true;
         } else if (activeChat) {
+            newChatInitializedRef.current = false;
             // Existing chat - restore mode
             if (activeChat.mode) {
                 setChatMode(activeChat.mode);
@@ -256,6 +270,8 @@ export function ChatProvider({
             if (activeChat.team_id) {
                 selectTeam(activeChat.team_id);
             }
+        } else if (!activeChatID) {
+            newChatInitializedRef.current = false;
         }
 
         if (!activeChatID || activeChatID === emptyChatID) {
@@ -555,7 +571,7 @@ export function ChatProvider({
                 `${getApiUrl()}/chats`,
                 {
                     "title": title,
-                    "model": emptyChatID,
+                    "model": selectedModelRef.current || 'gemini-2.0-flash-exp',
                     "mode": chatMode,
                     "team_id": chatMode === 'team' ? selectedTeamId : null
                 },

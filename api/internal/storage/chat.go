@@ -10,10 +10,14 @@ import (
 )
 
 func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
-	// Default mode to 'agent' if not specified
+	// Default mode to 'agent' if not specified, or 'team' if team_id is present
 	mode := c.Mode
 	if mode == "" {
-		mode = "agent"
+		if c.TeamID != nil && *c.TeamID != "" {
+			mode = "team"
+		} else {
+			mode = "agent"
+		}
 	}
 
 	chatModel := &Chat{

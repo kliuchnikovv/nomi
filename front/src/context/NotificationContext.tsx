@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { useAuth } from '../auth/context';
-import { getApiUrl } from '../apiClient';
+import { useAuth } from '../screens/auth/context';
+import { getApiUrl } from '../config';
 import { ChatSocket } from '../socket';
 import { Frame } from '../screens/main/models';
 

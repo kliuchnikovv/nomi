@@ -51,7 +51,7 @@ function ProjectCard({
     theme: any;
     palette: ThemePalette;
 }) {
-    const isAnalyzing = project.Status === 'ANALYZING';
+    const isAnalyzing = project.status === 'ANALYZING';
 
     const pulseStyle = useAnimatedStyle(() => {
         if (!isAnalyzing) return { opacity: 1 };
@@ -68,7 +68,7 @@ function ProjectCard({
     });
 
     const getStatusInfo = () => {
-        switch (project.Status) {
+        switch (project.status) {
             case 'ANALYZING':
                 return { label: 'Analyzing', color: palette.blue, Icon: Play };
             case 'READY':
@@ -113,25 +113,25 @@ function ProjectCard({
                 <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Text style={{ color: theme.text, fontWeight: '700', fontSize: 15, flex: 1, marginRight: 8 }} numberOfLines={1}>
-                            {project.Name}
+                            {project.name}
                         </Text>
                         <View style={{ flexDirection: 'row', gap: 16 }}>
-                            {project.Repository && project.Status !== 'ANALYZING' && (
-                                <Pressable onPress={(e) => { e.stopPropagation(); onReindex(project.ID); }}>
+                            {project.repository && project.status !== 'ANALYZING' && (
+                                <Pressable key="reindex" onPress={(e) => { e.stopPropagation(); onReindex(project.id); }}>
                                     <RefreshDouble width={14} height={14} color={theme.textSecondary} />
                                 </Pressable>
                             )}
-                            <Pressable onPress={(e) => { e.stopPropagation(); onDelete(project.ID); }}>
+                            <Pressable key="delete" onPress={(e) => { e.stopPropagation(); onDelete(project.id); }}>
                                 <Trash width={14} height={14} color={palette.red} />
                             </Pressable>
                         </View>
                     </View>
 
-                    {project.Repository && (
+                    {project.repository && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                             <Github width={12} height={12} color={theme.textSecondary} style={{ marginRight: 4 }} />
                             <Text style={{ color: theme.textSecondary, fontSize: 12 }} numberOfLines={1}>
-                                {project.Repository}
+                                {project.repository}
                             </Text>
                         </View>
                     )}
@@ -153,9 +153,9 @@ function ProjectCard({
                                 {statusInfo.label}
                             </Text>
                         </Animated.View>
-                        {project.LastIndexedAt && (
-                            <Text style={{ color: theme.textSecondary, fontSize: 10, marginLeft: 8 }}>
-                                Indexed {formatTimestamp(new Date(project.LastIndexedAt).getTime())}
+                        {project.last_indexed_at && (
+                            <Text key="indexed-at" style={{ color: theme.textSecondary, fontSize: 10, marginLeft: 8 }}>
+                                Indexed {formatTimestamp(new Date(project.last_indexed_at).getTime())}
                             </Text>
                         )}
                     </View>
@@ -186,12 +186,12 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
     };
 
     const handleDeleteProject = async (id: string) => {
-        const project = projects.find(p => p.ID === id);
+        const project = projects.find(p => p.id === id);
         if (!project) return;
 
         Alert.alert(
             'Delete Project',
-            `Are you sure you want to delete "${project.Name}"? This will also remove all indexed knowledge.`,
+            `Are you sure you want to delete "${project.name}"? This will also remove all indexed knowledge.`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -200,7 +200,7 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
                     onPress: async () => {
                         try {
                             await projectsApi.delete(id);
-                            setProjects(prev => prev.filter(p => p.ID !== id));
+                            setProjects(prev => prev.filter(p => p.id !== id));
                             if (activeProjectId === id) setActiveProjectId(null);
                         } catch (err) {
                             console.error('Failed to delete project', err);
@@ -213,12 +213,12 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
     };
 
     const handleReindexProject = async (id: string) => {
-        const project = projects.find(p => p.ID === id);
+        const project = projects.find(p => p.id === id);
         if (!project) return;
 
         Alert.alert(
             'Re-index Project',
-            `This will delete existing knowledge and re-analyze the repository "${project.Repository}". Continue?`,
+            `This will delete existing knowledge and re-analyze the repository "${project.repository}". Continue?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -236,7 +236,7 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
 
                             // Optimistic update
                             setProjects(prev => prev.map(p =>
-                                p.ID === id ? { ...p, Status: 'ANALYZING' as const } : p
+                                p.id === id ? { ...p, status: 'ANALYZING' as const } : p
                             ));
                             await projectsApi.reindex(id, githubToken);
                         } catch (err) {
@@ -261,7 +261,7 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
 
     // Poll for status updates if any project is ANALYZING
     useEffect(() => {
-        const hasAnalyzing = projects.some(p => p.Status === 'ANALYZING');
+        const hasAnalyzing = projects.some(p => p.status === 'ANALYZING');
         if (!hasAnalyzing) return;
 
         const interval = setInterval(() => {
@@ -325,12 +325,12 @@ export function ProjectList({ visible = true }: { visible?: boolean }) {
                             </Text>
                         </View>
                     ) : (
-                        projects.map(project => (
+                        projects.map((project, index) => (
                             <ProjectCard
-                                key={project.ID}
+                                key={project.id || `project-${index}`}
                                 project={project}
-                                isActive={activeProjectId === project.ID}
-                                onPress={() => setActiveProjectId(activeProjectId === project.ID ? null : project.ID)}
+                                isActive={activeProjectId === project.id}
+                                onPress={() => setActiveProjectId(activeProjectId === project.id ? null : project.id)}
                                 onDelete={handleDeleteProject}
                                 onReindex={handleReindexProject}
                                 theme={theme}

@@ -268,15 +268,15 @@ export const weatherApi = {
 };
 
 export interface Project {
-    ID: string;
-    UserID: string;
-    Name: string;
-    Description?: string;
-    Repository?: string;
-    Status: 'PENDING' | 'ANALYZING' | 'READY' | 'FAILED';
-    LastIndexedAt?: string;
-    CreatedAt: string;
-    UpdatedAt: string;
+    id: string;
+    user_id: string;
+    name: string;
+    description?: string;
+    repository?: string;
+    status: 'PENDING' | 'ANALYZING' | 'READY' | 'FAILED';
+    last_indexed_at?: string;
+    created_at: string;
+    updated_at: string;
 }
 
 export const projectsApi = {
@@ -288,7 +288,7 @@ export const projectsApi = {
     update: (id: string, body: { name?: string; description?: string; repository?: string }) =>
         apiClient.put<Project>(`${API_URL()}/projects/${id}`, body),
     delete: (id: string) => apiClient.delete<void>(`${API_URL()}/projects/${id}`),
-    updateStatus: (id: string, status: Project['Status']) =>
+    updateStatus: (id: string, status: Project['status']) =>
         apiClient.patch<void>(`${API_URL()}/projects/${id}/status`, { status }),
     reindex: (id: string, githubToken?: string) =>
         apiClient.post<{ status: string; project_id: string }>(`${API_URL()}/projects/${id}/reindex`, { github_token: githubToken }),
