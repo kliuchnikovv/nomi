@@ -12,11 +12,17 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=genie
+      - REDIS_URL=redis:6379
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./config:/config:ro
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
 
   agent:
     build:
@@ -27,6 +33,7 @@ services:
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/genie?sslmode=disable
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
@@ -42,7 +49,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5

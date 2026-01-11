@@ -1,13 +1,17 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -20,26 +24,61 @@ type Hub struct {
 	store      *storage.Storage
 	logger     *zap.Logger
 	llmBaseURL string
+	redis      *redis.Client
 
 	upgrader websocket.Upgrader
 }
 
 func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub {
-	return &Hub{
+	// Initialize Redis
+	redisAddr := os.Getenv("REDIS_URL")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379" // Fallback for local dev without docker
+	}
+
+	// Handle redis:// prefix if present (common in connection strings)
+	opt, err := redis.ParseURL(redisAddr)
+	if err != nil {
+		// If parse fails (e.g. host:port format or no schema), try creating options directly
+		opt = &redis.Options{
+			Addr: redisAddr,
+		}
+	}
+
+	rClient := redis.NewClient(opt)
+
+	// Ping Redis
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := rClient.Ping(ctx).Result(); err != nil {
+		// Log but don't crash - maybe it comes up later
+		logger.Error("failed to connect to redis", zap.Error(err))
+	} else {
+		logger.Info("connected to redis", zap.String("addr", redisAddr))
+	}
+
+	h := &Hub{
 		rooms:      make(map[uuid.UUID]*Room),
 		unregister: make(chan *Room),
 		store:      store,
 		logger:     logger.With(zap.String("component", "hub")),
 		llmBaseURL: llmBaseURL,
+		redis:      rClient,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
 		},
 	}
+
+	// Start Redis Subscriber
+	go h.subscribeRedis()
+
+	return h
 }
 
 func (h *Hub) Run() {
+	// Periodic cleanup or metrics?
 	for room := range h.unregister {
 		h.mu.Lock()
 		if _, ok := h.rooms[room.ID]; ok {
@@ -47,6 +86,48 @@ func (h *Hub) Run() {
 			h.logger.Info("room closed", zap.String("room_id", room.ID.String()))
 		}
 		h.mu.Unlock()
+	}
+}
+
+func (h *Hub) subscribeRedis() {
+	ctx := context.Background()
+	// Subscribe to all user channels
+	pubsub := h.redis.PSubscribe(ctx, "chat:user:*")
+	defer pubsub.Close()
+
+	ch := pubsub.Channel()
+
+	h.logger.Info("started redis subscription", zap.String("pattern", "chat:user:*"))
+
+	for msg := range ch {
+		// msg.Channel is the full channel name, e.g. "chat:user:123-456..."
+		// msg.Payload is the JSON string
+		
+		// Extract userID from channel
+		// Format: chat:user:<uuid>
+		var userIDStr string
+		if len(msg.Channel) > 10 { // "chat:user:" is 10 chars
+			userIDStr = msg.Channel[10:]
+		}
+
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			h.logger.Warn("invalid user id in redis channel", zap.String("channel", msg.Channel))
+			continue
+		}
+
+		// Parse frame to validate it
+		// We expect the payload to be a JSON string of Frame or just arbitrary JSON
+		// For now, let's assume it's a valid JSON that the frontend can handle
+		// Or we can try to parse into Frame to be safe
+		var frame Frame
+		if err := json.Unmarshal([]byte(msg.Payload), &frame); err != nil {
+			h.logger.Warn("failed to parse redis message payload", zap.Error(err))
+			continue
+		}
+
+		// Broadcast to user's connected clients
+		h.BroadcastToUser(userID, frame)
 	}
 }
 

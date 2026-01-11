@@ -370,8 +370,10 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		if r.Type == RoomTypeChat {
 			r.logger.Warn("message chat_id mismatch in chat room", zap.String("msg_chat_id", frame.ChatID.String()), zap.String("room_id", r.ID.String()))
 			frame.ChatID = r.ID
+		} else if r.Type == RoomTypeUser {
+			// For User rooms, we explicitly ALLOW mismatch because we route based on it
+			// We do NOT overwrite frame.ChatID here, so we can use it for routing later
 		}
-		// For User rooms, we keep the original ChatID for routing
 	}
 	if frame.ChatID == uuid.Nil {
 		frame.ChatID = r.ID

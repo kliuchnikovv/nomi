@@ -6,6 +6,8 @@ import os
 import requests
 import time
 import uuid
+import asyncio
+import redis.asyncio as redis
 from typing import Optional, List, Any, AsyncGenerator, Dict
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Cookie
@@ -88,6 +90,14 @@ class LLMWebSocketSession:
         self.pending_frames: List[Frame] = []
         self._receive_task: Optional[asyncio.Task] = None
 
+        # Redis logic
+        self.redis_client = None
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        try:
+            self.redis_client = redis.from_url(redis_url, decode_responses=True)
+        except Exception as e:
+            logger.error(f"[WS] Failed to connect to Redis: {e}")
+
     async def _cleanup_tasks(self):
         """Cancel any pending tasks to avoid 'Task exception was never retrieved'."""
         tasks = []
@@ -122,11 +132,42 @@ class LLMWebSocketSession:
 
     async def _send_frame(self, frame: Frame) -> int:
         data = frame.marshal()
-        logger.debug("[WS] Sending frame: op=%s id=%d payload_len=%d", frame.op, frame.id, len(str(data.get("payload", ""))))
-        try:
-            await self.websocket.send_json(data)
-        except RuntimeError as e:
-            logger.debug("[WS] Cannot send frame (WebSocket closed): %s", e)
+        # logger.debug("[WS] Sending frame: op=%s id=%d payload_len=%d", frame.op, frame.id, len(str(data.get("payload", ""))))
+        
+        # Determine target user_id for channel
+        # Use self.user_id if available (authenticated), otherwise fallback to session_id (anonymous/chat_id)
+        # However, Go subscribes to chat:user:* where * matches what?
+        # The Go Hub subscribes to "chat:user:*". 
+        # When Go parses the channel, it extracts everything after "chat:user:".
+        # So we must publish to "chat:user:<TARGET_USER_ID>".
+        
+        # Important: If self.user_id is None, we might be in trouble if Go expects a UUID.
+        # But usually user_id is extracted from token.
+        target_id = self.user_id or self.session_id
+        
+        if self.redis_client:
+            channel = f"chat:user:{target_id}"
+            try:
+                # Publish JSON string
+                await self.redis_client.publish(channel, json.dumps(data))
+                # logger.debug(f"[WS] Published to Redis channel {channel}")
+            except Exception as e:
+                logger.error(f"[WS] Redis publish failed: {e}")
+                # Fallback to WS? Or just fail? 
+                # If Redis is main path, we should probably log error. 
+                # Falling back might cause duplicate messages if partially working.
+                # For now, let's try fallback just in case redis is down
+                try:
+                    await self.websocket.send_json(data)
+                except Exception:
+                    pass
+        else:
+            # Legacy/Fallback mode
+            try:
+                await self.websocket.send_json(data)
+            except RuntimeError as e:
+                logger.debug("[WS] Cannot send frame (WebSocket closed): %s", e)
+                
         self.next_id = frame.id + 1
         return self.next_id
 
