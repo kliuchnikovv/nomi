@@ -305,7 +305,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
                             setPendingChatMode({
                                 mode: 'team',
                                 teamId: 'development_team',
-                                initialMessage: `Analyze this task and propose a plan: ${task.title}`
+                                initialMessage: `Analyze this task and propose a plan: ${task.title}${task.description ? `\n\nDescription:\n${task.description}` : ''}`
                             });
                             setActiveChatID(newChat.id);
                             setNewTaskModalVisible(false);

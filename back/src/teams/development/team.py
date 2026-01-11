@@ -100,6 +100,14 @@ search_knowledge(query="websocket implementation", project_id="*")
 - IF "No information found" is returned for project '{project_id}' and '*', STOP SEARCHING immediately and report it.
 - DO NOT retry more than 2 times for the same intent.
 
+## CRITICAL: Avoiding Infinite Search Loops
+- You have a HARD LIMIT of 5 tool calls total.
+- If search returns irrelevant results (like only AGENTS.md/README.md), do NOT keep rephrasing.
+- After 2 failed search attempts, STOP and proceed with standard assumptions.
+- If you cannot find specific code files, assume standard Go/Python/TypeScript project structure.
+- State clearly: "I could not find information about X in the provided context" and continue.
+- NEVER enter an infinite loop of searching — it causes timeouts and errors.
+
 # Key Questions to Consider
 - Which component(s) are affected: `api/`, `back/`, or `front/`?
 - Are there existing similar implementations to follow?
@@ -768,7 +776,8 @@ If a team member encounters issues:
                     output_schema=AnalystOutput,
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step
+                    on_completion=self.transition_to_next_step,
+                    tool_call_limit=5,
                 ),
                 WorkflowAgent(
                     name="Architect",
@@ -780,7 +789,8 @@ If a team member encounters issues:
                     output_schema=ArchitectPlan,
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step
+                    on_completion=self.transition_to_next_step,
+                    tool_call_limit=5,
                 ),
                 WorkflowAgent(
                     name="Worker",
@@ -790,7 +800,8 @@ If a team member encounters issues:
                     markdown=markdown,
                     debug_mode=debug_mode,
                     workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step
+                    on_completion=self.transition_to_next_step,
+                    tool_call_limit=5,
                 ),
                 WorkflowAgent(
                     name="Reviewer",
@@ -801,19 +812,24 @@ If a team member encounters issues:
                     output_schema=ReviewVerdict,
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step
+                    on_completion=self.transition_to_next_step,
+                    tool_call_limit=5,
                 ),
                 WorkflowAgent(
                     name="Verifier",
                     model=model,
-                    instructions=analyst_instructions, # Re-use Analyst instructions
+                    instructions=analyst_instructions.format(
+                        project_id=project_id or "unknown",
+                        task_id=task_id or "unknown"
+                    ), # Re-use Analyst instructions with context
                     markdown=markdown,
                     debug_mode=debug_mode,
                     tools=analyst_tools,
                     output_schema=FinalAcceptance, # Different model
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step
+                    on_completion=self.transition_to_next_step,
+                    tool_call_limit=5,
                 ),
             ],
             add_history_to_context=True,
