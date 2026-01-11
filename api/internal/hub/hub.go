@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 
@@ -30,9 +29,9 @@ type Hub struct {
 	upgrader websocket.Upgrader
 }
 
-func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub {
-	redisAddr := os.Getenv("REDIS_ADDR")
+func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string, redisAddr string) *Hub {
 	if redisAddr == "" {
+		// Fallback if not configured, though config should handle it
 		redisAddr = "redis:6379"
 	}
 
