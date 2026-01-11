@@ -9,28 +9,16 @@ import React, {
     useCallback,
     useMemo,
 } from 'react';
-import { ChatContextType, Props, Model } from './models';
+import { ChatContextType, Props, Model, DetailLevel } from './models';
 import { useAuth } from '../auth/context.tsx';
-import { alertError } from '../auth/models.tsx';
-import { ChatSocket } from '../../socket';
-import { getApiUrl, API_URL } from '../../config.ts';
+import { socket } from '../../socket';
+import { getApiUrl } from '../../config.ts';
 import { modelsApi, sidebarApi } from '../../apiClient';
 import { AVAILABLE_TEAMS } from './teams';
 import { useMain } from '../main/context';
-import { gmailClient } from '../../services/integrations/clients/GmailClient';
-import { calendarClient } from '../../services/integrations/clients/CalendarClient';
 import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
-import { AppState, AppStateStatus } from 'react-native';
-
-function generateUUID() {
-    // RFC4122 version 4 compliant enough for client-side ids
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-    });
-}
+import { v4 as uuidv4 } from 'uuid';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -49,23 +37,22 @@ export function ChatProvider({
     activeChatID,
     setActiveChatID,
 }: Props) {
-    // 1. Subscribe to Store instead of local state
-    // Use selector to avoid re-renders on other chats changes
-    const [pluginThreadMeta, setPluginThreadMeta] = useState<{ provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null>(null);
+    // Select messages from global store
+    const messages = useChatStore(
+        useCallback(
+            (state) => (activeChatID ? state.chats[activeChatID] || [] : []),
+            [activeChatID]
+        )
+    );
+    const setMessagesToStore = useChatStore((state) => state.setMessages);
 
-    // Select messages based on mode
-    const chatKey = pluginThreadMeta ? `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}` : activeChatID;
-    const storeMessages = useChatStore(state => state.messages[chatKey]);
-    // Use useMemo to avoid creating a new empty array reference on each render
-    const messages = useMemo(() => storeMessages ?? [], [storeMessages]);
-
-    // const [messages, setMessages] = useState<Message[]>([]);
     const [messagesLoading, setMessagesLoading] = useState(false);
     const { tools } = useConnectors();
     const [externalTitle, setExternalTitle] = useState<string | null>(null);
-    const socketRef = useRef<ChatSocket | null>(null); // Declare socketRef
     const seededChatRef = useRef<string | null>(null);
     const newChatInitializedRef = useRef<boolean>(false);
+    const [pluginThreadMeta, setPluginThreadMeta] = useState<{ provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null>(null);
+
     const mapPluginMessage = useCallback((msg: any, provider: string, fallbackRole: 'assistant' | 'user' = 'assistant'): Message => {
         const roleFromMsg = msg.role
             || (msg.sender && msg.sender !== provider ? 'user' : undefined)
@@ -96,18 +83,6 @@ export function ChatProvider({
     const [assistantWorking, setAssistantWorking] = useState<boolean>(false);
     const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
     const [teamCommand, setTeamCommand] = useState<any>(null);
-    const buildTeamCommand = useCallback((modelId: string | null) => {
-        const model = modelId || 'gemini-1.5-pro';
-        return {
-            name: 'Default Team',
-            model,
-            participants: [
-                { type: 'mailer', model },
-                { type: 'rag', model },
-                { type: 'memoriser', model },
-            ],
-        };
-    }, []);
 
     // Model selection state
     const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash-exp');
@@ -123,11 +98,11 @@ export function ChatProvider({
         }
 
         // Notify WebSocket about model change if connection is active
-        if (socketRef.current) {
+        if (activeChatID) {
             console.log('Notifying WebSocket about model change to:', model);
-            socketRef.current.changeModel(model);
+            socket.changeModel(activeChatID, model);
         }
-    }, []);
+    }, [activeChatID]);
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
 
     // Error state management
@@ -148,7 +123,6 @@ export function ChatProvider({
     const [showReasoning, setShowReasoning] = useState<boolean>(false);
     const [showMemberResponses, setShowMemberResponses] = useState<boolean>(false);
     const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('hide');
-
 
     const setDetailLevel = useCallback((level: DetailLevel) => {
         setDetailLevelInternal(level);
@@ -176,16 +150,21 @@ export function ChatProvider({
         }
     }, []);
 
-    const { user, token, refreshToken } = useAuth(); // Destructure token and refreshToken
+    const { user, token, refreshToken } = useAuth();
+    const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter } = useMain();
 
-    // const API_URL = 'https://genie.com';
+    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0].id);
+
+    const selectTeam = useCallback((teamId: string) => {
+        setSelectedTeamId(teamId);
+    }, []);
+
 
     // Keep getMessages for initial load and manual refresh if needed
     const getMessages = useCallback(async (chatID: string) => {
+        if (!chatID || chatID === emptyChatID) return;
         setMessagesLoading(true);
         try {
-            // First check local store if needed, or sync with it?
-            // For now, fetch from API and update local store to keep sync
             const data = await apiClient.get<Message[]>(
                 `${getApiUrl()}/chats/${chatID}/messages`,
             );
@@ -193,11 +172,8 @@ export function ChatProvider({
                 return;
             }
 
-            // setMessages(data); // Removed local state set
-
-            // Update Store (Sync Source of Truth)
-            const store = useChatStore.getState();
-            data.forEach(m => store.addMessage(chatID, m));
+            // Update store
+            setMessagesToStore(chatID, data);
 
             // Sync model from last assistant message or any message that has a model field
             if (!manualModelSelectionRef.current && data.length > 0) {
@@ -220,7 +196,6 @@ export function ChatProvider({
             }
 
         } catch (error) {
-            // alertError(`Failed to fetch messages for chat: ${error}`);
             console.error(
                 `Failed to fetch messages for chat ${chatID}:`,
                 error,
@@ -228,9 +203,213 @@ export function ChatProvider({
         } finally {
             setMessagesLoading(false);
         }
-    }, [setSelectedModel]);
+    }, [setSelectedModel, setMessagesToStore]);
 
-    const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter } = useMain();
+
+    // Define createChat early so sendStreamingMessage can use it
+    const createChat = useCallback(async (title: string) => {
+        let chatID: string;
+
+        try {
+            const created = await apiClient.post<{ id: string }>(
+                `${getApiUrl()}/chats`,
+                {
+                    "title": title,
+                    "model": selectedModelRef.current || 'gemini-2.0-flash-exp',
+                    "mode": chatMode,
+                    "team_id": chatMode === 'team' ? selectedTeamId : null,
+                    "project_id": activeChat?.project_id,
+                    "task_id": activeChat?.task_id,
+                },
+            );
+            if (created?.id) {
+                chatID = created.id;
+                setActiveChatID(created.id);
+            } else {
+                console.error('Chat create returned no id', created);
+                return;
+            }
+        } catch (e) {
+            console.error('Failed to create chat before sending:', e);
+            return;
+        }
+
+        return chatID;
+    }, [chatMode, selectedTeamId, setActiveChatID, activeChat]);
+
+    // Define createMessage early so sendStreamingMessage can use it
+    const createMessage = useCallback(async (text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean, role: string = 'user') => {
+        let messageID: string;
+
+        try {
+            const model = selectedModelRef.current;
+            const created = await apiClient.post<{ id: string }>(
+                `${getApiUrl()}/chats/${chatID}/messages`,
+                {
+                    chat_id: chatID,
+                    role: role,
+                    text: text,
+                    model: model,
+                    attachment_ids: attachmentIDs,
+                    web_search: webSearch,
+                },
+            );
+            if (created?.id) {
+                messageID = created.id;
+                setCurrentMessageID(created.id);
+            } else {
+                console.error('Message create returned no id', created);
+                return;
+            }
+        } catch (e) {
+            console.error('Failed to create message before sending:', e);
+            return;
+        }
+
+        return messageID;
+    }, []);
+
+    // We need to update how `messages` is selected to support plugins
+    const messagesSelector = useCallback((state: any) => {
+        if (pluginThreadMeta) {
+            const pluginChatKey = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
+            return state.chats[pluginChatKey] || [];
+        }
+        return activeChatID ? state.chats[activeChatID] || [] : [];
+    }, [activeChatID, pluginThreadMeta]);
+
+    const storeMessages = useChatStore(messagesSelector);
+
+    const sendStreamingMessage = useCallback(
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string, role: string = 'user') => {
+            if (!text.trim() && attachments.length === 0) return;
+            if (!user?.id) return;
+
+            setError(null);
+
+            const attachmentIDs = attachments.map(a => a.id);
+            const modelAttachments = attachments.map(a => ({
+                id: a.id,
+                file_name: a.name,
+                file_type: a.mimeType,
+                size: 0,
+                uri: a.uri
+            }));
+
+            setLastFailedMessage({
+                text: text.trim(),
+                attachments: attachments,
+                messageId: reuseMessageId,
+                webSearch,
+                thinking
+            });
+
+            let chatIdToUse = activeChatID;
+            let messageID: string | undefined = reuseMessageId;
+            const timestamp = Date.now();
+
+            if (pluginThreadMeta) {
+                // Plugin mode
+                chatIdToUse = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
+                // Using the provider ID for the socket routing if needed, but since we are in plugin mode,
+                // we might need to route differently or just use the local display.
+                // For now, let's assume we use the real ID for the socket too.
+                chatIdToUse = String(pluginThreadMeta.chatId);
+
+                // For plugin mode, we generate ID locally if not provided
+                if (!messageID) {
+                    messageID = uuidv4();
+                }
+            } else {
+                if (!chatIdToUse || chatIdToUse === emptyChatID) {
+                    chatIdToUse = await createChat(text) || activeChatID;
+                }
+
+                if (!chatIdToUse) {
+                    console.error('Failed to resolve chat id before sending message');
+                    setError('Не удалось создать чат');
+                    return;
+                }
+
+                if (!reuseMessageId) {
+                    messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch, role);
+                    if (!messageID) {
+                        console.error('Failed to create message before sending via WebSocket');
+                        setError('Не удалось создать сообщение');
+                        return;
+                    }
+                    setCurrentMessageID(messageID!);
+                    setLastFailedMessage(prev => prev ? { ...prev, messageId: messageID } : null);
+
+                    const userMessage: Message = {
+                        id: messageID!,
+                        chat_id: chatIdToUse!,
+                        sender: user.id,
+                        role: role,
+                        text: text.trim(),
+                        created_at: timestamp,
+                        attachments: modelAttachments,
+                    };
+
+                    // Update Store
+                    useChatStore.getState().addMessage(chatIdToUse, {
+                        message_id: messageID,
+                        role: role,
+                        message: text.trim(),
+                        sender: user.id,
+                        // eof: true // user message is complete
+                    });
+                } else {
+                    console.log('Reusing existing message ID for retry:', reuseMessageId);
+                    setCurrentMessageID(reuseMessageId);
+                }
+            }
+
+            const sessionId = `sess_${timestamp}`;
+
+            setAssistantWorking(true);
+
+            // Use Global Socket
+            if (!chatIdToUse || !messageID) {
+                setAssistantWorking(false);
+                setError('Ошибка отправки сообщения');
+                return;
+            }
+
+            socket.sendMessage(
+                text.trim(),
+                chatIdToUse,
+                sessionId,
+                messageID,
+                attachmentIDs,
+                webSearch,
+                thinking,
+                role,
+                selectedModelRef.current || undefined
+            );
+        },
+        [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, setLastFailedMessage],
+    );
+
+    const sendMessage = useCallback(
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, role: string = 'user') => {
+            await sendStreamingMessage(text, attachments, webSearch, thinking, undefined, role);
+        },
+        [sendStreamingMessage],
+    );
+
+    const retryLastMessage = useCallback(() => {
+        if (lastFailedMessage) {
+            setError(null);
+            sendStreamingMessage(
+                lastFailedMessage.text,
+                lastFailedMessage.attachments,
+                lastFailedMessage.webSearch,
+                lastFailedMessage.thinking,
+                lastFailedMessage.messageId // reusing the message ID!
+            );
+        }
+    }, [lastFailedMessage, sendStreamingMessage]);
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
@@ -265,16 +444,6 @@ export function ChatProvider({
             if (pendingChatMode) {
                 modeToUse = pendingChatMode.mode;
                 teamIdToUse = pendingChatMode.teamId;
-
-                // If there's an initial message, we'll send it after the chat is fully switched
-                if (pendingChatMode.initialMessage) {
-                    const messageToSend = pendingChatMode.initialMessage;
-                    const chatIDToSend = activeChatID;
-                    // We need a small delay or a way to ensure the chat switch is complete
-                    // Actually, if we are at emptyChatID, we are just PREPARING.
-                    // The message should be sent when we land on the REAL ID.
-                }
-
                 clearPendingChatMode?.();
             } else {
                 modeToUse = (sidebarFilter === 'all' || sidebarFilter === 'agent' ? 'agent' : 'team');
@@ -317,11 +486,16 @@ export function ChatProvider({
         }
 
         if (!activeChatID || activeChatID === emptyChatID) {
-            // setMessages([]); // Store handles it
+            // Clear store for current chat or just ignore?
+            // We shouldn't clear the store because we want persistence.
             return;
         }
-        getMessages(activeChatID);
-    }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode, sidebarFilter]);
+        // Only fetch if empty or user navigation
+        // Actually, we should probably fetch to sync with backend?
+        if (messages.length === 0) {
+            getMessages(activeChatID);
+        }
+    }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode, sidebarFilter, sendMessage, selectTeam, clearPendingChatMode]);
 
     // Fetch available models on mount with retry
     useEffect(() => {
@@ -347,11 +521,6 @@ export function ChatProvider({
         return () => { mounted = false; };
     }, []);
 
-    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0].id);
-
-    const selectTeam = useCallback((teamId: string) => {
-        setSelectedTeamId(teamId);
-    }, []);
 
     useEffect(() => {
         if (chatMode !== 'team') return;
@@ -359,17 +528,12 @@ export function ChatProvider({
         const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId) || AVAILABLE_TEAMS[0];
         const baseCommand = team.command;
 
-        // Apply model override if the team is dynamic or allows it. 
-        // For now, let's assume all teams can have their primary model overridden by the UI picker
-        // provided the backend team implementation respects it (TravelPlanning/GenieTeam take a 'model' param).
         const next = {
             ...baseCommand,
             model: selectedModel || baseCommand.model,
             auth_token: token,
             project_id: activeChat?.project_id,
             task_id: activeChat?.task_id,
-            // For dynamic teams, we might want to update participants' models too, 
-            // but let's keep it simple: model picker overrides the main team/conductor model.
         };
 
         setTeamCommand((prev: any) => {
@@ -378,77 +542,35 @@ export function ChatProvider({
             } catch { /* ignore */ }
             return next;
         });
-    }, [chatMode, selectedModel, selectedTeamId, token]);
+    }, [chatMode, selectedModel, selectedTeamId, token, activeChat]);
+
+    // WebSocket lifecycle is now handled globally in App.tsx
+    // But we still want to attach listeners for specific events like Done/Error?
+    // The store updates automatically.
+    // We can use a side effect to track "assistantWorking".
 
     useEffect(() => {
-        console.log('WebSocket useEffect: activeChatID:', activeChatID);
-        console.log(
-            'WebSocket useEffect: token:',
-            token ? token.substring(0, 10) + '...' : 'null',
-        );
-        console.log('WebSocket useEffect: condition result:', !token); // Only check for token
+        // We set handlers to the global socket to update local state like 'assistantWorking'
+        socket.setHandlers({
+            onDone: () => {
+                setAssistantWorking(false);
+            },
+            onError: (err: any) => {
+                setAssistantWorking(false);
+                const message = err?.message || 'Ошибка соединения';
+                setError(message);
+            },
+            onUnauthorized: async () => {
+                return await refreshToken();
+            },
+        });
 
-        if (!token) {
-            // Only check for token
-            console.warn(
-                'WebSocket useEffect: Returning early due to missing token.',
-            );
-            socketRef.current?.close();
-            socketRef.current = null;
-            return;
-        }
+        // No explicit cleanup to remove handlers for now as they are simple and global-ish.
+        // Ideally we should manage multiple listeners.
+        // For now, this component is the main consumer.
+    }, [refreshToken]);
 
-        // Не открываем сокет, пока у нас placeholder chat_id или в режиме плагина
-        if ((!activeChatID || activeChatID === emptyChatID) && !pluginThreadMeta) {
-            // console.warn('WebSocket useEffect: Skipping WS init until real chat_id is set');
-            socketRef.current?.close();
-            socketRef.current = null;
-            return;
-        }
 
-        if (!socketRef.current) {
-            const socketId = Math.random().toString(36).substring(7);
-            console.log(`[WS-${socketId}] Creating new ChatSocket. socketRef was null.`);
-            socketRef.current = newWebSocket(token, activeChatID);
-            (socketRef.current as any).__debugId = socketId;
-        } else {
-            console.log(`[WS-${(socketRef.current as any).__debugId}] socketRef.current already exists, not creating new.`);
-        }
-
-        console.log(`WebSocket useEffect: socket ready`)
-        // Send current tools configuration to the backend
-        socketRef.current?.sendTools(tools);
-
-        return () => {
-            console.log('WS cleanup: deps changed', { activeChatID, token: !!token });
-            socketRef.current?.close();
-            socketRef.current = null;
-        };
-    }, [activeChatID, token, refreshToken, chatMode, teamCommand, tools]); // Dependencies for WebSocket lifecycle
-
-    // Global Lifecycle & Network Handling
-    useEffect(() => {
-        // AppState listener - reconnect socket when app becomes active
-        const handleAppStateChange = (nextAppState: AppStateStatus) => {
-            if (nextAppState === 'active') {
-                console.log('[ChatContext] App became active');
-                if (socketRef.current) {
-                    if (!socketRef.current.isConnected()) {
-                        console.log('[ChatContext] Reconnecting socket...');
-                        socketRef.current.open();
-                    } else {
-                        // Even if connected, ensure outbox is processed
-                        socketRef.current.processOutbox();
-                    }
-                }
-            }
-        };
-        const sub = AppState.addEventListener('change', handleAppStateChange);
-
-        return () => {
-            sub.remove();
-        };
-    }, []);
     const refreshPluginThread = useCallback(async () => {
         if (!pluginThreadMeta) return;
         try {
@@ -458,157 +580,28 @@ export function ChatProvider({
                 pluginThreadMeta.integrationId,
             );
             const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, pluginThreadMeta.provider));
-            // setMessages(converted);
+            // Update store directly or local state? Plugin threads might not be in chat store yet.
+            // For now, plugins use local `messages` state in previous code, but here we bound `messages` to store.
+            // If pluginThreadMeta is set, `activeChatID` is likely emptyChatID.
+            // So `messages` from store is [].
 
-            const store = useChatStore.getState();
-            const key = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
-            converted.forEach(m => store.addMessage(key, m));
+            // Wait! The refactoring to use store makes `messages` derived from store.
+            // But plugin messages are not in `chats` store necessarily, or they are?
+            // If we use store for plugins, we need to generate a unique ID for the key.
+            // Previous code used `setMessages` (local state).
+
+            // To support plugins with the new store:
+            // We can use a synthetic chatID for the plugin thread.
+            const pluginChatKey = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
+            setMessagesToStore(pluginChatKey, converted);
+
+            // BUT: activeChatID is emptyChatID. We need to point it to pluginChatKey?
+            // Or we need `messages` to select from pluginChatKey if pluginThreadMeta is set.
+            // Let's update the selector.
         } catch (err) {
             console.error('Failed to refresh plugin thread', err);
         }
-    }, [pluginThreadMeta, mapPluginMessage]);
-
-    const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string, role: string = 'user') => {
-            if (!text.trim() && attachments.length === 0) return;
-            if (!user?.id) return;
-
-            // Clear error when sending a new message
-            setError(null);
-
-            // Map local attachments to model Attachment type early for both cases
-            const attachmentIDs = attachments.map(a => a.id);
-            const modelAttachments = attachments.map(a => ({
-                id: a.id,
-                file_name: a.name,
-                file_type: a.mimeType,
-                size: 0, // Unknown size for local
-                uri: a.uri
-            }));
-
-            // Save for retry with all details, but update messageId later if created
-            setLastFailedMessage({
-                text: text.trim(),
-                attachments: attachments,
-                messageId: reuseMessageId, // Will be updated if fresh send
-                webSearch,
-                thinking
-            });
-
-            let chatIdToUse = activeChatID;
-            let messageID: string | undefined = reuseMessageId;
-            const timestamp = Date.now();
-
-            if (pluginThreadMeta) {
-                chatIdToUse = String(pluginThreadMeta.chatId);
-                const storeKey = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
-
-                if (!messageID) {
-                    messageID = generateUUID();
-                }
-
-                if (!reuseMessageId) {
-                    const newUserMessage: Message = {
-                        id: messageID,
-                        chat_id: chatIdToUse,
-                        sender: user.id,
-                        role: role,
-                        text: text.trim(),
-                        created_at: timestamp,
-                        attachments: modelAttachments,
-                    };
-                    // setMessages(prev => [...prev, newUserMessage]);
-                    useChatStore.getState().addMessage(storeKey, newUserMessage);
-                }
-                // We do not call sidebarApi.sendChatMessage anymore.
-                // We rely on WebSocket to handle the message.
-            } else {
-                // Если чата ещё нет, создаём его через REST и монтируем id
-                if (!chatIdToUse || chatIdToUse === emptyChatID) {
-                    chatIdToUse = await createChat(text) || activeChatID;
-                }
-
-                if (!chatIdToUse) {
-                    console.error('Failed to resolve chat id before sending message');
-                    setError('Не удалось создать чат');
-                    return;
-                }
-
-                if (!reuseMessageId) {
-                    // SOCKET-FIRST CHANGE: Generate ID locally and skip createMessage REST call
-                    messageID = generateUUID();
-                    setCurrentMessageID(messageID!);
-
-                    // Update lastFailedMessage with the real messageID so retry can use it
-                    setLastFailedMessage(prev => prev ? { ...prev, messageId: messageID } : null);
-
-                    const userMessage: Message = {
-                        id: messageID!,
-                        chat_id: chatIdToUse!,
-                        sender: user.id,
-                        role: role,
-                        text: text.trim(),
-                        created_at: timestamp,
-                        attachments: modelAttachments,
-                        status: 'pending', // Pending status
-                    };
-
-                    // setMessages(prevMessages => [
-                    //     ...prevMessages,
-                    //     userMessage,
-                    // ]);
-
-                    // Add to Store (Optimistic)
-                    useChatStore.getState().addMessage(chatIdToUse, userMessage);
-
-                } else {
-                    console.log('Reusing existing message ID for retry:', reuseMessageId);
-                    setCurrentMessageID(reuseMessageId);
-                }
-            }
-
-            const sessionId = `sess_${timestamp}`;
-            console.log(
-                'sendStreamingMessage: socketRef.current:',
-                socketRef.current,
-            ); // Add this log
-            if (!socketRef.current) {
-                if (!chatIdToUse || !messageID) {
-                    console.error('Missing chatId or messageId when initializing WebSocket');
-                    setError('Ошибка инициализации соединения');
-                    return;
-                }
-                socketRef.current = newWebSocket(token!, chatIdToUse);
-            }
-
-            setAssistantWorking(true);
-            // Теперь точно есть socketRef; sendMessage положит в outbox и откроет WS
-            if (!chatIdToUse || !messageID) {
-                console.error('Missing chatId or messageId before sending message via WebSocket');
-                setAssistantWorking(false);
-                setError('Ошибка отправки сообщения');
-                return;
-            }
-            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch, thinking, role);
-            console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
-        },
-        [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token, createChat], // createMessage removed from deps
-    ); // Dependencies for sendStreamingMessage
-
-    const executeMessageAction = useCallback(async (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => {
-        if (!pluginThreadMeta) return;
-        try {
-            await sidebarApi.executeMessageAction(pluginThreadMeta.provider, messageId, {
-                command: action.command,
-                url: action.url,
-                prompt: action.prompt,
-                agent: action.agent,
-            });
-            await refreshPluginThread();
-        } catch (err) {
-            console.error('Failed to execute plugin action', err);
-        }
-    }, [pluginThreadMeta, refreshPluginThread]);
+    }, [pluginThreadMeta, mapPluginMessage, setMessagesToStore]);
 
     const startPluginThread = useCallback(async ({ provider, chatId, title, integrationId, integrationName, messages: preloadedMessages }: { provider: string; chatId: string | number; title?: string | null; integrationId?: string; integrationName?: string | null; messages?: any[] }) => {
         setPluginThreadMeta({ provider, chatId, integrationId, integrationName });
@@ -616,8 +609,8 @@ export function ChatProvider({
         setTeamCommand(null);
         setExternalTitle(title || null);
         setAssistantWorking(false);
-        // setMessages([]); // Store handles
-        setActiveChatID(emptyChatID);
+        setActiveChatID(emptyChatID); // Deselect main chat
+
         try {
             let incomingMessages: any[] = [];
             if (preloadedMessages && Array.isArray(preloadedMessages)) {
@@ -627,97 +620,22 @@ export function ChatProvider({
                 incomingMessages = resp?.messages || [];
             }
             const converted = (incomingMessages || []).map(msg => mapPluginMessage(msg, provider));
-            // setMessages(converted);
-
-            const store = useChatStore.getState();
-            const key = `plugin_${provider}_${chatId}`;
-            converted.forEach(m => store.addMessage(key, m));
+            // Update Store for this plugin chat
+            // Key: String(chatId) which is the real ID
+            setMessagesToStore(String(chatId), converted);
         } catch (err) {
             console.error('Failed to load plugin chat on start', err);
         }
-    }, [setActiveChatID, mapPluginMessage, setChatMode, setTeamCommand]);
+    }, [setActiveChatID, mapPluginMessage, setChatMode, setTeamCommand, setMessagesToStore]);
 
     const clearPluginThread = useCallback(() => {
         setPluginThreadMeta(null);
         setExternalTitle(null);
-        // setMessages([]);
+        // Messages will clear because selector depends on pluginThreadMeta
     }, []);
-
-    const createChat = useCallback(async (title: string) => {
-        let chatID: string;
-
-        try {
-            const created = await apiClient.post<{ id: string }>(
-                `${getApiUrl()}/chats`,
-                {
-                    "title": title,
-                    "model": selectedModelRef.current || 'gemini-2.0-flash-exp',
-                    "mode": chatMode,
-                    "team_id": chatMode === 'team' ? selectedTeamId : null,
-                    "project_id": activeChat?.project_id,
-                    "task_id": activeChat?.task_id,
-                },
-            );
-            if (created?.id) {
-                chatID = created.id;
-                setActiveChatID(created.id);
-                // getChats();
-            } else {
-                console.error('Chat create returned no id', created);
-                return;
-            }
-        } catch (e) {
-            console.error('Failed to create chat before sending:', e);
-            return;
-        }
-
-        return chatID;
-    }, [chatMode, selectedTeamId, setActiveChatID]);
-
-    const createMessage = useCallback(async (text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean, role: string = 'user') => {
-        let messageID: string;
-
-        try {
-            const model = selectedModelRef.current;
-            console.log('Creating message with model:', model);
-
-            const created = await apiClient.post<{ id: string }>(
-                `${getApiUrl()}/chats/${chatID}/messages`,
-                {
-                    chat_id: chatID,
-                    role: role,
-                    text: text,
-                    model: model,
-                    attachment_ids: attachmentIDs,
-                    web_search: webSearch,
-                },
-            );
-            if (created?.id) {
-                messageID = created.id;
-                setCurrentMessageID(created.id);
-                console.log('messageID:', messageID);
-            } else {
-                console.error('Message create returned no id', created);
-                return;
-            }
-        } catch (e) {
-            console.error('Failed to create message before sending:', e);
-            return;
-        }
-
-        return messageID;
-    }, []);
-
-    const sendMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, role: string = 'user') => {
-            await sendStreamingMessage(text, attachments, webSearch, thinking, undefined, role);
-        },
-        [sendStreamingMessage],
-    );
 
     const handleClientAction = useCallback(async (payload: any) => {
         console.log('[ChatContext] Handling client action:', payload);
-        console.log('[ChatContext] Raw payload string:', JSON.stringify(payload));
         const { tool, method, params } = payload;
 
         try {
@@ -725,9 +643,6 @@ export function ChatProvider({
             const result = await clientToolExecutor.execute({ tool, method, params });
 
             console.log('[ChatContext] Action executed, sending result:', result);
-
-            // Send result back to the agent as a system message
-            // We use a prefix to help the agent understand it's a tool result
             await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`, [], false, undefined, 'system');
 
         } catch (error) {
@@ -736,243 +651,25 @@ export function ChatProvider({
         }
     }, [sendMessage]);
 
-    function newWebSocket(tkn: string, chatID: string) {
-        console.log('Creating new WebSocket with model:', selectedModel);
-        const sock = new ChatSocket(
-            getApiUrl(),
-            () => tkn,
-            () => pluginThreadMeta ? String(pluginThreadMeta.chatId) : chatID,
-            () => currentMessageID,
-            () => {
-                const model = selectedModelRef.current;
-                console.log('getModel() returning:', model);
-                return model;
-            },
-            () => pluginThreadMeta ? 'inbox' : 'chat',
-            () => chatMode,
-            () => teamCommand,
-        )
-
-        sock.setHandlers({
-            onMessage: (frame: Frame) => {
-                // console.log('onMessage: received message', frame);
-                if (frame.payload?.type === 'actions') {
-                    console.log('>>> ACTIONS FRAME RECEIVED:', frame.payload);
-                }
-
-                // Handle Client Actions (Remote Brain -> Local Hands)
-                if (frame.payload?.type === 'client_action') {
-                    handleClientAction(frame.payload);
-                    return; // Don't add to messages list as a display message
-                }
-
-                // setMessages(prevMessages =>
-                //    onReceivedMessage(frame, prevMessages)
-                // );
-                onReceivedMessage(frame);
-            },
-            onMeta: (frame: Frame) => {
-                // console.log('onMeta: received message', frame);
-                if (frame.payload?.type === 'chat_update' && frame.payload.message) {
-                    console.log('Updating chat title:', frame.payload.message);
-                    setExternalTitle(frame.payload.message);
-                    return;
-                }
-                // setMessages(prevMessages => onReceivedMeta(frame, prevMessages));
-                onReceivedMeta(frame);
-            },
-            onDone: (frame: Frame) => {
-                console.log(`onDone: received message`, frame);
-                setAssistantWorking(false);
-                // getMessages();
-            },
-            onError: (err: any) => {
-                console.error('WebSocket error:', err);
-                setAssistantWorking(false);
-                const message =
-                    err?.message ||
-                    err?.error?.message ||
-                    err?.payload?.message ||
-                    err?.payload?.error ||
-                    (typeof err === 'string' ? err : null) ||
-                    'Ошибка соединения';
-                setError(message);
-                // alertError(message);
-            },
-            onUnauthorized: async () => {
-                return await refreshToken();
-            },
-        });
-
-        return sock
-    }
-
-    function onReceivedMessage(frame: Frame) {
-        const store = useChatStore.getState();
-        const chatKey = pluginThreadMeta ? `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}` : activeChatID;
-        const currentMessages = store.messages[chatKey] || [];
-
-        let newMessages = [...currentMessages];
-        const messageID = frame.payload.message_id;
-        if (!messageID) return;
-
-        const existingMessage = newMessages.find(m => m.id === messageID);
-        if (existingMessage && existingMessage.role === 'user') {
-            console.log('Dedup: skipping duplicate user message', messageID);
-            return;
-        }
-
-        let messageIdx = newMessages.findIndex((item) => {
-            return item.id === frame.payload.message_id;
-        })
-
-        if (messageIdx === -1) {
-            messageIdx = newMessages.length;
-            const role = frame.payload.role || 'assistant';
-            const sender = frame.payload.sender || (role === 'user' ? 'user' : 'assistant');
-
-            newMessages[messageIdx] = {
-                id: messageID,
-                chat_id: chatKey,
-                sender: sender,
-                role: role,
-                text: role === 'user' ? (frame.payload.message || "") : " ",
-                created_at: Date.now(),
-                content_parts: role === 'user' ? undefined : [],
-            };
-            if (role === 'user') {
-                store.addMessage(chatKey, newMessages[messageIdx]);
-                return;
-            }
-        }
-
-        if (frame.payload.role !== 'user' && !frame.payload.eof) {
-            const msg = newMessages[messageIdx];
-            const existingParts = msg.content_parts || [];
-            let updatedParts = [...existingParts];
-            let updatedText = msg.text;
-            let updatedToolCalls = [...(msg.tool_calls || [])];
-            let updatedReasoningSteps = [...(msg.reasoning_steps || [])];
-
-            if (frame.payload.type === 'tool_call' && frame.payload.tool) {
-                updatedParts.push({ type: 'tool_call', tool_call: frame.payload.tool });
-                updatedToolCalls.push(frame.payload.tool);
-            } else if (frame.payload.type === 'member_response') {
-                const memberText = frame.payload.message || '';
-                const agentName = frame.payload.agent_name || 'Member';
-                if (memberText) {
-                    const lastPart = updatedParts.length > 0 ? updatedParts[updatedParts.length - 1] : null;
-                    if (lastPart && (lastPart as any).type === 'member_response' && (lastPart as any).agent_name === agentName) {
-                        updatedParts[updatedParts.length - 1] = { ...lastPart, text: (lastPart as any).text + memberText } as any;
-                    } else {
-                        updatedParts.push({ type: 'member_response', agent_name: agentName, text: memberText } as any);
-                    }
-                }
-            } else if (frame.payload.type === 'reasoning') {
-                const reasoningText = frame.payload.content || frame.payload.message || '';
-                if (reasoningText) {
-                    if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === 'reasoning') {
-                        const lastPart = updatedParts[updatedParts.length - 1] as any;
-                        updatedParts[updatedParts.length - 1] = { ...lastPart, reasoning: lastPart.reasoning + reasoningText };
-                    } else {
-                        updatedParts.push({ type: 'reasoning', reasoning: reasoningText });
-                    }
-
-                    if (updatedReasoningSteps.length > 0) {
-                        updatedReasoningSteps[updatedReasoningSteps.length - 1] += reasoningText;
-                    } else {
-                        updatedReasoningSteps.push(reasoningText);
-                    }
-                }
-            } else if (frame.payload.type === 'client_action') {
-                // Client action execution is handled in effect hook, just render here
-                updatedParts.push({
-                    type: 'tool_call',
-                    tool_call: {
-                        name: `${frame.payload.tool}:${frame.payload.method}`,
-                        arguments: frame.payload.params,
-                        result: "Executed on client"
-                    }
-                });
-            } else {
-                const newText = frame.payload.message || '';
-                if (newText) {
-                    updatedParts.push({ type: 'text', text: newText });
-                    updatedText = (updatedText === " " ? "" : updatedText) + newText;
-                }
-            }
-
-            newMessages[messageIdx] = {
-                ...msg,
-                text: updatedText,
-                content_parts: updatedParts,
-                tool_calls: updatedToolCalls,
-                reasoning_steps: updatedReasoningSteps
-            };
-        } else {
-            setAssistantWorking(false);
-        }
-
-        store.addMessage(chatKey, newMessages[messageIdx]);
-    }
-
-    function onReceivedMeta(frame: Frame) {
-        const store = useChatStore.getState();
-        const chatKey = pluginThreadMeta ? `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}` : activeChatID;
-        const currentMessages = store.messages[chatKey] || [];
-        const payload = frame.payload;
-
-        if (!payload.message_id) return;
-        const messageIdx = currentMessages.findIndex(m => m.id === payload.message_id);
-        if (messageIdx === -1) return;
-
-        const msg = currentMessages[messageIdx];
-        let updatedMsg = { ...msg };
-
-        if (payload.type === 'metadata') {
-            updatedMsg.model = payload.model || msg.model;
-            // Handle tool calls in metadata if necessary (legacy)
-        } else if (payload.type === 'usage') {
-            updatedMsg.metadata = {
-                ...msg.metadata,
-                usage: {
-                    prompt_tokens: payload.prompt_tokens,
-                    completion_tokens: payload.completion_tokens,
-                    elapsed_ms: payload.elapsed_ms
-                }
-            };
-        }
-
-        store.addMessage(chatKey, updatedMsg);
-    }
-
-    const retryLastMessage = useCallback(() => {
-        if (lastFailedMessage) {
-            setError(null);
-            sendStreamingMessage(
-                lastFailedMessage.text,
-                lastFailedMessage.attachments,
-                lastFailedMessage.webSearch,
-                lastFailedMessage.thinking,
-                lastFailedMessage.messageId // reusing the message ID!
-            );
-        }
-    }, [lastFailedMessage, sendStreamingMessage]);
+    const executeMessageAction = useCallback(async (action: any, messageId: string) => {
+        console.log('[ChatContext] Executing action:', action.label, 'for message:', messageId);
+        // For now, just send the action label as a new message
+        await sendMessage(action.label || action.action, [], false, undefined, 'user');
+    }, [sendMessage]);
 
     const stopGeneration = useCallback(() => {
         console.log('Stopping generation');
-        if (socketRef.current) {
-            socketRef.current.sendStop();
-            socketRef.current = null;
+        if (activeChatID) {
+            socket.sendStop(activeChatID);
         }
         setAssistantWorking(false);
-    }, []);
+    }, [activeChatID]);
 
     const value: ChatContextType = {
-        messages,
+        messages: storeMessages, // Use the selected messages
         messagesLoading,
         getMessages,
-        sendMessage, // Now uses the WebSocket version
+        sendMessage,
         executeMessageAction,
         assistantWorking,
         externalTitle,
@@ -995,7 +692,6 @@ export function ChatProvider({
         thinkingLevel,
         setThinkingLevel,
         stopGeneration,
-        // Display settings
         showToolCalls,
         setShowToolCalls,
         showReasoning,

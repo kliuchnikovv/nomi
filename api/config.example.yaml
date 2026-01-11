@@ -30,9 +30,6 @@ token:
 llm:
   base_url: "http://localhost:7777"
 
-redis:
-  addr: "${REDIS_ADDR:-localhost:6379}"
-
 plugins:
   gmail:
     enabled: true

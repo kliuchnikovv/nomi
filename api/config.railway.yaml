@@ -31,9 +31,6 @@ token:
 llm:
   base_url: ${LLM_BASE_URL}
 
-redis:
-  addr: ${REDIS_URL}
-
 plugins:
   imap:
     enabled: false
