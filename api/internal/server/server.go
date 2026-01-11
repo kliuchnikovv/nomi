@@ -166,6 +166,7 @@ func New(
 	r.DELETE("/api/project-tasks/:id", wrapWithAuth(projectHandler.DeleteTask, authMiddleware))
 	// State Machine Transition
 	r.PATCH("/api/project-tasks/:id/status", taskAuth, projectTaskHandler.UpdateStatus)
+	r.GET("/api/active-tasks", wrapWithAuth(projectTaskHandler.GetActiveTasks, authMiddleware))
 
 	// Team State API
 	r.POST("/api/team/state", taskAuth, teamHandler.SetState)

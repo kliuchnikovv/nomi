@@ -51,27 +51,35 @@ class ProjectKnowledgeManager:
     def search(self, query: str, project_id: Optional[str] = None, max_results: int = 5) -> List[Document]:
         """
         Search for documents.
-        If project_id is provided, filters by that project using base knowledge (ignores user_id).
-        If project_id is None, searches general knowledge using user-scoped knowledge.
-        To search EVERYTHING for the user regardless of project, pass project_id="*" (or we could change design).
-        Current requirement: "Project A search shouldn't return Project B data".
-        So we enforce strict filtering.
+        If project_id is provided (and not "*"), filters by that project using base knowledge. 
+        Note: Specific project search currently bypasses user_id isolation in base_knowledge, 
+        relying on the uniqueness of project IDs.
+        
+        If project_id is "*", searches across all projects for this user.
+        If project_id is None, searches general knowledge for this user.
         """
         filters = {}
         if project_id and project_id != "*":
              filters["project_id"] = project_id
-             logger.info(f"Searching project {project_id} (using base knowledge) with query: {query}")
-             return self.base_knowledge.search(query=query, max_results=max_results, filters=filters)
+             logger.info(f"Searching knowledge for project {project_id} with query: {query}")
+             results = self.base_knowledge.search(query=query, max_results=max_results, filters=filters)
+             logger.info(f"Found {len(results)} results in project {project_id}")
+             return results
         
         elif project_id == "*":
-            # Search across all projects (user-scoped still applies via UserScopedKnowledge)
-            pass
+            # Search across all projects (no project_id filter)
+            logger.info(f"Searching across all projects for user {self.user_id} with query: {query}")
+            results = self.knowledge.search(query=query, max_results=max_results)
+            logger.info(f"Found {len(results)} results across projects for user {self.user_id}")
+            return results
         else:
              filters["project_id"] = "general"
 
-        logger.info(f"Searching user {self.user_id} (project: {filters.get('project_id', '*')}) with query: {query}")
+        logger.info(f"Searching general knowledge for user {self.user_id} with query: {query}")
         # UserScopedKnowledge.search adds user_id to filter.
-        return self.knowledge.search(query=query, max_results=max_results, filters=filters)
+        results = self.knowledge.search(query=query, max_results=max_results, filters=filters)
+        logger.info(f"Found {len(results)} general results for user {self.user_id}")
+        return results
 
     def ingest_repository(self, repo_name: str, project_id: str, github_token: Optional[str] = None) -> None:
         """

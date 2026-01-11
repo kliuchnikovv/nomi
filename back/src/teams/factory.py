@@ -18,8 +18,11 @@ class TeamFactory:
         self.model = model
         self.debug_mode = debug_mode
 
-    async def build(self, command_desc: dict, session_id: str, tools_specs: Optional[List[ToolSpec]] = None) -> Team:
+    async def build(self, command_desc: dict, session_id: str, tools_specs: Optional[List[ToolSpec]] = None, user_id: Optional[str] = None) -> Team:
         logger.info("[WS] Building Team from command description: %s", command_desc)
+        
+        # Priority for user_id: 1. Explicitly passed argument, 2. Command description, 3. Session/Chat ID
+        effective_user_id = user_id or command_desc.get("user_id") or session_id
         
         team_type = command_desc.get("type", "").lower()
         
@@ -52,14 +55,14 @@ class TeamFactory:
             from src.tools.factory import build as build_tools, ToolsConfig
             logger.info("[WS] Instantiating DevelopmentTeam")
             
-            # Use user_id from command description if available, otherwise fallback to session_id
-            user_id = command_desc.get("user_id") or session_id
-
             # Try to get GitHub token from command_desc or environment
             github_token = command_desc.get("github_token") or os.getenv("GITHUB_TOKEN")
             
             # Get auth token for API calls
             auth_token = command_desc.get("auth_token")
+
+            # Get project_id context
+            project_id = command_desc.get("project_id")
 
             # Build client tools if specs provided
             client_tools = []
@@ -75,7 +78,8 @@ class TeamFactory:
                 db=self.db,
                 github_token=github_token,
                 debug_mode=self.debug_mode,
-                user_id=user_id,
+                user_id=effective_user_id,
+                project_id=project_id,
                 auth_token=auth_token,
                 db_url=self.db.db_url if self.db else None, # Use existing DB connection URL
                 client_tools=client_tools
@@ -149,6 +153,8 @@ class TeamFactory:
                     model_name=p_model,
                     agent_type=p_type,
                     command_desc=p_data,
+                    user_id=effective_user_id,
+                    chat_id=session_id, # Fallback chat_id
                     tools_specs=tools_specs
                 )
                 members.append(member)

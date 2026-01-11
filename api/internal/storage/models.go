@@ -17,7 +17,10 @@ type Chat struct {
 	Model      string     `gorm:"type:text;not null"`
 	Title      string     `gorm:"not null"`
 	Mode       string     `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
+	Mode       string     `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
 	TeamID     *string    `gorm:"type:varchar(50);default:null"`             // e.g. 'dnd_team', 'travel_planning'
+	ProjectID  *uuid.UUID `gorm:"type:uuid;default:null;index"`
+	TaskID     *uuid.UUID `gorm:"type:uuid;default:null;index"`
 	CreatedAt  time.Time  `gorm:"not null"`
 	UpdatedAt  time.Time  `gorm:"not null;index;index:idx_chats_user_updated,priority:2,sort:desc"`
 	ArchivedAt *time.Time `gorm:"default:null"`
@@ -38,19 +41,19 @@ type Attachment struct {
 
 // Message represents a message in the database
 type Message struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	ChatID      uuid.UUID      `gorm:"type:uuid;not null;index:idx_messages_chat_created,priority:1"`
-	UserID      uuid.UUID      `gorm:"type:uuid;not null"`
-	Role        string         `gorm:"type:varchar(20);not null"`
-	Text        string         `gorm:"type:text;not null"`
+	ID           uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ChatID       uuid.UUID      `gorm:"type:uuid;not null;index:idx_messages_chat_created,priority:1"`
+	UserID       uuid.UUID      `gorm:"type:uuid;not null"`
+	Role         string         `gorm:"type:varchar(20);not null"`
+	Text         string         `gorm:"type:text;not null"`
 	ToolCalls    datatypes.JSON `gorm:"type:jsonb"`
 	ContentParts datatypes.JSON `gorm:"type:jsonb"` // Stores ordered text, tool_calls, reasoning
 	Reasoning    string         `gorm:"type:text"`  // Stores accumulated reasoning/thinking steps
 	Model        string         `gorm:"type:text"`
 	Actions      datatypes.JSON `gorm:"type:jsonb"` // Stores potential user actions (buttons)
 	Attachments  []Attachment   `gorm:"foreignKey:MessageID"`
-	CreatedAt   time.Time      `gorm:"not null;index:idx_messages_chat_created,priority:2,sort:desc"`
-	UpdatedAt   time.Time      `gorm:"not null"`
+	CreatedAt    time.Time      `gorm:"not null;index:idx_messages_chat_created,priority:2,sort:desc"`
+	UpdatedAt    time.Time      `gorm:"not null"`
 }
 
 type Integration struct {

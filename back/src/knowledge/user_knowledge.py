@@ -20,9 +20,10 @@ class UserScopedKnowledge(Knowledge):
         """
         Search with enforced user_id filter.
         """
-        effective_filter = filters or {}
+        effective_filter = (filters or {}).copy()
         # PgVector in Agno treats 'filters' as a metadata filter dictionary
         effective_filter["user_id"] = self.user_id
+        logger.info(f"UserScopedKnowledge search: query='{query}', filters={effective_filter}")
         return super().search(query, max_results, filters=effective_filter)
 
     def load_text(self, text: str, meta_data: dict = None):

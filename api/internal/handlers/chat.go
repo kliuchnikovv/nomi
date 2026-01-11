@@ -41,6 +41,8 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 		Title:      newChat.Title,
 		Mode:       newChat.Mode,
 		TeamID:     newChat.TeamID,
+		ProjectID:  newChat.ProjectID,
+		TaskID:     newChat.TaskID,
 		CreatedAt:  time.Now().UTC(),
 		UpdatedAt:  time.Now().UTC(),
 		ArchivedAt: nil,

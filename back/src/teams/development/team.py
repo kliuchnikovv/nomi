@@ -60,8 +60,8 @@ The **Genie** project is a monorepo containing:
 The `project_id` is the database ID of the project you're working on.
 - It is passed in the session/task context when you receive a request
 - Look for it in the `AnalystOutput.project_id` field from previous outputs
-- If working on "Genie" project itself, use the project_id from the task context
-- If truly unknown, use `project_id="*"` to search across all projects
+- If working on "Genie" project itself, use the project_id from the task context: {project_id}
+- If truly unknown, use `project_id="*"` to search across all projects (BUT try specific ID first)
 
 ## What Knowledge is Available
 The knowledge base contains STRUCTURED information (not raw files):
@@ -95,7 +95,9 @@ search_knowledge(query="websocket implementation", project_id="*")
 ## Key Tips
 - Be SPECIFIC in your queries — "api endpoints for users" is better than "api"
 - ALWAYS search before claiming information is missing
-- If one query returns nothing, try different keywords
+- If one query returns nothing, try different keywords ONCE.
+- IF "No information found" is returned for project '{project_id}' and '*', STOP SEARCHING immediately and report it.
+- DO NOT retry more than 2 times for the same intent.
 
 # Key Questions to Consider
 - Which component(s) are affected: `api/`, `back/`, or `front/`?
@@ -447,6 +449,7 @@ class DevelopmentTeam(Team):
         debug_mode: bool = False,
         user_id: Optional[str] = None,
         auth_token: Optional[str] = None,
+        project_id: Optional[str] = None,
         db_url: Optional[str] = None, # Added to support Workflow Storage
         client_tools: Optional[List[Toolkit]] = None,
     ):
@@ -751,13 +754,14 @@ If a team member encounters issues:
                 WorkflowAgent(
                     name="Analyst",
                     model=model,
-                    instructions=analyst_instructions,
+                    instructions=analyst_instructions.format(project_id=project_id or "unknown"),
                     markdown=markdown,
                     debug_mode=debug_mode,
                     tools=analyst_tools,
                     output_schema=AnalystOutput,
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
+                    tool_choice_limit=10, 
                     on_completion=self.transition_to_next_step
                 ),
                 WorkflowAgent(
@@ -770,6 +774,7 @@ If a team member encounters issues:
                     output_schema=ArchitectPlan,
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
+                    tool_choice_limit=10,
                     on_completion=self.transition_to_next_step
                 ),
                 WorkflowAgent(

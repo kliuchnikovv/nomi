@@ -108,3 +108,13 @@ func (s *Storage) UpdateProjectTask(ctx context.Context, task *ProjectTask) erro
 func (s *Storage) DeleteProjectTask(ctx context.Context, id uuid.UUID) error {
 	return s.DB.WithContext(ctx).Delete(&ProjectTask{}, id).Error
 }
+
+// GetActiveProjectTasksForUser retrieves all active tasks for a user
+func (s *Storage) GetActiveProjectTasksForUser(ctx context.Context, userID uuid.UUID) ([]ProjectTask, error) {
+	var tasks []ProjectTask
+	err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND status NOT IN ?", userID, []ProjectTaskStatus{ProjectTaskStatusDone, ProjectTaskStatusCancelled}).
+		Order("updated_at DESC").
+		Find(&tasks).Error
+	return tasks, err
+}

@@ -42,10 +42,30 @@ def _classify_error(exc: Exception) -> tuple[int, str, str]:
         return 400, "context_length_exceeded", "Context length exceeded."
     return 500, "internal_error", f"Internal Server Error: {s}"
 
+def _extract_user_id_from_token(token: str) -> Optional[str]:
+    """Extract user_id (sub) from JWT token payload without external libraries."""
+    try:
+        parts = token.split('.')
+        if len(parts) != 3:
+            return None
+        payload_b64 = parts[1]
+        # Add padding
+        payload_b64 += '=' * (-len(payload_b64) % 4)
+        import base64
+        import json
+        payload_json = base64.b64decode(payload_b64).decode('utf-8')
+        payload = json.loads(payload_json)
+        # Go backend usually sets 'sub' as the user ID
+        return payload.get('sub') or payload.get('user_id')
+    except Exception as e:
+        logger.warning("[WS] Failed to extract user_id from token: %s", e)
+        return None
+
 class LLMWebSocketSession:
-    def __init__(self, websocket: WebSocket, session_id: str, agent_factory: AgentFactory):
+    def __init__(self, websocket: WebSocket, session_id: str, agent_factory: AgentFactory, user_id: Optional[str] = None):
         self.websocket = websocket
         self.session_id = session_id
+        self.user_id = user_id  # Real user ID (UUID) from auth token
         self.agent_factory = agent_factory
         self.next_id = 0
         self.cancel_event = asyncio.Event()
@@ -261,6 +281,9 @@ class LLMWebSocketSession:
 
     async def build_agent_instance(self):
         """Build or rebuild the agent."""
+        # Use user_id if available, fallback to session_id (which is usually chat_id or anonymous UUID)
+        rag_user_id = self.user_id or self.session_id
+
         try:
             if self.build_mode == "team":
                 if not self.command_desc:
@@ -276,6 +299,7 @@ class LLMWebSocketSession:
                     command_desc=self.command_desc,
                     session_id=self.session_id,
                     tools_specs=self.tools_specs,
+                    user_id=rag_user_id,
                 )
             else:
                 self.agent = await self.agent_factory.build(
@@ -286,7 +310,7 @@ class LLMWebSocketSession:
                     command_desc=self.command_desc,
                     web_search=self.current_web_search,
                     thinking=self.current_thinking,
-                    user_id=self.session_id,
+                    user_id=rag_user_id,
                     chat_id=self.chat_id_param,
                     timezone=self.timezone,
                     timezone_offset=self.timezone_offset,
@@ -969,7 +993,16 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             await websocket.close(code=1008, reason="invalid session_id")
             return
 
-        session = LLMWebSocketSession(websocket, session_id, agent_factory)
+        # Try to extract real User ID from token in query params
+        token = websocket.query_params.get("token")
+        user_id = _extract_user_id_from_token(token) if token else None
+        
+        if user_id:
+             logger.info("[WS] Identifed user %s from token", user_id)
+        else:
+             logger.info("[WS] Could not identify user from token, falling back to session_id %s", session_id)
+
+        session = LLMWebSocketSession(websocket, session_id, agent_factory, user_id=user_id)
 
         try:
             await session.accept()

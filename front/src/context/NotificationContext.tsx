@@ -3,6 +3,7 @@ import { useAuth } from '../screens/auth/context';
 import { getApiUrl } from '../config';
 import { ChatSocket } from '../socket';
 import { Frame } from '../screens/main/models';
+import { projectTasksApi } from '../apiClient';
 
 type TaskStatus = 'BACKLOG' | 'ANALYSIS' | 'PLANNING' | 'CODING' | 'REVIEW' | 'VERIFY' | 'DONE' | 'CANCELLED';
 
@@ -124,6 +125,32 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             socketRef.current = null;
         };
     }, [token, refreshToken]);
+
+    useEffect(() => {
+        if (token) {
+            loadInitialTasks();
+        } else {
+            setActiveTasks([]);
+        }
+    }, [token]);
+
+    const loadInitialTasks = async () => {
+        try {
+            const tasks = await projectTasksApi.getActiveTasks();
+            if (tasks) {
+                setActiveTasks(tasks.map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    projectId: t.project_id,
+                    projectName: t.project_name,
+                    status: t.status,
+                    updatedAt: t.updated_at
+                })));
+            }
+        } catch (err) {
+            console.warn('[NotificationContext] Failed to load initial tasks:', err);
+        }
+    };
 
     const handleTaskUpdate = (data: any) => {
         console.log('[NotificationContext] Task Update:', data);

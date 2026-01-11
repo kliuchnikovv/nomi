@@ -97,6 +97,58 @@ func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
 	})
 }
 
+func (h *ProjectTaskHandler) GetActiveTasks(c *gin.Context) {
+	ctx := c.Request.Context()
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	tasks, err := h.store.GetActiveProjectTasksForUser(ctx, user.ID)
+	if err != nil {
+		h.logger.Error("failed to fetch active tasks", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch active tasks"})
+		return
+	}
+
+	// Enrich with project names
+	type ActiveTaskResponse struct {
+		ID          uuid.UUID `json:"id"`
+		Title       string    `json:"title"`
+		ProjectID   uuid.UUID `json:"project_id"`
+		ProjectName string    `json:"project_name"`
+		Status      string    `json:"status"`
+		UpdatedAt   time.Time `json:"updated_at"`
+	}
+
+	response := make([]ActiveTaskResponse, 0, len(tasks))
+	projectNames := make(map[uuid.UUID]string)
+
+	for _, t := range tasks {
+		name, ok := projectNames[t.ProjectID]
+		if !ok {
+			if project, err := h.store.GetProject(ctx, t.ProjectID); err == nil {
+				name = project.Name
+				projectNames[t.ProjectID] = name
+			} else {
+				name = "Project"
+			}
+		}
+
+		response = append(response, ActiveTaskResponse{
+			ID:          t.ID,
+			Title:       t.Title,
+			ProjectID:   t.ProjectID,
+			ProjectName: name,
+			Status:      string(t.Status),
+			UpdatedAt:   t.UpdatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 func isValidTransition(current, next storage.ProjectTaskStatus) bool {
 	// If status is not changing, it's valid (idempotent)
 	if current == next {

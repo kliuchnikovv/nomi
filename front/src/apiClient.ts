@@ -292,5 +292,18 @@ export const projectsApi = {
         apiClient.patch<void>(`${API_URL()}/projects/${id}/status`, { status }),
     reindex: (id: string, githubToken?: string) =>
         apiClient.post<{ status: string; project_id: string }>(`${API_URL()}/projects/${id}/reindex`, { github_token: githubToken }),
+    createTask: (projectId: string, body: { title: string; description?: string; priority?: string }) =>
+        apiClient.post<{ id: string; title: string; status: string; project_id: string }>(`${API_URL()}/projects/${projectId}/tasks`, body),
+};
+
+export const projectTasksApi = {
+    getActiveTasks: () => apiClient.get<Array<{
+        id: string;
+        title: string;
+        project_id: string;
+        project_name: string;
+        status: any;
+        updated_at: string;
+    }>>(`${API_URL()}/active-tasks`),
 };
 
