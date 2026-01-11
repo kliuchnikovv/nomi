@@ -335,12 +335,18 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		return
 	}
 
-	// Basic validation
+	// Preserve original ChatID for routing in User rooms
+	originalChatID := frame.ChatID
+
+	// Basic validation - for Chat rooms, warn if mismatch but allow processing
 	if frame.ChatID != uuid.Nil && frame.ChatID != r.ID {
-		r.logger.Warn("message chat_id mismatch", zap.String("msg_chat_id", frame.ChatID.String()), zap.String("room_id", r.ID.String()))
-		// Force it?
-		frame.ChatID = r.ID
-	} else {
+		if r.Type == RoomTypeChat {
+			r.logger.Warn("message chat_id mismatch in chat room", zap.String("msg_chat_id", frame.ChatID.String()), zap.String("room_id", r.ID.String()))
+			frame.ChatID = r.ID
+		}
+		// For User rooms, we keep the original ChatID for routing
+	}
+	if frame.ChatID == uuid.Nil {
 		frame.ChatID = r.ID
 	}
 
@@ -466,14 +472,14 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 	} else {
 		// User channel - handle routing and broadcast
-		// If this is a message operation with a valid chat_id, route it to the chat room
-		if frame.Operation == MessageOperation && frame.ChatID != uuid.Nil && frame.ChatID != r.ID {
+		// Use originalChatID for routing since frame.ChatID may have been normalized
+		if frame.Operation == MessageOperation && originalChatID != uuid.Nil && originalChatID != r.ID {
 			r.logger.Info("routing message from user channel to chat room",
-				zap.String("chat_id", frame.ChatID.String()),
+				zap.String("chat_id", originalChatID.String()),
 				zap.String("user_id", r.initiatorID.String()),
 			)
 			// Get or create the chat room and forward the message
-			chatRoom, err := r.hub.GetOrCreateRoom(frame.ChatID, RoomTypeChat, r.initiatorID, r.mode, r.command)
+			chatRoom, err := r.hub.GetOrCreateRoom(originalChatID, RoomTypeChat, r.initiatorID, r.mode, r.command)
 			if err != nil {
 				r.logger.Error("failed to get chat room for routing", zap.Error(err))
 			} else {
