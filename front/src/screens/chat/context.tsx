@@ -22,6 +22,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
+// Stable empty array reference to prevent infinite re-renders in Zustand selectors
+const EMPTY_MESSAGES: Message[] = [];
+
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function useChat() {
@@ -40,7 +43,7 @@ export function ChatProvider({
     // Select messages from global store
     const messages = useChatStore(
         useCallback(
-            (state) => (activeChatID ? state.chats[activeChatID] || [] : []),
+            (state) => (activeChatID ? state.chats[activeChatID] ?? EMPTY_MESSAGES : EMPTY_MESSAGES),
             [activeChatID]
         )
     );
@@ -273,9 +276,9 @@ export function ChatProvider({
     const messagesSelector = useCallback((state: any) => {
         if (pluginThreadMeta) {
             const pluginChatKey = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
-            return state.chats[pluginChatKey] || [];
+            return state.chats[pluginChatKey] ?? EMPTY_MESSAGES;
         }
-        return activeChatID ? state.chats[activeChatID] || [] : [];
+        return activeChatID ? state.chats[activeChatID] ?? EMPTY_MESSAGES : EMPTY_MESSAGES;
     }, [activeChatID, pluginThreadMeta]);
 
     const storeMessages = useChatStore(messagesSelector);

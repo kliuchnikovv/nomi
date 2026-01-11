@@ -465,8 +465,23 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			r.llmSocket.Write(context.Background(), frame)
 		}
 	} else {
-		// User channel - basically just broadcast or ignore.
-		// For now, simple echo/broadcast to other devices of same user
+		// User channel - handle routing and broadcast
+		// If this is a message operation with a valid chat_id, route it to the chat room
+		if frame.Operation == MessageOperation && frame.ChatID != uuid.Nil && frame.ChatID != r.ID {
+			r.logger.Info("routing message from user channel to chat room",
+				zap.String("chat_id", frame.ChatID.String()),
+				zap.String("user_id", r.initiatorID.String()),
+			)
+			// Get or create the chat room and forward the message
+			chatRoom, err := r.hub.GetOrCreateRoom(frame.ChatID, RoomTypeChat, r.initiatorID, r.mode, r.command)
+			if err != nil {
+				r.logger.Error("failed to get chat room for routing", zap.Error(err))
+			} else {
+				// Inject the message into the chat room
+				chatRoom.InjectMessage(msg.Client.userID, msg.Payload)
+			}
+		}
+		// Also broadcast to other devices of same user
 		broadcast(frame)
 	}
 }
