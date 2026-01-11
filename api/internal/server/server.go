@@ -103,7 +103,7 @@ func New(
 		emailAnalysisHandler = handlers.NewEmailAnalysisHandler(db, llmService)
 		dashboardHandler     = handlers.NewDashboardHandler(db)
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
-		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg)
+		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg, hubInstance)
 		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance)
 		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
 	)
