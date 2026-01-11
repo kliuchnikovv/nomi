@@ -843,7 +843,7 @@ If a team member encounters issues:
                  next_role = "Developer" # Loop back for fixes
 
         if next_status:
-            self._update_task_status(task_id, next_status)
+            self._update_task_status(task_id, next_status, artifacts=content)
 
         # 3. Trigger Next Agent Automatically
         if next_role:
@@ -876,7 +876,7 @@ If a team member encounters issues:
         else:
             print(f"Agent role {role} not found.")
 
-    def _update_task_status(self, task_id: str, status: str):
+    def _update_task_status(self, task_id: str, status: str, artifacts: Optional[dict] = None):
         # Call Go API
         base_url = os.getenv("API_BASE_URL", "http://api:8080")
         url = f"{base_url}/api/project-tasks/{task_id}/status"
@@ -884,6 +884,9 @@ If a team member encounters issues:
              # We need a way to authenticate or use internal secret
              secret = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
              headers = {"X-Internal-Secret": secret}
-             requests.patch(url, json={"status": status}, headers=headers)
+             payload = {"status": status}
+             if artifacts:
+                 payload["artifacts"] = artifacts
+             requests.patch(url, json=payload, headers=headers)
         except Exception as e:
             print(f"Failed to update task status: {e}")

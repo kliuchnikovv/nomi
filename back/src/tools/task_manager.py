@@ -13,7 +13,7 @@ class TaskManagementTool(Toolkit):
         self.api_url = api_url or os.getenv("GO_API_URL", "http://localhost:8080/api")
         self.register(self.update_task_status)
 
-    def update_task_status(self, task_id: str, status: str, pr_url: Optional[str] = None) -> str:
+    def update_task_status(self, task_id: str, status: str, pr_url: Optional[str] = None, artifacts: Optional[dict] = None) -> str:
         """
         Updates the status of a project task in the Go API.
 
@@ -21,6 +21,7 @@ class TaskManagementTool(Toolkit):
             task_id (str): The UUID of the task.
             status (str): The new status (e.g., 'REVIEW', 'CODING', 'DONE').
             pr_url (str, optional): The URL of the created Pull Request.
+            artifacts (dict, optional): Result artifacts to store (e.g., analyst specs).
 
         Returns:
             str: Confirmation message or error.
@@ -30,6 +31,8 @@ class TaskManagementTool(Toolkit):
 
         url = f"{self.api_url}/project-tasks/{task_id}/status"
         payload = {"status": status}
+        if artifacts:
+            payload["artifacts"] = artifacts
 
         # Note: The Go API currently only supports status updates via this endpoint.
         # If pr_url is provided, we should ideally store it.

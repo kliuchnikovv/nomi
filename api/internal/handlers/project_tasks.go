@@ -36,7 +36,8 @@ func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *conf
 }
 
 type UpdateStatusRequest struct {
-	Status storage.ProjectTaskStatus `json:"status" binding:"required"`
+	Status    storage.ProjectTaskStatus `json:"status" binding:"required"`
+	Artifacts map[string]interface{}    `json:"artifacts"`
 }
 
 func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
@@ -71,7 +72,7 @@ func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
 	oldStatus := task.Status
 
 	// Update status
-	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status); err != nil {
+	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status, req.Artifacts); err != nil {
 		h.logger.Error("failed to update task status", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return

@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -139,7 +139,7 @@ func (h *WebhooksHandler) HandleGitHubWebhook(c *gin.Context) {
 
 	shouldNotify := false
 	if task.Status != storage.ProjectTaskStatusReview {
-		err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, storage.ProjectTaskStatusReview)
+		err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, storage.ProjectTaskStatusReview, nil)
 		if err != nil {
 			h.logger.Error("failed to update status", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "db update failed"})

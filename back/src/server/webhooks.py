@@ -28,11 +28,19 @@ if db_dsn and db_dsn.startswith("postgres://"):
 
 # Global Engine for Connection Pooling
 engine = None
-if db_dsn:
-    try:
-        engine = create_engine(db_dsn, pool_size=5, max_overflow=10)
-    except Exception as e:
-        logger.error(f"Failed to create DB engine: {e}")
+try:
+    engine = create_engine(db_dsn, pool_size=5, max_overflow=10)
+except Exception as e:
+    logger.error(f"Failed to create DB engine: {e}")
+
+class ProjectTaskNotification(BaseModel):
+    user_id: str
+    project_id: str
+    task_id: str
+    old_status: str
+    new_status: str
+    timestamp: Optional[Any] = None
+    event: Optional[str] = None
 
 class GithubWebhookPayload(BaseModel):
     action: str
@@ -188,6 +196,56 @@ def process_pr_review(payload: GithubWebhookPayload, internal_secret: str):
 
     except Exception as e:
         logger.error(f"Agent execution failed: {e}")
+
+@router.post("/notify-lead")
+async def notify_team_lead(notification: ProjectTaskNotification):
+    """
+    Receive task status change notifications and trigger Workflow.
+    """
+    logger.info(f"Received ProjectTask update: Task {notification.task_id} transitioned from {notification.old_status} to {notification.new_status}")
+
+    # Map Status -> Agent Role
+    # BACKLOG -> ANALYSIS: Analyst
+    # ANALYSIS -> PLANNING: Architect
+    # PLANNING -> CODING: Worker
+    # REVIEW -> VERIFY: Verifier (not implemented as separate agent trigger yet, but Reviewer handles loop)
+    # CODING -> REVIEW: Reviewer
+    
+    status_to_role = {
+        "ANALYSIS": "Analyst",
+        "PLANNING": "Architect",
+        "CODING": "Worker",
+        "REVIEW": "Reviewer",
+        "VERIFY": "Verifier"
+    }
+
+    role = status_to_role.get(notification.new_status)
+    if not role:
+        logger.info(f"No agent mapping for status {notification.new_status}, ignoring notification.")
+        return {"status": "ignored", "task_id": notification.task_id}
+
+    try:
+        from src.teams.development.team import DevelopmentTeam
+        
+        db_url = os.getenv("DB_DSN")
+        if db_url and db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+        # Instantiate team
+        team = DevelopmentTeam(
+            model=MODEL, # MODEL is Gemini from webhooks.py
+            user_id=notification.user_id,
+            db_url=db_url,
+            github_token=os.getenv("GITHUB_TOKEN")
+        )
+
+        # Run the component
+        team.run_component(role, notification.task_id)
+        return {"status": "triggered", "role": role, "task_id": notification.task_id}
+
+    except Exception as e:
+        logger.error(f"Failed to trigger {role}: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
 
 @router.post("/github")
 async def handle_github_webhook(

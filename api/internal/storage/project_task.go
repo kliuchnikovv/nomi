@@ -30,11 +30,16 @@ func (s *Storage) GetProjectTask(ctx context.Context, id uuid.UUID) (*ProjectTas
 }
 
 // UpdateProjectTaskStatus updates the status of a project task
-func (s *Storage) UpdateProjectTaskStatus(ctx context.Context, id uuid.UUID, status ProjectTaskStatus) error {
-	result := s.DB.WithContext(ctx).Model(&ProjectTask{}).Where("id = ?", id).Updates(map[string]interface{}{
+func (s *Storage) UpdateProjectTaskStatus(ctx context.Context, id uuid.UUID, status ProjectTaskStatus, artifacts map[string]interface{}) error {
+	updates := map[string]interface{}{
 		"status":     status,
 		"updated_at": time.Now().UTC(),
-	})
+	}
+	if artifacts != nil {
+		updates["artifacts"] = artifacts
+	}
+
+	result := s.DB.WithContext(ctx).Model(&ProjectTask{}).Where("id = ?", id).Updates(updates)
 	if result.Error != nil {
 		return result.Error
 	}
