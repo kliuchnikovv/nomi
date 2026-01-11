@@ -303,3 +303,25 @@ func New(
 		},
 	}
 }
+
+func (s *Server) ListenAndServe() error {
+	return s.httpServer.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.httpServer.Shutdown(ctx)
+}
+
+func authGinMiddleware(authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		wrapped := authMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c.Request = r
+		}))
+		wrapped.ServeHTTP(c.Writer, c.Request)
+		if c.Writer.Written() {
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
