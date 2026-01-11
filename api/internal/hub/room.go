@@ -16,8 +16,16 @@ import (
 	"go.uber.org/zap"
 )
 
+type RoomType string
+
+const (
+	RoomTypeChat RoomType = "chat"
+	RoomTypeUser RoomType = "user"
+)
+
 type Room struct {
 	ID     uuid.UUID
+	Type   RoomType
 	hub    *Hub
 	logger *zap.Logger
 	store  *storage.Storage
@@ -58,11 +66,12 @@ type Room struct {
 	}
 }
 
-func NewRoom(hub *Hub, id uuid.UUID, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string, mode string, command string) *Room {
+func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string, mode string, command string) *Room {
 	return &Room{
 		ID:          id,
+		Type:        roomType,
 		hub:         hub,
-		logger:      logger.With(zap.String("room_id", id.String())),
+		logger:      logger.With(zap.String("room_id", id.String()), zap.String("type", string(roomType))),
 		store:       store,
 		initiatorID: initiatorID,
 		clients:     make(map[*Client]bool),
@@ -85,8 +94,11 @@ func (r *Room) Run() {
 		}
 	}()
 
-	// Connect to LLM immediately
-	r.connectLLM()
+	// Connect to LLM immediately ONLY if it's a chat room
+	// For user channels, we don't connect to LLM unless needed (future feature)
+	if r.Type == RoomTypeChat {
+		r.connectLLM()
+	}
 
 	// Idle timeout: close the room if no activity/clients for 5 minutes.
 	const idleTimeout = 5 * time.Minute
@@ -218,6 +230,11 @@ func (r *Room) connectLLM() {
 }
 
 func (r *Room) initLLMContext() {
+	// Only chat rooms need history context
+	if r.Type != RoomTypeChat {
+		return
+	}
+
 	ctx := context.Background() // Use background context for DB ops
 
 	// 1. Send Tools (Integrations) - REMOVED (Client-side keys only)
@@ -265,13 +282,6 @@ func (r *Room) InjectMessage(userID uuid.UUID, payload []byte) {
 }
 
 func (r *Room) handleUserMessage(msg *ClientMessage) {
-	// Parse message
-	// The ClientMessage.Payload is JSON bytes of Frame
-	// Actually, we could parse it in Client, but doing it here is fine.
-	// But ClientMessage payload is []byte.
-	// We need to parse it to Frame.
-	// Wait, we defined ClientMessage with Payload []byte.
-
 	// Helper to broadcast to all clients
 	broadcast := func(f Frame) {
 		r.logger.Info("broadcast to clients",
@@ -294,7 +304,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	}
 
 	// Helper to broadcast to all clients EXCEPT the sender
-	// Used for user messages to avoid duplication (frontend adds them optimistically)
 	broadcastExcept := func(f Frame, sender *Client) {
 		b, _ := json.Marshal(f)
 		for client := range r.clients {
@@ -320,17 +329,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	_ = broadcastExcept
 
 	// Parse
-	// We can use a temporary struct or just Frame if it matches.
-	// Note: The client sends specific fields.
-	// We used generic json unmarshal in streamer.
-	// Let's rely on standard Unmarshal.
-
-	// Wait, we need to know the Operation.
-	// If it's a "message", we process.
-	// If it's "ping", we might ignore or pong? (Client handles pong automatically in readPump if it was control frame, but this is text frame)
-
-	// Let's assume it's a Frame.
-	// Note: We need to parse it to struct.
 	var frame Frame
 	if err := json.Unmarshal(msg.Payload, &frame); err != nil {
 		r.logger.Warn("failed to parse user message", zap.Error(err))
@@ -346,7 +344,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		frame.ChatID = r.ID
 	}
 
-	if frame.Operation == MessageOperation {
+	if frame.Operation == MessageOperation && r.Type == RoomTypeChat {
 		// This is a user message from client
 		// 1. Enrich with attachments
 		if len(frame.Payload.AttachmentIDs) > 0 {
@@ -459,13 +457,17 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				r.generationInProgress = false
 			}
 		}
-	} else {
-		// Pass through other frames (e.g. commands, meta, tools, history)
+	} else if r.Type == RoomTypeChat {
+		// Pass through other frames (e.g. commands, meta, tools, history) for CHAT rooms
 		broadcast(frame)
 		r.connectLLM()
 		if r.llmSocket != nil {
 			r.llmSocket.Write(context.Background(), frame)
 		}
+	} else {
+		// User channel - basically just broadcast or ignore.
+		// For now, simple echo/broadcast to other devices of same user
+		broadcast(frame)
 	}
 }
 
@@ -503,7 +505,11 @@ func (r *Room) handleLLMMessage(frame Frame) {
 		}
 	}
 
-	// DB Persistence (Assistant)
+	// DB Persistence (Assistant) - Only for Chat Rooms
+	if r.Type != RoomTypeChat {
+		return
+	}
+
 	ctx := context.Background()
 
 	// Handle metadata

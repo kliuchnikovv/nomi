@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
@@ -17,10 +18,11 @@ import (
 type ProjectTaskHandler struct {
 	store      *storage.Storage
 	logger     *zap.Logger
+	hub        *hub.Hub
 	llmBaseURL string
 }
 
-func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config) *ProjectTaskHandler {
+func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hub *hub.Hub) *ProjectTaskHandler {
 	baseURL := cfg.LLM.BaseURL
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:7777"
@@ -28,6 +30,7 @@ func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *conf
 	return &ProjectTaskHandler{
 		store:      store,
 		logger:     logger.With(zap.String("component", "project_task_handler")),
+		hub:        hub,
 		llmBaseURL: baseURL,
 	}
 }
@@ -65,12 +68,23 @@ func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
+	oldStatus := task.Status
+
 	// Update status
 	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status); err != nil {
 		h.logger.Error("failed to update task status", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return
 	}
+
+	// Fetch Project Name for UI
+	projectName := "Project"
+	if project, err := h.store.GetProject(c.Request.Context(), task.ProjectID); err == nil {
+		projectName = project.Name
+	}
+
+	// Broadcast update to User Channel
+	h.broadcastTaskUpdate(task.UserID, task, projectName, oldStatus, req.Status)
 
 	// Notify Python Backend (Team Lead Agent)
 	go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, req.Status)
@@ -102,11 +116,15 @@ func isValidTransition(current, next storage.ProjectTaskStatus) bool {
 	case storage.ProjectTaskStatusBacklog:
 		return next == storage.ProjectTaskStatusAnalysis
 	case storage.ProjectTaskStatusAnalysis:
-		return next == storage.ProjectTaskStatusCoding
+		return next == storage.ProjectTaskStatusCoding || next == storage.ProjectTaskStatusPlanning // Added Planning
+	case storage.ProjectTaskStatusPlanning:
+		return next == storage.ProjectTaskStatusCoding // Planning -> Coding
 	case storage.ProjectTaskStatusCoding:
 		return next == storage.ProjectTaskStatusReview
 	case storage.ProjectTaskStatusReview:
-		return next == storage.ProjectTaskStatusDone || next == storage.ProjectTaskStatusCoding // Done or Fixes
+		return next == storage.ProjectTaskStatusVerify || next == storage.ProjectTaskStatusCoding // Done or Fixes. Verify added.
+	case storage.ProjectTaskStatusVerify:
+		return next == storage.ProjectTaskStatusDone || next == storage.ProjectTaskStatusCoding
 	case storage.ProjectTaskStatusDone:
 		return false // Terminal state (except analysis/cancelled handled above)
 	case storage.ProjectTaskStatusCancelled:
@@ -164,4 +182,27 @@ func (h *ProjectTaskHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID,
 			zap.String("task_id", taskID.String()),
 			zap.String("status", string(newStatus)))
 	}
+}
+
+func (h *ProjectTaskHandler) broadcastTaskUpdate(userID uuid.UUID, task *storage.ProjectTask, projectName string, oldStatus, newStatus storage.ProjectTaskStatus) {
+	frame := hub.Frame{
+		ID:        0,
+		ChatID:    userID, // Targeting user channel
+		Timestamp: time.Now().UTC(),
+		Kind:      hub.SignalKind,
+		Operation: hub.SignalOperation,
+		Payload: hub.Payload{
+			Type: "task_updated",
+			Command: map[string]interface{}{
+				"task_id":      task.ID,
+				"task_title":   task.Title,
+				"project_id":   task.ProjectID,
+				"project_name": projectName,
+				"old_status":   oldStatus,
+				"new_status":   newStatus,
+				"updated_at":   time.Now().UTC(),
+			},
+		},
+	}
+	h.hub.BroadcastToUser(userID, frame)
 }

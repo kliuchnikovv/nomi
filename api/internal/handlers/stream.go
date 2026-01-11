@@ -39,36 +39,47 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 
 	h.logger.Info("client connected to websocket", zap.String("user_id", user.ID.String()))
 
-	// Resolve Chat ID
+	// Resolve Chat ID and Room Type
 	var chatID uuid.UUID
-	chatIDStr := c.Query("chat_id")
-	if chatIDStr == "" {
-		chatIDStr = c.Query("chatId")
-	}
+	var roomType hub.RoomType = hub.RoomTypeChat
 
-	if chatIDStr != "" {
-		if id, err := uuid.Parse(chatIDStr); err == nil {
-			chatID = id
-		} else {
-			h.logger.Warn("invalid chat_id format", zap.String("chat_id", chatIDStr))
-		}
-	}
-
-	// Security check: verify user owns the chat
-	if chatID != uuid.Nil {
-		if _, err := h.store.GetChat(ctx, user.ID, chatID); err != nil {
-			h.logger.Warn("user attempted to access invalid/unauthorized chat",
-				zap.String("user_id", user.ID.String()),
-				zap.String("chat_id", chatID.String()),
-				zap.Error(err))
-			c.JSON(http.StatusForbidden, gin.H{"error": "chat not found or access denied"})
-			return
-		}
+	// Check if this is a user channel request
+	channel := c.Query("channel")
+	if channel == "user" {
+		chatID = user.ID
+		roomType = hub.RoomTypeUser
+		h.logger.Info("connecting to user notification channel", zap.String("user_id", user.ID.String()))
 	} else {
-		// If no chat_id provided, generate one.
-		// New chat session.
-		chatID = uuid.New()
-		h.logger.Info("no chat_id provided, generated new session_id", zap.String("session_id", chatID.String()))
+		// Normal Chat Logic
+		chatIDStr := c.Query("chat_id")
+		if chatIDStr == "" {
+			chatIDStr = c.Query("chatId")
+		}
+
+		if chatIDStr != "" {
+			if id, err := uuid.Parse(chatIDStr); err == nil {
+				chatID = id
+			} else {
+				h.logger.Warn("invalid chat_id format", zap.String("chat_id", chatIDStr))
+			}
+		}
+
+		// Security check: verify user owns the chat
+		if chatID != uuid.Nil {
+			if _, err := h.store.GetChat(ctx, user.ID, chatID); err != nil {
+				h.logger.Warn("user attempted to access invalid/unauthorized chat",
+					zap.String("user_id", user.ID.String()),
+					zap.String("chat_id", chatID.String()),
+					zap.Error(err))
+				c.JSON(http.StatusForbidden, gin.H{"error": "chat not found or access denied"})
+				return
+			}
+		} else {
+			// If no chat_id provided, generate one.
+			// New chat session.
+			chatID = uuid.New()
+			h.logger.Info("no chat_id provided, generated new session_id", zap.String("session_id", chatID.String()))
+		}
 	}
 
 	// Extract team mode params from query
@@ -83,7 +94,8 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 
 	h.logger.Info("websocket params",
 		zap.String("mode", mode),
-		zap.Bool("has_command", command != ""))
+		zap.Bool("has_command", command != ""),
+		zap.String("room_type", string(roomType)))
 
-	h.hub.ServeWs(c.Writer, c.Request, chatID, user, mode, command)
+	h.hub.ServeWs(c.Writer, c.Request, chatID, roomType, user, mode, command)
 }
