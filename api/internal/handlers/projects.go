@@ -31,7 +31,7 @@ func NewProjectHandler(store *storage.Storage, logger *zap.Logger, cfg *config.C
 		store:       store,
 		logger:      logger.With(zap.String("component", "project_handler")),
 		llmBaseURL:  cfg.LLM.BaseURL,
-		taskHandler: NewProjectTaskHandler(store, logger, cfg), // Re-use notification logic
+		taskHandler: NewProjectTaskHandler(store, logger, cfg, hub), // Re-use notification logic
 		hub:         hub,
 	}
 }

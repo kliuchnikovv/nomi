@@ -81,6 +81,15 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 	}
 }
 
+func (h *Hub) BroadcastToRoom(roomID uuid.UUID, frame Frame) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if room, ok := h.rooms[roomID]; ok {
+		room.Broadcast(frame)
+	}
+}
+
 func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, chatID uuid.UUID, user *storage.User, mode string, command string) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
