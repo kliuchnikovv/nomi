@@ -1,5 +1,14 @@
 import { Frame } from './screens/main/models';
+import { useChatStore } from './store/chatStore';
 
+// Helper if uuid package is not available or problematic in RN without polyfills
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
 
 type Handlers = {
     // onToken?: (frame: Frame) => void;
@@ -24,7 +33,8 @@ export class ChatSocket {
     private readonly getMode?: () => 'agent' | 'team' | null | undefined;
     private readonly getCommand?: () => any;
     private handlers: Handlers = {};
-    private outbox: any[] = [];
+    // Removed internal outbox in favor of store
+    // private outbox: any[] = [];
     private idleTimer: any = null;
     private idleTimeoutMs = 5 * 60 * 1000; // 5 minutes
     private sentCommandFrame = false;
@@ -73,6 +83,37 @@ export class ChatSocket {
 
     isReady(): boolean {
         return !!this.ws && this.ws.readyState === 1;
+    }
+
+    // Process Persistent Outbox
+    public async processOutbox() {
+        if (!this.isReady()) {
+            console.log('[Socket] Cannot process outbox: Socket not ready');
+            return;
+        }
+
+        const store = useChatStore.getState();
+        const outbox = store.outbox;
+
+        if (outbox.length === 0) return;
+
+        console.log(`[Socket] Processing outbox: ${outbox.length} messages`);
+
+        for (const item of outbox) {
+            try {
+                this.ws.send(JSON.stringify(item.payload));
+                // We don't remove from outbox here; we wait for ACK
+                // But for reliability, maybe we should remove if send throws? No, retry later.
+            } catch (e) {
+                console.warn('[Socket] Failed to send outbox item', e);
+                // Stop processing if connection seems broken
+                break;
+            }
+        }
+    }
+
+    public isConnected() {
+        return this.isReady();
     }
 
     open(initialQ?: string, initialSessionId?: string) {
@@ -164,13 +205,9 @@ export class ChatSocket {
                 this.touchActivity();
                 this.sentCommandFrame = false;
                 this.enqueueCommandFrame();
-                const queue = this.outbox;
-                this.outbox = [];
-                for (const msg of queue) {
-                    try {
-                        ws.send(JSON.stringify(msg));
-                    } catch { }
-                }
+
+                // Process persistent outbox instead of local queue
+                this.processOutbox();
             };
 
             ws.onmessage = async (e: any) => {
@@ -231,6 +268,17 @@ export class ChatSocket {
                         const kind = frame.kind;
                         const data = frame.payload;
                         const operation = frame.op;
+
+                        // Check for ACK
+                        if (operation === 'ack' && data?.message_id) {
+                            console.log(`[Socket] Received ACK for message: ${data.message_id}`);
+                            const store = useChatStore.getState();
+                            store.removeFromOutbox(data.message_id);
+                            store.updateMessageStatus(data.message_id, 'sent');
+
+                            // Continue processing remaining outbox if any (to ensure order?)
+                            // Actually processOutbox loops through all.
+                        }
 
                         // console.log(`${operation} with kind ${kind}`, frame);
                         switch (operation) {
@@ -300,39 +348,11 @@ export class ChatSocket {
                                 this.handlers.onMessage?.(frame);
                                 break;
                             default:
-                                console.warn(`Unknown message op: ${operation}`, rawJson);
+                                if (operation !== 'ack') {
+                                    console.warn(`Unknown message op: ${operation}`, rawJson);
+                                }
                                 break;
                         }
-
-                        // if (frame.op === 'announce' || data?.chat_id || data?.chatId) {
-                        //     const announcedId = data?.chat_id || data?.chatId || data?.id;
-                        //     if (announcedId) this.handlers.onAnnounce?.(String(announcedId));
-                        // }
-                        //
-                        // if (kind === 'data' && typeof data?.message === 'string') {
-                        //     if (data.eof) {
-                        //         // This is a full message
-                        //         this.handlers.onMessage?.(data.message, data.message_id);
-                        //     } else {
-                        //         // This is a streaming token
-                        //         this.handlers.onToken?.(data.message);
-                        //     }
-                        // } else if (kind === 'done') {
-                        //     this.handlers.onDone?.(data?.message_id);
-                        // } else if (
-                        //     kind === 'error' &&
-                        //     (data?.code === 401 || data?.status === 401)
-                        // ) {
-                        //     if (!retried) {
-                        //         retried = true;
-                        //         const ok = await (this.handlers.onUnauthorized?.() ?? false);
-                        //         if (ok) {
-                        //             try { ws.close(); } catch {}
-                        //             this.open();
-                        //             return;
-                        //         }
-                        //     }
-                        // }
                     } catch (err) {
                         console.warn('Failed to parse WS message:', err, trimmed);
                     }
@@ -378,11 +398,24 @@ export class ChatSocket {
     }
 
     sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: string, role: string = 'user') {
-        // console.log('Sending message:', message, sessionId, attachmentIDs, webSearch, thinking);
         const chatID = this.getChatId();
         const model = this.getModel();
-        // const messageID = this.getMessageId();
+
         if (!chatID) return;
+
+        // If no messageID provided, generate one locally (Socket-First approach)
+        const finalMessageID = messageID || generateUUID();
+
+        // Optimistic Update: Store message immediately in ChatStore
+        const store = useChatStore.getState();
+        // Construct partial message for store
+        const timestamp = Date.now();
+        // Assuming we have access to user ID or it's "user"
+        // Wait, socket doesn't know sender ID cleanly without props.
+        // But the store.addMessage requires a full Message object.
+        // We will delegate the store.addMessage to the caller (ChatContext)
+        // OR we can do it here if we pass enough info.
+        // For 'outbox', we definitely need to store it here.
 
         this.enqueueCommandFrame(chatID);
 
@@ -392,7 +425,7 @@ export class ChatSocket {
             chat_id: chatID,
             op: 'message',
             payload: {
-                message_id: messageID,
+                message_id: finalMessageID,
                 message: message,
                 role: role, // Use provided role
                 model: model, // Include user's model choice
@@ -400,28 +433,74 @@ export class ChatSocket {
                 attachment_ids: attachmentIDs,
                 web_search: webSearch,
                 thinking: thinking,
+                // Add timestamp to payload? Protocol doesn't strictly require it for processing but good for sync?
             },
         };
-        // console.log('Sending message:', msg);
+
+        // Add to persistent outbox
+        // We need a proper Message object for the store's outbox visualization if we want to show it?
+        // Actually, the Store's outbox structure expects { message: Message, payload: any }.
+        // Constructing a Message object here might be redundant if ChatContext already does it.
+        // Let's assume ChatContext calls this.
+        // But wait, the requirement says "Socket-First".
+        // The Plan says: "Update sendMessage to: Create local UUID, Save to store, AddToOutbox, Try to send".
+
+        // To construct a valid Message object we need 'sender' and 'created_at'.
+        // We can pass them or let ChatContext handle the UI part and Socket handle the Transport part.
+        // However, `outbox` is now in `chatStore`.
+        // Let's make `sendMessage` accept the full `Message` object optionally?
+        // Or just keep the signature and let ChatContext add to store `messages`,
+        // while `socket` adds to store `outbox`.
+
+        // Let's create a temporary Message object for the outbox reference
+        // Note: The outbox needs the Message object primarily if we want to display it or retry it with UI context.
+        // But `processOutbox` only needs `payload`.
+        // The requirement "If send message without internet, it appears in chat" implies the store has it in `messages`.
+
+        // Let's update the Outbox item structure in Store to be just payload if we don't strictly need the Message object there,
+        // OR we construct a minimal one.
+        // But the store definition I wrote has `message: Message`.
+
+        // Let's fetch the message from the store if it exists? No, it might not exist yet if we do it here.
+
+        // Better approach:
+        // ChatContext constructs the Message, adds to Store (messages), then calls Socket.sendMessage.
+        // Socket.sendMessage adds to Store (outbox) and tries to send.
+        // But Socket.sendMessage signature doesn't take the Message object.
+
+        // I will modify ChatContext to pass the message object OR
+        // I will construct a dummy message wrapper for the outbox entry if needed,
+        // relying on ChatContext to have populated the main messages list.
+        // Actually, for `outbox` persistence, we need the `payload`.
+        // The `message` field in outbox was intended for UI "retrying..." indicators perhaps?
+
+        // Let's simplify:
+        // 1. ChatContext creates Message (pending), adds to store.messages.
+        // 2. ChatContext calls socket.sendMessage with messageID.
+        // 3. Socket adds { message: {id: messageID} as Message, payload: msg } to outbox.
+        // 4. Socket tries to send.
+
+        // We cast to Message to satisfy TS for now, or fetch from store messages if possible.
+        const dummyMessage = { id: finalMessageID } as any;
+
+        store.addToOutbox(dummyMessage, msg);
 
         if (!this.ws) {
-            // Queue the message and open the connection; onopen flushes outbox
-            this.outbox.push(msg);
             this.open(message, sessionId);
             return;
         }
 
         if (this.isReady()) {
             try {
-                // console.log('send', JSON.stringify(msg));
                 this.ws.send(JSON.stringify(msg));
                 this.touchActivity();
             } catch {
-                this.outbox.push(msg);
+                // Already in outbox
             }
-        } else {
-            this.outbox.push(msg);
         }
+
+        // Return the ID so context knows it
+        return finalMessageID;
     }
 
     private enqueueCommandFrame(chatID?: string | null) {
@@ -443,7 +522,12 @@ export class ChatSocket {
             },
         };
         this.sentCommandFrame = true;
-        this.outbox.unshift(frame);
+        // Tools frame shouldn't necessarily go to outbox in the same way as user messages,
+        // but for team mode init it might be needed.
+        // For now, let's allow it to be sent directly on open.
+        if (this.isReady()) {
+             try { this.ws.send(JSON.stringify(frame)); } catch {}
+        }
     }
 
     sendTools(tools: any[]) {
@@ -465,11 +549,9 @@ export class ChatSocket {
             } catch (err) {
                 console.error('Failed to send tools frame:', err);
             }
-        } else {
-            // Queue it? Ideally yes, but tools are usually sent on connect.
-            // If we put it in outbox, it will be sent on open.
-            this.outbox.push(frame);
         }
+        // Tools usually don't need persistent outbox for offline messaging logic,
+        // they are session initialization.
     }
 
     sendStop() {
@@ -526,7 +608,6 @@ export class ChatSocket {
         } catch { }
 
         this.ws = null;
-        this.outbox = [];
         this.sentCommandFrame = false;
 
         if (this.idleTimer) {

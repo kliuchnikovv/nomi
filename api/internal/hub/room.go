@@ -415,6 +415,25 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		})
 		if err != nil {
 			r.logger.Error("failed to save user message", zap.Error(err))
+		} else {
+			// Send ACK to sender
+			ackFrame := Frame{
+				ID:        0,
+				ChatID:    r.ID,
+				Kind:      MetaKind,
+				Operation: AckOperation,
+				Timestamp: time.Now().UTC(),
+				Payload: Payload{
+					MessageID: msgID,
+				},
+			}
+			ackBytes, _ := json.Marshal(ackFrame)
+			select {
+			case msg.Client.send <- ackBytes:
+			default:
+				// If send buffer is full, we might lose ACK, but client will retry anyway.
+				r.logger.Warn("failed to send ack (buffer full)", zap.String("client_id", msg.Client.userID.String()))
+			}
 		}
 
 		// Update Chat Title if empty (or default)
