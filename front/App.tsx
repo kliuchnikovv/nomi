@@ -6,7 +6,8 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View, Text } from 'react-native';
+import { StatusBar, StyleSheet, useColorScheme, View, Text, AppState, AppStateStatus } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ChatLayout from './src/screens/main/screen.tsx';
 import {
@@ -28,37 +29,11 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
 import { initDatabase } from './src/services/database/database';
 import { registerBackgroundSync } from './src/services/background/backgroundSyncService';
-// import { useChatStore } from './src/store/chatStore'; // Verification import
+import { socket } from './src/socket';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
     const [configReady, setConfigReady] = useState(false);
-
-    // Verification Code - Uncomment to test store
-    /*
-    useEffect(() => {
-        const testStore = async () => {
-             // Wait for hydration
-             await new Promise(r => setTimeout(r, 1000));
-
-             const state = useChatStore.getState();
-             console.log('Store loaded:', state.chats);
-
-             // Test add message
-             const testChatId = 'test-chat-1';
-             const testMsg = {
-                 _id: Math.random().toString(),
-                 text: 'Hello Persistence ' + new Date().toISOString(),
-                 createdAt: new Date(),
-                 user: { _id: 1, name: 'Test User' }
-             };
-
-             state.addMessage(testChatId, testMsg);
-             console.log('Message added to', testChatId);
-        };
-        testStore();
-    }, []);
-    */
     const [initStatus, setInitStatus] = useState('Initializing...');
 
     // Initialize API URL and Database before rendering
@@ -91,6 +66,33 @@ function App() {
             }
         };
         init();
+    }, []);
+
+    // Socket Lifecycle Listeners (AppState & NetInfo)
+    useEffect(() => {
+        // 1. AppState: Reconnect when returning from background
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+            if (nextAppState === 'active') {
+                console.log('[App] Active: Force Reconnect');
+                socket.connect();
+                socket.processOutbox(); // Push queue
+            }
+        };
+        const sub = AppState.addEventListener('change', handleAppStateChange);
+
+        // 2. NetInfo: Reconnect when internet becomes reachable
+        const unsubscribeNet = NetInfo.addEventListener(state => {
+            if (state.isConnected && state.isInternetReachable) {
+                console.log('[App] Network Online: Force Reconnect');
+                socket.connect();
+                socket.processOutbox();
+            }
+        });
+
+        return () => {
+            sub.remove();
+            unsubscribeNet();
+        };
     }, []);
 
     if (!configReady) {
@@ -130,13 +132,29 @@ function App() {
 
 function AppContent() {
     const insets = useSafeAreaInsets();
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, token } = useAuth();
     const { theme } = useTheme();
 
     const containerStyle = useMemo(() => ({
         flex: 1,
         backgroundColor: theme.background,
     }), [theme.background]);
+
+    // Global Socket Lifecycle - Auth Token Management
+    useEffect(() => {
+        console.log('[App] Auth state changed. Token present:', !!token);
+        if (token) {
+            socket.setToken(token);
+            if (!socket.isReady()) {
+                console.log('[App] Connecting global socket...');
+                socket.open();
+            }
+        } else {
+            console.log('[App] Token cleared. Closing global socket.');
+            socket.close();
+            socket.setToken(null);
+        }
+    }, [token]);
 
     if (isLoading) {
         return <View style={containerStyle} />;

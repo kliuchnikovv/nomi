@@ -60,4 +60,3 @@ ddgs
 mcp
 PyGithub
 openai>=1.0.0
-redis
