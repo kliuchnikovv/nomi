@@ -6,7 +6,8 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View, Text } from 'react-native';
+import { StatusBar, StyleSheet, useColorScheme, View, Text, AppState, AppStateStatus } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import ChatLayout from './src/screens/main/screen.tsx';
 import {
@@ -67,6 +68,33 @@ function App() {
         init();
     }, []);
 
+    // Socket Lifecycle Listeners (AppState & NetInfo)
+    useEffect(() => {
+        // 1. AppState: Reconnect when returning from background
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+            if (nextAppState === 'active') {
+                console.log('[App] Active: Force Reconnect');
+                socket.connect();
+                socket.processOutbox(); // Push queue
+            }
+        };
+        const sub = AppState.addEventListener('change', handleAppStateChange);
+
+        // 2. NetInfo: Reconnect when internet becomes reachable
+        const unsubscribeNet = NetInfo.addEventListener(state => {
+            if (state.isConnected && state.isInternetReachable) {
+                console.log('[App] Network Online: Force Reconnect');
+                socket.connect();
+                socket.processOutbox();
+            }
+        });
+
+        return () => {
+            sub.remove();
+            unsubscribeNet();
+        };
+    }, []);
+
     if (!configReady) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDarkMode ? '#000' : '#fff' }}>
@@ -112,7 +140,7 @@ function AppContent() {
         backgroundColor: theme.background,
     }), [theme.background]);
 
-    // Global Socket Lifecycle
+    // Global Socket Lifecycle - Auth Token Management
     useEffect(() => {
         console.log('[App] Auth state changed. Token present:', !!token);
         if (token) {

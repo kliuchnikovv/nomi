@@ -58,6 +58,26 @@ export class ChatSocket {
         return !!this.ws && this.ws.readyState === 1;
     }
 
+    // Alias for open to match expected API
+    connect() {
+        this.open();
+    }
+
+    processOutbox() {
+        if (this.isReady() && this.outbox.length > 0) {
+            const queue = this.outbox;
+            this.outbox = [];
+            for (const msg of queue) {
+                try {
+                    this.ws.send(JSON.stringify(msg));
+                } catch {
+                    // If send fails, put it back or retry?
+                    // For now, fire and forget or it will be lost.
+                }
+            }
+        }
+    }
+
     // Global connection doesn't take chat-specific params initially
     open() {
         const token = this.token;
@@ -109,13 +129,7 @@ export class ChatSocket {
 
             ws.onopen = () => {
                 this.touchActivity();
-                const queue = this.outbox;
-                this.outbox = [];
-                for (const msg of queue) {
-                    try {
-                        ws.send(JSON.stringify(msg));
-                    } catch { }
-                }
+                this.processOutbox(); // Replaced inline loop with method call
             };
 
             ws.onmessage = async (e: any) => {
