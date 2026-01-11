@@ -13,8 +13,7 @@ import requests
 from github import Github
 
 from src.agents.reviewer import build_reviewer_agent
-from src.agents.reviewer_models import ReviewerInput, ReviewerOutput, ReviewComment
-from src.teams.development.models import AnalystOutput, ArchitectOutput
+from src.teams.development.models import ReviewerInput, ReviewVerdict, ReviewComment, AnalystOutput, ArchitectOutput
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -136,9 +135,9 @@ def process_pr_review(payload: GithubWebhookPayload, internal_secret: str):
 
         # Run agent
         response = reviewer.run(input_data)
-        result: ReviewerOutput = response.content
+        result: ReviewVerdict = response.content
 
-        logger.info(f"Review Verdict: {result.verdict}")
+        logger.info(f"Review Verdict: {result.approved}")
 
         # 4. Post to GitHub
         if gh:
@@ -146,8 +145,8 @@ def process_pr_review(payload: GithubWebhookPayload, internal_secret: str):
                 repo = gh.get_repo(payload.repository)
                 pr = repo.get_pull(payload.pr_number)
 
-                body = f"## 🤖 Reviewer Agent Verification\n\n**Verdict**: {result.verdict.upper()}\n\n{result.summary}"
-                event_action = "APPROVE" if result.verdict == "approve" else "REQUEST_CHANGES"
+                body = f"## 🤖 Reviewer Agent Verification\n\n**Verdict**: {'APPROVE' if result.approved else 'REQUEST CHANGES'}\n\n{result.summary}"
+                event_action = "APPROVE" if result.approved else "REQUEST_CHANGES"
 
                 pr.create_review(body=body, event=event_action)
                 logger.info(f"Posted review to GitHub: {event_action}")
@@ -155,7 +154,7 @@ def process_pr_review(payload: GithubWebhookPayload, internal_secret: str):
                 logger.error(f"Failed to post review: {post_err}")
 
         # 5. Update Task Status (if rejected)
-        if result.verdict == "request_changes":
+        if not result.approved:
              try:
                  with engine.connect() as conn:
                     update_q = text("""
@@ -176,7 +175,7 @@ def process_pr_review(payload: GithubWebhookPayload, internal_secret: str):
                   go_api_url = os.getenv("GO_API_URL", "http://localhost:8080")
                   # internal_secret already passed/available
 
-                  msg_content = f"**Reviewer Agent Feedback**\nVerdict: {result.verdict}\n\n{result.summary}"
+                  msg_content = f"**Reviewer Agent Feedback**\nVerdict: {'approved' if result.approved else 'changes requested'}\n\n{result.summary}"
 
                   requests.post(
                       f"{go_api_url}/api/chats/{chat_id}/messages",

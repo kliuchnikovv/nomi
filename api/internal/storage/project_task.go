@@ -6,62 +6,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgtype"
-	"gorm.io/gorm"
 )
 
-// ProjectStatus defines the state of repository analysis
-type ProjectStatus string
-
-const (
-	ProjectStatusPending   ProjectStatus = "PENDING"
-	ProjectStatusAnalyzing ProjectStatus = "ANALYZING"
-	ProjectStatusReady     ProjectStatus = "READY"
-	ProjectStatusFailed    ProjectStatus = "FAILED"
-)
-
-// ProjectTaskStatus defines the state of a project task
-type ProjectTaskStatus string
-
-const (
-	ProjectTaskStatusBacklog  ProjectTaskStatus = "BACKLOG"
-	ProjectTaskStatusAnalysis ProjectTaskStatus = "ANALYSIS"
-	ProjectTaskStatusPlanning ProjectTaskStatus = "PLANNING"
-	ProjectTaskStatusCoding   ProjectTaskStatus = "CODING"
-	ProjectTaskStatusReview   ProjectTaskStatus = "REVIEW"
-	ProjectTaskStatusVerify   ProjectTaskStatus = "VERIFY"
-	ProjectTaskStatusDone     ProjectTaskStatus = "DONE"
-	ProjectTaskStatusCancelled ProjectTaskStatus = "CANCELLED"
-)
-
-// Project represents a project context
-type Project struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	UserID      uuid.UUID      `gorm:"type:uuid;not null;index"`
-	Name        string         `gorm:"type:text;not null"`
-	Description string         `gorm:"type:text"`
-	Repository      string         `gorm:"type:text"` // e.g. "owner/repo"
-	Status          ProjectStatus  `gorm:"type:varchar(20);default:'READY';not null"`
-	LastIndexedAt   *time.Time     `gorm:"type:timestamp"`
-	CreatedAt       time.Time      `gorm:"not null"`
-	UpdatedAt       time.Time      `gorm:"not null"`
-	DeletedAt       gorm.DeletedAt `gorm:"index"`
-}
-
-// ProjectTask represents a task within a project
-type ProjectTask struct {
-	ID          uuid.UUID         `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	UserID      uuid.UUID         `gorm:"type:uuid;not null;index"`
-	ProjectID   uuid.UUID         `gorm:"type:uuid;not null;index"`
-	Title       string            `gorm:"type:text;not null"`
-	Description string            `gorm:"type:text"`
-	Status      ProjectTaskStatus `gorm:"type:varchar(20);default:'BACKLOG';not null"`
-	Priority    string            `gorm:"type:varchar(20);default:'medium'"`
-	Artifacts   pgtype.JSONB      `gorm:"type:jsonb;default:'{}'"` // AnalystOutput + ArchitectPlan
-	CreatedAt   time.Time         `gorm:"not null"`
-	UpdatedAt   time.Time         `gorm:"not null"`
-	DeletedAt   gorm.DeletedAt    `gorm:"index"`
-}
+// Methods for Project and ProjectTask are kept here while models are in models.go
 
 // CreateProject creates a new project
 func (s *Storage) CreateProject(ctx context.Context, project *Project) error {

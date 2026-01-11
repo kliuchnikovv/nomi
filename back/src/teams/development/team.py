@@ -397,6 +397,13 @@ Only use emojis if explicitly requested.
 7. Reference specific issues using `file_path:line_number` format.
 8. Provide constructive feedback or approval.
 
+# Output Format
+You must return a `ReviewVerdict` object:
+- `approved`: true or false.
+- `summary`: A concise explanation of your decision (mandatory).
+- `comments`: A list of `ReviewComment` objects with `file_path`, `line_number`, `body`, and `severity`.
+- `required_changes`: A list of high-level changes required if not approved.
+
 # Review Checklist
 - [ ] Code follows existing patterns in the directory
 - [ ] No new dependencies without checking package files

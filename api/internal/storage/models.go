@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgtype"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -105,4 +106,85 @@ func (s *Storage) GetAttachmentsByIDs(ctx context.Context, ids []uuid.UUID) ([]A
 		return nil, err
 	}
 	return attachments, nil
+}
+
+// --- Project and Task Models ---
+
+// ProjectStatus defines the state of repository analysis
+type ProjectStatus string
+
+const (
+	ProjectStatusPending   ProjectStatus = "PENDING"
+	ProjectStatusAnalyzing ProjectStatus = "ANALYZING"
+	ProjectStatusReady     ProjectStatus = "READY"
+	ProjectStatusFailed    ProjectStatus = "FAILED"
+)
+
+// ProjectTaskStatus defines the state of a project task
+type ProjectTaskStatus string
+
+const (
+	ProjectTaskStatusBacklog   ProjectTaskStatus = "BACKLOG"
+	ProjectTaskStatusAnalysis  ProjectTaskStatus = "ANALYSIS"
+	ProjectTaskStatusPlanning  ProjectTaskStatus = "PLANNING"
+	ProjectTaskStatusCoding    ProjectTaskStatus = "CODING"
+	ProjectTaskStatusReview    ProjectTaskStatus = "REVIEW"
+	ProjectTaskStatusVerify    ProjectTaskStatus = "VERIFY"
+	ProjectTaskStatusDone      ProjectTaskStatus = "DONE"
+	ProjectTaskStatusCancelled ProjectTaskStatus = "CANCELLED"
+)
+
+// Project represents a project context
+type Project struct {
+	ID            uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID        uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
+	Name          string         `gorm:"type:text;not null" json:"name"`
+	Description   string         `gorm:"type:text" json:"description"`
+	Repository    string         `gorm:"type:text" json:"repository"` // e.g. "owner/repo"
+	Status        ProjectStatus  `gorm:"type:varchar(20);default:'READY';not null" json:"status"`
+	LastIndexedAt *time.Time     `gorm:"type:timestamp" json:"last_indexed_at"`
+	CreatedAt     time.Time      `gorm:"not null" json:"created_at"`
+	UpdatedAt     time.Time      `gorm:"not null" json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// ProjectTask represents a task within a project
+type ProjectTask struct {
+	ID          uuid.UUID         `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID      uuid.UUID         `gorm:"type:uuid;not null;index" json:"user_id"`
+	ProjectID   uuid.UUID         `gorm:"type:uuid;not null;index" json:"project_id"`
+	Title       string            `gorm:"type:text;not null" json:"title"`
+	Description string            `gorm:"type:text" json:"description"`
+	Status      ProjectTaskStatus `gorm:"type:varchar(20);default:'BACKLOG';not null" json:"status"`
+	Priority    string            `gorm:"type:varchar(20);default:'medium'" json:"priority"`
+	Artifacts   pgtype.JSONB      `gorm:"type:jsonb;default:'{}'" json:"artifacts"` // AnalystOutput + ArchitectPlan
+	CreatedAt   time.Time         `gorm:"not null" json:"created_at"`
+	UpdatedAt   time.Time         `gorm:"not null" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt    `gorm:"index" json:"-"`
+}
+
+// TaskStatus defines the state of a scheduled task
+type TaskStatus string
+
+const (
+	TaskStatusPending   TaskStatus = "pending"
+	TaskStatusRunning   TaskStatus = "running"
+	TaskStatusCompleted TaskStatus = "completed"
+	TaskStatusFailed    TaskStatus = "failed"
+)
+
+// Task represents a scheduled job
+type Task struct {
+	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID    uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
+	ChatID    uuid.UUID      `gorm:"type:uuid;not null" json:"chat_id"`
+	Type      string         `gorm:"type:varchar(50);not null" json:"type"` // e.g. "agent_message"
+	Payload   datatypes.JSON `gorm:"type:jsonb;not null" json:"payload"`    // e.g. {"message": "check news"}
+	Tools     datatypes.JSON `gorm:"type:jsonb" json:"tools"`               // Tools that were active when task was created
+	CronExpr  string         `gorm:"type:varchar(50)" json:"cron_expr"`     // Optional cron expression
+	ExecuteAt time.Time      `gorm:"not null" json:"execute_at"`
+	Status    TaskStatus     `gorm:"type:varchar(20);default:'pending';not null" json:"status"`
+	Error     string         `gorm:"type:text" json:"error"`
+	CreatedAt time.Time      `gorm:"not null" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"not null" json:"updated_at"`
 }

@@ -96,10 +96,17 @@ class ArchitectPlan(BaseModel):
     style_guide_rules: List[str] = Field(..., description="Coding standards from AGENTS.md")
     reference_snippets: List[str] = Field(..., description="Relevant code snippets from the codebase")
 
+class ReviewComment(BaseModel):
+    file_path: str = Field(..., description="File path related to the comment")
+    line_number: Optional[int] = Field(None, description="Line number for the comment")
+    body: str = Field(..., description="The comment text")
+    severity: Literal["critical", "warning", "info"] = Field("warning")
+
 class ReviewVerdict(BaseModel):
-    approved: bool
-    comments: List[str]
-    required_changes: List[str]
+    approved: bool = Field(..., description="Whether the changes are approved")
+    summary: str = Field(..., description="Summary of the review")
+    comments: List[ReviewComment] = Field(default_factory=list, description="List of specific comments")
+    required_changes: List[str] = Field(default_factory=list, description="List of high-level required changes")
 
 class FinalAcceptance(BaseModel):
     accepted: bool
@@ -122,3 +129,9 @@ class ArchitectOutput(BaseModel):
     adr: ArchitectureDecisionRecord = Field(..., description="Architecture Decision Record")
     implementation_plan: List[ImplementationStep] = Field(..., description="List of files and changes")
     definition_of_done: List[str] = Field(..., description="Checklist of required artifacts and tests")
+
+class ReviewerInput(BaseModel):
+    pr_diff: str = Field(..., description="The diff of the pull request")
+    analyst_output: AnalystOutput = Field(..., description="The original requirements")
+    architect_output: ArchitectOutput = Field(..., description="The architectural plan")
+    file_list: List[str] = Field(..., description="List of files changed in PR")

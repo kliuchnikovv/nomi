@@ -3,7 +3,7 @@ from typing import Optional
 
 from agno.agent import Agent
 from agno.models.base import Model
-from src.agents.reviewer_models import ReviewerInput, ReviewerOutput
+from src.teams.development.models import ReviewerInput, ReviewVerdict
 
 reviewer_agent_instructions = dedent('''
 You are a **Senior Quality Assurance & Security Engineer**. Your job is to act as a strict Quality Gate for code changes.
@@ -36,12 +36,13 @@ You will receive:
    - **Protocol**: Verify correct WebSocket frame usage if applicable.
 
 # Output
-You must return a `ReviewerOutput` object:
-- `verdict`: "approve" or "request_changes".
-- `comments`: A list of specific comments linked to file lines.
+You must return a `ReviewVerdict` object:
+- `approved`: true or false.
 - `summary`: A concise explanation of your decision.
+- `comments`: A list of `ReviewComment` objects with `file_path`, `line_number`, `body`, and `severity`.
+- `required_changes`: A list of high-level changes required if not approved.
 
-If you find ANY security issue (secrets, vulnerabilities), the verdict MUST be "request_changes".
+If you find ANY security issue (secrets, vulnerabilities), the `approved` MUST be false.
 ''')
 
 def build_reviewer_agent(model: Model, debug_mode: bool = False) -> Agent:
@@ -49,7 +50,7 @@ def build_reviewer_agent(model: Model, debug_mode: bool = False) -> Agent:
         name="ReviewerBot",
         model=model,
         instructions=reviewer_agent_instructions,
-        response_model=ReviewerOutput,
+        response_model=ReviewVerdict,
         markdown=True,
         debug_mode=debug_mode,
     )

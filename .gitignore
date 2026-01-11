@@ -23,3 +23,5 @@ api/config.yaml
 
 # Compiled API binary
 api/api
+
+.DS_Store
