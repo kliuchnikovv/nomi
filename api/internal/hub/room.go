@@ -35,6 +35,7 @@ type Room struct {
 
 	clients    map[*Client]bool
 	ingress    chan *ClientMessage
+	broadcast  chan Frame // Channel for direct broadcasting (bypassing logic)
 	register   chan *Client
 	unregister chan *Client
 
@@ -76,6 +77,7 @@ func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, s
 		initiatorID: initiatorID,
 		clients:     make(map[*Client]bool),
 		ingress:     make(chan *ClientMessage),
+		broadcast:   make(chan Frame),
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		llmBaseURL:  llmBaseURL,
@@ -134,6 +136,24 @@ func (r *Room) Run() {
 		case msg := <-r.ingress:
 			resetTimer()
 			r.handleUserMessage(msg)
+
+		case frame := <-r.broadcast:
+			resetTimer() // Reset timer on activity
+			// Direct broadcast to all clients in this room
+			// This matches handleLLMMessage logic but invoked externally
+			b, err := json.Marshal(frame)
+			if err != nil {
+				r.logger.Error("failed to marshal broadcast frame", zap.Error(err))
+				continue
+			}
+			for client := range r.clients {
+				select {
+				case client.send <- b:
+				default:
+					close(client.send)
+					delete(r.clients, client)
+				}
+			}
 
 		case frame, ok := <-r.llmFrames:
 			if !ok {
@@ -273,12 +293,19 @@ func (r *Room) InjectMessage(userID uuid.UUID, payload []byte) {
 	msg := &ClientMessage{
 		Client: &Client{
 			userID: userID,
-			// send:   make(chan []byte), // We don't read from this, so nil is fine? No, broadcast writes to it.
-			// Actually, if we pass nil client, we need to handle it in handleUserMessage.
+			// send:   make(chan []byte),
 		},
 		Payload: payload,
 	}
-	r.handleUserMessage(msg)
+	// Send to ingress channel to be processed by Run loop
+	// This ensures we don't access room state concurrently and wakes up the loop
+	r.ingress <- msg
+}
+
+// BroadcastFrame queues a frame for broadcasting to all clients in this room.
+// This is thread-safe and safe to call from other goroutines.
+func (r *Room) BroadcastFrame(frame Frame) {
+	r.broadcast <- frame
 }
 
 func (r *Room) handleUserMessage(msg *ClientMessage) {
@@ -523,6 +550,17 @@ func (r *Room) handleLLMMessage(frame Frame) {
 		default:
 			close(client.send)
 			delete(r.clients, client)
+		}
+	}
+
+	// Forward to User Room if this is a Chat Room
+	// This ensures users connected to the global "user" channel receive updates
+	if r.Type == RoomTypeChat {
+		userRoom, err := r.hub.GetOrCreateRoom(r.initiatorID, RoomTypeUser, r.initiatorID, "", "")
+		if err == nil && userRoom != nil {
+			userRoom.BroadcastFrame(frame)
+		} else {
+			r.logger.Warn("failed to get user room for forwarding", zap.Error(err))
 		}
 	}
 
