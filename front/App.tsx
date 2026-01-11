@@ -21,6 +21,7 @@ const { PluginChatsProvider } = PCPModel;
 import { AuthScreen } from './src/screens/auth/screen.tsx';
 import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
+import { NotificationProvider } from './src/context/NotificationContext'; // Added import
 
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
@@ -83,13 +84,15 @@ function App() {
                             <StatusBar
                                 barStyle={isDarkMode ? 'light-content' : 'dark-content'}
                             />
-                            <PluginChatsProvider>
-                                <ConnectorsProvider>
-                                    <MainProvider>
-                                        <AppContent />
-                                    </MainProvider>
-                                </ConnectorsProvider>
-                            </PluginChatsProvider>
+                            <NotificationProvider>
+                                <PluginChatsProvider>
+                                    <ConnectorsProvider>
+                                        <MainProvider>
+                                            <AppContent />
+                                        </MainProvider>
+                                    </ConnectorsProvider>
+                                </PluginChatsProvider>
+                            </NotificationProvider>
                         </AuthProvider>
                     </ThemeProvider>
                 </SafeAreaProvider>

@@ -18,11 +18,11 @@ import (
 type ProjectTaskHandler struct {
 	store      *storage.Storage
 	logger     *zap.Logger
-	llmBaseURL string
 	hub        *hub.Hub
+	llmBaseURL string
 }
 
-func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hub *hub.Hub) *ProjectTaskHandler {
+func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hubInstance *hub.Hub) *ProjectTaskHandler {
 	baseURL := cfg.LLM.BaseURL
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:7777"
@@ -30,14 +30,13 @@ func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *conf
 	return &ProjectTaskHandler{
 		store:      store,
 		logger:     logger.With(zap.String("component", "project_task_handler")),
+		hub:        hubInstance,
 		llmBaseURL: baseURL,
-		hub:        hub,
 	}
 }
 
 type UpdateStatusRequest struct {
-	Status    storage.ProjectTaskStatus `json:"status" binding:"required"`
-	Artifacts map[string]interface{}    `json:"artifacts"`
+	Status storage.ProjectTaskStatus `json:"status" binding:"required"`
 }
 
 func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
@@ -69,49 +68,30 @@ func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	// Prepare artifacts
-	var artifactsBytes []byte
-	if req.Artifacts != nil {
-		b, err := json.Marshal(req.Artifacts)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid artifacts JSON"})
-			return
-		}
-		artifactsBytes = b
-	}
+	oldStatus := task.Status
 
-	// Update status and artifacts
-	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status, artifactsBytes); err != nil {
+	// Update status
+	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status); err != nil {
 		h.logger.Error("failed to update task status", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return
 	}
 
-	// Notify Python Backend (Team Lead Agent)
-	go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, req.Status)
+	// Fetch Project Name for UI
+	projectName := "Project"
+	if project, err := h.store.GetProject(c.Request.Context(), task.ProjectID); err == nil {
+		projectName = project.Name
+	}
 
-	// Broadcast task_updated event to Project Room
-	h.hub.BroadcastToRoom(task.ProjectID, hub.Frame{
-		ID:        0, // System frame
-		ChatID:    task.ProjectID,
-		Kind:      hub.MetaKind,
-		Operation: hub.MessageOperation,
-		Timestamp: time.Now().UTC(),
-		Payload: hub.Payload{
-			Type:    "task_updated",
-			Message: string(req.Status),
-			Params: map[string]interface{}{
-				"task_id":    task.ID.String(),
-				"old_status": task.Status,
-				"new_status": req.Status,
-				"artifacts":  req.Artifacts,
-			},
-		},
-	})
+	// Broadcast update to User Channel
+	h.broadcastTaskUpdate(task.UserID, task, projectName, oldStatus, req.Status)
+
+	// Notify Python Backend (Team Lead Agent)
+	go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, oldStatus, req.Status)
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":         task.ID,
-		"old_status": task.Status,
+		"old_status": oldStatus,
 		"new_status": req.Status,
 	})
 }
@@ -136,11 +116,15 @@ func isValidTransition(current, next storage.ProjectTaskStatus) bool {
 	case storage.ProjectTaskStatusBacklog:
 		return next == storage.ProjectTaskStatusAnalysis
 	case storage.ProjectTaskStatusAnalysis:
-		return next == storage.ProjectTaskStatusCoding
+		return next == storage.ProjectTaskStatusCoding || next == storage.ProjectTaskStatusPlanning // Added Planning
+	case storage.ProjectTaskStatusPlanning:
+		return next == storage.ProjectTaskStatusCoding // Planning -> Coding
 	case storage.ProjectTaskStatusCoding:
 		return next == storage.ProjectTaskStatusReview
 	case storage.ProjectTaskStatusReview:
-		return next == storage.ProjectTaskStatusDone || next == storage.ProjectTaskStatusCoding // Done or Fixes
+		return next == storage.ProjectTaskStatusVerify || next == storage.ProjectTaskStatusCoding // Done or Fixes. Verify added.
+	case storage.ProjectTaskStatusVerify:
+		return next == storage.ProjectTaskStatusDone || next == storage.ProjectTaskStatusCoding
 	case storage.ProjectTaskStatusDone:
 		return false // Terminal state (except analysis/cancelled handled above)
 	case storage.ProjectTaskStatusCancelled:
@@ -198,4 +182,27 @@ func (h *ProjectTaskHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID,
 			zap.String("task_id", taskID.String()),
 			zap.String("status", string(newStatus)))
 	}
+}
+
+func (h *ProjectTaskHandler) broadcastTaskUpdate(userID uuid.UUID, task *storage.ProjectTask, projectName string, oldStatus, newStatus storage.ProjectTaskStatus) {
+	frame := hub.Frame{
+		ID:        0,
+		ChatID:    userID, // Targeting user channel
+		Timestamp: time.Now().UTC(),
+		Kind:      hub.SignalKind,
+		Operation: hub.SignalOperation,
+		Payload: hub.Payload{
+			Type: "task_updated",
+			Command: map[string]interface{}{
+				"task_id":      task.ID,
+				"task_title":   task.Title,
+				"project_id":   task.ProjectID,
+				"project_name": projectName,
+				"old_status":   oldStatus,
+				"new_status":   newStatus,
+				"updated_at":   time.Now().UTC(),
+			},
+		},
+	}
+	h.hub.BroadcastToUser(userID, frame)
 }

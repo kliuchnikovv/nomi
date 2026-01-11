@@ -1,4 +1,4 @@
-import { Frame } from './screens/main/models.tsx';
+import { Frame } from './screens/main/models';
 
 
 type Handlers = {
@@ -103,7 +103,13 @@ export class ChatSocket {
 
         // Add context parameter
         const context = this.getContext();
-        if (context) qs.append('source', context);
+        if (context) {
+             qs.append('source', context);
+             // Special handling for user channel
+             if (context === 'user_channel') {
+                 qs.append('channel', 'user');
+             }
+        }
 
         const mode = this.getMode?.() || 'agent';
         if (mode) qs.append('mode', mode);
@@ -289,6 +295,9 @@ export class ChatSocket {
                                 break;
                             case 'tools':
                                 this.handlers.onTools?.(frame);
+                                break;
+                            case 'signal': // Add support for signal operations
+                                this.handlers.onMessage?.(frame);
                                 break;
                             default:
                                 console.warn(`Unknown message op: ${operation}`, rawJson);

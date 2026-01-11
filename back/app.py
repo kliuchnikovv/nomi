@@ -436,9 +436,7 @@ except Exception:
 
 try:
     app.include_router(webhooks.router)
-    # Also include the API notification router
-    app.include_router(webhooks.api_notification_router)
-    logging.info("Webhooks routes mounted")
+    logging.info("Webhooks route mounted at /webhooks")
 except Exception:
     logging.exception("Failed to mount Webhooks routes")
 
@@ -659,6 +657,56 @@ async def get_embedding(request: EmbeddingRequest):
     except Exception as e:
         logging.error(f"Embedding generation failed: {e}")
         return {"error": str(e)}
+
+class ProjectTaskNotification(BaseModel):
+    user_id: str
+    project_id: str
+    task_id: str
+    old_status: str
+    new_status: str
+    timestamp: Optional[str] = None
+    event: Optional[str] = None
+
+@app.post("/api/notify-lead")
+async def notify_team_lead(notification: ProjectTaskNotification):
+    """
+    Receive task status change notifications and trigger Workflow.
+    """
+    logging.info(f"Received ProjectTask update: Task {notification.task_id} transitioned from {notification.old_status} to {notification.new_status}")
+
+    # Reactivation logic for GitHub Webhooks (status == REVIEW)
+    if notification.new_status == "REVIEW":
+        try:
+            # Reconstruct the team.
+            # Note: We need a fresh team instance.
+            # We assume agent_factory is available globally or we use the class directly.
+            # Using direct class instantiation to avoid async factory complexity if not needed,
+            # but factory handles tools. Let's try to use factory if we were in async context?
+            # Or just use DevelopmentTeam directly as we did in factory.
+
+            # Need DB connection string
+            db_url = os.getenv("DB_DSN")
+            if db_url and db_url.startswith("postgres://"):
+                db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+            # Instantiate team
+            team = DevelopmentTeam(
+                model=model, # Global model from app.py
+                user_id=notification.user_id,
+                db_url=db_url,
+                # We might need GitHub token if Reviewer needs it, usually via env
+                github_token=os.getenv("GITHUB_TOKEN")
+            )
+
+            # Run the component
+            team.run_component("Reviewer", notification.task_id)
+            return {"status": "triggered", "task_id": notification.task_id}
+
+        except Exception as e:
+            logging.error(f"Failed to trigger Reviewer: {e}", exc_info=True)
+            return {"status": "error", "message": str(e)}
+
+    return {"status": "received", "task_id": notification.task_id}
 
 if __name__ == "__main__":
     agent_os.serve(

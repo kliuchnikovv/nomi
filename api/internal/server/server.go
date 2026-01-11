@@ -44,35 +44,6 @@ func New(
 	// Initialize notifier first
 	n := notifier.New()
 
-	// Plugin system initialization (Moved to top so handlers can use manager)
-	// Plugin system initialization (Moved to top so handlers can use manager)
-	/*
-		pluginState := map[string]plugins.PluginState{}
-		for name, st := range cfg.Plugins {
-			pluginState[name] = plugins.PluginState{Enabled: st.Enabled, State: st.State}
-		}
-		// Force enable 'jules' if not configured (it uses per-user auth, safe to be globally enabled)
-		if _, ok := pluginState["jules"]; !ok {
-			pluginState["jules"] = plugins.PluginState{Enabled: true}
-		}
-		runtime := plugins.NewRuntime(
-			plugins.NewNotifierAdapter(n),
-			plugins.NewStorageAdapter(db),
-			logger,
-			plugins.NewLLMAdapter(llmService),
-			oauthConfigs,
-		)
-		manager := plugins.NewManager(runtime, pluginState)
-		if err := manager.Register(plugins.NewGenericIMAPPlugin()); err != nil {
-			logger.Error("failed to register imap plugin", zap.Error(err))
-		}
-		if err := manager.Register(plugins.NewGmailPlugin()); err != nil {
-			logger.Error("failed to register gmail plugin", zap.Error(err))
-		}
-		if err := manager.Register(jules.NewJulesPlugin()); err != nil {
-			logger.Error("failed to register jules plugin", zap.Error(err))
-		}
-	*/
 	// Initialize Hub
 	hubInstance := hub.NewHub(db, logger, cfg.LLM.BaseURL)
 	go hubInstance.Run()
@@ -104,7 +75,7 @@ func New(
 		dashboardHandler     = handlers.NewDashboardHandler(db)
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
 		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg, hubInstance)
-		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance)
+		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance) // Updated call here
 		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
 	)
 

@@ -3,6 +3,7 @@ import { View, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, Text }
 import { useTheme } from '../../context/ThemeContext';
 import { DashboardHeader } from './components/DashboardHeader';
 import { GreetingCard } from './components/GreetingCard';
+import { ActiveTasksList } from '../../components/dashboard/ActiveTasksList';
 
 import { BriefingCard } from '../chat/components/BriefingCard';
 import { dashboardApi } from '../../apiClient';
@@ -94,6 +95,8 @@ export const DashboardScreen = ({ onNavigateToChat, onNewChatPress, onOpenChats,
                 }
             >
                 <GreetingCard userName={dashboardData?.user?.name} />
+
+                <ActiveTasksList />
 
                 <BriefingCard />
 

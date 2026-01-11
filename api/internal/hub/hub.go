@@ -50,16 +50,16 @@ func (h *Hub) Run() {
 	}
 }
 
-func (h *Hub) GetOrCreateRoom(chatID uuid.UUID, userID uuid.UUID, mode string, command string) (*Room, error) {
+func (h *Hub) GetOrCreateRoom(roomID uuid.UUID, roomType RoomType, userID uuid.UUID, mode string, command string) (*Room, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	room, ok := h.rooms[chatID]
+	room, ok := h.rooms[roomID]
 	if !ok {
-		room = NewRoom(h, chatID, userID, h.store, h.logger, h.llmBaseURL, mode, command)
-		h.rooms[chatID] = room
+		room = NewRoom(h, roomID, roomType, userID, h.store, h.logger, h.llmBaseURL, mode, command)
+		h.rooms[roomID] = room
 		go room.Run()
-		h.logger.Info("room created", zap.String("room_id", chatID.String()), zap.String("mode", mode))
+		h.logger.Info("room created", zap.String("room_id", roomID.String()), zap.String("type", string(roomType)), zap.String("mode", mode))
 	}
 	return room, nil
 }
@@ -81,16 +81,7 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 	}
 }
 
-func (h *Hub) BroadcastToRoom(roomID uuid.UUID, frame Frame) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	if room, ok := h.rooms[roomID]; ok {
-		room.Broadcast(frame)
-	}
-}
-
-func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, chatID uuid.UUID, user *storage.User, mode string, command string) {
+func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, roomID uuid.UUID, roomType RoomType, user *storage.User, mode string, command string) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		h.logger.Error("failed to upgrade websocket", zap.Error(err))
@@ -105,7 +96,7 @@ func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, chatID uuid.UUID, 
 		logger: h.logger.With(zap.String("client_id", user.ID.String())),
 	}
 
-	room, err := h.GetOrCreateRoom(chatID, user.ID, mode, command)
+	room, err := h.GetOrCreateRoom(roomID, roomType, user.ID, mode, command)
 	if err != nil {
 		h.logger.Error("failed to get/create room", zap.Error(err))
 		return
