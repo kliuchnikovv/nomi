@@ -15,6 +15,9 @@ type Config struct {
 	LLM struct {
 		BaseURL string `yaml:"base_url"`
 	} `yaml:"llm"`
+	Redis struct {
+		Addr string `yaml:"addr"`
+	} `yaml:"redis"`
 	Database struct {
 		Host     string `yaml:"host"`
 		Port     int    `yaml:"port"`
