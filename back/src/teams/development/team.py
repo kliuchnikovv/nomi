@@ -761,7 +761,6 @@ If a team member encounters issues:
                     output_schema=AnalystOutput,
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
-                    tool_choice_limit=10, 
                     on_completion=self.transition_to_next_step
                 ),
                 WorkflowAgent(
@@ -774,7 +773,6 @@ If a team member encounters issues:
                     output_schema=ArchitectPlan,
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
-                    tool_choice_limit=10,
                     on_completion=self.transition_to_next_step
                 ),
                 WorkflowAgent(

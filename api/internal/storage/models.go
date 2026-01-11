@@ -12,13 +12,13 @@ import (
 
 // Chat представляет чат в базе данных
 type Chat struct {
-	ID         uuid.UUID  `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	UserID     uuid.UUID  `gorm:"type:uuid;not null;index:idx_chats_user_updated,priority:1"`
-	Model      string     `gorm:"type:text;not null"`
-	Title      string     `gorm:"not null"`
-	Mode       string     `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
-	Mode       string     `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
-	TeamID     *string    `gorm:"type:varchar(50);default:null"`             // e.g. 'dnd_team', 'travel_planning'
+	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID uuid.UUID `gorm:"type:uuid;not null;index:idx_chats_user_updated,priority:1"`
+	Model  string    `gorm:"type:text;not null"`
+	Title  string    `gorm:"not null"`
+	Mode   string    `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
+
+	TeamID     *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
 	ProjectID  *uuid.UUID `gorm:"type:uuid;default:null;index"`
 	TaskID     *uuid.UUID `gorm:"type:uuid;default:null;index"`
 	CreatedAt  time.Time  `gorm:"not null"`
