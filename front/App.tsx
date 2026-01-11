@@ -28,6 +28,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
 import { initDatabase } from './src/services/database/database';
 import { registerBackgroundSync } from './src/services/background/backgroundSyncService';
+import { socket } from './src/socket';
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -103,13 +104,29 @@ function App() {
 
 function AppContent() {
     const insets = useSafeAreaInsets();
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, token } = useAuth();
     const { theme } = useTheme();
 
     const containerStyle = useMemo(() => ({
         flex: 1,
         backgroundColor: theme.background,
     }), [theme.background]);
+
+    // Global Socket Lifecycle
+    useEffect(() => {
+        console.log('[App] Auth state changed. Token present:', !!token);
+        if (token) {
+            socket.setToken(token);
+            if (!socket.isReady()) {
+                console.log('[App] Connecting global socket...');
+                socket.open();
+            }
+        } else {
+            console.log('[App] Token cleared. Closing global socket.');
+            socket.close();
+            socket.setToken(null);
+        }
+    }, [token]);
 
     if (isLoading) {
         return <View style={containerStyle} />;
