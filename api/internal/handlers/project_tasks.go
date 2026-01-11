@@ -20,10 +20,9 @@ type ProjectTaskHandler struct {
 	logger     *zap.Logger
 	hub        *hub.Hub
 	llmBaseURL string
-	hub        *hub.Hub
 }
 
-func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hub *hub.Hub) *ProjectTaskHandler {
+func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hubInstance *hub.Hub) *ProjectTaskHandler {
 	baseURL := cfg.LLM.BaseURL
 	if baseURL == "" {
 		baseURL = "http://127.0.0.1:7777"
@@ -31,15 +30,13 @@ func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *conf
 	return &ProjectTaskHandler{
 		store:      store,
 		logger:     logger.With(zap.String("component", "project_task_handler")),
-		hub:        hub,
+		hub:        hubInstance,
 		llmBaseURL: baseURL,
-		hub:        hub,
 	}
 }
 
 type UpdateStatusRequest struct {
-	Status    storage.ProjectTaskStatus `json:"status" binding:"required"`
-	Artifacts map[string]interface{}    `json:"artifacts"`
+	Status storage.ProjectTaskStatus `json:"status" binding:"required"`
 }
 
 func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
@@ -71,19 +68,10 @@ func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	// Prepare artifacts
-	var artifactsBytes []byte
-	if req.Artifacts != nil {
-		b, err := json.Marshal(req.Artifacts)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid artifacts JSON"})
-			return
-		}
-		artifactsBytes = b
-	}
+	oldStatus := task.Status
 
-	// Update status and artifacts
-	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status, artifactsBytes); err != nil {
+	// Update status
+	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status); err != nil {
 		h.logger.Error("failed to update task status", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return
@@ -99,30 +87,11 @@ func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
 	h.broadcastTaskUpdate(task.UserID, task, projectName, oldStatus, req.Status)
 
 	// Notify Python Backend (Team Lead Agent)
-	go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, req.Status)
-
-	// Broadcast task_updated event to Project Room
-	h.hub.BroadcastToRoom(task.ProjectID, hub.Frame{
-		ID:        0, // System frame
-		ChatID:    task.ProjectID,
-		Kind:      hub.MetaKind,
-		Operation: hub.MessageOperation,
-		Timestamp: time.Now().UTC(),
-		Payload: hub.Payload{
-			Type:    "task_updated",
-			Message: string(req.Status),
-			Params: map[string]interface{}{
-				"task_id":    task.ID.String(),
-				"old_status": task.Status,
-				"new_status": req.Status,
-				"artifacts":  req.Artifacts,
-			},
-		},
-	})
+	go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, oldStatus, req.Status)
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":         task.ID,
-		"old_status": task.Status,
+		"old_status": oldStatus,
 		"new_status": req.Status,
 	})
 }
