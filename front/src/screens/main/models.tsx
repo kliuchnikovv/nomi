@@ -88,6 +88,7 @@ export type Message = {
     content_parts?: ContentPart[] // For inline tool call rendering
     model?: string
     attachments?: Attachment[]
+    pending?: boolean
 }
 
 export type Frame = {

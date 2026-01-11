@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgconn"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
@@ -413,8 +415,52 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			Model:     frame.Payload.Model,
 			CreatedAt: time.Now().UTC(),
 		})
+
+		isDuplicate := false
 		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				// Duplicate key error
+				r.logger.Info("ignoring duplicate message", zap.String("msg_id", msgID.String()))
+				isDuplicate = true
+				err = nil // Treat as success
+			} else {
+				// Check if error message contains "duplicate key" as fallback
+				// Sometimes GORM or drivers wrap errors differently
+				if err.Error() == "duplicate key value violates unique constraint" ||
+				   (len(err.Error()) > 20 && err.Error()[:20] == "ERROR: duplicate key") {
+					r.logger.Info("ignoring duplicate message (string check)", zap.String("msg_id", msgID.String()))
+					isDuplicate = true
+					err = nil
+				}
+			}
+		}
+
+		if err != nil {
+			// Real error - do not acknowledge
 			r.logger.Error("failed to save user message", zap.Error(err))
+		} else {
+			// Success or Duplicate -> Send ACK
+			ackFrame := Frame{
+				ID:        0,
+				ChatID:    r.ID,
+				Kind:      MetaKind,
+				Operation: "ack",
+				Timestamp: time.Now().UTC(),
+				Payload: Payload{
+					MessageID: msgID,
+				},
+			}
+
+			ackBytes, _ := json.Marshal(ackFrame)
+			if msg.Client != nil && msg.Client.send != nil {
+				select {
+				case msg.Client.send <- ackBytes:
+					r.logger.Debug("ack sent", zap.String("msg_id", msgID.String()))
+				default:
+					r.logger.Warn("failed to send ack (buffer full)", zap.String("msg_id", msgID.String()))
+				}
+			}
 		}
 
 		// Update Chat Title if empty (or default)
@@ -463,15 +509,21 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		)
 
 		// 4. Broadcast to OTHER clients (sender already has this message optimistically)
+		// NOTE: If this was a duplicate retry, we SHOULD broadcast it again to other clients?
+		// Probably fine to broadcast again, worst case other clients see dupes (but they should dedup by ID too).
 		broadcastExcept(frame, msg.Client)
 
-		// 5. Forward to LLM
-		r.connectLLM() // Ensure connected
-		if r.llmSocket != nil {
-			r.generationInProgress = true // Keep room alive until response complete
-			if err := r.llmSocket.Write(context.Background(), frame); err != nil {
-				r.logger.Error("failed to forward to llm", zap.Error(err))
-				r.generationInProgress = false
+		// 5. Forward to LLM (if not duplicate)
+		// If it's a duplicate, we probably shouldn't re-trigger the LLM unless we want to force regeneration?
+		// For now, let's assume we ONLY trigger LLM if it's NOT a duplicate.
+		if !isDuplicate {
+			r.connectLLM() // Ensure connected
+			if r.llmSocket != nil {
+				r.generationInProgress = true // Keep room alive until response complete
+				if err := r.llmSocket.Write(context.Background(), frame); err != nil {
+					r.logger.Error("failed to forward to llm", zap.Error(err))
+					r.generationInProgress = false
+				}
 			}
 		}
 	} else if r.Type == RoomTypeChat {

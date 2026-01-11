@@ -52,6 +52,7 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
                 attachments: msg.attachments,
                 actions: msg.actions,
                 content_parts: msg.content_parts,
+                pending: msg.pending,
             };
         });
     }, [messages, userId]);

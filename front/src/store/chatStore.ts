@@ -1,12 +1,33 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Message } from '../screens/main/models';
 import { ChatState, IMessage } from '../types/Model';
+
+interface ChatState {
+    chats: Record<string, Message[]>; // Key is chat_id
+    addMessage: (chatId: string, message: Message) => void;
+    setMessages: (chatId: string, messages: Message[]) => void;
+    updateMessageStatus: (chatId: string, messageId: string, status: 'pending' | 'sent' | 'error') => void;
+    updateMessage: (chatId: string, messageId: string, updates: Partial<Message>) => void;
+}
 
 export const useChatStore = create<ChatState>()(
     persist(
         (set, get) => ({
             chats: {},
+            updateMessage: (chatId, messageId, updates) => set((state) => {
+                const currentMessages = state.chats[chatId] || [];
+                const updatedMessages = currentMessages.map(m =>
+                    m.id === messageId ? { ...m, ...updates } : m
+                );
+                return {
+                    chats: {
+                        ...state.chats,
+                        [chatId]: updatedMessages,
+                    },
+                };
+            }),
 
             addMessage: (chatId, message) => {
                 set((state) => {
@@ -39,6 +60,7 @@ export const useChatStore = create<ChatState>()(
                     }
                 }));
             },
+
 
             updateMessageStatus: (chatId, msgId, status) => {
                 set((state) => {
