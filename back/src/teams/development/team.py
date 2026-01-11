@@ -425,26 +425,29 @@ You must return a `ReviewVerdict` object:
 ''')
 
 worker_instructions = dedent('''
-You are the **Worker** (Jules Operator). Your job is to execute the **ArchitectPlan** using the Jules API.
+You are the **Worker** (Jules Operator). Your job is to execute the **ArchitectPlan** using the Jules API if available.
 You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 
 # Role
 1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
-2. **Execute**: Use `jules_api` to create a session and execute the plan.
+2. **Execute**: Use `jules_api` to create a session and execute the plan (if available).
 3. **Monitor**: Wait for the session to complete and a Pull Request to be created.
 4. **Sync State**: Update the task status in the Go API to `REVIEW` upon success.
 
 # Workflow
-1. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
+1. **Check Tools**: First verify if `jules_api` tool is available. If not, report to Team Leader that automated execution is not possible.
+2. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
    - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
-2. **Wait**: Call `wait_for_pr` to block until Jules finishes.
-3. **Finish**:
+3. **Wait**: Call `wait_for_pr` to block until Jules finishes.
+4. **Finish**:
    - If successful (PR created), call `update_task_status(task_id, "REVIEW", pr_url="...")` to update the task and log the PR link.
    - If failed/timeout, report error to the Team Leader.
 
 # Tools
-- `jules_api`: Create sessions, list activities.
+- `jules_api`: Create sessions, list activities (optional - requires JULES_API_KEY).
 - `task_management_tool`: Update task status in Genie.
+
+**IMPORTANT**: If `jules_api` tool is not available (JULES_API_KEY not set), inform the Team Leader that the task needs manual implementation via the Developer agent instead.
 ''')
 
 
@@ -454,13 +457,14 @@ class DevelopmentTeam(Team):
         model: Model,
         db: BaseDb | None = None,
         github_token: Optional[str] = None,
+        jules_api_key: Optional[str] = None,
         markdown: bool = True,
         debug_mode: bool = False,
         user_id: Optional[str] = None,
         auth_token: Optional[str] = None,
         project_id: Optional[str] = None,
         task_id: Optional[str] = None,
-        db_url: Optional[str] = None, # Added to support Workflow Storage
+        db_url: Optional[str] = None,
         client_tools: Optional[List[Toolkit]] = None,
     ):
         # Initialize GitHub tools if token is provided
@@ -469,11 +473,14 @@ class DevelopmentTeam(Team):
         
         architect_tools = [github_tool] if github_tool else []
         
-        jules_api_key = os.getenv("JULES_API_KEY", "")
-        worker_tools = [
-            JulesTools(api_key=jules_api_key),
-            TaskManagementTool()
-        ]
+        # Jules API key: prefer passed parameter, fallback to env var
+        effective_jules_key = jules_api_key or os.getenv("JULES_API_KEY", "")
+        worker_tools = [TaskManagementTool()]
+        if effective_jules_key:
+            worker_tools.insert(0, JulesTools(api_key=effective_jules_key))
+            print("[DevelopmentTeam] Jules tools enabled")
+        else:
+            print("[DevelopmentTeam] Warning: Jules API key not provided, Jules tools disabled")
 
         # Analyst and Verifier tools
         analyst_tools = []
@@ -544,35 +551,8 @@ CI/CD Workflows:
 <agentic_mode_overview>
 You are in AGENTIC mode.
 **Purpose**: The task view UI gives users clear visibility into your progress on complex work without overwhelming them with every detail.
-**Core mechanic**: Call task_boundary to enter task view mode and communicate your progress to the user.
-**When to skip**: For simple work (answering questions, quick refactors, single-file edits that do not affect many lines etc.), skip task boundaries and artifacts.
-<task_boundary_tool>
-**Purpose**: Communicate progress through a structured task UI.
-**UI Display**:
-- TaskName = Header of the UI block
-- TaskSummary = Description of this task
-- TaskStatus = Current activity
-**First call**: Set TaskName using the mode and work area (e.g., "Planning Authentication"), TaskSummary to briefly describe the goal, TaskStatus to what you are about to start doing.
-**Updates**: Call again with:
-- **Same TaskName** + updated TaskSummary/TaskStatus = Updates accumulate in the same UI block
-- **Different TaskName** = Starts a new UI block with a fresh TaskSummary for the new task
-**TaskName granularity**: Represents your current objective. Change TaskName when moving between major modes (Planning → Implementing → Verifying) or when switching to a fundamentally different component or activity.
-**Recommended pattern**: Use descriptive TaskNames that clearly communicate your current objective:
-- Mode-based: "Planning Authentication", "Implementing User Profiles", "Verifying Payment Flow"
-- Activity-based: "Debugging Login Failure", "Researching Database Schema", "Refactoring API Layer"
-**TaskSummary**: Describes the current high-level goal. Initially, state the goal. As you make progress, update it cumulatively to reflect what has been accomplished.
-**TaskStatus**: Current activity you are about to start. This should describe what you WILL do, not what you have already completed.
-**Mode**: Set to PLANNING, EXECUTION, or VERIFICATION.
-</task_boundary_tool>
-<notify_user_tool>
-**Purpose**: The ONLY way to communicate with users during task mode.
-**Critical**: While in task view mode, regular messages are invisible. You MUST use notify_user.
-**When to use**:
-- Request artifact review (include paths in PathsToReview)
-- Ask clarifying questions that block progress
-- Batch all independent questions into one call
-**Effect**: Exits task view mode and returns to normal chat.
-</notify_user_tool>
+**Core mechanic**: Communicate your progress to the user through structured responses.
+**When to skip**: For simple work (answering questions, quick refactors, single-file edits that do not affect many lines etc.), skip detailed progress updates.
 </agentic_mode_overview>
 <mode_descriptions>
 Set mode when calling task_boundary: PLANNING, EXECUTION, or VERIFICATION.

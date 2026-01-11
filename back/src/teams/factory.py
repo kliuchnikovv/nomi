@@ -58,6 +58,9 @@ class TeamFactory:
             # Try to get GitHub token from command_desc or environment
             github_token = command_desc.get("github_token") or os.getenv("GITHUB_TOKEN")
             
+            # Get Jules API key from user integration (passed from Go API)
+            jules_api_key = command_desc.get("jules_api_key")
+            
             # Get auth token for API calls
             auth_token = command_desc.get("auth_token")
 
@@ -78,12 +81,13 @@ class TeamFactory:
                 model=self.model,
                 db=self.db,
                 github_token=github_token,
+                jules_api_key=jules_api_key,
                 debug_mode=self.debug_mode,
                 user_id=effective_user_id,
                 project_id=project_id,
                 task_id=task_id,
                 auth_token=auth_token,
-                db_url=self.db.db_url if self.db else None, # Use existing DB connection URL
+                db_url=self.db.db_url if self.db else None,
                 client_tools=client_tools
             )
 

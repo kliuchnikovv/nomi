@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -92,10 +93,54 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		command = c.Query("team")
 	}
 
+	// Enrich command with user integrations (Jules API key for development_team)
+	if mode == "team" && command != "" {
+		command = h.enrichCommandWithIntegrations(user.ID, command)
+	}
+
 	h.logger.Info("websocket params",
 		zap.String("mode", mode),
 		zap.Bool("has_command", command != ""),
 		zap.String("room_type", string(roomType)))
 
 	h.hub.ServeWs(c.Writer, c.Request, chatID, roomType, user, mode, command)
+}
+
+// enrichCommandWithIntegrations adds user's integration credentials to the command
+func (h *StreamHandler) enrichCommandWithIntegrations(userID uuid.UUID, command string) string {
+	// Parse existing command
+	var cmdData map[string]interface{}
+	if err := json.Unmarshal([]byte(command), &cmdData); err != nil {
+		h.logger.Warn("failed to parse command for enrichment", zap.Error(err))
+		return command
+	}
+
+	// Check if this is development_team
+	teamType, _ := cmdData["type"].(string)
+	if teamType != "development_team" {
+		return command
+	}
+
+	// Get Jules integration for user
+	var julesIntegration storage.Integration
+	if err := h.store.DB.Where("user_id = ? AND provider = ? AND enabled = ?", userID, "jules", true).First(&julesIntegration).Error; err == nil {
+		// Parse params to get api_key
+		var params map[string]string
+		if err := json.Unmarshal([]byte(julesIntegration.Params), &params); err == nil {
+			if apiKey, ok := params["api_key"]; ok && apiKey != "" {
+				cmdData["jules_api_key"] = apiKey
+				h.logger.Info("added Jules API key to command for development_team",
+					zap.String("user_id", userID.String()))
+			}
+		}
+	}
+
+	// Re-serialize command
+	enriched, err := json.Marshal(cmdData)
+	if err != nil {
+		h.logger.Error("failed to marshal enriched command", zap.Error(err))
+		return command
+	}
+
+	return string(enriched)
 }

@@ -391,15 +391,34 @@ class ProjectKnowledgeManager:
         documents = []
         
         api_patterns = [
+            # Go API
             ("api/internal/http", "go", "API routes and handlers"),
             ("api/internal/handlers", "go", "HTTP handlers"),
             ("api/internal/storage", "go", "Data storage and models"),
             ("api/internal/models", "go", "Domain models"),
             ("api/internal/hub", "go", "Communication hub"),
+            ("api/internal/services", "go", "Business logic services"),
+            ("api/cmd", "go", "Main entry points"),
+            # Python Backend
             ("back/src/agents", "py", "AI agents"),
             ("back/src/teams", "py", "Agent teams"),
+            ("back/src/workflow", "py", "Workflow logic"),
+            ("back/src/knowledge", "py", "Knowledge management"),
+            ("back/src/tools", "py", "Agent tools"),
+            ("back/src/server", "py", "Server implementation"),
+            ("back/src/models", "py", "Data models"),
+            # Frontend
             ("front/src/screens", "tsx", "App screens"),
+            ("front/src/components", "tsx", "UI components"),
             ("front/src/api", "ts", "Frontend API client"),
+            ("front/src/context", "tsx", "React context providers"),
+            ("front/src/hooks", "ts", "Custom React hooks"),
+            ("front/src/utils", "ts", "Utility functions"),
+            ("front/src/services", "ts", "Frontend services"),
+            # Root-level source files
+            ("back/src", "py", "Backend core modules"),
+            ("back", "py", "Backend entry point"),
+            ("api", "go", "API root files"),
         ]
         
         for path, ext, description in api_patterns:
