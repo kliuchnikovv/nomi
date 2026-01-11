@@ -11,49 +11,45 @@ interface ChatStoreState {
         payload: any; // The WebSocket frame payload
     }[];
     addMessage: (chatId: string, message: Message) => void;
+    setMessages: (chatId: string, messages: Message[]) => void;
     updateMessageStatus: (messageId: string, status: 'pending' | 'sent' | 'error') => void;
     addToOutbox: (message: Message, payload: any) => void;
     removeFromOutbox: (messageId: string) => void;
     clearOutbox: () => void;
 }
 
-export const useChatStore = create<ChatState>()(
+export const useChatStore = create<ChatStoreState>()(
     persist(
         (set, get) => ({
-            chats: {},
+            messages: {},
             outbox: [],
             addMessage: (chatId, message) => {
                 set((state) => {
-                    const currentMessages = state.chats[chatId] || [];
-                    // Deduplication based on _id
-                    const exists = currentMessages.some(m => m._id === message._id);
+                    const currentMessages = state.messages[chatId] || [];
+                    // Deduplication based on id
+                    const exists = currentMessages.some(m => m.id === message.id);
                     if (exists) {
                         return state;
                     }
-                    // Add to beginning (GiftedChat standard) or end?
-                    // GiftedChat usually expects newest first (index 0).
-                    // Let's assume we append to the list and sorting happens in UI,
-                    // OR strictly follow GiftedChat's "inverted" expectation if we want to store it that way.
-                    // However, standard store usually just holds the list.
-                    // Let's append to the front (newest first) to match common GiftedChat usage if the array is passed directly.
+                    // Append to the end (chronological order)
                     return {
-                        chats: {
-                            ...state.chats,
-                            [chatId]: [message, ...currentMessages]
+                        messages: {
+                            ...state.messages,
+                            [chatId]: [...currentMessages, message]
                         }
                     };
                 });
             },
 
-            setMessages: (chatId, messages) => {
+            setMessages: (chatId, newMessages) => {
                 set((state) => ({
-                    chats: {
-                        ...state.chats,
-                        [chatId]: messages
+                    messages: {
+                        ...state.messages,
+                        [chatId]: newMessages
                     }
                 }));
             },
-          
+
             updateMessageStatus: (messageId, status) => set((state) => {
                 const newMessages = { ...state.messages };
                 let updated = false;
@@ -73,7 +69,7 @@ export const useChatStore = create<ChatState>()(
                 if (!updated) return state;
                 return { messages: newMessages };
             }),
-          
+
             addToOutbox: (message, payload) => set((state) => ({
                 outbox: [...state.outbox, { message, payload }],
             })),

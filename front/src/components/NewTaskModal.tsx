@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { projectsApi } from '../apiClient';
 
@@ -78,79 +78,99 @@ export const NewTaskModal = ({ visible, onClose, onTaskCreated }: NewTaskModalPr
             transparent={true}
             onRequestClose={onClose}
         >
-            <View style={styles.centeredView}>
-                <View style={[styles.modalView, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                    <Text style={[styles.modalTitle, { color: theme.text }]}>New Task</Text>
+            <KeyboardAvoidingView
+                style={styles.keyboardAvoidingView}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            >
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.centeredView}>
+                        <View style={[styles.modalView, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                            <ScrollView
+                                showsVerticalScrollIndicator={false}
+                                keyboardShouldPersistTaps="handled"
+                                contentContainerStyle={styles.scrollContent}
+                            >
+                                <Text style={[styles.modalTitle, { color: theme.text }]}>New Task</Text>
 
-                    {loading ? (
-                        <ActivityIndicator size="large" color={theme.primary} />
-                    ) : (
-                        <>
-                            <Text style={[styles.label, { color: theme.textSecondary }]}>Project</Text>
-                            <View style={styles.projectList}>
-                                {projects.map(project => (
-                                    <TouchableOpacity
-                                        key={project.id}
-                                        style={[
-                                            styles.projectItem,
-                                            selectedProjectId === project.id && { backgroundColor: theme.primary + '20', borderColor: theme.primary }
-                                        ]}
-                                        onPress={() => setSelectedProjectId(project.id)}
-                                    >
-                                        <Text style={[
-                                            styles.projectText,
-                                            { color: selectedProjectId === project.id ? theme.primary : theme.text }
-                                        ]}>
-                                            {project.name}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                                {loading ? (
+                                    <ActivityIndicator size="large" color={theme.primary} />
+                                ) : (
+                                    <>
+                                        <Text style={[styles.label, { color: theme.textSecondary }]}>Project</Text>
+                                        <View style={styles.projectList}>
+                                            {projects.map(project => (
+                                                <TouchableOpacity
+                                                    key={project.id}
+                                                    style={[
+                                                        styles.projectItem,
+                                                        selectedProjectId === project.id && { backgroundColor: theme.primary + '20', borderColor: theme.primary }
+                                                    ]}
+                                                    onPress={() => setSelectedProjectId(project.id)}
+                                                >
+                                                    <Text style={[
+                                                        styles.projectText,
+                                                        { color: selectedProjectId === project.id ? theme.primary : theme.text }
+                                                    ]}>
+                                                        {project.name}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
 
-                            <Text style={[styles.label, { color: theme.textSecondary }]}>Task Title</Text>
-                            <TextInput
-                                style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
-                                placeholder="E.g. Refactor Login"
-                                placeholderTextColor={theme.textSecondary}
-                                value={title}
-                                onChangeText={setTitle}
-                            />
+                                        <Text style={[styles.label, { color: theme.textSecondary }]}>Task Title</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface }]}
+                                            placeholder="E.g. Refactor Login"
+                                            placeholderTextColor={theme.textSecondary}
+                                            value={title}
+                                            onChangeText={setTitle}
+                                        />
 
-                            <Text style={[styles.label, { color: theme.textSecondary }]}>Description (Optional)</Text>
-                            <TextInput
-                                style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface, height: 80 }]}
-                                placeholder="Details about the task..."
-                                placeholderTextColor={theme.textSecondary}
-                                value={description}
-                                onChangeText={setDescription}
-                                multiline
-                            />
+                                        <Text style={[styles.label, { color: theme.textSecondary }]}>Description (Optional)</Text>
+                                        <TextInput
+                                            style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.surface, height: 80 }]}
+                                            placeholder="Details about the task..."
+                                            placeholderTextColor={theme.textSecondary}
+                                            value={description}
+                                            onChangeText={setDescription}
+                                            multiline
+                                        />
 
-                            <View style={styles.actions}>
-                                <TouchableOpacity style={[styles.button, { backgroundColor: theme.surface }]} onPress={onClose}>
-                                    <Text style={[styles.buttonText, { color: theme.text }]}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.button, { backgroundColor: theme.primary }]}
-                                    onPress={handleCreate}
-                                    disabled={creating}
-                                >
-                                    {creating ? (
-                                        <ActivityIndicator color="#FFF" size="small" />
-                                    ) : (
-                                        <Text style={[styles.buttonText, { color: '#FFF' }]}>Create & Chat</Text>
-                                    )}
-                                </TouchableOpacity>
-                            </View>
-                        </>
-                    )}
-                </View>
-            </View>
+                                        <View style={styles.actions}>
+                                            <TouchableOpacity style={[styles.button, { backgroundColor: theme.surface }]} onPress={onClose}>
+                                                <Text style={[styles.buttonText, { color: theme.text }]}>Cancel</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.button, { backgroundColor: theme.primary }]}
+                                                onPress={handleCreate}
+                                                disabled={creating}
+                                            >
+                                                {creating ? (
+                                                    <ActivityIndicator color="#FFF" size="small" />
+                                                ) : (
+                                                    <Text style={[styles.buttonText, { color: '#FFF' }]}>Create & Chat</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                        </View>
+                                    </>
+                                )}
+                            </ScrollView>
+                        </View>
+                    </View>
+                </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
         </Modal>
     );
 };
 
 const styles = StyleSheet.create({
+    keyboardAvoidingView: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
+    },
     centeredView: {
         flex: 1,
         justifyContent: 'center',

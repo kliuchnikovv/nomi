@@ -84,8 +84,9 @@ class LLMWebSocketSession:
         self.build_mode: str = "agent"
         self.chat_id_param: Optional[str] = None
 
-        # Pending frame from handshake
-        self.pending_frame: Optional[Frame] = None
+        # Pending frames buffer for handshake race condition
+        # Messages arriving before agent is ready are queued here
+        self.pending_frames: List[Frame] = []
         self._receive_task: Optional[asyncio.Task] = None
 
         # Redis setup
@@ -207,7 +208,10 @@ class LLMWebSocketSession:
             if frame.op == Op.TOOLS:
                 self._parse_tools(frame.payload)
             else:
-                logger.warning("[WS] Expected TOOLS frame but got: %s", frame.op)
+                # Save for main loop - don't discard the frame
+                logger.warning("[WS] Expected TOOLS frame but got: %s, buffering for later processing", frame.op)
+                self.pending_frames.append(frame)
+                return  # Skip HISTORY wait since we already have a pending frame
         except asyncio.TimeoutError:
             logger.warning("[WS] Timeout waiting for tools: session_id=%s", self.session_id)
         except WebSocketDisconnect:
@@ -225,8 +229,8 @@ class LLMWebSocketSession:
                 self._parse_history(frame.payload)
             else:
                 # Save for main loop
-                logger.debug("[WS] Got %s instead of HISTORY, saving.", frame.op)
-                self.pending_frame = frame
+                logger.debug("[WS] Got %s instead of HISTORY, buffering.", frame.op)
+                self.pending_frames.append(frame)
         except asyncio.TimeoutError:
             logger.debug("[WS] Timeout waiting for history")
         except WebSocketDisconnect:
@@ -357,10 +361,10 @@ class LLMWebSocketSession:
             start_action_tracking()
 
             while True:
-                # Check pending first
-                if self.pending_frame:
-                    frame = self.pending_frame
-                    self.pending_frame = None
+                # Process all pending frames first (buffered during handshake)
+                if self.pending_frames:
+                    frame = self.pending_frames.pop(0)
+                    logger.info("[WS] Processing buffered frame: op=%s", frame.op)
                     await self.process_frame(frame)
                     continue
 

@@ -7,6 +7,7 @@ import React, {
     useRef,
     useState,
     useCallback,
+    useMemo,
 } from 'react';
 import { ChatContextType, Props, Model } from './models';
 import { useAuth } from '../auth/context.tsx';
@@ -21,7 +22,6 @@ import { calendarClient } from '../../services/integrations/clients/CalendarClie
 import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
 import { AppState, AppStateStatus } from 'react-native';
-import NetInfo from '@react-native-community/netinfo';
 
 function generateUUID() {
     // RFC4122 version 4 compliant enough for client-side ids
@@ -55,7 +55,9 @@ export function ChatProvider({
 
     // Select messages based on mode
     const chatKey = pluginThreadMeta ? `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}` : activeChatID;
-    const messages = useChatStore(state => state.messages[chatKey] || []);
+    const storeMessages = useChatStore(state => state.messages[chatKey]);
+    // Use useMemo to avoid creating a new empty array reference on each render
+    const messages = useMemo(() => storeMessages ?? [], [storeMessages]);
 
     // const [messages, setMessages] = useState<Message[]>([]);
     const [messagesLoading, setMessagesLoading] = useState(false);
@@ -426,41 +428,25 @@ export function ChatProvider({
 
     // Global Lifecycle & Network Handling
     useEffect(() => {
-        // 1. AppState Listener
+        // AppState listener - reconnect socket when app becomes active
         const handleAppStateChange = (nextAppState: AppStateStatus) => {
             if (nextAppState === 'active') {
                 console.log('[ChatContext] App became active');
                 if (socketRef.current) {
                     if (!socketRef.current.isConnected()) {
-                         console.log('[ChatContext] Reconnecting socket...');
-                         socketRef.current.open();
+                        console.log('[ChatContext] Reconnecting socket...');
+                        socketRef.current.open();
                     } else {
-                         // Even if connected, ensure outbox is processed (maybe previous attempt failed silently)
-                         socketRef.current.processOutbox();
+                        // Even if connected, ensure outbox is processed
+                        socketRef.current.processOutbox();
                     }
                 }
             }
         };
         const sub = AppState.addEventListener('change', handleAppStateChange);
 
-        // 2. NetInfo Listener
-        const unsubscribeNet = NetInfo.addEventListener(state => {
-            if (state.isConnected && state.isInternetReachable) {
-                console.log('[ChatContext] Network became reachable');
-                if (socketRef.current) {
-                    if (!socketRef.current.isConnected()) {
-                        console.log('[ChatContext] Reconnecting socket due to network...');
-                        socketRef.current.open();
-                    } else {
-                        socketRef.current.processOutbox();
-                    }
-                }
-            }
-        });
-
         return () => {
             sub.remove();
-            unsubscribeNet();
         };
     }, []);
     const refreshPluginThread = useCallback(async () => {
@@ -831,7 +817,7 @@ export function ChatProvider({
         if (!messageID) return;
 
         const existingMessage = newMessages.find(m => m.id === messageID);
-         if (existingMessage && existingMessage.role === 'user') {
+        if (existingMessage && existingMessage.role === 'user') {
             console.log('Dedup: skipping duplicate user message', messageID);
             return;
         }
@@ -841,11 +827,11 @@ export function ChatProvider({
         })
 
         if (messageIdx === -1) {
-             messageIdx = newMessages.length;
-             const role = frame.payload.role || 'assistant';
-             const sender = frame.payload.sender || (role === 'user' ? 'user' : 'assistant');
+            messageIdx = newMessages.length;
+            const role = frame.payload.role || 'assistant';
+            const sender = frame.payload.sender || (role === 'user' ? 'user' : 'assistant');
 
-             newMessages[messageIdx] = {
+            newMessages[messageIdx] = {
                 id: messageID,
                 chat_id: chatKey,
                 sender: sender,
@@ -860,47 +846,47 @@ export function ChatProvider({
             }
         }
 
-         if (frame.payload.role !== 'user' && !frame.payload.eof) {
-             const msg = newMessages[messageIdx];
-             const existingParts = msg.content_parts || [];
-             let updatedParts = [...existingParts];
-             let updatedText = msg.text;
-             let updatedToolCalls = [...(msg.tool_calls || [])];
-             let updatedReasoningSteps = [...(msg.reasoning_steps || [])];
+        if (frame.payload.role !== 'user' && !frame.payload.eof) {
+            const msg = newMessages[messageIdx];
+            const existingParts = msg.content_parts || [];
+            let updatedParts = [...existingParts];
+            let updatedText = msg.text;
+            let updatedToolCalls = [...(msg.tool_calls || [])];
+            let updatedReasoningSteps = [...(msg.reasoning_steps || [])];
 
-             if (frame.payload.type === 'tool_call' && frame.payload.tool) {
-                 updatedParts.push({ type: 'tool_call', tool_call: frame.payload.tool });
-                 updatedToolCalls.push(frame.payload.tool);
-             } else if (frame.payload.type === 'member_response') {
-                 const memberText = frame.payload.message || '';
-                 const agentName = frame.payload.agent_name || 'Member';
-                 if (memberText) {
-                     const lastPart = updatedParts.length > 0 ? updatedParts[updatedParts.length - 1] : null;
-                     if (lastPart && (lastPart as any).type === 'member_response' && (lastPart as any).agent_name === agentName) {
-                          updatedParts[updatedParts.length - 1] = { ...lastPart, text: (lastPart as any).text + memberText } as any;
-                     } else {
-                          updatedParts.push({ type: 'member_response', agent_name: agentName, text: memberText } as any);
-                     }
-                 }
-             } else if (frame.payload.type === 'reasoning') {
-                  const reasoningText = frame.payload.content || frame.payload.message || '';
-                  if (reasoningText) {
-                       if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === 'reasoning') {
-                           const lastPart = updatedParts[updatedParts.length - 1] as any;
-                           updatedParts[updatedParts.length - 1] = { ...lastPart, reasoning: lastPart.reasoning + reasoningText };
-                       } else {
-                           updatedParts.push({ type: 'reasoning', reasoning: reasoningText });
-                       }
+            if (frame.payload.type === 'tool_call' && frame.payload.tool) {
+                updatedParts.push({ type: 'tool_call', tool_call: frame.payload.tool });
+                updatedToolCalls.push(frame.payload.tool);
+            } else if (frame.payload.type === 'member_response') {
+                const memberText = frame.payload.message || '';
+                const agentName = frame.payload.agent_name || 'Member';
+                if (memberText) {
+                    const lastPart = updatedParts.length > 0 ? updatedParts[updatedParts.length - 1] : null;
+                    if (lastPart && (lastPart as any).type === 'member_response' && (lastPart as any).agent_name === agentName) {
+                        updatedParts[updatedParts.length - 1] = { ...lastPart, text: (lastPart as any).text + memberText } as any;
+                    } else {
+                        updatedParts.push({ type: 'member_response', agent_name: agentName, text: memberText } as any);
+                    }
+                }
+            } else if (frame.payload.type === 'reasoning') {
+                const reasoningText = frame.payload.content || frame.payload.message || '';
+                if (reasoningText) {
+                    if (updatedParts.length > 0 && updatedParts[updatedParts.length - 1].type === 'reasoning') {
+                        const lastPart = updatedParts[updatedParts.length - 1] as any;
+                        updatedParts[updatedParts.length - 1] = { ...lastPart, reasoning: lastPart.reasoning + reasoningText };
+                    } else {
+                        updatedParts.push({ type: 'reasoning', reasoning: reasoningText });
+                    }
 
-                       if (updatedReasoningSteps.length > 0) {
-                           updatedReasoningSteps[updatedReasoningSteps.length - 1] += reasoningText;
-                       } else {
-                           updatedReasoningSteps.push(reasoningText);
-                       }
-                  }
-             } else if (frame.payload.type === 'client_action') {
-                  // Client action execution is handled in effect hook, just render here
-                  updatedParts.push({
+                    if (updatedReasoningSteps.length > 0) {
+                        updatedReasoningSteps[updatedReasoningSteps.length - 1] += reasoningText;
+                    } else {
+                        updatedReasoningSteps.push(reasoningText);
+                    }
+                }
+            } else if (frame.payload.type === 'client_action') {
+                // Client action execution is handled in effect hook, just render here
+                updatedParts.push({
                     type: 'tool_call',
                     tool_call: {
                         name: `${frame.payload.tool}:${frame.payload.method}`,
@@ -908,56 +894,56 @@ export function ChatProvider({
                         result: "Executed on client"
                     }
                 });
-             } else {
-                 const newText = frame.payload.message || '';
-                 if (newText) {
-                     updatedParts.push({ type: 'text', text: newText });
-                     updatedText = (updatedText === " " ? "" : updatedText) + newText;
-                 }
-             }
+            } else {
+                const newText = frame.payload.message || '';
+                if (newText) {
+                    updatedParts.push({ type: 'text', text: newText });
+                    updatedText = (updatedText === " " ? "" : updatedText) + newText;
+                }
+            }
 
-             newMessages[messageIdx] = {
-                 ...msg,
-                 text: updatedText,
-                 content_parts: updatedParts,
-                 tool_calls: updatedToolCalls,
-                 reasoning_steps: updatedReasoningSteps
-             };
-         } else {
-             setAssistantWorking(false);
-         }
+            newMessages[messageIdx] = {
+                ...msg,
+                text: updatedText,
+                content_parts: updatedParts,
+                tool_calls: updatedToolCalls,
+                reasoning_steps: updatedReasoningSteps
+            };
+        } else {
+            setAssistantWorking(false);
+        }
 
-         store.addMessage(chatKey, newMessages[messageIdx]);
+        store.addMessage(chatKey, newMessages[messageIdx]);
     }
 
     function onReceivedMeta(frame: Frame) {
-         const store = useChatStore.getState();
-         const chatKey = pluginThreadMeta ? `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}` : activeChatID;
-         const currentMessages = store.messages[chatKey] || [];
-         const payload = frame.payload;
+        const store = useChatStore.getState();
+        const chatKey = pluginThreadMeta ? `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}` : activeChatID;
+        const currentMessages = store.messages[chatKey] || [];
+        const payload = frame.payload;
 
-         if (!payload.message_id) return;
-         const messageIdx = currentMessages.findIndex(m => m.id === payload.message_id);
-         if (messageIdx === -1) return;
+        if (!payload.message_id) return;
+        const messageIdx = currentMessages.findIndex(m => m.id === payload.message_id);
+        if (messageIdx === -1) return;
 
-         const msg = currentMessages[messageIdx];
-         let updatedMsg = { ...msg };
+        const msg = currentMessages[messageIdx];
+        let updatedMsg = { ...msg };
 
-         if (payload.type === 'metadata') {
-             updatedMsg.model = payload.model || msg.model;
-             // Handle tool calls in metadata if necessary (legacy)
-         } else if (payload.type === 'usage') {
-             updatedMsg.metadata = {
-                 ...msg.metadata,
-                 usage: {
-                        prompt_tokens: payload.prompt_tokens,
-                        completion_tokens: payload.completion_tokens,
-                        elapsed_ms: payload.elapsed_ms
-                    }
-             };
-         }
+        if (payload.type === 'metadata') {
+            updatedMsg.model = payload.model || msg.model;
+            // Handle tool calls in metadata if necessary (legacy)
+        } else if (payload.type === 'usage') {
+            updatedMsg.metadata = {
+                ...msg.metadata,
+                usage: {
+                    prompt_tokens: payload.prompt_tokens,
+                    completion_tokens: payload.completion_tokens,
+                    elapsed_ms: payload.elapsed_ms
+                }
+            };
+        }
 
-         store.addMessage(chatKey, updatedMsg);
+        store.addMessage(chatKey, updatedMsg);
     }
 
     const retryLastMessage = useCallback(() => {
