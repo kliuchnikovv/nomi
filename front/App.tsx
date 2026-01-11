@@ -34,6 +34,32 @@ import { socket } from './src/socket';
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
     const [configReady, setConfigReady] = useState(false);
+
+    // Verification Code - Uncomment to test store
+    /*
+    useEffect(() => {
+        const testStore = async () => {
+             // Wait for hydration
+             await new Promise(r => setTimeout(r, 1000));
+
+             const state = useChatStore.getState();
+             console.log('Store loaded:', state.chats);
+
+             // Test add message
+             const testChatId = 'test-chat-1';
+             const testMsg = {
+                 _id: Math.random().toString(),
+                 text: 'Hello Persistence ' + new Date().toISOString(),
+                 createdAt: new Date(),
+                 user: { _id: 1, name: 'Test User' }
+             };
+
+             state.addMessage(testChatId, testMsg);
+             console.log('Message added to', testChatId);
+        };
+        testStore();
+    }, []);
+    */
     const [initStatus, setInitStatus] = useState('Initializing...');
 
     // Initialize API URL and Database before rendering

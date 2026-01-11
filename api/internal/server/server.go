@@ -45,7 +45,7 @@ func New(
 	n := notifier.New()
 
 	// Initialize Hub
-	hubInstance := hub.NewHub(db, logger, cfg.LLM.BaseURL)
+	hubInstance := hub.NewHub(db, logger, cfg.LLM.BaseURL, cfg.Redis.Addr)
 	go hubInstance.Run()
 
 	// Инициализация обработчиков
