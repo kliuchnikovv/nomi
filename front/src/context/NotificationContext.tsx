@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/context';
 import { getApiUrl } from '../apiClient';
-import { ChatSocket } from '../../socket';
+import { ChatSocket } from '../socket';
 import { Frame } from '../screens/main/models';
 
 type TaskStatus = 'BACKLOG' | 'ANALYSIS' | 'PLANNING' | 'CODING' | 'REVIEW' | 'VERIFY' | 'DONE' | 'CANCELLED';

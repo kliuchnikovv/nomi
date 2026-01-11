@@ -1,4 +1,4 @@
-import { Frame } from './screens/main/models.tsx';
+import { Frame } from './screens/main/models';
 
 
 type Handlers = {
