@@ -98,9 +98,6 @@ export default function MessageScreen(props: Props) {
 
     const isDaemon = props.message.role === 'daemon';
 
-    // Add opacity style if message is pending
-    const statusStyle = props.message.status === 'pending' ? { opacity: 0.5 } : {};
-
     // Use content_parts for inline rendering, fallback to text + grouped tool_calls
     const hasContentParts = props.message.content_parts && props.message.content_parts.length > 0;
 
@@ -124,15 +121,9 @@ export default function MessageScreen(props: Props) {
     }
 
     return (
-        <View style={[...containerStylesByType[props.message.role], statusStyle]}>
+        <View style={containerStylesByType[props.message.role]}>
             {props.header && (
                 <Text style={styles.daemonHeader}>{props.header}</Text>
-            )}
-            {props.message.status === 'pending' && (
-                 <View style={{ position: 'absolute', bottom: 4, right: 4 }}>
-                     {/* Could add a small icon here, but opacity is good for now */}
-                     {/* <ActivityIndicator size="small" color="#aaa" /> */}
-                 </View>
             )}
             {hasContentParts ? (
                 // New: Render content_parts inline

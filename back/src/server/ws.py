@@ -8,7 +8,6 @@ import time
 import uuid
 from typing import Optional, List, Any, AsyncGenerator, Dict
 
-import redis.asyncio as redis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Cookie
 from agno.agent import Agent
 from agno.media import Image
@@ -88,11 +87,6 @@ class LLMWebSocketSession:
         self.pending_frame: Optional[Frame] = None
         self._receive_task: Optional[asyncio.Task] = None
 
-        # Redis setup
-        self.redis_client = redis.from_url(os.environ.get("REDIS_URL", "redis://redis:6379/0"))
-        # Ensure we have a user_id to publish to
-        self.redis_channel = f"chat:user:{self.user_id}" if self.user_id else None
-
     async def _cleanup_tasks(self):
         """Cancel any pending tasks to avoid 'Task exception was never retrieved'."""
         tasks = []
@@ -125,28 +119,13 @@ class LLMWebSocketSession:
             await asyncio.gather(*tasks, return_exceptions=True)
             logger.debug("[WS] Cleaned up %d pending tasks", len(tasks))
 
-        # Close Redis client
-        if self.redis_client:
-            try:
-                await self.redis_client.aclose()
-                logger.debug("[WS] Closed Redis client")
-            except Exception as e:
-                logger.warning("[WS] Failed to close Redis client: %s", e)
-
     async def _send_frame(self, frame: Frame) -> int:
         data = frame.marshal()
         logger.debug("[WS] Sending frame: op=%s id=%d payload_len=%d", frame.op, frame.id, len(str(data.get("payload", ""))))
-
-        if not self.redis_channel:
-             logger.error("[WS] Cannot send frame: No redis channel (missing user_id)")
-             return self.next_id
-
         try:
-            # Publish to Redis instead of writing to WebSocket
-            await self.redis_client.publish(self.redis_channel, json.dumps(data))
-        except Exception as e:
-            logger.error("[WS] Failed to publish frame to Redis: %s", e)
-
+            await self.websocket.send_json(data)
+        except RuntimeError as e:
+            logger.debug("[WS] Cannot send frame (WebSocket closed): %s", e)
         self.next_id = frame.id + 1
         return self.next_id
 
@@ -1014,20 +993,14 @@ def router(agent_factory: AgentFactory) -> APIRouter:
             await websocket.close(code=1008, reason="invalid session_id")
             return
 
-        # Try to extract real User ID from token in query params or 'user_id' param
+        # Try to extract real User ID from token in query params
         token = websocket.query_params.get("token")
-        user_id_param = websocket.query_params.get("user_id")
+        user_id = _extract_user_id_from_token(token) if token else None
         
-        user_id = None
-        if user_id_param:
-             user_id = user_id_param
-        elif token:
-             user_id = _extract_user_id_from_token(token)
-
         if user_id:
-             logger.info("[WS] Identifed user %s", user_id)
+             logger.info("[WS] Identifed user %s from token", user_id)
         else:
-             logger.info("[WS] Could not identify user, falling back to session_id %s", session_id)
+             logger.info("[WS] Could not identify user from token, falling back to session_id %s", session_id)
 
         session = LLMWebSocketSession(websocket, session_id, agent_factory, user_id=user_id)
 
