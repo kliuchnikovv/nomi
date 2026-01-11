@@ -26,13 +26,13 @@ type ProjectHandler struct {
 	hub         *hub.Hub
 }
 
-func NewProjectHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hub *hub.Hub) *ProjectHandler {
+func NewProjectHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hubInstance *hub.Hub) *ProjectHandler {
 	return &ProjectHandler{
 		store:       store,
 		logger:      logger.With(zap.String("component", "project_handler")),
 		llmBaseURL:  cfg.LLM.BaseURL,
-		taskHandler: NewProjectTaskHandler(store, logger, cfg), // Re-use notification logic
-		hub:         hub,
+		taskHandler: NewProjectTaskHandler(store, logger, cfg, hubInstance), // Pass hubInstance
+		hub:         hubInstance,
 	}
 }
 

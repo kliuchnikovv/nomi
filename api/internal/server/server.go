@@ -75,7 +75,7 @@ func New(
 		dashboardHandler     = handlers.NewDashboardHandler(db)
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
 		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg, hubInstance)
-		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance)
+		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance) // Updated call here
 		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
 	)
 
@@ -301,27 +301,5 @@ func New(
 			Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
 			Handler: r,
 		},
-	}
-}
-
-func (s *Server) ListenAndServe() error {
-	return s.httpServer.ListenAndServe()
-}
-
-func (s *Server) Shutdown(ctx context.Context) error {
-	return s.httpServer.Shutdown(ctx)
-}
-
-func authGinMiddleware(authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		wrapped := authMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			c.Request = r
-		}))
-		wrapped.ServeHTTP(c.Writer, c.Request)
-		if c.Writer.Written() {
-			c.Abort()
-			return
-		}
-		c.Next()
 	}
 }
