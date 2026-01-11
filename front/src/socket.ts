@@ -1,5 +1,8 @@
 import { Frame } from './screens/main/models';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 
+const OUTBOX_KEY = 'chat_outbox';
 
 type Handlers = {
     // onToken?: (frame: Frame) => void;
@@ -11,6 +14,7 @@ type Handlers = {
     onMeta?: (meta: Frame) => void;
     onPing?: (ping: Frame) => Promise<boolean> | boolean;
     onTools?: (frame: Frame) => void; // For tools list
+    onAck?: (messageId: string) => void; // New handler for ACKs
 };
 
 export class ChatSocket {
@@ -28,6 +32,8 @@ export class ChatSocket {
     private idleTimer: any = null;
     private idleTimeoutMs = 5 * 60 * 1000; // 5 minutes
     private sentCommandFrame = false;
+    private isConnectedToNet: boolean = true;
+    private unsubscribeNetInfo: (() => void) | null = null;
 
     constructor(
         rootUrl: string,
@@ -47,6 +53,17 @@ export class ChatSocket {
         this.getContext = getContext;
         this.getMode = getMode;
         this.getCommand = getCommand;
+
+        // Initialize NetInfo listener
+        this.unsubscribeNetInfo = NetInfo.addEventListener((state: NetInfoState) => {
+            this.isConnectedToNet = state.isConnected ?? true;
+            if (this.isConnectedToNet) {
+                this.processOutbox();
+            }
+        });
+
+        // Load outbox from storage
+        this.loadOutbox();
     }
 
     setHandlers(h: Handlers) {
@@ -75,6 +92,100 @@ export class ChatSocket {
         return !!this.ws && this.ws.readyState === 1;
     }
 
+    private async loadOutbox() {
+        try {
+            const stored = await AsyncStorage.getItem(OUTBOX_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) {
+                    this.outbox = parsed;
+                    // Try to send immediately if possible
+                    if (this.isReady() || this.isConnectedToNet) {
+                        this.processOutbox();
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load outbox', e);
+        }
+    }
+
+    private async saveOutbox() {
+        try {
+            await AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(this.outbox));
+        } catch (e) {
+            console.warn('Failed to save outbox', e);
+        }
+    }
+
+    private async addToOutbox(msg: any) {
+        // Avoid duplicates if possible, though UUID should be unique
+        this.outbox.push(msg);
+        await this.saveOutbox();
+        this.processOutbox();
+    }
+
+    private async removeFromOutbox(messageId: string) {
+        this.outbox = this.outbox.filter(msg => msg.payload?.message_id !== messageId);
+        await this.saveOutbox();
+    }
+
+    private async processOutbox() {
+        if (!this.isConnectedToNet) return;
+
+        // Ensure socket is open
+        if (!this.ws || this.ws.readyState !== 1) {
+             // If not ready, open() will trigger onopen which calls processOutbox (via flush logic there)
+             // But we need to make sure open() is called.
+             // If ws is null, open() will create it.
+             this.open();
+             return;
+        }
+
+        // Send messages
+        // We iterate carefully. If send fails, we keep in outbox.
+        // We DO NOT remove from outbox here. We wait for ACK.
+        for (const msg of this.outbox) {
+             try {
+                // Check if this is a command frame (internal logic) or user message
+                // User messages rely on ACKs. Command frames might not get ACKs?
+                // For now, let's treat everything as needing to be sent.
+                // If it's a 'tools' frame or 'model' frame, maybe we don't wait for ACK?
+                // The requirement is specific to user messages.
+
+                // If it is a message operation, we send and keep in queue.
+                // If it is other ops (like tools), we send and maybe remove?
+                // For simplicity, let's persist everything until ACK or cleanup.
+                // BUT: Backend only ACKs 'message' operations currently.
+                // So for non-message operations, we might get stuck?
+                // Strategy: Only 'message' ops stay in persistent queue. Others can be transient?
+                // Or: We just fire and forget for non-message ops (like 'tools').
+
+                // Let's assume outbox contains mixed types.
+                // If op != 'message', send and remove immediately?
+                if (msg.op !== 'message') {
+                     this.ws.send(JSON.stringify(msg));
+                     // Remove from outbox if it's not a message op (fire and forget for now)
+                     // Actually, tools frame is sent on connect usually.
+                     // Let's filter out non-message frames from persistence if they were added there?
+                } else {
+                     this.ws.send(JSON.stringify(msg));
+                }
+             } catch (e) {
+                 console.warn('Failed to send from outbox', e);
+                 // Stop processing if send fails (connection likely dropped)
+                 break;
+             }
+        }
+
+        // Cleanup non-message frames from outbox to avoid sticking
+        const newOutbox = this.outbox.filter(msg => msg.op === 'message');
+        if (newOutbox.length !== this.outbox.length) {
+            this.outbox = newOutbox;
+            await this.saveOutbox();
+        }
+    }
+
     open(initialQ?: string, initialSessionId?: string) {
         const chatId = this.getChatId();
         const token = this.getToken();
@@ -86,6 +197,13 @@ export class ChatSocket {
         }
 
         if (this.ws) {
+            // If already connecting or open, do nothing?
+            // If closing, wait?
+            if (this.ws.readyState === 0 || this.ws.readyState === 1) {
+                 // Already connecting/connected.
+                 return;
+            }
+            // If closed/closing, cleanup
             try {
                 this.ws.close();
             } catch { }
@@ -164,13 +282,9 @@ export class ChatSocket {
                 this.touchActivity();
                 this.sentCommandFrame = false;
                 this.enqueueCommandFrame();
-                const queue = this.outbox;
-                this.outbox = [];
-                for (const msg of queue) {
-                    try {
-                        ws.send(JSON.stringify(msg));
-                    } catch { }
-                }
+
+                // Process the persistent outbox
+                this.processOutbox();
             };
 
             ws.onmessage = async (e: any) => {
@@ -236,6 +350,12 @@ export class ChatSocket {
                         switch (operation) {
                             case 'ping':
                                 this.handlers.onPing?.(frame);
+                                break;
+                            case 'ack':
+                                if (data?.message_id) {
+                                    await this.removeFromOutbox(data.message_id);
+                                    this.handlers.onAck?.(data.message_id);
+                                }
                                 break;
                             case 'error':
                                 if (data?.code !== 401 || retried) {
@@ -304,35 +424,6 @@ export class ChatSocket {
                                 break;
                         }
 
-                        // if (frame.op === 'announce' || data?.chat_id || data?.chatId) {
-                        //     const announcedId = data?.chat_id || data?.chatId || data?.id;
-                        //     if (announcedId) this.handlers.onAnnounce?.(String(announcedId));
-                        // }
-                        //
-                        // if (kind === 'data' && typeof data?.message === 'string') {
-                        //     if (data.eof) {
-                        //         // This is a full message
-                        //         this.handlers.onMessage?.(data.message, data.message_id);
-                        //     } else {
-                        //         // This is a streaming token
-                        //         this.handlers.onToken?.(data.message);
-                        //     }
-                        // } else if (kind === 'done') {
-                        //     this.handlers.onDone?.(data?.message_id);
-                        // } else if (
-                        //     kind === 'error' &&
-                        //     (data?.code === 401 || data?.status === 401)
-                        // ) {
-                        //     if (!retried) {
-                        //         retried = true;
-                        //         const ok = await (this.handlers.onUnauthorized?.() ?? false);
-                        //         if (ok) {
-                        //             try { ws.close(); } catch {}
-                        //             this.open();
-                        //             return;
-                        //         }
-                        //     }
-                        // }
                     } catch (err) {
                         console.warn('Failed to parse WS message:', err, trimmed);
                     }
@@ -377,13 +468,13 @@ export class ChatSocket {
         }
     }
 
-    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: string, role: string = 'user') {
-        // console.log('Sending message:', message, sessionId, attachmentIDs, webSearch, thinking);
+    async sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: string, role: string = 'user') {
         const chatID = this.getChatId();
         const model = this.getModel();
-        // const messageID = this.getMessageId();
+
         if (!chatID) return;
 
+        // Ensure command frame is enqueued if needed (transient, mostly)
         this.enqueueCommandFrame(chatID);
 
         const msg = {
@@ -402,25 +493,13 @@ export class ChatSocket {
                 thinking: thinking,
             },
         };
-        // console.log('Sending message:', msg);
 
+        // Add to persistent outbox first
+        await this.addToOutbox(msg);
+
+        // Try to open socket if not open (it will process outbox on open)
         if (!this.ws) {
-            // Queue the message and open the connection; onopen flushes outbox
-            this.outbox.push(msg);
             this.open(message, sessionId);
-            return;
-        }
-
-        if (this.isReady()) {
-            try {
-                // console.log('send', JSON.stringify(msg));
-                this.ws.send(JSON.stringify(msg));
-                this.touchActivity();
-            } catch {
-                this.outbox.push(msg);
-            }
-        } else {
-            this.outbox.push(msg);
         }
     }
 
@@ -443,6 +522,10 @@ export class ChatSocket {
             },
         };
         this.sentCommandFrame = true;
+        // Command frames are transient, let's put them in front of outbox in memory,
+        // but maybe not persist? Or persist if strict.
+        // For now, let's not break existing logic too much.
+        // The original code pushed to outbox unshift.
         this.outbox.unshift(frame);
     }
 
@@ -526,7 +609,8 @@ export class ChatSocket {
         } catch { }
 
         this.ws = null;
-        this.outbox = [];
+        // Don't clear outbox here anymore! It's persistent.
+        // this.outbox = [];
         this.sentCommandFrame = false;
 
         if (this.idleTimer) {
@@ -534,6 +618,11 @@ export class ChatSocket {
                 clearTimeout(this.idleTimer);
             } catch { }
             this.idleTimer = null;
+        }
+
+        if (this.unsubscribeNetInfo) {
+            this.unsubscribeNetInfo();
+            this.unsubscribeNetInfo = null;
         }
     }
 }

@@ -19,15 +19,7 @@ import { useMain } from '../main/context';
 import { gmailClient } from '../../services/integrations/clients/GmailClient';
 import { calendarClient } from '../../services/integrations/clients/CalendarClient';
 import { useConnectors } from '../settings/connectors/context';
-
-function generateUUID() {
-    // RFC4122 version 4 compliant enough for client-side ids
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-    });
-}
+import { v4 as uuidv4 } from 'uuid';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -160,6 +152,11 @@ export function ChatProvider({
                 setShowToolCalls(true);
                 setShowReasoning(true);
                 setShowMemberResponses(true);
+                break;
+            case 'reasoning_only': // Ensure this matches UI options if present
+                setShowReasoning(true);
+                setShowToolCalls(false);
+                setShowMemberResponses(false);
                 break;
         }
     }, []);
@@ -422,129 +419,6 @@ export function ChatProvider({
         }
     }, [pluginThreadMeta, mapPluginMessage]);
 
-    const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string, role: string = 'user') => {
-            if (!text.trim() && attachments.length === 0) return;
-            if (!user?.id) return;
-
-            // Clear error when sending a new message
-            setError(null);
-
-            // Map local attachments to model Attachment type early for both cases
-            const attachmentIDs = attachments.map(a => a.id);
-            const modelAttachments = attachments.map(a => ({
-                id: a.id,
-                file_name: a.name,
-                file_type: a.mimeType,
-                size: 0, // Unknown size for local
-                uri: a.uri
-            }));
-
-            // Save for retry with all details, but update messageId later if created
-            setLastFailedMessage({
-                text: text.trim(),
-                attachments: attachments,
-                messageId: reuseMessageId, // Will be updated if fresh send
-                webSearch,
-                thinking
-            });
-
-            let chatIdToUse = activeChatID;
-            let messageID: string | undefined = reuseMessageId;
-            const timestamp = Date.now();
-
-            if (pluginThreadMeta) {
-                chatIdToUse = String(pluginThreadMeta.chatId);
-                if (!messageID) {
-                    messageID = generateUUID();
-                }
-
-                if (!reuseMessageId) {
-                    const newUserMessage: Message = {
-                        id: messageID,
-                        chat_id: chatIdToUse,
-                        sender: user.id,
-                        role: role,
-                        text: text.trim(),
-                        created_at: timestamp,
-                        attachments: modelAttachments,
-                    };
-                    setMessages(prev => [...prev, newUserMessage]);
-                }
-                // We do not call sidebarApi.sendChatMessage anymore.
-                // We rely on WebSocket to handle the message.
-            } else {
-                // Если чата ещё нет, создаём его через REST и монтируем id
-                if (!chatIdToUse || chatIdToUse === emptyChatID) {
-                    chatIdToUse = await createChat(text) || activeChatID;
-                }
-
-                if (!chatIdToUse) {
-                    console.error('Failed to resolve chat id before sending message');
-                    setError('Не удалось создать чат');
-                    return;
-                }
-
-                if (!reuseMessageId) {
-                    messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch, role);
-                    if (!messageID) {
-                        console.error('Failed to create message before sending via WebSocket');
-                        setError('Не удалось создать сообщение');
-                        return;
-                    }
-                    setCurrentMessageID(messageID!);
-
-                    // Update lastFailedMessage with the real messageID so retry can use it
-                    setLastFailedMessage(prev => prev ? { ...prev, messageId: messageID } : null);
-
-                    const userMessage: Message = {
-                        id: messageID!,
-                        chat_id: chatIdToUse!,
-                        sender: user.id,
-                        role: role,
-                        text: text.trim(),
-                        created_at: timestamp,
-                        attachments: modelAttachments,
-                    };
-
-                    setMessages(prevMessages => [
-                        ...prevMessages,
-                        userMessage,
-                    ]);
-                } else {
-                    console.log('Reusing existing message ID for retry:', reuseMessageId);
-                    setCurrentMessageID(reuseMessageId);
-                }
-            }
-
-            const sessionId = `sess_${timestamp}`;
-            console.log(
-                'sendStreamingMessage: socketRef.current:',
-                socketRef.current,
-            ); // Add this log
-            if (!socketRef.current) {
-                if (!chatIdToUse || !messageID) {
-                    console.error('Missing chatId or messageId when initializing WebSocket');
-                    setError('Ошибка инициализации соединения');
-                    return;
-                }
-                socketRef.current = newWebSocket(token!, chatIdToUse);
-            }
-
-            setAssistantWorking(true);
-            // Теперь точно есть socketRef; sendMessage положит в outbox и откроет WS
-            if (!chatIdToUse || !messageID) {
-                console.error('Missing chatId or messageId before sending message via WebSocket');
-                setAssistantWorking(false);
-                setError('Ошибка отправки сообщения');
-                return;
-            }
-            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch, thinking, role);
-            console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
-        },
-        [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token, createChat, createMessage],
-    ); // Dependencies for sendStreamingMessage
-
     const executeMessageAction = useCallback(async (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => {
         if (!pluginThreadMeta) return;
         try {
@@ -654,6 +528,140 @@ export function ChatProvider({
         return messageID;
     }, []);
 
+    const sendStreamingMessage = useCallback(
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string, role: string = 'user') => {
+            if (!text.trim() && attachments.length === 0) return;
+            if (!user?.id) return;
+
+            // Clear error when sending a new message
+            setError(null);
+
+            // Map local attachments to model Attachment type early for both cases
+            const attachmentIDs = attachments.map(a => a.id);
+            const modelAttachments = attachments.map(a => ({
+                id: a.id,
+                file_name: a.name,
+                file_type: a.mimeType,
+                size: 0, // Unknown size for local
+                uri: a.uri
+            }));
+
+            // Save for retry with all details, but update messageId later if created
+            setLastFailedMessage({
+                text: text.trim(),
+                attachments: attachments,
+                messageId: reuseMessageId, // Will be updated if fresh send
+                webSearch,
+                thinking
+            });
+
+            let chatIdToUse = activeChatID;
+            let messageID: string | undefined = reuseMessageId;
+            const timestamp = Date.now();
+
+            if (pluginThreadMeta) {
+                chatIdToUse = String(pluginThreadMeta.chatId);
+                if (!messageID) {
+                    messageID = uuidv4();
+                }
+
+                if (!reuseMessageId) {
+                    const newUserMessage: Message = {
+                        id: messageID,
+                        chat_id: chatIdToUse,
+                        sender: user.id,
+                        role: role,
+                        text: text.trim(),
+                        created_at: timestamp,
+                        attachments: modelAttachments,
+                        pending: true, // Optimistic pending state
+                    };
+                    setMessages(prev => [...prev, newUserMessage]);
+                }
+                // We do not call sidebarApi.sendChatMessage anymore.
+                // We rely on WebSocket to handle the message.
+            } else {
+                // Если чата ещё нет, создаём его через REST и монтируем id
+                if (!chatIdToUse || chatIdToUse === emptyChatID) {
+                    chatIdToUse = await createChat(text) || activeChatID;
+                }
+
+                if (!chatIdToUse) {
+                    console.error('Failed to resolve chat id before sending message');
+                    setError('Не удалось создать чат');
+                    return;
+                }
+
+                if (!reuseMessageId) {
+                    // Generate ID locally for Optimistic UI
+                    if (!messageID) {
+                         messageID = uuidv4();
+                    }
+                    // We DO NOT wait for createMessage REST call anymore for the optimistic update.
+                    // We send via WebSocket directly.
+                    // However, we might need createMessage for the FIRST message to initialize chat state on backend properly?
+                    // Actually, if we send via socket with chatID, backend creates message.
+                    // But if it's a NEW chat (created via REST just above), it's fine.
+
+                    // messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch, role);
+
+                    // Assign local ID
+                    setCurrentMessageID(messageID!);
+
+                    // Update lastFailedMessage with the real messageID so retry can use it
+                    setLastFailedMessage(prev => prev ? { ...prev, messageId: messageID } : null);
+
+                    const userMessage: Message = {
+                        id: messageID!,
+                        chat_id: chatIdToUse!,
+                        sender: user.id,
+                        role: role,
+                        text: text.trim(),
+                        created_at: timestamp,
+                        attachments: modelAttachments,
+                        pending: true, // Optimistic pending state
+                    };
+
+                    setMessages(prevMessages => [
+                        ...prevMessages,
+                        userMessage,
+                    ]);
+                } else {
+                    console.log('Reusing existing message ID for retry:', reuseMessageId);
+                    setCurrentMessageID(reuseMessageId);
+                    // Update existing message to pending?
+                    setMessages(prev => prev.map(m => m.id === reuseMessageId ? { ...m, pending: true } : m));
+                }
+            }
+
+            const sessionId = `sess_${timestamp}`;
+            console.log(
+                'sendStreamingMessage: socketRef.current:',
+                socketRef.current,
+            ); // Add this log
+            if (!socketRef.current) {
+                if (!chatIdToUse || !messageID) {
+                    console.error('Missing chatId or messageId when initializing WebSocket');
+                    setError('Ошибка инициализации соединения');
+                    return;
+                }
+                socketRef.current = newWebSocket(token!, chatIdToUse);
+            }
+
+            setAssistantWorking(true);
+            // Теперь точно есть socketRef; sendMessage положит в outbox и откроет WS
+            if (!chatIdToUse || !messageID) {
+                console.error('Missing chatId or messageId before sending message via WebSocket');
+                setAssistantWorking(false);
+                setError('Ошибка отправки сообщения');
+                return;
+            }
+            socketRef.current!.sendMessage(text.trim(), sessionId, messageID, attachmentIDs, webSearch, thinking, role);
+            console.log("WebSocket sendStreamingMessage: socketRef.current:", socketRef.current);
+        },
+        [activeChatID, user?.id, refreshToken, socketRef.current, pluginThreadMeta, mapPluginMessage, refreshPluginThread, token, createChat, createMessage], // Removed createMessage dependency as we bypass it
+    );
+
     const sendMessage = useCallback(
         async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, role: string = 'user') => {
             await sendStreamingMessage(text, attachments, webSearch, thinking, undefined, role);
@@ -746,6 +754,10 @@ export function ChatProvider({
             onUnauthorized: async () => {
                 return await refreshToken();
             },
+            onAck: (messageId: string) => {
+                // Mark message as not pending
+                setMessages(prev => prev.map(m => m.id === messageId ? { ...m, pending: false } : m));
+            }
         });
 
         return sock
