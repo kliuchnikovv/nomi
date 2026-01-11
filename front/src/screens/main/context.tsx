@@ -12,6 +12,7 @@ import { useAuth } from '../auth/context.tsx';
 import { apiClient } from '../../apiClient.ts'
 import { Chat, GetChatsOptions, MainContextType } from "./models";
 import { getApiUrl, API_URL } from '../../config.ts';
+import { NewTaskModal } from '../../components/NewTaskModal';
 
 export const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -30,6 +31,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     const [chatsLoading, setChatsLoading] = useState(false);
     const [activeChatID, setActiveChatID] = useState<string | null>(null);
     const [sidebarFilter, setSidebarFilter] = useState<string>('all');
+    const [newTaskModalVisible, setNewTaskModalVisible] = useState(false);
 
     const { isAuthenticated } = useAuth();
 
@@ -250,7 +252,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     }
 
     // State to store pending mode/team for new chat
-    const [pendingChatMode, setPendingChatMode] = useState<{ mode: 'agent' | 'team'; teamId: string | null } | null>(null);
+    const [pendingChatMode, setPendingChatMode] = useState<{ mode: 'agent' | 'team'; teamId: string | null; initialMessage?: string } | null>(null);
 
     function createNewChatWithMode(mode: 'agent' | 'team', teamId: string | null) {
         // Store the mode/team to be used when the chat is created
@@ -278,6 +280,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setSidebarFilter,
         pendingChatMode,
         clearPendingChatMode,
+        newTaskModalVisible,
+        setNewTaskModalVisible,
     };
 
     return (
@@ -285,6 +289,34 @@ export function MainProvider({ children }: { children: ReactNode }) {
             value={value}
         >
             {children}
+            <NewTaskModal
+                visible={newTaskModalVisible}
+                onClose={() => setNewTaskModalVisible(false)}
+                onTaskCreated={async (task, projectId) => {
+                    try {
+                        const newChat = await apiClient.post<Chat>(`${getApiUrl()}/chats`, {
+                            mode: 'team',
+                            team_id: 'development_team',
+                            project_id: projectId,
+                            task_id: task.id,
+                            title: task.title,
+                        });
+                        if (newChat && newChat.id) {
+                            setPendingChatMode({
+                                mode: 'team',
+                                teamId: 'development_team',
+                                initialMessage: `Analyze this task and propose a plan: ${task.title}`
+                            });
+                            setActiveChatID(newChat.id);
+                            setNewTaskModalVisible(false);
+                            getChats({ preserveActiveChat: true });
+                        }
+                    } catch (e) {
+                        console.error('Failed to create chat for task:', e);
+                        alertError(`Failed to create chat: ${e}`);
+                    }
+                }}
+            />
         </MainContext.Provider>
     );
 }

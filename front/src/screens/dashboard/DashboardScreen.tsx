@@ -7,9 +7,9 @@ import { ActiveTasksList } from '../../components/dashboard/ActiveTasksList';
 
 import { BriefingCard } from '../chat/components/BriefingCard';
 import { dashboardApi, apiClient } from '../../apiClient';
-import { NewTaskModal } from '../../components/NewTaskModal';
 import { getApiUrl } from '../../config';
 import { Chat } from '../main/models';
+import { useMain } from '../main/context';
 
 interface DashboardScreenProps {
     onNavigateToChat: (chatId: string) => void;
@@ -23,7 +23,7 @@ export const DashboardScreen = ({ onNavigateToChat, onNewChatPress, onOpenChats,
     const { theme } = useTheme();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [newTaskVisible, setNewTaskVisible] = useState(false);
+    const { setNewTaskModalVisible } = useMain();
     const [dashboardData, setDashboardData] = useState<{
         user: { name: string };
         recent_chats: any[];
@@ -85,30 +85,9 @@ export const DashboardScreen = ({ onNavigateToChat, onNewChatPress, onOpenChats,
                 <DashboardHeader
                     onMenuPress={onOpenChats}
                     onInboxPress={onOpenInbox}
-                    onNewTaskPress={() => setNewTaskVisible(true)}
+                    onNewTaskPress={() => setNewTaskModalVisible(true)}
                 />
             )}
-            <NewTaskModal
-                visible={newTaskVisible}
-                onClose={() => setNewTaskVisible(false)}
-                onTaskCreated={async (task, projectId) => {
-                    try {
-                        const newChat = await apiClient.post<Chat>(`${getApiUrl()}/chats`, {
-                            mode: 'team',
-                            team_id: 'development_team',
-                            project_id: projectId,
-                            task_id: task.id,
-                            title: task.title,
-                        });
-                        if (newChat && newChat.id) {
-                            onNavigateToChat(newChat.id);
-                        }
-                    } catch (e) {
-                        console.error('Failed to create chat for task:', e);
-                        // Optional: alert user
-                    }
-                }}
-            />
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={{ paddingTop: 8 }}

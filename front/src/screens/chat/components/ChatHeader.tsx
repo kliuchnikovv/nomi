@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { Menu, Mail, MagicWand, Code, Airplane, Cube } from 'iconoir-react-native';
+import { Menu, Mail, MagicWand, Code, Airplane, Cube, Plus } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from '../styles';
 import { useTheme } from '../../../context/ThemeContext';
@@ -11,6 +11,7 @@ interface ChatHeaderProps {
     subtitle: string;
     onMenuPress?: () => void;
     onInboxPress?: () => void;
+    onNewTaskPress?: () => void;
     showMenu?: boolean;
     showInbox?: boolean;
     isInboxMode?: boolean;
@@ -24,6 +25,7 @@ export function ChatHeader({
     subtitle,
     onMenuPress,
     onInboxPress,
+    onNewTaskPress,
     showMenu = true,
     showInbox = true,
     isInboxMode = false,
@@ -108,6 +110,16 @@ export function ChatHeader({
                     </Text>
                 ) : null}
             </View>
+            {onNewTaskPress && (
+                <TouchableOpacity style={styles.menuButton} onPress={onNewTaskPress}>
+                    <Plus
+                        width={22}
+                        height={22}
+                        color={theme.textPrimary}
+                        strokeWidth={2}
+                    />
+                </TouchableOpacity>
+            )}
             {showInbox && onInboxPress && (
                 <TouchableOpacity style={styles.menuButton} onPress={onInboxPress}>
                     <Mail

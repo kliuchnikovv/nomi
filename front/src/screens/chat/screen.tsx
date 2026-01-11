@@ -66,7 +66,11 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
-    const { chats, chatsLoading, activeChatID, activeChat, setActiveChatID, getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat } = useMain();
+    const {
+        chats, chatsLoading, activeChatID, activeChat, setActiveChatID,
+        getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat,
+        setNewTaskModalVisible
+    } = useMain();
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
     const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
@@ -450,6 +454,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         subtitle={headerSubtitle}
                         onMenuPress={handleOpenMenu}
                         onInboxPress={handleOpenInbox}
+                        onNewTaskPress={() => setNewTaskModalVisible(true)}
                         showMenu={!isWide}
                         showInbox={!isWide}
                         isInboxMode={isPluginThread}
@@ -460,8 +465,8 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
 
 
 
-                    {/* Show Dashboard when no messages, Chat when there are messages */}
-                    {messages.length === 0 && !messagesLoading ? (
+                    {/* Show Dashboard when no messages AND it's a new chat placeholder, Chat when there are messages or it's a persisted chat */}
+                    {messages.length === 0 && !messagesLoading && activeChatID === '00000000-0000-0000-0000-000000000000' ? (
                         <KeyboardAvoidingView
                             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             style={{ flex: 1 }}

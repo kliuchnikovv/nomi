@@ -61,6 +61,7 @@ The `project_id` is the database ID of the project you're working on.
 - It is passed in the session/task context when you receive a request
 - Look for it in the `AnalystOutput.project_id` field from previous outputs
 - If working on "Genie" project itself, use the project_id from the task context: {project_id}
+- Task context: {task_id}
 - If truly unknown, use `project_id="*"` to search across all projects (BUT try specific ID first)
 
 ## What Knowledge is Available
@@ -450,6 +451,7 @@ class DevelopmentTeam(Team):
         user_id: Optional[str] = None,
         auth_token: Optional[str] = None,
         project_id: Optional[str] = None,
+        task_id: Optional[str] = None,
         db_url: Optional[str] = None, # Added to support Workflow Storage
         client_tools: Optional[List[Toolkit]] = None,
     ):
@@ -491,6 +493,8 @@ class DevelopmentTeam(Team):
         # Workflow Storage
         self.workflow_storage = PgWorkflowStorage(db_url) if db_url else None
         self.user_id = user_id
+        self.project_id = project_id
+        self.task_id = task_id
 
         description = dedent('''
 <identity>
@@ -754,7 +758,10 @@ If a team member encounters issues:
                 WorkflowAgent(
                     name="Analyst",
                     model=model,
-                    instructions=analyst_instructions.format(project_id=project_id or "unknown"),
+                    instructions=analyst_instructions.format(
+                        project_id=project_id or "unknown",
+                        task_id=task_id or "unknown"
+                    ),
                     markdown=markdown,
                     debug_mode=debug_mode,
                     tools=analyst_tools,

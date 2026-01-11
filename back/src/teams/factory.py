@@ -61,8 +61,9 @@ class TeamFactory:
             # Get auth token for API calls
             auth_token = command_desc.get("auth_token")
 
-            # Get project_id context
+            # Get project_id and task_id context
             project_id = command_desc.get("project_id")
+            task_id = command_desc.get("task_id")
 
             # Build client tools if specs provided
             client_tools = []
@@ -80,6 +81,7 @@ class TeamFactory:
                 debug_mode=self.debug_mode,
                 user_id=effective_user_id,
                 project_id=project_id,
+                task_id=task_id,
                 auth_token=auth_token,
                 db_url=self.db.db_url if self.db else None, # Use existing DB connection URL
                 client_tools=client_tools

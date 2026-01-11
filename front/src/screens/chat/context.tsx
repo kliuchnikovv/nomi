@@ -247,6 +247,16 @@ export function ChatProvider({
             if (pendingChatMode) {
                 modeToUse = pendingChatMode.mode;
                 teamIdToUse = pendingChatMode.teamId;
+
+                // If there's an initial message, we'll send it after the chat is fully switched
+                if (pendingChatMode.initialMessage) {
+                    const messageToSend = pendingChatMode.initialMessage;
+                    const chatIDToSend = activeChatID;
+                    // We need a small delay or a way to ensure the chat switch is complete
+                    // Actually, if we are at emptyChatID, we are just PREPARING.
+                    // The message should be sent when we land on the REAL ID.
+                }
+
                 clearPendingChatMode?.();
             } else {
                 modeToUse = (sidebarFilter === 'all' || sidebarFilter === 'agent' ? 'agent' : 'team');
@@ -260,6 +270,20 @@ export function ChatProvider({
             newChatInitializedRef.current = true;
         } else if (activeChat) {
             newChatInitializedRef.current = false;
+
+            // Check for initial message from pendingChatMode if it was just set
+            if (pendingChatMode?.initialMessage && activeChatID === activeChat.id) {
+                const initialMsg = pendingChatMode.initialMessage;
+                // Clear it from state to prevent double-sending
+                clearPendingChatMode?.();
+
+                // Send after a short delay to ensure socket initialization
+                setTimeout(() => {
+                    console.log('Sending initial message for task-linked chat:', initialMsg);
+                    sendMessage(initialMsg);
+                }, 500);
+            }
+
             // Existing chat - restore mode
             if (activeChat.mode) {
                 setChatMode(activeChat.mode);
@@ -324,6 +348,8 @@ export function ChatProvider({
             ...baseCommand,
             model: selectedModel || baseCommand.model,
             auth_token: token,
+            project_id: activeChat?.project_id,
+            task_id: activeChat?.task_id,
             // For dynamic teams, we might want to update participants' models too, 
             // but let's keep it simple: model picker overrides the main team/conductor model.
         };
@@ -573,7 +599,9 @@ export function ChatProvider({
                     "title": title,
                     "model": selectedModelRef.current || 'gemini-2.0-flash-exp',
                     "mode": chatMode,
-                    "team_id": chatMode === 'team' ? selectedTeamId : null
+                    "team_id": chatMode === 'team' ? selectedTeamId : null,
+                    "project_id": activeChat?.project_id,
+                    "task_id": activeChat?.task_id,
                 },
             );
             if (created?.id) {
