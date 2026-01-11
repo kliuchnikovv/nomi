@@ -227,6 +227,9 @@ func (r *Room) connectLLM() {
 	if r.command != "" {
 		query.Add("command", r.command)
 	}
+	
+	// Pass user_id so Python knows who to publish to in Redis
+	query.Add("user_id", r.initiatorID.String())
 
 	u.RawQuery = query.Encode()
 

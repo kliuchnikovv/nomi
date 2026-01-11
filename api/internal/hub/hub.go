@@ -102,7 +102,9 @@ func (h *Hub) subscribeRedis() {
 	for msg := range ch {
 		// msg.Channel is the full channel name, e.g. "chat:user:123-456..."
 		// msg.Payload is the JSON string
-		
+
+		h.logger.Info("received redis message", zap.String("channel", msg.Channel))
+
 		// Extract userID from channel
 		// Format: chat:user:<uuid>
 		var userIDStr string
@@ -112,9 +114,11 @@ func (h *Hub) subscribeRedis() {
 
 		userID, err := uuid.Parse(userIDStr)
 		if err != nil {
-			h.logger.Warn("invalid user id in redis channel", zap.String("channel", msg.Channel))
+			h.logger.Warn("invalid user id in redis channel", zap.String("channel", msg.Channel), zap.String("id_part", userIDStr))
 			continue
 		}
+
+		h.logger.Info("parsed user id from redis channel", zap.String("user_id", userID.String()))
 
 		// Parse frame to validate it
 		// We expect the payload to be a JSON string of Frame or just arbitrary JSON
@@ -149,16 +153,24 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
+	h.logger.Info("broadcasting to user via redis", zap.String("user_id", userID.String()), zap.Int("total_rooms", len(h.rooms)))
+
 	payload, err := json.Marshal(frame)
 	if err != nil {
 		h.logger.Error("failed to marshal broadcast frame", zap.Error(err))
 		return
 	}
 
+	found := 0
 	for _, room := range h.rooms {
 		if room.initiatorID == userID {
+			h.logger.Info("found matching room for user", zap.String("room_id", room.ID.String()))
 			room.InjectMessage(userID, payload)
+			found++
 		}
+	}
+	if found == 0 {
+		h.logger.Warn("no active rooms found for user", zap.String("user_id", userID.String()))
 	}
 }
 

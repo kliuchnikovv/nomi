@@ -1042,10 +1042,14 @@ def router(agent_factory: AgentFactory) -> APIRouter:
         token = websocket.query_params.get("token")
         user_id = _extract_user_id_from_token(token) if token else None
         
+        # Fallback: check plain user_id param (trusted internal communication)
+        if not user_id:
+            user_id = websocket.query_params.get("user_id")
+
         if user_id:
-             logger.info("[WS] Identifed user %s from token", user_id)
+             logger.info("[WS] Identifed user %s", user_id)
         else:
-             logger.info("[WS] Could not identify user from token, falling back to session_id %s", session_id)
+             logger.info("[WS] Could not identify user, falling back to session_id %s", session_id)
 
         session = LLMWebSocketSession(websocket, session_id, agent_factory, user_id=user_id)
 
