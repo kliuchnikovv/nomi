@@ -75,8 +75,9 @@ func New(
 		dashboardHandler     = handlers.NewDashboardHandler(db)
 		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
 		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg, hubInstance)
-		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance) // Updated call here
+		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance)
 		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
+		toolsHandler         = handlers.NewToolsHandler(db, logger)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -188,6 +189,10 @@ func New(
 
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
+
+	// Tools API (Used by Agent/Python Backend)
+	// Takes ?session_id=... to resolve user context
+	r.GET("/api/tools", toolsHandler.ListTools)
 
 	// File Upload API
 	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))
