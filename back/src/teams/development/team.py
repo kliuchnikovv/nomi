@@ -866,12 +866,20 @@ If a team member encounters issues:
     def run_component(self, role: str, task_id: str):
         """
         Public method to manually trigger a specific agent (e.g. from Webhook).
+        This method supports stateless execution by resuming context from WorkflowStorage.
         """
         agent = next((m for m in self.members if m.name == role), None)
         if agent:
-            # We might not have session_id here if called from webhook (new context).
-            # But WorkflowAgent.run looks up by task_id too.
-            print(f"[Workflow] Manually triggering {role} for Task {task_id}")
+            # When resuming from background task, we don't have session_id in memory.
+            # WorkflowAgent.run will attempt to look it up using task_id + WorkflowStorage.
+            print(f"[Workflow] Resuming task {task_id} with {role} (Stateless Execution)")
+
+            # Explicitly log if storage is configured to confirm readiness for restoration
+            if self.workflow_storage:
+                print(f"[Workflow] Storage configured. Agent will attempt to fetch artifacts for task {task_id}")
+            else:
+                print(f"[Workflow] WARNING: No WorkflowStorage configured. Context restoration may fail.")
+
             agent.run(message=f"External trigger for {role}.", task_id=task_id, session_id=None)
         else:
             print(f"Agent role {role} not found.")
