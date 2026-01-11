@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Message } from '../screens/main/models';
+import { ChatState, IMessage } from '../types/Model';
 
 interface ChatState {
     chats: Record<string, Message[]>; // Key is chat_id
@@ -15,43 +16,6 @@ export const useChatStore = create<ChatState>()(
     persist(
         (set, get) => ({
             chats: {},
-            addMessage: (chatId, message) => set((state) => {
-                const currentMessages = state.chats[chatId] || [];
-                // Check if message already exists to avoid duplicates
-                const exists = currentMessages.some(m => m.id === message.id);
-                if (exists) return state;
-
-                return {
-                    chats: {
-                        ...state.chats,
-                        [chatId]: [...currentMessages, message],
-                    },
-                };
-            }),
-            setMessages: (chatId, messages) => set((state) => ({
-                chats: {
-                    ...state.chats,
-                    [chatId]: messages,
-                },
-            })),
-            updateMessageStatus: (chatId, messageId, status) => set((state) => {
-                const currentMessages = state.chats[chatId] || [];
-                const updatedMessages = currentMessages.map(m => {
-                    if (m.id === messageId) {
-                        // Assuming the Message type has a pending field or we map 'status' to it
-                        // The user requested 'status', but our model has 'pending?: boolean'.
-                        // Let's map 'sent' -> pending: false, 'pending' -> pending: true
-                        return { ...m, pending: status === 'pending' };
-                    }
-                    return m;
-                });
-                return {
-                    chats: {
-                        ...state.chats,
-                        [chatId]: updatedMessages,
-                    },
-                };
-            }),
             updateMessage: (chatId, messageId, updates) => set((state) => {
                 const currentMessages = state.chats[chatId] || [];
                 const updatedMessages = currentMessages.map(m =>
@@ -64,6 +28,54 @@ export const useChatStore = create<ChatState>()(
                     },
                 };
             }),
+
+            addMessage: (chatId, message) => {
+                set((state) => {
+                    const currentMessages = state.chats[chatId] || [];
+                    // Deduplication based on _id
+                    const exists = currentMessages.some(m => m._id === message._id);
+                    if (exists) {
+                        return state;
+                    }
+                    // Add to beginning (GiftedChat standard) or end?
+                    // GiftedChat usually expects newest first (index 0).
+                    // Let's assume we append to the list and sorting happens in UI,
+                    // OR strictly follow GiftedChat's "inverted" expectation if we want to store it that way.
+                    // However, standard store usually just holds the list.
+                    // Let's append to the front (newest first) to match common GiftedChat usage if the array is passed directly.
+                    return {
+                        chats: {
+                            ...state.chats,
+                            [chatId]: [message, ...currentMessages]
+                        }
+                    };
+                });
+            },
+
+            setMessages: (chatId, messages) => {
+                set((state) => ({
+                    chats: {
+                        ...state.chats,
+                        [chatId]: messages
+                    }
+                }));
+            },
+
+
+            updateMessageStatus: (chatId, msgId, status) => {
+                set((state) => {
+                    const currentMessages = state.chats[chatId] || [];
+                    const updatedMessages = currentMessages.map(msg =>
+                        msg._id === msgId ? { ...msg, ...status } : msg
+                    );
+                    return {
+                        chats: {
+                            ...state.chats,
+                            [chatId]: updatedMessages
+                        }
+                    };
+                });
+            }
         }),
         {
             name: 'chat-storage',

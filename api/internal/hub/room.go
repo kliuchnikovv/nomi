@@ -37,6 +37,7 @@ type Room struct {
 
 	clients    map[*Client]bool
 	ingress    chan *ClientMessage
+	redisIngress chan Frame
 	register   chan *Client
 	unregister chan *Client
 
@@ -70,19 +71,20 @@ type Room struct {
 
 func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string, mode string, command string) *Room {
 	return &Room{
-		ID:          id,
-		Type:        roomType,
-		hub:         hub,
-		logger:      logger.With(zap.String("room_id", id.String()), zap.String("type", string(roomType))),
-		store:       store,
-		initiatorID: initiatorID,
-		clients:     make(map[*Client]bool),
-		ingress:     make(chan *ClientMessage),
-		register:    make(chan *Client),
-		unregister:  make(chan *Client),
-		llmBaseURL:  llmBaseURL,
-		mode:        mode,
-		command:     command,
+		ID:           id,
+		Type:         roomType,
+		hub:          hub,
+		logger:       logger.With(zap.String("room_id", id.String()), zap.String("type", string(roomType))),
+		store:        store,
+		initiatorID:  initiatorID,
+		clients:      make(map[*Client]bool),
+		ingress:      make(chan *ClientMessage),
+		redisIngress: make(chan Frame, 256),
+		register:     make(chan *Client),
+		unregister:   make(chan *Client),
+		llmBaseURL:   llmBaseURL,
+		mode:         mode,
+		command:      command,
 	}
 }
 
@@ -137,7 +139,11 @@ func (r *Room) Run() {
 			resetTimer()
 			r.handleUserMessage(msg)
 
-		case frame, ok := <-r.llmFrames:
+		case frame := <-r.redisIngress:
+			resetTimer()
+			r.handleLLMMessage(frame)
+
+		case _, ok := <-r.llmFrames:
 			if !ok {
 				r.logger.Warn("llm frames channel closed, will retry connection on next message")
 				r.llmFrames = nil // Disable this case to avoid busy loop
@@ -145,8 +151,10 @@ func (r *Room) Run() {
 				// If the next write fails, connectLLM will handle reconnection
 				continue
 			}
-			resetTimer()
-			r.handleLLMMessage(frame)
+			// We no longer process frames from the WebSocket directly as they come via Redis.
+			// However, we might still receive control frames or pings if Python sends them there.
+			// But since we told Python to send EVERYTHING to Redis, this channel should stay silent
+			// until it closes. If we receive something, we ignore it to avoid duplication.
 
 		case err, ok := <-r.llmErrs:
 			if !ok {
@@ -201,6 +209,7 @@ func (r *Room) connectLLM() {
 
 	query := u.Query()
 	query.Add("chat_id", r.ID.String())
+	query.Add("user_id", r.initiatorID.String())
 
 	// Forward mode and command to Python backend
 	if r.mode != "" {
@@ -229,6 +238,14 @@ func (r *Room) connectLLM() {
 
 	// Send Tools and History
 	r.initLLMContext()
+}
+
+func (r *Room) HandleRedisFrame(frame Frame) {
+	select {
+	case r.redisIngress <- frame:
+	default:
+		r.logger.Warn("redis ingress full, dropping frame", zap.String("op", string(frame.Operation)))
+	}
 }
 
 func (r *Room) initLLMContext() {
