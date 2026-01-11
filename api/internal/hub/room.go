@@ -35,6 +35,7 @@ type Room struct {
 
 	clients    map[*Client]bool
 	ingress    chan *ClientMessage
+	broadcast  chan Frame // Channel for broadcasting system messages
 	register   chan *Client
 	unregister chan *Client
 
@@ -76,6 +77,7 @@ func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, s
 		initiatorID: initiatorID,
 		clients:     make(map[*Client]bool),
 		ingress:     make(chan *ClientMessage),
+		broadcast:   make(chan Frame, 256),
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		llmBaseURL:  llmBaseURL,
@@ -134,6 +136,26 @@ func (r *Room) Run() {
 		case msg := <-r.ingress:
 			resetTimer()
 			r.handleUserMessage(msg)
+
+		case frame := <-r.broadcast:
+			resetTimer()
+			// Marshal and broadcast to all clients
+			b, err := json.Marshal(frame)
+			if err != nil {
+				r.logger.Error("failed to marshal broadcast frame", zap.Error(err))
+			} else {
+				for client := range r.clients {
+					if client.send == nil {
+						continue
+					}
+					select {
+					case client.send <- b:
+					default:
+						close(client.send)
+						delete(r.clients, client)
+					}
+				}
+			}
 
 		case frame, ok := <-r.llmFrames:
 			if !ok {
@@ -265,6 +287,14 @@ func (r *Room) initLLMContext() {
 		if err := r.llmSocket.Write(context.Background(), frame); err != nil {
 			r.logger.Error("failed to send history", zap.Error(err))
 		}
+	}
+}
+
+func (r *Room) Broadcast(frame Frame) {
+	select {
+	case r.broadcast <- frame:
+	default:
+		r.logger.Warn("broadcast channel full, dropping frame", zap.String("op", string(frame.Operation)))
 	}
 }
 

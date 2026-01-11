@@ -20,6 +20,7 @@ type ProjectTaskHandler struct {
 	logger     *zap.Logger
 	hub        *hub.Hub
 	llmBaseURL string
+	hub        *hub.Hub
 }
 
 func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Config, hub *hub.Hub) *ProjectTaskHandler {
@@ -32,11 +33,13 @@ func NewProjectTaskHandler(store *storage.Storage, logger *zap.Logger, cfg *conf
 		logger:     logger.With(zap.String("component", "project_task_handler")),
 		hub:        hub,
 		llmBaseURL: baseURL,
+		hub:        hub,
 	}
 }
 
 type UpdateStatusRequest struct {
-	Status storage.ProjectTaskStatus `json:"status" binding:"required"`
+	Status    storage.ProjectTaskStatus `json:"status" binding:"required"`
+	Artifacts map[string]interface{}    `json:"artifacts"`
 }
 
 func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
@@ -68,10 +71,19 @@ func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	oldStatus := task.Status
+	// Prepare artifacts
+	var artifactsBytes []byte
+	if req.Artifacts != nil {
+		b, err := json.Marshal(req.Artifacts)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid artifacts JSON"})
+			return
+		}
+		artifactsBytes = b
+	}
 
-	// Update status
-	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status); err != nil {
+	// Update status and artifacts
+	if err := h.store.UpdateProjectTaskStatus(c.Request.Context(), taskID, req.Status, artifactsBytes); err != nil {
 		h.logger.Error("failed to update task status", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return
@@ -88,6 +100,25 @@ func (h *ProjectTaskHandler) UpdateStatus(c *gin.Context) {
 
 	// Notify Python Backend (Team Lead Agent)
 	go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, req.Status)
+
+	// Broadcast task_updated event to Project Room
+	h.hub.BroadcastToRoom(task.ProjectID, hub.Frame{
+		ID:        0, // System frame
+		ChatID:    task.ProjectID,
+		Kind:      hub.MetaKind,
+		Operation: hub.MessageOperation,
+		Timestamp: time.Now().UTC(),
+		Payload: hub.Payload{
+			Type:    "task_updated",
+			Message: string(req.Status),
+			Params: map[string]interface{}{
+				"task_id":    task.ID.String(),
+				"old_status": task.Status,
+				"new_status": req.Status,
+				"artifacts":  req.Artifacts,
+			},
+		},
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":         task.ID,
