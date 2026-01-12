@@ -143,7 +143,9 @@ func (r *Room) Run() {
 
 		case frame := <-r.llmIngress:
 			resetTimer()
-			r.handleLLMMessage(frame)
+			// Message came from Redis (Hub broadcast), so it was already sent to User Room if needed.
+			// Do NOT forward to User Room again.
+			r.handleLLMMessage(frame, false)
 
 		case frame := <-r.broadcast:
 			resetTimer() // Reset timer on activity
@@ -172,7 +174,9 @@ func (r *Room) Run() {
 				continue
 			}
 			resetTimer()
-			r.handleLLMMessage(frame)
+			// Message came from direct LLM socket (shouldn't happen with current arch, but if it does),
+			// we MUST forward to User Room to ensure consistency.
+			r.handleLLMMessage(frame, true)
 
 		case err, ok := <-r.llmErrs:
 			if !ok {
@@ -538,7 +542,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	}
 }
 
-func (r *Room) handleLLMMessage(frame Frame) {
+func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	// DEBUG: Log all incoming LLM frames
 	r.logger.Info("handleLLMMessage received frame",
 		zap.String("kind", string(frame.Kind)),
@@ -574,7 +578,7 @@ func (r *Room) handleLLMMessage(frame Frame) {
 
 	// Forward to User Room if this is a Chat Room
 	// This ensures users connected to the global "user" channel receive updates
-	if r.Type == RoomTypeChat {
+	if r.Type == RoomTypeChat && forwardToUser {
 		userRoom, err := r.hub.GetOrCreateRoom(r.initiatorID, RoomTypeUser, r.initiatorID, "", "")
 		if err == nil && userRoom != nil {
 			userRoom.BroadcastFrame(frame)
