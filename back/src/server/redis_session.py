@@ -41,7 +41,11 @@ class RedisSession:
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         self.redis_client = redis.from_url(redis_url, decode_responses=True)
         self.next_id = 0
+        self.next_id = 0
         self.cancel_event = asyncio.Event()
+
+        # History storage
+        self.chat_history: List[Dict[str, str]] = []
 
     async def _send_frame(self, frame: Frame) -> int:
         """Publish frame to Redis chat:user:<user_id>."""
@@ -121,13 +125,102 @@ class RedisSession:
             await self._send_frame(make_error(self.next_id, "build_failed", self.chat_id, str(e), 500))
             raise
 
+    def _parse_tools(self, payload: Any):
+        if not payload:
+            return
+        if not isinstance(payload, dict):
+            payload = payload if hasattr(payload, '__dict__') else {}
+        
+        tools_obj = payload.get("tools") if isinstance(payload, dict) else None
+        tools_data = []
+
+        if isinstance(tools_obj, dict):
+            tools_data = tools_obj.get("tools", [])
+        elif isinstance(tools_obj, list):
+            tools_data = tools_obj
+
+        if isinstance(tools_data, list):
+            for tool_dict in tools_data:
+                if not isinstance(tool_dict, dict):
+                    continue
+                try:
+                    params = tool_dict.get("params", {})
+                    if isinstance(params, str):
+                        try:
+                            params = json.loads(params)
+                        except json.JSONDecodeError:
+                            params = {}
+
+                    tool_spec = ToolSpec(
+                        name=tool_dict.get("name", ""),
+                        enabled=tool_dict.get("enabled", True),
+                        params=params if isinstance(params, dict) else {},
+                    )
+                    self.tools_specs.append(tool_spec)
+                except Exception as e:
+                    logger.warning("[RedisSession] Failed to parse tool: %s", e)
+
+        # Also check for command/team desc in payload
+        cmd_obj = payload.get("command") if isinstance(payload, dict) else None
+        if cmd_obj is None and isinstance(payload, dict):
+            cmd_obj = payload.get("team")
+
+        if cmd_obj:
+            if isinstance(cmd_obj, str):
+                try:
+                    cmd_obj = json.loads(cmd_obj)
+                except json.JSONDecodeError:
+                    pass
+            if isinstance(cmd_obj, dict):
+                self.command_desc = cmd_obj
+                # If model is not set, set it from command
+                if self.current_model_name is None:
+                    self.current_model_name = cmd_obj.get("model")
+
+        logger.info("[RedisSession] Parsed tools: count=%d", len(self.tools_specs))
+
+    def _parse_history(self, payload: Any):
+        if payload and isinstance(payload, dict):
+            history_data = payload.get("history", [])
+            if isinstance(history_data, list):
+                for msg in history_data:
+                    if isinstance(msg, dict):
+                        self.chat_history.append({
+                            "role": msg.get("role", "user"),
+                            "content": msg.get("text", "")
+                        })
+                logger.info("[RedisSession] Parsed history: count=%d", len(self.chat_history))
+
+
     async def handle_user_message(self, frame: Frame):
         payload = frame.payload or {}
         text = payload.get("message", "")
         message_id = str(uuid.uuid4())
         
+        # --- NEW LOGIC: Init from Payload ---
+        
+        # 1. Check and update chat history
+        incoming_history = payload.get("history")
+        if incoming_history:
+            # Wrap in dict to match _parse_history expectation or change _parse_history
+            # The Go side sends "History": [...] which arrives as payload["history"] = [...]
+            # _parse_history expects {"history": [...]} or just the payload if it contains "history"
+            self._parse_history(payload) 
+
+        # 2. Check and update tools/commands
+        if payload.get("tools") or payload.get("command") or payload.get("team"):
+            self._parse_tools(payload)
+            # If tools updated, we might need to assume agent needs rebuild (which happens below anyway)
+
+        # ------------------------------------
+
         # Build agent
         await self.build_agent_instance(payload)
+        
+        # If we have history and the agent supports it, we might want to load it.
+        # But commonly the Agent loads from DB based on session_id.
+        # If we want to use the push-history, we might need to manually set it.
+        # However, for now, we follow the user's request to just parse it.
         
         msg_chat_id = frame.chat_id or self.chat_id
 

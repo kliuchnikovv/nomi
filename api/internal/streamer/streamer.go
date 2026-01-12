@@ -101,36 +101,20 @@ func (streamer *Streamer) Stream(
 	if modelReader != nil {
 		// Tools sending removed (client-side only)
 
-		// Send chat history to model if available
-		if len(streamer.chatHistory) > 0 {
-			// Convert chat history to simple format for model
-			historyData := make([]map[string]interface{}, 0, len(streamer.chatHistory))
-			for _, msg := range streamer.chatHistory {
-				historyData = append(historyData, map[string]interface{}{
-					"role": string(msg.Role),
-					"text": msg.Text,
-				})
-			}
-
-			historyFrame := Frame{
-				ID:        1,
-				ChatID:    chatID,
-				Kind:      TokenKind,
-				Operation: HistoryOperation,
-				Timestamp: time.Now().UTC(),
-				Payload: Payload{
-					History: historyData,
-				},
-			}
-			if err := modelReader.Write(ctx, historyFrame); err != nil {
-				streamer.logger.Error("failed to send history to model", zap.Error(err))
-			} else {
-				streamer.logger.Info("sent chat history to model", zap.Int("count", len(streamer.chatHistory)))
-			}
-		}
-
 		// Send initial message if present
 		if streamer.initialMessage != "" {
+			// Prepare history data
+			var historyData []map[string]interface{}
+			if len(streamer.chatHistory) > 0 {
+				historyData = make([]map[string]interface{}, 0, len(streamer.chatHistory))
+				for _, msg := range streamer.chatHistory {
+					historyData = append(historyData, map[string]interface{}{
+						"role": string(msg.Role),
+						"text": msg.Text,
+					})
+				}
+			}
+
 			msgFrame := Frame{
 				Kind:      TokenKind,
 				Operation: MessageOperation,
@@ -139,12 +123,16 @@ func (streamer *Streamer) Stream(
 				Payload: Payload{
 					Message:     streamer.initialMessage,
 					Attachments: streamer.initialAttachments,
+					History:     historyData,
+					Command:     streamer.commandPayload,
 				},
 			}
 			if err := modelReader.Write(ctx, msgFrame); err != nil {
-				streamer.logger.Error("failed to send initial message to model", zap.Error(err))
+				streamer.logger.Error("failed to send initial message bunddle to model", zap.Error(err))
 			} else {
-				streamer.logger.Info("sent initial message to model", zap.String("message", streamer.initialMessage))
+				streamer.logger.Info("sent bundled initial message to model",
+					zap.String("message", streamer.initialMessage),
+					zap.Int("history_count", len(historyData)))
 			}
 		}
 	}
