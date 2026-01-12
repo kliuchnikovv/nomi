@@ -320,16 +320,30 @@ class RedisSession:
 
         agent_input = text
         if self.chat_history:
-             try:
-                 msgs = []
-                 for h in self.chat_history:
-                     msgs.append(Message(role=h["role"], content=h["content"]))
-                 if text:
-                     msgs.append(Message(role="user", content=text))
-                 agent_input = msgs
-                 logger.info("[RedisSession] Using chat history: %d messages", len(self.chat_history))
-             except Exception as e:
-                 logger.error("[RedisSession] Failed to construct history messages: %s", e)
+            try:
+                # Format history as text context for the model
+                # This ensures the model sees the conversation history
+                history_lines = []
+                for h in self.chat_history:
+                    role = h["role"].upper()
+                    content = h["content"]
+                    history_lines.append(f"{role}: {content}")
+                
+                history_context = "\n".join(history_lines)
+                
+                # Prepend history to current message
+                if text:
+                    agent_input = f"""<CONVERSATION_HISTORY>
+{history_context}
+</CONVERSATION_HISTORY>
+
+USER's current message: {text}"""
+                else:
+                    agent_input = f"<CONVERSATION_HISTORY>\n{history_context}\n</CONVERSATION_HISTORY>\n\n[Continue from the conversation above]"
+                
+                logger.info("[RedisSession] Injected chat history: %d messages into prompt", len(self.chat_history))
+            except Exception as e:
+                logger.error("[RedisSession] Failed to inject history: %s", e)
 
         if attachments:
             images = []
