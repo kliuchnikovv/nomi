@@ -76,6 +76,7 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		h.logger.Error("failed to fetch integrations", zap.Error(err))
 		// Proceed with default tools even if integrations fail
 	}
+	h.logger.Info("fetched integrations", zap.Int("count", len(integrations)), zap.String("user_id", userID.String()))
 
 	// 4. Build Response
 	type ToolConfig struct {
