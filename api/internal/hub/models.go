@@ -61,6 +61,8 @@ type Payload struct {
 	Role   string    `json:"role,omitempty"`   // "user" or "assistant"
 	Sender uuid.UUID `json:"sender,omitempty"` // User ID who sent the message
 
+	AgentType string `json:"agent_type,omitempty"` // "agent", "team", etc.
+
 	Type             string      `json:"type,omitempty"`
 	Content          string      `json:"content,omitempty"` // Generic content field (e.g., reasoning text)
 	AgentName        string      `json:"agent_name,omitempty"` // For team member responses

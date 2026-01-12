@@ -5,15 +5,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
+	// Legacy imports for direct LLM socket
+	// "net/http"
+	// "github.com/gorilla/websocket"
 )
 
 type RoomType string
@@ -42,17 +43,22 @@ type Room struct {
 	// Ingress for LLM frames from Redis (e.g. from Python team agents)
 	llmIngress chan Frame
 
-	// LLM Connection
-	llmBaseURL string
-	llmSocket  *Socket
-	llmFrames  <-chan Frame
-	llmErrs    <-chan error
-	// Context for LLM reading
-	llmCtx    context.Context
-	llmCancel context.CancelFunc
+	/*
+		// Legacy: Direct LLM Connection
+		llmBaseURL string
+		llmSocket  *Socket
+		llmFrames  <-chan Frame
+		llmErrs    <-chan error
+		// Context for LLM reading
+		llmCtx    context.Context
+		llmCancel context.CancelFunc
+	*/
 
 	// Team Mode
-	mode    string // "agent" or "team"
+
+	// Team Mode
+	mode string // "agent" or "team"
+
 	command string // JSON-encoded team command
 
 	// Generation state - prevents room from closing while LLM is generating
@@ -84,27 +90,23 @@ func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, s
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		llmIngress:  make(chan Frame),
-		llmBaseURL:  llmBaseURL,
-		mode:        mode,
-		command:     command,
+		// llmBaseURL:  llmBaseURL, // Legacy
+		mode:    mode,
+		command: command,
 	}
 }
 
 func (r *Room) Run() {
 	defer func() {
-		if r.llmCancel != nil {
-			r.llmCancel()
-		}
-		if r.llmSocket != nil {
-			r.llmSocket.Close()
-		}
+		/*
+			if r.llmCancel != nil {
+				r.llmCancel()
+			}
+			if r.llmSocket != nil {
+				r.llmSocket.Close()
+			}
+		*/
 	}()
-
-	// Connect to LLM immediately ONLY if it's a chat room
-	// For user channels, we don't connect to LLM unless needed (future feature)
-	if r.Type == RoomTypeChat {
-		r.connectLLM()
-	}
 
 	// Idle timeout: close the room if no activity/clients for 5 minutes.
 	const idleTimeout = 5 * time.Minute
@@ -120,6 +122,14 @@ func (r *Room) Run() {
 		}
 		timer.Reset(idleTimeout)
 	}
+
+	/*
+		// Connect to LLM immediately ONLY if it's a chat room
+		// For user channels, we don't connect to LLM unless needed (future feature)
+		if r.Type == RoomTypeChat {
+			r.connectLLM()
+		}
+	*/
 
 	for {
 		select {
@@ -165,30 +175,32 @@ func (r *Room) Run() {
 				}
 			}
 
-		case frame, ok := <-r.llmFrames:
-			if !ok {
-				r.logger.Warn("llm frames channel closed, will retry connection on next message")
-				r.llmFrames = nil // Disable this case to avoid busy loop
-				// Don't set llmSocket = nil here - the connection might still be valid for writes
-				// If the next write fails, connectLLM will handle reconnection
-				continue
-			}
-			resetTimer()
-			// Message came from direct LLM socket (shouldn't happen with current arch, but if it does),
-			// we MUST forward to User Room to ensure consistency.
-			r.handleLLMMessage(frame, true)
+		/*
+			case frame, ok := <-r.llmFrames:
+				if !ok {
+					r.logger.Warn("llm frames channel closed, will retry connection on next message")
+					r.llmFrames = nil // Disable this case to avoid busy loop
+					// Don't set llmSocket = nil here - the connection might still be valid for writes
+					// If the next write fails, connectLLM will handle reconnection
+					continue
+				}
+				resetTimer()
+				// Message came from direct LLM socket (shouldn't happen with current arch, but if it does),
+				// we MUST forward to User Room to ensure consistency.
+				r.handleLLMMessage(frame, true)
 
-		case err, ok := <-r.llmErrs:
-			if !ok {
-				r.llmErrs = nil
-				continue
-			}
-			r.logger.Error("llm error", zap.Error(err))
-			// Only reset socket on actual errors
-			if r.llmSocket != nil {
-				r.llmSocket.Close()
-				r.llmSocket = nil
-			}
+			case err, ok := <-r.llmErrs:
+				if !ok {
+					r.llmErrs = nil
+					continue
+				}
+				r.logger.Error("llm error", zap.Error(err))
+				// Only reset socket on actual errors
+				if r.llmSocket != nil {
+					r.llmSocket.Close()
+					r.llmSocket = nil
+				}
+		*/
 
 		case <-timer.C:
 			if len(r.clients) == 0 && !r.generationInProgress {
@@ -205,6 +217,8 @@ func (r *Room) Run() {
 	}
 }
 
+/*
+// Legacy: Direct LLM Connection methods
 func (r *Room) connectLLM() {
 	// If we have a socket but no frames channel, we need to restart the reader
 	if r.llmSocket != nil && r.llmFrames == nil {
@@ -239,7 +253,7 @@ func (r *Room) connectLLM() {
 	if r.command != "" {
 		query.Add("command", r.command)
 	}
-	
+
 	// Pass user_id so Python knows who to publish to in Redis
 	query.Add("user_id", r.initiatorID.String())
 
@@ -302,6 +316,7 @@ func (r *Room) initLLMContext() {
 		}
 	}
 }
+*/
 
 func (r *Room) InjectMessage(userID uuid.UUID, payload []byte) {
 	// Create a "fake" client message
@@ -505,21 +520,49 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		broadcastExcept(frame, msg.Client)
 
 		// 5. Forward to LLM
-		r.connectLLM() // Ensure connected
-		if r.llmSocket != nil {
-			r.generationInProgress = true // Keep room alive until response complete
-			if err := r.llmSocket.Write(context.Background(), frame); err != nil {
-				r.logger.Error("failed to forward to llm", zap.Error(err))
-				r.generationInProgress = false
+		// 5. Forward to LLM via Redis
+		// Enrich Payload with Mode (AgentType) and Command for the new session building
+		if r.mode != "" {
+			frame.Payload.AgentType = r.mode
+		}
+		if r.command != "" {
+			// Try to unmarshal JSON command to interface{}, otherwise pass as string?
+			// Payload.Command is interface{}.
+			var cmdMap interface{}
+			if err := json.Unmarshal([]byte(r.command), &cmdMap); err == nil {
+				frame.Payload.Command = cmdMap
+			} else {
+				frame.Payload.Command = r.command // Fallback
 			}
 		}
+
+		payloadBytes, _ := json.Marshal(frame)
+		r.logger.Info("REDIS PUBLISH",
+			zap.String("channel", fmt.Sprintf("chat:request:%s", r.ID.String())),
+			zap.String("op", string(frame.Operation)),
+			zap.Int("len", len(payloadBytes)),
+		)
+
+		if err := r.hub.redis.Publish(context.Background(), fmt.Sprintf("chat:request:%s", r.ID.String()), payloadBytes).Err(); err != nil {
+			r.logger.Error("failed to publish to redis", zap.Error(err))
+		}
+		// Set processing flag? It's async now.
+		r.generationInProgress = true
+
 	} else if r.Type == RoomTypeChat {
 		// Pass through other frames (e.g. commands, meta, tools, history) for CHAT rooms
 		broadcast(frame)
-		r.connectLLM()
-		if r.llmSocket != nil {
-			r.llmSocket.Write(context.Background(), frame)
-		}
+		// For other frames, also push to Redis?
+		// e.g. STOP command.
+		payloadBytes, _ := json.Marshal(frame)
+		r.hub.redis.Publish(context.Background(), fmt.Sprintf("chat:request:%s", r.ID.String()), payloadBytes)
+
+		/*
+			r.connectLLM()
+			if r.llmSocket != nil {
+				r.llmSocket.Write(context.Background(), frame)
+			}
+		*/
 	} else {
 		// User channel - handle routing and broadcast
 		// Use originalChatID for routing since frame.ChatID may have been normalized

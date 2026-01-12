@@ -145,9 +145,18 @@ agent_os = AgentOS(
 global app
 app = agent_os.get_app()
 
+@app.on_event("startup")
+async def _start_redis_worker():
+    from src.server.redis_worker import RedisWorker
+    global redis_worker
+    redis_worker = RedisWorker(agent_factory)
+    await redis_worker.start()
+
 @app.on_event("shutdown")
-async def _shutdown_tool_config_client():
+async def _shutdown_resources():
     await tool_config_client.close()
+    if 'redis_worker' in globals():
+        await redis_worker.stop()
 
 # Health check endpoint for Railway zero-downtime deployments
 @app.get("/health")
@@ -428,11 +437,11 @@ Extract urgency, connections, time frames, and suggest 2-5 actions."""
 session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")
 app.add_middleware(SessionMiddleware, secret_key=session_secret)
 
-try:
-    app.include_router(ws_server.router(agent_factory))
-    logging.info("WS route mounted at /llm/ws")
-except Exception:
-    logging.exception("Failed to mount WS routes")
+# try:
+#     app.include_router(ws_server.router(agent_factory))
+#     logging.info("WS route mounted at /llm/ws")
+# except Exception:
+#     logging.exception("Failed to mount WS routes")
 
 try:
     app.include_router(webhooks.router)

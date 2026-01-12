@@ -103,7 +103,10 @@ func (h *Hub) subscribeRedis() {
 		// msg.Channel is the full channel name, e.g. "chat:user:123-456..."
 		// msg.Payload is the JSON string
 
-		h.logger.Info("received redis message", zap.String("channel", msg.Channel))
+		h.logger.Info("REDIS RECEIVED",
+			zap.String("channel", msg.Channel),
+			zap.Int("len", len(msg.Payload)),
+		)
 
 		// Extract userID from channel
 		// Format: chat:user:<uuid>
