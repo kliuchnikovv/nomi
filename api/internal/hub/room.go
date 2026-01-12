@@ -657,8 +657,32 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				zap.String("chat_id", originalChatID.String()),
 				zap.String("user_id", r.initiatorID.String()),
 			)
+			
+			// Get the chat from DB to get its actual mode and team_id
+			// This is crucial for team chats (development_team, dnd_team, etc.)
+			chatMode := r.mode
+			chatCommand := r.command
+			
+			chatRecord, err := r.store.GetChat(context.Background(), r.initiatorID, originalChatID)
+			if err == nil && chatRecord != nil {
+				// Use the chat's actual mode and team configuration
+				if chatRecord.Mode != "" {
+					chatMode = chatRecord.Mode
+				}
+				// Build command from team_id if available
+				if chatRecord.TeamID != nil && *chatRecord.TeamID != "" {
+					chatCommand = fmt.Sprintf(`{"type":"%s"}`, *chatRecord.TeamID)
+					r.logger.Info("using team from chat record",
+						zap.String("mode", chatMode),
+						zap.String("team_id", *chatRecord.TeamID),
+					)
+				}
+			} else if err != nil {
+				r.logger.Warn("failed to get chat record for mode detection, using defaults", zap.Error(err))
+			}
+			
 			// Get or create the chat room and forward the message
-			chatRoom, err := r.hub.GetOrCreateRoom(originalChatID, RoomTypeChat, r.initiatorID, r.mode, r.command)
+			chatRoom, err := r.hub.GetOrCreateRoom(originalChatID, RoomTypeChat, r.initiatorID, chatMode, chatCommand)
 			if err != nil {
 				r.logger.Error("failed to get chat room for routing", zap.Error(err))
 			} else {
