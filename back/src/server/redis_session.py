@@ -8,6 +8,7 @@ import redis.asyncio as redis
 from typing import Optional, List, Any, Dict
 
 from agno.agent import Agent
+from agno.models.message import Message
 from src.agents.factory import AgentFactory
 from src.server.models import Frame, Op
 from src.server.utils import make_meta, make_error, make_done, make_data
@@ -187,7 +188,7 @@ class RedisSession:
                     if isinstance(msg, dict):
                         self.chat_history.append({
                             "role": msg.get("role", "user"),
-                            "content": msg.get("text", "")
+                            "content": msg.get("text") or msg.get("content", "")
                         })
                 logger.info("[RedisSession] Parsed history: count=%d", len(self.chat_history))
 
@@ -303,6 +304,19 @@ class RedisSession:
         if self.session_id and self.command_desc and self.command_desc.get("type", "agent") != "team":
              kwargs["session_id"] = self.session_id
 
+        agent_input = text
+        if self.chat_history:
+             try:
+                 msgs = []
+                 for h in self.chat_history:
+                     msgs.append(Message(role=h["role"], content=h["content"]))
+                 if text:
+                     msgs.append(Message(role="user", content=text))
+                 agent_input = msgs
+                 logger.info("[RedisSession] Using chat history: %d messages", len(self.chat_history))
+             except Exception as e:
+                 logger.error("[RedisSession] Failed to construct history messages: %s", e)
+
         if attachments:
             images = []
             for att in attachments:
@@ -332,10 +346,13 @@ class RedisSession:
 
         # Helper to decide if we should await
         async def run_fn(fn):
-            message_text = text if (text and text.strip()) else "[continue from previous context]"
+            inp = agent_input
+            if isinstance(inp, str):
+                 inp = inp if (inp and inp.strip()) else "[continue from previous context]"
+            
             if asyncio.iscoroutinefunction(fn):
-                return await fn(message_text, stream=True, stream_events=True, **kwargs)
-            return fn(message_text, stream=True, stream_events=True, **kwargs)
+                return await fn(inp, stream=True, stream_events=True, **kwargs)
+            return fn(inp, stream=True, stream_events=True, **kwargs)
 
         result = None
         try:
