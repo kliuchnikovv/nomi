@@ -540,32 +540,51 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// This ensures Python backend receives tools directly in the message
 		// avoiding an extra HTTP round-trip and race conditions
 		
-		// Always include default tools
+		// Start with default tools that are always available
 		var tools []interface{}
 		tools = append(tools, map[string]interface{}{"name": "web_search", "enabled": true})
 		tools = append(tools, map[string]interface{}{"name": "knowledge_search", "enabled": true, "user_id": r.initiatorID.String()})
 
-		// Fetch enabled integrations (Gmail, GitHub, etc)
-		var integrations []storage.Integration
-		if err := r.store.DB.Where("user_id = ? AND enabled = ?", r.initiatorID, true).Find(&integrations).Error; err != nil {
-			r.logger.Warn("failed to fetch integrations for bundling", zap.Error(err))
-		} else {
-			r.logger.Info("fetched integrations", zap.Int("count", len(integrations)), zap.String("user_id", r.initiatorID.String()))
-			for _, integ := range integrations {
-				r.logger.Debug("processing integration", zap.String("provider", integ.Provider), zap.Bool("enabled", integ.Enabled))
-				// Parse Params string to map
-				var paramsMap map[string]interface{}
-				if err := json.Unmarshal([]byte(integ.Params), &paramsMap); err != nil {
-					// Fallback if empty or invalid
-					paramsMap = make(map[string]interface{})
+		// Check if client sent integrations in the payload
+		if frame.Payload.Tools != nil {
+			// Client sent integrations - use them directly
+			if clientTools, ok := frame.Payload.Tools.([]interface{}); ok && len(clientTools) > 0 {
+				r.logger.Info("using client-sent integrations", zap.Int("count", len(clientTools)))
+				for _, ct := range clientTools {
+					if ctMap, ok := ct.(map[string]interface{}); ok {
+						// Skip default tools we already added
+						if name, ok := ctMap["name"].(string); ok {
+							if name == "web_search" || name == "knowledge_search" {
+								continue
+							}
+						}
+						tools = append(tools, ct)
+					}
 				}
-				
-				// Ensure 'name' and 'enabled' are set
-				paramsMap["name"] = integ.Provider
-				paramsMap["enabled"] = true
-				
-				// Add to tool list
-				tools = append(tools, paramsMap)
+			}
+		} else {
+			// Fallback: Fetch enabled integrations from DB (Gmail, GitHub, etc)
+			var integrations []storage.Integration
+			if err := r.store.DB.Where("user_id = ? AND enabled = ?", r.initiatorID, true).Find(&integrations).Error; err != nil {
+				r.logger.Warn("failed to fetch integrations for bundling", zap.Error(err))
+			} else {
+				r.logger.Info("fetched integrations from DB", zap.Int("count", len(integrations)), zap.String("user_id", r.initiatorID.String()))
+				for _, integ := range integrations {
+					r.logger.Debug("processing integration", zap.String("provider", integ.Provider), zap.Bool("enabled", integ.Enabled))
+					// Parse Params string to map
+					var paramsMap map[string]interface{}
+					if err := json.Unmarshal([]byte(integ.Params), &paramsMap); err != nil {
+						// Fallback if empty or invalid
+						paramsMap = make(map[string]interface{})
+					}
+					
+					// Ensure 'name' and 'enabled' are set
+					paramsMap["name"] = integ.Provider
+					paramsMap["enabled"] = true
+					
+					// Add to tool list
+					tools = append(tools, paramsMap)
+				}
 			}
 		}
 		

@@ -24,7 +24,7 @@ export class ChatSocket {
     // Actually, team commands are sent once per session usually. But in a global socket, we might switch contexts.
     // For now, let's keep it simple: we send commands when sending a message if needed, or rely on the backend session.
 
-    constructor() {}
+    constructor() { }
 
     setToken(token: string | null) {
         this.token = token;
@@ -263,7 +263,8 @@ export class ChatSocket {
         webSearch?: boolean,
         thinking?: string,
         role: string = 'user',
-        model?: string
+        model?: string,
+        tools?: any[]
     ) {
         if (!chatId) return;
 
@@ -285,6 +286,7 @@ export class ChatSocket {
                 attachment_ids: attachmentIDs,
                 web_search: webSearch,
                 thinking: thinking,
+                tools: tools, // Pass integrations to backend
             },
         };
 

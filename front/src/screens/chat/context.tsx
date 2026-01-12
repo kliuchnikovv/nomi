@@ -388,10 +388,11 @@ export function ChatProvider({
                 webSearch,
                 thinking,
                 role,
-                selectedModelRef.current || undefined
+                selectedModelRef.current || undefined,
+                tools // Pass enabled integrations to backend
             );
         },
-        [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, setLastFailedMessage],
+        [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, setLastFailedMessage, tools],
     );
 
     const sendMessage = useCallback(
