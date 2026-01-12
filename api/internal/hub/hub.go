@@ -155,12 +155,6 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 
 	h.logger.Info("broadcasting to user via redis", zap.String("user_id", userID.String()), zap.Int("total_rooms", len(h.rooms)))
 
-	payload, err := json.Marshal(frame)
-	if err != nil {
-		h.logger.Error("failed to marshal broadcast frame", zap.Error(err))
-		return
-	}
-
 	found := 0
 	for _, room := range h.rooms {
 		if room.initiatorID == userID {
