@@ -558,8 +558,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 					paramsMap = make(map[string]interface{})
 				}
 				
-				// Ensure 'name' is in params 
+				// Ensure 'name' and 'enabled' are set
 				paramsMap["name"] = integ.Provider
+				paramsMap["enabled"] = true
 				
 				// Add to tool list
 				tools = append(tools, paramsMap)
@@ -567,6 +568,38 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 		
 		frame.Payload.Tools = tools
+		
+		// Log bundled tools
+		var toolNames []string
+		for _, t := range tools {
+			if tm, ok := t.(map[string]interface{}); ok {
+				if name, ok := tm["name"].(string); ok {
+					toolNames = append(toolNames, name)
+				}
+			}
+		}
+		r.logger.Info("bundled tools", zap.Int("count", len(tools)), zap.Strings("names", toolNames))
+
+		// 5.2 Fetch and Bundle Chat History
+		// This ensures Python backend receives history directly in the message
+		messages, err := r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
+		if err != nil {
+			r.logger.Warn("failed to load history for bundling", zap.Error(err))
+		} else if len(messages) > 0 {
+			historyData := make([]map[string]interface{}, 0, len(messages))
+			for _, msg := range messages {
+				historyData = append(historyData, map[string]interface{}{
+					"role":    string(msg.Role),
+					"content": msg.Text,
+				})
+			}
+			frame.Payload.History = historyData
+			r.logger.Info("bundled chat history", 
+				zap.Int("count", len(historyData)),
+				zap.String("first_role", historyData[0]["role"].(string)),
+				zap.String("last_role", historyData[len(historyData)-1]["role"].(string)),
+			)
+		}
 
 		payloadBytes, _ := json.Marshal(frame)
 		r.logger.Info("REDIS PUBLISH",

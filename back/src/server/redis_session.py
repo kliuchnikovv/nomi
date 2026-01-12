@@ -145,12 +145,20 @@ class RedisSession:
                 if not isinstance(tool_dict, dict):
                     continue
                 try:
+                    # First try nested "params" key
                     params = tool_dict.get("params", {})
                     if isinstance(params, str):
                         try:
                             params = json.loads(params)
                         except json.JSONDecodeError:
                             params = {}
+                    
+                    # IMPORTANT: Also merge top-level keys (like user_id) into params
+                    # Go sends: {"name": "knowledge_search", "enabled": true, "user_id": "..."}
+                    # So user_id is at top level, not inside "params"
+                    for key in ("user_id", "access_token", "token", "creds", "account_email"):
+                        if key in tool_dict and key not in params:
+                            params[key] = tool_dict[key]
 
                     tool_spec = ToolSpec(
                         name=tool_dict.get("name", ""),
@@ -158,6 +166,8 @@ class RedisSession:
                         params=params if isinstance(params, dict) else {},
                     )
                     self.tools_specs.append(tool_spec)
+                    logger.debug("[RedisSession] Parsed tool: name=%s, enabled=%s, params_keys=%s", 
+                                 tool_spec.name, tool_spec.enabled, list(params.keys()))
                 except Exception as e:
                     logger.warning("[RedisSession] Failed to parse tool: %s", e)
 
@@ -178,7 +188,8 @@ class RedisSession:
                 if self.current_model_name is None:
                     self.current_model_name = cmd_obj.get("model")
 
-        logger.info("[RedisSession] Parsed tools: count=%d", len(self.tools_specs))
+        tool_names = [t.name for t in self.tools_specs]
+        logger.info("[RedisSession] Parsed tools: count=%d, names=%s", len(self.tools_specs), tool_names)
 
     def _parse_history(self, payload: Any):
         if payload and isinstance(payload, dict):
@@ -190,7 +201,10 @@ class RedisSession:
                             "role": msg.get("role", "user"),
                             "content": msg.get("text") or msg.get("content", "")
                         })
-                logger.info("[RedisSession] Parsed history: count=%d", len(self.chat_history))
+                logger.info("[RedisSession] Parsed history: count=%d, first_role=%s, last_role=%s", 
+                            len(self.chat_history), 
+                            self.chat_history[0]["role"] if self.chat_history else "N/A",
+                            self.chat_history[-1]["role"] if self.chat_history else "N/A")
 
 
     async def handle_user_message(self, frame: Frame):
