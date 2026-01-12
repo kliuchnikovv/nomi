@@ -166,37 +166,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await setAuthData(null, null, null);
     }
 
-    async function refreshToken(): Promise<boolean> {
-        const currentRefreshToken = refreshTokenValue || (await AsyncStorage.getItem('refreshToken'));
+    // Latch to prevent multiple concurrent refresh requests
+    let refreshPromise: Promise<boolean> | null = null;
 
-        if (!currentRefreshToken) {
-            await logout();
-            return false;
+    async function refreshToken(): Promise<boolean> {
+        if (refreshPromise) {
+            return refreshPromise;
         }
 
-        try {
-            const response = await fetch(`${getApiUrl()}/auth/refresh`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    refresh_token: currentRefreshToken,
-                }),
-            });
+        refreshPromise = (async () => {
+            const currentRefreshToken = refreshTokenValue || (await AsyncStorage.getItem('refreshToken'));
 
-            if (!response.ok) {
+            if (!currentRefreshToken) {
                 await logout();
+                refreshPromise = null;
                 return false;
             }
 
-            const data = await response.json();
-            await setAuthData(data.user, data.token, data.refresh_token);
+            try {
+                const response = await fetch(`${getApiUrl()}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        refresh_token: currentRefreshToken,
+                    }),
+                });
 
-            return true;
-        } catch (error) {
-            console.error(`error while refreshing token: ${error}`);
-            await logout();
-            return false;
-        }
+                if (!response.ok) {
+                    await logout();
+                    return false;
+                }
+
+                const data = await response.json();
+                await setAuthData(data.user, data.token, data.refresh_token);
+
+                return true;
+            } catch (error) {
+                console.error(`error while refreshing token: ${error}`);
+                await logout();
+                return false;
+            } finally {
+                refreshPromise = null;
+            }
+        })();
+
+        return refreshPromise;
     }
 
     async function signInWithGoogle() {

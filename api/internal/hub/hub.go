@@ -165,7 +165,7 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 	for _, room := range h.rooms {
 		if room.initiatorID == userID {
 			h.logger.Info("found matching room for user", zap.String("room_id", room.ID.String()))
-			room.InjectMessage(userID, payload)
+			room.HandleRemoteLLMFrame(frame)
 			found++
 		}
 	}

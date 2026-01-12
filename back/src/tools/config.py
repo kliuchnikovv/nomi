@@ -29,15 +29,21 @@ class ToolConfigClient:
         self._timeout = timeout
         self._client = client or httpx.AsyncClient(timeout=timeout)
 
-    async def fetch_tools(self, session_id: str) -> ToolsConfig:
+    async def fetch_tools(self, session_id: str | None = None, user_id: str | None = None) -> ToolsConfig:
         config = ToolsConfig()
-        if not session_id:
+        if not session_id and not user_id:
             return config
+
+        params = {}
+        if session_id:
+            params["session_id"] = session_id
+        if user_id:
+            params["user_id"] = user_id
 
         try:
             response = await self._client.get(
                 f"{self._base_url}/api/tools",
-                params={"session_id": session_id},
+                params=params,
             )
             response.raise_for_status()
             payload = response.json()

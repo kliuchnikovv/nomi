@@ -68,20 +68,28 @@ export default function ChatInput(props: Props) {
     const { activeChatID } = useMain();
 
 
-    const handleSend = useCallback(() => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSend = useCallback(async () => {
+        if (isSubmitting) return;
         const text = (value ?? '').trim();
         const hasAttachments = attachments.length > 0 && !attachments.some(a => a.loading);
 
         if (!text && !hasAttachments) return;
 
-        // Pass full attachments (including URI) to sendMessage for optimistic updates
-        // webSearchEnabled is now always valid/handled, but we can pass true or ignore it if backend handles it
-        sendMessage(text, attachments, true, thinkingLevel);
+        setIsSubmitting(true);
+        try {
+            // Pass full attachments (including URI) to sendMessage for optimistic updates
+            // webSearchEnabled is now always valid/handled, but we can pass true or ignore it if backend handles it
+            await sendMessage(text, attachments, true, thinkingLevel);
+        } finally {
+            setIsSubmitting(false);
+        }
 
         Keyboard.dismiss();
         setValue('');
         setAttachments([]);
-    }, [value, attachments, sendMessage, thinkingLevel]);
+    }, [value, attachments, sendMessage, thinkingLevel, isSubmitting]);
 
     // Reset input when switching chats
     useEffect(() => {
@@ -509,15 +517,19 @@ export default function ChatInput(props: Props) {
                                 style={({ pressed }) => [
                                     styles.sendBtn,
                                     isSendDisabled && styles.iconBtnDisabled,
-                                    pressed && !isSendDisabled && styles.sendBtnPressed,
+                                    (pressed && !isSendDisabled && !isSubmitting) && styles.sendBtnPressed,
                                 ]}
-                                disabled={isSendDisabled}
+                                disabled={isSendDisabled || isSubmitting}
                             >
-                                <ArrowUp
-                                    width={24}
-                                    height={24}
-                                    color={theme.background}
-                                />
+                                {isSubmitting ? (
+                                    <ActivityIndicator size="small" color={theme.background} />
+                                ) : (
+                                    <ArrowUp
+                                        width={24}
+                                        height={24}
+                                        color={theme.background}
+                                    />
+                                )}
                             </Pressable>
                         )}
                     </View>

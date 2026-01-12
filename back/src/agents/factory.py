@@ -153,7 +153,7 @@ class AgentFactory:
         if not tools_specs and user_id:
             try:
                 logger.debug("[Factory] Fetching tools for user_id=%s", user_id)
-                tools_config = await self._config_client.fetch_tools(user_id)
+                tools_config = await self._config_client.fetch_tools(user_id=user_id)
                 logger.info("[Factory] Fetched %d tools for user %s", len(tools_config.entries), user_id)
                 
                 # Add web search tool if supported

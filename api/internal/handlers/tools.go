@@ -26,34 +26,44 @@ func NewToolsHandler(store *storage.Storage, logger *zap.Logger) *ToolsHandler {
 // ListTools returns the list of enabled tools for the current session/user
 func (h *ToolsHandler) ListTools(c *gin.Context) {
 	sessionID := c.Query("session_id")
-	if sessionID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "session_id is required"})
-		return
-	}
+	userIDStr := c.Query("user_id") // Add support for direct user_id lookup
 
-	// 1. Resolve Session (Chat) to get UserID
-	chatUUID, err := uuid.Parse(sessionID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session_id format"})
-		return
-	}
+	var userID uuid.UUID
 
-	// Fetch Chat to identify user. 
-	// We trust the session_id as a capability token for internal tool resolution.
-	var chat storage.Chat
-	// Using generic DB query as we don't have GetChatByID without UserID context in standard helpers
-	if err := h.store.DB.First(&chat, "id = ?", chatUUID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+	if userIDStr != "" {
+		// 1a. Use provided UserID directly
+		var err error
+		userID, err = uuid.Parse(userIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id format"})
 			return
 		}
-		h.logger.Error("failed to fetch chat for tools", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+	} else if sessionID != "" {
+		// 1b. Resolve Session (Chat) to get UserID
+		chatUUID, err := uuid.Parse(sessionID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid session_id format"})
+			return
+		}
+
+		var chat storage.Chat
+		if err := h.store.DB.First(&chat, "id = ?", chatUUID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+				return
+			}
+			h.logger.Error("failed to fetch chat for tools", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		userID = chat.UserID
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session_id or user_id is required"})
 		return
 	}
 
 	// 2. Fetch User to check settings (e.g. WebSearchEnabled)
-	user, err := h.store.GetUserByID(c.Request.Context(), chat.UserID)
+	user, err := h.store.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
 		h.logger.Error("failed to fetch user for tools", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user"})
@@ -62,7 +72,7 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 
 	// 3. Fetch Integrations
 	var integrations []storage.Integration
-	if err := h.store.DB.Where("user_id = ? AND enabled = ?", chat.UserID, true).Find(&integrations).Error; err != nil {
+	if err := h.store.DB.Where("user_id = ? AND enabled = ?", userID, true).Find(&integrations).Error; err != nil {
 		h.logger.Error("failed to fetch integrations", zap.Error(err))
 		// Proceed with default tools even if integrations fail
 	}

@@ -13,6 +13,7 @@ import { apiClient } from '../../apiClient.ts'
 import { Chat, GetChatsOptions, MainContextType } from "./models";
 import { getApiUrl, API_URL } from '../../config.ts';
 import { NewTaskModal } from '../../components/NewTaskModal';
+import { useChatStore } from '../../store/chatStore';
 
 export const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -234,6 +235,13 @@ export function MainProvider({ children }: { children: ReactNode }) {
             console.error('Failed to rename chat:', error);
         }
     }
+
+    // Ensure emptyChatID is always clean to show Dashboard
+    useEffect(() => {
+        if (activeChatID === emptyChatID) {
+            useChatStore.getState().clearChat(emptyChatID);
+        }
+    }, [activeChatID]);
 
     function createNewChat() {
         if (chats.some(c => c.id === emptyChatID)) {

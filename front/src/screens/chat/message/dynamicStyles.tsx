@@ -328,10 +328,12 @@ export const createMarkdownStyles = (theme: ThemeColors) => ({
     bullet_list: {
         marginTop: 4,
         marginBottom: 4,
+        color: theme.textPrimary,
     },
     ordered_list: {
         marginTop: 4,
         marginBottom: 4,
+        color: theme.textPrimary,
     },
     list_item: {
         marginTop: 2,
@@ -339,24 +341,32 @@ export const createMarkdownStyles = (theme: ThemeColors) => ({
         flexDirection: 'row',
         flexWrap: 'wrap',
         width: '100%',
+        color: theme.textPrimary,
     },
     // Fix for list content width
     bullet_list_icon: {
         marginRight: 8,
+        color: theme.textPrimary,
     },
     bullet_list_content: {
         flex: 1,
         flexShrink: 1,
+        color: theme.textPrimary,
     },
     ordered_list_icon: {
         marginRight: 8,
+        color: theme.textPrimary,
     },
     ordered_list_content: {
         flex: 1,
         flexShrink: 1,
+        color: theme.textPrimary,
     },
     paragraph: {
         marginTop: 4,
         marginBottom: 4,
+        color: theme.textPrimary,
+        fontSize: 16,
+        lineHeight: 24,
     },
 });

@@ -39,6 +39,9 @@ type Room struct {
 	register   chan *Client
 	unregister chan *Client
 
+	// Ingress for LLM frames from Redis (e.g. from Python team agents)
+	llmIngress chan Frame
+
 	// LLM Connection
 	llmBaseURL string
 	llmSocket  *Socket
@@ -80,6 +83,7 @@ func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, s
 		broadcast:   make(chan Frame),
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
+		llmIngress:  make(chan Frame),
 		llmBaseURL:  llmBaseURL,
 		mode:        mode,
 		command:     command,
@@ -136,6 +140,10 @@ func (r *Room) Run() {
 		case msg := <-r.ingress:
 			resetTimer()
 			r.handleUserMessage(msg)
+
+		case frame := <-r.llmIngress:
+			resetTimer()
+			r.handleLLMMessage(frame)
 
 		case frame := <-r.broadcast:
 			resetTimer() // Reset timer on activity
@@ -309,6 +317,12 @@ func (r *Room) InjectMessage(userID uuid.UUID, payload []byte) {
 // This is thread-safe and safe to call from other goroutines.
 func (r *Room) BroadcastFrame(frame Frame) {
 	r.broadcast <- frame
+}
+
+// HandleRemoteLLMFrame queues a frame from a remote LLM (via Redis) to be processed
+// as an LLM message (persisted as assistant, etc)
+func (r *Room) HandleRemoteLLMFrame(frame Frame) {
+	r.llmIngress <- frame
 }
 
 func (r *Room) handleUserMessage(msg *ClientMessage) {
