@@ -269,10 +269,11 @@ async def build(config: ToolsConfig) -> List[Toolkit]:
         
         # If no exact match, try prefix match (e.g., "Gmail (email)" matches "Gmail")
         if not builder:
+            item_name_lower = item.name.lower()
             for registered_name, registered_builder in TOOL_BUILDERS.items():
-                if item.name.startswith(registered_name):
+                if item_name_lower.startswith(registered_name.lower()):
                     builder = registered_builder
-                    logger.debug(f"[Tools] Matched '{item.name}' to builder '{registered_name}'")
+                    logger.debug(f"[Tools] Matched '{item.name}' to builder '{registered_name}' (case-insensitive)")
                     break
         
         if not builder:
