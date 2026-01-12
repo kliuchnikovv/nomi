@@ -536,6 +536,38 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
+		// 5.1 Fetch and Bundle Tools
+		// This ensures Python backend receives tools directly in the message
+		// avoiding an extra HTTP round-trip and race conditions
+		
+		// Always include default tools
+		var tools []interface{}
+		tools = append(tools, map[string]interface{}{"name": "web_search", "enabled": true})
+		tools = append(tools, map[string]interface{}{"name": "knowledge_search", "enabled": true, "user_id": r.initiatorID.String()})
+
+		// Fetch enabled integrations (Gmail, GitHub, etc)
+		var integrations []storage.Integration
+		if err := r.store.DB.Where("user_id = ? AND enabled = ?", r.initiatorID, true).Find(&integrations).Error; err != nil {
+			r.logger.Warn("failed to fetch integrations for bundling", zap.Error(err))
+		} else {
+			for _, integ := range integrations {
+				// Parse Params string to map
+				var paramsMap map[string]interface{}
+				if err := json.Unmarshal([]byte(integ.Params), &paramsMap); err != nil {
+					// Fallback if empty or invalid
+					paramsMap = make(map[string]interface{})
+				}
+				
+				// Ensure 'name' is in params 
+				paramsMap["name"] = integ.Provider
+				
+				// Add to tool list
+				tools = append(tools, paramsMap)
+			}
+		}
+		
+		frame.Payload.Tools = tools
+
 		payloadBytes, _ := json.Marshal(frame)
 		r.logger.Info("REDIS PUBLISH",
 			zap.String("channel", fmt.Sprintf("chat:request:%s", r.ID.String())),

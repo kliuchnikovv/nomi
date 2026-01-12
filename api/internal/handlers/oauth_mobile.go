@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
@@ -341,6 +342,60 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		zap.String("provider", providerName),
 		zap.String("email", accountEmail),
 	)
+
+	// Save integration to backend database so Python agent can use it
+	user, err := userFromCtxMobile(c.Request.Context())
+	if err == nil && user != nil {
+		params := map[string]interface{}{
+			"access_token":  token.AccessToken,
+			"refresh_token": token.RefreshToken,
+			"token_expiry":  token.Expiry.Unix(),
+			"account_email": accountEmail,
+			"client_id":     oauthConfig.ClientID,
+			"client_secret": oauthConfig.ClientSecret,
+			"token_type":    token.TokenType,
+		}
+		
+		// For Google, token_uri is standard. For GitHub, it's distinct.
+		if providerName == ProviderGitHub {
+			params["token_uri"] = "https://github.com/login/oauth/access_token"
+		} else {
+			params["token_uri"] = "https://oauth2.googleapis.com/token"
+		}
+
+		paramsJSON, _ := json.Marshal(params)
+
+		var integration storage.Integration
+		err := h.storage.DB.Where("user_id = ? AND provider = ?", user.ID, providerName).First(&integration).Error
+		
+		if err == nil {
+			// Update existing
+			integration.Params = string(paramsJSON)
+			integration.Name = accountEmail // Update name to match email
+			integration.Enabled = true
+			integration.UpdatedAt = time.Now()
+			h.storage.DB.Save(&integration)
+			h.logger.Info("updated integration", zap.String("provider", providerName), zap.String("user_id", user.ID.String()))
+		} else {
+			// Create new
+			newIntegration := storage.Integration{
+				UserID:    user.ID,
+				Name:      accountEmail,
+				Provider:  providerName,
+				Params:    string(paramsJSON),
+				Enabled:   true,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if err := h.storage.DB.Create(&newIntegration).Error; err != nil {
+				h.logger.Error("failed to create integration", zap.Error(err))
+			} else {
+				h.logger.Info("created integration", zap.String("provider", providerName), zap.String("user_id", user.ID.String()))
+			}
+		}
+	} else {
+		h.logger.Warn("could not save integration: user not found in context", zap.Error(err))
+	}
 
 	c.JSON(http.StatusOK, response)
 }
