@@ -269,6 +269,8 @@ class RedisSession:
             streamed_text_len = 0
             async for ev in result:
                 event_type = type(ev).__name__
+                logger.info(f"[RedisSession] Stream event received: {event_type}")
+                logger.debug(f"[RedisSession] Event details: {ev}")
                 
                 # Check if this is a member agent event
                 agent_id = getattr(ev, 'agent_id', None)
@@ -295,6 +297,18 @@ class RedisSession:
 
                 if captured_reasoning:
                     yield {"type": "reasoning", "content": captured_reasoning}
+
+                if "RunCompleted" in event_type:
+                    val = getattr(ev, "content", None)
+                    if val and len(str(val)) > streamed_text_len:
+                        remainder = str(val)[streamed_text_len:]
+                        if remainder.strip():
+                            logger.info("[RedisSession] Sending remaining content from RunCompleted: %s...", remainder[:50])
+                            # Check if it looks like reasoning
+                            if remainder.strip().startswith("My thinking process") or remainder.strip().startswith("Thinking Process:"):
+                                yield {"type": "reasoning", "content": remainder}
+                            else:
+                                yield {"type": "text", "content": remainder}
 
                 # 3. Text Content
                 if "RunContentEvent" in event_type or "ModelContentEvent" in event_type or "TextDeltaEvent" in event_type or "TextEvent" in event_type:
