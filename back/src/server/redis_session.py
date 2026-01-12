@@ -106,21 +106,60 @@ class RedisSession:
         rag_user_id = self.user_id or self.session_id
 
         try:
-            # We assume Team mode if command_desc is present and has team info?
-            # Or simplified building. using factory.build
+            # Check if this is a Team mode request
+            # agent_type could be "team" (generic) and command_desc provides specific type
+            is_team_mode = False
+            team_type = None
             
-            # Using same logic as WS
-            self.agent = await self.agent_factory.build(
-                session_id=self.session_id,
-                tools_specs=self.tools_specs, # Likely empty, factory will fetch
-                model_name=self.current_model_name,
-                agent_type=self.agent_type,
-                command_desc=self.command_desc,
-                web_search=False, # Default
-                thinking=self.current_thinking,
-                user_id=rag_user_id,
-                chat_id=self.chat_id,
-            )
+            if self.command_desc and isinstance(self.command_desc, dict):
+                team_type = self.command_desc.get("type", "").lower()
+                # Known team types that require TeamFactory
+                known_teams = ["development_team", "dnd_team", "travel_planning", "genie"]
+                if team_type in known_teams:
+                    is_team_mode = True
+                    logger.info("[RedisSession] Detected team mode: type=%s", team_type)
+            elif self.agent_type and self.agent_type.lower() == "team":
+                is_team_mode = True
+                logger.info("[RedisSession] Detected team mode from agent_type")
+            
+            if is_team_mode and self.command_desc:
+                # Use TeamFactory for team chats
+                from src.teams.factory import TeamFactory
+                
+                # Build model for the team
+                model = self.agent_factory.build_model(
+                    self.current_model_name or "gemini-2.0-flash-exp",
+                    web_search=False,
+                    thinking=self.current_thinking
+                )
+                
+                team_factory = TeamFactory(
+                    agent_factory=self.agent_factory,
+                    db=self.agent_factory._db,
+                    model=model,
+                    debug_mode=self.agent_factory._debug_mode
+                )
+                
+                self.agent = await team_factory.build(
+                    command_desc=self.command_desc,
+                    session_id=self.session_id,
+                    tools_specs=self.tools_specs,
+                    user_id=rag_user_id
+                )
+                logger.info("[RedisSession] Built team successfully: type=%s", team_type)
+            else:
+                # Using regular agent factory
+                self.agent = await self.agent_factory.build(
+                    session_id=self.session_id,
+                    tools_specs=self.tools_specs, # Likely empty, factory will fetch
+                    model_name=self.current_model_name,
+                    agent_type=self.agent_type,
+                    command_desc=self.command_desc,
+                    web_search=False, # Default
+                    thinking=self.current_thinking,
+                    user_id=rag_user_id,
+                    chat_id=self.chat_id,
+                )
         except Exception as e:
             logger.error(f"[RedisSession] Failed to build agent: {e}")
             await self._send_frame(make_error(self.next_id, "build_failed", self.chat_id, str(e), 500))

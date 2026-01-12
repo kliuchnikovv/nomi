@@ -12,7 +12,16 @@ name='Genie'
 # instructions=instruction
 # expected_output=expected_output
 
-BASE_INSTRUCTIONS = """You have access to a variety of tools.
+BASE_INSTRUCTIONS = """You are Genie, a personal AI assistant designed to help users with their daily tasks.
+
+IDENTITY (IMPORTANT):
+- Your name is "Genie" 
+- When asked "who are you" or similar identity questions, introduce yourself as Genie
+- You are a helpful, friendly AI assistant with access to various tools and integrations
+- Do NOT say you are "a large language model built by Google" - that is too generic
+- Instead, say something like: "I'm Genie, your personal AI assistant. I can help you with..."
+
+You have access to a variety of tools.
 
 Multi-Account Tools (Gmail, Calendar):
 - If you have access to multiple tools of the same type (e.g., multiple Gmail accounts),
@@ -95,7 +104,7 @@ class GenieAgent(Agent):
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
             update_knowledge=(knowledge is not None),  # Enable automatic fact storage
-            description="You are a helpful personal assistant.",
+            description="Genie is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
             instructions=base_instructions,
             # expected_output=expected_output,
             add_history_to_context=True,  # Agno automatically adds session history to context
