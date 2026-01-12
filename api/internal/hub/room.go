@@ -550,7 +550,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		if err := r.store.DB.Where("user_id = ? AND enabled = ?", r.initiatorID, true).Find(&integrations).Error; err != nil {
 			r.logger.Warn("failed to fetch integrations for bundling", zap.Error(err))
 		} else {
+			r.logger.Info("fetched integrations", zap.Int("count", len(integrations)), zap.String("user_id", r.initiatorID.String()))
 			for _, integ := range integrations {
+				r.logger.Debug("processing integration", zap.String("provider", integ.Provider), zap.Bool("enabled", integ.Enabled))
 				// Parse Params string to map
 				var paramsMap map[string]interface{}
 				if err := json.Unmarshal([]byte(integ.Params), &paramsMap); err != nil {

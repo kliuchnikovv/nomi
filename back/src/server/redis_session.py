@@ -321,25 +321,33 @@ class RedisSession:
         agent_input = text
         if self.chat_history:
             try:
-                # Format history as text context for the model
-                # This ensures the model sees the conversation history
+                # Format history as conversation context
+                # Make it clear this is the ACTUAL conversation history the model should reference
                 history_lines = []
                 for h in self.chat_history:
-                    role = h["role"].upper()
+                    role = "User" if h["role"] == "user" else "You"
                     content = h["content"]
                     history_lines.append(f"{role}: {content}")
                 
                 history_context = "\n".join(history_lines)
                 
-                # Prepend history to current message
+                # Format with clear instructions that this IS the conversation
                 if text:
-                    agent_input = f"""<CONVERSATION_HISTORY>
-{history_context}
-</CONVERSATION_HISTORY>
+                    agent_input = f"""[IMPORTANT: The following is your conversation history with this user. Use it to answer questions about previous messages.]
 
-USER's current message: {text}"""
+--- Previous messages in this conversation ---
+{history_context}
+--- End of conversation history ---
+
+User's new message: {text}"""
                 else:
-                    agent_input = f"<CONVERSATION_HISTORY>\n{history_context}\n</CONVERSATION_HISTORY>\n\n[Continue from the conversation above]"
+                    agent_input = f"""[IMPORTANT: Continue the conversation based on history below.]
+
+--- Previous messages ---
+{history_context}
+--- End ---
+
+Continue the conversation."""
                 
                 logger.info("[RedisSession] Injected chat history: %d messages into prompt", len(self.chat_history))
             except Exception as e:
