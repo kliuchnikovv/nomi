@@ -28,7 +28,12 @@ class RedisWorker:
 
     async def start(self):
         """Start the Redis worker."""
-        logger.info("[RedisWorker] Starting...")
+        # Mask password in logs
+        safe_url = self.redis_url
+        if "@" in safe_url:
+            safe_url = f"{safe_url.split('@')[-1]}"
+            
+        logger.warning(f"[RedisWorker] Starting... URL: ...@{safe_url}")
         self.running = True
         
         try:
@@ -39,7 +44,7 @@ class RedisWorker:
             # Pattern: chat:request:<chat_id>
             await self.pubsub.psubscribe("chat:request:*")
             
-            logger.info("[RedisWorker] Subscribed to chat:request:*")
+            logger.warning("[RedisWorker] Successfully subscribed to chat:request:*")
             
             asyncio.create_task(self._process_messages())
             

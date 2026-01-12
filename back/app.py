@@ -147,10 +147,15 @@ app = agent_os.get_app()
 
 @app.on_event("startup")
 async def _start_redis_worker():
-    from src.server.redis_worker import RedisWorker
-    global redis_worker
-    redis_worker = RedisWorker(agent_factory)
-    await redis_worker.start()
+    logging.warning("[Startup] Initializing Redis Worker...")
+    try:
+        from src.server.redis_worker import RedisWorker
+        global redis_worker
+        redis_worker = RedisWorker(agent_factory)
+        await redis_worker.start()
+        logging.warning("[Startup] Redis Worker started successfully")
+    except Exception as e:
+        logging.error(f"[Startup] Failed to start Redis Worker: {e}", exc_info=True)
 
 @app.on_event("shutdown")
 async def _shutdown_resources():
