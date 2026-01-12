@@ -94,7 +94,13 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 
 	// Knowledge Base (RAG) - Default enabled for Agents
 	// We could parameterize this, but generally agents need access to knowledge.
-	tools = append(tools, ToolConfig{Name: "search_knowledge_base", Enabled: true})
+	tools = append(tools, ToolConfig{
+		Name:    "knowledge_search",
+		Enabled: true,
+		Params: map[string]interface{}{
+			"user_id": userID.String(),
+		},
+	})
 
 	// Add Integrations
 	for _, integration := range integrations {
