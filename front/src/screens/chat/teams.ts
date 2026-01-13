@@ -53,6 +53,57 @@ export const AVAILABLE_TEAMS: TeamDetails[] = [
             model: 'gemini-2.0-flash-exp', // Prefer a strong model for coding
         }
     },
+    // Individual Development Team Agents (for direct 1:1 chat)
+    {
+        id: 'analyst',
+        name: '🔍 Analyst',
+        description: 'Requirements analysis, acceptance criteria, and RAG-powered codebase understanding.',
+        command: {
+            type: 'analyst',
+            name: 'Analyst',
+            model: 'gemini-2.5-flash',
+        }
+    },
+    {
+        id: 'architect',
+        name: '🏗️ Architect',
+        description: 'System design, ADRs, implementation plans, and architecture decisions.',
+        command: {
+            type: 'architect',
+            name: 'Architect',
+            model: 'gemini-2.5-flash',
+        }
+    },
+    {
+        id: 'developer',
+        name: '💻 Developer',
+        description: 'Code implementation, debugging, and development tasks.',
+        command: {
+            type: 'developer',
+            name: 'Developer',
+            model: 'gemini-2.5-flash',
+        }
+    },
+    {
+        id: 'worker',
+        name: '⚙️ Worker',
+        description: 'Automated execution via Jules API for implementation plans.',
+        command: {
+            type: 'worker',
+            name: 'Worker',
+            model: 'gemini-2.5-flash',
+        }
+    },
+    {
+        id: 'reviewer',
+        name: '✅ Reviewer',
+        description: 'Code review, quality validation, and security checks.',
+        command: {
+            type: 'reviewer',
+            name: 'Reviewer',
+            model: 'gemini-2.5-flash',
+        }
+    },
     {
         id: 'dnd_team',
         name: 'D&D Team',

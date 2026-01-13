@@ -92,6 +92,21 @@ function ChatListContent({
                 case 'dnd_team':
                     color = theme.accent || '#BB9AF7';
                     break;
+                case 'analyst':
+                    color = '#7AA2F7'; // Blue for analysis
+                    break;
+                case 'architect':
+                    color = '#9ECE6A'; // Green for design
+                    break;
+                case 'developer':
+                    color = '#E0AF68'; // Orange for coding
+                    break;
+                case 'worker':
+                    color = '#73DACA'; // Cyan for automation
+                    break;
+                case 'reviewer':
+                    color = '#F7768E'; // Red for review
+                    break;
             }
             list.push({ id: t.id, title: t.name, color });
         });
@@ -278,6 +293,21 @@ function ChatListContent({
                         break;
                     case 'dnd_team':
                         categoryColor = theme.accent || '#BB9AF7';
+                        break;
+                    case 'analyst':
+                        categoryColor = '#7AA2F7';
+                        break;
+                    case 'architect':
+                        categoryColor = '#9ECE6A';
+                        break;
+                    case 'developer':
+                        categoryColor = '#E0AF68';
+                        break;
+                    case 'worker':
+                        categoryColor = '#73DACA';
+                        break;
+                    case 'reviewer':
+                        categoryColor = '#F7768E';
                         break;
                     default:
                         categoryColor = theme.info || '#7DCFFF';

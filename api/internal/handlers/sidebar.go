@@ -129,6 +129,16 @@ func (h *SidebarHandler) ListChats(c *gin.Context) {
 			icon = "plane"
 		case "development_team":
 			icon = "code"
+		case "analyst":
+			icon = "search"
+		case "architect":
+			icon = "building"
+		case "developer":
+			icon = "terminal"
+		case "worker":
+			icon = "cog"
+		case "reviewer":
+			icon = "check"
 		}
 
 		resp = append(resp, SidebarChat{

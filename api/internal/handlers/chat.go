@@ -198,6 +198,16 @@ func getIconForTeam(teamID *string) string {
 		return "code"
 	case "travel_planning":
 		return "plane"
+	case "analyst":
+		return "search"
+	case "architect":
+		return "building"
+	case "developer":
+		return "terminal"
+	case "worker":
+		return "cog"
+	case "reviewer":
+		return "check"
 	default:
 		return ""
 	}

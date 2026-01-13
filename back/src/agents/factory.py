@@ -15,6 +15,19 @@ from src.agents.mailer import MailerAgent
 from src.agents.briefing import BriefingAgent
 from src.agents.extractor import ExtractionAgent
 from src.agents.email_analyzer import EmailAnalyzerAgent
+from src.workflow.agent import WorkflowAgent
+from src.teams.development.team import (
+    analyst_instructions,
+    architect_instructions,
+    developer_instructions,
+    reviewer_instructions,
+    worker_instructions,
+)
+from src.teams.development.models import (
+    AnalystOutput,
+    ArchitectPlan,
+    ReviewVerdict,
+)
 from src.knowledge.factory import build_vector_db
 from src.knowledge.user_knowledge import UserScopedKnowledge
 from src.tools.config import ToolConfigClient
@@ -255,6 +268,70 @@ class AgentFactory:
                 agent = EmailAnalyzerAgent(
                     model=model,
                     debug_mode=self._debug_mode,
+                )
+            elif agent_type and agent_type.lower() == "analyst":
+                agent = WorkflowAgent(
+                    name="Analyst",
+                    model=model,
+                    instructions=analyst_instructions.format(
+                        project_id="unknown", task_id="unknown"
+                    ),
+                    markdown=True,
+                    debug_mode=self._debug_mode,
+                    tools=tools,
+                    output_schema=AnalystOutput,
+                    workflow_storage=None,
+                    on_completion=None,
+                    tool_call_limit=10,
+                )
+            elif agent_type and agent_type.lower() == "architect":
+                agent = WorkflowAgent(
+                    name="Architect",
+                    model=model,
+                    tools=tools,
+                    instructions=architect_instructions,
+                    markdown=True,
+                    debug_mode=self._debug_mode,
+                    output_schema=ArchitectPlan,
+                    workflow_storage=None,
+                    on_completion=None,
+                    tool_call_limit=10,
+                )
+            elif agent_type and agent_type.lower() == "developer":
+                agent = WorkflowAgent(
+                    name="Developer",
+                    model=model,
+                    tools=tools,
+                    instructions=developer_instructions,
+                    markdown=True,
+                    debug_mode=self._debug_mode,
+                    workflow_storage=None,
+                    on_completion=None,
+                    tool_call_limit=20,
+                )
+            elif agent_type and agent_type.lower() == "worker":
+                agent = WorkflowAgent(
+                    name="Worker",
+                    model=model,
+                    tools=tools,
+                    instructions=worker_instructions,
+                    markdown=True,
+                    debug_mode=self._debug_mode,
+                    workflow_storage=None,
+                    on_completion=None,
+                    tool_call_limit=10,
+                )
+            elif agent_type and agent_type.lower() == "reviewer":
+                agent = WorkflowAgent(
+                    name="Reviewer",
+                    model=model,
+                    instructions=reviewer_instructions,
+                    markdown=True,
+                    debug_mode=self._debug_mode,
+                    output_schema=ReviewVerdict,
+                    workflow_storage=None,
+                    on_completion=None,
+                    tool_call_limit=10,
                 )
             else:
                 # Default to Genie
