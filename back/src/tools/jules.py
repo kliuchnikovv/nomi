@@ -28,31 +28,45 @@ class JulesTools(Toolkit):
         self.register(self.wait_for_completion)
         self.register(self.wait_for_pr)
 
+    def _parse_error(self, response: requests.Response) -> str:
+        """Parses error details from Jules API response."""
+        try:
+            error_data = response.json()
+            if "error" in error_data:
+                err = error_data["error"]
+                return f"{err.get('status', 'ERROR')}: {err.get('message', 'Unknown error')} (Code: {err.get('code')})"
+        except ValueError:
+            pass
+        return f"HTTP {response.status_code}: {response.text}"
+
     def _get(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         url = f"{self.base_url}/{endpoint}"
         try:
             response = requests.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
+            if not response.ok:
+                error_msg = self._parse_error(response)
+                logger.error(f"Jules API Request Failed: {error_msg}")
+                return {"error": error_msg}
             return response.json()
         except requests.exceptions.RequestException as e:
-            logger.error(f"Jules API Request Failed: {e}")
-            if e.response is not None:
-                logger.error(f"Response: {e.response.text}")
+            logger.error(f"Jules API Connection Failed: {e}")
             return {"error": str(e)}
 
     def _post(self, endpoint: str, data: Optional[Dict] = None) -> Dict:
         url = f"{self.base_url}/{endpoint}"
         try:
             response = requests.post(url, headers=self.headers, json=data or {})
-            response.raise_for_status()
+            if not response.ok:
+                error_msg = self._parse_error(response)
+                logger.error(f"Jules API Request Failed: {error_msg}")
+                return {"error": error_msg}
+            
             # Handle empty responses
             if not response.content:
                 return {}
             return response.json()
         except requests.exceptions.RequestException as e:
-            logger.error(f"Jules API Request Failed: {e}")
-            if e.response is not None:
-                logger.error(f"Response: {e.response.text}")
+            logger.error(f"Jules API Connection Failed: {e}")
             return {"error": str(e)}
 
     def list_sources(self) -> str:
@@ -235,74 +249,70 @@ class JulesTools(Toolkit):
                     return artifact["pullRequest"].get("url")
         return None
 
-    def wait_for_pr(self, session_id: str, timeout_minutes: int = 10) -> str:
-        """Polls the session activities for a Pull Request creation event.
-
-        This method blocks the agent execution until a PR is created, the session
-        completes/fails, or the timeout is reached.
-
-        Args:
-            session_id (str): The ID of the session to monitor.
-            timeout_minutes (int): Maximum time to wait in minutes (default: 10).
-
-        Returns:
-            str: JSON string containing 'status' and 'pr_url' if found, or 'error' if timed out.
+    def wait_for_pr(self, session_id: str, timeout_minutes: int = 15) -> str:
         """
+        Waits for a Pull Request to be created in the session.
+        Polls the session activities and status.
+        """
+        logger.info(f"Starting to poll Jules session {session_id} for PR creation (timeout: {timeout_minutes}m)")
         start_time = time.time()
         end_time = start_time + (timeout_minutes * 60)
+        
+        # Normalize session_id to ensure it's a valid resource path
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
-
-        logger.info(f"Starting to poll Jules session {session_id} for PR creation (timeout: {timeout_minutes}m)")
+        session_url = f"{self.base_url}/{resource_path}"
+        activities_url = f"{self.base_url}/{resource_path}/activities"
 
         while time.time() < end_time:
             try:
-                # Fetch recent activities
-                activities_data = self._get(f"{resource_path}/activities", params={"pageSize": 30})
-                activities = activities_data.get("activities", [])
+                # 1. First check the session status itself
+                session_resp = requests.get(session_url, headers=self.headers)
+                
+                if not session_resp.ok:
+                    if session_resp.status_code == 404:
+                        return f"Error: Session {session_id} not found or expired. Please retry creating a session."
+                    # Fatal client errors should stop the polling immediately
+                    if 400 <= session_resp.status_code < 500 and session_resp.status_code != 429:
+                        return f"Fatal Error checking session: {self._parse_error(session_resp)}"
+                    # Server errors (5xx) or Rate Limit (429) will be ignored for this check, hoping for recovery or just retrying via loop
+                else:
+                    session_data = session_resp.json()
+                    # Check for inactive statuses
+                    state = session_data.get("state", "STATE_UNSPECIFIED")
+                    if state in ["STOPPED", "FAILED", "INACTIVE", "CANCELLED"]:
+                        return f"Error: Session stopped prematurely with state: {state}. No PR was created."
 
-                for activity in activities:
-                    # Check for session failed - early exit
-                    if "sessionFailed" in activity:
-                        failed_data = activity.get("sessionFailed", {})
-                        reason = failed_data.get("reason", "Unknown error")
-                        logger.warning(f"Jules session {session_id} failed: {reason}")
-                        return json.dumps({
-                            "status": "failed",
-                            "error": reason
-                        })
+                # 2. Check activities for PR existence
+                resp = requests.get(activities_url, headers=self.headers, params={"pageSize": 30})
+                
+                if not resp.ok:
+                    if resp.status_code == 404:
+                         return f"Error: Activities for session {session_id} not found (404). Session might be lost."
+                    # Fatal client errors
+                    if 400 <= resp.status_code < 500 and resp.status_code != 429:
+                        return f"Fatal Error fetching activities: {self._parse_error(resp)}"
+                    
+                    resp.raise_for_status() # Trigger exception for 5xx/429 to hit the retry logic
+                
+                data = resp.json()
+                
+                if "activities" in data:
+                    for activity in data["activities"]:
+                        # Look for PR creation activity
+                        if activity.get("type") == "PULL_REQUEST_CREATED":
+                            metadata = activity.get("pullRequestCreated", {})
+                            pr_url = metadata.get("url", "URL not found")
+                            return f"Success! Pull Request created: {pr_url}"
+                        
+                        # Additionally: if we see an error in activities
+                        if activity.get("type") == "ERROR" or "error" in activity:
+                             return f"Error reported by Jules: {activity.get('error', {}).get('message', 'Unknown error')}"
 
-                    # Check for session completed
-                    if "sessionCompleted" in activity:
-                        # Session completed - check for PR in artifacts
-                        pr_url = self._extract_pr_url_from_artifacts(activity.get("artifacts", []))
-                        if pr_url:
-                            return json.dumps({"status": "success", "pr_url": pr_url})
-                        else:
-                            return json.dumps({
-                                "status": "completed_no_pr",
-                                "message": "Session completed but no PR was created"
-                            })
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Jules API polling error: {e}")
+                # Don't exit immediately, give a chance for temporary network glitch
+            
+            time.sleep(10)  # Pause before next poll
 
-                    # Check artifacts for PR URL
-                    artifacts = activity.get("artifacts", [])
-                    pr_url = self._extract_pr_url_from_artifacts(artifacts)
-                    if pr_url:
-                        return json.dumps({"status": "success", "pr_url": pr_url})
-
-                    # Fallback: Check text content for GitHub PR URL
-                    text_content = activity.get("description", "") or ""
-                    if "github.com" in text_content and "/pull/" in text_content:
-                        words = text_content.split()
-                        for word in words:
-                            if "github.com" in word and "/pull/" in word:
-                                url = word.rstrip(".,;:)")
-                                return json.dumps({"status": "success", "pr_url": url})
-
-            except Exception as e:
-                logger.warning(f"Error polling Jules activities: {e}")
-
-            # Wait before next poll
-            time.sleep(15)
-
-        return json.dumps({"status": "timeout", "error": f"No PR created within {timeout_minutes} minutes."})
+        return "Timeout: No Pull Request was created within the allocated time."
 
