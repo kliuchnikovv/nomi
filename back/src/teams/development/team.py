@@ -123,7 +123,7 @@ You must output a VALID JSON object matching the `AnalystOutput` schema, wrapped
 
 Example Output:
 ```json
-{
+{{
   "project_id": "...",
   "task_id": "...",
   "summary": "...",
@@ -132,7 +132,7 @@ Example Output:
   "affected_modules": [...],
   "relevant_rag_snippets": [...],
   "constraints": [...]
-}
+}}
 ```
 """)
 
