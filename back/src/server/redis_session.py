@@ -71,15 +71,15 @@ class RedisSession:
             if frame.op == Op.MESSAGE:
                 await self.handle_user_message(frame)
             elif frame.op == Op.STOP:
-                # We can't easily cancel a running task from another session instance unless we share state.
-                # For now, Redis request is one-shot. STOP needs coordination.
-                # If we want to support STOP via Redis, we need shared state (e.g. Redis key) or the worker keeps track.
-                # The RedisWorker keeps track of tasks. But here we are inside a new Session instance.
-                # This suggests RedisSession should probably be persistent or managed by Worker.
-                # But for now, let's assume one-shot.
-                pass
+                # STOP is handled by RedisWorker via task.cancel()
+                # This path shouldn't be reached for STOP since Worker handles it directly
+                self.cancel_event.set()
+                logger.info("[RedisSession] STOP received, setting cancel flag")
             else:
                 logger.warning(f"[RedisSession] Unsupported op: {frame.op}")
+        except asyncio.CancelledError:
+            logger.info("[RedisSession] Task cancelled, cleaning up")
+            raise  # Re-raise to let RedisWorker handle it
         finally:
             if self.redis_client:
                 await self.redis_client.close()
@@ -253,6 +253,12 @@ class RedisSession:
         
         # --- NEW LOGIC: Init from Payload ---
         
+        # 0. Extract user_id first (critical for RAG)
+        incoming_user_id = payload.get("user_id")
+        if incoming_user_id:
+            self.user_id = str(incoming_user_id)
+            logger.info("[RedisSession] Updated user_id from payload: %s", self.user_id)
+        
         # 1. Check and update chat history
         incoming_history = payload.get("history")
         if incoming_history:
@@ -346,6 +352,9 @@ class RedisSession:
             # Done
             await self._send_frame(make_done(self.next_id, msg_chat_id, {"message_id": message_id}))
 
+        except asyncio.CancelledError:
+            logger.info("[RedisSession] Streaming cancelled by user")
+            raise  # Re-raise to propagate cancellation
         except Exception as e:
             logger.error(f"[RedisSession] Error streaming: {e}", exc_info=True)
             await self._send_frame(make_error(self.next_id, "stream_failed", msg_chat_id, str(e), 500))

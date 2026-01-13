@@ -62,6 +62,7 @@ type Payload struct {
 	AttachmentIDs    []uuid.UUID `json:"attachment_ids,omitempty"`
 	WebSearch        bool        `json:"web_search,omitempty"`
 	Command          interface{} `json:"command,omitempty"`
+	UserID           uuid.UUID   `json:"user_id,omitempty"`
 }
 
 type ErrorInfo struct {
