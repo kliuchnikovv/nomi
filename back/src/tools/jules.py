@@ -282,31 +282,52 @@ class JulesTools(Toolkit):
                     if state in ["STOPPED", "FAILED", "INACTIVE", "CANCELLED"]:
                         return f"Error: Session stopped prematurely with state: {state}. No PR was created."
 
-                # 2. Check activities for PR existence
-                resp = requests.get(activities_url, headers=self.headers, params={"pageSize": 30})
+                # 2. Check activities for PR existence (with pagination)
+                # We must fetch recent activities until we find the PR or exhaust the search
+                # Since order is unspecified/unreliable, we might need to sweep multiple pages 
+                # if there are many activities.
                 
-                if not resp.ok:
-                    if resp.status_code == 404:
-                         return f"Error: Activities for session {session_id} not found (404). Session might be lost."
-                    # Fatal client errors
-                    if 400 <= resp.status_code < 500 and resp.status_code != 429:
-                        return f"Fatal Error fetching activities: {self._parse_error(resp)}"
-                    
-                    resp.raise_for_status() # Trigger exception for 5xx/429 to hit the retry logic
+                activities = []
+                page_token = None
                 
-                data = resp.json()
+                # We limit the depth of search to avoid fetching thousands of activities if something goes wrong
+                max_pages = 5 
                 
-                if "activities" in data:
-                    for activity in data["activities"]:
-                        # Look for PR creation activity
-                        if activity.get("type") == "PULL_REQUEST_CREATED":
-                            metadata = activity.get("pullRequestCreated", {})
-                            pr_url = metadata.get("url", "URL not found")
-                            return f"Success! Pull Request created: {pr_url}"
+                for _ in range(max_pages):
+                    params = {"pageSize": 100} # Fetch more per page
+                    if page_token:
+                        params["pageToken"] = page_token
                         
-                        # Additionally: if we see an error in activities
-                        if activity.get("type") == "ERROR" or "error" in activity:
-                             return f"Error reported by Jules: {activity.get('error', {}).get('message', 'Unknown error')}"
+                    resp = requests.get(activities_url, headers=self.headers, params=params)
+                    
+                    if not resp.ok:
+                        if resp.status_code == 404:
+                            # If page token becomes invalid or session lost
+                            break 
+                        if 400 <= resp.status_code < 500 and resp.status_code != 429:
+                            break # Fatal error
+                        # Ignore other errors and retry outer loop
+                        break
+                    
+                    data = resp.json()
+                    page_activities = data.get("activities", [])
+                    activities.extend(page_activities)
+                    
+                    page_token = data.get("nextPageToken")
+                    if not page_token:
+                        break
+                
+                # Now scan all collected activities
+                for activity in activities:
+                    # Look for PR creation activity
+                    if activity.get("type") == "PULL_REQUEST_CREATED":
+                        metadata = activity.get("pullRequestCreated", {})
+                        pr_url = metadata.get("url", "URL not found")
+                        return f"Success! Pull Request created: {pr_url}"
+                    
+                    # Additionally: if we see an error in activities
+                    if activity.get("type") == "ERROR" or "error" in activity:
+                         return f"Error reported by Jules: {activity.get('error', {}).get('message', 'Unknown error')}"
 
             except requests.exceptions.RequestException as e:
                 logger.error(f"Jules API polling error: {e}")
