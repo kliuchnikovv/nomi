@@ -570,7 +570,7 @@ class DevelopmentTeam(Team):
         if len(message.split()) <= 2:
             return False
 
-        # Check workflow context - if we're in active development, don't delegate
+        # Check workflow context - if we're in active development, prefer developer for simple messages
         if self.workflow_storage and self.task_id:
             try:
                 # Get current phase from workflow artifacts
@@ -594,9 +594,20 @@ class DevelopmentTeam(Team):
                 elif artifacts[0]:  # Analysis completed
                     current_phase = "design"
 
-                # If we're in active development phase, delegate to developer, not analyst
+                # If we're in active development phase AND this is a simple message,
+                # delegate to developer instead of analyst
                 if current_phase in ["development", "design"]:
-                    return False
+                    # For simple messages in development phase, don't delegate to analyst
+                    # (they'll be handled by developer instead)
+                    # But complex requests should still go to analyst for clarification
+                    is_simple_message = (
+                        any(word in message_lower for word in continuation_words)
+                        or any(phrase in message_lower for phrase in status_words)
+                        or any(word in message_lower for word in casual_words)
+                        or len(message.split()) <= 2
+                    )
+                    if is_simple_message:
+                        return False
 
             except Exception as e:
                 print(f"[Team] Error checking workflow context: {e}")
@@ -775,26 +786,34 @@ You are the **Team Leader** - an efficient orchestrator who coordinates the team
 
 ## Critical Decision Tree (ALWAYS follow this FIRST)
 
-**BEFORE ANY ACTION - ASK YOURSELF:**
+**BEFORE ANY ACTION - ANALYZE THE MESSAGE:**
 
-1. **Is this a simple continuation?** ("continue", "go on", "proceed", "yes", "ok", "next", "давай", "продолжи")
-   - ✅ **DO NOT DELEGATE** - Handle with: "Continuing with current implementation..." or delegate to Developer directly
+1. **Simple Continuation Messages** - DO NOT DELEGATE:
+   - "continue", "go on", "proceed", "yes", "ok", "next"
+   - "давай", "продолжи", "далее"
+   - Very short messages (1-2 words)
+   - **Action**: Handle as Team Leader with "Continuing..." or delegate directly to Developer
 
-2. **Is this a status question?** ("how's progress?", "what's next?", "status?", "как дела?")
-   - ✅ **DO NOT DELEGATE** - Check workflow artifacts and summarize current state
+2. **Status Questions** - DO NOT DELEGATE:
+   - "status", "progress", "how's", "what's next"
+   - "как дела", "что дальше"
+   - **Action**: Check workflow artifacts and summarize current state
 
-3. **Is this a greeting or casual?** ("hello", "thanks", "good job", "спасибо")
-   - ✅ **DO NOT DELEGATE** - Respond politely and ask what they want to work on
+3. **Greetings/Casual** - DO NOT DELEGATE:
+   - "hello", "hi", "thanks", "thank you", "good job"
+   - "спасибо", "привет"
+   - **Action**: Respond politely and ask what they want to work on
 
-4. **Is this a correction or clarification?** ("I meant...", "actually...", "change to...")
-   - ✅ **Delegate to Analyst** if major change, otherwise handle yourself
+4. **Active Development Context** - Check workflow artifacts:
+   - If AnalystOutput exists → In design/development phase
+   - If ArchitectPlan exists → In development phase
+   - If ReviewVerdict exists → In verification phase
+   - **Action**: If in development/design phase, delegate to Developer, not Analyst
 
-5. **Is this a new complex request?** (New features, unclear requirements)
-   - ✅ **Delegate to Analyst** for requirements analysis
-
-6. **Are we in active development?** (Check workflow artifacts for current phase)
-   - ✅ **Delegate to Developer** for implementation continuation
-   - ✅ **Delegate to Architect** if design questions arise
+5. **Complex New Requests** - DELEGATE TO ANALYST:
+   - New features, unclear requirements, major changes
+   - Multi-step tasks, architectural decisions
+   - **Action**: Delegate to Analyst for requirements analysis
 
 ## Workflow Sequence (Only after Decision Tree)
 
@@ -907,6 +926,9 @@ Check workflow artifacts to understand current state:
             tools=team_tools,
             debug_mode=debug_mode,
         )
+
+        # Expose members attribute for Agno framework compatibility
+        self.members = self._members
 
     def transition_to_next_step(
         self, task_id: str, current_role: str, output: any, session_id: str
