@@ -457,6 +457,7 @@ You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 
 
 class DevelopmentTeam(Team):
+    members: List[WorkflowAgent] = []
     def __init__(
         self,
         model: Model,
@@ -476,7 +477,9 @@ class DevelopmentTeam(Team):
         # 1. Server-side Tools
         github_tool = GithubTools(access_token=github_token) if github_token else None
 
-        architect_tools = [github_tool] if github_tool else []
+        architect_tools = []
+        if github_tool:
+            architect_tools.append(github_tool)
 
         # Jules API key: prefer passed parameter, fallback to env var
         effective_jules_key = jules_api_key or os.getenv("JULES_API_KEY", "")
@@ -501,7 +504,8 @@ class DevelopmentTeam(Team):
         # Add client tools to all agents (or specific ones)
         if client_tools:
             analyst_tools.extend(client_tools)
-            architect_tools.extend(client_tools)
+            if github_tool:
+                architect_tools.extend(client_tools)
             # Worker might not need all client tools, but let's be inclusive if they are generic
             worker_tools.extend(client_tools)
 
@@ -848,87 +852,90 @@ Check workflow artifacts to understand current state:
 
         # analyst_tools already defined above
 
+        # Store members list for Agno compatibility
+        members_list = [
+            WorkflowAgent(
+                name="Analyst",
+                model=model,
+                instructions=analyst_instructions.format(
+                    project_id=project_id or "unknown", task_id=task_id or "unknown"
+                ),
+                markdown=markdown,
+                debug_mode=debug_mode,
+                tools=analyst_tools,
+                output_schema=AnalystOutput,
+                structured_outputs=True,
+                workflow_storage=self.workflow_storage,
+                on_completion=self.transition_to_next_step,
+                tool_call_limit=5,
+            ),
+            WorkflowAgent(
+                name="Architect",
+                model=model,
+                tools=architect_tools,
+                instructions=architect_instructions,
+                markdown=markdown,
+                debug_mode=debug_mode,
+                output_schema=ArchitectPlan,
+                structured_outputs=True,
+                workflow_storage=self.workflow_storage,
+                on_completion=self.transition_to_next_step,
+                tool_call_limit=5,
+            ),
+            WorkflowAgent(
+                name="Worker",
+                model=model,
+                tools=worker_tools,
+                instructions=worker_instructions,
+                markdown=markdown,
+                debug_mode=debug_mode,
+                workflow_storage=self.workflow_storage,
+                on_completion=self.transition_to_next_step,
+                tool_call_limit=5,
+            ),
+            WorkflowAgent(
+                name="Reviewer",
+                model=model,
+                instructions=reviewer_instructions,
+                markdown=markdown,
+                debug_mode=debug_mode,
+                output_schema=ReviewVerdict,
+                structured_outputs=True,
+                workflow_storage=self.workflow_storage,
+                on_completion=self.transition_to_next_step,
+                tool_call_limit=5,
+            ),
+            WorkflowAgent(
+                name="Verifier",
+                model=model,
+                instructions=analyst_instructions.format(
+                    project_id=project_id or "unknown", task_id=task_id or "unknown"
+                ),  # Re-use Analyst instructions with context
+                markdown=markdown,
+                debug_mode=debug_mode,
+                tools=analyst_tools,
+                output_schema=FinalAcceptance,  # Different model
+                structured_outputs=True,
+                workflow_storage=self.workflow_storage,
+                on_completion=self.transition_to_next_step,
+                tool_call_limit=5,
+            ),
+        ]
+
         super().__init__(
             name="Development Team",
             model=model,
             db=db,
             description=description,
             instructions=instructions,
-            members=[
-                WorkflowAgent(
-                    name="Analyst",
-                    model=model,
-                    instructions=analyst_instructions.format(
-                        project_id=project_id or "unknown", task_id=task_id or "unknown"
-                    ),
-                    markdown=markdown,
-                    debug_mode=debug_mode,
-                    tools=analyst_tools,
-                    output_schema=AnalystOutput,
-                    structured_outputs=True,
-                    workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step,
-                    tool_call_limit=5,
-                ),
-                WorkflowAgent(
-                    name="Architect",
-                    model=model,
-                    tools=architect_tools,
-                    instructions=architect_instructions,
-                    markdown=markdown,
-                    debug_mode=debug_mode,
-                    output_schema=ArchitectPlan,
-                    structured_outputs=True,
-                    workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step,
-                    tool_call_limit=5,
-                ),
-                WorkflowAgent(
-                    name="Worker",
-                    model=model,
-                    tools=worker_tools,
-                    instructions=worker_instructions,
-                    markdown=markdown,
-                    debug_mode=debug_mode,
-                    workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step,
-                    tool_call_limit=5,
-                ),
-                WorkflowAgent(
-                    name="Reviewer",
-                    model=model,
-                    instructions=reviewer_instructions,
-                    markdown=markdown,
-                    debug_mode=debug_mode,
-                    output_schema=ReviewVerdict,
-                    structured_outputs=True,
-                    workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step,
-                    tool_call_limit=5,
-                ),
-                WorkflowAgent(
-                    name="Verifier",
-                    model=model,
-                    instructions=analyst_instructions.format(
-                        project_id=project_id or "unknown", task_id=task_id or "unknown"
-                    ),  # Re-use Analyst instructions with context
-                    markdown=markdown,
-                    debug_mode=debug_mode,
-                    tools=analyst_tools,
-                    output_schema=FinalAcceptance,  # Different model
-                    structured_outputs=True,
-                    workflow_storage=self.workflow_storage,
-                    on_completion=self.transition_to_next_step,
-                    tool_call_limit=5,
-                ),
-            ],
+            members=members_list,
             add_history_to_context=True,
             tools=team_tools,
             debug_mode=debug_mode,
         )
 
         # Expose members attribute for Agno framework compatibility
-        self.members = self._members
+        self.members = members_list
 
     def transition_to_next_step(
         self, task_id: str, current_role: str, output: any, session_id: str
