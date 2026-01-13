@@ -792,7 +792,7 @@ Check workflow artifacts to understand current state:
                 debug_mode=debug_mode,
                 tools=analyst_tools,
                 output_schema=AnalystOutput,
-                structured_outputs=True,
+                # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 workflow_storage=self.workflow_storage,
                 on_completion=self.transition_to_next_step,
                 tool_call_limit=5,
@@ -805,7 +805,7 @@ Check workflow artifacts to understand current state:
                 markdown=markdown,
                 debug_mode=debug_mode,
                 output_schema=ArchitectPlan,
-                structured_outputs=True,
+                # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 workflow_storage=self.workflow_storage,
                 on_completion=self.transition_to_next_step,
                 tool_call_limit=5,
@@ -828,7 +828,7 @@ Check workflow artifacts to understand current state:
                 markdown=markdown,
                 debug_mode=debug_mode,
                 output_schema=ReviewVerdict,
-                structured_outputs=True,
+                # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 workflow_storage=self.workflow_storage,
                 on_completion=self.transition_to_next_step,
                 tool_call_limit=5,
@@ -843,7 +843,7 @@ Check workflow artifacts to understand current state:
                 debug_mode=debug_mode,
                 tools=analyst_tools,
                 output_schema=FinalAcceptance,  # Different model
-                structured_outputs=True,
+                # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 workflow_storage=self.workflow_storage,
                 on_completion=self.transition_to_next_step,
                 tool_call_limit=5,

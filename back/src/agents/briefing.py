@@ -125,7 +125,7 @@ class BriefingAgent(Agent):
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),
             output_schema=BriefingResponse,
-            structured_outputs=True,
+            # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
             debug_mode=debug_mode,
             description="Prepares the daily executive briefing with context.",
         )
