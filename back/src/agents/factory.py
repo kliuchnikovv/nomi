@@ -23,11 +23,8 @@ from src.teams.development.team import (
     reviewer_instructions,
     worker_instructions,
 )
-from src.teams.development.models import (
-    AnalystOutput,
-    ArchitectPlan,
-    ReviewVerdict,
-)
+# NOTE: AnalystOutput, ArchitectPlan, ReviewVerdict imports removed
+# Gemini 2.5 doesn't support output_schema with function calling
 from src.knowledge.factory import build_vector_db
 from src.knowledge.user_knowledge import UserScopedKnowledge
 from src.tools.config import ToolConfigClient
@@ -270,6 +267,7 @@ class AgentFactory:
                     debug_mode=self._debug_mode,
                 )
             elif agent_type and agent_type.lower() == "analyst":
+                # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 agent = WorkflowAgent(
                     name="Analyst",
                     model=model,
@@ -279,12 +277,12 @@ class AgentFactory:
                     markdown=True,
                     debug_mode=self._debug_mode,
                     tools=tools,
-                    output_schema=AnalystOutput,
                     workflow_storage=None,
                     on_completion=None,
                     tool_call_limit=10,
                 )
             elif agent_type and agent_type.lower() == "architect":
+                # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 agent = WorkflowAgent(
                     name="Architect",
                     model=model,
@@ -292,7 +290,6 @@ class AgentFactory:
                     instructions=architect_instructions,
                     markdown=True,
                     debug_mode=self._debug_mode,
-                    output_schema=ArchitectPlan,
                     workflow_storage=None,
                     on_completion=None,
                     tool_call_limit=10,
@@ -322,13 +319,13 @@ class AgentFactory:
                     tool_call_limit=10,
                 )
             elif agent_type and agent_type.lower() == "reviewer":
+                # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 agent = WorkflowAgent(
                     name="Reviewer",
                     model=model,
                     instructions=reviewer_instructions,
                     markdown=True,
                     debug_mode=self._debug_mode,
-                    output_schema=ReviewVerdict,
                     workflow_storage=None,
                     on_completion=None,
                     tool_call_limit=10,
