@@ -483,7 +483,20 @@ class DevelopmentTeam(Team):
         # Jules API key: prefer passed parameter, fallback to env var
         effective_jules_key = jules_api_key or os.getenv("JULES_API_KEY", "")
         worker_tools = [TaskManagementTool()]
-        if effective_jules_key:
+        
+        # Check if Jules tool is already in client_tools
+        jules_tool_exists = False
+        if client_tools:
+            for tool in client_tools:
+                if isinstance(tool, JulesTools):
+                    jules_tool_exists = True
+                    print("[DevelopmentTeam] Found existing JulesTools in client_tools")
+                    break
+        
+        if jules_tool_exists:
+            # Already have the tool, no need to add again or warn
+            pass
+        elif effective_jules_key:
             worker_tools.insert(0, JulesTools(api_key=effective_jules_key))
             print("[DevelopmentTeam] Jules tools enabled")
         else:
