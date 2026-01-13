@@ -79,6 +79,7 @@ export type Message = {
     sender: string
     role: string
     text: string
+    agent_id?: string // For multi-agent teams
     created_at: number
     actions?: MessageAction[]
     importance?: string

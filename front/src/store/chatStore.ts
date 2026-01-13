@@ -77,6 +77,10 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
     }
 
     let messageIdx = newMessages.findIndex((item) => {
+        // Multi-agent support: message is identified by message_id AND agent_id
+        if (payload.agent_name && item.agent_id && item.agent_id !== payload.agent_name) {
+            return false;
+        }
         return item.id === payload.message_id;
     });
 
@@ -85,20 +89,14 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         // Use role from payload if available (for multi-device sync)
         const role = payload.role || 'assistant';
         const sender = payload.sender || (role === 'user' ? 'user' : 'assistant');
-        // console.log('[DEBUG] New message received:', {
-        //     messageID,
-        //     payloadRole: payload.role,
-        //     resolvedRole: role,
-        //     payloadSender: payload.sender,
-        //     message: payload.message?.substring(0, 50),
-        // });
+        
         newMessages[messageIdx] = {
             id: messageID,
             chat_id: activeChatID,
             sender: sender,
             role: role,
+            agent_id: payload.agent_name,
             // Initialize with a space for assistant to ensure GiftedChat renders the bubble immediately
-            // This allows content_parts (thinking, tools) to be visible even before text arrives
             text: role === 'user' ? (payload.message || "") : " ",
             created_at: Date.now(),
             content_parts: role === 'user' ? undefined : [], // Initialize content_parts for assistant

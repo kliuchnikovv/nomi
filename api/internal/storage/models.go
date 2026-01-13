@@ -46,6 +46,7 @@ type Message struct {
 	UserID       uuid.UUID      `gorm:"type:uuid;not null"`
 	Role         string         `gorm:"type:varchar(20);not null"`
 	Text         string         `gorm:"type:text;not null"`
+	AgentID      *string        `gorm:"type:varchar(50);default:null;index"` // For multi-agent teams
 	ToolCalls    datatypes.JSON `gorm:"type:jsonb"`
 	ContentParts datatypes.JSON `gorm:"type:jsonb"` // Stores ordered text, tool_calls, reasoning
 	Reasoning    string         `gorm:"type:text"`  // Stores accumulated reasoning/thinking steps

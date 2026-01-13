@@ -157,6 +157,21 @@ export const styles = StyleSheet.create({
         fontSize: 11,
         fontFamily: 'Menlo',
     },
+    agentLabel: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+        paddingBottom: 4,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    agentLabelText: {
+        color: theme.accent,
+        fontSize: 12,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
     modelText: {
         color: theme.textSecondary,
         fontSize: 11,

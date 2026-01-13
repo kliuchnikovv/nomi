@@ -14,6 +14,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// Helper to convert string to *string
+func stringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 type Streamer struct {
 	storage *storage.Storage
 	logger  *zap.Logger
@@ -133,7 +141,7 @@ func (streamer *Streamer) Stream(client *Socket) {
 				History:     historyData,
 				Tools:       tools,
 				Command:     streamer.commandPayload,
-				UserID:      streamer.userID, 
+				UserID:      streamer.userID,
 			},
 		}
 
@@ -219,6 +227,7 @@ func (streamer *Streamer) Stream(client *Socket) {
 						Sender:    storage.ZeroUUID,
 						Role:      chat.RoleAssistant,
 						Model:     currentMessageMetadata.Model,
+						AgentID:   stringPtr(frame.Payload.AgentName),
 						ToolCalls: currentMessageMetadata.ToolCalls,
 						CreatedAt: time.Now().UTC(),
 					})
@@ -247,6 +256,7 @@ func (streamer *Streamer) Stream(client *Socket) {
 						Role:      chat.RoleAssistant,
 						Text:      frame.Payload.Message,
 						Model:     currentMessageMetadata.Model,
+						AgentID:   stringPtr(frame.Payload.AgentName),
 						ToolCalls: currentMessageMetadata.ToolCalls,
 						CreatedAt: time.Now().UTC(),
 					})

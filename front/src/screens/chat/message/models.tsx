@@ -38,6 +38,7 @@ export type Message = {
     sender: string
     role: Role
     text: string
+    agent_id?: string
     created_at: number
     actions?: Action[]
     importance?: string

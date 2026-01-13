@@ -54,6 +54,7 @@ type Payload struct {
 	EndOfBuffer bool        `json:"eof,omitempty"`
 
 	Type             string      `json:"type,omitempty"`
+	AgentName        string      `json:"agent_name,omitempty"` // For multi-agent teams
 	CompletionTokens uint        `json:"completion_tokens,omitempty"`
 	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
 	Tools            interface{} `json:"tools,omitempty"`

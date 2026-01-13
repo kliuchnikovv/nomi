@@ -20,6 +20,7 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { authStore } from '../../../apiClient';
 import { getApiUrl, API_URL } from '../../../config';
 import { useChat } from '../context';
+import { getAgentIcon } from '../../../utils/agentAvatars';
 
 function AttachmentImage({ attachment }: { attachment: Attachment }) {
     const [token, setToken] = useState<string | null>(authStore.getToken());
@@ -122,6 +123,13 @@ export default function MessageScreen(props: Props) {
 
     return (
         <View style={containerStylesByType[props.message.role]}>
+            {props.message.agent_id && (
+                <View style={styles.agentLabel}>
+                    <Text style={styles.agentLabelText}>
+                        {getAgentIcon(props.message.agent_id)} {props.message.agent_id}
+                    </Text>
+                </View>
+            )}
             {props.header && (
                 <Text style={styles.daemonHeader}>{props.header}</Text>
             )}
