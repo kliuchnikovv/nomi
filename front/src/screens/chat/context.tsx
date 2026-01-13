@@ -220,7 +220,8 @@ export function ChatProvider({
                     "title": title,
                     "model": selectedModelRef.current || 'gemini-2.0-flash-exp',
                     "mode": chatMode,
-                    "team_id": chatMode === 'team' ? selectedTeamId : null,
+                    // Pass team_id for teams, OR for individual agents (agent_type)
+                    "team_id": selectedTeamId || null,
                     "project_id": activeChat?.project_id,
                     "task_id": activeChat?.task_id,
                 },

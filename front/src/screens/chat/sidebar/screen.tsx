@@ -269,8 +269,15 @@ function ChatListContent({
         if (sidebarFilter === 'all' || sidebarFilter === 'agent') {
             onNewChatWithMode('agent', null);
         } else {
-            // Team ID
-            onNewChatWithMode('team', sidebarFilter);
+            // Check if this is an individual agent (not a team)
+            const selectedEntry = AVAILABLE_TEAMS.find(t => t.id === sidebarFilter);
+            if (selectedEntry?.isAgent) {
+                // Individual agent - use 'agent' mode with agent_type in team_id
+                onNewChatWithMode('agent', sidebarFilter);
+            } else {
+                // Team mode
+                onNewChatWithMode('team', sidebarFilter);
+            }
         }
     }, [onNewChat, onNewChatWithMode, sidebarFilter]);
 

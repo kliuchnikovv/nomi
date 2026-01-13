@@ -528,9 +528,17 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		if r.command != "" {
 			// Try to unmarshal JSON command to interface{}, otherwise pass as string?
 			// Payload.Command is interface{}.
-			var cmdMap interface{}
+			var cmdMap map[string]interface{}
 			if err := json.Unmarshal([]byte(r.command), &cmdMap); err == nil {
 				frame.Payload.Command = cmdMap
+				// For individual agents (mode=agent with type in command), use the type as agent_type
+				// This allows analyst, architect, developer, etc. to be correctly identified
+				if r.mode == "agent" {
+					if cmdType, ok := cmdMap["type"].(string); ok && cmdType != "" && cmdType != "agent" {
+						frame.Payload.AgentType = cmdType
+						r.logger.Info("using agent type from command", zap.String("agent_type", cmdType))
+					}
+				}
 			} else {
 				frame.Payload.Command = r.command // Fallback
 			}
