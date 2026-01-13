@@ -62,6 +62,13 @@ class SafeGemini(Gemini):
         filtered_messages = []
         
         for msg in messages:
+            # DEBUG: Log tool messages to find the application/json issue
+            if msg.role == "tool":
+                logger.info(f"[SafeGemini DEBUG] Tool Message: content_type={type(msg.content)} content={msg.content}")
+                if isinstance(msg.content, list):
+                    for i, part in enumerate(msg.content):
+                        logger.info(f"[SafeGemini DEBUG] Part {i}: {part}")
+
             # Check if message has content
             if msg.content is None:
                 # Skip messages with no content at all
