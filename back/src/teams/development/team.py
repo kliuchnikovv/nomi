@@ -13,7 +13,12 @@ from agno.tools.github import GithubTools
 import requests
 
 from src.agents.genie import GenieAgent
-from src.teams.development.models import AnalystOutput, ArchitectPlan, ReviewVerdict, FinalAcceptance
+from src.teams.development.models import (
+    AnalystOutput,
+    ArchitectPlan,
+    ReviewVerdict,
+    FinalAcceptance,
+)
 from src.rag_service import KnowledgeSearchTool
 from src.workflow.agent import PgWorkflowStorage, WorkflowAgent
 from src.tools.jules import JulesTools
@@ -21,7 +26,7 @@ from src.tools.task_manager import TaskManagementTool
 
 # --- Instructions for each role ---
 
-analyst_instructions = dedent('''
+analyst_instructions = dedent("""
 You are an interactive **Analyst** that helps users with software engineering tasks. Your goal is to thoroughly analyze requests, identify missing requirements, and clarify scope.
 
 IMPORTANT: Assist with defensive security tasks only. Refuse to create, modify, or improve code that may be used maliciously.
@@ -48,7 +53,7 @@ The **Genie** project is a monorepo containing:
 - **`api/`** — Go REST API & WebSocket server (Gin + GORM)
 
 # Your Role as Analyst
-1. **Analyze Request**: Read the user's request carefully to understand the desired feature or change.
+1. **Analyze Request**: Read the user's request carefully. If the request is a simple continuation (e.g., "continue", "proceed"), use historical context to fulfill the required output schema without redundant re-analysis.
 2. **Check RAG**: Use the `knowledge_search_tool` to check the current state of the project and avoid duplicating existing functionality. Search for relevant code patterns, existing APIs, or similar features.
 3. **Identify Requirements**: Break down the request into atomic functional requirements.
 4. **Define Acceptance Criteria**: For each requirement, define clear, testable acceptance criteria.
@@ -116,9 +121,9 @@ search_knowledge(query="websocket implementation", project_id="*")
 - What tests are needed?
 
 You must always output a structured `AnalystOutput` object when you have completed your analysis.
-''')
+""")
 
-architect_instructions = dedent('''
+architect_instructions = dedent("""
 You are the **System Architect**, the primary quality gatekeeper. Your role is to ensure that new features do not degrade the codebase into "spaghetti code" and strictly adhere to established architectural patterns.
 
 # Core Responsibilities
@@ -162,9 +167,9 @@ You must produce a structured response containing:
 - **Go (`api/`)**: Gin + GORM + Strict Typing.
 - **Python (`back/`)**: Agno Framework + Type Hints + Async.
 - **Front (`front/`)**: React Native + TypeScript + Local SQLite.
-''')
+""")
 
-developer_instructions = dedent('''
+developer_instructions = dedent("""
 You are an interactive **Developer** that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
 
 IMPORTANT: Assist with defensive security tasks only. Refuse to create, modify, or improve code that may be used maliciously. Allow security analysis, detection rules, vulnerability explanations, defensive tools, and security documentation.
@@ -354,9 +359,9 @@ Status:
 
 Recent commits:
 ${Last 5 Recent commits}
-''')
+""")
 
-reviewer_instructions = dedent('''
+reviewer_instructions = dedent("""
 You are an interactive **Reviewer** that helps users with software engineering tasks. Your goal is to validate code and tests produced by the Developer.
 
 IMPORTANT: Assist with defensive security tasks only. Refuse to create, modify, or improve code that may be used maliciously.
@@ -422,9 +427,9 @@ You must return a `ReviewVerdict` object:
 - [ ] No secrets or sensitive data exposed
 - [ ] Tests are comprehensive and pass
 - [ ] Linters pass without errors
-''')
+""")
 
-worker_instructions = dedent('''
+worker_instructions = dedent("""
 You are the **Worker** (Jules Operator). Your job is to execute the **ArchitectPlan** using the Jules API if available.
 You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 
@@ -448,7 +453,7 @@ You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 - `task_management_tool`: Update task status in Genie.
 
 **IMPORTANT**: If `jules_api` tool is not available (JULES_API_KEY not set), inform the Team Leader that the task needs manual implementation via the Developer agent instead.
-''')
+""")
 
 
 class DevelopmentTeam(Team):
@@ -470,9 +475,9 @@ class DevelopmentTeam(Team):
         # Initialize GitHub tools if token is provided
         # 1. Server-side Tools
         github_tool = GithubTools(access_token=github_token) if github_token else None
-        
+
         architect_tools = [github_tool] if github_tool else []
-        
+
         # Jules API key: prefer passed parameter, fallback to env var
         effective_jules_key = jules_api_key or os.getenv("JULES_API_KEY", "")
         worker_tools = [TaskManagementTool()]
@@ -480,15 +485,19 @@ class DevelopmentTeam(Team):
             worker_tools.insert(0, JulesTools(api_key=effective_jules_key))
             print("[DevelopmentTeam] Jules tools enabled")
         else:
-            print("[DevelopmentTeam] Warning: Jules API key not provided, Jules tools disabled")
+            print(
+                "[DevelopmentTeam] Warning: Jules API key not provided, Jules tools disabled"
+            )
 
         # Analyst and Verifier tools
         analyst_tools = []
         if user_id:
-             analyst_tools.append(KnowledgeSearchTool(user_id=user_id, auth_token=auth_token))
+            analyst_tools.append(
+                KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
+            )
         if github_tool:
-             analyst_tools.append(github_tool)
-             
+            analyst_tools.append(github_tool)
+
         # Add client tools to all agents (or specific ones)
         if client_tools:
             analyst_tools.extend(client_tools)
@@ -501,7 +510,9 @@ class DevelopmentTeam(Team):
         if github_tool:
             team_tools.append(github_tool)
         if user_id:
-            team_tools.append(KnowledgeSearchTool(user_id=user_id, auth_token=auth_token))
+            team_tools.append(
+                KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
+            )
         if client_tools:
             team_tools.extend(client_tools)
 
@@ -511,7 +522,7 @@ class DevelopmentTeam(Team):
         self.project_id = project_id
         self.task_id = task_id
 
-        description = dedent('''
+        description = dedent("""
 <identity>
 You are the **Team Leader** of a Development Team, a powerful agentic AI coding assistant for the Genie project.
 You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.
@@ -662,52 +673,51 @@ Never introduce code that exposes or logs secrets and keys
 Never commit secrets or keys to the repository
 NEVER commit changes unless the user explicitly asks you to </code_style>
 The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** designs the solution 3. **Developer** implements code and tests 4. **Reviewer** validates the result 5. Create Pull Request for merge to main 
-''')
-        
-        instructions = dedent('''
+""")
+
+        instructions = dedent("""
 # Team Leader Instructions
 
 ## Team Coordination
 
 You are responsible for coordinating your team members to deliver high-quality software solutions.
+You must be an efficient orchestrator: do not delegate if you can handle a simple request yourself, and skip steps that are already completed or unnecessary.
 
-### Workflow
+### Workflow Sequence
 
-1. **PLANNING Phase**
-   - Have the **Analyst** evaluate the user request
-   - Identify which component(s) are affected: api/, back/, or front/
-   - Have the **Architect** propose a technical design once requirements are clear
-   - Create implementation_plan.md and get user approval
+1. **ANALYSIS**: Have the **Analyst** evaluate the request.
+   - SKIP if: Request is a simple continuation ("continue", "go on"), a greeting, or the requirements are already perfectly clear.
+2. **DESIGN**: Have the **Architect** propose a technical design and implementation plan.
+   - SKIP if: You are already in the middle of implementation and just need to continue coding, or the task is a trivial single-file edit.
+3. **IMPLEMENTATION**: Instruct the **Developer** (manual) or **Worker** (auto) to implement the solution.
+4. **REVIEW**: Ask the **Reviewer** to check the implementation.
+5. **VERIFICATION**: Have the **Verifier** perform final checks and run tests.
 
-2. **EXECUTION Phase**
-   - Instruct the **Developer** (manual) or **Worker** (auto) to implement the solution
-   - Ensure code follows existing patterns in each directory
-   - Have the **Developer** write comprehensive tests
-   - NEVER assume a library is available — check package files first
+## Delegation Quick Reference
 
-3. **VERIFICATION Phase**
-   - Ask the **Reviewer** to check the implementation
-   - Run linters and tests:
-     - Go: go test ./... && golangci-lint run
-     - Python: pytest && flake8 && black --check .
-     - TypeScript: npm test && npm run lint
-   - Create walkthrough.md documenting results
-   - Create Pull Request for merge
+| Agent | Delegate When | Skip When |
+|-------|---------------|-----------|
+| **Analyst** | Requirements are unclear, complex, or need functional breakdown. | Simple follow-ups, greetings, or clear tasks. |
+| **Architect** | Technical design decisions or a multi-file plan is needed. | Trivial changes or continuing existing plan. |
+| **Worker** | Automated execution via Jules API is preferred (requires ArchitectPlan). | Jules API not available or manual coding preferred. |
+| **Developer** | Interactive coding, debugging, or manual implementation needed. | Task already completed by Worker. |
+| **Reviewer** | Implementation is ready for quality check. | Initial planning phase. |
 
 ## Delegation Rules
 
-- **Analyst**: Assign when requirements are unclear or need clarification
-- **Architect**: Assign when technical design decisions are needed
-- **Worker**: Assign for fully automated implementation using Jules API (Requires ArchitectPlan).
-- **Developer**: Assign for interactive code implementation and testing tasks
-- **Reviewer**: Assign after Developer/Worker completes implementation
+- **Team Leader (You)**: Handle simple continuations, status updates, or general questions yourself.
+- **Analyst**: Focus on "WHAT" needs to be done.
+- **Architect**: Focus on "HOW" it should be implemented.
+- **Developer/Worker**: Focus on "DOING" the work.
+- **Reviewer**: Focus on "VERIFYING" quality and security.
 
 ## Communication
 
-- Present clear, concise summaries of progress to the user
-- Ask for clarification when requirements are ambiguous
-- Report blockers immediately
-- Provide constructive feedback to team members
+- Present clear, concise summaries of progress to the user.
+- If you skip a member, explain briefly why (e.g., "Requirements are clear, proceeding directly to Architect").
+- Ask for clarification ONLY when truly blocked.
+- Report blockers immediately.
+- Provide constructive feedback to team members.
 
 ## Code Quality Standards
 
@@ -732,7 +742,7 @@ If a team member encounters issues:
 - Create comprehensive walkthrough.md
 - Create Pull Request with clear description
 - Present final result to the user
-        ''')
+        """)
 
         # analyst_tools already defined above
 
@@ -747,8 +757,7 @@ If a team member encounters issues:
                     name="Analyst",
                     model=model,
                     instructions=analyst_instructions.format(
-                        project_id=project_id or "unknown",
-                        task_id=task_id or "unknown"
+                        project_id=project_id or "unknown", task_id=task_id or "unknown"
                     ),
                     markdown=markdown,
                     debug_mode=debug_mode,
@@ -799,13 +808,12 @@ If a team member encounters issues:
                     name="Verifier",
                     model=model,
                     instructions=analyst_instructions.format(
-                        project_id=project_id or "unknown",
-                        task_id=task_id or "unknown"
-                    ), # Re-use Analyst instructions with context
+                        project_id=project_id or "unknown", task_id=task_id or "unknown"
+                    ),  # Re-use Analyst instructions with context
                     markdown=markdown,
                     debug_mode=debug_mode,
                     tools=analyst_tools,
-                    output_schema=FinalAcceptance, # Different model
+                    output_schema=FinalAcceptance,  # Different model
                     structured_outputs=True,
                     workflow_storage=self.workflow_storage,
                     on_completion=self.transition_to_next_step,
@@ -817,7 +825,9 @@ If a team member encounters issues:
             debug_mode=debug_mode,
         )
 
-    def transition_to_next_step(self, task_id: str, current_role: str, output: any, session_id: str):
+    def transition_to_next_step(
+        self, task_id: str, current_role: str, output: any, session_id: str
+    ):
         """
         Orchestrates the workflow state machine.
         Called after an agent completes its task.
@@ -826,9 +836,13 @@ If a team member encounters issues:
             return
 
         # 1. Save Artifact
-        artifact_type = type(output).__name__ if not isinstance(output, dict) else "Dict"
+        artifact_type = (
+            type(output).__name__ if not isinstance(output, dict) else "Dict"
+        )
         content = output.model_dump() if hasattr(output, "model_dump") else output
-        self.workflow_storage.save_artifact(session_id, task_id, current_role, artifact_type, content)
+        self.workflow_storage.save_artifact(
+            session_id, task_id, current_role, artifact_type, content
+        )
 
         # 2. Update Status & Determine Next Step
         next_status = None
@@ -841,12 +855,12 @@ If a team member encounters issues:
             next_status = "CODING"
             next_role = "Developer"
         elif current_role == "Reviewer":
-             if hasattr(output, 'approved') and output.approved:
-                 next_status = "VERIFY"
-                 next_role = "Verifier"
-             else:
-                 next_status = "CODING"
-                 next_role = "Developer" # Loop back for fixes
+            if hasattr(output, "approved") and output.approved:
+                next_status = "VERIFY"
+                next_role = "Verifier"
+            else:
+                next_status = "CODING"
+                next_role = "Developer"  # Loop back for fixes
 
         if next_status:
             self._update_task_status(task_id, next_status, artifacts=content)
@@ -865,7 +879,9 @@ If a team member encounters issues:
 
                 # Execute synchronously
                 try:
-                    next_agent.run(message=message, task_id=task_id, session_id=session_id)
+                    next_agent.run(
+                        message=message, task_id=task_id, session_id=session_id
+                    )
                 except Exception as e:
                     print(f"Failed to auto-activate {next_role}: {e}")
 
@@ -878,21 +894,27 @@ If a team member encounters issues:
             # We might not have session_id here if called from webhook (new context).
             # But WorkflowAgent.run looks up by task_id too.
             print(f"[Workflow] Manually triggering {role} for Task {task_id}")
-            agent.run(message=f"External trigger for {role}.", task_id=task_id, session_id=None)
+            agent.run(
+                message=f"External trigger for {role}.",
+                task_id=task_id,
+                session_id=None,
+            )
         else:
             print(f"Agent role {role} not found.")
 
-    def _update_task_status(self, task_id: str, status: str, artifacts: Optional[dict] = None):
+    def _update_task_status(
+        self, task_id: str, status: str, artifacts: Optional[dict] = None
+    ):
         # Call Go API
         base_url = os.getenv("API_BASE_URL", "http://api:8080")
         url = f"{base_url}/api/project-tasks/{task_id}/status"
         try:
-             # We need a way to authenticate or use internal secret
-             secret = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
-             headers = {"X-Internal-Secret": secret}
-             payload = {"status": status}
-             if artifacts:
-                 payload["artifacts"] = artifacts
-             requests.patch(url, json=payload, headers=headers)
+            # We need a way to authenticate or use internal secret
+            secret = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+            headers = {"X-Internal-Secret": secret}
+            payload = {"status": status}
+            if artifacts:
+                payload["artifacts"] = artifacts
+            requests.patch(url, json=payload, headers=headers)
         except Exception as e:
             print(f"Failed to update task status: {e}")
