@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import redis.asyncio as redis
-from typing import Optional
+from typing import Optional, Dict, Set
 
 from agno.agent import Agent
 from agno.models.base import Model
@@ -106,40 +106,44 @@ class RedisWorker:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
+    
+    # Global task registry
+    ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
+
     async def _process_request(self, chat_id: str, raw_data: str):
         """Process the request logic."""
+        task_id = chat_id # Use chat_id as task key. 
+        # If we need per-message cancellation, we'd need message_id, but usually we cancel the whole generation for the chat.
+
         try:
             payload = json.loads(raw_data)
             frame = Frame(**payload)
             
             # Validate frame
-            # We expect Op.MESSAGE mostly, but could differ
+            if frame.op == Op.PING:
+                return
+
+            if frame.op == Op.STOP:
+                logger.info(f"[RedisWorker] Received STOP for chat {chat_id}")
+                if chat_id in self.ACTIVE_TASKS:
+                    self.ACTIVE_TASKS[chat_id].cancel()
+                    # We don't remove it here immediately, let the task finish/cleanup
+                return
+
             if frame.op != Op.MESSAGE:
                 logger.warning(f"[RedisWorker] Ignoring non-MESSAGE op: {frame.op} for chat {chat_id}")
                 return
 
-            # Extract user_id from payload if available, or rely on session logic
-            # The Go API usually puts user_id in the frame payload or we might need it from the channel?
-            # Go hub stores initiatorID. 
-            # Ideally the frame payload should contain 'user_id' or similar metadata if needed for auth context.
-            # However, looking at ws.py, user_id comes from token.
-            # Refactor: Go should inject user_id into the frame payload or 'data' wrapper.
-            
-            # Let's assume the frame payload has a "user" object or similar, OR we use chat_id as session.
-            # For now, we use chat_id as session_id.
-            
-            # We need to know the User ID to fetch tools and for RAG.
-            # If the frame lacks it, we might be limited.
-            # Go's HandleUserMessage:
-            # msg := &chat.Message{ ... UserID: r.initiatorID ... }
-            # Payload sent to LLM is `Frame`.
-            # We should probably update Go to include `user_id` in the `Frame` or its payload.
-            # But let's check Frame struct in `models.go` (Python) and `hub/models.go` (Go).
-            # Frame has `Payload map[string]interface{}`.
-            
-            # ImplementationDetail: We will read `user_id` from payload if present.
+            # For MESSAGE, we cancel previous task if any (debouncing/restart)
+            if chat_id in self.ACTIVE_TASKS:
+                logger.info(f"[RedisWorker] Cancelling existing task for chat {chat_id}")
+                self.ACTIVE_TASKS[chat_id].cancel()
+                # Wait a bit? Or just overwrite.
+                # Ideally, we should wait for it to cleanup, but for now we just overwrite in dict 
+                # and let the old task die in background.
+
+            # Implement logic to handle session
             frame_payload = frame.payload or {}
-            # Go sends "sender" (UUID), Python might look for "user_id". Handle both.
             user_id = frame_payload.get("user_id") or frame_payload.get("sender")
             
             session = RedisSession(
@@ -149,9 +153,31 @@ class RedisWorker:
                 chat_id=chat_id
             )
             
-            await session.handle_frame(frame)
+            # Create new task
+            # We wrap it to ensure cleanup from registry
+            async def wrapped_task():
+                try:
+                    await session.handle_frame(frame)
+                except asyncio.CancelledError:
+                    logger.info(f"[RedisWorker] Task cancelled for chat {chat_id}")
+                    raise
+                except Exception as e:
+                    logger.error(f"[RedisWorker] Task error for chat {chat_id}: {e}")
+                finally:
+                    if self.ACTIVE_TASKS.get(chat_id) == current_task:
+                        del self.ACTIVE_TASKS[chat_id]
+
+            # We need reference to current_task inside, but we can't get it before creation.
+            # So we create it first.
+            t = asyncio.create_task(wrapped_task())
+            current_task = t
+            self.ACTIVE_TASKS[chat_id] = t
+            
+            await t
             
         except json.JSONDecodeError:
             logger.error(f"[RedisWorker] Failed to decode JSON for chat {chat_id}")
+        except asyncio.CancelledError:
+            pass # Expected
         except Exception as e:
             logger.error(f"[RedisWorker] Error processing request for {chat_id}: {e}", exc_info=True)
