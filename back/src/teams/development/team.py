@@ -522,6 +522,89 @@ class DevelopmentTeam(Team):
         self.project_id = project_id
         self.task_id = task_id
 
+    def should_delegate_to_analyst(self, message: str) -> bool:
+        """Check if message needs analyst delegation based on content analysis"""
+        message_lower = message.lower().strip()
+
+        # Simple continuations - NO delegation
+        continuation_words = [
+            "continue",
+            "go on",
+            "proceed",
+            "yes",
+            "ok",
+            "next",
+            "давай",
+            "продолжи",
+            "далее",
+        ]
+        if any(word in message_lower for word in continuation_words):
+            return False
+
+        # Status questions - NO delegation
+        status_words = [
+            "status",
+            "progress",
+            "how's",
+            "what's next",
+            "как дела",
+            "что дальше",
+        ]
+        if any(phrase in message_lower for phrase in status_words):
+            return False
+
+        # Greetings and casual - NO delegation
+        casual_words = [
+            "hello",
+            "hi",
+            "thanks",
+            "thank you",
+            "good job",
+            "спасибо",
+            "привет",
+        ]
+        if any(word in message_lower for word in casual_words):
+            return False
+
+        # Very short messages (1-2 words) - likely continuations
+        if len(message.split()) <= 2:
+            return False
+
+        # Check workflow context - if we're in active development, don't delegate
+        if self.workflow_storage and self.task_id:
+            try:
+                # Get current phase from workflow artifacts
+                current_phase = None
+                artifacts = [
+                    self.workflow_storage.get_artifact_by_task(
+                        self.task_id, "AnalystOutput"
+                    ),
+                    self.workflow_storage.get_artifact_by_task(
+                        self.task_id, "ArchitectPlan"
+                    ),
+                    self.workflow_storage.get_artifact_by_task(
+                        self.task_id, "ReviewVerdict"
+                    ),
+                ]
+
+                if artifacts[2]:  # Review completed
+                    current_phase = "verification"
+                elif artifacts[1]:  # Architecture completed
+                    current_phase = "development"
+                elif artifacts[0]:  # Analysis completed
+                    current_phase = "design"
+
+                # If we're in active development phase, delegate to developer, not analyst
+                if current_phase in ["development", "design"]:
+                    return False
+
+            except Exception as e:
+                print(f"[Team] Error checking workflow context: {e}")
+                # Continue with delegation on error
+
+        # Default: delegate to analyst for safety (new complex requests)
+        return True
+
         description = dedent("""
 <identity>
 You are the **Team Leader** of a Development Team, a powerful agentic AI coding assistant for the Genie project.
@@ -658,6 +741,14 @@ Critical Rules
 Keep lines short and concise
 Use file basenames for readability
 Do not surround link text with backticks </format_tips> </artifact_formatting_guidelines>
+<workflow_context>
+You have access to workflow artifacts that track the current state of development:
+- **AnalystOutput**: Requirements analysis and acceptance criteria
+- **ArchitectPlan**: Technical design and implementation plan
+- **ReviewVerdict**: Code review results and approval status
+
+**Check these artifacts before delegating** to understand what phase you're in and what has been completed.
+</workflow_context>
 <communication_style>
 
 Formatting: Format responses in GitHub-style markdown. Use backticks for file, directory, function, and class names.
@@ -678,70 +769,62 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         instructions = dedent("""
 # Team Leader Instructions
 
-## Team Coordination
+## Core Role: Orchestrator & Decision Maker
 
-You are responsible for coordinating your team members to deliver high-quality software solutions.
-You must be an efficient orchestrator: do not delegate if you can handle a simple request yourself, and skip steps that are already completed or unnecessary.
+You are the **Team Leader** - an efficient orchestrator who coordinates the team but does NOT do the work yourself. Your job is to analyze each request and delegate to the RIGHT specialist at the RIGHT time.
 
-### Workflow Sequence
+## Critical Decision Tree (ALWAYS follow this FIRST)
 
-1. **ANALYSIS**: Have the **Analyst** evaluate the request.
-   - SKIP if: Request is a simple continuation ("continue", "go on"), a greeting, or the requirements are already perfectly clear.
-2. **DESIGN**: Have the **Architect** propose a technical design and implementation plan.
-   - SKIP if: You are already in the middle of implementation and just need to continue coding, or the task is a trivial single-file edit.
-3. **IMPLEMENTATION**: Instruct the **Developer** (manual) or **Worker** (auto) to implement the solution.
-4. **REVIEW**: Ask the **Reviewer** to check the implementation.
-5. **VERIFICATION**: Have the **Verifier** perform final checks and run tests.
+**BEFORE ANY ACTION - ASK YOURSELF:**
 
-## Delegation Quick Reference
+1. **Is this a simple continuation?** ("continue", "go on", "proceed", "yes", "ok", "next", "давай", "продолжи")
+   - ✅ **DO NOT DELEGATE** - Handle with: "Continuing with current implementation..." or delegate to Developer directly
 
-| Agent | Delegate When | Skip When |
-|-------|---------------|-----------|
-| **Analyst** | Requirements are unclear, complex, or need functional breakdown. | Simple follow-ups, greetings, or clear tasks. |
-| **Architect** | Technical design decisions or a multi-file plan is needed. | Trivial changes or continuing existing plan. |
-| **Worker** | Automated execution via Jules API is preferred (requires ArchitectPlan). | Jules API not available or manual coding preferred. |
-| **Developer** | Interactive coding, debugging, or manual implementation needed. | Task already completed by Worker. |
-| **Reviewer** | Implementation is ready for quality check. | Initial planning phase. |
+2. **Is this a status question?** ("how's progress?", "what's next?", "status?", "как дела?")
+   - ✅ **DO NOT DELEGATE** - Check workflow artifacts and summarize current state
+
+3. **Is this a greeting or casual?** ("hello", "thanks", "good job", "спасибо")
+   - ✅ **DO NOT DELEGATE** - Respond politely and ask what they want to work on
+
+4. **Is this a correction or clarification?** ("I meant...", "actually...", "change to...")
+   - ✅ **Delegate to Analyst** if major change, otherwise handle yourself
+
+5. **Is this a new complex request?** (New features, unclear requirements)
+   - ✅ **Delegate to Analyst** for requirements analysis
+
+6. **Are we in active development?** (Check workflow artifacts for current phase)
+   - ✅ **Delegate to Developer** for implementation continuation
+   - ✅ **Delegate to Architect** if design questions arise
+
+## Workflow Sequence (Only after Decision Tree)
+
+1. **ANALYSIS**: Delegate to **Analyst** ONLY for new/unclear requirements
+2. **DESIGN**: Delegate to **Architect** for technical planning
+3. **IMPLEMENTATION**: Delegate to **Developer**/**Worker** for code execution
+4. **REVIEW**: Delegate to **Reviewer** for quality checks
+5. **VERIFICATION**: Delegate to **Verifier** for final validation
 
 ## Delegation Rules
 
-- **Team Leader (You)**: Handle simple continuations, status updates, or general questions yourself.
-- **Analyst**: Focus on "WHAT" needs to be done.
-- **Architect**: Focus on "HOW" it should be implemented.
-- **Developer/Worker**: Focus on "DOING" the work.
-- **Reviewer**: Focus on "VERIFYING" quality and security.
+- **Analyst**: ONLY when requirements are truly unclear or complex new features
+- **Architect**: ONLY when technical design decisions are needed
+- **Developer**: For implementation, debugging, code changes
+- **Worker**: For automated execution (if Jules API available)
+- **Reviewer**: After implementation is complete
 
-## Communication
+## Context Awareness
 
-- Present clear, concise summaries of progress to the user.
-- If you skip a member, explain briefly why (e.g., "Requirements are clear, proceeding directly to Architect").
-- Ask for clarification ONLY when truly blocked.
-- Report blockers immediately.
-- Provide constructive feedback to team members.
+Check workflow artifacts to understand current state:
+- If Analyst completed → Delegate to Architect
+- If Architect completed → Delegate to Developer
+- If Developer working → Continue with Developer
+- If blocked/unclear → Ask user for clarification
 
-## Code Quality Standards
+## Communication Style
 
-- NEVER add comments unless explicitly asked
-- Follow existing code conventions in each directory
-- Never expose or log secrets and keys
-- Never commit directly to main branch
-- Always create Pull Requests for changes
-
-## Error Handling
-
-If a team member encounters issues:
-1. Analyze the error message carefully
-2. Determine if the issue requires a different team member
-3. If fundamental design flaw, return to PLANNING phase
-4. If minor issue, have Developer fix and Reviewer re-check
-
-## Final Delivery
-
-- Ensure all tests pass
-- Ensure all linters pass
-- Create comprehensive walkthrough.md
-- Create Pull Request with clear description
-- Present final result to the user
+- Be decisive: "I'll have the Developer continue with the implementation"
+- Be informative: "Based on our progress, we're at the implementation phase"
+- Ask when blocked: "Could you clarify what specific aspect you'd like me to focus on?"
         """)
 
         # analyst_tools already defined above
@@ -865,25 +948,9 @@ If a team member encounters issues:
         if next_status:
             self._update_task_status(task_id, next_status, artifacts=content)
 
-        # 3. Trigger Next Agent Automatically
-        if next_role:
-            # Find the agent
-            next_agent = next((m for m in self.members if m.name == next_role), None)
-            if next_agent:
-                print(f"[Workflow] Activating {next_role} for Task {task_id}")
-                # Pass previous output as context/message
-                # We need to construct a prompt.
-                # WorkflowAgent.run() handles context inheritance via storage, so we just need to wake it up.
-                # We pass task_id/session_id so it finds the context.
-                message = f"Previous step completed. Proceed with {next_role} phase for Task {task_id}."
-
-                # Execute synchronously
-                try:
-                    next_agent.run(
-                        message=message, task_id=task_id, session_id=session_id
-                    )
-                except Exception as e:
-                    print(f"Failed to auto-activate {next_role}: {e}")
+        # 3. DO NOT auto-trigger next agent - let Team Leader decide based on context
+        # This prevents forced delegation and allows intelligent decision-making
+        # Team Leader will check workflow artifacts and user intent before delegating
 
     def run_component(self, role: str, task_id: str):
         """
