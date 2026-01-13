@@ -25,6 +25,7 @@ class JulesTools(Toolkit):
         self.register(self.approve_plan)
         self.register(self.list_activities)
         self.register(self.send_message)
+        self.register(self.wait_for_completion)
         self.register(self.wait_for_pr)
 
     def _get(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
@@ -155,10 +156,90 @@ class JulesTools(Toolkit):
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
         return json.dumps(self._post(f"{resource_path}:sendMessage", data={"prompt": prompt}))
 
+    def wait_for_completion(
+        self, session_id: str, timeout_minutes: int = 30, poll_interval_seconds: int = 15
+    ) -> str:
+        """Polls the session activities until session completes or fails.
+
+        This method blocks the agent execution until the session reaches a terminal state
+        (completed or failed) or the timeout is reached.
+
+        Args:
+            session_id (str): The ID of the session to monitor.
+            timeout_minutes (int): Maximum time to wait in minutes (default: 30).
+            poll_interval_seconds (int): Interval between polls in seconds (default: 15).
+
+        Returns:
+            str: JSON string containing:
+                - 'status': 'completed' | 'failed' | 'timeout'
+                - 'reason': Error reason if failed
+                - 'artifacts': List of artifacts if completed (changeSets, etc.)
+                - 'pr_url': PR URL if found in artifacts
+        """
+        start_time = time.time()
+        end_time = start_time + (timeout_minutes * 60)
+        resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
+
+        logger.info(f"Polling Jules session {session_id} for completion (timeout: {timeout_minutes}m)")
+
+        while time.time() < end_time:
+            try:
+                activities_data = self._get(f"{resource_path}/activities", params={"pageSize": 50})
+                activities = activities_data.get("activities", [])
+
+                for activity in activities:
+                    # Check for session completed
+                    if "sessionCompleted" in activity:
+                        logger.info(f"Jules session {session_id} completed successfully")
+                        result = {
+                            "status": "completed",
+                            "artifacts": activity.get("artifacts", [])
+                        }
+                        # Try to find PR URL in artifacts
+                        pr_url = self._extract_pr_url_from_artifacts(activity.get("artifacts", []))
+                        if pr_url:
+                            result["pr_url"] = pr_url
+                        return json.dumps(result)
+
+                    # Check for session failed
+                    if "sessionFailed" in activity:
+                        failed_data = activity.get("sessionFailed", {})
+                        reason = failed_data.get("reason", "Unknown error")
+                        logger.warning(f"Jules session {session_id} failed: {reason}")
+                        return json.dumps({
+                            "status": "failed",
+                            "reason": reason
+                        })
+
+            except Exception as e:
+                logger.warning(f"Error polling Jules activities: {e}")
+
+            time.sleep(poll_interval_seconds)
+
+        return json.dumps({
+            "status": "timeout",
+            "error": f"Session did not complete within {timeout_minutes} minutes."
+        })
+
+    def _extract_pr_url_from_artifacts(self, artifacts: List[Any]) -> Optional[str]:
+        """Extracts a Pull Request URL from artifacts if present."""
+        for artifact in artifacts:
+            if isinstance(artifact, dict):
+                # Check for changeSet with GitHub PR
+                change_set = artifact.get("changeSet", {})
+                git_patch = change_set.get("gitPatch", {})
+                if "pullRequestUrl" in git_patch:
+                    return git_patch["pullRequestUrl"]
+                # Check for direct PR metadata
+                if "pullRequest" in artifact:
+                    return artifact["pullRequest"].get("url")
+        return None
+
     def wait_for_pr(self, session_id: str, timeout_minutes: int = 10) -> str:
         """Polls the session activities for a Pull Request creation event.
 
-        This method blocks the agent execution until a PR is created or the timeout is reached.
+        This method blocks the agent execution until a PR is created, the session
+        completes/fails, or the timeout is reached.
 
         Args:
             session_id (str): The ID of the session to monitor.
@@ -176,38 +257,46 @@ class JulesTools(Toolkit):
         while time.time() < end_time:
             try:
                 # Fetch recent activities
-                activities_data = self._get(f"{resource_path}/activities", params={"pageSize": 20})
+                activities_data = self._get(f"{resource_path}/activities", params={"pageSize": 30})
                 activities = activities_data.get("activities", [])
 
                 for activity in activities:
-                    # Look for activities that indicate a PR was created.
-                    # This relies on the specific payload structure of Jules activities.
-                    # Usually, there's a type or kind, or we search text content.
-                    # Assumption: Jules returns an activity with 'githubPr' or similar metadata,
-                    # or the 'reasoning' / 'text' contains the link.
-                    # Let's inspect 'activityType' or specific fields if documented.
-                    # Without strict docs, we look for 'pullRequest' in payload or text.
+                    # Check for session failed - early exit
+                    if "sessionFailed" in activity:
+                        failed_data = activity.get("sessionFailed", {})
+                        reason = failed_data.get("reason", "Unknown error")
+                        logger.warning(f"Jules session {session_id} failed: {reason}")
+                        return json.dumps({
+                            "status": "failed",
+                            "error": reason
+                        })
 
-                    # Common structure might be activity -> detail -> pullRequest -> url
+                    # Check for session completed
+                    if "sessionCompleted" in activity:
+                        # Session completed - check for PR in artifacts
+                        pr_url = self._extract_pr_url_from_artifacts(activity.get("artifacts", []))
+                        if pr_url:
+                            return json.dumps({"status": "success", "pr_url": pr_url})
+                        else:
+                            return json.dumps({
+                                "status": "completed_no_pr",
+                                "message": "Session completed but no PR was created"
+                            })
 
-                    # 1. Check direct metadata if available (hypothetical based on standard Google Cloud APIs)
-                    if "metadata" in activity:
-                        metadata = activity["metadata"]
-                        if "pullRequest" in metadata:
-                            pr_url = metadata["pullRequest"].get("url")
-                            if pr_url:
-                                return json.dumps({"status": "success", "pr_url": pr_url})
+                    # Check artifacts for PR URL
+                    artifacts = activity.get("artifacts", [])
+                    pr_url = self._extract_pr_url_from_artifacts(artifacts)
+                    if pr_url:
+                        return json.dumps({"status": "success", "pr_url": pr_url})
 
-                    # 2. Check text content for "Pull Request created" + URL
-                    text_content = activity.get("text", "")
+                    # Fallback: Check text content for GitHub PR URL
+                    text_content = activity.get("description", "") or ""
                     if "github.com" in text_content and "/pull/" in text_content:
-                         # Simple extraction (naive)
-                         words = text_content.split()
-                         for word in words:
-                             if "github.com" in word and "/pull/" in word:
-                                 # Clean up trailing punctuation
-                                 url = word.rstrip(".,;:)")
-                                 return json.dumps({"status": "success", "pr_url": url})
+                        words = text_content.split()
+                        for word in words:
+                            if "github.com" in word and "/pull/" in word:
+                                url = word.rstrip(".,;:)")
+                                return json.dumps({"status": "success", "pr_url": url})
 
             except Exception as e:
                 logger.warning(f"Error polling Jules activities: {e}")
@@ -216,3 +305,4 @@ class JulesTools(Toolkit):
             time.sleep(15)
 
         return json.dumps({"status": "timeout", "error": f"No PR created within {timeout_minutes} minutes."})
+

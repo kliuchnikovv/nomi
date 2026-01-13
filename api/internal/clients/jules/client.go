@@ -64,8 +64,16 @@ type Activity struct {
 	ID              string                 `json:"id"`
 	CreateTime      string                 `json:"createTime"`
 	Originator      string                 `json:"originator"` // "agent" or "user"
+	Description     string                 `json:"description,omitempty"`
 	ProgressUpdated map[string]interface{} `json:"progressUpdated,omitempty"`
 	PlanGenerated   map[string]interface{} `json:"planGenerated,omitempty"`
+	PlanApproved    map[string]interface{} `json:"planApproved,omitempty"`
+	UserMessaged    map[string]interface{} `json:"userMessaged,omitempty"`
+	AgentMessaged   map[string]interface{} `json:"agentMessaged,omitempty"`
+	SessionCompleted map[string]interface{} `json:"sessionCompleted,omitempty"`
+	SessionFailed   *struct {
+		Reason string `json:"reason"`
+	} `json:"sessionFailed,omitempty"`
 	Artifacts       []interface{}          `json:"artifacts,omitempty"`
 }
 
