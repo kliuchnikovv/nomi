@@ -457,7 +457,6 @@ You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 
 
 class DevelopmentTeam(Team):
-    members: List[WorkflowAgent] = []
     def __init__(
         self,
         model: Model,
@@ -526,99 +525,6 @@ class DevelopmentTeam(Team):
         self.project_id = project_id
         self.task_id = task_id
 
-    def should_delegate_to_analyst(self, message: str) -> bool:
-        """Check if message needs analyst delegation based on content analysis"""
-        message_lower = message.lower().strip()
-
-        # Simple continuations - NO delegation
-        continuation_words = [
-            "continue",
-            "go on",
-            "proceed",
-            "yes",
-            "ok",
-            "next",
-            "давай",
-            "продолжи",
-            "далее",
-        ]
-        if any(word in message_lower for word in continuation_words):
-            return False
-
-        # Status questions - NO delegation
-        status_words = [
-            "status",
-            "progress",
-            "how's",
-            "what's next",
-            "как дела",
-            "что дальше",
-        ]
-        if any(phrase in message_lower for phrase in status_words):
-            return False
-
-        # Greetings and casual - NO delegation
-        casual_words = [
-            "hello",
-            "hi",
-            "thanks",
-            "thank you",
-            "good job",
-            "спасибо",
-            "привет",
-        ]
-        if any(word in message_lower for word in casual_words):
-            return False
-
-        # Very short messages (1-2 words) - likely continuations
-        if len(message.split()) <= 2:
-            return False
-
-        # Check workflow context - if we're in active development, prefer developer for simple messages
-        if self.workflow_storage and self.task_id:
-            try:
-                # Get current phase from workflow artifacts
-                current_phase = None
-                artifacts = [
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "AnalystOutput"
-                    ),
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "ArchitectPlan"
-                    ),
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "ReviewVerdict"
-                    ),
-                ]
-
-                if artifacts[2]:  # Review completed
-                    current_phase = "verification"
-                elif artifacts[1]:  # Architecture completed
-                    current_phase = "development"
-                elif artifacts[0]:  # Analysis completed
-                    current_phase = "design"
-
-                # If we're in active development phase AND this is a simple message,
-                # delegate to developer instead of analyst
-                if current_phase in ["development", "design"]:
-                    # For simple messages in development phase, don't delegate to analyst
-                    # (they'll be handled by developer instead)
-                    # But complex requests should still go to analyst for clarification
-                    is_simple_message = (
-                        any(word in message_lower for word in continuation_words)
-                        or any(phrase in message_lower for phrase in status_words)
-                        or any(word in message_lower for word in casual_words)
-                        or len(message.split()) <= 2
-                    )
-                    if is_simple_message:
-                        return False
-
-            except Exception as e:
-                print(f"[Team] Error checking workflow context: {e}")
-                # Continue with delegation on error
-
-        # Default: delegate to analyst for safety (new complex requests)
-        return True
 
         description = dedent("""
 <identity>
@@ -1014,3 +920,98 @@ Check workflow artifacts to understand current state:
             requests.patch(url, json=payload, headers=headers)
         except Exception as e:
             print(f"Failed to update task status: {e}")
+
+
+    def should_delegate_to_analyst(self, message: str) -> bool:
+        """Check if message needs analyst delegation based on content analysis"""
+        message_lower = message.lower().strip()
+
+        # Simple continuations - NO delegation
+        continuation_words = [
+            "continue",
+            "go on",
+            "proceed",
+            "yes",
+            "ok",
+            "next",
+            "давай",
+            "продолжи",
+            "далее",
+        ]
+        if any(word in message_lower for word in continuation_words):
+            return False
+
+        # Status questions - NO delegation
+        status_words = [
+            "status",
+            "progress",
+            "how's",
+            "what's next",
+            "как дела",
+            "что дальше",
+        ]
+        if any(phrase in message_lower for phrase in status_words):
+            return False
+
+        # Greetings and casual - NO delegation
+        casual_words = [
+            "hello",
+            "hi",
+            "thanks",
+            "thank you",
+            "good job",
+            "спасибо",
+            "привет",
+        ]
+        if any(word in message_lower for word in casual_words):
+            return False
+
+        # Very short messages (1-2 words) - likely continuations
+        if len(message.split()) <= 2:
+            return False
+
+        # Check workflow context - if we're in active development, prefer developer for simple messages
+        if self.workflow_storage and self.task_id:
+            try:
+                # Get current phase from workflow artifacts
+                current_phase = None
+                artifacts = [
+                    self.workflow_storage.get_artifact_by_task(
+                        self.task_id, "AnalystOutput"
+                    ),
+                    self.workflow_storage.get_artifact_by_task(
+                        self.task_id, "ArchitectPlan"
+                    ),
+                    self.workflow_storage.get_artifact_by_task(
+                        self.task_id, "ReviewVerdict"
+                    ),
+                ]
+
+                if artifacts[2]:  # Review completed
+                    current_phase = "verification"
+                elif artifacts[1]:  # Architecture completed
+                    current_phase = "development"
+                elif artifacts[0]:  # Analysis completed
+                    current_phase = "design"
+
+                # If we're in active development phase AND this is a simple message,
+                # delegate to developer instead of analyst
+                if current_phase in ["development", "design"]:
+                    # For simple messages in development phase, don't delegate to analyst
+                    # (they'll be handled by developer instead)
+                    # But complex requests should still go to analyst for clarification
+                    is_simple_message = (
+                        any(word in message_lower for word in continuation_words)
+                        or any(phrase in message_lower for phrase in status_words)
+                        or any(word in message_lower for word in casual_words)
+                        or len(message.split()) <= 2
+                    )
+                    if is_simple_message:
+                        return False
+
+            except Exception as e:
+                print(f"[Team] Error checking workflow context: {e}")
+                # Continue with delegation on error
+
+        # Default: delegate to analyst for safety (new complex requests)
+        return True
