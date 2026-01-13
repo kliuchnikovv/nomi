@@ -223,6 +223,7 @@ class RedisSession:
                         "token",
                         "creds",
                         "account_email",
+                        "api_key",  # Jules API key from frontend
                     ):
                         if key in tool_dict and key not in params:
                             params[key] = tool_dict[key]
