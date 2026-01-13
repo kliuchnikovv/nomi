@@ -8,17 +8,34 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
-type AuthHandler struct {
-	storage      *storage.Storage
-	tokenManager *auth.TokenManager
+type AuthStorer interface {
+	GetUserByEmail(ctx context.Context, email string) (*storage.User, error)
+	SaveRefreshToken(ctx context.Context, userID uuid.UUID, token string, ttl time.Duration) error
+	CreateUser(ctx context.Context, email, password, name string) (*storage.User, error)
+	ConsumeRefreshToken(ctx context.Context, token string) (*storage.RefreshToken, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (*storage.User, error)
+	UpdateUser(ctx context.Context, user *storage.User) error
 }
 
-func NewAuthHandler(storage *storage.Storage, tokenManager *auth.TokenManager) *AuthHandler {
+type AuthTokenManager interface {
+	GenerateToken(user *storage.User) (string, error)
+	GenerateRefreshToken() (string, error)
+}
+
+type AuthHandler struct {
+	storage      AuthStorer
+	tokenManager AuthTokenManager
+}
+
+func NewAuthHandler(storage AuthStorer, tokenManager AuthTokenManager) *AuthHandler {
 	return &AuthHandler{
 		storage:      storage,
 		tokenManager: tokenManager,
