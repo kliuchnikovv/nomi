@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, Alert } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import Markdown from 'react-native-markdown-display';
 import { useChat } from '../context';
 import { ContentPart } from './models';
 import { useTheme } from '../../../context/ThemeContext';
 import { createMarkdownStyles } from './dynamicStyles';
+import { createMarkdownRules } from './markdownRules';
 import { SingleToolCall, ReasoningBlock, MemberResponseBlock, CollapsibleSteps } from './ToolCalls';
 
 /**
@@ -33,7 +35,17 @@ function isLogMessage(text: string): boolean {
 export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
     const { showToolCalls, showReasoning, showMemberResponses } = useChat();
     const { theme } = useTheme();
+    const { theme } = useTheme();
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+
+    const handleCodeCopy = (code: string) => {
+        Clipboard.setString(code);
+        // Optional: visible feedback
+        // Alert.alert("Copied", "Code copied to clipboard"); 
+        console.log('Code copied to clipboard');
+    };
+
+    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), []);
 
     const filteredParts = useMemo(() => {
         return parts.filter(part => {
@@ -125,7 +137,7 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                             delayLongPress={250}
                             style={({ pressed }) => [pressed && { opacity: 0.75 }]}
                         >
-                            <Markdown style={markdownStyles as any}>
+                            <Markdown style={markdownStyles as any} rules={markdownRules}>
                                 {part.text || ''}
                             </Markdown>
                         </Pressable>

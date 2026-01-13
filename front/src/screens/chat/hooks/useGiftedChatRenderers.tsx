@@ -13,6 +13,7 @@ import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
 import { createStyles, createMarkdownStyles } from '../message/dynamicStyles';
+import { createMarkdownRules } from '../message/markdownRules';
 import { useChat } from '../context';
 import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
 
@@ -24,6 +25,12 @@ function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
     // Assuming 'theme' prop passed to SystemMessageBubble is ThemeColors
     const dynamicStyles = useMemo(() => createStyles(theme, palette), [theme, palette]);
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+
+    const handleCodeCopy = (code: string) => {
+        Clipboard.setString(code);
+        console.log('System code copied');
+    };
+    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), []);
 
     return (
         <View style={{ marginBottom: 8, paddingHorizontal: 16 }}>
@@ -45,7 +52,7 @@ function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
                 {expanded && (
                     <View style={dynamicStyles.toolCallsList}>
                         <View style={dynamicStyles.toolCallItem}>
-                            <Markdown style={markdownStyles as any}>
+                            <Markdown style={markdownStyles as any} rules={markdownRules}>
                                 {text}
                             </Markdown>
                         </View>
@@ -88,6 +95,13 @@ export function useGiftedChatRenderers({
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     // Use dynamicStyles createMarkdownStyles which takes MessageTheme (ThemeColors)
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+
+    const handleCodeCopy = useCallback((code: string) => {
+        Clipboard.setString(code);
+        console.log('Code copied to clipboard');
+    }, []);
+    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), [handleCodeCopy]);
+
     const { showToolCalls } = useChat();
 
     const handleLongPress = useCallback((context: any, message: any) => {
@@ -357,6 +371,7 @@ export function useGiftedChatRenderers({
                 >
                     <Markdown
                         style={markdownStyles as any}
+                        rules={markdownRules}
                         onLinkPress={(url) => {
                             const openLink = async () => {
                                 try {

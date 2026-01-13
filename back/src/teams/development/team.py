@@ -1,7 +1,9 @@
 from textwrap import dedent
 from typing import Optional, List
 import os
+import re
 import json
+from pydantic import BaseModel
 
 from agno.agent import Agent
 from agno.knowledge import Knowledge
@@ -117,7 +119,21 @@ search_knowledge(query="websocket implementation", project_id="*")
 - Are there security implications?
 - What tests are needed?
 
-You must always output a structured `AnalystOutput` object when you have completed your analysis.
+You must output a VALID JSON object matching the `AnalystOutput` schema, wrapped in a markdown code block.
+
+Example Output:
+```json
+{
+  "project_id": "...",
+  "task_id": "...",
+  "summary": "...",
+  "requirements": [...],
+  "scenarios": [...],
+  "affected_modules": [...],
+  "relevant_rag_snippets": [...],
+  "constraints": [...]
+}
+```
 """)
 
 architect_instructions = dedent("""
@@ -136,7 +152,28 @@ You are the **System Architect**, the primary quality gatekeeper. Your role is t
 4. **Verify**: Check designs against architectural guidelines.
 
 # Output Format
-You must produce a structured response containing:
+You must output a VALID JSON object matching the `ArchitectPlan` schema, wrapped in a markdown code block.
+
+Example Output:
+```json
+{
+  "project_id": "...",
+  "task_id": "...",
+  "adr_title": "...",
+  "adr_decision": "...",
+  "adr_consequences": [...],
+  "files_to_create": [...],
+  "files_to_modify": [...],
+  "technical_approach": "...",
+  "verification_steps": [...],
+  "context": { ... },
+  "steps": [...],
+  "style_guide_rules": [...],
+  "reference_snippets": [...]
+}
+```
+
+## 1. Context & Scope
 
 ## 1. Context & Scope
 - Components affected: [List components]
@@ -407,7 +444,8 @@ Only use emojis if explicitly requested.
 8. Provide constructive feedback or approval.
 
 # Output Format
-You must return a `ReviewVerdict` object:
+You must return a `ReviewVerdict` JSON object wrapped in a markdown code block (```json ... ```):
+- `approved`: true or false.
 - `approved`: true or false.
 - `summary`: A concise explanation of your decision (mandatory).
 - `comments`: A list of `ReviewComment` objects with `file_path`, `line_number`, `body`, and `severity`.
@@ -455,6 +493,27 @@ The `source` parameter for `create_session` must be in the format: `sources/gith
 - `task_management_tool`: Update task status in Genie.
 
 **IMPORTANT**: If `jules_api` tool is not available (JULES_API_KEY not set), inform the Team Leader that the task needs manual implementation via the Developer agent instead.
+""")
+
+verifier_instructions = dedent("""
+You are the **Verifier**. Your validation is the final step before the task is marked as Done.
+You check if the changes satisfy the user's original requirements as defined by the Analyst.
+
+# Goal
+Verify that the implemented solution works and meets the acceptance criteria.
+
+# Output Format
+You must output a VALID JSON object matching the `FinalAcceptance` schema, wrapped in a markdown code block.
+
+Example Output:
+```json
+{
+  "accepted": true,
+  "reason": "All tests passed and requirements met."
+}
+```
+
+If rejected, `accepted` must be false and `reason` must explain what failed.
 """)
 
 
@@ -775,7 +834,7 @@ Check workflow artifacts to understand current state:
                 markdown=markdown,
                 debug_mode=debug_mode,
                 tools=analyst_tools,
-                output_schema=AnalystOutput,
+                # output_schema=AnalystOutput,  <-- REMOVED for Gemini 2.5 compatibility
                 # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 workflow_storage=self.workflow_storage,
                 on_completion=self.transition_to_next_step,
@@ -788,7 +847,7 @@ Check workflow artifacts to understand current state:
                 instructions=architect_instructions,
                 markdown=markdown,
                 debug_mode=debug_mode,
-                output_schema=ArchitectPlan,
+                # output_schema=ArchitectPlan, <-- REMOVED for Gemini 2.5 compatibility
                 # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 workflow_storage=self.workflow_storage,
                 on_completion=self.transition_to_next_step,
@@ -811,7 +870,7 @@ Check workflow artifacts to understand current state:
                 instructions=reviewer_instructions,
                 markdown=markdown,
                 debug_mode=debug_mode,
-                output_schema=ReviewVerdict,
+                # output_schema=ReviewVerdict, <-- REMOVED for Gemini 2.5 compatibility
                 # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 workflow_storage=self.workflow_storage,
                 on_completion=self.transition_to_next_step,
@@ -820,14 +879,11 @@ Check workflow artifacts to understand current state:
             WorkflowAgent(
                 name="Verifier",
                 model=model,
-                instructions=analyst_instructions.format(
-                    project_id=project_id or "unknown",
-                    task_id=task_id or "unknown",
-                ),  # Re-use Analyst instructions with context
+                instructions=verifier_instructions,  # Use dedicated instructions
                 markdown=markdown,
                 debug_mode=debug_mode,
                 tools=analyst_tools,
-                output_schema=FinalAcceptance,  # Different model
+                # output_schema=FinalAcceptance, <-- REMOVED for Gemini 2.5 compatibility
                 # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
                 workflow_storage=self.workflow_storage,
                 on_completion=self.transition_to_next_step,
@@ -850,6 +906,41 @@ Check workflow artifacts to understand current state:
         # Expose members attribute for Agno framework compatibility
         self.members = members_list
 
+    def _parse_agent_output(self, output: Any, schema_class: Type[BaseModel]) -> BaseModel:
+        """Parses the agent output (string or dict) into the expected Pydantic model."""
+        if isinstance(output, schema_class):
+            return output
+        
+        data = output
+        if isinstance(output, str):
+            # Try to find JSON block
+            try:
+                # 1. Look for ```json ... ``` or ``` ... ```
+                match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", output, re.DOTALL)
+                if match:
+                    json_str = match.group(1)
+                    data = json.loads(json_str)
+                else:
+                    # 2. Try raw JSON finding
+                    start = output.find("{")
+                    end = output.rfind("}")
+                    if start != -1 and end != -1:
+                        json_str = output[start : end + 1]
+                        data = json.loads(json_str)
+                    else:
+                        # 3. Last attempt: assume it's pure JSON
+                        data = json.loads(output)
+            except Exception as e:
+                print(f"[Team] Failed to parse output as JSON: {e}")
+                # Log the raw output for debugging
+                # print(f"Raw output: {output}")
+                raise ValueError(f"Failed to parse JSON for {schema_class.__name__}")
+
+        if isinstance(data, dict):
+            return schema_class(**data)
+        
+        raise ValueError(f"Unexpected output format for {schema_class.__name__}: {type(data)}")
+
     def transition_to_next_step(
         self, task_id: str, current_role: str, output: any, session_id: str
     ):
@@ -860,11 +951,31 @@ Check workflow artifacts to understand current state:
         if not self.workflow_storage:
             return
 
+        # 0. Parse Output Output manually since we removed output_schema
+        parsed_output = output
+        try:
+             if current_role == "Analyst":
+                 parsed_output = self._parse_agent_output(output, AnalystOutput)
+             elif current_role == "Architect":
+                 parsed_output = self._parse_agent_output(output, ArchitectPlan)
+             elif current_role == "Reviewer":
+                 parsed_output = self._parse_agent_output(output, ReviewVerdict)
+             elif current_role == "Verifier":
+                 parsed_output = self._parse_agent_output(output, FinalAcceptance)
+        except Exception as e:
+            print(f"[Team] Validation failed for {current_role}: {e}")
+            # If parsing fails, we probably shouldn't proceed cleanly.
+            # But let's save what we have as "RawOutput" or similar?
+            # For now, let's just log and maybe fallback to treating it as dict if possible
+            # OR just return to avoid saving garbage
+            # self.workflow_storage.save_artifact(session_id, task_id, current_role, "ErrorOutput", {"error": str(e), "raw": str(output)})
+            return
+
         # 1. Save Artifact
         artifact_type = (
-            type(output).__name__ if not isinstance(output, dict) else "Dict"
+            type(parsed_output).__name__ if not isinstance(parsed_output, dict) else "Dict"
         )
-        content = output.model_dump() if hasattr(output, "model_dump") else output
+        content = parsed_output.model_dump() if hasattr(parsed_output, "model_dump") else parsed_output
         self.workflow_storage.save_artifact(
             session_id, task_id, current_role, artifact_type, content
         )
@@ -880,7 +991,7 @@ Check workflow artifacts to understand current state:
             next_status = "CODING"
             next_role = "Developer"
         elif current_role == "Reviewer":
-            if hasattr(output, "approved") and output.approved:
+            if hasattr(parsed_output, "approved") and parsed_output.approved:
                 next_status = "VERIFY"
                 next_role = "Verifier"
             else:
