@@ -371,4 +371,36 @@ export const createMarkdownStyles = (theme: ThemeColors) => ({
         fontSize: 16,
         lineHeight: 24,
     },
+    // Missing rules often causing white background defaults
+    fence: {
+        backgroundColor: theme.codeBg || '#1a1b26',
+        padding: 12,
+        borderRadius: 8,
+        marginVertical: 8,
+        fontFamily: 'Menlo',
+        fontSize: 14,
+        color: theme.codeText || '#a9b1d6',
+    },
+    table: {
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: 8,
+    },
+    tr: {
+        backgroundColor: theme.background,
+        borderBottomWidth: 1,
+        borderColor: theme.border,
+        flexDirection: 'row',
+    },
+    th: {
+        flex: 1,
+        padding: 5,
+        fontWeight: 'bold',
+        color: theme.textPrimary,
+    },
+    td: {
+        flex: 1,
+        padding: 5,
+        color: theme.textPrimary,
+    },
 });
