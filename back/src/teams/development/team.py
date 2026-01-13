@@ -441,15 +441,24 @@ You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 
 # Workflow
 1. **Check Tools**: First verify if `jules_api` tool is available. If not, report to Team Leader that automated execution is not possible.
-2. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
+2. **Verify Source Access**: Call `list_sources()` to get available repositories and verify the target repo is accessible.
+3. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
+   - **CRITICAL**: The `source` parameter MUST use the format: `sources/github/<owner>/<repo>`
+   - Example: If repository_name is `kliuchnikovv/genie-api`, use `sources/github/kliuchnikovv/genie-api`
+   - The source MUST exist in the list returned by `list_sources()` - if not found, report error to Team Leader.
    - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
-3. **Wait**: Call `wait_for_pr` to block until Jules finishes.
-4. **Finish**:
+4. **Wait**: Call `wait_for_pr` to block until Jules finishes.
+5. **Finish**:
    - If successful (PR created), call `update_task_status(task_id, "REVIEW", pr_url="...")` to update the task and log the PR link.
    - If failed/timeout, report error to the Team Leader.
 
+# Jules Source Format
+The `source` parameter for `create_session` must be in the format: `sources/github/<owner>/<repo>`
+- From ArchitectPlan.context.repository_name: `owner/repo` → convert to `sources/github/owner/repo`
+- Always verify the source exists by checking `list_sources()` output first!
+
 # Tools
-- `jules_api`: Create sessions, list activities (optional - requires JULES_API_KEY).
+- `jules_api`: Create sessions, list sources, list activities (optional - requires JULES_API_KEY).
 - `task_management_tool`: Update task status in Genie.
 
 **IMPORTANT**: If `jules_api` tool is not available (JULES_API_KEY not set), inform the Team Leader that the task needs manual implementation via the Developer agent instead.
