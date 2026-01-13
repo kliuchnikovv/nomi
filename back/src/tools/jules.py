@@ -325,6 +325,28 @@ class JulesTools(Toolkit):
                         pr_url = metadata.get("url", "URL not found")
                         return f"Success! Pull Request created: {pr_url}"
                     
+                    # Check for session completed (might imply PR is ready in artifacts)
+                    if "sessionCompleted" in activity:
+                        # Session completed - check for PR in artifacts
+                        pr_url = self._extract_pr_url_from_artifacts(activity.get("artifacts", []))
+                        if pr_url:
+                            return json.dumps({"status": "success", "pr_url": pr_url})
+                        else:
+                            return json.dumps({
+                                "status": "completed_no_pr",
+                                "message": "Session completed but no PR was created"
+                            })
+
+                    # Check for session failed
+                    if "sessionFailed" in activity:
+                        failed_data = activity.get("sessionFailed", {})
+                        reason = failed_data.get("reason", "Unknown error")
+                        logger.warning(f"Jules session {session_id} failed: {reason}")
+                        return json.dumps({
+                            "status": "failed",
+                            "error": reason
+                        })
+
                     # Additionally: if we see an error in activities
                     if activity.get("type") == "ERROR" or "error" in activity:
                          return f"Error reported by Jules: {activity.get('error', {}).get('message', 'Unknown error')}"
