@@ -46,6 +46,10 @@ export type ThemeColors = {
     calendar?: string;
     email?: string;
     task?: string;
+    // Code colors
+    codeBg?: string;
+    codeInlineBg?: string;
+    codeText?: string;
 };
 
 export type ThemeDescriptor = {

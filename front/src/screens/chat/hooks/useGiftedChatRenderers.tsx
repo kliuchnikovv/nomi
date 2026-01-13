@@ -3,7 +3,7 @@ import { Linking, View, Text, ActionSheetIOS, Pressable } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
-import { createChatTheme, createMarkdownStyles } from '../theme';
+import { createChatTheme } from '../theme';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ThemeColors } from '../../../themes/types';
 import ChatInput from '../input/component';
@@ -12,7 +12,7 @@ import { ToolCallsSection } from '../message/ToolCalls';
 import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
-import { styles as messageStyles } from '../message/styles';
+import { createStyles, createMarkdownStyles } from '../message/dynamicStyles';
 import { useChat } from '../context';
 import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
 
@@ -20,28 +20,31 @@ function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
     const [expanded, setExpanded] = React.useState(false);
 
     // Create markdown styles with theme
-    const markdownStyles = useMemo(() => createMarkdownStyles(createChatTheme(theme)), [theme]);
+    const { palette } = useTheme(); // We need palette for createStyles
+    // Assuming 'theme' prop passed to SystemMessageBubble is ThemeColors
+    const dynamicStyles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
     return (
         <View style={{ marginBottom: 8, paddingHorizontal: 16 }}>
-            <View style={messageStyles.toolCallsContainer}>
+            <View style={dynamicStyles.toolCallsContainer}>
                 <Pressable
                     onPress={() => setExpanded(!expanded)}
                     style={({ pressed }) => [
-                        messageStyles.toolCallsHeader,
+                        dynamicStyles.toolCallsHeader,
                         pressed && { opacity: 0.7 },
                     ]}
                 >
-                    <Text style={messageStyles.toolCallsHeaderText}>
+                    <Text style={dynamicStyles.toolCallsHeaderText}>
                         System Activity
                     </Text>
-                    <Text style={messageStyles.toolCallsExpandIcon}>
+                    <Text style={dynamicStyles.toolCallsExpandIcon}>
                         {expanded ? '▼' : '▶'}
                     </Text>
                 </Pressable>
                 {expanded && (
-                    <View style={messageStyles.toolCallsList}>
-                        <View style={messageStyles.toolCallItem}>
+                    <View style={dynamicStyles.toolCallsList}>
+                        <View style={dynamicStyles.toolCallItem}>
                             <Markdown style={markdownStyles as any}>
                                 {text}
                             </Markdown>
@@ -83,7 +86,8 @@ export function useGiftedChatRenderers({
     onMessageAction,
 }: GiftedChatRenderersParams) {
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
-    const markdownStyles = useMemo(() => createMarkdownStyles(chatTheme), [chatTheme]);
+    // Use dynamicStyles createMarkdownStyles which takes MessageTheme (ThemeColors)
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
     const { showToolCalls } = useChat();
 
     const handleLongPress = useCallback((context: any, message: any) => {

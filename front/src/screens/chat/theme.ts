@@ -17,6 +17,10 @@ export const createChatTheme = (theme: ThemeColors) => ({
     errorText: themePalette.red,
     errorButtonBackground: themePalette.red,
     errorButtonText: '#FFFFFF',
+    // Code colors
+    codeBg: theme.codeBg || themePalette.bg,
+    codeInlineBg: theme.codeInlineBg || '#24283b',
+    codeText: theme.codeText || themePalette.white,
 });
 
 export const ASSISTANT_BUBBLE_WIDTH_RATIO = 1.0;
@@ -85,25 +89,25 @@ export const createMarkdownStyles = (chatTheme: ReturnType<typeof createChatThem
         fontFamily: 'System',
     },
     code_inline: {
-        backgroundColor: 'rgba(192, 202, 245, 0.1)',
+        backgroundColor: chatTheme.codeInlineBg || '#24283b',
         paddingHorizontal: 4,
         paddingVertical: 2,
         borderRadius: 6,
-        color: chatTheme.accentAlt,
+        color: chatTheme.codeText || '#a9b1d6',
         fontFamily: 'Courier',
     },
     code_block: {
-        backgroundColor: 'rgba(192, 202, 245, 0.05)',
+        backgroundColor: chatTheme.codeBg || '#1a1b26',
         padding: 8,
         borderRadius: 10,
-        color: chatTheme.accentAlt,
+        color: chatTheme.codeText || '#a9b1d6',
         fontFamily: 'Courier',
     },
     fence: {
-        backgroundColor: 'rgba(192, 202, 245, 0.05)',
+        backgroundColor: chatTheme.codeBg || '#1a1b26',
         padding: 8,
         borderRadius: 10,
-        color: chatTheme.accentAlt,
+        color: chatTheme.codeText || '#a9b1d6',
         fontFamily: 'Courier',
     },
 });

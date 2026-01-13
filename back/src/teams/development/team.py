@@ -24,6 +24,7 @@ from src.workflow.agent import PgWorkflowStorage, WorkflowAgent
 from src.tools.jules import JulesTools
 from src.tools.task_manager import TaskManagementTool
 
+
 # --- Instructions for each role ---
 
 analyst_instructions = dedent("""
@@ -46,11 +47,7 @@ IMPORTANT: Do NOT add unnecessary preamble or postamble.
 Avoid introductions, conclusions, and explanations unless asked.
 Only use emojis if explicitly requested.
 
-# Project Context
-The **Genie** project is a monorepo containing:
-- **`front/`** — React Native mobile app (TypeScript)
-- **`back/`** — Python AI agent service (Agno framework)
-- **`api/`** — Go REST API & WebSocket server (Gin + GORM)
+
 
 # Your Role as Analyst
 1. **Analyze Request**: Read the user's request carefully. If the request is a simple continuation (e.g., "continue", "proceed"), use historical context to fulfill the required output schema without redundant re-analysis.
@@ -129,27 +126,27 @@ You are the **System Architect**, the primary quality gatekeeper. Your role is t
 # Core Responsibilities
 1. **Filter & Validate**: Analyze requirements from the Analyst to ensure they make sense architecturally.
 2. **Dictate Patterns**: You do not just "suggest"; you *dictate* the patterns (e.g., "Use Factory Pattern", "Use GORM").
-3. **Enforce Rules**: Ensure the **Remote Brain, Local Hands** principle is followed.
-4. **Scope Control**: Explicitly define which components (Front/Back/API) are touched.
+3. **Enforce Rules**: Ensure the architectural principles are followed.
+4. **Scope Control**: Explicitly define which components are touched.
 
 # Workflow
 1. **Analyze Input**: Receive `AnalystOutput` (requirements/intent).
 2. **Consult Contract**: Read `AGENTS.md` (via GitHub tool) to ensure you have the latest project rules.
 3. **Design**: Create an Architecture Decision Record (ADR) and a detailed Implementation Plan.
-4. **Verify**: Check designs against "Remote Brain, Local Hands" (logic in Python, execution in React Native).
+4. **Verify**: Check designs against architectural guidelines.
 
 # Output Format
 You must produce a structured response containing:
 
 ## 1. Context & Scope
-- Components affected: [API, Back, Front]
+- Components affected: [List components]
 - Key constraints identified.
 
 ## 2. Architecture Decision Record (ADR)
 - **Title**: Short name of the decision
 - **Status**: Proposed
 - **Context**: Why are we doing this?
-- **Decision**: What is the technical solution? (e.g., "Use `api/internal/hub` for real-time sync")
+- **Decision**: What is the technical solution?
 - **Consequences**: Trade-offs (e.g., "Increases latency but ensures consistency")
 
 ## 3. Implementation Plan (for Jules)
@@ -162,11 +159,7 @@ You must produce a structured response containing:
 - [ ] Checklist of required artifacts
 - [ ] Specific tests to pass
 
-# Design Principles
-- **Remote Brain, Local Hands**: Heavy logic in Python (`back/`), local execution/storage in React Native (`front/`).
-- **Go (`api/`)**: Gin + GORM + Strict Typing.
-- **Python (`back/`)**: Agno Framework + Type Hints + Async.
-- **Front (`front/`)**: React Native + TypeScript + Local SQLite.
+
 """)
 
 developer_instructions = dedent("""
@@ -561,17 +554,7 @@ Your team consists of:
 - **Developer** — implements code and tests (manual/interactive mode)
 - **Reviewer** — validates correctness, security, and quality
 </identity>
-<project_context>
-The **Genie** project is a monorepo containing:
-- **front/** — React Native mobile app (TypeScript)
-- **back/** — Python AI agent service (Agno framework)
-- **api/** — Go REST API and WebSocket server (Gin + GORM)
-For project documentation, refer to:
-- README.md — project overview and setup
-- AGENTS.md — coding rules, testing commands, and CI/CD info
-Repository: https://github.com/kliuchnikovv/genie-api
-Issues: https://github.com/kliuchnikovv/genie-api/issues
-</project_context>
+
 <github_integration>
 All changes must go through Pull Requests:
 1. Create a feature branch for your changes
@@ -786,7 +769,8 @@ Check workflow artifacts to understand current state:
                 name="Analyst",
                 model=model,
                 instructions=analyst_instructions.format(
-                    project_id=project_id or "unknown", task_id=task_id or "unknown"
+                    project_id=project_id or "unknown",
+                    task_id=task_id or "unknown",
                 ),
                 markdown=markdown,
                 debug_mode=debug_mode,
@@ -837,7 +821,8 @@ Check workflow artifacts to understand current state:
                 name="Verifier",
                 model=model,
                 instructions=analyst_instructions.format(
-                    project_id=project_id or "unknown", task_id=task_id or "unknown"
+                    project_id=project_id or "unknown",
+                    task_id=task_id or "unknown",
                 ),  # Re-use Analyst instructions with context
                 markdown=markdown,
                 debug_mode=debug_mode,

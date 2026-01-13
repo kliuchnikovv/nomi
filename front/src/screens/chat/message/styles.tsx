@@ -153,7 +153,7 @@ export const styles = StyleSheet.create({
         marginBottom: 4,
     },
     toolCallArgs: {
-        color: theme.textSecondary,
+        color: theme.codeText || '#a9b1d6',
         fontSize: 11,
         fontFamily: 'Menlo',
     },
@@ -313,20 +313,22 @@ export const markdownStyles = {
         color: theme.accent,
     },
     code_inline: {
-        backgroundColor: 'rgba(192, 202, 245, 0.1)',
+        backgroundColor: theme.codeInlineBg || '#24283b',
         paddingHorizontal: 4,
         paddingVertical: 2,
         borderRadius: 4,
         fontFamily: 'Menlo',
         fontSize: 14,
+        color: theme.codeText || '#a9b1d6',
     },
     code_block: {
-        backgroundColor: 'rgba(192, 202, 245, 0.05)',
+        backgroundColor: theme.codeBg || '#1a1b26',
         padding: 12,
         borderRadius: 8,
         marginVertical: 8,
         fontFamily: 'Menlo',
         fontSize: 14,
+        color: theme.codeText || '#a9b1d6',
     },
     blockquote: {
         borderLeftWidth: 3,

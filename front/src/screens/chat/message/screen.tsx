@@ -14,7 +14,8 @@ import { ToolCallsSection, SingleToolCall, ReasoningBlock, MemberResponseBlock }
 import Markdown from 'react-native-markdown-display';
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { Action, Props, Role, Attachment, ContentPart } from './models'
-import { styles, markdownStyles } from './styles.tsx';
+import { createStyles, createMarkdownStyles } from './dynamicStyles';
+import { useTheme } from '../../../context/ThemeContext';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { authStore } from '../../../apiClient';
@@ -60,6 +61,10 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
 import { ContentPartsRenderer } from './ContentPartsRenderer';
 export default function MessageScreen(props: Props) {
     const { showToolCalls, showReasoning } = useChat();
+    const { theme, palette } = useTheme();
+
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
     // Debug logging
     console.log('[MessageScreen] Render:', {
@@ -219,6 +224,9 @@ export function ActionScreen({
     onActionPress?: (action: Action) => Promise<void>;
     messageID: string;
 }) {
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+
     const openWeb = useCallback(async (url: string) => {
         try {
             const isAvailable = await InAppBrowser.isAvailable();

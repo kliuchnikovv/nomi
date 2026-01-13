@@ -88,7 +88,7 @@ class TeamFactory:
                 task_id=task_id,
                 auth_token=auth_token,
                 db_url=self.db.db_url if self.db else None,
-                client_tools=client_tools
+                client_tools=client_tools,
             )
 
         elif team_type == "dnd_team":

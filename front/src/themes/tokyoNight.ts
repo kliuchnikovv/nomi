@@ -51,6 +51,10 @@ export const tokyoNightTheme: ThemeDescriptor = {
         calendar: palette.blue,
         email: palette.red,
         task: palette.green,
+        // Code colors
+        codeBg: '#292e42',           // currentLine - lighter than bg for visibility
+        codeInlineBg: '#24283b',       // surface
+        codeText: palette.fg,          // #c0caf5 - readable code color
     },
 };
 
