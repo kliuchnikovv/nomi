@@ -38,6 +38,8 @@ leader_instructions = dedent("""
     2.  **Direct Communication**: Your agents (Analyst, Architect, etc.) speak directly to the user.
     3.  **NO REPETITION**: Do not summarize or repeat what your sub-agents just said.
     4.  **Format**: Ensure all output is in clean, readable **Markdown**.
+    5.  **STOP ON QUESTIONS**: If a sub-agent asks the User a question, YOU MUST STOP. Do not answer for the User. Do not simulate the User's response.
+    6.  **NO HALLUCINATION**: Do not simulate future steps. If the Analyst is working, do not claim the Architect is done. Wait for the actual tool outputs.
 """)
 
 analyst_instructions = dedent("""
@@ -70,7 +72,6 @@ Please structure your final response as follows:
 
 IMPORTANT: Do NOT output JSON. Use standard Markdown formatting.
 """)
-""")
 
 architect_instructions = dedent("""
 You are a Software **Architect**. Your goal is to design the technical solution based on the Analyst's requirements.
@@ -100,9 +101,6 @@ Please structure your response as follows:
 - [ ] [Test case 2]
 
 IMPORTANT: Do NOT output JSON. Write in clean, readable Markdown.
-""")
-
-
 """)
 
 developer_instructions = dedent("""
@@ -826,11 +824,38 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         next_role = None
 
         if current_role == "Analyst":
-            next_status = "PLANNING"
-            next_role = "Architect"
+            # Check if output is complete coverage of requirements
+            is_complete = False
+            if isinstance(parsed_output, AnalystOutput):
+                is_complete = True
+            elif isinstance(parsed_output, dict) and ("requirements" in parsed_output or "content" in parsed_output):
+                is_complete = True
+            elif isinstance(parsed_output, str) and ("## ✅ Definition of Done" in parsed_output or "## 📝 Requirements" in parsed_output):
+                is_complete = True
+            
+            if is_complete:
+                 next_status = "PLANNING"
+                 next_role = "Architect"
+            else:
+                 print("[Team] Analyst output appears to be questions/clarification. Staying in analysis phase.")
+                 return
+
         elif current_role == "Architect":
-            next_status = "CODING"
-            next_role = "Developer"
+            # Check if output contains a plan
+            is_complete = False
+            if isinstance(parsed_output, ArchitectPlan):
+                is_complete = True
+            elif isinstance(parsed_output, dict) and ("implementation_plan" in parsed_output or "context" in parsed_output):
+                is_complete = True
+            elif isinstance(parsed_output, str) and ("## 🛠 Implementation Plan" in parsed_output or "## 🏗 Architecture Decision" in parsed_output):
+                is_complete = True
+
+            if is_complete:
+                next_status = "CODING"
+                next_role = "Developer"
+            else:
+                print("[Team] Architect output appears incomplete. Staying in planning phase.")
+                return
         elif current_role == "Reviewer":
             # Check for "Approved" string in markdown if it's string, or property if dict
             is_approved = False
