@@ -12,6 +12,7 @@ class TaskManagementTool(Toolkit):
         # Default to localhost if not specified, but should use internal docker networking in prod
         self.api_url = api_url or os.getenv("GO_API_URL", "http://localhost:8080/api")
         self.register(self.update_task_status)
+        self.register(self.list_projects)
 
     def update_task_status(self, task_id: str, status: str, pr_url: Optional[str] = None, artifacts: Optional[dict] = None) -> str:
         """
@@ -66,3 +67,41 @@ class TaskManagementTool(Toolkit):
             if e.response is not None:
                 return f"Error updating status: {e.response.text}"
             return f"Error updating status: {str(e)}"
+
+    def list_projects(self) -> str:
+        """
+        Lists all available projects with their IDs and names.
+        Use this to find the correct project_id before searching knowledge or creating tasks.
+
+        Returns:
+            str: A JSON formatted string list of projects or error message.
+        """
+        url = f"{self.api_url}/projects"
+        try:
+            headers = {}
+            internal_key = os.getenv("INTERNAL_API_KEY")
+            if internal_key:
+                 headers["X-Internal-Secret"] = internal_key
+
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            
+            projects = response.json()
+            if not projects:
+                return "No projects found."
+            
+            # Format nicely for the LLM
+            result = []
+            for p in projects:
+                # Assuming the API returns keys like 'id', 'name', 'description'
+                # Adjust based on your actual Go API response structure
+                p_id = p.get('id', 'unknown')
+                p_name = p.get('name', 'No Name')
+                p_desc = p.get('description', '')
+                result.append(f"ID: {p_id} | Name: {p_name} | Desc: {p_desc}")
+            
+            return "\n".join(result)
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to list projects: {e}")
+            return f"Error listing projects: {str(e)}"

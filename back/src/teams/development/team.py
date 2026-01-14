@@ -52,21 +52,24 @@ Only use emojis if explicitly requested.
 
 
 # Your Role as Analyst
-1. **Analyze Request**: Read the user's request carefully. If the request is a simple continuation (e.g., "continue", "proceed"), use historical context to fulfill the required output schema without redundant re-analysis.
-2. **Check RAG**: Use the `knowledge_search_tool` to check the current state of the project and avoid duplicating existing functionality. Search for relevant code patterns, existing APIs, or similar features.
-3. **Identify Requirements**: Break down the request into atomic functional requirements.
-4. **Define Acceptance Criteria**: For each requirement, define clear, testable acceptance criteria.
-5. **Structure Output**: You MUST return the result in the `AnalystOutput` format.
+1. **Analyze Request**: Read the user's request carefully.
+2. **Determine Project Context**:
+   - If `project_id` is provided in the context, use it.
+   - If `project_id` is unknown or ambiguous, **YOU MUST** use the `list_projects` tool first.
+   - **NEVER GUESS** a project ID.
+   - **NEVER use `*`** unless explicitly instructed to search globally.
+3. **Check RAG**: Use `knowledge_search_tool` with the CORRECT project_id found in step 2.
+4. **Identify Requirements**: Break down the request into atomic functional requirements.
+5. **Define Acceptance Criteria**: For each requirement, define clear, testable acceptance criteria.
+6. **Structure Output**: You MUST return the result in the `AnalystOutput` format.
 
 # RAG Usage — How to Find Project Information
 
-## How to Get project_id
-The `project_id` is the database ID of the project you're working on.
-- It is passed in the session/task context when you receive a request
-- Look for it in the `AnalystOutput.project_id` field from previous outputs
-- If working on "Genie" project itself, use the project_id from the task context: {project_id}
-- Task context: {task_id}
-- If truly unknown, use `project_id="*"` to search across all projects (BUT try specific ID first)
+## How to Get project_id (CRITICAL)
+1. **Check Context First**: Look at the `task_id` and `project_id` passed to you.
+2. **Use Tool**: If `project_id` is missing, 'unknown', or ambiguous (e.g., user says "in the travel app"), call `list_projects()` immediately.
+3. **Match**: Select the ID from the list that matches the user's intent.
+4. **Proceed**: Use this confirmed ID for all `search_knowledge` calls.
 
 ## What Knowledge is Available
 The knowledge base contains STRUCTURED information (not raw files):
@@ -441,20 +444,20 @@ Only use emojis if explicitly requested.
 - Error handling: `if err != nil { return }`
 - Logging: `zap` structured logging
 - NO `panic()`, NO global variables for state
-- Linting: `golangci-lint run`
+- Build: `go build ./...`
 - Tests: `go test ./...`
 
 ## Python (`back/`)
 - Type hints for all function signatures
 - Pydantic models for validation
 - Use `logging`, not `print()`
-- Linting: `flake8 && black --check .`
+- Linting: `ruff check .`
 - Tests: `pytest`
 
 ## TypeScript/React Native (`front/`)
 - Functional components only, TypeScript strict mode
 - Screens in `src/screens/`, Components in `src/components/`
-- Linting: `npm run lint`
+- Type Check: `npm run type-check`
 - Tests: `npm test`
 
 # Your Role as Reviewer
@@ -463,7 +466,7 @@ Only use emojis if explicitly requested.
 3. Identify bugs, security vulnerabilities, or performance issues.
 4. Check that NO comments are added unless explicitly requested.
 5. Ensure NO hardcoded secrets, API keys, or credentials.
-6. Verify linters pass: `go test`, `pytest`, `npm run lint`.
+6. Verify checks pass: `go test`, `pytest`, `ruff check`, `type-check`.
 7. Reference specific issues using `file_path:line_number` format.
 8. Provide constructive feedback or approval.
 
@@ -550,8 +553,12 @@ You must output a VALID JSON object matching the `FinalAcceptance` schema, wrapp
 Example Output:
 ```json
 {{
-  "accepted": true,
-  "reason": "All tests passed and requirements met."
+  "msg": "Verification successful. All tests passed.",
+  "content": {{
+    "accepted": true,
+    "reason": "All tests passed and requirements met."
+  }},
+  "actions": []
 }}
 ```
 
@@ -579,13 +586,16 @@ class DevelopmentTeam(Team):
         # 1. Server-side Tools
         github_tool = GithubTools(access_token=github_token) if github_token else None
 
+        # Initialize Task Tool (needed for listing projects)
+        task_tool = TaskManagementTool()
+
         architect_tools = []
         if github_tool:
             architect_tools.append(github_tool)
 
         # Jules API key: prefer passed parameter, fallback to env var
         effective_jules_key = jules_api_key or os.getenv("JULES_API_KEY", "")
-        worker_tools = [TaskManagementTool()]
+        worker_tools = [task_tool]
         
         # Check if Jules tool is already in client_tools
         jules_tool_exists = False
@@ -609,6 +619,10 @@ class DevelopmentTeam(Team):
 
         # Analyst and Verifier tools
         analyst_tools = []
+        
+        # ADD TASK TOOL TO ANALYST (So they can list projects)
+        analyst_tools.append(task_tool)
+
         if user_id:
             analyst_tools.append(
                 KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)

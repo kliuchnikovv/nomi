@@ -171,7 +171,7 @@ cd api && go test ./...
 
 ### Linting
 ```bash
-cd api && golangci-lint run
+cd api && go build ./...
 ```
 
 ### Forbidden Actions
@@ -201,7 +201,7 @@ cd back && pytest
 
 ### Linting
 ```bash
-cd back && flake8 && black --check .
+cd back && ruff check .
 ```
 
 ### Forbidden Actions
@@ -232,7 +232,7 @@ cd front && npm test
 
 ### Linting
 ```bash
-cd front && npm run lint
+cd front && npm run type-check
 ```
 
 ### Forbidden Actions

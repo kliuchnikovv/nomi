@@ -495,28 +495,22 @@ export default function ChatInput(props: Props) {
                     </View>
 
                     <View style={styles.rightActions}>
-                        {assistantWorking ? (
-                            chatMode === 'agent' ? (
-                                <Pressable
-                                    onPress={stopGeneration}
-                                    style={({ pressed }) => [
-                                        styles.sendBtn,
-                                        { backgroundColor: '#e74c3c' },
-                                        pressed && { opacity: 0.7 },
-                                    ]}
-                                >
-                                    <Square
-                                        width={16}
-                                        height={16}
-                                        color={theme.background}
-                                        fill={theme.background}
-                                    />
-                                </Pressable>
-                            ) : (
-                                <View style={[styles.sendBtn, styles.iconBtnDisabled]}>
-                                    <ActivityIndicator size="small" color={theme.background} />
-                                </View>
-                            )
+                        {(assistantWorking && chatMode === 'agent') ? (
+                            <Pressable
+                                onPress={stopGeneration}
+                                style={({ pressed }) => [
+                                    styles.sendBtn,
+                                    { backgroundColor: '#e74c3c' },
+                                    pressed && { opacity: 0.7 },
+                                ]}
+                            >
+                                <Square
+                                    width={16}
+                                    height={16}
+                                    color={theme.background}
+                                    fill={theme.background}
+                                />
+                            </Pressable>
                         ) : (
                             <Pressable
                                 onPress={handleSend}
