@@ -17,9 +17,9 @@ import { Plugin, PluginChat } from './models';
 import { usePluginChats } from './context';
 import { useChat } from '../chat/context';
 import { useTheme } from '../../context/ThemeContext';
-import { Sidebar } from '../../components/Sidebar';
+import { Sidebar } from '../../components/DrawerSidebar';
 import { ThemePalette } from '../../themes/types';
-import { CalendarSidebar } from '../chat/sidebar/CalendarSidebar';
+import { CalendarSidebar } from '../chat/leftSidebar/CalendarSidebar';
 import { ProjectList } from '../../components/ProjectList';
 import Animated, { useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 

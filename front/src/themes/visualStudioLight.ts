@@ -8,6 +8,7 @@ const palette: ThemePalette = {
     cyan: '#0451a5',
     blue: '#0000ff',
     magenta: '#811f3f',
+    purple: '#af00db',  // Purple color for VS Light
     white: '#ffffff',
     fg: '#000000',
     black: '#000000',

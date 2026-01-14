@@ -1,23 +1,4 @@
-export type Message = {
-    id: string;
-    chat_id: string;
-    sender: string;
-    role: 'user' | 'assistant' | 'system';
-    text: string;
-    tool_calls?: ToolCall[];
-    model?: string;
-};
+// Legacy types - migrated to organized structure
+// TODO: Update all imports to use the new centralized types from './types/index'
 
-export type ToolCall = {
-    name: string;
-    arguments?: any;
-    result?: any;
-};
-
-export type Chat = {
-    id: string;
-    title: string;
-    created_at: number;
-    messages?: Message[];
-    icon?: string;
-};
+export type { Message, Chat, ToolCall } from './types';

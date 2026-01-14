@@ -4,7 +4,7 @@ import Animated, { interpolate, SharedValue, useAnimatedStyle } from 'react-nati
 import { GestureDetector } from 'react-native-gesture-handler';
 import { Gesture } from 'react-native-gesture-handler';
 import { useTheme } from '../context/ThemeContext';
-import { createSidebarStyles, SidebarSide, SidebarStyles } from './sidebarStyles';
+import { createSidebarStyles, SidebarSide, SidebarStyles } from './drawerSidebarStyles';
 
 export interface SidebarProps {
     side: SidebarSide;

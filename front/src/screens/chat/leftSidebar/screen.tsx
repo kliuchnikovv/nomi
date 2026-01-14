@@ -9,7 +9,7 @@ import { createSidebarStyles } from './styles';
 import { createChatTheme } from '../theme';
 import { useTheme } from '../../../context/ThemeContext';
 import { Skeleton } from '../../../components/Skeleton';
-import { Sidebar } from '../../../components/Sidebar';
+import { Sidebar } from '../../../components/DrawerSidebar';
 import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
 import { useMain } from '../../main/context';
@@ -437,7 +437,6 @@ function ChatListContent({
                     ref={flatListRef}
                     data={visibleChats}
                     keyExtractor={(item) => item.id}
-                    renderItem={renderItem}
                     renderItem={renderItem}
                     ItemSeparatorComponent={() => <View style={styles.separator} />}
                     ListFooterComponent={renderListFooter}

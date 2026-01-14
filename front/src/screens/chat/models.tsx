@@ -1,6 +1,6 @@
 import { Chat, GetChatsOptions, Message } from '../main/models';
 import { ReactNode } from 'react';
-import { PluginChatMessage } from '../rightsidebar/models';
+import { PluginChatMessage } from '../integrationsSidebar/models';
 
 export type DetailLevel = 'hide' | 'tool_calls' | 'think' | 'all';
 

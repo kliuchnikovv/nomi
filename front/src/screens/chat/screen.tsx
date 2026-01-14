@@ -18,8 +18,8 @@ import { createStyles } from './styles';
 import { useGiftedMessages } from './hooks/useGiftedMessages';
 import { useGiftedChatRenderers } from './hooks/useGiftedChatRenderers';
 import { ChatHeader } from './components/ChatHeader';
-import { ChatSidebar } from './sidebar/screen';
-import RightSidebar from '../rightsidebar/screen';
+import { ChatSidebar } from './leftSidebar/screen';
+import RightSidebar from '../integrationsSidebar/screen';
 import { useTheme } from '../../context/ThemeContext';
 import { Skeleton } from '../../components/Skeleton';
 import { Attachment, MessageAction } from '../main/models';
@@ -205,14 +205,14 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                     // Remote file
                     const isAvailable = await Sharing.isAvailableAsync();
                     if (isAvailable) {
-                        const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'download');
+                        const fileUri = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + '/' + (attachment.file_name || 'download');
                         const downloadRes = await FileSystem.downloadAsync(attachment.uri, fileUri);
                         await Sharing.shareAsync(downloadRes.uri);
                     }
                 } else if (attachment.content) {
                     // Base64 content
-                    const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'file');
-                    await FileSystem.writeAsStringAsync(fileUri, attachment.content, { encoding: FileSystem.EncodingType.Base64 });
+                    const fileUri = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + '/' + (attachment.file_name || 'file');
+                    await FileSystem.writeAsStringAsync(fileUri, attachment.content, { encoding: 'base64' });
                     await Sharing.shareAsync(fileUri);
                 }
             } catch (e) {

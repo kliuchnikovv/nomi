@@ -725,7 +725,6 @@ export function ChatProvider({
         showMemberResponses,
         setShowMemberResponses,
         detailLevel,
-        detailLevel,
         setDetailLevel,
         activeAgentsCount,
     };

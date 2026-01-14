@@ -16,7 +16,7 @@ import {
 } from 'react-native-safe-area-context';
 
 import { MainProvider } from './src/screens/main/context';
-import * as PCPModel from './src/screens/rightsidebar/PluginChatsProviderImpl';
+import * as PCPModel from './src/screens/integrationsSidebar/PluginChatsProviderImpl';
 const { PluginChatsProvider } = PCPModel;
 
 import { AuthScreen } from './src/screens/auth/screen.tsx';

@@ -6,6 +6,7 @@ import Markdown from 'react-native-markdown-display';
 import { createChatTheme } from '../theme';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ThemeColors } from '../../../themes/types';
+import { useTheme } from '../../../context/ThemeContext';
 import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ToolCallsSection } from '../message/ToolCalls';

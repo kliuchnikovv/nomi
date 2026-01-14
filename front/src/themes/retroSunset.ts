@@ -8,6 +8,7 @@ const palette: ThemePalette = {
     cyan: '#399CA7',          // Vibrant teal
     blue: '#195F7A',          // Deep teal blue
     magenta: '#E6836A',       // Peachy tone
+    purple: '#B5838D',        // Muted purple
     black: '#0F2A3A',         // Very deep navy
     white: '#F5F0E6',         // Warm off-white
     fg: '#F5F0E6',

@@ -10,6 +10,7 @@ const palette: ThemePalette = {
     cyan: '#4A9B9B',         // Teal
     blue: '#4A9B9B',         // Teal (used for blue role)
     magenta: '#6B5B95',      // Indigo/purple
+    purple: '#6B5B95',       // Same as magenta
     black: '#2D2D36',        // Dark charcoal
     white: '#FAF0E6',        // Cream/linen background
     fg: '#2D2D36',           // Dark text on light

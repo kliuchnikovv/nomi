@@ -12,7 +12,7 @@ import Animated, { useAnimatedStyle, withRepeat, withTiming, withSequence } from
 import { projectsApi, Project } from '../apiClient';
 import { useTheme } from '../context/ThemeContext';
 import { ThemePalette } from '../themes/types';
-import AddProjectModal from '../screens/rightsidebar/AddProjectModal';
+import AddProjectModal from '../screens/integrationsSidebar/AddProjectModal';
 import { integrationStorage } from '../services/integrations';
 
 const formatTimestamp = (timestamp?: number) => {

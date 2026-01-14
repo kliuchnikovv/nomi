@@ -8,6 +8,7 @@ export type ThemePalette = {
     cyan: string;
     blue: string;
     magenta: string;
+    purple: string;  // Added for ActiveTaskCard component
     white: string;
     fg: string;
     black: string;

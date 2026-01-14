@@ -8,6 +8,7 @@ const palette: ThemePalette = {
     cyan: '#95e1d3',
     blue: '#59c2c9',
     magenta: '#d2a6ff',
+    purple: '#d2a6ff',  // Same as magenta for now
     white: '#e6e6e6',
     fg: '#b8c5d0',
     black: '#0f2027',

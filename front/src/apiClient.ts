@@ -1,5 +1,5 @@
 import { getApiUrl } from './config';
-import { SidebarChatsResponse, SidebarChatMessagesResponse, SidebarResponse } from './screens/rightsidebar/models';
+import { SidebarChatsResponse, SidebarChatMessagesResponse, SidebarResponse } from './screens/integrationsSidebar/models';
 
 // Helper to get current API URL (reads from cache, falls back to default)
 const API_URL = () => getApiUrl();
