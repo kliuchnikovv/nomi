@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class RedisSession:
     """
     Handles a single request/response cycle or a session context via Redis.
-    Mimics LLMWebSocketSession but for headless execution.
+    Provides headless execution for communication with Go Hub.
     """
 
     def __init__(
@@ -63,7 +63,7 @@ class RedisSession:
         payload = {
             "type": "system_status",
             "active_agents_count": count,
-            "active_agents_list": list(self.active_agents)
+            "active_agents_list": list(self.active_agents),
         }
 
         frame = Frame(
@@ -72,7 +72,7 @@ class RedisSession:
             kind=Kind.SIGNAL,
             op=Op.SIGNAL,
             chat_id=self.chat_id,
-            payload=payload
+            payload=payload,
         )
 
         await self._send_frame(frame)
@@ -357,11 +357,7 @@ class RedisSession:
 
         idx = 0
         try:
-            # We reuse the same streaming logic as WS.
-            # BUT _stream_agent_events is defined in LLMWebSocketSession... we need to copy or share it.
-            # Since it's complex, I should copy it here or refactor to a mixin.
-            # For expediency, I will copy the logic but using self.agent
-
+            # Stream agent events for real-time response
             async for event in self._stream_agent_events(
                 text, payload.get("attachments")
             ):
@@ -392,18 +388,20 @@ class RedisSession:
                 elif evt_type == "member_response":
                     chunk = event.get("content", "")
                     if chunk:
-                        # Send as a regular message part, but you might want to mark it 
+                        # Send as a regular message part, but you might want to mark it
                         # so the frontend knows who sent it.
                         payload_data = {
                             "ix": idx,
                             "eof": False,
                             "message": chunk,
                             "message_id": message_id,
-                            "agent_name": event.get("agent_name"), # Pass agent name
-                            "type": "member_response"
+                            "agent_name": event.get("agent_name"),  # Pass agent name
+                            "type": "member_response",
                         }
                         await self._send_frame(
-                            make_data(self.next_id, Op.MESSAGE, msg_chat_id, payload_data)
+                            make_data(
+                                self.next_id, Op.MESSAGE, msg_chat_id, payload_data
+                            )
                         )
                         idx += 1
 
@@ -687,7 +685,11 @@ Continue the conversation."""
 
                     chunk = str(val) if val is not None else ""
 
-                    if chunk.startswith("```tool_outputs") or chunk.startswith('{"delegate_task_to_member') or "delegate_task_to_member_response" in chunk:
+                    if (
+                        chunk.startswith("```tool_outputs")
+                        or chunk.startswith('{"delegate_task_to_member')
+                        or "delegate_task_to_member_response" in chunk
+                    ):
                         continue
 
                     if chunk != captured_reasoning:
@@ -705,12 +707,12 @@ Continue the conversation."""
                                 "agent_name": current_agent_name,
                             }
                             streamed_text_len += len(chunk)
-                
+
                 # --- NEW: Track Active Agents ---
                 if "RunStarted" in event_type and agent_name:
                     self.active_agents.add(agent_name)
                     asyncio.create_task(self._broadcast_system_status())
-                
+
                 elif "RunCompleted" in event_type and agent_name:
                     if agent_name in self.active_agents:
                         self.active_agents.discard(agent_name)

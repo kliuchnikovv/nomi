@@ -101,10 +101,11 @@ Communication between Go Hub, Python Brain, and Client uses a JSON Frame protoco
 - **Workflow:**
     1. Python Agent calls a "Mock" tool (e.g., `ClientGmailTools.send_email`).
     2. This mock records a `ClientAction` in context.
-    3. `ws.py` intercepts this action and sends a `client_action` frame.
-    4. Frontend `ChatContext` receives frame -> calls `ClientToolExecutor.ts`.
-    5. `ClientToolExecutor` uses local `GmailClient` with local auth tokens.
-    6. Result is displayed/fed back to chat.
+    3. `RedisSession` publishes a `client_action` frame to Redis.
+    4. Go Hub receives frame and forwards to Frontend `ChatContext`.
+    5. `ChatContext` calls `ClientToolExecutor.ts`.
+    6. `ClientToolExecutor` uses local `GmailClient` with local auth tokens.
+    7. Result is displayed/fed back to chat.
 
 ---
 

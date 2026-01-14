@@ -12,13 +12,14 @@ from agno.knowledge.embedder.google import GeminiEmbedder
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.agents.genie import GenieAgent
-from src.server import ws as ws_server
 from src.server import webhooks
 from src.agents.factory import AgentFactory
 from src.tools.config import ToolConfigClient
 from src.tools.factory import ToolsConfig
 from src.tools.client_side import start_action_tracking, get_client_actions
-from src.teams.development.team import DevelopmentTeam # Import for type hinting if needed, or dynamic loading
+from src.teams.development.team import (
+    DevelopmentTeam,
+)  # Import for type hinting if needed, or dynamic loading
 
 from dotenv import load_dotenv
 
@@ -26,10 +27,11 @@ from dotenv import load_dotenv
 # Если файл не найден, используем переменные окружения из системы (для продакшн)
 load_dotenv()
 
+
 # ---- Logging ----
 class RailwayJsonFormatter(logging.Formatter):
     """JSON formatter for Railway-compatible logs"""
-    
+
     LEVEL_MAP = {
         logging.DEBUG: "debug",
         logging.INFO: "info",
@@ -37,30 +39,31 @@ class RailwayJsonFormatter(logging.Formatter):
         logging.ERROR: "error",
         logging.CRITICAL: "fatal",
     }
-    
+
     def format(self, record: logging.LogRecord) -> str:
         import json
         from datetime import datetime
-        
+
         # Base JSON structure with top-level severity for Railway
         log_entry = {
-            "level": self.LEVEL_MAP.get(record.levelno, "info").upper(), 
+            "level": self.LEVEL_MAP.get(record.levelno, "info").upper(),
             "message": record.getMessage(),
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "logger": record.name
+            "logger": record.name,
         }
 
         # Add exception info if present
         if record.exc_info:
             log_entry["exception"] = self.formatException(record.exc_info)
-            # Duplicate error message in attributes for backward compat if needed, 
+            # Duplicate error message in attributes for backward compat if needed,
             # but primary "level" must be at root.
 
         # Add extra attributes from record if they exist (custom args)
         if hasattr(record, "custom_attrs"):
-             log_entry.update(record.custom_attrs)
-        
+            log_entry.update(record.custom_attrs)
+
         return json.dumps(log_entry, ensure_ascii=False)
+
 
 def _init_logging():
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -72,27 +75,28 @@ def _init_logging():
         fmt = RailwayJsonFormatter()
         h.setFormatter(fmt)
         root.addHandler(h)
-    
+
     # Configure third-party library loggers
     logging.getLogger("agno").setLevel(level)
-    
+
     # Silence noise but allow propagation for Uvicorn errors to use our JSON formatter
     for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
         log = logging.getLogger(logger_name)
         log.handlers = []  # Remove default Uvicorn handlers
-        log.propagate = True # Let it bubble up to root (which has our JSON formatter)
+        log.propagate = True  # Let it bubble up to root (which has our JSON formatter)
         log.setLevel(logging.WARNING)
 
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("hpack").setLevel(logging.WARNING)
-    
+
     logging.info("Logging initialized at %s", level_name)
+
 
 debug_mode = os.getenv("DEBUG") == "True"
 _init_logging()
 
-model=Gemini(
+model = Gemini(
     id="gemini-2.0-flash",
     api_key=os.getenv("GOOGLE_API_KEY"),
 )
@@ -140,13 +144,14 @@ agent_os = AgentOS(
             debug_mode=debug_mode,
             github_token=os.getenv("GITHUB_TOKEN"),
         )
-    ]
+    ],
 )
 global app
 app = agent_os.get_app()
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -155,6 +160,7 @@ async def lifespan(app: FastAPI):
     logging.warning("[Lifespan] Initializing Redis Worker...")
     try:
         from src.server.redis_worker import RedisWorker
+
         global redis_worker
         redis_worker = RedisWorker(agent_factory)
         await redis_worker.start()
@@ -162,15 +168,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[Lifespan] Error starting Redis Worker: {e}")
         logging.error(f"[Lifespan] Failed to start Redis Worker: {e}", exc_info=True)
-    
+
     yield
-    
+
     # Shutdown
     print("[Lifespan] Shutting down...")
     logging.warning("[Lifespan] Shutting down resources...")
     await tool_config_client.close()
-    if 'redis_worker' in globals():
+    if "redis_worker" in globals():
         await redis_worker.stop()
+
 
 # Assign lifespan to the app
 # Note: agent_os.get_app() returns a FastAPI app.
@@ -178,14 +185,18 @@ async def lifespan(app: FastAPI):
 # Check if agent_os set one? Unlikely for basic usage.
 app.router.lifespan_context = lifespan
 
+
 # Health check endpoint for Railway zero-downtime deployments
 @app.get("/health")
 async def health_check():
     from datetime import datetime
+
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
 
 class QueryRequest(BaseModel):
     query: str
+
 
 @app.post("/query")
 async def run_query(request: QueryRequest):
@@ -193,17 +204,17 @@ async def run_query(request: QueryRequest):
     session_id = str(uuid.uuid4())
     # AgentFactory is already configured
     agent = await agent_factory.build(session_id=session_id)
-    
+
     # Run agent non-streaming
     # arun might be a coroutine function or a regular function returning a coroutine/generator
     # We force stream=False to get a RunResponse object instead of generator
     response_or_coro = agent.arun(request.query, stream=False)
-    
+
     if inspect.isawaitable(response_or_coro):
         response = await response_or_coro
     else:
         response = response_or_coro
-    
+
     # Extract content
     # response should be RunResponse
     answer = ""
@@ -212,34 +223,38 @@ async def run_query(request: QueryRequest):
     if hasattr(response, "content") and response.content:
         answer = str(response.content)
     elif response and isinstance(response, str):
-         answer = response
-         
+        answer = response
+
     # Extract reasoning
     if hasattr(response, "reasoning_content") and response.reasoning_content:
         reasoning = str(response.reasoning_content)
     elif hasattr(response, "reasoning_steps") and response.reasoning_steps:
-         reasoning = "\n".join([str(step) for step in response.reasoning_steps])
+        reasoning = "\n".join([str(step) for step in response.reasoning_steps])
 
     return {
-        "answer": answer, 
+        "answer": answer,
         "reasoning": reasoning,
-        "client_actions": [action.model_dump() for action in get_client_actions()]
+        "client_actions": [action.model_dump() for action in get_client_actions()],
     }
+
 
 class BriefingRequest(BaseModel):
     user_id: Optional[str] = None
     context: Optional[dict] = None
 
+
 @app.post("/api/briefing")
 async def get_briefing(request: BriefingRequest):
-    logging.info(f"Received briefing request. User: {request.user_id} Context provided: {bool(request.context)}")
+    logging.info(
+        f"Received briefing request. User: {request.user_id} Context provided: {bool(request.context)}"
+    )
     if request.context:
-         logging.info(f"Context keys: {request.context.keys()}")
-         if 'emails' in request.context:
-             logging.info(f"Context email count: {len(request.context['emails'])}")
-    
-             logging.info(f"Context email count: {len(request.context['emails'])}")
-    
+        logging.info(f"Context keys: {request.context.keys()}")
+        if "emails" in request.context:
+            logging.info(f"Context email count: {len(request.context['emails'])}")
+
+            logging.info(f"Context email count: {len(request.context['emails'])}")
+
     start_action_tracking()
     session_id = str(uuid.uuid4())
     # Build BriefingAgent
@@ -248,19 +263,20 @@ async def get_briefing(request: BriefingRequest):
         user_id=request.user_id,
         agent_type="briefing",
     )
-    
+
     # Construct prompt with context
     prompt = "Generate the morning briefing."
-    
+
     context_has_data = False
     if request.context:
         for key, value in request.context.items():
             if value and isinstance(value, list) and len(value) > 0:
                 context_has_data = True
                 break
-    
+
     if context_has_data:
         import json
+
         context_str = json.dumps(request.context, indent=2, default=str)
         prompt = f"""Generate the morning briefing based on the following context data from user integrations (TREAT THIS AS GATHERED DATA):
 
@@ -271,23 +287,25 @@ Even if you do not have active server-side tools, USE THIS DATA to generate the 
 Do NOT say 'connect integrations' if valid data is present in the context.
 Analyze this data to identify critical items. Do not invent items not present in the data.
 """
-    
-    
+
     logging.info(f"Generated prompt (length: {len(prompt)}): {prompt[:200]}...")
-    
+
     # 3. Run agent to get briefing
     try:
         logging.info("Running agent...")
         response = await agent.arun(prompt, stream=False)
         logging.info(f"Agent response type: {type(response)}")
-        
+
         # Extract structured output
         if response and response.content:
-            logging.info(f"Agent content (length: {len(response.content)}): {response.content[:200]}...")
+            logging.info(
+                f"Agent content (length: {len(response.content)}): {response.content[:200]}..."
+            )
             content = response.content
             # Handle string output (Agent returning JSON string)
             if isinstance(content, str):
                 import json
+
                 try:
                     # Strip markdown code blocks if present
                     clean_content = content.strip()
@@ -298,43 +316,47 @@ Analyze this data to identify critical items. Do not invent items not present in
                     if clean_content.endswith("```"):
                         clean_content = clean_content[:-3]
                     clean_content = clean_content.strip()
-                    
+
                     return json.loads(clean_content)
                 except json.JSONDecodeError:
                     logging.error(f"Failed to parse JSON content: {content}")
-                    return {"error": "Failed to parse briefing JSON", "raw_content": content}
+                    return {
+                        "error": "Failed to parse briefing JSON",
+                        "raw_content": content,
+                    }
 
             # Handle object output (if supported)
             if hasattr(content, "model_dump"):
                 result = content.model_dump()
             else:
-                 result = content
-            
+                result = content
+
             # Attach client actions if result is a dict
             if isinstance(result, dict):
-                result["client_actions"] = [action.model_dump() for action in get_client_actions()]
-                
+                result["client_actions"] = [
+                    action.model_dump() for action in get_client_actions()
+                ]
+
             return result
-        
+
         return {"error": "No content generated"}
     except Exception as e:
         logging.error(f"Briefing generation failed: {e}", exc_info=True)
         return {"error": str(e)}
 
+
 # ...
 class AnalysisRequest(BaseModel):
     text: str
 
+
 @app.post("/api/analyze")
 async def analyze_text(request: AnalysisRequest):
     session_id = str(uuid.uuid4())
-    agent = await agent_factory.build(
-        session_id=session_id,
-        agent_type="extraction"
-    )
-    
+    agent = await agent_factory.build(session_id=session_id, agent_type="extraction")
+
     prompt = f"Extract events and tasks from this text:\n\n{request.text}"
-    
+
     try:
         response = await agent.arun(prompt, stream=False)
         if response and response.content:
@@ -342,10 +364,11 @@ async def analyze_text(request: AnalysisRequest):
             # Handle object output
             if hasattr(content, "model_dump"):
                 return content.model_dump()
-            
+
             # Handle string output
             if isinstance(content, str):
                 import json
+
                 try:
                     clean_content = content.strip()
                     if clean_content.startswith("```json"):
@@ -357,7 +380,7 @@ async def analyze_text(request: AnalysisRequest):
                     return json.loads(clean_content.strip())
                 except json.JSONDecodeError:
                     return {"events": [], "tasks": [], "error": "Failed to parse JSON"}
-            
+
             return content
         return {"events": [], "tasks": []}
     except Exception as e:
@@ -378,39 +401,39 @@ class EmailAnalysisRequest(BaseModel):
 async def analyze_email(request: EmailAnalysisRequest):
     """Analyze an email to extract urgency, connections, time frames, and suggest actions."""
     logging.info(f"Analyzing email: {request.email_id} subject='{request.subject}'")
-    
+
     session_id = str(uuid.uuid4())
     agent = await agent_factory.build(
-        session_id=session_id,
-        agent_type="email_analyzer"
+        session_id=session_id, agent_type="email_analyzer"
     )
-    
+
     # Construct prompt with email details
     prompt = f"""Analyze the following email:
 
-From: {request.from_name or 'Unknown'} <{request.from_email or 'unknown'}>
-Subject: {request.subject or '(no subject)'}
-Date: {request.date or 'Unknown'}
+From: {request.from_name or "Unknown"} <{request.from_email or "unknown"}>
+Subject: {request.subject or "(no subject)"}
+Date: {request.date or "Unknown"}
 
 Body:
 {request.body}
 
 Extract urgency, connections, time frames, and suggest 2-5 actions."""
-    
+
     try:
         response = await agent.arun(prompt, stream=False)
         if response and response.content:
             content = response.content
-            
+
             # Handle object output
             if hasattr(content, "model_dump"):
                 result = content.model_dump()
                 result["email_id"] = request.email_id
                 return result
-            
+
             # Handle string output (JSON)
             if isinstance(content, str):
                 import json
+
                 try:
                     clean_content = content.strip()
                     if clean_content.startswith("```json"):
@@ -430,17 +453,17 @@ Extract urgency, connections, time frames, and suggest 2-5 actions."""
                         "connections": [],
                         "time_frame": None,
                         "suggested_actions": [],
-                        "error": "Failed to parse JSON"
+                        "error": "Failed to parse JSON",
                     }
-            
+
             return content
-        
+
         return {
             "email_id": request.email_id,
             "urgency": "normal",
             "connections": [],
             "time_frame": None,
-            "suggested_actions": []
+            "suggested_actions": [],
         }
     except Exception as e:
         logging.error(f"Email analysis failed: {e}", exc_info=True)
@@ -450,18 +473,13 @@ Extract urgency, connections, time frames, and suggest 2-5 actions."""
             "connections": [],
             "time_frame": None,
             "suggested_actions": [],
-            "error": str(e)
+            "error": str(e),
         }
+
 
 # Sessions for OAuth state (required for request.session)
 session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")
 app.add_middleware(SessionMiddleware, secret_key=session_secret)
-
-# try:
-#     app.include_router(ws_server.router(agent_factory))
-#     logging.info("WS route mounted at /llm/ws")
-# except Exception:
-#     logging.exception("Failed to mount WS routes")
 
 try:
     app.include_router(webhooks.router)
@@ -472,6 +490,7 @@ except Exception:
 
 class RepoListRequest(BaseModel):
     github_token: Optional[str] = None
+
 
 @app.post("/api/github/repos")
 async def list_github_repos(request: RepoListRequest):
@@ -488,15 +507,17 @@ async def list_github_repos(request: RepoListRequest):
         user = g.get_user()
         repos = []
         # sort by updated to show most relevant first
-        for repo in user.get_repos(sort="updated", direction="desc"): 
-            repos.append({
-                "id": repo.id,
-                "name": repo.full_name, # owner/repo
-                "private": repo.private,
-                "url": repo.html_url,
-                "description": repo.description
-            })
-            if len(repos) >= 50: # Limit to 50 recent repos to avoid slow response
+        for repo in user.get_repos(sort="updated", direction="desc"):
+            repos.append(
+                {
+                    "id": repo.id,
+                    "name": repo.full_name,  # owner/repo
+                    "private": repo.private,
+                    "url": repo.html_url,
+                    "description": repo.description,
+                }
+            )
+            if len(repos) >= 50:  # Limit to 50 recent repos to avoid slow response
                 break
         return repos
 
@@ -524,7 +545,9 @@ async def analyze_project(request: ProjectAnalysisRequest):
     import asyncio
     import requests
 
-    logging.info(f"Received project analysis request: {request.project_id} repo={request.repository}")
+    logging.info(
+        f"Received project analysis request: {request.project_id} repo={request.repository}"
+    )
 
     def update_status(status: str):
         api_url = os.getenv("GO_API_URL", "http://localhost:8080")
@@ -536,7 +559,9 @@ async def analyze_project(request: ProjectAnalysisRequest):
         headers["X-Internal-Secret"] = internal_key
         try:
             resp = requests.patch(url, json={"status": status}, headers=headers)
-            logging.info(f"Updated project {request.project_id} status to {status}, response: {resp.status_code}")
+            logging.info(
+                f"Updated project {request.project_id} status to {status}, response: {resp.status_code}"
+            )
         except Exception as e:
             logging.error(f"Failed to update project status: {e}")
 
@@ -553,14 +578,16 @@ async def analyze_project(request: ProjectAnalysisRequest):
                 manager.ingest_repository,
                 request.repository,
                 request.project_id,
-                github_token  # Can be None for public repos
+                github_token,  # Can be None for public repos
             )
 
             logging.info(f"Completed analysis for project {request.project_id}")
             await asyncio.to_thread(update_status, "READY")
 
         except Exception as e:
-            logging.error(f"Failed to analyze project {request.project_id}: {e}", exc_info=True)
+            logging.error(
+                f"Failed to analyze project {request.project_id}: {e}", exc_info=True
+            )
             await asyncio.to_thread(update_status, "FAILED")
 
     # Run analysis in background
@@ -574,19 +601,25 @@ class DeleteProjectRequest(BaseModel):
 
 
 @app.delete("/api/projects/{project_id}")
-async def delete_project_knowledge_endpoint(project_id: str, request: Optional[DeleteProjectRequest] = None):
+async def delete_project_knowledge_endpoint(
+    project_id: str, request: Optional[DeleteProjectRequest] = None
+):
     """
     Delete RAG knowledge for a project.
     """
     import asyncio
+
     try:
         from src.rag_service import ProjectKnowledgeManager
+
         user_id = request.user_id if request else None
-        logging.info(f"Received request to delete knowledge for project {project_id} (user: {user_id})")
-        
+        logging.info(
+            f"Received request to delete knowledge for project {project_id} (user: {user_id})"
+        )
+
         manager = ProjectKnowledgeManager(user_id=user_id or "system")
         await asyncio.to_thread(manager.delete_project_knowledge, project_id)
-        
+
         return {"status": "deleted", "project_id": project_id}
     except Exception as e:
         logging.error(f"Failed to delete project knowledge: {e}", exc_info=True)
@@ -608,7 +641,9 @@ async def reindex_project(project_id: str, request: ReindexProjectRequest):
     import asyncio
     import requests
 
-    logging.info(f"Received reindex request: project={project_id} repo={request.repository}")
+    logging.info(
+        f"Received reindex request: project={project_id} repo={request.repository}"
+    )
 
     def update_status(status: str):
         api_url = os.getenv("GO_API_URL", "http://localhost:8080")
@@ -620,7 +655,9 @@ async def reindex_project(project_id: str, request: ReindexProjectRequest):
         headers["X-Internal-Secret"] = internal_key
         try:
             resp = requests.patch(url, json={"status": status}, headers=headers)
-            logging.info(f"Updated project {project_id} status to {status}, response: {resp.status_code}")
+            logging.info(
+                f"Updated project {project_id} status to {status}, response: {resp.status_code}"
+            )
         except Exception as e:
             logging.error(f"Failed to update project status: {e}")
 
@@ -632,10 +669,7 @@ async def reindex_project(project_id: str, request: ReindexProjectRequest):
 
             manager = ProjectKnowledgeManager(user_id=request.user_id or "system")
             await asyncio.to_thread(
-                manager.reindex_repository,
-                request.repository,
-                project_id,
-                github_token
+                manager.reindex_repository, request.repository, project_id, github_token
             )
 
             logging.info(f"Completed reindex for project {project_id}")
@@ -655,12 +689,13 @@ class EmbeddingRequest(BaseModel):
     text: Optional[str] = None  # Single text (backward compatible)
     texts: Optional[list[str]] = None  # Batch of texts
 
+
 @app.post("/api/embeddings")
 async def get_embedding(request: EmbeddingRequest):
     """
     Generate embeddings for text(s).
     Transient processing: The text is NOT saved or logged.
-    
+
     Accepts either:
     - `text`: Single string → returns `embedding`
     - `texts`: Array of strings → returns `embeddings`
@@ -670,18 +705,18 @@ async def get_embedding(request: EmbeddingRequest):
         if request.texts is not None:
             if len(request.texts) == 0:
                 return {"embeddings": []}
-            
+
             embeddings = []
             for text in request.texts:
                 embedding = embedder.get_embedding(text)
                 embeddings.append(embedding)
             return {"embeddings": embeddings}
-        
+
         # Single mode (backward compatible)
         if request.text is not None:
             embedding = embedder.get_embedding(request.text)
             return {"embedding": embedding}
-        
+
         return {"error": "Either 'text' or 'texts' must be provided"}
     except Exception as e:
         logging.error(f"Embedding generation failed: {e}")
@@ -690,7 +725,7 @@ async def get_embedding(request: EmbeddingRequest):
 
 if __name__ == "__main__":
     agent_os.serve(
-        app="app:app", 
+        app="app:app",
         reload=True,
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", 7777)),
