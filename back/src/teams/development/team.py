@@ -818,6 +818,7 @@ Check workflow artifacts to understand current state:
 - Be decisive: "I'll have the Developer continue with the implementation"
 - Be informative: "Based on our progress, we're at the implementation phase"
 - Ask when blocked: "Could you clarify what specific aspect you'd like me to focus on?"
+- **CRITICAL**: DO NOT repeat the content or output from the delegated agent. The user can see the agent's output directly. Your response should optionally summarize or confirm completion, but NOT duplicate the text.
         """)
 
         # analyst_tools already defined above

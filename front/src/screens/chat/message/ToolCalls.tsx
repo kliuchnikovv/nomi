@@ -1,7 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
-import { createStyles } from './dynamicStyles';
+import { createStyles, createMarkdownStyles } from './dynamicStyles';
+import Markdown from 'react-native-markdown-display';
+import { createMarkdownRules } from './markdownRules';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
     const [expanded, setExpanded] = useState(false);
@@ -145,36 +148,32 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
 }
 
 // Team member response block for showing agent activity
+// Team member response block for showing agent activity
 export function MemberResponseBlock({ agentName, text }: { agentName: string; text: string }) {
-    const [expanded, setExpanded] = useState(false);
     const { theme, palette } = useTheme();
     const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+
+    const handleCodeCopy = (code: string) => {
+        Clipboard.setString(code);
+    };
+
+    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), []);
 
     if (!text) return null;
 
     return (
         <View style={styles.memberResponseContainer}>
-            <Pressable
-                onPress={() => setExpanded(!expanded)}
-                style={({ pressed }) => [
-                    styles.memberResponseHeader,
-                    pressed && { opacity: 0.7 },
-                ]}
-            >
+            <View style={styles.memberResponseHeader}>
                 <Text style={styles.memberResponseHeaderText}>
                     👤 {agentName}
                 </Text>
-                <Text style={styles.toolCallsExpandIcon}>
-                    {expanded ? '▼' : '▶'}
-                </Text>
-            </Pressable>
-            {expanded && (
-                <View style={styles.memberResponseContent}>
-                    <Text style={styles.memberResponseText}>
-                        {text}
-                    </Text>
-                </View>
-            )}
+            </View>
+            <View style={styles.memberResponseContent}>
+                <Markdown style={markdownStyles as any} rules={markdownRules}>
+                    {text}
+                </Markdown>
+            </View>
         </View>
     );
 }

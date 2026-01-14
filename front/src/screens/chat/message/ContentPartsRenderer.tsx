@@ -33,8 +33,8 @@ function isLogMessage(text: string): boolean {
 }
 
 export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
-    const { showToolCalls, showReasoning, showMemberResponses } = useChat();
-    const { theme } = useTheme();
+    const { showToolCalls, showReasoning, showMemberResponses, chatMode } = useChat();
+    const isTeamMode = chatMode === 'team';
     const { theme } = useTheme();
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
@@ -58,12 +58,8 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
             }
 
             if ((part as any).type === 'member_response') {
-                const memberPart = part as any;
-                // Always show Narrator, otherwise respect the toggle
-                // NOTE: We usually WANT to see member responses as bubbles now
-                if (memberPart.agent_name !== 'Narrator' && !showMemberResponses) {
-                    return false;
-                }
+                // Member responses are now considered primary content (bubbles), so we always show them.
+                return true;
             }
             return true;
         });
@@ -129,7 +125,19 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
             {groupedParts.map((group, groupIndex) => {
                 if (group.type === 'text' && group.part) {
                     const part = group.part;
-                    if (part.type !== 'text') return null;
+                    // Check if we should wrap this text in a "Team Lead" bubble
+                    const isTeamMode = useChat().chatMode === 'team';
+
+                    if (isTeamMode) {
+                        return (
+                            <MemberResponseBlock
+                                key={`text-${groupIndex}`}
+                                agentName="Team Lead"
+                                text={part.text || ''}
+                            />
+                        );
+                    }
+
                     return (
                         <Pressable
                             key={`text-${groupIndex}`}

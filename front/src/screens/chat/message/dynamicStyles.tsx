@@ -231,9 +231,13 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
         },
         // Member response block styles (for team member agent activity)
         memberResponseContainer: {
-            marginVertical: 6,
-            backgroundColor: withAlpha(palette.cyan, 0.08),
-            borderRadius: 8,
+            marginVertical: 8,
+            alignSelf: 'flex-start',
+            maxWidth: '95%',
+            borderRadius: 16,
+            backgroundColor: theme.surfaceHighlight, // Use standard bubble background
+            borderWidth: 1,
+            borderColor: withAlpha(palette.cyan, 0.2), // Subtle border
             overflow: 'hidden',
         },
         memberResponseHeader: {
@@ -241,21 +245,23 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingVertical: 6,
-            paddingHorizontal: 10,
+            paddingHorizontal: 12,
+            backgroundColor: withAlpha(palette.cyan, 0.1), // Header slightly darker/tinted
+            borderBottomWidth: 1,
+            borderBottomColor: withAlpha(palette.cyan, 0.1),
         },
         memberResponseHeaderText: {
             color: palette.cyan,
             fontSize: 12,
-            fontWeight: '600',
+            fontWeight: '700',
         },
         memberResponseContent: {
-            paddingHorizontal: 10,
-            paddingBottom: 8,
+            padding: 12,
         },
         memberResponseText: {
             color: theme.textPrimary,
-            fontSize: 13,
-            lineHeight: 18,
+            fontSize: 15,
+            lineHeight: 22,
         },
         // Collapsible steps styles - now theme-aware!
         collapsibleStepsContainer: {

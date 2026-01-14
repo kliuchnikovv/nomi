@@ -161,6 +161,7 @@ export function ChatProvider({
 
     const selectTeam = useCallback((teamId: string) => {
         setSelectedTeamId(teamId);
+        setChatMode('team');
     }, []);
 
 
@@ -215,6 +216,18 @@ export function ChatProvider({
         let chatID: string;
 
         try {
+            // Sanitize payload: don't send team_id if mode is agent, unless it's a specific agent-as-team
+            let teamIdToSend = selectedTeamId || null;
+            if (chatMode === 'agent') {
+                // Check if the selectedTeamId is actually an agent
+                const teamDef = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
+                if (teamDef && !teamDef.isAgent) {
+                    // If it's a TEAM (like development_team) but we are in AGENT mode, sanitize it.
+                    // Agents shouldn't have a team_id unless they are specific agent-types.
+                    teamIdToSend = null;
+                }
+            }
+
             const created = await apiClient.post<{ id: string }>(
                 `${getApiUrl()}/chats`,
                 {
@@ -222,7 +235,7 @@ export function ChatProvider({
                     "model": selectedModelRef.current || 'gemini-2.0-flash-exp',
                     "mode": chatMode,
                     // Pass team_id for teams, OR for individual agents (agent_type)
-                    "team_id": selectedTeamId || null,
+                    "team_id": teamIdToSend,
                     "project_id": activeChat?.project_id,
                     "task_id": activeChat?.task_id,
                 },
@@ -485,7 +498,8 @@ export function ChatProvider({
             }
 
             if (activeChat.team_id) {
-                selectTeam(activeChat.team_id);
+                // Use setSelectedTeamId to avoid side-effect of switching mode to 'team' if we are in 'agent' mode
+                setSelectedTeamId(activeChat.team_id);
             }
         } else if (!activeChatID) {
             newChatInitializedRef.current = false;
@@ -501,7 +515,7 @@ export function ChatProvider({
         if (messages.length === 0) {
             getMessages(activeChatID);
         }
-    }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode, sidebarFilter, sendMessage, selectTeam, clearPendingChatMode]);
+    }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode, sidebarFilter, sendMessage, clearPendingChatMode]);
 
     // Fetch available models on mount with retry
     useEffect(() => {
