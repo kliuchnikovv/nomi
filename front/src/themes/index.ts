@@ -4,6 +4,7 @@ import { serikaDarkTheme } from './serikaDark';
 import { tokyoNightTheme } from './tokyoNight';
 import { visualStudioLightTheme } from './visualStudioLight';
 import { retroPastelTheme } from './retroPastel';
+import { deepOceanTheme } from './deepOcean';
 import { ThemeDescriptor, ThemeName } from './types';
 
 export const themes: Record<ThemeName, ThemeDescriptor> = {
@@ -13,6 +14,7 @@ export const themes: Record<ThemeName, ThemeDescriptor> = {
     serikaDark: serikaDarkTheme,
     retroSunset: retroSunsetTheme,
     retroPastel: retroPastelTheme,
+    deepOcean: deepOceanTheme,
 };
 
 export const defaultThemeName: ThemeName = 'retroSunset';
