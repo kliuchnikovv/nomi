@@ -687,24 +687,24 @@ Continue the conversation."""
 
                     chunk = str(val) if val is not None else ""
 
-                        if chunk.startswith("```tool_outputs") or chunk.startswith('{"delegate_task_to_member') or "delegate_task_to_member_response" in chunk:
-                            continue
+                    if chunk.startswith("```tool_outputs") or chunk.startswith('{"delegate_task_to_member') or "delegate_task_to_member_response" in chunk:
+                        continue
 
-                        if chunk != captured_reasoning:
-                            if is_member_event:
-                                yield {
-                                    "type": "member_response",
-                                    "content": chunk,
-                                    "agent_id": agent_id,
-                                    "agent_name": agent_name,
-                                }
-                            else:
-                                 yield {
-                                    "type": "text",
-                                    "content": chunk,
-                                    "agent_name": current_agent_name,
-                                }
-                                 streamed_text_len += len(chunk)
+                    if chunk != captured_reasoning:
+                        if is_member_event:
+                            yield {
+                                "type": "member_response",
+                                "content": chunk,
+                                "agent_id": agent_id,
+                                "agent_name": agent_name,
+                            }
+                        else:
+                            yield {
+                                "type": "text",
+                                "content": chunk,
+                                "agent_name": current_agent_name,
+                            }
+                            streamed_text_len += len(chunk)
                 
                 # --- NEW: Track Active Agents ---
                 if "RunStarted" in event_type and agent_name:
