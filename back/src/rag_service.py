@@ -627,65 +627,65 @@ class KnowledgeSearchTool(Toolkit):
             logger.error(f"Error searching knowledge: {e}")
             return f"Error occurred while searching: {str(e)}"
 
-    def list_projects(self) -> str:
-        """
-        List all available projects for the current user.
+    # def list_projects(self) -> str:
+    #     """
+    #     List all available projects for the current user.
         
-        Use this tool when you need to discover which projects exist and get their IDs.
-        This is especially useful when the user asks about a project by name but you don't
-        know its ID.
+    #     Use this tool when you need to discover which projects exist and get their IDs.
+    #     This is especially useful when the user asks about a project by name but you don't
+    #     know its ID.
         
-        Returns:
-            str: A formatted list of projects with their IDs, names, descriptions, and repo URLs.
+    #     Returns:
+    #         str: A formatted list of projects with their IDs, names, descriptions, and repo URLs.
         
-        Example Usage:
-            - User asks: "What do you know about genie?"
-            - Call list_projects() to find the project ID for "genie"
-            - Then use search_knowledge(query="...", project_id="<found_id>")
-        """
-        try:
-            api_url = os.getenv("GO_API_URL", "http://localhost:8080")
-            headers = {}
-            if self.auth_token:
-                headers["Authorization"] = f"Bearer {self.auth_token}"
+    #     Example Usage:
+    #         - User asks: "What do you know about genie?"
+    #         - Call list_projects() to find the project ID for "genie"
+    #         - Then use search_knowledge(query="...", project_id="<found_id>")
+    #     """
+    #     try:
+    #         api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+    #         headers = {}
+    #         if self.auth_token:
+    #             headers["Authorization"] = f"Bearer {self.auth_token}"
             
-            with httpx.Client(timeout=10.0) as client:
-                response = client.get(f"{api_url}/api/projects", headers=headers)
+    #         with httpx.Client(timeout=10.0) as client:
+    #             response = client.get(f"{api_url}/api/projects", headers=headers)
                 
-                if response.status_code == 401:
-                    return "Error: Not authorized. Please ensure you are logged in."
+    #             if response.status_code == 401:
+    #                 return "Error: Not authorized. Please ensure you are logged in."
                 
-                if response.status_code != 200:
-                    logger.error(f"Failed to list projects: {response.status_code} - {response.text}")
-                    return f"Error fetching projects: HTTP {response.status_code}"
+    #             if response.status_code != 200:
+    #                 logger.error(f"Failed to list projects: {response.status_code} - {response.text}")
+    #                 return f"Error fetching projects: HTTP {response.status_code}"
                 
-                projects = response.json()
+    #             projects = response.json()
                 
-                if not projects:
-                    return "No projects found. The user hasn't added any projects yet."
+    #             if not projects:
+    #                 return "No projects found. The user hasn't added any projects yet."
                 
-                # Format projects list
-                lines = ["# Available Projects\n"]
-                for project in projects:
-                    project_id = project.get("id") or project.get("ID") or "unknown"
-                    name = project.get("name") or project.get("Name") or "Unnamed"
-                    description = project.get("description") or project.get("Description") or "No description"
-                    repo_url = project.get("repo_url") or project.get("Repository") or ""
-                    status = project.get("status") or project.get("Status") or "unknown"
+    #             # Format projects list
+    #             lines = ["# Available Projects\n"]
+    #             for project in projects:
+    #                 project_id = project.get("id") or project.get("ID") or "unknown"
+    #                 name = project.get("name") or project.get("Name") or "Unnamed"
+    #                 description = project.get("description") or project.get("Description") or "No description"
+    #                 repo_url = project.get("repo_url") or project.get("Repository") or ""
+    #                 status = project.get("status") or project.get("Status") or "unknown"
                     
-                    lines.append(f"## {name}")
-                    lines.append(f"- **Project ID**: `{project_id}`")
-                    lines.append(f"- **Description**: {description}")
-                    if repo_url:
-                        lines.append(f"- **Repository**: {repo_url}")
-                    lines.append(f"- **Status**: {status}")
-                    lines.append("")
+    #                 lines.append(f"## {name}")
+    #                 lines.append(f"- **Project ID**: `{project_id}`")
+    #                 lines.append(f"- **Description**: {description}")
+    #                 if repo_url:
+    #                     lines.append(f"- **Repository**: {repo_url}")
+    #                 lines.append(f"- **Status**: {status}")
+    #                 lines.append("")
                 
-                return "\n".join(lines)
+    #             return "\n".join(lines)
                 
-        except httpx.TimeoutException:
-            logger.error("Timeout while fetching projects list")
-            return "Error: Timeout while fetching projects. Please try again."
-        except Exception as e:
-            logger.error(f"Error listing projects: {e}")
-            return f"Error listing projects: {str(e)}"
+    #     except httpx.TimeoutException:
+    #         logger.error("Timeout while fetching projects list")
+    #         return "Error: Timeout while fetching projects. Please try again."
+    #     except Exception as e:
+    #         logger.error(f"Error listing projects: {e}")
+    #         return f"Error listing projects: {str(e)}"
