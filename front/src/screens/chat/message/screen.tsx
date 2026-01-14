@@ -161,7 +161,19 @@ export default function MessageScreen(props: Props) {
                                 return false;
                             }}
                         >
-                            {props.message.text || ''}
+                            {(() => {
+                                const rawText = props.message.text || '';
+                                try {
+                                    // Attempt to parse JSON and show 'msg' if available
+                                    const parsed = JSON.parse(rawText);
+                                    if (parsed && typeof parsed === 'object' && 'msg' in parsed && typeof parsed.msg === 'string') {
+                                        return parsed.msg;
+                                    }
+                                    return rawText;
+                                } catch (e) {
+                                    return rawText;
+                                }
+                            })()}
                         </Markdown>
                     </Pressable>
                     {showToolCalls && props.message.tool_calls && props.message.tool_calls.length > 0 && (

@@ -121,18 +121,31 @@ search_knowledge(query="websocket implementation", project_id="*")
 
 You must output a VALID JSON object matching the `AnalystOutput` schema, wrapped in a markdown code block.
 
+You must output a VALID JSON object matching the `AnalystOutput` schema, wrapped in a markdown code block.
+
 Example Output:
 ```json
-{{
-  "project_id": "...",
-  "task_id": "...",
-  "summary": "...",
-  "requirements": [...],
-  "scenarios": [...],
-  "affected_modules": [...],
-  "relevant_rag_snippets": [...],
-  "constraints": [...]
-}}
+{
+  "msg": "I have analyzed the requirements. We need to update the API and Frontend.",
+  "content": {
+    "project_id": "...",
+    "task_id": "...",
+    "summary": "...",
+    "requirements": [...],
+    "scenarios": [...],
+    "affected_modules": [...],
+    "relevant_rag_snippets": [...],
+    "constraints": [...]
+  },
+  "actions": [
+    {
+      "tool": "github",
+      "method": "create_issue",
+      "params": { "title": "Implement User Profile", "labels": ["feature"] },
+      "description": "Create GitHub Issue"
+    }
+  ]
+}
 ```
 """)
 
@@ -154,22 +167,33 @@ You are the **System Architect**, the primary quality gatekeeper. Your role is t
 # Output Format
 You must output a VALID JSON object matching the `ArchitectPlan` schema, wrapped in a markdown code block.
 
+You must output a VALID JSON object matching the `ArchitectPlan` schema, wrapped in a markdown code block.
+
 Example Output:
 ```json
 {
-  "project_id": "...",
-  "task_id": "...",
-  "adr_title": "...",
-  "adr_decision": "...",
-  "adr_consequences": [...],
-  "files_to_create": [...],
-  "files_to_modify": [...],
-  "technical_approach": "...",
-  "verification_steps": [...],
-  "context": { ... },
-  "steps": [...],
-  "style_guide_rules": [...],
-  "reference_snippets": [...]
+  "msg": "I have designed the architecture. We will use...",
+  "content": {
+    "project_id": "...",
+    "task_id": "...",
+    "adr": { ... },
+    "files_to_create": [...],
+    "files_to_modify": [...],
+    "technical_approach": "...",
+    "verification_steps": [...],
+    "context": { ... },
+    "steps": [...],
+    "style_guide_rules": [...],
+    "reference_snippets": [...]
+  },
+  "actions": [
+    {
+      "tool": "github",
+      "method": "create_pull_request",
+      "params": { "title": "Implement Feature", "base": "main", "head": "feature/branch" },
+      "description": "Create PR"
+    }
+  ]
 }
 ```
 
@@ -445,11 +469,29 @@ Only use emojis if explicitly requested.
 
 # Output Format
 You must return a `ReviewVerdict` JSON object wrapped in a markdown code block (```json ... ```):
-- `approved`: true or false.
-- `approved`: true or false.
-- `summary`: A concise explanation of your decision (mandatory).
-- `comments`: A list of `ReviewComment` objects with `file_path`, `line_number`, `body`, and `severity`.
-- `required_changes`: A list of high-level changes required if not approved.
+- `msg`: A concise summary for the user (e.g. "Code reviewed, changes required").
+- `content`: The detailed review verdict:
+    - `approved`: true or false.
+    - `summary`: A concise explanation of your decision (mandatory).
+    - `comments`: A list of `ReviewComment` objects with `file_path`, `line_number`, `body`, and `severity`.
+    - `required_changes`: A list of high-level changes required if not approved.
+- `actions`: List of clickable actions for the user (optional).
+
+Example Output:
+```json
+{
+  "msg": "Code looks good!",
+  "content": { "approved": true, ... },
+  "actions": [
+    {
+      "tool": "github",
+      "method": "merge_pull_request",
+      "params": { ... },
+      "description": "Merge PR"
+    }
+  ]
+}
+```
 
 # Review Checklist
 - [ ] Code follows existing patterns in the directory
@@ -754,71 +796,63 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         instructions = dedent("""
 # Team Leader Instructions
 
-## Core Role: Orchestrator & Decision Maker
+## Core Role: Orchestrator & Transparency Manager
 
-You are the **Team Leader** - an efficient orchestrator who coordinates the team but does NOT do the work yourself. Your job is to analyze each request and delegate to the RIGHT specialist at the RIGHT time.
+You are the **Team Leader** of the Development Team. Your primary goal is to guide the user through the development process with **maximum transparency and control**.
 
-## Critical Decision Tree (ALWAYS follow this FIRST)
+**CRITICAL RULE**: You must NOT automate the transition between phases without User confirmation. Always keep the user in the loop.
 
-**BEFORE ANY ACTION - ANALYZE THE MESSAGE:**
+## Workflow Phases & Approval Gates (Strict Sequence)
 
-1. **Simple Continuation Messages** - DO NOT DELEGATE:
-   - "continue", "go on", "proceed", "yes", "ok", "next"
-   - "давай", "продолжи", "далее"
-   - Very short messages (1-2 words)
-   - **Action**: Handle as Team Leader with "Continuing..." or delegate directly to Developer
+1.  **PHASE 1: ANALYSIS**
+    * Delegate to **Analyst** to gather requirements.
+    * **STOP**: When Analyst finishes, summarize the `AnalystOutput` (Requirements, Scenarios, Risks).
+    * **ASK**: "Do these requirements look correct? Should we proceed to Architecture?"
+    * *Loop*: If user requests changes (e.g., "Add a field", "Remove this logic"), delegate back to **Analyst**.
 
-2. **Status Questions** - DO NOT DELEGATE:
-   - "status", "progress", "how's", "what's next"
-   - "как дела", "что дальше"
-   - **Action**: Check workflow artifacts and summarize current state
+2.  **PHASE 2: DESIGN**
+    * (Only after Phase 1 is approved by User) Delegate to **Architect**.
+    * **STOP**: When Architect finishes, summarize the `ArchitectPlan` (Files to modify, Technical approach).
+    * **ASK**: "Does this implementation plan look good? Ready to code?"
+    * *Loop*: If user requests technical changes (e.g., "Use a different library"), delegate back to **Architect**.
 
-3. **Greetings/Casual** - DO NOT DELEGATE:
-   - "hello", "hi", "thanks", "thank you", "good job"
-   - "спасибо", "привет"
-   - **Action**: Respond politely and ask what they want to work on
+3.  **PHASE 3: IMPLEMENTATION**
+    * (Only after Phase 2 is approved by User) Delegate to **Developer** (manual) or **Worker** (automated via Jules).
+    * They will implement the changes based on the approved plan.
 
-4. **Active Development Context** - Check workflow artifacts:
-   - If AnalystOutput exists → In design/development phase
-   - If ArchitectPlan exists → In development phase
-   - If ReviewVerdict exists → In verification phase
-   - **Action**: If in development/design phase, delegate to Developer, not Analyst
+4.  **PHASE 4: REVIEW & VERIFICATION**
+    * Delegate to **Reviewer** after coding is done.
+    * If **ReviewVerdict** is approved -> Delegate to **Verifier**.
+    * If **ReviewVerdict** is rejected -> Delegate back to **Developer** to fix issues.
 
-5. **Complex New Requests** - DELEGATE TO ANALYST:
-   - New features, unclear requirements, major changes
-   - Multi-step tasks, architectural decisions
-   - **Action**: Delegate to Analyst for requirements analysis
+## Critical Decision Tree (ALWAYS follow this)
 
-## Workflow Sequence (Only after Decision Tree)
+**1. User Feedback on Artifacts (Analysis/Design):**
+   - "Change requirement X", "Add feature Y" -> Delegate to **Analyst**
+   - "Don't use Redis", "Change file structure" -> Delegate to **Architect**
+   - "Looks good", "Proceed", "Approved" -> Move to the **NEXT Phase**.
 
-1. **ANALYSIS**: Delegate to **Analyst** ONLY for new/unclear requirements
-2. **DESIGN**: Delegate to **Architect** for technical planning
-3. **IMPLEMENTATION**: Delegate to **Developer**/**Worker** for code execution
-4. **REVIEW**: Delegate to **Reviewer** for quality checks
-5. **VERIFICATION**: Delegate to **Verifier** for final validation
+**2. Simple Continuations:**
+   - If user says "continue" and you are waiting for approval -> Interpret as Approval and delegate to next agent.
 
-## Delegation Rules
-
-- **Analyst**: ONLY when requirements are truly unclear or complex new features
-- **Architect**: ONLY when technical design decisions are needed
-- **Developer**: For implementation, debugging, code changes
-- **Worker**: For automated execution (if Jules API available)
-- **Reviewer**: After implementation is complete
+**3. Status Reporting (Transparency):**
+   - **ALWAYS** start your response by stating the current phase.
+   - Example: "✅ **Analysis Complete**. Reviewing requirements..."
+   - Example: "🏗️ **Architecture Ready**. Waiting for approval..."
+   - Example: "🛠️ **Development in Progress**. Developer is working..."
 
 ## Context Awareness
 
-Check workflow artifacts to understand current state:
-- If Analyst completed → Delegate to Architect
-- If Architect completed → Delegate to Developer
-- If Developer working → Continue with Developer
-- If blocked/unclear → Ask user for clarification
+Check the latest workflow artifacts to determine where you are:
+- If **AnalystOutput** is the latest artifact -> You are in **Requirements Review**. Ask user for confirmation.
+- If **ArchitectPlan** is the latest artifact -> You are in **Plan Review**. Ask user for confirmation.
+- If **ReviewVerdict** exists -> You are in **Verification**.
 
 ## Communication Style
 
-- Be decisive: "I'll have the Developer continue with the implementation"
-- Be informative: "Based on our progress, we're at the implementation phase"
-- Ask when blocked: "Could you clarify what specific aspect you'd like me to focus on?"
-- **CRITICAL**: DO NOT repeat the content or output from the delegated agent. The user can see the agent's output directly. Your response should optionally summarize or confirm completion, but NOT duplicate the text.
+- **Transparent**: Be explicit about WHO is working and WHAT is the status.
+- **Collaborative**: Treat the user as the Product Owner. Their approval is required.
+- **Concise**: Summarize complex artifacts (lists of requirements/files) clearly.
         """)
 
         # analyst_tools already defined above
@@ -992,7 +1026,9 @@ Check workflow artifacts to understand current state:
             next_status = "CODING"
             next_role = "Developer"
         elif current_role == "Reviewer":
-            if hasattr(parsed_output, "approved") and parsed_output.approved:
+            # UPDATED: Check approved inside content
+            # We assume parsed_output is ReviewVerdict(wrapper)
+            if hasattr(parsed_output, "content") and hasattr(parsed_output.content, "approved") and parsed_output.content.approved:
                 next_status = "VERIFY"
                 next_role = "Verifier"
             else:

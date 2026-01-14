@@ -1,130 +1,107 @@
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
+# --- Shared Action Model ---
+class AgentAction(BaseModel):
+    tool: str = Field(..., description="Название инструмента (например, 'github', 'jira').")
+    method: str = Field(..., description="Метод для вызова.")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Параметры вызова.")
+    description: str = Field(..., description="Текст на кнопке (например, 'Создать задачу').")
+
+# --- ANALYST ---
 class FunctionalRequirement(BaseModel):
-    id: str = Field(
-        ...,
-        description="Уникальный код (напр., REQ-001). Используется для трассировки в коммитах."
-    )
-    title: str = Field(
-        ...,
-        description="Краткое техническое название требования."
-    )
-    description: str = Field(
-        ...,
-        description="Подробное описание: что именно должно происходить и какая бизнес-логика реализуется."
-    )
-    priority: Literal["P0", "P1", "P2", "P3"] = Field(
-        "P1",
-        description="P0: Блокирующее, P1: Критичное, P2: Важное, P3: Желательное."
-    )
-
-    # Ключевой блок для Jules и Reviewer
-    acceptance_criteria: List[str] = Field(
-        ...,
-        description="Четкие проверяемые условия (напр., 'API возвращает 404, если ID не найден')."
-    )
-
-    # Помогаем Архитектору
-    module_context: List[Literal["front", "back", "api", "infra"]] = Field(
-        ...,
-        description="На какие части системы влияет это конкретное требование."
-    )
-
-    is_breaking_change: bool = Field(
-        False,
-        description="Флаг, указывающий на изменение существующих контрактов или API."
-    )
+    id: str = Field(..., description="Уникальный код (напр., REQ-001).")
+    title: str = Field(..., description="Краткое название.")
+    description: str = Field(..., description="Подробное описание бизнес-логики.")
+    priority: Literal["P0", "P1", "P2", "P3"] = Field("P1")
+    acceptance_criteria: List[str] = Field(..., description="Критерии приемки.")
+    module_context: List[Literal["front", "back", "api", "infra"]] = Field(...)
+    is_breaking_change: bool = Field(False)
 
 class UserScenario(BaseModel):
-    scenario: str = Field(..., description="Описание пути пользователя (As a user I want to...)")
-    acceptance_criteria: List[str] = Field(..., description="Список условий, при которых задача считается выполненной")
+    scenario: str = Field(..., description="User Story (As a user...)")
+    acceptance_criteria: List[str] = Field(...)
+
+class AnalystDetails(BaseModel):
+    project_id: str = Field(..., description="ID проекта.")
+    task_id: str = Field(..., description="ID задачи.")
+    summary: str = Field(..., description="Резюме изменений.")
+    requirements: List[FunctionalRequirement]
+    scenarios: List[UserScenario]
+    affected_modules: List[str] = Field(..., description="Затронутые модули.")
+    relevant_rag_snippets: List[str] = Field(default_factory=list)
+    constraints: List[str] = Field(default_factory=list)
 
 class AnalystOutput(BaseModel):
-    project_id: str = Field(..., description="ID проекта из БД. Use 'unknown' if not clear from context.")
-    task_id: str = Field(..., description="ID задачи в очереди (UUID). Use '00000000-0000-0000-0000-000000000000' if not applicable.")
+    msg: str = Field(..., description="Краткое сообщение для пользователя.")
+    content: AnalystDetails = Field(..., description="Детальный анализ требований.")
+    actions: List[AgentAction] = Field(default_factory=list, description="Предлагаемые действия (кнопки).")
 
-    summary: str = Field(..., description="Высокоуровневое резюме того, что должно измениться")
-
-    # Ключевые требования
-    requirements: List[FunctionalRequirement]
-
-    # Сценарии приемки (для будущего тестирования)
-    scenarios: List[UserScenario]
-
-    # Анализ контекста
-    affected_modules: List[str] = Field(
-        ..., description="Список модулей, которые затрагивает задача (front, back, api, infrastructure)"
-    )
-    relevant_rag_snippets: List[str] = Field(
-        default_factory=list,
-        description="Краткие выдержки из документации проекта, на которые опирался аналитик"
-    )
-
-    constraints: List[str] = Field(
-        default_factory=list,
-        description="Ограничения (например: 'не изменять API эндпоинты' или 'сохранить обратную совместимость')"
-    )
-
+# --- ARCHITECT ---
 class ArchitectPlanContext(BaseModel):
-    repository_name: str = Field(..., description="Full repository name (e.g., 'owner/repo')")
-    branch_name: str = Field(..., description="Target branch name for the feature")
-    task_id: str = Field(..., description="UUID of the task in the database")
+    repository_name: str = Field(...)
+    branch_name: str = Field(...)
+    task_id: str = Field(...)
 
-class ArchitectPlan(BaseModel):
-    # Context
+class ArchitectureDecisionRecord(BaseModel):
+    title: str = Field(...)
+    status: Literal["Proposed", "Accepted", "Rejected", "Deprecated"] = Field("Proposed")
+    context: str = Field(...)
+    decision: str = Field(...)
+    consequences: str = Field(...) 
+
+class ImplementationStep(BaseModel):
+    file_path: str = Field(...)
+    description: str = Field(...)
+    action: Literal["create", "modify", "delete"] = Field(...)
+
+class ArchitectDetails(BaseModel):
     project_id: str
     task_id: str
-
-    # Decisions
-    adr_title: str
-    adr_decision: str
-    adr_consequences: List[str]
-
-    # Implementation Plan
+    adr: ArchitectureDecisionRecord = Field(..., description="ADR запись.")
+    technical_approach: str = Field(..., description="Технический подход.")
     files_to_create: List[str]
     files_to_modify: List[str]
-
-    technical_approach: str = Field(..., description="Detailed technical approach for the developer")
-
-    # Validation
     verification_steps: List[str]
-      
-    context: ArchitectPlanContext = Field(..., description="Context identifiers for the task")
+    context: ArchitectPlanContext = Field(...)
+    steps: List[ImplementationStep] = Field(..., description="Список шагов реализации.")
+    style_guide_rules: List[str] = Field(...)
+    reference_snippets: List[str] = Field(...)
 
-    steps: List[str] = Field(..., description="List of atomic implementation steps")
-    style_guide_rules: List[str] = Field(..., description="Coding standards from AGENTS.md")
-    reference_snippets: List[str] = Field(..., description="Relevant code snippets from the codebase")
+class ArchitectPlan(BaseModel):
+    msg: str = Field(..., description="Краткое сообщение (напр., 'План готов').")
+    content: ArchitectDetails = Field(..., description="Детальный архитектурный план.")
+    actions: List[AgentAction] = Field(default_factory=list)
 
+# --- REVIEWER ---
 class ReviewComment(BaseModel):
-    file_path: str = Field(..., description="File path related to the comment")
-    line_number: Optional[int] = Field(None, description="Line number for the comment")
-    body: str = Field(..., description="The comment text")
+    file_path: str = Field(...)
+    line_number: Optional[int] = Field(None)
+    body: str = Field(...)
     severity: Literal["critical", "warning", "info"] = Field("warning")
 
-class ReviewVerdict(BaseModel):
-    approved: bool = Field(..., description="Whether the changes are approved")
-    summary: str = Field(..., description="Summary of the review")
-    comments: List[ReviewComment] = Field(default_factory=list, description="List of specific comments")
-    required_changes: List[str] = Field(default_factory=list, description="List of high-level required changes")
+class ReviewDetails(BaseModel):
+    approved: bool = Field(..., description="Одобрено ли.")
+    summary: str = Field(..., description="Резюме ревью.")
+    comments: List[ReviewComment] = Field(default_factory=list)
+    required_changes: List[str] = Field(default_factory=list)
 
-class FinalAcceptance(BaseModel):
+class ReviewVerdict(BaseModel):
+    msg: str = Field(..., description="Краткое сообщение (напр., 'Требуются правки').")
+    content: ReviewDetails = Field(..., description="Детальный вердикт.")
+    actions: List[AgentAction] = Field(default_factory=list)
+
+# --- VERIFIER ---
+class FinalAcceptanceDetails(BaseModel):
     accepted: bool
     reason: str
 
-class ArchitectureDecisionRecord(BaseModel):
-    title: str = Field(..., description="Short name of the decision")
-    status: Literal["Proposed", "Accepted", "Rejected", "Deprecated"] = Field("Proposed")
-    context: str = Field(..., description="Why are we doing this?")
-    decision: str = Field(..., description="What is the technical solution?")
-    consequences: str = Field(..., description="Trade-offs")
+class FinalAcceptance(BaseModel):
+    msg: str = Field(...)
+    content: FinalAcceptanceDetails = Field(...)
+    actions: List[AgentAction] = Field(default_factory=list)
 
-class ImplementationStep(BaseModel):
-    file_path: str = Field(..., description="Path to the file")
-    description: str = Field(..., description="Description of changes")
-    action: Literal["create", "modify", "delete"] = Field(..., description="Type of action")
-
-class ArchitectOutput(BaseModel):
+class ArchitectOutput(BaseModel): # Kept for potential backward compatibility or internal use if needed, but ArchitectDetails covers it
     context_analysis: str = Field(..., description="Analysis of affected components and constraints")
     adr: ArchitectureDecisionRecord = Field(..., description="Architecture Decision Record")
     implementation_plan: List[ImplementationStep] = Field(..., description="List of files and changes")
