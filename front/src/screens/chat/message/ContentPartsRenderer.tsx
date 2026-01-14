@@ -8,6 +8,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { createMarkdownStyles } from './dynamicStyles';
 import { createMarkdownRules } from './markdownRules';
 import { SingleToolCall, ReasoningBlock, MemberResponseBlock, CollapsibleSteps } from './ToolCalls';
+import { DocumentBlock } from './DocumentBlock';
 
 /**
  * Detects if a string is a backend JSON log message that shouldn't be displayed in chat.
@@ -32,6 +33,28 @@ function isLogMessage(text: string): boolean {
     }
 }
 
+// Helper to parse "Document" JSON from text (AnalystOutput, ArchitectPlan, etc.)
+function parseDocument(text: string): { msg: string, content: any } | null {
+    if (!text) return null;
+
+    // Look for JSON code block: ```json { ... } ```
+    const jsonBlockRegex = /```json\s*(\{[\s\S]*?\})\s*```/;
+    const match = text.match(jsonBlockRegex);
+
+    if (match && match[1]) {
+        try {
+            const obj = JSON.parse(match[1]);
+            // Check for our specific schema signatures
+            if (obj && typeof obj === 'object' && 'msg' in obj && 'content' in obj) {
+                return { msg: obj.msg, content: obj.content };
+            }
+        } catch (e) {
+            // Failed to parse, ignore
+        }
+    }
+    return null;
+}
+
 export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
     const { showToolCalls, showReasoning, showMemberResponses, chatMode } = useChat();
     const isTeamMode = chatMode === 'team';
@@ -41,7 +64,6 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
     const handleCodeCopy = (code: string) => {
         Clipboard.setString(code);
         // Optional: visible feedback
-        // Alert.alert("Copied", "Code copied to clipboard"); 
         console.log('Code copied to clipboard');
     };
 
@@ -86,7 +108,6 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
     }, [filteredParts]);
 
     // Group parts for rendering: consecutive "internal" parts (tool_call, reasoning) should be grouped
-    // Member responses are NO LONGER considered internal, they should break the group and render standalone
     const groupedParts = useMemo(() => {
         const result: { type: 'group' | 'text' | 'member', parts?: ContentPart[], part?: ContentPart }[] = [];
         let currentInternalGroup: ContentPart[] = [];
@@ -107,8 +128,6 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                 currentInternalGroup.push(part);
             } else if ((part as any).type === 'member_response') {
                 flushInternalGroup();
-                // Special case: Narrator member_response could be treated as text if desired,
-                // but treating it as a member block is consistent for "Agent Bubbles"
                 result.push({ type: 'member', part });
             } else {
                 // Text part
@@ -125,15 +144,38 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
             {groupedParts.map((group, groupIndex) => {
                 if (group.type === 'text' && group.part) {
                     const part = group.part;
-                    // Check if we should wrap this text in a "Team Lead" bubble
-                    const isTeamMode = useChat().chatMode === 'team';
+                    const textContent = part.text || '';
 
+                    // Try to parse as a structured Document first
+                    const documentData = parseDocument(textContent);
+
+                    if (documentData) {
+                        const isTeamMode = useChat().chatMode === 'team';
+                        return (
+                            <View key={`doc-${groupIndex}`}>
+                                {isTeamMode ? (
+                                    <MemberResponseBlock
+                                        agentName="Team Lead"
+                                        text={documentData.msg}
+                                    />
+                                ) : (
+                                    <Markdown style={markdownStyles as any} rules={markdownRules}>
+                                        {documentData.msg}
+                                    </Markdown>
+                                )}
+                                <DocumentBlock title="Details" content={documentData.content} />
+                            </View>
+                        );
+                    }
+
+                    // Standard text rendering
+                    const isTeamMode = useChat().chatMode === 'team';
                     if (isTeamMode) {
                         return (
                             <MemberResponseBlock
                                 key={`text-${groupIndex}`}
                                 agentName="Team Lead"
-                                text={part.text || ''}
+                                text={textContent}
                             />
                         );
                     }
@@ -141,12 +183,12 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                     return (
                         <Pressable
                             key={`text-${groupIndex}`}
-                            onLongPress={() => onLongPress(part.text || '')}
+                            onLongPress={() => onLongPress(textContent)}
                             delayLongPress={250}
                             style={({ pressed }) => [pressed && { opacity: 0.75 }]}
                         >
                             <Markdown style={markdownStyles as any} rules={markdownRules}>
-                                {part.text || ''}
+                                {textContent}
                             </Markdown>
                         </Pressable>
                     );
@@ -178,4 +220,3 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
         </>
     );
 }
-

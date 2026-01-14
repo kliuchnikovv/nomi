@@ -300,6 +300,35 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingBottom: 10,
     },
+    // Document block styles
+    documentContainer: {
+        marginVertical: 8,
+        borderRadius: 8,
+        backgroundColor: theme.surfaceHighlight, // or use palette.bg with alpha
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        overflow: 'hidden',
+    },
+    documentHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    documentTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.accent, // A distinct color, e.g. blue/cyan
+    },
+    documentChevron: {
+        fontSize: 12,
+        color: theme.textSecondary,
+    },
+    documentBody: {
+        padding: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.1)', // Slightly darker for contrast
+    },
 });
 
 // Markdown styles - separate from StyleSheet.create() due to custom properties
