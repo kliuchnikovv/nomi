@@ -10,7 +10,7 @@ from typing import Optional, List, Any, Dict
 from agno.agent import Agent
 from agno.models.message import Message
 from src.agents.factory import AgentFactory
-from src.server.models import Frame, Op
+from src.server.models import Frame, Op, Kind
 from src.server.utils import make_meta, make_error, make_done, make_data
 from src.tools.models import ToolSpec
 from src.tools.client_side import start_action_tracking
@@ -39,6 +39,7 @@ class RedisSession:
         self.redis_client = None
         self.agent: Optional[Agent] = None
         self.tools_specs: List[ToolSpec] = []
+        self.active_agents: set[str] = set()
 
         # State (similar to WS session)
         self.current_model_name: Optional[str] = None
@@ -55,6 +56,26 @@ class RedisSession:
 
         # History storage
         self.chat_history: List[Dict[str, str]] = []
+
+    async def _broadcast_system_status(self):
+        count = len(self.active_agents)
+        # Construct payload
+        payload = {
+            "type": "system_status",
+            "active_agents_count": count,
+            "active_agents_list": list(self.active_agents)
+        }
+
+        frame = Frame(
+            id=self.next_id,
+            ts=time.time(),
+            kind=Kind.SIGNAL,
+            op=Op.SIGNAL,
+            chat_id=self.chat_id,
+            payload=payload
+        )
+
+        await self._send_frame(frame)
 
     async def _send_frame(self, frame: Frame) -> int:
         """Publish frame to Redis chat:user:<user_id>."""
@@ -368,6 +389,24 @@ class RedisSession:
                         )
                         idx += 1
 
+                elif evt_type == "member_response":
+                    chunk = event.get("content", "")
+                    if chunk:
+                        # Send as a regular message part, but you might want to mark it 
+                        # so the frontend knows who sent it.
+                        payload_data = {
+                            "ix": idx,
+                            "eof": False,
+                            "message": chunk,
+                            "message_id": message_id,
+                            "agent_name": event.get("agent_name"), # Pass agent name
+                            "type": "member_response"
+                        }
+                        await self._send_frame(
+                            make_data(self.next_id, Op.MESSAGE, msg_chat_id, payload_data)
+                        )
+                        idx += 1
+
                 elif evt_type == "tool_call":
                     # (Copy logic from WS)
                     safe_tool = event.get(
@@ -648,13 +687,7 @@ Continue the conversation."""
 
                     chunk = str(val) if val is not None else ""
 
-                    if chunk:
-                        # Skip tool outputs that shouldn't be shown to users
-                        if (
-                            chunk.startswith("```tool_outputs")
-                            or chunk.startswith('{"delegate_task_to_member')
-                            or "delegate_task_to_member_response" in chunk
-                        ):
+                        if chunk.startswith("```tool_outputs") or chunk.startswith('{"delegate_task_to_member') or "delegate_task_to_member_response" in chunk:
                             continue
 
                         if chunk != captured_reasoning:
@@ -666,12 +699,23 @@ Continue the conversation."""
                                     "agent_name": agent_name,
                                 }
                             else:
-                                yield {
+                                 yield {
                                     "type": "text",
                                     "content": chunk,
                                     "agent_name": current_agent_name,
                                 }
-                                streamed_text_len += len(chunk)
+                                 streamed_text_len += len(chunk)
+                
+                # --- NEW: Track Active Agents ---
+                if "RunStarted" in event_type and agent_name:
+                    self.active_agents.add(agent_name)
+                    asyncio.create_task(self._broadcast_system_status())
+                
+                elif "RunCompleted" in event_type and agent_name:
+                    if agent_name in self.active_agents:
+                        self.active_agents.discard(agent_name)
+                        asyncio.create_task(self._broadcast_system_status())
+                # --------------------------------
 
         elif hasattr(result, "__iter__") and not isinstance(result, (str, bytes)):
             # Sync iterator fallback

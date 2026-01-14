@@ -86,6 +86,7 @@ export function ChatProvider({
     const [assistantWorking, setAssistantWorking] = useState<boolean>(false);
     const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
     const [teamCommand, setTeamCommand] = useState<any>(null);
+    const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
 
     // Model selection state
     const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash-exp');
@@ -559,6 +560,12 @@ export function ChatProvider({
         socket.setHandlers({
             onDone: () => {
                 setAssistantWorking(false);
+                setActiveAgentsCount(0);
+            },
+            onSignal: (payload: any) => {
+                if (payload.type === 'system_status' && typeof payload.active_agents_count === 'number') {
+                    setActiveAgentsCount(payload.active_agents_count);
+                }
             },
             onError: (err: any) => {
                 setAssistantWorking(false);
@@ -704,7 +711,9 @@ export function ChatProvider({
         showMemberResponses,
         setShowMemberResponses,
         detailLevel,
+        detailLevel,
         setDetailLevel,
+        activeAgentsCount,
     };
 
 

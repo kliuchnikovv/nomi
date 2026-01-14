@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { Menu, Mail, MagicWand, Code, Airplane, Cube, Plus } from 'iconoir-react-native';
+import { Menu, Mail, MagicWand, Code, Airplane, Cube, Plus, Group } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from '../styles';
 import { useTheme } from '../../../context/ThemeContext';
@@ -18,6 +18,7 @@ interface ChatHeaderProps {
     icon?: string;
     chatMode?: 'agent' | 'team' | 'plugin';
     teamId?: string | null;
+    activeAgentsCount?: number;
 }
 
 export function ChatHeader({
@@ -32,6 +33,7 @@ export function ChatHeader({
     icon,
     chatMode,
     teamId,
+    activeAgentsCount = 0,
 }: ChatHeaderProps) {
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
@@ -101,9 +103,34 @@ export function ChatHeader({
                 )}
             </View>
             <View style={[styles.headerBody, { flex: 1, minWidth: 0 }]}>
-                <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">
-                    {title}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">
+                        {title}
+                    </Text>
+
+                    {activeAgentsCount > 0 && (
+                        <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            backgroundColor: theme.success + '20',
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: 8,
+                            marginLeft: 8,
+                            marginBottom: 4, // Align better with multiline title if fits, or just aesthetics
+                        }}>
+                            <Group width={12} height={12} color={theme.success} strokeWidth={2.5} />
+                            <Text style={{
+                                fontSize: 10,
+                                fontWeight: '700',
+                                color: theme.success,
+                                marginLeft: 4
+                            }}>
+                                {activeAgentsCount}
+                            </Text>
+                        </View>
+                    )}
+                </View>
                 {subtitle ? (
                     <Text style={styles.headerSubtitle} numberOfLines={1}>
                         {subtitle}

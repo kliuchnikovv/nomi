@@ -64,6 +64,7 @@ export interface ChatContextType {
     setShowMemberResponses: (show: boolean) => void;
     detailLevel: DetailLevel;
     setDetailLevel: (level: DetailLevel) => void;
+    activeAgentsCount?: number;
 }
 
 

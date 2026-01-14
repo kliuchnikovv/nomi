@@ -60,6 +60,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         clearPluginThread,
         chatMode,
         selectedTeamId,
+        activeAgentsCount,
     } = useChat();
     const { user, token } = useAuth();
     const { theme } = useTheme();
@@ -461,6 +462,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         icon={activeChat?.icon}
                         chatMode={chatMode}
                         teamId={selectedTeamId}
+                        activeAgentsCount={activeAgentsCount}
                     />
 
 

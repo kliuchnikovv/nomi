@@ -11,6 +11,7 @@ type Handlers = {
     // Legacy handlers that might still be useful
     onMessage?: (frame: Frame) => void;
     onMeta?: (meta: Frame) => void;
+    onSignal?: (frame: Frame) => void;
 };
 
 export class ChatSocket {
@@ -149,11 +150,13 @@ export class ChatSocket {
                         const op = frame.op;
 
                         // Handle global routing
-                        if (op === 'message' || op === 'tools' || op === 'model' || op === 'done') {
+                        if (op === 'message' || op === 'tools' || op === 'model' || op === 'done' || op === 'signal') {
                             const chatId = frame.chat_id;
                             if (chatId) {
                                 // 1. Update Global Store
-                                useChatStore.getState().addMessage(chatId, frame.payload);
+                                if (op === 'message') {
+                                    useChatStore.getState().addMessage(chatId, frame.payload);
+                                }
 
                                 // 2. Notify Listeners (legacy handlers for specific effects)
                                 // Only call legacy handlers if they are still relevant.
@@ -162,6 +165,8 @@ export class ChatSocket {
                                     this.handlers.onMessage?.(frame);
                                 } else if (op === 'done') {
                                     this.handlers.onDone?.(frame);
+                                } else if (op === 'signal') {
+                                    this.handlers.onSignal?.(frame);
                                 } else {
                                     this.handlers.onMeta?.(frame);
                                 }
