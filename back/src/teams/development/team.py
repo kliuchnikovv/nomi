@@ -125,9 +125,9 @@ You must output a VALID JSON object matching the `AnalystOutput` schema, wrapped
 
 Example Output:
 ```json
-{
+{{
   "msg": "I have analyzed the requirements. We need to update the API and Frontend.",
-  "content": {
+  "content": {{
     "project_id": "...",
     "task_id": "...",
     "summary": "...",
@@ -136,16 +136,16 @@ Example Output:
     "affected_modules": [...],
     "relevant_rag_snippets": [...],
     "constraints": [...]
-  },
+  }},
   "actions": [
-    {
+    {{
       "tool": "github",
       "method": "create_issue",
-      "params": { "title": "Implement User Profile", "labels": ["feature"] },
+      "params": {{ "title": "Implement User Profile", "labels": ["feature"] }},
       "description": "Create GitHub Issue"
-    }
+    }}
   ]
-}
+}}
 ```
 """)
 
@@ -171,30 +171,30 @@ You must output a VALID JSON object matching the `ArchitectPlan` schema, wrapped
 
 Example Output:
 ```json
-{
+{{
   "msg": "I have designed the architecture. We will use...",
-  "content": {
+  "content": {{
     "project_id": "...",
     "task_id": "...",
-    "adr": { ... },
+    "adr": {{ ... }},
     "files_to_create": [...],
     "files_to_modify": [...],
     "technical_approach": "...",
     "verification_steps": [...],
-    "context": { ... },
+    "context": {{ ... }},
     "steps": [...],
     "style_guide_rules": [...],
     "reference_snippets": [...]
-  },
+  }},
   "actions": [
-    {
+    {{
       "tool": "github",
       "method": "create_pull_request",
-      "params": { "title": "Implement Feature", "base": "main", "head": "feature/branch" },
+      "params": {{ "title": "Implement Feature", "base": "main", "head": "feature/branch" }},
       "description": "Create PR"
-    }
+    }}
   ]
-}
+}}
 ```
 
 ## 1. Context & Scope
@@ -479,18 +479,18 @@ You must return a `ReviewVerdict` JSON object wrapped in a markdown code block (
 
 Example Output:
 ```json
-{
+{{
   "msg": "Code looks good!",
-  "content": { "approved": true, ... },
+  "content": {{ "approved": true, ... }},
   "actions": [
-    {
+    {{
       "tool": "github",
       "method": "merge_pull_request",
-      "params": { ... },
+      "params": {{ ... }},
       "description": "Merge PR"
-    }
+    }}
   ]
-}
+}}
 ```
 
 # Review Checklist
@@ -549,10 +549,10 @@ You must output a VALID JSON object matching the `FinalAcceptance` schema, wrapp
 
 Example Output:
 ```json
-{
+{{
   "accepted": true,
   "reason": "All tests passed and requirements met."
-}
+}}
 ```
 
 If rejected, `accepted` must be false and `reason` must explain what failed.

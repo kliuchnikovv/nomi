@@ -295,3 +295,13 @@ If CI fails:
 
 ### Required Secrets
 - `RAILWAY_TOKEN`: Railway API token for preview deployments
+
+# Agent Instructions
+
+Before marking any task as complete, you MUST execute the following verification steps in the terminal:
+
+1. **Python:** `ruff check .` AND `pytest`
+2. **Go:** `go build ./...` AND `go test ./...`
+3. **TypeScript:** `npm run type-check` (or `tsc --noEmit`)
+
+If any command fails (non-zero exit code), you must fix the code and retry. Do not ask for confirmation until tests pass.
