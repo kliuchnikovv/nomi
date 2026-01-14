@@ -47,7 +47,13 @@ class DuckDuckGoTools(Toolkit):
         if self.fixed_max_results:
             max_results = self.fixed_max_results
 
-        return str(list(self.ddgs.text(query, max_results=max_results)))
+        try:
+            results = list(self.ddgs.text(query, max_results=max_results))
+            if not results:
+                return "No results found."
+            return str(results)
+        except Exception as e:
+            return f"An error occurred: {e}"
 
     def duckduckgo_news(self, query: str, max_results: int = 5) -> str:
         """Use this function to search DuckDuckGo News for a query.
@@ -62,4 +68,10 @@ class DuckDuckGoTools(Toolkit):
         if self.fixed_max_results:
             max_results = self.fixed_max_results
 
-        return str(list(self.ddgs.news(query, max_results=max_results)))
+        try:
+            results = list(self.ddgs.news(query, max_results=max_results))
+            if not results:
+                return "No results found."
+            return str(results)
+        except Exception as e:
+            return f"An error occurred: {e}"
