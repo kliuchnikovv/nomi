@@ -1,10 +1,10 @@
 package auth
 
 import (
-    "errors"
-    "crypto/rand"
-    "encoding/base64"
-    "time"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -48,12 +48,12 @@ func (tm *TokenManager) GenerateToken(user *storage.User) (string, error) {
 
 // GenerateRefreshToken creates a secure random opaque token string
 func (tm *TokenManager) GenerateRefreshToken() (string, error) {
-    b := make([]byte, 32)
-    if _, err := rand.Read(b); err != nil {
-        return "", err
-    }
-    // URL-safe base64
-    return base64.RawURLEncoding.EncodeToString(b), nil
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	// URL-safe base64
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // ValidateToken проверяет JWT токен и возвращает claims

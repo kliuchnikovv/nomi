@@ -52,7 +52,7 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	chat.Icon = getIconForTeam(chat.TeamID)
 
 	c.JSON(http.StatusOK, chat)
@@ -78,7 +78,7 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
 		return
 	}
-	
+
 	chat.Icon = getIconForTeam(chat.TeamID)
 
 	c.JSON(http.StatusOK, chat)
@@ -156,7 +156,7 @@ func (h *ChatHandler) UpdateChat(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	chat.Icon = getIconForTeam(chat.TeamID)
 
 	c.JSON(http.StatusOK, chat)

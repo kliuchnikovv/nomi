@@ -349,39 +349,23 @@ Only use emojis if explicitly requested.
 7. Reference specific issues using `file_path:line_number` format.
 8. Provide constructive feedback or approval.
 
-# Output Format
-You must return a `ReviewVerdict` JSON object wrapped in a markdown code block (```json ... ```):
-- `msg`: A concise summary for the user (e.g. "Code reviewed, changes required").
-- `content`: The detailed review verdict:
-    - `approved`: true or false.
-    - `summary`: A concise explanation of your decision (mandatory).
-    - `comments`: A list of `ReviewComment` objects with `file_path`, `line_number`, `body`, and `severity`.
-    - `required_changes`: A list of high-level changes required if not approved.
-- `actions`: List of clickable actions for the user (optional).
+# Output Format (Markdown)
+Please structure your response as follows:
 
-Example Output:
-```json
-{{
-  "msg": "Code looks good!",
-  "content": {{ "approved": true, ... }},
-  "actions": [
-    {{
-      "tool": "github",
-      "method": "merge_pull_request",
-      "params": {{ ... }},
-      "description": "Merge PR"
-    }}
-  ]
-}}
-```
+## 🏁 Review Verdict
+- **Status**: [Approved / Changes Required]
+- **Summary**: [Concise explanation]
 
-# Review Checklist
-- [ ] Code follows existing patterns in the directory
-- [ ] No new dependencies without checking package files
-- [ ] Error handling is proper and consistent
-- [ ] No secrets or sensitive data exposed
-- [ ] Tests are comprehensive and pass
-- [ ] Linters pass without errors
+## 📝 Findings
+- **File**: `path/to/file`
+- **Issue**: [Description]
+- **Severity**: [High/Medium/Low]
+
+## 🔧 Required Changes
+1. [Change 1]
+2. [Change 2]
+
+IMPORTANT: Do NOT output JSON. Use standard Markdown formatting.
 """)
 
 worker_instructions = dedent("""
@@ -426,22 +410,18 @@ You check if the changes satisfy the user's original requirements as defined by 
 # Goal
 Verify that the implemented solution works and meets the acceptance criteria.
 
-# Output Format
-You must output a VALID JSON object matching the `FinalAcceptance` schema, wrapped in a markdown code block.
+# Output Format (Markdown)
+Please structure your response as follows:
 
-Example Output:
-```json
-{{
-  "msg": "Verification successful. All tests passed.",
-  "content": {{
-    "accepted": true,
-    "reason": "All tests passed and requirements met."
-  }},
-  "actions": []
-}}
-```
+## ✅ Verification Result
+- **Status**: [Accepted / Rejected]
+- **Reason**: [Explanation]
 
-If rejected, `accepted` must be false and `reason` must explain what failed.
+## 🧪 Test Results
+- [ ] [Test case 1]: [Pass/Fail]
+- [ ] [Test case 2]: [Pass/Fail]
+
+IMPORTANT: Do NOT output JSON. Use standard Markdown formatting.
 """)
 
 
@@ -759,8 +739,8 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         # Expose members attribute for Agno framework compatibility
         self.members = self.members
 
-    def _parse_agent_output(self, output: Any, schema_class: Type[BaseModel]) -> BaseModel:
-        """Parses the agent output (string or dict) into the expected Pydantic model."""
+    def _parse_agent_output(self, output: Any, schema_class: Type[BaseModel]) -> Any:
+        """Parses the agent output (string or dict). Returns Pydantic model if possible, else dict or str."""
         if isinstance(output, schema_class):
             return output
         
@@ -782,17 +762,24 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                         data = json.loads(json_str)
                     else:
                         # 3. Last attempt: assume it's pure JSON
-                        data = json.loads(output)
+                        # Check if it looks like JSON before loading to avoid exceptions on normal text
+                        if output.strip().startswith("{"):
+                             data = json.loads(output)
+                        else:
+                             # It's just text (Markdown), return as is
+                             return output
             except Exception as e:
-                print(f"[Team] Failed to parse output as JSON: {e}")
-                # Log the raw output for debugging
-                # print(f"Raw output: {output}")
-                raise ValueError(f"Failed to parse JSON for {schema_class.__name__}")
+                print(f"[Team] Output is likely Markdown, failed json parse: {e}")
+                return output
 
         if isinstance(data, dict):
-            return schema_class(**data)
+            try:
+                return schema_class(**data)
+            except Exception:
+                # Fallback to dict if schema doesn't match
+                return data
         
-        raise ValueError(f"Unexpected output format for {schema_class.__name__}: {type(data)}")
+        return data
 
     def transition_to_next_step(
         self, task_id: str, current_role: str, output: any, session_id: str
@@ -805,30 +792,31 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             return
 
         # 0. Parse Output Output manually since we removed output_schema
-        parsed_output = output
-        try:
-             if current_role == "Analyst":
-                 parsed_output = self._parse_agent_output(output, AnalystOutput)
-             elif current_role == "Architect":
-                 parsed_output = self._parse_agent_output(output, ArchitectPlan)
-             elif current_role == "Reviewer":
-                 parsed_output = self._parse_agent_output(output, ReviewVerdict)
-             elif current_role == "Verifier":
-                 parsed_output = self._parse_agent_output(output, FinalAcceptance)
-        except Exception as e:
-            print(f"[Team] Validation failed for {current_role}: {e}")
-            # If parsing fails, we probably shouldn't proceed cleanly.
-            # But let's save what we have as "RawOutput" or similar?
-            # For now, let's just log and maybe fallback to treating it as dict if possible
-            # OR just return to avoid saving garbage
-            # self.workflow_storage.save_artifact(session_id, task_id, current_role, "ErrorOutput", {"error": str(e), "raw": str(output)})
-            return
+        # 0. Parse Output
+        parsed_output = self._parse_agent_output(output, BaseModel) # Schema doesn't matter much if we handle dict/str
 
         # 1. Save Artifact
-        artifact_type = (
-            type(parsed_output).__name__ if not isinstance(parsed_output, dict) else "Dict"
-        )
-        content = parsed_output.model_dump() if hasattr(parsed_output, "model_dump") else parsed_output
+        artifact_type = "Markdown"
+        content = parsed_output
+        
+        if hasattr(parsed_output, "model_dump"):
+            artifact_type = type(parsed_output).__name__
+            content = parsed_output.model_dump()
+        elif isinstance(parsed_output, dict):
+            artifact_type = "Dict"
+            content = parsed_output
+        elif isinstance(parsed_output, str):
+             # For Analysis, map string to "AnalystOutput" type so logic downstream works?
+             if current_role == "Analyst":
+                 artifact_type = "AnalystOutput"
+             elif current_role == "Architect":
+                 artifact_type = "ArchitectPlan"
+             elif current_role == "Reviewer":
+                 artifact_type = "ReviewVerdict"
+             elif current_role == "Verifier":
+                 artifact_type = "FinalAcceptance"
+             content = {"markdown": parsed_output}
+
         self.workflow_storage.save_artifact(
             session_id, task_id, current_role, artifact_type, content
         )
@@ -844,9 +832,17 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             next_status = "CODING"
             next_role = "Developer"
         elif current_role == "Reviewer":
-            # UPDATED: Check approved inside content
-            # We assume parsed_output is ReviewVerdict(wrapper)
-            if hasattr(parsed_output, "content") and hasattr(parsed_output.content, "approved") and parsed_output.content.approved:
+            # Check for "Approved" string in markdown if it's string, or property if dict
+            is_approved = False
+            if isinstance(parsed_output, str):
+                if "**Status**: Approved" in parsed_output or "Status: Approved" in parsed_output:
+                     is_approved = True
+            elif isinstance(parsed_output, dict) and parsed_output.get("content", {}).get("approved"):
+                 is_approved = True
+            elif hasattr(parsed_output, "content") and parsed_output.content.approved:
+                 is_approved = True
+            
+            if is_approved:
                 next_status = "VERIFY"
                 next_role = "Verifier"
             else:

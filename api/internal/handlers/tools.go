@@ -110,10 +110,10 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 			// Try to unmarshal params if it's a JSON string
 			_ = json.Unmarshal([]byte(integration.Params), &params)
 		}
-		
+
 		// Use integration.Provider as the tool name (e.g., 'gmail', 'github')
 		// This must match the keys expected by Python's ToolConfig
-		toolName := integration.Provider 
+		toolName := integration.Provider
 		if toolName == "" {
 			toolName = integration.Name
 		}

@@ -69,7 +69,7 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	if len(toolsPreview) > 200 {
 		toolsPreview = toolsPreview[:200] + "..."
 	}
-	
+
 	h.Logger.Info("creating task",
 		zap.String("user_id", req.UserID.String()),
 		zap.String("chat_id", req.ChatID.String()),

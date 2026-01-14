@@ -252,7 +252,6 @@ func New(
 		}
 		c.Status(resp.StatusCode)
 
-
 		// Stream response body
 		_, _ = io.Copy(c.Writer, resp.Body)
 	})

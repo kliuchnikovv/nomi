@@ -251,7 +251,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	}
 
 	var accountEmail string
-	
+
 	if providerName == ProviderGitHub {
 		// GitHub does not return ID Token. Fetch user email manually.
 		client := oauthConfig.Client(ctx, token)
@@ -355,7 +355,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 			"client_secret": oauthConfig.ClientSecret,
 			"token_type":    token.TokenType,
 		}
-		
+
 		// For Google, token_uri is standard. For GitHub, it's distinct.
 		if providerName == ProviderGitHub {
 			params["token_uri"] = "https://github.com/login/oauth/access_token"
@@ -367,7 +367,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 
 		var integration storage.Integration
 		err := h.storage.DB.Where("user_id = ? AND provider = ?", user.ID, providerName).First(&integration).Error
-		
+
 		if err == nil {
 			// Update existing
 			integration.Params = string(paramsJSON)

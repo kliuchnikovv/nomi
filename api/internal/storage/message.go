@@ -465,11 +465,11 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 			updates["content_parts"] = contentPartsJSON
 		}
 	}
-    
-    // Update reasoning if provided
-    if m.Reasoning != "" {
-        updates["reasoning"] = m.Reasoning
-    }
+
+	// Update reasoning if provided
+	if m.Reasoning != "" {
+		updates["reasoning"] = m.Reasoning
+	}
 
 	// Update actions if provided
 	if m.Actions != nil {

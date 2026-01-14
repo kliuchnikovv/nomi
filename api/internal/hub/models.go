@@ -9,9 +9,9 @@ import (
 type Kind string
 
 const (
-	TokenKind Kind = "data"
-	MetaKind  Kind = "meta"
-	ErrorKind Kind = "error"
+	TokenKind  Kind = "data"
+	MetaKind   Kind = "meta"
+	ErrorKind  Kind = "error"
 	SignalKind Kind = "signal"
 )
 
@@ -27,11 +27,11 @@ const (
 	SelectModelOperation Operation = "select_model"
 	ChangeModelOperation Operation = "change_model"
 
-	AckOperation   Operation = "ack"
-	NackOperation  Operation = "nack"
-	JoinOperation  Operation = "join"
-	LeaveOperation Operation = "leave"
-	PongOperation  Operation = "pong"
+	AckOperation    Operation = "ack"
+	NackOperation   Operation = "nack"
+	JoinOperation   Operation = "join"
+	LeaveOperation  Operation = "leave"
+	PongOperation   Operation = "pong"
 	SignalOperation Operation = "signal"
 )
 
@@ -47,15 +47,15 @@ type Frame struct {
 }
 
 type Payload struct {
-	MessageID   uuid.UUID   `json:"message_id,omitempty"`
-	Message     string      `json:"message,omitempty"`
-	Model       string      `json:"model,omitempty"`
-	ToolCalls   interface{} `json:"tool_calls,omitempty"`
-	Reason      string      `json:"reason,omitempty"`
+	MessageID uuid.UUID   `json:"message_id,omitempty"`
+	Message   string      `json:"message,omitempty"`
+	Model     string      `json:"model,omitempty"`
+	ToolCalls interface{} `json:"tool_calls,omitempty"`
+	Reason    string      `json:"reason,omitempty"`
 	// ReasoningSteps contains "thinking" content from models that support it
 	ReasoningSteps []string `json:"reasoning_steps,omitempty"`
 	Index          uint     `json:"ix,omitempty"`
-	EndOfBuffer bool        `json:"eof,omitempty"`
+	EndOfBuffer    bool     `json:"eof,omitempty"`
 
 	// Role and Sender for multi-device sync (to distinguish user/assistant messages)
 	Role   string    `json:"role,omitempty"`   // "user" or "assistant"
@@ -64,7 +64,7 @@ type Payload struct {
 	AgentType string `json:"agent_type,omitempty"` // "agent", "team", etc.
 
 	Type             string      `json:"type,omitempty"`
-	Content          string      `json:"content,omitempty"` // Generic content field (e.g., reasoning text)
+	Content          string      `json:"content,omitempty"`    // Generic content field (e.g., reasoning text)
 	AgentName        string      `json:"agent_name,omitempty"` // For team member responses
 	CompletionTokens uint        `json:"completion_tokens,omitempty"`
 	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
@@ -78,7 +78,7 @@ type Payload struct {
 	// Command/Team specific
 	Command interface{} `json:"command,omitempty"`
 	Team    interface{} `json:"team,omitempty"`
-	
+
 	// Client Action fields
 	Method      string                 `json:"method,omitempty"`
 	Params      map[string]interface{} `json:"params,omitempty"`

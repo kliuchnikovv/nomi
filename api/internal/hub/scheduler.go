@@ -135,7 +135,7 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 
 	// For now, let's construct a minimal valid frame and inject.
 	msgID := uuid.New()
-	
+
 	// Unmarshal tools from task if they exist
 	var tools interface{}
 	if len(task.Tools) > 0 {
@@ -143,7 +143,7 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 			s.logger.Warn("failed to unmarshal task tools", zap.Error(err))
 		}
 	}
-	
+
 	frame := Frame{
 		ChatID:    task.ChatID,
 		Operation: MessageOperation,

@@ -41,18 +41,18 @@ func NewWebhooksHandler(store *storage.Storage, logger *zap.Logger, cfg *config.
 
 // GitHub payload structures (minimal)
 type GitHubPullRequestEvent struct {
-	Action      string             `json:"action"`
-	PullRequest GitHubPullRequest  `json:"pull_request"`
-	Repository  GitHubRepository   `json:"repository"`
+	Action       string             `json:"action"`
+	PullRequest  GitHubPullRequest  `json:"pull_request"`
+	Repository   GitHubRepository   `json:"repository"`
 	Installation GitHubInstallation `json:"installation"`
 }
 
 type GitHubPullRequest struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	State  string `json:"state"`
-	Head   GitHubRef `json:"head"`
-	HTMLURL string `json:"html_url"`
+	Number  int       `json:"number"`
+	Title   string    `json:"title"`
+	State   string    `json:"state"`
+	Head    GitHubRef `json:"head"`
+	HTMLURL string    `json:"html_url"`
 }
 
 type GitHubRef struct {
@@ -207,7 +207,7 @@ func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, ol
 		"task_id":    taskID,
 		"old_status": oldStatus,
 		"new_status": newStatus,
-		"timestamp":  "now", // simplified
+		"timestamp":  "now",       // simplified
 		"event":      "pr_opened", // Extra context
 	}
 

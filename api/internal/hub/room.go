@@ -547,7 +547,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// 5.1 Fetch and Bundle Tools
 		// This ensures Python backend receives tools directly in the message
 		// avoiding an extra HTTP round-trip and race conditions
-		
+
 		// Start with default tools that are always available
 		var tools []interface{}
 		tools = append(tools, map[string]interface{}{"name": "web_search", "enabled": true})
@@ -585,19 +585,19 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 						// Fallback if empty or invalid
 						paramsMap = make(map[string]interface{})
 					}
-					
+
 					// Ensure 'name' and 'enabled' are set
 					paramsMap["name"] = integ.Provider
 					paramsMap["enabled"] = true
-					
+
 					// Add to tool list
 					tools = append(tools, paramsMap)
 				}
 			}
 		}
-		
+
 		frame.Payload.Tools = tools
-		
+
 		// Log bundled tools
 		var toolNames []string
 		for _, t := range tools {
@@ -623,7 +623,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				})
 			}
 			frame.Payload.History = historyData
-			r.logger.Info("bundled chat history", 
+			r.logger.Info("bundled chat history",
 				zap.Int("count", len(historyData)),
 				zap.String("first_role", historyData[0]["role"].(string)),
 				zap.String("last_role", historyData[len(historyData)-1]["role"].(string)),
@@ -665,12 +665,12 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				zap.String("chat_id", originalChatID.String()),
 				zap.String("user_id", r.initiatorID.String()),
 			)
-			
+
 			// Get the chat from DB to get its actual mode and team_id
 			// This is crucial for team chats (development_team, dnd_team, etc.)
 			chatMode := r.mode
 			chatCommand := r.command
-			
+
 			chatRecord, err := r.store.GetChat(context.Background(), r.initiatorID, originalChatID)
 			if err == nil && chatRecord != nil {
 				// Use the chat's actual mode and team configuration
@@ -688,7 +688,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			} else if err != nil {
 				r.logger.Warn("failed to get chat record for mode detection, using defaults", zap.Error(err))
 			}
-			
+
 			// Get or create the chat room and forward the message
 			chatRoom, err := r.hub.GetOrCreateRoom(originalChatID, RoomTypeChat, r.initiatorID, chatMode, chatCommand)
 			if err != nil {

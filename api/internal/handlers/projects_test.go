@@ -51,7 +51,7 @@ func TestListProjects(t *testing.T) {
 	// Create key projects
 	p1ID := uuid.New()
 	p2ID := uuid.New()
-	
+
 	p1 := &storage.Project{
 		ID:          p1ID,
 		UserID:      userID,
@@ -64,12 +64,12 @@ func TestListProjects(t *testing.T) {
 	store.DB.Create(p1)
 
 	p2 := &storage.Project{
-		ID:          p2ID,
-		UserID:      userID,
-		Name:        "Project Beta",
-		Status:      storage.ProjectStatusAnalyzing,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:        p2ID,
+		UserID:    userID,
+		Name:      "Project Beta",
+		Status:    storage.ProjectStatusAnalyzing,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	store.DB.Create(p2)
 
@@ -97,7 +97,7 @@ func TestListProjects(t *testing.T) {
 	// GORM might return in any order depending on specific SQL/Driver implementation
 	// But usually insertion order for sqlite.
 	assert.Len(t, projects, 2)
-	
+
 	// Helper to find project by name
 	findProj := func(name string) *storage.Project {
 		for _, p := range projects {
@@ -111,7 +111,7 @@ func TestListProjects(t *testing.T) {
 	projAlpha := findProj("Project Alpha")
 	assert.NotNil(t, projAlpha)
 	assert.Equal(t, "Values test", projAlpha.Description)
-	
+
 	projBeta := findProj("Project Beta")
 	assert.NotNil(t, projBeta)
 	assert.Equal(t, storage.ProjectStatusAnalyzing, projBeta.Status)

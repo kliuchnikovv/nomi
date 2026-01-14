@@ -100,10 +100,10 @@ func (h *SidebarHandler) ListChats(c *gin.Context) {
 	}
 
 	// DEBUG: Log what we got from storage
-	fmt.Printf("[DEBUG ListChats] provider=%s, integration_id=%v, user_id=%s, chats_count=%d\n", 
+	fmt.Printf("[DEBUG ListChats] provider=%s, integration_id=%v, user_id=%s, chats_count=%d\n",
 		provider, integrationFilter, user.ID.String(), len(chats))
 	for i, chat := range chats {
-		fmt.Printf("[DEBUG ListChats] chat[%d]: id=%s, title=%s, count=%d\n", 
+		fmt.Printf("[DEBUG ListChats] chat[%d]: id=%s, title=%s, count=%d\n",
 			i, chat.ID.String(), chat.Title, chat.Count)
 	}
 
@@ -113,10 +113,10 @@ func (h *SidebarHandler) ListChats(c *gin.Context) {
 		if chat.LastReceived != nil {
 			last = *chat.LastReceived
 		}
-		
+
 		// Map team ID to icon (using same logic as chat handler, but specialized for plugin chats if needed)
-		// Usually plugin chats might not have 'TeamID' directly exposed in 'ListPluginChatsWithStats' result 
-		// if they are generic plugin chats. But if they align with teams (e.g. Genie), we might deduce it 
+		// Usually plugin chats might not have 'TeamID' directly exposed in 'ListPluginChatsWithStats' result
+		// if they are generic plugin chats. But if they align with teams (e.g. Genie), we might deduce it
 		// or if 'Provider' maps to team.
 		// For now, let's map 'Provider' to icon as a fallback or primary method for sidebar.
 		icon := ""
