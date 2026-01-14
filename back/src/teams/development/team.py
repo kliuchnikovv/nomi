@@ -587,7 +587,7 @@ class DevelopmentTeam(Team):
         github_tool = GithubTools(access_token=github_token) if github_token else None
 
         # Initialize Task Tool (needed for listing projects)
-        task_tool = TaskManagementTool(user_id=user_id)
+        task_tool = TaskManagementTool(user_id=user_id, auth_token=auth_token)
 
         architect_tools = []
         if github_tool:

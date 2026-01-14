@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import Markdown from 'react-native-markdown-display';
-import { styles, markdownStyles } from './styles';
+import { useTheme } from '../../../context/ThemeContext';
+import { createStyles, createMarkdownStyles } from './dynamicStyles';
 
 interface DocumentBlockProps {
     title: string;
@@ -10,6 +11,9 @@ interface DocumentBlockProps {
 
 export const DocumentBlock: React.FC<DocumentBlockProps> = ({ title, content }) => {
     const [expanded, setExpanded] = useState(false);
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
     // Helper to render content based on type
     const renderContent = (data: any) => {

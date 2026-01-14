@@ -8,7 +8,7 @@ from agno.tools import Toolkit
 from agno.utils.log import logger
 
 class TaskManagementTool(Toolkit):
-    def __init__(self, api_url: Optional[str] = None, user_id: Optional[str] = None):
+    def __init__(self, api_url: Optional[str] = None, user_id: Optional[str] = None, auth_token: Optional[str] = None):
         super().__init__(name="task_management_tool")
         # Default to localhost if not specified, but should use internal docker networking in prod
         base_url = api_url or os.getenv("GO_API_URL", "http://localhost:8080/api")
@@ -16,7 +16,9 @@ class TaskManagementTool(Toolkit):
         if not base_url.endswith("/api"):
             base_url = f"{base_url.rstrip('/')}/api"
         self.api_url = base_url
+        self.api_url = base_url
         self.user_id = user_id
+        self.auth_token = auth_token
         self.register(self.update_task_status)
         self.register(self.list_projects)
 
@@ -61,6 +63,8 @@ class TaskManagementTool(Toolkit):
             internal_key = os.getenv("INTERNAL_API_KEY")
             if internal_key:
                  headers["X-Internal-Secret"] = internal_key
+            elif self.auth_token:
+                 headers["Authorization"] = f"Bearer {self.auth_token}"
 
             response = requests.patch(url, json=payload, headers=headers)
             response.raise_for_status()
@@ -126,6 +130,8 @@ class TaskManagementTool(Toolkit):
             internal_key = os.getenv("INTERNAL_API_KEY")
             if internal_key:
                  headers["X-Internal-Secret"] = internal_key
+            elif self.auth_token:
+                 headers["Authorization"] = f"Bearer {self.auth_token}"
 
             response = requests.get(url, headers=headers)
             response.raise_for_status()

@@ -287,6 +287,37 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             paddingHorizontal: 10,
             paddingBottom: 10,
         },
+        // Document block styles
+        documentContainer: {
+            marginVertical: 8,
+            borderRadius: 8,
+            backgroundColor: theme.surfaceHighlight,
+            borderWidth: 1,
+            borderColor: withAlpha(theme.textSecondary, 0.1),
+            overflow: 'hidden',
+        },
+        documentHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 12,
+            backgroundColor: withAlpha(theme.accent, 0.15), // Highlighted header
+            borderBottomWidth: 1,
+            borderBottomColor: withAlpha(theme.accent, 0.1),
+        },
+        documentTitle: {
+            fontSize: 14,
+            fontWeight: 'bold',
+            color: theme.accent, // Highlighted text
+        },
+        documentChevron: {
+            fontSize: 12,
+            color: theme.textSecondary,
+        },
+        documentBody: {
+            padding: 12,
+            backgroundColor: theme.codeBg || '#1a1b26',
+        },
     });
 };
 
