@@ -11,7 +11,7 @@ import (
 
 // User представляет информацию о пользователе
 type User struct {
-	ID               uuid.UUID      `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ID               uuid.UUID      `json:"id" gorm:"type:uuid;primary_key"`
 	Email            string         `json:"email" gorm:"uniqueIndex;not null"`
 	PasswordHash     string         `json:"-" gorm:"not null"`
 	Name             string         `json:"name"`
@@ -19,6 +19,13 @@ type User struct {
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+func (base *User) BeforeCreate(tx *gorm.DB) (err error) {
+	if base.ID == uuid.Nil {
+		base.ID = uuid.New()
+	}
+	return
 }
 
 // CreateUser создает нового пользователя

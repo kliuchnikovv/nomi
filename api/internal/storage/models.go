@@ -140,7 +140,7 @@ const (
 
 // Project represents a project context
 type Project struct {
-	ID            uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	ID            uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
 	UserID        uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
 	Name          string         `gorm:"type:text;not null" json:"name"`
 	Description   string         `gorm:"type:text" json:"description"`
@@ -150,6 +150,13 @@ type Project struct {
 	CreatedAt     time.Time      `gorm:"not null" json:"created_at"`
 	UpdatedAt     time.Time      `gorm:"not null" json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+func (base *Project) BeforeCreate(tx *gorm.DB) (err error) {
+	if base.ID == uuid.Nil {
+		base.ID = uuid.New()
+	}
+	return
 }
 
 // ProjectTask represents a task within a project

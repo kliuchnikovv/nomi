@@ -10,7 +10,11 @@ class TaskManagementTool(Toolkit):
     def __init__(self, api_url: Optional[str] = None):
         super().__init__(name="task_management_tool")
         # Default to localhost if not specified, but should use internal docker networking in prod
-        self.api_url = api_url or os.getenv("GO_API_URL", "http://localhost:8080/api")
+        base_url = api_url or os.getenv("GO_API_URL", "http://localhost:8080/api")
+        # Ensure base_url ends with /api
+        if not base_url.endswith("/api"):
+            base_url = f"{base_url.rstrip('/')}/api"
+        self.api_url = base_url
         self.register(self.update_task_status)
         self.register(self.list_projects)
 
