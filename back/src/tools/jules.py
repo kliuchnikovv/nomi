@@ -86,8 +86,7 @@ class JulesTools(Toolkit):
         task_id: Optional[str] = None,
         starting_branch: str = "main",
         automation_mode: Optional[str] = None,
-        title: Optional[str] = None,
-        webhook_url: Optional[str] = None
+        title: Optional[str] = None
     ) -> str:
         """Creates a new session with Jules.
 
