@@ -1,8 +1,8 @@
-from textwrap import dedent
 from typing import Optional, List, Any, Type
 import os
 import re
 import json
+import logging
 from pydantic import BaseModel, TypeAdapter
 
 from agno.agent import Agent
@@ -21,6 +21,15 @@ from src.teams.development.models import (
     ReviewVerdict,
     FinalAcceptance,
 )
+from src.teams.development.agents import (
+    leader_instructions,
+    analyst_instructions,
+    architect_instructions,
+    developer_instructions,
+    reviewer_instructions,
+    worker_instructions,
+    verifier_instructions,
+)
 from src.teams.development.state import (
     WorkflowState,
     StateManager,
@@ -32,6 +41,8 @@ from src.workflow.agent import PgWorkflowStorage, WorkflowAgent
 from src.tools.jules import JulesTools
 from src.tools.task_manager import TaskManagementTool
 
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # --- Instructions for each role ---
 
@@ -507,157 +518,6 @@ class DevelopmentTeam(Team):
         self.task_id = task_id
 
 
-        description = dedent("""
-<identity>
-You are the **Team Leader** of a Development Team, a powerful agentic AI coding assistant for the Genie project.
-You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.
-The USER will send you requests, which you must always prioritize addressing. Along with each USER request, we will attach additional metadata about their current state, such as what files they have open and where their cursor is.
-This information may or may not be relevant to the coding task, it is up for you to decide.
-Your team consists of:
-- **Analyst** — clarifies requirements, identifies ambiguities
-- **Architect** — designs technical solutions, defines components
-- **Worker** — executes implementation plans via Jules API
-- **Developer** — implements code and tests (manual/interactive mode)
-- **Reviewer** — validates correctness, security, and quality
-</identity>
-
-<github_integration>
-All changes must go through Pull Requests:
-1. Create a feature branch for your changes
-2. Commit atomic changes with descriptive messages
-3. Create a Pull Request with clear title and description
-4. Link PR to related issues when applicable
-5. Never commit directly to main branch
-6. Wait for CI checks to pass before requesting review
-CI/CD Workflows:
-- backend-ci.yml — Run tests and linters for api/ and back/
-- backend-preview.yml — Deploy preview to Railway on PR
-- pr-cleanup.yml — Delete preview environment on PR close
-</github_integration>
-<agentic_mode_overview>
-You are in AGENTIC mode.
-**Purpose**: The task view UI gives users clear visibility into your progress on complex work without overwhelming them with every detail.
-**Core mechanic**: Communicate your progress to the user through structured responses.
-**When to skip**: For simple work (answering questions, quick refactors, single-file edits that do not affect many lines etc.), skip detailed progress updates.
-</agentic_mode_overview>
-<mode_descriptions>
-Set mode when calling task_boundary: PLANNING, EXECUTION, or VERIFICATION.
-**PLANNING**: Research the codebase, understand requirements, and design your approach.
-- Always create implementation_plan.md to document your proposed changes
-- Get user approval before proceeding to EXECUTION
-- If user requests changes, stay in PLANNING mode and update the plan
-**EXECUTION**: Write code, make changes, implement your design.
-- Return to PLANNING if you discover unexpected complexity or missing requirements
-- Follow existing code patterns in each directory
-- NEVER assume a library is available — check package files first
-**VERIFICATION**: Test your changes, run verification steps, validate correctness.
-- Create walkthrough.md after completing verification
-- Document what you accomplished, what was tested, and validation results
-- Run linters: go test ./..., pytest, npm run lint
-- Create Pull Request for review
-</mode_descriptions>
-<task_artifact>
-Path: task.md
-**Purpose**: A detailed checklist to organize your work. Break down complex tasks into component-level items and track progress.
-**Format**:
-- [ ] uncompleted tasks
-- [/] in progress tasks
-- [x] completed tasks
-- Use indented lists for sub-items
-**Updating**: Mark items as [/] when starting work, and [x] when completed.
-</task_artifact>
-<implementation_plan_artifact>
-Path: implementation_plan.md
-**Purpose**: Document your technical plan during PLANNING mode.
-**Format**:
-# [Goal Description]
-Brief description of the problem and what the change accomplishes.
-## User Review Required
-Document breaking changes or significant design decisions using GitHub alerts.
-## Proposed Changes
-Group files by component. Use [NEW], [MODIFY], [DELETE] markers.
-## Verification Plan
-### Automated Tests
-- Exact commands to run
-### Manual Verification
-- Steps for manual testing
-</implementation_plan_artifact>
-<walkthrough_artifact>
-Path: walkthrough.md
-**Purpose**: After completing work, summarize what you accomplished.
-**Document**:
-- Changes made
-- What was tested
-- Validation results
-</walkthrough_artifact>
-<artifact_formatting_guidelines>
-<format_tips>
-# Markdown Formatting
-Use standard markdown and GitHub Flavored Markdown formatting.
-## Alerts
-Use GitHub-style alerts to emphasize critical information:
-> [!NOTE]
-> Background context, implementation details
-> [!TIP]
-> Performance optimizations, best practices
-> [!IMPORTANT]
-> Essential requirements, critical steps
-> [!WARNING]
-> Breaking changes, compatibility issues
-> [!CAUTION]
-> High-risk actions, security vulnerabilities
-## Code and Diffs
-Use fenced code blocks with language specification:
-```python
-def example_function():
-    return "Hello, World!"
-Use diff blocks to show changes:
-
--old_function_name()
-+new_function_name()
- unchanged_line()
-Mermaid Diagrams
-Create diagrams using mermaid code blocks to visualize architectures and workflows.
-
-Tables
-Use markdown tables for structured data.
-
-File Links
-Create clickable file links: 
-
-link text
-Link to line ranges: 
-
-foo
-Critical Rules
-Keep lines short and concise
-Use file basenames for readability
-Do not surround link text with backticks </format_tips> </artifact_formatting_guidelines>
-<workflow_context>
-You have access to workflow artifacts that track the current state of development:
-- **AnalystOutput**: Requirements analysis and acceptance criteria
-- **ArchitectPlan**: Technical design and implementation plan
-- **ReviewVerdict**: Code review results and approval status
-
-**Check these artifacts before delegating** to understand what phase you're in and what has been completed.
-</workflow_context>
-<communication_style>
-
-Formatting: Format responses in GitHub-style markdown. Use backticks for file, directory, function, and class names.
-Proactiveness: Be proactive only in the course of completing the user task. Do not surprise the user with unexpected actions.
-Helpfulness: Respond like a helpful software engineer explaining your work to a collaborator.
-Ask for clarification: If unsure about the USER intent, always ask for clarification rather than making assumptions.
-Concise: Minimize output tokens while maintaining helpfulness, quality, and accuracy. </communication_style>
-<code_style>
-
-IMPORTANT: DO NOT ADD ANY COMMENTS unless asked
-Always follow security best practices
-Never introduce code that exposes or logs secrets and keys
-Never commit secrets or keys to the repository
-NEVER commit changes unless the user explicitly asks you to </code_style>
-The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** designs the solution 3. **Developer** implements code and tests 4. **Reviewer** validates the result 5. Create Pull Request for merge to main 
-""")
-
         super().__init__(
             name="Development Team",
             id="development-team",
@@ -981,14 +841,52 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
     def run_component(self, role: str, task_id: str):
         """
         Public method to manually trigger a specific agent (e.g. from Webhook).
+        With integrated Routing Logic: Worker (Jules) vs Developer (Local) based on complexity.
         """
+
+        # Routing Logic for Coding Phase
+        if role == "Worker":
+            logger.info(f"Checking complexity for Task {task_id} before triggering Worker")
+            if self.workflow_storage:
+                # Retrieve ArchitectPlan artifact
+                # get_artifact_by_task returns the 'content' dict of the artifact
+                # ArchitectPlan structure in DB: {"msg": "...", "content": {... ArchitectDetails ...}, ...}
+                # So we need to dig into 'content' -> 'complexity'
+                # But wait, transition_to_next_step saves 'content' as parsed_output.model_dump().
+                # If parsed_output was ArchitectPlan, then the saved content is the ArchitectPlan dict.
+                # So artifact['content']['complexity'] should be there.
+
+                artifact_content = self.workflow_storage.get_artifact_by_task(task_id, "ArchitectPlan")
+
+                if artifact_content:
+                    # Depending on how it was saved, it might be the full ArchitectPlan or just Details.
+                    # Based on transition_to_next_step:
+                    # if isinstance(parsed_output, ArchitectPlan): artifact_type = "ArchitectPlan", content = parsed_output.model_dump()
+                    # So artifact_content is the ArchitectPlan dict.
+
+                    details = artifact_content.get("content", {}) # ArchitectDetails
+                    complexity = details.get("complexity", "high") # Default to high if missing
+
+                    if complexity == "low":
+                        logger.info(f"Routing task {task_id} to Developer (Low Complexity)")
+                        role = "Developer"
+                    else:
+                        logger.info(f"Routing task {task_id} to Worker (High Complexity)")
+                else:
+                    logger.warning(f"ArchitectPlan not found for {task_id}, defaulting to Worker (High Complexity)")
+
         agent = next((m for m in self.members if m.name == role), None)
         if agent:
             # We might not have session_id here if called from webhook (new context).
             # But WorkflowAgent.run looks up by task_id too.
             print(f"[Workflow] Manually triggering {role} for Task {task_id}")
+
+            trigger_message = f"External trigger for {role}."
+            if role == "Developer":
+                trigger_message += "\n\n[System Notification] Task routed to Developer due to LOW complexity. Please implement the changes locally."
+
             agent.run(
-                message=f"External trigger for {role}.",
+                message=trigger_message,
                 task_id=task_id,
                 session_id=None,
             )
