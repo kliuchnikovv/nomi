@@ -200,6 +200,7 @@ func New(
 
 	// Webhooks
 	r.POST("/api/webhooks/github", webhooksHandler.HandleGitHubWebhook)
+	r.POST("/api/webhooks/jules", webhooksHandler.HandleJulesWebhook)
 
 	// Mobile OAuth API (tokens returned to client, not stored on backend)
 	r.GET("/api/oauth/:provider/callback", mobileOAuthHandler.Callback) // Web callback from Google, redirects to app
