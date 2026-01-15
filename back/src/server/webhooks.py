@@ -29,7 +29,8 @@ if db_dsn and db_dsn.startswith("postgres://"):
 # Global Engine for Connection Pooling
 engine = None
 try:
-    engine = create_engine(db_dsn, pool_size=5, max_overflow=10)
+    if db_dsn:
+        engine = create_engine(db_dsn, pool_size=5, max_overflow=10)
 except Exception as e:
     logger.error(f"Failed to create DB engine: {e}")
 
@@ -49,6 +50,112 @@ class GithubWebhookPayload(BaseModel):
     branch: str
     diff: str # Passed from Go or fetched here
     installation_id: int # Needed for GithubTools auth
+
+class JulesWebhookPayload(BaseModel):
+    session_id: str
+    status: str # "completed", "failed"
+    artifacts: List[Dict[str, Any]] = [] # Contains changeSets, etc.
+    error: Optional[str] = None
+
+def process_jules_webhook(payload: JulesWebhookPayload):
+    """
+    Background task to process Jules completion.
+    """
+    logger.info(f"Processing Jules Webhook for session {payload.session_id}, Status: {payload.status}")
+
+    if not engine:
+        logger.error("DB Engine not initialized")
+        return
+
+    # 1. Find Task by Session ID
+    # We assume 'artifacts' -> 'jules_session_id' in project_tasks
+    task_id = None
+    task_status = None
+    project_id = None
+    user_id = None
+
+    try:
+        with engine.connect() as conn:
+            # Note: Postgres JSONB query for value inside object
+            query = text("""
+                SELECT id, status, project_id, user_id
+                FROM project_tasks
+                WHERE artifacts::jsonb ->> 'jules_session_id' = :sid
+                LIMIT 1
+            """)
+            result = conn.execute(query, {"sid": payload.session_id}).fetchone()
+
+            if not result:
+                logger.warning(f"No task found for session {payload.session_id}")
+                return
+
+            task_id = str(result[0])
+            task_status = result[1]
+            project_id = str(result[2])
+            user_id = str(result[3])
+
+    except Exception as e:
+        logger.error(f"Database error locating task: {e}")
+        return
+
+    # 2. Handle Outcome
+    if payload.status == "completed":
+        # Extract PR URL
+        pr_url = None
+        for artifact in payload.artifacts:
+            # Try to find PR URL in artifacts (changeSets or pullRequest)
+            if isinstance(artifact, dict):
+                 # Format A: changeSet -> gitPatch -> pullRequestUrl
+                 change_set = artifact.get("changeSet", {})
+                 git_patch = change_set.get("gitPatch", {})
+                 if "pullRequestUrl" in git_patch:
+                     pr_url = git_patch["pullRequestUrl"]
+                 # Format B: pullRequest -> url
+                 if "pullRequest" in artifact:
+                     pr_url = artifact["pullRequest"].get("url")
+
+            if pr_url:
+                break
+
+        if pr_url:
+            logger.info(f"Jules Task {task_id} Success. PR: {pr_url}")
+            # Update status to REVIEW
+            new_status = "REVIEW"
+
+            # Use DevelopmentTeam's _update_task_status helper via instantiation or direct API call
+            # Let's do direct API call to avoid instantiating Team just for this
+            go_api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+            internal_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+
+            try:
+                requests.patch(
+                    f"{go_api_url}/api/project-tasks/{task_id}/status",
+                    json={"status": new_status, "artifacts": {"pr_url": pr_url}},
+                    headers={"X-Internal-Secret": internal_key}
+                )
+                logger.info("Updated task status to REVIEW")
+
+                # Notification will be handled by notify-lead endpoint automatically if it listens to transitions
+                # But notify-lead endpoint listens to *Go* invoking it.
+                # When we call PATCH /status above, Go *should* fire notify-lead back to us?
+                # Let's check api/internal/handlers/project_tasks.go
+                # Yes: `h.notifyTeamLead` is called in UpdateStatus.
+                # So we don't need to manually trigger Reviewer here.
+
+            except Exception as e:
+                logger.error(f"Failed to update task status: {e}")
+
+        else:
+            logger.warning("Jules completed but no PR URL found.")
+            # Maybe update artifacts but keep status? Or fail?
+            # For now, log and do nothing.
+
+    elif payload.status == "failed":
+        logger.warning(f"Jules Task {task_id} Failed: {payload.error}")
+        # Revert to CODING or keep as is?
+        # Let's revert to PLANNING or CODING so user can retry?
+        # Or just log error in artifacts.
+        pass
 
 def process_pr_review(payload: GithubWebhookPayload, internal_secret: str):
     """
@@ -260,3 +367,14 @@ async def handle_github_webhook(
     background_tasks.add_task(process_pr_review, payload, x_internal_secret)
 
     return {"status": "accepted", "message": "Review queued"}
+
+@router.post("/jules")
+async def handle_jules_webhook(
+    payload: JulesWebhookPayload,
+    background_tasks: BackgroundTasks
+):
+    # Jules might not send internal secret. We trust the payload structure for now
+    # or validate signature if we had the key.
+    # We should add logic to verify source IP or signature in production.
+    background_tasks.add_task(process_jules_webhook, payload)
+    return {"status": "received"}

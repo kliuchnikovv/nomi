@@ -25,8 +25,8 @@ class JulesTools(Toolkit):
         self.register(self.approve_plan)
         self.register(self.list_activities)
         self.register(self.send_message)
-        self.register(self.wait_for_completion)
-        self.register(self.wait_for_pr)
+        # self.register(self.wait_for_completion) # Blocking calls disabled
+        # self.register(self.wait_for_pr)
 
     def _parse_error(self, response: requests.Response) -> str:
         """Parses error details from Jules API response."""
@@ -83,7 +83,8 @@ class JulesTools(Toolkit):
         source: str,
         starting_branch: str = "main",
         automation_mode: Optional[str] = None,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        webhook_url: Optional[str] = None
     ) -> str:
         """Creates a new session with Jules.
 
@@ -93,6 +94,7 @@ class JulesTools(Toolkit):
             starting_branch (str): The branch to start from (default: "main").
             automation_mode (str): Optional mode, e.g., "AUTO_CREATE_PR".
             title (str): Optional title for the session.
+            webhook_url (str): Optional URL for Jules to notify on completion.
 
         Returns:
             str: JSON string containing the created session details.
@@ -110,6 +112,8 @@ class JulesTools(Toolkit):
             payload["automationMode"] = automation_mode
         if title:
             payload["title"] = title
+        if webhook_url:
+            payload["webhookUrl"] = webhook_url
 
         return json.dumps(self._post("sessions", payload))
 
