@@ -67,6 +67,8 @@ class ArchitectDetails(BaseModel):
     steps: List[ImplementationStep] = Field(..., description="Список шагов реализации.")
     style_guide_rules: List[str] = Field(...)
     reference_snippets: List[str] = Field(...)
+    complexity: Literal["low", "high"] = Field(..., description="Complexity of the task")
+    reasoning: str = Field(..., description="Reasoning for the complexity")
 
 class ArchitectPlan(BaseModel):
     msg: str = Field(..., description="Краткое сообщение (напр., 'План готов').")
