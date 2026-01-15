@@ -82,6 +82,8 @@ class JulesTools(Toolkit):
         self,
         prompt: str,
         source: str,
+        webhook_url: Optional[str] = None,
+        task_id: Optional[str] = None,
         starting_branch: str = "main",
         automation_mode: Optional[str] = None,
         title: Optional[str] = None
@@ -91,6 +93,8 @@ class JulesTools(Toolkit):
         Args:
             prompt (str): The prompt to start the session with.
             source (str): The source identifier (e.g., "sources/github/owner/repo").
+            webhook_url (str, optional): URL to call when session completes.
+            task_id (str, optional): ID of the task to associate with the session.
             starting_branch (str): The branch to start from (default: "main").
             automation_mode (str): Optional mode, e.g., "AUTO_CREATE_PR".
             title (str): Optional title for the session.
@@ -107,6 +111,15 @@ class JulesTools(Toolkit):
                 }
             }
         }
+
+        if webhook_url:
+            payload["webhookUrl"] = webhook_url
+
+        if task_id:
+            payload["labels"] = {
+                "task_id": task_id
+            }
+
         if automation_mode:
             payload["automationMode"] = automation_mode
         if title:

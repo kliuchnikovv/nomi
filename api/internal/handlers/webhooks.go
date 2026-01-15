@@ -168,6 +168,53 @@ func (h *WebhooksHandler) HandleGitHubWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "processed"})
 }
 
+func (h *WebhooksHandler) HandleJulesWebhook(c *gin.Context) {
+	// 1. Read Payload
+	payloadBody, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+		return
+	}
+
+	// 2. Proxy to Python Backend
+	url := fmt.Sprintf("%s/webhooks/jules", h.llmBaseURL)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(payloadBody))
+	if err != nil {
+		h.logger.Error("failed to create proxy request", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Forward headers if needed (Content-Type)
+	req.Header.Set("Content-Type", c.GetHeader("Content-Type"))
+
+	// Use internal secret for auth if needed (although Python endpoint might be public or use labels)
+	// But webhooks.py router doesn't seem to enforce auth on /jules unless we add it.
+	// The plan didn't specify auth for this webhook, relying on obscure URL or payload validation.
+	// However, standard practice is good.
+	// We'll pass it just in case future-proofing.
+	// req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret) // If available
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		h.logger.Error("failed to forward webhook to python", zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to forward webhook"})
+		return
+	}
+	defer resp.Body.Close()
+
+	// 3. Return Python response
+	// We can just stream the response back
+	for name, values := range resp.Header {
+		for _, value := range values {
+			c.Writer.Header().Add(name, value)
+		}
+	}
+	c.Status(resp.StatusCode)
+	io.Copy(c.Writer, resp.Body)
+}
+
 func (h *WebhooksHandler) validateSignature(payload []byte, signatureHeader string) bool {
 	// If no secret is configured, skip validation (dev mode)
 	// But in prod we must validate.
