@@ -48,11 +48,17 @@ type GitHubPullRequestEvent struct {
 }
 
 type GitHubPullRequest struct {
-	Number  int       `json:"number"`
-	Title   string    `json:"title"`
-	State   string    `json:"state"`
-	Head    GitHubRef `json:"head"`
-	HTMLURL string    `json:"html_url"`
+	Number  int        `json:"number"`
+	Title   string     `json:"title"`
+	State   string     `json:"state"`
+	Head    GitHubRef  `json:"head"`
+	HTMLURL string     `json:"html_url"`
+	User    GitHubUser `json:"user"`
+}
+
+type GitHubUser struct {
+	Login string `json:"login"`
+	Type  string `json:"type"` // "User" or "Bot"
 }
 
 type GitHubRef struct {
@@ -156,10 +162,7 @@ func (h *WebhooksHandler) HandleGitHubWebhook(c *gin.Context) {
 		// Re-use logic from ProjectTaskHandler or duplicate it.
 		// Since we are in a different handler, duplicating the simple notification logic is fine or we can extract it.
 		// I will instantiate a ProjectTaskHandler or copy the notify logic. Copying is safer to avoid circular deps if refactoring is hard.
-		metadata := map[string]interface{}{
-			"pr_url": event.PullRequest.HTMLURL,
-		}
-		go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, storage.ProjectTaskStatusReview, metadata)
+		go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, storage.ProjectTaskStatusReview, event.PullRequest.HTMLURL, event.PullRequest.User.Login)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "processed"})
@@ -201,8 +204,13 @@ func (h *WebhooksHandler) extractTaskID(branchName string) (uuid.UUID, error) {
 	return uuid.Parse(match)
 }
 
-// Copied from ProjectTaskHandler to avoid coupling for now
-func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, oldStatus, newStatus storage.ProjectTaskStatus, metadata map[string]interface{}) {
+func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, oldStatus, newStatus storage.ProjectTaskStatus, prURL string, prAuthor string) {
+	// Determine source based on PR author
+	prSource := "git_agent" // default
+	if prAuthor == "google-labs-jules[bot]" || prAuthor == "google-labs-jules" {
+		prSource = "jules"
+	}
+
 	// Create a payload to match what ProjectTaskHandler sends
 	payload := map[string]interface{}{
 		"user_id":    userID,
@@ -210,9 +218,11 @@ func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, ol
 		"task_id":    taskID,
 		"old_status": oldStatus,
 		"new_status": newStatus,
-		"timestamp":  "now",       // simplified
-		"event":      "pr_opened", // Extra context
-		"metadata":   metadata,
+		"pr_url":     prURL,
+		"pr_source":  prSource, // "jules" or "git_agent"
+		"pr_author":  prAuthor,
+		"timestamp":  "now",
+		"event":      "pr_opened",
 	}
 
 	// We can use the same endpoint /api/notify-lead

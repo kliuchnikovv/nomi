@@ -112,3 +112,20 @@ class ReviewerInput(BaseModel):
     analyst_output: AnalystOutput = Field(..., description="The original requirements")
     architect_output: ArchitectOutput = Field(..., description="The architectural plan")
     file_list: List[str] = Field(..., description="List of files changed in PR")
+
+
+# --- PR OUTPUT (Unified) ---
+class PRCreatedOutput(BaseModel):
+    """Unified output from both Git-Developer and Jules-Manager"""
+    msg: str = Field(..., description="Status message (e.g., 'PR created successfully')")
+    pr_url: str = Field(..., description="URL of created Pull Request")
+    source: Literal["git_agent", "jules"] = Field(..., description="Which agent created the PR")
+    branch_name: str = Field(..., description="Name of the feature branch")
+
+
+# --- REVIEWER INPUT V2 (Unified) ---
+class ReviewerInputV2(BaseModel):
+    """Unified input for Reviewer agent"""
+    pr_url: str = Field(..., description="URL of Pull Request to review")
+    original_prd: str = Field(..., description="Original PRD requirements for verification")
+
