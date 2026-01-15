@@ -160,7 +160,36 @@ func New(
 	r.POST("/api/projects/:id/reindex", wrapWithAuth(projectHandler.ReindexProject, authMiddleware))
 
 	// Project Tasks API (CRUD)
-	r.POST("/api/projects/:id/tasks", wrapWithAuth(projectHandler.CreateTask, authMiddleware))
+	// Allow internal API key for task creation (Architect agent)
+	r.POST("/api/projects/:id/tasks", func(c *gin.Context) {
+		secret := os.Getenv("INTERNAL_API_KEY")
+		if secret == "" {
+			secret = "jules-secret-key"
+		}
+		if c.GetHeader("X-Internal-Secret") == secret {
+			// For internal calls, we need to manually set the userID in context if the handler relies on it.
+			// However, the handler extracts userID from context `userID := c.MustGet("userID").(uuid.UUID)`
+			// We need to pass the userID in the header or body for internal calls, or have the handler support it.
+			// Let's modify the handler or provide a middleware that extracts User-ID header for internal calls.
+			userIDStr := c.GetHeader("X-User-ID")
+			if userIDStr != "" {
+				if uid, err := uuid.Parse(userIDStr); err == nil {
+					c.Set("userID", uid)
+					gin.WrapH(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						// Wrap to match signature if needed, but projectHandler.CreateTask is a gin.HandlerFunc
+						projectHandler.CreateTask(c)
+					}))(c)
+					return
+				}
+			}
+			// If no User-ID provided for internal call, it might fail in handler.
+			// Let's assume the caller provides X-User-ID.
+			c.JSON(http.StatusBadRequest, gin.H{"error": "X-User-ID header required for internal calls"})
+			return
+		}
+		// Fallback to standard user auth
+		wrapWithAuth(projectHandler.CreateTask, authMiddleware)(c)
+	})
 	r.GET("/api/projects/:id/tasks", wrapWithAuth(projectHandler.ListTasks, authMiddleware))
 	r.GET("/api/project-tasks/:id", wrapWithAuth(projectHandler.GetTask, authMiddleware))
 	r.PUT("/api/project-tasks/:id", wrapWithAuth(projectHandler.UpdateTask, authMiddleware))
