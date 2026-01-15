@@ -3,7 +3,7 @@ from typing import Optional, List, Any, Type
 import os
 import re
 import json
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from agno.agent import Agent
 from agno.knowledge import Knowledge
@@ -20,6 +20,12 @@ from src.teams.development.models import (
     ArchitectPlan,
     ReviewVerdict,
     FinalAcceptance,
+)
+from src.teams.development.state import (
+    WorkflowState,
+    StateManager,
+    WorkflowStage,
+    WorkflowStatus,
 )
 from src.rag_service import KnowledgeSearchTool
 from src.workflow.agent import PgWorkflowStorage, WorkflowAgent
@@ -358,42 +364,33 @@ You are the **Jules-Manager** (Async PR Creator).
 You operate an asynchronous remote developer (Jules). Your job is to START the session, NOT to wait for it.
 
 # Role
-Оператор удаленного CI/CD агента.
-
-# Input
-- PRD (Product Requirements Document)
-- Tech Plan (ArchitectPlan)
-- Task ID (UUID) - CRITICAL for branch naming
+1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
+2. **Execute**: Use `jules_api` to create a session and execute the plan (if available).
+3. **Async Workflow**: Do NOT wait for completion. Return the session ID and exit. The system will handle the webhook callback.
 
 # Workflow
-1. **Check Tools**: Verify `jules_api` tool is available. If not, report to Team Leader.
-2. **Verify Source**: Call `list_sources()` to verify the target repo is accessible.
-3. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
-   - **CRITICAL**: Source format: `sources/github/<owner>/<repo>`
-   - **CRITICAL**: Include Task ID in the prompt so Jules names the branch correctly!
-   - Branch naming template: `genie-{task_id}-description`
-   - Example prompt: "Task ID: abc-123-def. Create feature branch genie-abc-123-def-add-login..."
-4. **Return Immediately**: After starting the session, return to Team Leader.
-   - **DO NOT POLL or WAIT** - GitHub webhook will notify when PR is created.
-   - Your job is DONE after create_session succeeds.
+1. **Check Tools**: Verify if `jules_api` tool is available.
+2. **Verify Source Access**: Call `list_sources()` to get available repositories.
+3. **Branch Naming**: You MUST define the `startingBranch` or `branchName` in the prompt to match this pattern: `feature/{task_id}/[brief-desc]`.
+   - The UUID `task_id` is CRITICAL for the webhook to identify the task later.
+4. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
+   - **CRITICAL**: The `source` parameter MUST use the format: `sources/github/<owner>/<repo>`
+   - Example: If repository_name is `kliuchnikovv/genie-api`, use `sources/github/kliuchnikovv/genie-api`
+   - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
+5. **Finish**:
+   - Return a message: "Jules Session Started: [Session ID]. Status: IN_PROGRESS."
+   - Do NOT call `wait_for_pr` or block.
 
-# Success Response
-Return a message like:
-"✅ Jules session started successfully. Session ID: {session_id}.
-The GitHub webhook will notify when the PR is ready.
-Branch will be named: genie-{task_id}-..."
-
-# Failure Response
-If create_session fails, report the error to Team Leader.
-
-# Why No Polling?
-- GitHub webhook will automatically notify when PR is created
-- Webhook extracts Task ID from branch name → Updates task status → Notifies Team Lead
-- This is more efficient and reliable than polling
+# Jules Source Format
+The `source` parameter for `create_session` must be in the format: `sources/github/<owner>/<repo>`
+- From ArchitectPlan.context.repository_name: `owner/repo` → convert to `sources/github/owner/repo`
+- Always verify the source exists by checking `list_sources()` output first!
 
 # Tools
-- `jules_api`: Create sessions, list sources (DO NOT use wait_for_pr)
-- `task_management_tool`: Update task status if needed
+- `jules_api`: Create sessions, list sources (optional - requires JULES_API_KEY).
+- `task_management_tool`: Update task status in Genie.
+
+**IMPORTANT**: If `jules_api` tool is not available (JULES_API_KEY not set), inform the Team Leader that the task needs manual implementation via the Developer agent instead.
 """)
 
 verifier_instructions = dedent("""
@@ -726,11 +723,17 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         # Expose members attribute for Agno framework compatibility
         self.members = self.members
 
-    def _parse_agent_output(self, output: Any, schema_class: Type[BaseModel]) -> Any:
+    def _parse_agent_output(self, output: Any, schema_class: Any) -> Any:
         """Parses the agent output (string or dict). Returns Pydantic model if possible, else dict or str."""
-        if isinstance(output, schema_class):
-            return output
-        
+        # Use TypeAdapter for validation if schema_class is a Model or TypeAdapter or Union
+        try:
+             # If it's already the right instance (for simple models)
+             if isinstance(output, schema_class) if isinstance(schema_class, type) else False:
+                  return output
+        except TypeError:
+             # schema_class might be a Union or TypeAdapter which can't be used with isinstance
+             pass
+
         data = output
         if isinstance(output, str):
             # Try to find JSON block
@@ -761,12 +764,53 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
 
         if isinstance(data, dict):
             try:
-                return schema_class(**data)
+                # Use TypeAdapter to handle Unions and standard models robustly
+                adapter = TypeAdapter(schema_class)
+                return adapter.validate_python(data)
             except Exception:
-                # Fallback to dict if schema doesn't match
-                return data
+                 try:
+                    # Fallback for simple models if TypeAdapter fails or if schema_class is just a class
+                    if isinstance(schema_class, type) and issubclass(schema_class, BaseModel):
+                        return schema_class(**data)
+                 except Exception:
+                    pass
+                 # Fallback to dict if schema doesn't match
+                 return data
         
         return data
+
+    def run(self, message: Optional[str] = None, **kwargs) -> Any:
+        # Load state context
+        task_id = self.task_id or kwargs.get("task_id")
+
+        # We need to make sure we don't pass task_id twice or conflict with kwargs
+        # But we need to use it for state retrieval.
+
+        if task_id and self.workflow_storage:
+             state_dict = self.workflow_storage.get_workflow_state(task_id)
+             if state_dict:
+                 try:
+                     current_state = self._parse_agent_output(state_dict, WorkflowState)
+                     # Determine message context based on state
+                     if isinstance(current_state, BaseModel): # Check if parsing succeeded
+                         stage_info = f"\n\n[System] Current Workflow State: {current_state.stage}"
+                         if hasattr(current_state, "status"):
+                              stage_info += f" ({current_state.status})"
+
+                         # Add stage-specific context
+                         if current_state.stage == WorkflowStage.CODING and hasattr(current_state, "plan_id"):
+                              stage_info += f"\nPlan ID: {current_state.plan_id} (Ready for coding)"
+                         elif current_state.stage == WorkflowStage.REVIEW and hasattr(current_state, "pr_url"):
+                              stage_info += f"\nPR URL: {current_state.pr_url} (Waiting for review)"
+
+                         if message:
+                             message += stage_info
+                         else:
+                             message = stage_info
+                 except Exception as e:
+                     print(f"[Team] Failed to parse state on run: {e}")
+
+        return super().run(message=message, **kwargs)
 
     def transition_to_next_step(
         self, task_id: str, current_role: str, output: any, session_id: str
@@ -778,9 +822,8 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         if not self.workflow_storage:
             return
 
-        # 0. Parse Output Output manually since we removed output_schema
         # 0. Parse Output
-        parsed_output = self._parse_agent_output(output, BaseModel) # Schema doesn't matter much if we handle dict/str
+        parsed_output = self._parse_agent_output(output, BaseModel)
 
         # 1. Save Artifact
         artifact_type = "Markdown"
@@ -793,7 +836,6 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             artifact_type = "Dict"
             content = parsed_output
         elif isinstance(parsed_output, str):
-             # For Analysis, map string to "AnalystOutput" type so logic downstream works?
              if current_role == "Analyst":
                  artifact_type = "AnalystOutput"
              elif current_role == "Architect":
@@ -804,71 +846,135 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                  artifact_type = "FinalAcceptance"
              content = {"markdown": parsed_output}
 
-        self.workflow_storage.save_artifact(
+        artifact_id = self.workflow_storage.save_artifact(
             session_id, task_id, current_role, artifact_type, content
         )
 
-        # 2. Update Status & Determine Next Step
-        next_status = None
-        next_role = None
-
-        if current_role == "Analyst":
-            # Check if output is complete coverage of requirements
-            is_complete = False
-            if isinstance(parsed_output, AnalystOutput):
-                is_complete = True
-            elif isinstance(parsed_output, dict) and ("requirements" in parsed_output or "content" in parsed_output):
-                is_complete = True
-            elif isinstance(parsed_output, str) and ("## ✅ Definition of Done" in parsed_output or "## 📝 Requirements" in parsed_output):
-                is_complete = True
-            
-            if is_complete:
-                 next_status = "PLANNING"
-                 next_role = "Architect"
+        # 2. Update Status using WorkflowState
+        try:
+            # Load current state or initialize
+            current_state_dict = self.workflow_storage.get_workflow_state(task_id)
+            if current_state_dict:
+                 current_state = self._parse_agent_output(current_state_dict, WorkflowState)
+                 # Handle case where parse might return dict if not matching union exactly?
+                 # Since WorkflowState is a Union, pydantic adapter usually handles it if dict has 'stage'
+                 if isinstance(current_state, dict):
+                     # Try to determine class based on stage
+                     pass # Pydantic adapter should have handled it if used correctly, assuming _parse uses the class
             else:
-                 print("[Team] Analyst output appears to be questions/clarification. Staying in analysis phase.")
+                 current_state = StateManager.get_initial_state()
+
+            next_stage = None
+            context_updates = {}
+
+            # Logic to determine NEXT stage based on CURRENT role output
+            if current_role == "Analyst":
+                 # Check completeness
+                 is_complete = False
+                 if isinstance(parsed_output, AnalystOutput) or (isinstance(parsed_output, dict) and "requirements" in parsed_output):
+                      is_complete = True
+                 elif isinstance(parsed_output, str) and "## ✅ Definition of Done" in parsed_output:
+                      is_complete = True
+
+                 if is_complete:
+                      next_stage = WorkflowStage.ARCHITECTURE
+                      context_updates = {"prd_id": artifact_id}
+
+            elif current_role == "Architect":
+                 if isinstance(parsed_output, ArchitectPlan) or (isinstance(parsed_output, dict) and "implementation_plan" in parsed_output):
+                      next_stage = WorkflowStage.CODING
+                      context_updates = {"plan_id": artifact_id}
+                 elif isinstance(parsed_output, str) and "## 🛠 Implementation Plan" in parsed_output:
+                      next_stage = WorkflowStage.CODING
+                      context_updates = {"plan_id": artifact_id}
+
+            elif current_role == "Reviewer":
+                 is_approved = False
+                 if isinstance(parsed_output, str) and ("**Status**: Approved" in parsed_output or "Status: Approved" in parsed_output):
+                      is_approved = True
+                 elif isinstance(parsed_output, dict) and parsed_output.get("content", {}).get("approved"):
+                      is_approved = True
+                 elif hasattr(parsed_output, "content") and parsed_output.content.approved:
+                      is_approved = True
+
+                 context_updates = {"review_verdict_id": artifact_id, "pr_url": getattr(current_state, "pr_url", "")}
+
+                 if is_approved:
+                      next_stage = WorkflowStage.VERIFICATION
+                 else:
+                      next_stage = WorkflowStage.CODING # Loop back
+            
+            elif current_role == "Worker":
+                 # Worker starts coding async. We do NOT transition to REVIEW yet.
+                 # Just update state with session_id if available.
+                 # Parsing output for session ID (naive check in string or dict)
+                 session_id_val = None
+                 if isinstance(parsed_output, dict):
+                     session_id_val = parsed_output.get("session_id") or parsed_output.get("name") # Jules returns 'name' as full ID
+                 elif isinstance(parsed_output, str):
+                     # Try to find "sessions/..." or UUID
+                     pass
+
+                 # We stay in CODING stage, but we might want to update the state object
+                 # Current implementation of StateManager.transition is for changing stages primarily
+                 # But we can "transition" to same stage with new data
+                 next_stage = WorkflowStage.CODING
+                 context_updates = {}
+                 if session_id_val:
+                     context_updates["session_id"] = session_id_val
+
+
+            if next_stage:
+                 new_state = StateManager.transition(current_state, next_stage, context_updates)
+                 self.workflow_storage.save_workflow_state(task_id, new_state.model_dump())
+
+                 # Map internal stage to API status string
+                 api_status_map = {
+                     WorkflowStage.ANALYSIS: "ANALYSIS",
+                     WorkflowStage.ARCHITECTURE: "PLANNING",
+                     WorkflowStage.CODING: "CODING", # or REVIEW if waiting for PR? Usually CODING.
+                     WorkflowStage.REVIEW: "REVIEW",
+                     WorkflowStage.VERIFICATION: "VERIFICATION",
+                     WorkflowStage.DONE: "DONE"
+                 }
+
+                 # Update external API status
+                 self._update_task_status(task_id, api_status_map.get(next_stage, "IN_PROGRESS"), artifacts=content)
+
+        except Exception as e:
+            print(f"[Team] State transition failed: {e}")
+            # Do not block execution, just log error
+
+    def handle_pr_created(self, pr_url: str):
+        """
+        External event handler for PR creation (triggered by Webhook).
+        Transitions state from CODING -> REVIEW.
+        """
+        if not self.workflow_storage or not self.task_id:
+            print("[Team] Cannot handle PR event: No storage or task_id")
+            return
+
+        try:
+             state_dict = self.workflow_storage.get_workflow_state(self.task_id)
+             if not state_dict:
+                 print("[Team] No state found for PR event")
                  return
 
-        elif current_role == "Architect":
-            # Check if output contains a plan
-            is_complete = False
-            if isinstance(parsed_output, ArchitectPlan):
-                is_complete = True
-            elif isinstance(parsed_output, dict) and ("implementation_plan" in parsed_output or "context" in parsed_output):
-                is_complete = True
-            elif isinstance(parsed_output, str) and ("## 🛠 Implementation Plan" in parsed_output or "## 🏗 Architecture Decision" in parsed_output):
-                is_complete = True
+             current_state = self._parse_agent_output(state_dict, WorkflowState)
 
-            if is_complete:
-                next_status = "CODING"
-                next_role = "Developer"
-            else:
-                print("[Team] Architect output appears incomplete. Staying in planning phase.")
-                return
-        elif current_role == "Reviewer":
-            # Check for "Approved" string in markdown if it's string, or property if dict
-            is_approved = False
-            if isinstance(parsed_output, str):
-                if "**Status**: Approved" in parsed_output or "Status: Approved" in parsed_output:
-                     is_approved = True
-            elif isinstance(parsed_output, dict) and parsed_output.get("content", {}).get("approved"):
-                 is_approved = True
-            elif hasattr(parsed_output, "content") and parsed_output.content.approved:
-                 is_approved = True
-            
-            if is_approved:
-                next_status = "VERIFY"
-                next_role = "Verifier"
-            else:
-                next_status = "CODING"
-                next_role = "Developer"  # Loop back for fixes
+             # Transition to REVIEW
+             new_state = StateManager.transition(
+                 current_state,
+                 WorkflowStage.REVIEW,
+                 {"pr_url": pr_url}
+             )
+             self.workflow_storage.save_workflow_state(self.task_id, new_state.model_dump())
 
-        if next_status:
-            self._update_task_status(task_id, next_status, artifacts=content)
+             # Trigger Reviewer
+             self.run_component("Reviewer", self.task_id)
 
-        # 3. DO NOT auto-trigger next agent - let Team Leader decide based on context
-        # This prevents forced delegation and allows intelligent decision-making
-        # Team Leader will check workflow artifacts and user intent before delegating
+        except Exception as e:
+             print(f"[Team] Failed to handle PR event: {e}")
 
     def run_component(self, role: str, task_id: str):
         """

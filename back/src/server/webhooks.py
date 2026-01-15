@@ -41,6 +41,7 @@ class ProjectTaskNotification(BaseModel):
     new_status: str
     timestamp: Optional[Any] = None
     event: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 class GithubWebhookPayload(BaseModel):
     action: str
@@ -240,6 +241,20 @@ async def notify_team_lead(notification: ProjectTaskNotification):
         )
 
         # Run the component
+        if role == "Reviewer" and notification.event == "pr_opened":
+             # Extract PR URL from metadata
+             pr_url = ""
+             if notification.metadata:
+                 pr_url = notification.metadata.get("pr_url", "")
+
+             if pr_url:
+                 # Update state machine first (this also triggers the component)
+                 team.handle_pr_created(pr_url)
+                 return {"status": "triggered_via_pr_event", "role": role, "task_id": notification.task_id}
+             else:
+                 # Fallback to just running the component, assuming state will sync later or is not critical
+                 logger.warning(f"PR URL missing in notification for task {notification.task_id}")
+
         team.run_component(role, notification.task_id)
         return {"status": "triggered", "role": role, "task_id": notification.task_id}
 
