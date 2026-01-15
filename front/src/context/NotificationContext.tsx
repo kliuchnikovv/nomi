@@ -14,6 +14,7 @@ export interface ActiveTask {
     projectName: string;
     status: TaskStatus;
     updatedAt: string;
+    artifacts?: any;
 }
 
 interface NotificationContextType {
@@ -144,7 +145,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     projectId: t.project_id,
                     projectName: t.project_name,
                     status: t.status,
-                    updatedAt: t.updated_at
+                    updatedAt: t.updated_at,
+                    artifacts: (t as any).artifacts
                 })));
             }
         } catch (err) {
@@ -160,7 +162,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             projectId: data.project_id,
             projectName: data.project_name,
             status: data.new_status,
-            updatedAt: data.updated_at
+            updatedAt: data.updated_at,
+            artifacts: data.artifacts
         };
 
         setActiveTasks(prev => {

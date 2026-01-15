@@ -114,12 +114,13 @@ func (h *ProjectTaskHandler) GetActiveTasks(c *gin.Context) {
 
 	// Enrich with project names
 	type ActiveTaskResponse struct {
-		ID          uuid.UUID `json:"id"`
-		Title       string    `json:"title"`
-		ProjectID   uuid.UUID `json:"project_id"`
-		ProjectName string    `json:"project_name"`
-		Status      string    `json:"status"`
-		UpdatedAt   time.Time `json:"updated_at"`
+		ID          uuid.UUID   `json:"id"`
+		Title       string      `json:"title"`
+		ProjectID   uuid.UUID   `json:"project_id"`
+		ProjectName string      `json:"project_name"`
+		Status      string      `json:"status"`
+		UpdatedAt   time.Time   `json:"updated_at"`
+		Artifacts   interface{} `json:"artifacts"`
 	}
 
 	response := make([]ActiveTaskResponse, 0, len(tasks))
@@ -143,6 +144,7 @@ func (h *ProjectTaskHandler) GetActiveTasks(c *gin.Context) {
 			ProjectName: name,
 			Status:      string(t.Status),
 			UpdatedAt:   t.UpdatedAt,
+			Artifacts:   t.Artifacts,
 		})
 	}
 
@@ -254,6 +256,7 @@ func (h *ProjectTaskHandler) broadcastTaskUpdate(userID uuid.UUID, task *storage
 				"old_status":   oldStatus,
 				"new_status":   newStatus,
 				"updated_at":   time.Now().UTC(),
+				"artifacts":    task.Artifacts,
 			},
 		},
 	}
