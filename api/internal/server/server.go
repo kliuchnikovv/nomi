@@ -165,6 +165,7 @@ func New(
 	r.GET("/api/project-tasks/:id", wrapWithAuth(projectHandler.GetTask, authMiddleware))
 	r.PUT("/api/project-tasks/:id", wrapWithAuth(projectHandler.UpdateTask, authMiddleware))
 	r.DELETE("/api/project-tasks/:id", wrapWithAuth(projectHandler.DeleteTask, authMiddleware))
+	r.POST("/api/project-tasks/:id/subtasks", taskAuth, projectHandler.CreateSubtask)
 	// State Machine Transition
 	r.PATCH("/api/project-tasks/:id/status", taskAuth, projectTaskHandler.UpdateStatus)
 	r.GET("/api/active-tasks", wrapWithAuth(projectTaskHandler.GetActiveTasks, authMiddleware))

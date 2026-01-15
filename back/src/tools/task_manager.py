@@ -20,6 +20,7 @@ class TaskManagementTool(Toolkit):
         self.register(self.list_projects)
         self.register(self.get_task_status)
         self.register(self.create_project_task)
+        self.register(self.create_subtask)
 
 
     def update_task_status(self, task_id: str, status: str, pr_url: Optional[str] = None, artifacts: Optional[dict] = None) -> str:
@@ -226,3 +227,45 @@ class TaskManagementTool(Toolkit):
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to list projects via API: {e}")
             return f"Error listing projects via API: {str(e)}"
+
+    def create_subtask(self, parent_id: str, title: str, description: str = "") -> str:
+        """
+        Creates a subtask under an existing parent task.
+
+        Args:
+            parent_id (str): The UUID of the parent task.
+            title (str): Title of the subtask.
+            description (str, optional): Detailed description.
+
+        Returns:
+            str: The ID of the created subtask or error message.
+        """
+        if not parent_id or not title:
+            return "Error: parent_id and title are required."
+
+        url = f"{self.api_url}/project-tasks/{parent_id}/subtasks"
+        payload = {
+            "title": title,
+            "description": description,
+        }
+
+        try:
+            headers = {}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+            
+            internal_key = os.getenv("INTERNAL_API_KEY")
+            if internal_key:
+                headers["X-Internal-Secret"] = internal_key
+
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            subtask = response.json()
+            return f"Subtask created successfully. ID: {subtask.get('id')}"
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to create subtask: {e}")
+            if e.response is not None:
+                return f"Error creating subtask: {e.response.text}"
+            return f"Error creating subtask: {str(e)}"
