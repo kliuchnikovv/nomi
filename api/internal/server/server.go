@@ -194,6 +194,7 @@ func New(
 	r.GET("/api/project-tasks/:id", wrapWithAuth(projectHandler.GetTask, authMiddleware))
 	r.PUT("/api/project-tasks/:id", wrapWithAuth(projectHandler.UpdateTask, authMiddleware))
 	r.DELETE("/api/project-tasks/:id", wrapWithAuth(projectHandler.DeleteTask, authMiddleware))
+	r.POST("/api/project-tasks/:id/subtasks", taskAuth, projectHandler.CreateSubtask)
 	// State Machine Transition
 	r.PATCH("/api/project-tasks/:id/status", taskAuth, projectTaskHandler.UpdateStatus)
 	r.GET("/api/active-tasks", wrapWithAuth(projectTaskHandler.GetActiveTasks, authMiddleware))
@@ -229,6 +230,7 @@ func New(
 
 	// Webhooks
 	r.POST("/api/webhooks/github", webhooksHandler.HandleGitHubWebhook)
+	r.POST("/api/webhooks/jules", webhooksHandler.HandleJulesWebhook)
 
 	// Mobile OAuth API (tokens returned to client, not stored on backend)
 	r.GET("/api/oauth/:provider/callback", mobileOAuthHandler.Callback) // Web callback from Google, redirects to app

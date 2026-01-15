@@ -164,6 +164,7 @@ type ProjectTask struct {
 	ID          uuid.UUID         `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
 	UserID      uuid.UUID         `gorm:"type:uuid;not null;index" json:"user_id"`
 	ProjectID   uuid.UUID         `gorm:"type:uuid;not null;index" json:"project_id"`
+	ParentID    *uuid.UUID        `gorm:"type:uuid;index" json:"parent_id,omitempty"` // For subtasks
 	Title       string            `gorm:"type:text;not null" json:"title"`
 	Description string            `gorm:"type:text" json:"description"`
 	Status      ProjectTaskStatus `gorm:"type:varchar(20);default:'BACKLOG';not null" json:"status"`

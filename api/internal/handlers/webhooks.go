@@ -48,11 +48,17 @@ type GitHubPullRequestEvent struct {
 }
 
 type GitHubPullRequest struct {
-	Number  int       `json:"number"`
-	Title   string    `json:"title"`
-	State   string    `json:"state"`
-	Head    GitHubRef `json:"head"`
-	HTMLURL string    `json:"html_url"`
+	Number  int        `json:"number"`
+	Title   string     `json:"title"`
+	State   string     `json:"state"`
+	Head    GitHubRef  `json:"head"`
+	HTMLURL string     `json:"html_url"`
+	User    GitHubUser `json:"user"`
+}
+
+type GitHubUser struct {
+	Login string `json:"login"`
+	Type  string `json:"type"` // "User" or "Bot"
 }
 
 type GitHubRef struct {
@@ -156,10 +162,59 @@ func (h *WebhooksHandler) HandleGitHubWebhook(c *gin.Context) {
 		// Re-use logic from ProjectTaskHandler or duplicate it.
 		// Since we are in a different handler, duplicating the simple notification logic is fine or we can extract it.
 		// I will instantiate a ProjectTaskHandler or copy the notify logic. Copying is safer to avoid circular deps if refactoring is hard.
-		go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, storage.ProjectTaskStatusReview)
+		go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, storage.ProjectTaskStatusReview, event.PullRequest.HTMLURL, event.PullRequest.User.Login)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "processed"})
+}
+
+
+// HandleJulesWebhook proxies the incoming Jules webhook to the Python backend
+func (h *WebhooksHandler) HandleJulesWebhook(c *gin.Context) {
+	// 1. Read Payload
+	payloadBody, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+		return
+	}
+
+	// 2. Proxy to Python Backend
+	url := fmt.Sprintf("%s/webhooks/jules", h.llmBaseURL)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(payloadBody))
+	if err != nil {
+		h.logger.Error("failed to create proxy request", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Forward headers if needed (Content-Type)
+	req.Header.Set("Content-Type", c.GetHeader("Content-Type"))
+
+	// Use internal secret for auth if needed (although Python endpoint might be public or use labels)
+	// But webhooks.py router doesn't seem to enforce auth on /jules unless we add it.
+	// The plan didn't specify auth for this webhook, relying on obscure URL or payload validation.
+	// However, standard practice is good.
+	// We'll pass it just in case future-proofing.
+	// req.Header.Set("X-Internal-Secret", h.cfg.InternalSecret) // If available
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		h.logger.Error("failed to forward webhook to python", zap.Error(err))
+		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to forward webhook"})
+		return
+	}
+	defer resp.Body.Close()
+
+	// 3. Return Python response
+	// We can just stream the response back
+	for name, values := range resp.Header {
+		for _, value := range values {
+			c.Writer.Header().Add(name, value)
+		}
+	}
+	c.Status(resp.StatusCode)
+	io.Copy(c.Writer, resp.Body)
 }
 
 func (h *WebhooksHandler) validateSignature(payload []byte, signatureHeader string) bool {
@@ -198,8 +253,13 @@ func (h *WebhooksHandler) extractTaskID(branchName string) (uuid.UUID, error) {
 	return uuid.Parse(match)
 }
 
-// Copied from ProjectTaskHandler to avoid coupling for now
-func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, oldStatus, newStatus storage.ProjectTaskStatus) {
+func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, oldStatus, newStatus storage.ProjectTaskStatus, prURL string, prAuthor string) {
+	// Determine source based on PR author
+	prSource := "git_agent" // default
+	if prAuthor == "google-labs-jules[bot]" || prAuthor == "google-labs-jules" {
+		prSource = "jules"
+	}
+
 	// Create a payload to match what ProjectTaskHandler sends
 	payload := map[string]interface{}{
 		"user_id":    userID,
@@ -207,8 +267,11 @@ func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, ol
 		"task_id":    taskID,
 		"old_status": oldStatus,
 		"new_status": newStatus,
-		"timestamp":  "now",       // simplified
-		"event":      "pr_opened", // Extra context
+		"pr_url":     prURL,
+		"pr_source":  prSource, // "jules" or "git_agent"
+		"pr_author":  prAuthor,
+		"timestamp":  "now",
+		"event":      "pr_opened",
 	}
 
 	// We can use the same endpoint /api/notify-lead

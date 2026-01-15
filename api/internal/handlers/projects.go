@@ -562,3 +562,57 @@ func (h *ProjectHandler) DeleteTask(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// CreateSubtaskRequest is the request body for creating a subtask
+type CreateSubtaskRequest struct {
+	Title       string `json:"title" binding:"required"`
+	Description string `json:"description"`
+}
+
+// CreateSubtask creates a new subtask under an existing parent task
+func (h *ProjectHandler) CreateSubtask(c *gin.Context) {
+	parentID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid parent task ID"})
+		return
+	}
+
+	var req CreateSubtaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get parent task to verify ownership and get project info
+	parentTask, err := h.store.GetProjectTask(c.Request.Context(), parentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Parent task not found"})
+		return
+	}
+
+	userID := c.MustGet("userID").(uuid.UUID)
+	if parentTask.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
+	subtask := &storage.ProjectTask{
+		UserID:      userID,
+		ProjectID:   parentTask.ProjectID,
+		ParentID:    &parentID,
+		Title:       req.Title,
+		Description: req.Description,
+		Priority:    parentTask.Priority,
+		Status:      storage.ProjectTaskStatusBacklog,
+		CreatedAt:   time.Now().UTC(),
+		UpdatedAt:   time.Now().UTC(),
+	}
+
+	if err := h.store.CreateProjectTask(c.Request.Context(), subtask); err != nil {
+		h.logger.Error("failed to create subtask", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subtask"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, subtask)
+}

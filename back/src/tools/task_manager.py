@@ -1,9 +1,7 @@
-from typing import Optional, List, Any
+from typing import Optional
 import os
 import requests
-import json
 from sqlalchemy import create_engine, text
-from agno.agent import Agent
 from agno.tools import Toolkit
 from agno.utils.log import logger
 
@@ -16,12 +14,13 @@ class TaskManagementTool(Toolkit):
         if not base_url.endswith("/api"):
             base_url = f"{base_url.rstrip('/')}/api"
         self.api_url = base_url
-        self.api_url = base_url
         self.user_id = user_id
         self.auth_token = auth_token
         self.register(self.update_task_status)
         self.register(self.list_projects)
-        self.register(self.create_task)
+        self.register(self.get_task_status)
+        self.register(self.create_project_task)
+        self.register(self.create_subtask)
 
 
     def update_task_status(self, task_id: str, status: str, pr_url: Optional[str] = None, artifacts: Optional[dict] = None) -> str:
@@ -45,27 +44,19 @@ class TaskManagementTool(Toolkit):
         if artifacts:
             payload["artifacts"] = artifacts
 
-        # Note: The Go API currently only supports status updates via this endpoint.
-        # If pr_url is provided, we should ideally store it.
-        # Since I cannot modify the Go API in this task, I will log it.
-        # In a future iteration (GENIE-005/GENIE-001), the Go API should support metadata updates.
         if pr_url:
             logger.info(f"Task {task_id} completed with PR: {pr_url}")
-            # Potential workaround: Add to payload if API is updated later,
-            # or try to update description if a separate endpoint exists.
-            # For now, we just proceed with status update.
 
         try:
-            # We assume internal networking allows this without complex auth for now,
-            # or relies on the same network security.
-            # If auth is needed, we would need to pass a token or secret.
-            # Based on SchedulerTools, there might be an internal key.
             headers = {}
+            # Prioritize auth token if available (consistent with other methods)
+            if self.auth_token:
+                 headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            # Use internal key as fallback or if specifically needed by backend
             internal_key = os.getenv("INTERNAL_API_KEY")
             if internal_key:
                  headers["X-Internal-Secret"] = internal_key
-            elif self.auth_token:
-                 headers["Authorization"] = f"Bearer {self.auth_token}"
 
             response = requests.patch(url, json=payload, headers=headers)
             response.raise_for_status()
@@ -79,6 +70,86 @@ class TaskManagementTool(Toolkit):
             if e.response is not None:
                 return f"Error updating status: {e.response.text}"
             return f"Error updating status: {str(e)}"
+
+    def get_task_status(self, task_id: str) -> str:
+        """
+        Retrieves the current status of a project task.
+
+        Args:
+            task_id (str): The UUID of the task.
+
+        Returns:
+            str: The status of the task or error message.
+        """
+        if not task_id:
+            return "Error: task_id is required."
+
+        url = f"{self.api_url}/project-tasks/{task_id}"
+
+        try:
+            headers = {}
+            # This endpoint requires auth token (wrapWithAuth)
+            if self.auth_token:
+                 headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            # Try internal secret as fallback if auth token missing (though API might not support it for GET)
+            internal_key = os.getenv("INTERNAL_API_KEY")
+            if not headers.get("Authorization") and internal_key:
+                 headers["X-Internal-Secret"] = internal_key
+
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+
+            task = response.json()
+            return task.get("status", "UNKNOWN")
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to get task status: {e}")
+            if e.response is not None:
+                return f"Error getting status: {e.response.text}"
+            return f"Error getting status: {str(e)}"
+
+    def create_project_task(self, project_id: str, title: str, description: str = "", priority: str = "medium") -> str:
+        """
+        Creates a new task in the specified project.
+
+        Args:
+            project_id (str): The UUID of the project.
+            title (str): Title of the task.
+            description (str, optional): Detailed description.
+            priority (str, optional): Priority (low, medium, high). Defaults to "medium".
+
+        Returns:
+            str: The ID of the created task or error message.
+        """
+        if not project_id or not title:
+            return "Error: project_id and title are required."
+
+        url = f"{self.api_url}/projects/{project_id}/tasks"
+        payload = {
+            "title": title,
+            "description": description,
+            "priority": priority
+        }
+
+        try:
+            headers = {}
+            if self.auth_token:
+                 headers["Authorization"] = f"Bearer {self.auth_token}"
+            else:
+                return "Error: Authentication token required to create tasks."
+
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            task = response.json()
+            return f"Task created successfully. ID: {task.get('id')}"
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to create project task: {e}")
+            if e.response is not None:
+                return f"Error creating task: {e.response.text}"
+            return f"Error creating task: {str(e)}"
 
     def list_projects(self) -> str:
         """
@@ -156,3 +227,45 @@ class TaskManagementTool(Toolkit):
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to list projects via API: {e}")
             return f"Error listing projects via API: {str(e)}"
+
+    def create_subtask(self, parent_id: str, title: str, description: str = "") -> str:
+        """
+        Creates a subtask under an existing parent task.
+
+        Args:
+            parent_id (str): The UUID of the parent task.
+            title (str): Title of the subtask.
+            description (str, optional): Detailed description.
+
+        Returns:
+            str: The ID of the created subtask or error message.
+        """
+        if not parent_id or not title:
+            return "Error: parent_id and title are required."
+
+        url = f"{self.api_url}/project-tasks/{parent_id}/subtasks"
+        payload = {
+            "title": title,
+            "description": description,
+        }
+
+        try:
+            headers = {}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+            
+            internal_key = os.getenv("INTERNAL_API_KEY")
+            if internal_key:
+                headers["X-Internal-Secret"] = internal_key
+
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            subtask = response.json()
+            return f"Subtask created successfully. ID: {subtask.get('id')}"
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to create subtask: {e}")
+            if e.response is not None:
+                return f"Error creating subtask: {e.response.text}"
+            return f"Error creating subtask: {str(e)}"

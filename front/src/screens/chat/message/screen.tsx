@@ -22,6 +22,7 @@ import { authStore } from '../../../apiClient';
 import { getApiUrl, API_URL } from '../../../config';
 import { useChat } from '../context';
 import { getAgentIcon } from '../../../utils/agentAvatars';
+import ApprovalCard from '../components/ApprovalCard';
 
 function AttachmentImage({ attachment }: { attachment: Attachment }) {
     const [token, setToken] = useState<string | null>(authStore.getToken());
@@ -220,6 +221,12 @@ export default function MessageScreen(props: Props) {
                         ))}
                     </View>
                 </View>
+            )}
+            {props.message.metadata?.type === 'approval_request' && props.message.metadata.task_id && (
+                <ApprovalCard
+                    taskId={props.message.metadata.task_id}
+                    nextStatus={props.message.metadata.next_status || 'PLANNING'}
+                />
             )}
         </View>
     );
