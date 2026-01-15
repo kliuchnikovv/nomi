@@ -66,6 +66,7 @@ leader_instructions = dedent("""
         - Inform the user "Task stopped."
         - Do NOT delegate to other agents.
     7.  **NO HALLUCINATION**: Do not simulate future steps. Wait for actual tool outputs.
+""")
 
 analyst_instructions = dedent("""
     You are an experienced **Business Analyst (BA)** in an IT team. Your goal is to turn abstract requests into clear PRDs (Product Requirements Documents).
