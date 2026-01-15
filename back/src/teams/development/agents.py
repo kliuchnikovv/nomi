@@ -275,8 +275,7 @@ class WorkerAgent(Agent):
                 # Role
                 1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
                 2. **Execute**: Use `jules_api` to create a session and execute the plan (if available).
-                3. **Monitor**: Wait for the session to complete and a Pull Request to be created.
-                4. **Sync State**: Update the task status in the Go API to `REVIEW` upon success.
+                3. **Async Confirmation**: Confirm the session has started. DO NOT WAIT for completion.
 
                 # Workflow
                 1. **Check Tools**: First verify if `jules_api` tool is available. If not, report to Team Leader that automated execution is not possible.
@@ -286,10 +285,10 @@ class WorkerAgent(Agent):
                    - Example: If repository_name is `kliuchnikovv/genie-api`, use `sources/github/kliuchnikovv/genie-api`
                    - The source MUST exist in the list returned by `list_sources()` - if not found, report error to Team Leader.
                    - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
-                4. **Wait**: Call `wait_for_pr` to block until Jules finishes.
-                5. **Finish**:
-                   - If successful (PR created), call `update_task_status(task_id, "REVIEW", pr_url="...")` to update the task and log the PR link.
-                   - If failed/timeout, report error to the Team Leader.
+                   - Include `webhook_url` if available (usually system provides it).
+                4. **Finish Immediately**:
+                   - Report "Jules session started successfully with Session ID: [ID]".
+                   - Do NOT wait for PR.
             """),
             tools=tools,
             markdown=True,

@@ -162,6 +162,55 @@ func (h *WebhooksHandler) HandleGitHubWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "processed"})
 }
 
+
+// HandleJulesWebhook proxies the incoming Jules webhook to the Python backend
+func (h *WebhooksHandler) HandleJulesWebhook(c *gin.Context) {
+	// 1. Read Payload
+	payloadBody, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+		return
+	}
+
+	// 2. Validate?
+	// If Jules sends a secret, we should validate it here.
+	// For now, assume internal security or no signature provided by Jules yet.
+	// But we should at least log it.
+	h.logger.Info("Received Jules Webhook", zap.ByteString("payload", payloadBody))
+
+	// 3. Proxy to Python Backend
+	// Python backend URL: h.llmBaseURL + "/webhooks/jules"
+	url := fmt.Sprintf("%s/webhooks/jules", h.llmBaseURL)
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(payloadBody))
+	if err != nil {
+		h.logger.Error("Failed to create proxy request", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Proxy Error"})
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	// Pass through specific headers if needed, e.g., X-Jules-Signature?
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		h.logger.Error("Failed to proxy to Python backend", zap.Error(err))
+		// We return 200 OK to Jules so it doesn't retry infinitely if our Python side is down,
+		// but we log the error. Or should we return 502?
+		// Better to return 502 so Jules knows to retry if it supports it.
+		c.JSON(http.StatusBadGateway, gin.H{"error": "Upstream Service Unavailable"})
+		return
+	}
+	defer resp.Body.Close()
+
+	// 4. Return Response
+	// Read response from Python
+	respBody, _ := io.ReadAll(resp.Body)
+	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), respBody)
+}
+
+
 func (h *WebhooksHandler) validateSignature(payload []byte, signatureHeader string) bool {
 	// If no secret is configured, skip validation (dev mode)
 	// But in prod we must validate.

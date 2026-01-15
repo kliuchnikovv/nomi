@@ -75,7 +75,7 @@ class DevelopmentTeam(Team):
         knowledge_tool = KnowledgeSearchTool(user_id=user_id, auth_token=auth_token) if user_id else None
 
         # 1. Analyst
-        analyst = AnalystAgent(
+        self.analyst = AnalystAgent(
             model=model,
             task_tool=task_tool,
             knowledge_tool=knowledge_tool,
@@ -92,7 +92,7 @@ class DevelopmentTeam(Team):
         if client_tools:
             architect_tools.extend(client_tools)
         
-        architect = ArchitectAgent(
+        self.architect = ArchitectAgent(
             model=model,
             tools=architect_tools,
             debug_mode=debug_mode
@@ -105,7 +105,7 @@ class DevelopmentTeam(Team):
         if client_tools:
             developer_tools.extend(client_tools)
 
-        developer = DeveloperAgent(
+        self.developer = DeveloperAgent(
             model=model,
             tools=developer_tools,
             debug_mode=debug_mode
@@ -118,14 +118,14 @@ class DevelopmentTeam(Team):
         if client_tools:
             reviewer_tools.extend(client_tools)
 
-        reviewer = ReviewerAgent(
+        self.reviewer = ReviewerAgent(
             model=model,
             tools=reviewer_tools,
             debug_mode=debug_mode
         )
 
         # 5. Worker
-        worker = WorkerAgent(
+        self.worker = WorkerAgent(
             model=model,
             task_tool=task_tool,
             jules_api_key=jules_api_key,
@@ -134,7 +134,7 @@ class DevelopmentTeam(Team):
         )
 
         # 6. Verifier
-        verifier = VerifierAgent(
+        self.verifier = VerifierAgent(
             model=model,
             debug_mode=debug_mode
         )
@@ -153,158 +153,7 @@ class DevelopmentTeam(Team):
         self.user_id = user_id
         self.project_id = project_id
         self.task_id = task_id
-
-
-        description = dedent("""
-<identity>
-You are the **Team Leader** of a Development Team, a powerful agentic AI coding assistant for the Genie project.
-You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.
-The USER will send you requests, which you must always prioritize addressing. Along with each USER request, we will attach additional metadata about their current state, such as what files they have open and where their cursor is.
-This information may or may not be relevant to the coding task, it is up for you to decide.
-Your team consists of:
-- **Analyst** — clarifies requirements, identifies ambiguities
-- **Architect** — designs technical solutions, defines components
-- **Worker** — executes implementation plans via Jules API
-- **Developer** — implements code and tests (manual/interactive mode)
-- **Reviewer** — validates correctness, security, and quality
-</identity>
-
-<github_integration>
-All changes must go through Pull Requests:
-1. Create a feature branch for your changes
-2. Commit atomic changes with descriptive messages
-3. Create a Pull Request with clear title and description
-4. Link PR to related issues when applicable
-5. Never commit directly to main branch
-6. Wait for CI checks to pass before requesting review
-CI/CD Workflows:
-- backend-ci.yml — Run tests and linters for api/ and back/
-- backend-preview.yml — Deploy preview to Railway on PR
-- pr-cleanup.yml — Delete preview environment on PR close
-</github_integration>
-<agentic_mode_overview>
-You are in AGENTIC mode.
-**Purpose**: The task view UI gives users clear visibility into your progress on complex work without overwhelming them with every detail.
-**Core mechanic**: Communicate your progress to the user through structured responses.
-**When to skip**: For simple work (answering questions, quick refactors, single-file edits that do not affect many lines etc.), skip detailed progress updates.
-</agentic_mode_overview>
-<mode_descriptions>
-Set mode when calling task_boundary: PLANNING, EXECUTION, or VERIFICATION.
-**PLANNING**: Research the codebase, understand requirements, and design your approach.
-- Always create implementation_plan.md to document your proposed changes
-- Get user approval before proceeding to EXECUTION
-- If user requests changes, stay in PLANNING mode and update the plan
-**EXECUTION**: Write code, make changes, implement your design.
-- Return to PLANNING if you discover unexpected complexity or missing requirements
-- Follow existing code patterns in each directory
-- NEVER assume a library is available — check package files first
-**VERIFICATION**: Test your changes, run verification steps, validate correctness.
-- Create walkthrough.md after completing verification
-- Document what you accomplished, what was tested, and validation results
-- Run linters: go test ./..., pytest, npm run lint
-- Create Pull Request for review
-</mode_descriptions>
-<task_artifact>
-Path: task.md
-**Purpose**: A detailed checklist to organize your work. Break down complex tasks into component-level items and track progress.
-**Format**:
-- [ ] uncompleted tasks
-- [/] in progress tasks
-- [x] completed tasks
-- Use indented lists for sub-items
-**Updating**: Mark items as [/] when starting work, and [x] when completed.
-</task_artifact>
-<implementation_plan_artifact>
-Path: implementation_plan.md
-**Purpose**: Document your technical plan during PLANNING mode.
-**Format**:
-# [Goal Description]
-Brief description of the problem and what the change accomplishes.
-## User Review Required
-Document breaking changes or significant design decisions using GitHub alerts.
-## Proposed Changes
-Group files by component. Use [NEW], [MODIFY], [DELETE] markers.
-## Verification Plan
-### Automated Tests
-- Exact commands to run
-### Manual Verification
-- Steps for manual testing
-</implementation_plan_artifact>
-<walkthrough_artifact>
-Path: walkthrough.md
-**Purpose**: After completing work, summarize what you accomplished.
-**Document**:
-- Changes made
-- What was tested
-- Validation results
-</walkthrough_artifact>
-<artifact_formatting_guidelines>
-<format_tips>
-# Markdown Formatting
-Use standard markdown and GitHub Flavored Markdown formatting.
-## Alerts
-Use GitHub-style alerts to emphasize critical information:
-> [!NOTE]
-> Background context, implementation details
-> [!TIP]
-> Performance optimizations, best practices
-> [!IMPORTANT]
-> Essential requirements, critical steps
-> [!WARNING]
-> Breaking changes, compatibility issues
-> [!CAUTION]
-> High-risk actions, security vulnerabilities
-## Code and Diffs
-Use fenced code blocks with language specification:
-```python
-def example_function():
-    return "Hello, World!"
-Use diff blocks to show changes:
-
--old_function_name()
-+new_function_name()
- unchanged_line()
-Mermaid Diagrams
-Create diagrams using mermaid code blocks to visualize architectures and workflows.
-
-Tables
-Use markdown tables for structured data.
-
-File Links
-Create clickable file links: 
-
-link text
-Link to line ranges: 
-
-foo
-Critical Rules
-Keep lines short and concise
-Use file basenames for readability
-Do not surround link text with backticks </format_tips> </artifact_formatting_guidelines>
-<workflow_context>
-You have access to workflow artifacts that track the current state of development:
-- **AnalystOutput**: Requirements analysis and acceptance criteria
-- **ArchitectPlan**: Technical design and implementation plan
-- **ReviewVerdict**: Code review results and approval status
-
-**Check these artifacts before delegating** to understand what phase you're in and what has been completed.
-</workflow_context>
-<communication_style>
-
-Formatting: Format responses in GitHub-style markdown. Use backticks for file, directory, function, and class names.
-Proactiveness: Be proactive only in the course of completing the user task. Do not surprise the user with unexpected actions.
-Helpfulness: Respond like a helpful software engineer explaining your work to a collaborator.
-Ask for clarification: If unsure about the USER intent, always ask for clarification rather than making assumptions.
-Concise: Minimize output tokens while maintaining helpfulness, quality, and accuracy. </communication_style>
-<code_style>
-
-IMPORTANT: DO NOT ADD ***ANY*** COMMENTS unless asked
-Always follow security best practices
-Never introduce code that exposes or logs secrets and keys
-Never commit secrets or keys to the repository
-NEVER commit changes unless the user explicitly asks you to </code_style>
-The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** designs the solution 3. **Developer** implements code and tests 4. **Reviewer** validates the result 5. Create Pull Request for merge to main 
-""")
+        self.auth_token = auth_token
 
         super().__init__(
             name="Development Team",
@@ -313,11 +162,189 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             instructions=leader_instructions,
             user_id=user_id,
             debug_mode=debug_mode,
-            members=[analyst, architect, developer, reviewer, worker, verifier],
+            members=[self.analyst, self.architect, self.developer, self.reviewer, self.worker, self.verifier],
         )
 
         # Expose members attribute for Agno framework compatibility
         self.members = self.members
+
+    def run(
+        self,
+        message: Optional[str] = None,
+        stream: bool = False,
+        **kwargs,
+    ) -> Any:
+        """
+        Orchestrates the workflow execution based on the current state.
+        Overrides the default Team run method to implement state-driven logic.
+        """
+        if not self.task_id:
+            # Fallback to standard team behavior if no task_id (e.g. just chatting)
+            return super().run(message=message, stream=stream, **kwargs)
+
+        # 1. Load State
+        current_state = self._load_state(self.task_id)
+        print(f"[Team] Task {self.task_id} state: {current_state}")
+
+        response = None
+        executed_role = None
+
+        # 2. State-Based Routing
+        # If the user message is explicit override, we might want to handle that,
+        # but generally we follow the state.
+
+        # State: ANALYSIS -> Analyst
+        if current_state == "ANALYSIS" or current_state == "TODO": # Default start
+            if self.should_delegate_to_analyst(message or ""):
+                print("[Team] Routing to Analyst")
+                response = self.analyst.run(message=message, stream=stream, **kwargs)
+                executed_role = "Analyst"
+            else:
+                # User asking simple questions, handled by Team Lead or Analyst
+                # Even if simple question, Analyst handles it contextually
+                response = self.analyst.run(message=message, stream=stream, **kwargs)
+                executed_role = "Analyst"
+
+        # State: PLANNING -> Architect
+        elif current_state == "PLANNING":
+            print("[Team] Routing to Architect")
+            # We need to make sure Architect has the requirements.
+            # They are in artifacts, agent should find them via context or tools.
+            response = self.architect.run(message=message, stream=stream, **kwargs)
+            executed_role = "Architect"
+
+        # State: CODING -> Developer OR Worker (Jules)
+        elif current_state == "CODING" or current_state == "IN_PROGRESS":
+            # Complexity Routing
+            is_complex = self._check_complexity()
+
+            if is_complex:
+                print("[Team] Routing to Worker (Complex Task)")
+                # Check if session already started?
+                session_id = self._get_jules_session_id()
+                if session_id:
+                    print("[Team] Jules session active. Checking status is async via webhook.")
+                    return "Jules is working on your task. You will be notified when a PR is created."
+                else:
+                    response = self.worker.run(message=message, stream=stream, **kwargs)
+                    executed_role = "Worker"
+            else:
+                print("[Team] Routing to Developer (Simple Task)")
+                response = self.developer.run(message=message, stream=stream, **kwargs)
+                executed_role = "Developer"
+
+        # State: REVIEW -> Reviewer
+        elif current_state == "REVIEW":
+            print("[Team] Routing to Reviewer")
+            response = self.reviewer.run(message=message, stream=stream, **kwargs)
+            executed_role = "Reviewer"
+
+        # State: VERIFY -> Verifier
+        elif current_state == "VERIFY":
+            print("[Team] Routing to Verifier")
+            response = self.verifier.run(message=message, stream=stream, **kwargs)
+            executed_role = "Verifier"
+
+        else:
+            # Default fallback
+            return super().run(message=message, stream=stream, **kwargs)
+
+        # 3. Handle Workflow State Update
+        if response and executed_role:
+            # Extract content from response
+            # Response type from .run() depends on 'stream' and 'response_model'.
+            # Agno Agent.run returns RunResponse or generator.
+            # Assuming not streaming for now or handling full response.
+
+            output_content = response # If string or object
+
+            # If response is an object with 'content' or 'messages', extract the last message content
+            if hasattr(response, "content"):
+                output_content = response.content
+
+            # Use task_id as session_id context for saving artifacts
+            session_id = self.task_id
+
+            self.transition_to_next_step(
+                task_id=self.task_id,
+                current_role=executed_role,
+                output=output_content,
+                session_id=session_id
+            )
+
+        return response
+
+
+    def _load_state(self, task_id: str) -> str:
+        """Fetches the current task status from the API/DB."""
+        # We can use TaskManagementTool logic or direct DB if available.
+        # Since we have TaskManagementTool initialized but not exposed as method...
+        # Let's verify if we can access it.
+        # For robustness, we'll try to use the API endpoint manually or via tool.
+
+        base_url = os.getenv("API_BASE_URL", "http://api:8080")
+        url = f"{base_url}/api/project-tasks/{task_id}"
+
+        try:
+            headers = {}
+            secret = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+            if secret:
+                headers["X-Internal-Secret"] = secret
+            elif self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            resp = requests.get(url, headers=headers)
+            if resp.ok:
+                data = resp.json()
+                return data.get("status", "TODO")
+        except Exception as e:
+            print(f"[Team] Error loading state: {e}")
+
+        return "TODO"
+
+    def _check_complexity(self) -> bool:
+        """
+        Determines if the task is complex (requires Jules) or simple (Developer).
+        Checks for complexity artifact or Architect Plan details.
+        """
+        if not self.workflow_storage:
+            return False # Default to simple if no storage
+
+        try:
+            # Check for ArchitectPlan
+            plan_artifact = self.workflow_storage.get_artifact_by_task(self.task_id, "ArchitectPlan")
+            if plan_artifact:
+                content = plan_artifact.get("content", {})
+                # Logic: If many files (>3) or specific flag, considered complex.
+                # For now, let's look for a flag or default to True if Architect didn't specify.
+                # Or maybe Architect should have output "Complexity: High".
+                # Let's assume High complexity for now if we are in CODING phase via Architect.
+
+                # Refined logic: If "technical_approach" mentions "Jules" or "Complex", or files > 2
+                files = content.get("files_to_modify", []) + content.get("files_to_create", [])
+                if len(files) > 2:
+                    return True
+
+            # Fallback: check if we have a "Complexity" artifact
+            comp = self.workflow_storage.get_artifact_by_task(self.task_id, "Complexity")
+            if comp and comp.get("content", {}).get("level") == "HIGH":
+                return True
+
+        except Exception as e:
+            print(f"[Team] Error checking complexity: {e}")
+
+        return False # Default to simple
+
+    def _get_jules_session_id(self) -> Optional[str]:
+        """Checks if a Jules session has been started for this task."""
+        if not self.workflow_storage:
+            return None
+
+        # Look for Worker artifact
+        worker_artifact = self.workflow_storage.get_artifact_by_task(self.task_id, "JulesSession")
+        if worker_artifact:
+            return worker_artifact.get("content", {}).get("session_id")
+        return None
 
     def _parse_agent_output(self, output: Any, schema_class: Type[BaseModel]) -> Any:
         """Parses the agent output (string or dict). Returns Pydantic model if possible, else dict or str."""
@@ -365,7 +392,7 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         self, task_id: str, current_role: str, output: any, session_id: str
     ):
         """
-        Orchestrates the workflow state machine.
+        Orchestrates the workflow state machine updates.
         Called after an agent completes its task.
         """
         if not self.workflow_storage:
@@ -374,10 +401,7 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         # 0. Parse Output
         parsed_output = self._parse_agent_output(output, BaseModel)
 
-        # 1. Save Artifact (generic fallback)
-        # Note: If Analyst used save_requirements tool, the artifact is already saved via API.
-        # But we also save the conversation output as an artifact record in workflow storage.
-
+        # 1. Save Artifact
         artifact_type = "Markdown"
         content = parsed_output
         
@@ -402,20 +426,29 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             session_id, task_id, current_role, artifact_type, content
         )
 
+        # Also save Jules Session if Worker output contains it
+        if current_role == "Worker" and isinstance(content, dict) and "name" in content:
+            # Assume content is session object
+            self.workflow_storage.save_artifact(
+                session_id, task_id, "JulesSession", "Dict", {"session_id": content.get("name")}
+            )
+
         # 2. Update Status & Determine Next Step
         next_status = None
 
         if current_role == "Analyst":
-            # For Analyst, trust the tool usage primarily.
-            # But if output explicitly says "requirements saved" or similar, we might want to ensure state.
-            pass
+            # State transition is handled by tool save_requirements usually,
+            # but if it returns here, we might verify.
+            # If artifact is AnalystOutput, we move to PLANNING
+            if artifact_type == "AnalystOutput" or (isinstance(content, dict) and "functional_requirements" in content):
+                 next_status = "PLANNING"
 
         elif current_role == "Architect":
             # Check if output contains a plan
             is_complete = False
             if isinstance(parsed_output, ArchitectPlan):
                 is_complete = True
-            elif isinstance(parsed_output, dict) and ("implementation_plan" in parsed_output or "context" in parsed_output):
+            elif isinstance(parsed_output, dict) and ("implementation_plan" in parsed_output or "files_to_modify" in parsed_output):
                 is_complete = True
             elif isinstance(parsed_output, str) and ("## 🛠 Implementation Plan" in parsed_output or "## 🏗 Architecture Decision" in parsed_output):
                 is_complete = True
@@ -425,6 +458,11 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             else:
                 print("[Team] Architect output appears incomplete. Staying in planning phase.")
                 return
+
+        elif current_role == "Worker":
+            # Worker (Jules) usually works async. If it returns immediately with session started:
+            pass
+
         elif current_role == "Reviewer":
             # Check for "Approved" string in markdown if it's string, or property if dict
             is_approved = False
@@ -527,44 +565,5 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             return False
 
         # Check workflow context - if we're in active development, prefer developer for simple messages
-        if self.workflow_storage and self.task_id:
-            try:
-                # Get current phase from workflow artifacts
-                current_phase = None
-                artifacts = [
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "AnalystOutput"
-                    ),
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "ArchitectPlan"
-                    ),
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "ReviewVerdict"
-                    ),
-                ]
-
-                if artifacts[2]:  # Review completed
-                    current_phase = "verification"
-                elif artifacts[1]:  # Architecture completed
-                    current_phase = "development"
-                elif artifacts[0]:  # Analysis completed
-                    current_phase = "design"
-
-                # If we're in active development phase AND this is a simple message,
-                # delegate to developer instead of analyst
-                if current_phase in ["development", "design"]:
-                    is_simple_message = (
-                        any(word in message_lower for word in continuation_words)
-                        or any(phrase in message_lower for phrase in status_words)
-                        or any(word in message_lower for word in casual_words)
-                        or len(message.split()) <= 2
-                    )
-                    if is_simple_message:
-                        return False
-
-            except Exception as e:
-                print(f"[Team] Error checking workflow context: {e}")
-                # Continue with delegation on error
-
-        # Default: delegate to analyst for safety (new complex requests)
+        # Note: run() method now handles phase checking, so this might be redundant or just a helper.
         return True
