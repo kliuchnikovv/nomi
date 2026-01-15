@@ -1,6 +1,8 @@
 from typing import Optional
 import os
+import json
 import requests
+import redis
 from sqlalchemy import create_engine, text
 from agno.tools import Toolkit
 from agno.utils.log import logger
@@ -16,11 +18,13 @@ class TaskManagementTool(Toolkit):
         self.api_url = base_url
         self.user_id = user_id
         self.auth_token = auth_token
+        self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         self.register(self.update_task_status)
         self.register(self.list_projects)
         self.register(self.get_task_status)
         self.register(self.create_project_task)
         self.register(self.create_subtask)
+        self.register(self.trigger_jules_monitoring)
 
 
     def update_task_status(self, task_id: str, status: str, pr_url: Optional[str] = None, artifacts: Optional[dict] = None) -> str:
@@ -269,3 +273,24 @@ class TaskManagementTool(Toolkit):
             if e.response is not None:
                 return f"Error creating subtask: {e.response.text}"
             return f"Error creating subtask: {str(e)}"
+
+    def trigger_jules_monitoring(self, task_id: str, session_id: str) -> str:
+        """
+        Triggers async monitoring of a Jules session via Redis.
+        The RedisWorker will poll for completion and update task status.
+
+        Args:
+            task_id (str): The internal task ID to update when done.
+            session_id (str): The Jules session ID to monitor.
+
+        Returns:
+            str: Confirmation message or error.
+        """
+        try:
+            r = redis.from_url(self.redis_url)
+            message = json.dumps({"task_id": task_id, "session_id": session_id})
+            r.publish("jules:monitor", message)
+            return f"Monitoring triggered for Task {task_id} (Session {session_id})"
+        except Exception as e:
+            logger.error(f"Failed to trigger Jules monitoring: {e}")
+            return f"Error triggering monitoring: {str(e)}"

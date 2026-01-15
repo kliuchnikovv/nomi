@@ -14,6 +14,8 @@ from src.server.utils import make_error
 from src.server.redis_session import RedisSession
 from src.agents.factory import AgentFactory
 from src.tools.config import ToolConfigClient
+from src.tools.jules import JulesTools
+from src.tools.task_manager import TaskManagementTool
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,11 @@ class RedisWorker:
         self.pubsub = None
         self.running = False
         self._tasks = set()
+        
+        # Tools for async Jules monitoring
+        jules_api_key = os.getenv("JULES_API_KEY")
+        self.jules_tool = JulesTools(api_key=jules_api_key) if jules_api_key else None
+        self.task_tool = TaskManagementTool()
 
     async def start(self):
         """Start the Redis worker."""
@@ -40,11 +47,11 @@ class RedisWorker:
             self.redis = redis.from_url(self.redis_url, decode_responses=True)
             self.pubsub = self.redis.pubsub()
             
-            # Subscribe to chat requests: chat:request:*
-            # Pattern: chat:request:<chat_id>
+            # Subscribe to chat requests AND jules monitoring events
             await self.pubsub.psubscribe("chat:request:*")
+            await self.pubsub.subscribe("jules:monitor")
             
-            logger.warning("[RedisWorker] Successfully subscribed to chat:request:*")
+            logger.warning("[RedisWorker] Successfully subscribed to chat:request:* and jules:monitor")
             
             asyncio.create_task(self._process_messages())
             
@@ -84,27 +91,36 @@ class RedisWorker:
 
     async def _handle_message(self, message: dict):
         """Handle a single message from Redis."""
-        # message format: {'type': 'pmessage', 'pattern': 'chat:request:*', 'channel': 'chat:request:<id>', 'data': '...'}
-        channel = message.get("channel")
+        channel = message.get("channel", "")
         data = message.get("data")
         
         if not channel or not data:
             return
 
-        # Extract chat_id from channel
+        # Case 1: Jules Monitoring Event
+        if channel == "jules:monitor":
+            try:
+                payload = json.loads(data)
+                task_id = payload.get("task_id")
+                session_id = payload.get("session_id")
+                if task_id and session_id:
+                    logger.info(f"[RedisWorker] Starting async monitoring for Task {task_id}, Session {session_id}")
+                    task = asyncio.create_task(self._poll_jules_status(task_id, session_id))
+                    self._tasks.add(task)
+                    task.add_done_callback(self._tasks.discard)
+            except Exception as e:
+                logger.error(f"[RedisWorker] Failed to handle jules:monitor: {e}")
+            return
+
+        # Case 2: Chat Request (pattern match)
         # channel: chat:request:<chat_id>
         parts = channel.split(":")
-        if len(parts) < 3:
-            logger.warning(f"[RedisWorker] Invalid channel format: {channel}")
-            return
-            
-        chat_id = parts[2]
-        
-        # Fire and forget task to handle the request
-        logger.info("[RedisWorker] RECEIVED chat:request:%s (len=%d)", chat_id, len(data))
-        task = asyncio.create_task(self._process_request(chat_id, data))
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        if len(parts) >= 3 and parts[0] == "chat" and parts[1] == "request":
+            chat_id = parts[2]
+            logger.info("[RedisWorker] RECEIVED chat:request:%s (len=%d)", chat_id, len(data))
+            task = asyncio.create_task(self._process_request(chat_id, data))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
 
     
     # Global task registry
@@ -181,3 +197,70 @@ class RedisWorker:
             pass # Expected
         except Exception as e:
             logger.error(f"[RedisWorker] Error processing request for {chat_id}: {e}", exc_info=True)
+
+    async def _poll_jules_status(self, task_id: str, session_id: str):
+        """
+        Periodically polls Jules API for session completion.
+        Updates task status to REVIEW upon success or FAILED on error.
+        """
+        if not self.jules_tool:
+            logger.error("[RedisWorker] Cannot poll Jules: Tool not initialized (Missing JULES_API_KEY)")
+            return
+
+        timeout_minutes = 30
+        poll_interval = 30
+        end_time = asyncio.get_event_loop().time() + (timeout_minutes * 60)
+
+        logger.info(f"[RedisWorker] Polling Jules session {session_id} for Task {task_id}")
+
+        while asyncio.get_event_loop().time() < end_time:
+            try:
+                # Use run_in_executor because JulesTools uses sync requests
+                status_json = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self.jules_tool.wait_for_completion,
+                    session_id,
+                    1,  # Check for 1 minute
+                    15  # Poll every 15 sec inside the blocking call
+                )
+
+                result = json.loads(status_json)
+                status = result.get("status")
+
+                if status == "completed":
+                    pr_url = result.get("pr_url")
+                    logger.info(f"[RedisWorker] Session {session_id} COMPLETED. PR: {pr_url}")
+
+                    artifacts = {"pr_url": pr_url} if pr_url else {}
+                    await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        self.task_tool.update_task_status,
+                        task_id,
+                        "REVIEW",
+                        pr_url,
+                        artifacts
+                    )
+                    return
+
+                elif status == "failed":
+                    reason = result.get("reason", "Unknown")
+                    logger.error(f"[RedisWorker] Session {session_id} FAILED: {reason}")
+                    await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        self.task_tool.update_task_status,
+                        task_id,
+                        "FAILED",
+                        None,
+                        {"error": reason}
+                    )
+                    return
+
+                # If still running, continue polling
+                await asyncio.sleep(poll_interval)
+
+            except Exception as e:
+                logger.error(f"[RedisWorker] Error polling Jules session {session_id}: {e}")
+                await asyncio.sleep(poll_interval)
+
+        # Timeout reached
+        logger.warning(f"[RedisWorker] Timeout waiting for Jules session {session_id}")

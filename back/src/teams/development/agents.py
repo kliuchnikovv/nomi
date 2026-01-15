@@ -15,6 +15,7 @@ from src.teams.development.models import (
 from src.tools.task_manager import TaskManagementTool
 from src.rag_service import KnowledgeSearchTool
 from src.tools.jules import JulesTools
+from src.tools.git import GitTools
 
 
 # --- ANALYST ---
@@ -175,8 +176,13 @@ class DeveloperAgent(Agent):
         self,
         model: Model,
         tools: List[Toolkit],
+        git_tool: Optional[GitTools] = None,
         debug_mode: bool = False
     ):
+        agent_tools = tools if tools else []
+        if git_tool:
+            agent_tools.append(git_tool)
+
         super().__init__(
             name="Developer",
             role="Developer",
@@ -195,7 +201,7 @@ class DeveloperAgent(Agent):
                 2. Implement changes file by file.
                 3. Run tests.
             """),
-            tools=tools,
+            tools=agent_tools,
             markdown=True,
             debug_mode=debug_mode,
         )
@@ -207,8 +213,13 @@ class ReviewerAgent(Agent):
         self,
         model: Model,
         tools: List[Toolkit],
+        git_tool: Optional[GitTools] = None,
         debug_mode: bool = False
     ):
+        agent_tools = tools if tools else []
+        if git_tool:
+            agent_tools.append(git_tool)
+
         super().__init__(
             name="Reviewer",
             role="Reviewer",
@@ -228,7 +239,7 @@ class ReviewerAgent(Agent):
                 Если все отлично, ответь только одним словом: APPROVED. Если есть проблемы, составь нумерованный список замечаний с указанием файла и строки, и рекомендацией по исправлению. Будь безжалостен к ошибкам.
             """),
             response_model=ReviewVerdict,
-            tools=tools,
+            tools=agent_tools,
             markdown=True,
             debug_mode=debug_mode,
         )

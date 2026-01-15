@@ -1,3 +1,4 @@
+from textwrap import dedent
 from typing import Optional, List, Any, Type
 import os
 import re
@@ -40,6 +41,7 @@ from src.rag_service import KnowledgeSearchTool
 from src.workflow.agent import PgWorkflowStorage, WorkflowAgent
 from src.tools.jules import JulesTools
 from src.tools.task_manager import TaskManagementTool
+from src.tools.git import GitTools
 
 # Import agents from the new agents.py file
 from src.teams.development.agents import (
@@ -108,35 +110,25 @@ analyst_instructions = dedent("""
 """)
 
 architect_instructions = dedent("""
-    You are a System Architect. You are given functional requirements. Your task is to design a technical solution that implements these requirements. Your actions:
+    You are a System Architect. You are given functional requirements. Your task is to design a technical solution.
 
-    Choose a suitable stack (if not specified) or follow the project's current stack.
+    # Actions
+    1. **Design**: Choose stack, define file structure and data schemas.
+    2. **Plan**: Break down the work into independent subtasks for the Developer/Jules.
+    3. **Create Tasks**: You MUST use the `create_subtask` tool to create a real task in the database for each implementation step.
+       - Title: Concise name (e.g., "Impl Backend API")
+       - Description: Technical details, file paths.
+    4. **Output**: Generate the `ArchitectPlan` artifact.
 
-    Determine the list of files that need to be created or modified.
-
-    Describe the data structure (JSON, DB schemas) and function/API signatures.
-
-    Create a step-by-step plan for the Developer.
-
-    Response Format:
-
-    Tech Stack: Languages, libs.
-
-    File Structure: File tree.
-
-    Integration Plan: Which methods/classes to create, which to modify.
-
-    Be concise and technical. Do not write code implementation, only architecture.
-
-    Task: Create a technical design document.
-
-    DoD (Definition of Done):
-
-    Specific file names (paths) are provided.
-
-    No contradictions with the Analyst's PRD.
-
-    External dependencies (libraries) are specified, if needed.
+    # Response Format
+    Tech Stack: ...
+    Subtasks Created:
+    - [ID] Task Title
+    
+    Task: Create technical design and subtasks.
+    DoD:
+    - Subtasks are created in the system via `create_subtask`.
+    - Plan covers all requirements.
 """)
 
 developer_instructions = dedent("""
@@ -384,34 +376,17 @@ You operate an asynchronous remote developer (Jules). Your job is to START the s
 
 # Role
 1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
-2. **Execute**: Use `jules_api` to create a session and execute the plan (if available).
-3. **Monitor**: Monitor execution in real-time and wait for the Pull Request.
-4. **Sync State**: Step statuses are updated automatically by `monitor_execution`. Finally update to `REVIEW`.
-
-# Workflow
-1. **Check Tools**: Verify if `jules_api` tool is available.
-2. **Verify Source Access**: Call `list_sources()` to get available repositories.
-3. **Branch Naming**: You MUST define the `startingBranch` or `branchName` in the prompt to match this pattern: `feature/{task_id}/[brief-desc]`.
-   - The UUID `task_id` is CRITICAL for the webhook to identify the task later.
-4. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
-   - **CRITICAL**: The `source` parameter MUST use the format: `sources/github/<owner>/<repo>`
-   - Example: If repository_name is `kliuchnikovv/genie-api`, use `sources/github/kliuchnikovv/genie-api`
-   - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
-4. **Monitor**: Call `monitor_execution(session_id, task_id, architect_plan)`. This will block until completion AND update step statuses in real-time.
-5. **Finish**:
-   - Return a message: "Jules Session Started: [Session ID]. Status: IN_PROGRESS."
-   - Do NOT call `wait_for_pr` or block.
-
-# Jules Source Format
-The `source` parameter for `create_session` must be in the format: `sources/github/<owner>/<repo>`
-- From ArchitectPlan.context.repository_name: `owner/repo` → convert to `sources/github/owner/repo`
-- Always verify the source exists by checking `list_sources()` output first!
-
-# Tools
-- `jules_api`: Create sessions, list sources (optional - requires JULES_API_KEY).
-- `task_management_tool`: Update task status in Genie.
-
-**IMPORTANT**: If `jules_api` tool is not available (JULES_API_KEY not set), inform the Team Leader that the task needs manual implementation via the Developer agent instead.
+2. **Execute**: Use `jules_api` to create a session (`create_session`).
+   - `automationMode`: "AUTO_CREATE_PR"
+   - `source`: "sources/github/owner/repo"
+   - `prompt`: Detailed instructions based on the plan.
+3. **Async Handoff**: 
+   - Once the session is created, your job is DONE.
+   - Return the Session ID.
+   - The system will automatically start monitoring the session.
+   
+# Output
+"Jules Session Started: [session_id]. Status: IN_PROGRESS."
 """)
 
 verifier_instructions = dedent("""
@@ -455,6 +430,11 @@ class DevelopmentTeam(Team):
         # Initialize GitHub tools if token is provided
         # 1. Server-side Tools
         github_tool = GithubTools(access_token=github_token) if github_token else None
+        
+        # Initialize Git Tool (Local)
+        # Assuming we are running in the root of the repo or a specific path
+        # In Docker/Cloud, this might be the mounted volume path.
+        git_tool = GitTools(repo_path=".", allow_destructive=False)
 
         # Initialize Task Tool (needed for listing projects)
         task_tool = TaskManagementTool(user_id=user_id, auth_token=auth_token)
@@ -472,7 +452,7 @@ class DevelopmentTeam(Team):
         )
 
         # 2. Architect
-        architect_tools = []
+        architect_tools = [task_tool]
         if github_tool:
             architect_tools.append(github_tool)
         if client_tools:
@@ -494,6 +474,7 @@ class DevelopmentTeam(Team):
         self.developer = DeveloperAgent(
             model=model,
             tools=developer_tools,
+            git_tool=git_tool,
             debug_mode=debug_mode
         )
 
@@ -507,6 +488,7 @@ class DevelopmentTeam(Team):
         self.reviewer = ReviewerAgent(
             model=model,
             tools=reviewer_tools,
+            git_tool=git_tool,
             debug_mode=debug_mode
         )
 
@@ -533,6 +515,8 @@ class DevelopmentTeam(Team):
             team_tools.append(knowledge_tool)
         if client_tools:
             team_tools.extend(client_tools)
+        # Note: We don't necessarily give git_tool to Team Lead directly, 
+        # as they delegate. But we could if helpful for status checks.
 
         # Workflow Storage
         self.workflow_storage = PgWorkflowStorage(db_url) if db_url else None
@@ -923,6 +907,12 @@ class DevelopmentTeam(Team):
                  elif isinstance(parsed_output, str):
                      # Try to find "sessions/..." or UUID
                      pass
+
+                 # Trigger Monitoring if session found
+                 if session_id_val:
+                     print(f"[Team] Triggering background monitoring for {session_id_val}")
+                     # Trigger async monitoring via RedisWorker
+                     self.task_tool.trigger_jules_monitoring(task_id, session_id_val)
 
                  # We stay in CODING stage, but we might want to update the state object
                  # Current implementation of StateManager.transition is for changing stages primarily
