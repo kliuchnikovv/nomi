@@ -32,6 +32,10 @@ class AnalystAgent(Agent):
     ):
         self.task_tool = task_tool
         self.task_id = task_id
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("[AnalystAgent] Initialized with task_id=%s", task_id)
 
         tools = [self.save_requirements, self.ask_clarification, task_tool]
         if knowledge_tool:

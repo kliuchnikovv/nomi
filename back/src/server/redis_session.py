@@ -703,12 +703,16 @@ Continue the conversation."""
                         continue
 
                     if chunk != captured_reasoning:
-                        if is_member_event:
+                        # Use current_agent_name to detect if we're in a member context
+                        # This is more reliable than per-event agent_id
+                        is_member_context = current_agent_name is not None and current_agent_name not in ("Team Lead", "Team Leader", "Development Team")
+                        
+                        if is_member_event or is_member_context:
                             yield {
                                 "type": "member_response",
                                 "content": chunk,
-                                "agent_id": agent_id,
-                                "agent_name": agent_name,
+                                "agent_id": agent_id or current_agent_name,
+                                "agent_name": agent_name or current_agent_name,
                             }
                         else:
                             yield {
@@ -727,6 +731,8 @@ Continue the conversation."""
                     if agent_name in self.active_agents:
                         self.active_agents.discard(agent_name)
                         asyncio.create_task(self._broadcast_system_status())
+                    # Reset current_agent_name so next content goes to Team Lead
+                    current_agent_name = None
                 # --------------------------------
 
         elif hasattr(result, "__iter__") and not isinstance(result, (str, bytes)):

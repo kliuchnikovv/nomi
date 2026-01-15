@@ -7,7 +7,7 @@ import { ContentPart } from './models';
 import { useTheme } from '../../../context/ThemeContext';
 import { createMarkdownStyles } from './dynamicStyles';
 import { createMarkdownRules } from './markdownRules';
-import { SingleToolCall, ReasoningBlock, MemberResponseBlock, CollapsibleSteps } from './ToolCalls';
+import { SingleToolCall, ReasoningBlock, AgentThinkingBlock, CollapsibleSteps } from './ToolCalls';
 import { DocumentBlock } from './DocumentBlock';
 
 /**
@@ -56,8 +56,7 @@ function parseDocument(text: string): { msg: string, content: any } | null {
 }
 
 export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
-    const { showToolCalls, showReasoning, showMemberResponses, chatMode } = useChat();
-    const isTeamMode = chatMode === 'team';
+    const { showToolCalls, showReasoning, showMemberResponses } = useChat();
     const { theme } = useTheme();
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
@@ -79,9 +78,9 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                 return false;
             }
 
+            // Member responses (agent thinking) - respect showMemberResponses toggle
             if ((part as any).type === 'member_response') {
-                // Member responses are now considered primary content (bubbles), so we always show them.
-                return true;
+                return showMemberResponses;
             }
             return true;
         });
@@ -150,36 +149,24 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                     const documentData = parseDocument(textContent);
 
                     if (documentData) {
-                        const isTeamMode = useChat().chatMode === 'team';
+                        // Team Lead text: render as plain Markdown (no bubble)
                         return (
                             <View key={`doc-${groupIndex}`}>
-                                {isTeamMode ? (
-                                    <MemberResponseBlock
-                                        agentName="Team Lead"
-                                        text={documentData.msg}
-                                    />
-                                ) : (
+                                <Pressable
+                                    onLongPress={() => onLongPress(documentData.msg)}
+                                    delayLongPress={250}
+                                    style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+                                >
                                     <Markdown style={markdownStyles as any} rules={markdownRules}>
                                         {documentData.msg}
                                     </Markdown>
-                                )}
-                                <DocumentBlock title="Details" content={documentData.content} />
+                                </Pressable>
+                                <DocumentBlock title="Детали" content={documentData.content} />
                             </View>
                         );
                     }
 
-                    // Standard text rendering
-                    const isTeamMode = useChat().chatMode === 'team';
-                    if (isTeamMode) {
-                        return (
-                            <MemberResponseBlock
-                                key={`text-${groupIndex}`}
-                                agentName="Team Lead"
-                                text={textContent}
-                            />
-                        );
-                    }
-
+                    // Team Lead text: render as plain Markdown (no bubble) - same for both modes
                     return (
                         <Pressable
                             key={`text-${groupIndex}`}
@@ -193,9 +180,10 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                         </Pressable>
                     );
                 } else if (group.type === 'member' && group.part) {
+                    // Team member responses: show as collapsible "thinking" blocks
                     const memberPart = group.part as any;
                     return (
-                        <MemberResponseBlock
+                        <AgentThinkingBlock
                             key={`member-${groupIndex}`}
                             agentName={memberPart.agent_name}
                             text={memberPart.text}

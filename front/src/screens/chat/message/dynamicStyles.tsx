@@ -229,15 +229,34 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             lineHeight: 18,
             fontStyle: 'italic',
         },
-        // Member response block styles (for team member agent activity)
+        // Agent thinking block styles (for team member agent responses as collapsible "thinking")
+        agentThinkingContainer: {
+            marginVertical: 6,
+            backgroundColor: withAlpha(palette.purple || palette.magenta, 0.08),
+            borderRadius: 8,
+            overflow: 'hidden',
+        },
+        agentThinkingHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingVertical: 6,
+            paddingHorizontal: 10,
+        },
+        agentThinkingHeaderText: {
+            color: palette.purple || palette.magenta,
+            fontSize: 12,
+            fontWeight: '600',
+        },
+        agentThinkingContent: {
+            paddingHorizontal: 10,
+            paddingBottom: 8,
+        },
+        // Legacy member response styles (kept for backward compatibility)
         memberResponseContainer: {
-            marginVertical: 8,
-            alignSelf: 'flex-start',
-            maxWidth: '95%',
-            borderRadius: 16,
-            backgroundColor: theme.surfaceHighlight, // Use standard bubble background
-            borderWidth: 1,
-            borderColor: withAlpha(palette.cyan, 0.2), // Subtle border
+            marginVertical: 6,
+            backgroundColor: withAlpha(palette.purple || palette.magenta, 0.08),
+            borderRadius: 8,
             overflow: 'hidden',
         },
         memberResponseHeader: {
@@ -245,18 +264,16 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingVertical: 6,
-            paddingHorizontal: 12,
-            backgroundColor: withAlpha(palette.cyan, 0.1), // Header slightly darker/tinted
-            borderBottomWidth: 1,
-            borderBottomColor: withAlpha(palette.cyan, 0.1),
+            paddingHorizontal: 10,
         },
         memberResponseHeaderText: {
-            color: palette.cyan,
+            color: palette.purple || palette.magenta,
             fontSize: 12,
             fontWeight: '700',
         },
         memberResponseContent: {
-            padding: 12,
+            paddingHorizontal: 10,
+            paddingBottom: 8,
         },
         memberResponseText: {
             color: theme.textPrimary,

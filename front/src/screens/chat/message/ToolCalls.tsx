@@ -147,9 +147,10 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
     );
 }
 
-// Team member response block for showing agent activity
-// Team member response block for showing agent activity
-export function MemberResponseBlock({ agentName, text }: { agentName: string; text: string }) {
+// Agent thinking block - shows team member agent responses as collapsible "thinking"
+// This displays other agents' work as internal reflections, not direct messages
+export function AgentThinkingBlock({ agentName, text }: { agentName: string; text: string }) {
+    const [expanded, setExpanded] = useState(false);
     const { theme, palette } = useTheme();
     const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
@@ -163,20 +164,34 @@ export function MemberResponseBlock({ agentName, text }: { agentName: string; te
     if (!text) return null;
 
     return (
-        <View style={styles.memberResponseContainer}>
-            <View style={styles.memberResponseHeader}>
-                <Text style={styles.memberResponseHeaderText}>
-                    👤 {agentName}
+        <View style={styles.agentThinkingContainer}>
+            <Pressable
+                onPress={() => setExpanded(!expanded)}
+                style={({ pressed }) => [
+                    styles.agentThinkingHeader,
+                    pressed && { opacity: 0.7 },
+                ]}
+            >
+                <Text style={styles.agentThinkingHeaderText}>
+                    🧠 {agentName}: Размышления
                 </Text>
-            </View>
-            <View style={styles.memberResponseContent}>
-                <Markdown style={markdownStyles as any} rules={markdownRules}>
-                    {text}
-                </Markdown>
-            </View>
+                <Text style={styles.toolCallsExpandIcon}>
+                    {expanded ? '▼' : '▶'}
+                </Text>
+            </Pressable>
+            {expanded && (
+                <View style={styles.agentThinkingContent}>
+                    <Markdown style={markdownStyles as any} rules={markdownRules}>
+                        {text}
+                    </Markdown>
+                </View>
+            )}
         </View>
     );
 }
+
+// Legacy alias for backward compatibility
+export const MemberResponseBlock = AgentThinkingBlock;
 
 // Collapsible steps container for grouping internal parts
 export function CollapsibleSteps({ children, defaultExpanded = false }: { children: React.ReactNode, defaultExpanded?: boolean }) {

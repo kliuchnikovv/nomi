@@ -544,6 +544,31 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
+		// 5.0.1 Inject task_id and project_id from Chat into command
+		// This is critical for DevelopmentTeam agents to save artifacts
+		chatRecord, err := r.store.GetChat(context.Background(), r.initiatorID, r.ID)
+		if err == nil && chatRecord != nil {
+			// Ensure we have a command map to inject into
+			cmdMap, ok := frame.Payload.Command.(map[string]interface{})
+			if !ok {
+				cmdMap = make(map[string]interface{})
+			}
+
+			// Inject task_id if available
+			if chatRecord.TaskID != nil {
+				cmdMap["task_id"] = chatRecord.TaskID.String()
+				r.logger.Info("injected task_id into command", zap.String("task_id", chatRecord.TaskID.String()))
+			}
+
+			// Inject project_id if available
+			if chatRecord.ProjectID != nil {
+				cmdMap["project_id"] = chatRecord.ProjectID.String()
+				r.logger.Info("injected project_id into command", zap.String("project_id", chatRecord.ProjectID.String()))
+			}
+
+			frame.Payload.Command = cmdMap
+		}
+
 		// 5.1 Fetch and Bundle Tools
 		// This ensures Python backend receives tools directly in the message
 		// avoiding an extra HTTP round-trip and race conditions

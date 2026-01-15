@@ -306,3 +306,75 @@ Before marking any task as complete, you MUST execute the following verification
 3. **TypeScript:** `npm run type-check` (or `tsc --noEmit`)
 
 If any command fails (non-zero exit code), you must fix the code and retry. Do not ask for confirmation until tests pass.
+
+---
+
+## Critical Patterns & Fixes
+
+### 1. Asyncio Cancellation (Stop Button)
+
+When handling user cancellation in async code, always catch `asyncio.CancelledError` explicitly and re-raise it:
+
+```python
+async def wrapped_task():
+    try:
+        await some_operation()
+    except asyncio.CancelledError:
+        logger.warning("Task cancelled correctly")
+        raise  # IMPORTANT: Always re-raise CancelledError
+    except Exception as e:
+        # Guard against CancelledError slipping through
+        if isinstance(e, asyncio.CancelledError):
+            raise
+        logger.error(f"Error: {e}")
+```
+
+**File:** `back/src/server/redis_worker.py`
+
+---
+
+### 2. SafeGithubTools (Optional Commit Messages)
+
+Use `SafeGithubTools` instead of `GithubTools` to make `message` parameter optional for file operations:
+
+```python
+from src.tools.factory import SafeGithubTools
+
+# OK - message is optional
+tool = SafeGithubTools(access_token=token)
+tool.create_file(repo_name="owner/repo", path="file.py", content="...")
+```
+
+**File:** `back/src/tools/factory.py`
+
+---
+
+### 3. Context Injection (Project ID & Task ID)
+
+`DevelopmentTeam.run()` automatically injects context into messages:
+
+```
+[SYSTEM CONTEXT - IMPORTANT]
+**Current Project ID**: `uuid`. ALWAYS use this ID when creating tasks.
+**Current Task ID**: `uuid`. Use this as parent_id for subtasks.
+You have access to the following repositories: [...]. Use ONLY these names.
+[END SYSTEM CONTEXT]
+```
+
+**File:** `back/src/teams/development/team.py`
+
+---
+
+### 4. GitHub Integration (Repository Discovery)
+
+Repositories are discovered via GitHub integration — **NOT** from environment variables:
+
+```python
+# Correct: Use list_repos from GitHub integration
+repos = self.github_tool.list_repos(limit=50)
+
+# WRONG: Do NOT use env vars for repo names
+# os.getenv('GITHUB_REPO_NAME')  ❌
+```
+
+**File:** `back/src/teams/development/team.py`

@@ -144,7 +144,7 @@ export function ChatProvider({
             case 'think':
                 setShowToolCalls(false);
                 setShowReasoning(true);
-                setShowMemberResponses(false);
+                setShowMemberResponses(true); // Agent thinking should show in think mode
                 break;
             case 'all':
                 setShowToolCalls(true);

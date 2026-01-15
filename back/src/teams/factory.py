@@ -67,6 +67,11 @@ class TeamFactory:
             # Get project_id and task_id context
             project_id = command_desc.get("project_id")
             task_id = command_desc.get("task_id")
+            
+            logger.info(
+                "[TeamFactory] Building DevelopmentTeam with context: project_id=%s, task_id=%s, user_id=%s",
+                project_id, task_id, effective_user_id
+            )
 
             # Build client tools if specs provided
             client_tools = []
