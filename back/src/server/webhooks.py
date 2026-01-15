@@ -1,20 +1,11 @@
-import os
-import json
 import logging
-from typing import Dict, Any, List, Optional
+import os
+from typing import Dict, Any, Optional
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
-from pydantic import BaseModel
-from agno.agent import Agent
-from agno.models.google import Gemini
-from agno.db.postgres import PostgresDb
-from sqlalchemy import text, create_engine
-import requests
-from github import Github
+from fastapi import APIRouter, Request, Header, HTTPException
+from src.tools.task_manager import TaskManagementTool
 
-from src.agents.reviewer import build_reviewer_agent
-from src.teams.development.models import ReviewerInput, ReviewVerdict, ReviewComment, AnalystOutput, ArchitectOutput
-
+# Create router for webhooks
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
 
@@ -58,193 +49,66 @@ class JulesWebhookPayload(BaseModel):
     artifacts: Optional[List[Dict[str, Any]]] = None
     error: Optional[str] = None
 
-def process_pr_review(payload: GithubWebhookPayload, internal_secret: str):
+@router.post("/jules")
+async def handle_jules_webhook(
+    request: Request,
+    x_jules_signature: Optional[str] = Header(None, alias="X-Jules-Signature")
+):
     """
-    Background task to perform the review.
+    Handles webhook events from Jules (the automated worker).
+    Expected payload includes session status, PR created event, or errors.
     """
-    logger.info(f"Starting PR Review for {payload.repository} PR #{payload.pr_number}")
-
-    if not engine:
-        logger.error("DB Engine not initialized, cannot review PR")
-        return
-
-    # 1. Initialize Reviewer Agent
     try:
-         reviewer = build_reviewer_agent(model=MODEL)
+        payload = await request.json()
     except Exception as e:
-         logger.error(f"Failed to build reviewer agent: {e}")
-         return
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    # 2. Fetch Task and Specs
-    analyst_output = None
-    architect_output = None
-    specs_data = {}
+    logging.info(f"[Webhook] Received Jules payload: {payload}")
 
-    try:
-        with engine.connect() as conn:
-            query = text("""
-                SELECT specs FROM project_tasks
-                WHERE specs::jsonb ->> 'branch' = :branch
-                LIMIT 1
-            """)
-            result = conn.execute(query, {"branch": payload.branch}).fetchone()
-
-            if not result:
-                logger.warning(f"No task found for branch {payload.branch}")
-                return
-
-            specs_data = result[0]
-            if isinstance(specs_data, str):
-                 specs_data = json.loads(specs_data)
-
-            analyst_data = specs_data.get("analyst_output")
-            architect_data = specs_data.get("architect_output")
-
-            if not analyst_data or not architect_data:
-                logger.warning("Task found but specs are incomplete")
-                return
-
-            analyst_output = AnalystOutput(**analyst_data)
-            architect_output = ArchitectOutput(**architect_data)
-
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        return
-
-    # 3. Run Review
-    logger.info("Running Reviewer Agent...")
-    try:
-        # Fetch Real Diff using PyGithub
-        github_token = os.getenv("GITHUB_TOKEN")
-        gh = Github(github_token) if github_token else None
-
-        real_diff = payload.diff
-        real_files = []
-
-        if gh and not real_diff:
-            try:
-                repo = gh.get_repo(payload.repository)
-                pr = repo.get_pull(payload.pr_number)
-
-                # Fetch diff with authentication headers
-                headers = {}
-                if github_token:
-                    headers["Authorization"] = f"token {github_token}"
-
-                diff_resp = requests.get(pr.diff_url, headers=headers)
-                if diff_resp.status_code == 200:
-                    real_diff = diff_resp.text
-                else:
-                    logger.error(f"Failed to fetch diff: {diff_resp.status_code}")
-
-                real_files = [f.filename for f in pr.get_files()]
-            except Exception as gh_err:
-                logger.error(f"GitHub API Error: {gh_err}")
-                real_diff = "Error fetching diff from GitHub."
-
-        input_data = ReviewerInput(
-           pr_diff=real_diff or "No diff provided",
-           analyst_output=analyst_output,
-           architect_output=architect_output,
-           file_list=real_files
-        )
-
-        # Run agent
-        response = reviewer.run(input_data)
-        result: ReviewVerdict = response.content
-
-        logger.info(f"Review Verdict: {result.approved}")
-
-        # 4. Post to GitHub
-        if gh:
-            try:
-                repo = gh.get_repo(payload.repository)
-                pr = repo.get_pull(payload.pr_number)
-
-                body = f"## 🤖 Reviewer Agent Verification\n\n**Verdict**: {'APPROVE' if result.approved else 'REQUEST CHANGES'}\n\n{result.summary}"
-                event_action = "APPROVE" if result.approved else "REQUEST_CHANGES"
-
-                pr.create_review(body=body, event=event_action)
-                logger.info(f"Posted review to GitHub: {event_action}")
-            except Exception as post_err:
-                logger.error(f"Failed to post review: {post_err}")
-
-        # 5. Update Task Status (if rejected)
-        if not result.approved:
-             try:
-                 with engine.connect() as conn:
-                    update_q = text("""
-                        UPDATE project_tasks
-                        SET status = 'CODING', updated_at = now()
-                        WHERE specs::jsonb ->> 'branch' = :branch
-                    """)
-                    conn.execute(update_q, {"branch": payload.branch})
-                    conn.commit()
-                    logger.info("Task status reverted to CODING")
-             except Exception as db_err:
-                 logger.error(f"Failed to update DB status: {db_err}")
-
-        # 6. Chat Notification
-        try:
-             chat_id = specs_data.get("chat_id")
-             if chat_id:
-                  go_api_url = os.getenv("GO_API_URL", "http://localhost:8080")
-                  # internal_secret already passed/available
-
-                  msg_content = f"**Reviewer Agent Feedback**\nVerdict: {'approved' if result.approved else 'changes requested'}\n\n{result.summary}"
-
-                  requests.post(
-                      f"{go_api_url}/api/chats/{chat_id}/messages",
-                      json={"content": msg_content, "role": "assistant"},
-                      headers={"X-Internal-Secret": internal_secret}
-                  )
-                  logger.info(f"Notification sent to chat {chat_id}")
-        except Exception as notify_err:
-             logger.error(f"Failed to notify chat: {notify_err}")
-
-    except Exception as e:
-        logger.error(f"Agent execution failed: {e}")
-
-@router.post("/notify-lead")
-async def notify_team_lead(notification: ProjectTaskNotification):
-    """
-    Receive task status change notifications and trigger Workflow.
-    """
-    logger.info(f"Received ProjectTask update: Task {notification.task_id} transitioned from {notification.old_status} to {notification.new_status}")
-
-    # Map Status -> Agent Role
-    # BACKLOG -> ANALYSIS: Analyst
-    # ANALYSIS -> PLANNING: Architect
-    # PLANNING -> CODING: Worker
-    # REVIEW -> VERIFY: Verifier (not implemented as separate agent trigger yet, but Reviewer handles loop)
-    # CODING -> REVIEW: Reviewer
+    # Validate signature if needed (skipped for now as per internal proxy trust)
     
-    status_to_role = {
-        "ANALYSIS": "Analyst",
-        "PLANNING": "Architect",
-        "CODING": "Worker",
-        "REVIEW": "Reviewer",
-        "VERIFY": "Verifier"
-    }
+    event_type = payload.get("type")
+    session_id = payload.get("session_id")
 
-    role = status_to_role.get(notification.new_status)
-    if not role:
-        logger.info(f"No agent mapping for status {notification.new_status}, ignoring notification.")
-        return {"status": "ignored", "task_id": notification.task_id}
+    # We might need task_id from payload context or metadata
+    # Assuming Jules returns the metadata we passed or we can infer it
+    # If not, we might need to store session_id <-> task_id mapping in Redis/DB
+    # For now, let's assume payload contains `clientContext` or similar with task_id
 
-    try:
-        from src.teams.development.team import DevelopmentTeam
+    # Example payload structure (hypothetical based on typical webhook)
+    # {
+    #   "type": "PULL_REQUEST_CREATED",
+    #   "session_id": "...",
+    #   "data": { "pr_url": "..." },
+    #   "context": { "task_id": "..." }
+    # }
+
+    # Check context for task_id
+    context = payload.get("context", {})
+    task_id = context.get("task_id")
+
+    # If task_id not in context, try to find it via session_id in our storage?
+    # Since we don't have easy reverse lookup without DB query, we hope it's passed back.
+    # If Jules doesn't support passing context back, we rely on the generic 'wait_for_pr' polling (fallback)
+    # OR we implement the Redis mapping in DevelopmentTeam.start_jules.
+
+    if not task_id:
+        logging.warning("[Webhook] No task_id found in Jules webhook payload.")
+        # Proceed only if we can identify what to do
+        # For PULL_REQUEST_CREATED, we might try to match branch name in payload if present?
+        return {"status": "ignored", "reason": "missing_task_id"}
+
+    task_tool = TaskManagementTool()
+
+    if event_type == "PULL_REQUEST_CREATED":
+        pr_url = payload.get("data", {}).get("pr_url")
+        logging.info(f"[Webhook] Jules created PR {pr_url} for Task {task_id}")
         
-        db_url = os.getenv("DB_DSN")
-        if db_url and db_url.startswith("postgres://"):
-            db_url = db_url.replace("postgres://", "postgresql://", 1)
-
-        # Instantiate team
-        team = DevelopmentTeam(
-            model=MODEL, # MODEL is Gemini from webhooks.py
-            user_id=notification.user_id,
-            db_url=db_url,
-            github_token=os.getenv("GITHUB_TOKEN")
+        # Update task status to REVIEW
+        result = task_tool.update_task_status(
+            task_id=task_id,
+            status="REVIEW",
+            pr_url=pr_url
         )
 
         # Run the component

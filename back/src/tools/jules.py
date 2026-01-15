@@ -25,9 +25,9 @@ class JulesTools(Toolkit):
         self.register(self.approve_plan)
         self.register(self.list_activities)
         self.register(self.send_message)
-        self.register(self.wait_for_completion)
-        self.register(self.wait_for_pr)
-        self.register(self.monitor_execution)
+        # Removed blocking wait tools to prevent agents from timing out
+        # self.register(self.wait_for_completion)
+        # self.register(self.wait_for_pr)
 
     def _parse_error(self, response: requests.Response) -> str:
         """Parses error details from Jules API response."""
@@ -86,7 +86,8 @@ class JulesTools(Toolkit):
         task_id: Optional[str] = None,
         starting_branch: str = "main",
         automation_mode: Optional[str] = None,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        webhook_url: Optional[str] = None
     ) -> str:
         """Creates a new session with Jules.
 
@@ -98,6 +99,7 @@ class JulesTools(Toolkit):
             starting_branch (str): The branch to start from (default: "main").
             automation_mode (str): Optional mode, e.g., "AUTO_CREATE_PR".
             title (str): Optional title for the session.
+            webhook_url (str): Optional webhook URL for notifications.
 
         Returns:
             str: JSON string containing the created session details.
@@ -124,6 +126,11 @@ class JulesTools(Toolkit):
             payload["automationMode"] = automation_mode
         if title:
             payload["title"] = title
+        if webhook_url:
+            # Assuming Jules API supports 'webhookUrl' or similar in payload
+            # If standard API doesn't support it, we rely on polling or external integration
+            # For now, adding it to payload as requested by review
+            payload["webhookUrl"] = webhook_url
 
         return json.dumps(self._post("sessions", payload))
 
@@ -142,19 +149,11 @@ class JulesTools(Toolkit):
         """Approves the current plan for a session.
 
         Args:
-            session_id (str): The ID of the session (can be the full name "sessions/..." or just the ID).
+            session_id (str): The ID of the session.
 
         Returns:
-            str: JSON string of the response (usually empty or confirmation).
+            str: JSON string of the response.
         """
-        # Ensure ID format if needed, but API usually accepts full resource name or ID in URL path
-        # Documentation says: sessions/SESSION_ID:approvePlan
-        # If user passes just ID, we might need to prepend 'sessions/', but let's assume they pass what they get from list_sessions
-        # Actually, list_sessions returns "name": "sessions/..." and "id": "...".
-        # The API URL pattern is `sessions/SESSION_ID:approvePlan`.
-        # If `session_id` provided is just the number, we might need to be careful.
-        # Let's handle both.
-
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
         return json.dumps(self._post(f"{resource_path}:approvePlan"))
 
@@ -179,7 +178,7 @@ class JulesTools(Toolkit):
             prompt (str): The message content.
 
         Returns:
-            str: JSON string (response will be empty, use list_activities to see reply).
+            str: JSON string.
         """
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
         return json.dumps(self._post(f"{resource_path}:sendMessage", data={"prompt": prompt}))

@@ -168,6 +168,8 @@ func (h *WebhooksHandler) HandleGitHubWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "processed"})
 }
 
+
+// HandleJulesWebhook proxies the incoming Jules webhook to the Python backend
 func (h *WebhooksHandler) HandleJulesWebhook(c *gin.Context) {
 	// 1. Read Payload
 	payloadBody, err := io.ReadAll(c.Request.Body)

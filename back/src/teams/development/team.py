@@ -41,10 +41,18 @@ from src.workflow.agent import PgWorkflowStorage, WorkflowAgent
 from src.tools.jules import JulesTools
 from src.tools.task_manager import TaskManagementTool
 
+# Import agents from the new agents.py file
+from src.teams.development.agents import (
+    AnalystAgent,
+    ArchitectAgent,
+    DeveloperAgent,
+    ReviewerAgent,
+    WorkerAgent,
+    VerifierAgent,
+)
 # Set up logger
 logger = logging.getLogger(__name__)
 
-# --- Instructions for each role ---
 
 leader_instructions = dedent("""
     You are the **Team Lead** of a high-performance software development team.
@@ -450,64 +458,79 @@ class DevelopmentTeam(Team):
 
         # Initialize Task Tool (needed for listing projects)
         task_tool = TaskManagementTool(user_id=user_id, auth_token=auth_token)
+        knowledge_tool = KnowledgeSearchTool(user_id=user_id, auth_token=auth_token) if user_id else None
 
+        # 1. Analyst
+        self.analyst = AnalystAgent(
+            model=model,
+            task_tool=task_tool,
+            knowledge_tool=knowledge_tool,
+            github_tool=github_tool,
+            client_tools=client_tools,
+            debug_mode=debug_mode,
+            task_id=task_id,
+        )
+
+        # 2. Architect
         architect_tools = []
         if github_tool:
             architect_tools.append(github_tool)
-
-        # Jules API key: prefer passed parameter, fallback to env var
-        effective_jules_key = jules_api_key or os.getenv("JULES_API_KEY", "")
-        worker_tools = [task_tool]
-        
-        # Check if Jules tool is already in client_tools
-        jules_tool_exists = False
         if client_tools:
-            for tool in client_tools:
-                if isinstance(tool, JulesTools):
-                    jules_tool_exists = True
-                    print("[DevelopmentTeam] Found existing JulesTools in client_tools")
-                    break
+            architect_tools.extend(client_tools)
         
-        if jules_tool_exists:
-            # Already have the tool, no need to add again or warn
-            pass
-        elif effective_jules_key:
-            worker_tools.insert(0, JulesTools(api_key=effective_jules_key))
-            print("[DevelopmentTeam] Jules tools enabled")
-        else:
-            print(
-                "[DevelopmentTeam] Warning: Jules API key not provided, Jules tools disabled"
-            )
+        self.architect = ArchitectAgent(
+            model=model,
+            tools=architect_tools,
+            debug_mode=debug_mode
+        )
 
-        # Analyst and Verifier tools
-        analyst_tools = []
-        
-        # ADD TASK TOOL TO ANALYST (So they can list projects)
-        analyst_tools.append(task_tool)
-
-        if user_id:
-            analyst_tools.append(
-                KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
-            )
+        # 3. Developer
+        developer_tools = []
         if github_tool:
-            analyst_tools.append(github_tool)
-
-        # Add client tools to all agents (or specific ones)
+            developer_tools.append(github_tool)
         if client_tools:
-            analyst_tools.extend(client_tools)
-            if github_tool:
-                architect_tools.extend(client_tools)
-            # Worker might not need all client tools, but let's be inclusive if they are generic
-            worker_tools.extend(client_tools)
+            developer_tools.extend(client_tools)
+
+        self.developer = DeveloperAgent(
+            model=model,
+            tools=developer_tools,
+            debug_mode=debug_mode
+        )
+
+        # 4. Reviewer
+        reviewer_tools = []
+        if github_tool:
+            reviewer_tools.append(github_tool)
+        if client_tools:
+            reviewer_tools.extend(client_tools)
+
+        self.reviewer = ReviewerAgent(
+            model=model,
+            tools=reviewer_tools,
+            debug_mode=debug_mode
+        )
+
+        # 5. Worker
+        self.worker = WorkerAgent(
+            model=model,
+            task_tool=task_tool,
+            jules_api_key=jules_api_key,
+            client_tools=client_tools,
+            debug_mode=debug_mode
+        )
+
+        # 6. Verifier
+        self.verifier = VerifierAgent(
+            model=model,
+            debug_mode=debug_mode
+        )
 
         # Team Lead tools (the team itself will have these)
         team_tools = []
         if github_tool:
             team_tools.append(github_tool)
-        if user_id:
-            team_tools.append(
-                KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
-            )
+        if knowledge_tool:
+            team_tools.append(knowledge_tool)
         if client_tools:
             team_tools.extend(client_tools)
 
@@ -516,7 +539,7 @@ class DevelopmentTeam(Team):
         self.user_id = user_id
         self.project_id = project_id
         self.task_id = task_id
-
+        self.auth_token = auth_token
 
         super().__init__(
             name="Development Team",
@@ -525,67 +548,191 @@ class DevelopmentTeam(Team):
             instructions=leader_instructions,
             user_id=user_id,
             debug_mode=debug_mode,
-            members=[
-                Agent(
-                    name="Analyst",
-                    role="Analyst",
-                    id="analyst",
-                    model=model,
-                    instructions=analyst_instructions,
-                    tools=analyst_tools,
-                    markdown=True,
-                ),
-                Agent(
-                    name="Architect",
-                    role="Architect",
-                    id="architect",
-                    model=model,
-                    instructions=architect_instructions,
-                    tools=architect_tools,
-                    markdown=True,
-                ),
-                Agent(
-                    name="Developer",
-                    role="Developer",
-                    id="developer",
-                    model=model,
-                    instructions=developer_instructions,
-                    tools=[github_tool] if github_tool else [],
-                    markdown=True,
-                ),
-                Agent(
-                    name="Reviewer",
-                    role="Reviewer",
-                    id="reviewer",
-                    model=model,
-                    instructions=reviewer_instructions,
-                    tools=[github_tool] if github_tool else [],
-                    markdown=True,
-                ),
-                Agent(
-                    name="Worker",
-                    role="Worker",
-                    id="worker",
-                    model=model,
-                    instructions=worker_instructions,
-                    tools=worker_tools,
-                    markdown=True,
-                ),
-                Agent(
-                    name="Verifier",
-                    role="Verifier",
-                    id="verifier",
-                    model=model,
-                    instructions=verifier_instructions,
-                    markdown=True,
-                ),
-            ],
+            members=[self.analyst, self.architect, self.developer, self.reviewer, self.worker, self.verifier],
         )
 
         # Expose members attribute for Agno framework compatibility
         self.members = self.members
 
-    def _parse_agent_output(self, output: Any, schema_class: Any) -> Any:
+    def run(
+        self,
+        message: Optional[str] = None,
+        stream: bool = False,
+        **kwargs,
+    ) -> Any:
+        """
+        Orchestrates the workflow execution based on the current state.
+        Overrides the default Team run method to implement state-driven logic.
+        """
+        if not self.task_id:
+            # Fallback to standard team behavior if no task_id (e.g. just chatting)
+            return super().run(message=message, stream=stream, **kwargs)
+
+        # 1. Load State
+        current_state = self._load_state(self.task_id)
+        print(f"[Team] Task {self.task_id} state: {current_state}")
+
+        response = None
+        executed_role = None
+
+        # 2. State-Based Routing
+        # If the user message is explicit override, we might want to handle that,
+        # but generally we follow the state.
+
+        # State: ANALYSIS -> Analyst
+        if current_state == "ANALYSIS" or current_state == "TODO": # Default start
+            if self.should_delegate_to_analyst(message or ""):
+                print("[Team] Routing to Analyst")
+                response = self.analyst.run(message=message, stream=stream, **kwargs)
+                executed_role = "Analyst"
+            else:
+                # User asking simple questions, handled by Team Lead or Analyst
+                # Even if simple question, Analyst handles it contextually
+                response = self.analyst.run(message=message, stream=stream, **kwargs)
+                executed_role = "Analyst"
+
+        # State: PLANNING -> Architect
+        elif current_state == "PLANNING":
+            print("[Team] Routing to Architect")
+            # We need to make sure Architect has the requirements.
+            # They are in artifacts, agent should find them via context or tools.
+            response = self.architect.run(message=message, stream=stream, **kwargs)
+            executed_role = "Architect"
+
+        # State: CODING -> Developer OR Worker (Jules)
+        elif current_state == "CODING" or current_state == "IN_PROGRESS":
+            # Complexity Routing
+            is_complex = self._check_complexity()
+
+            if is_complex:
+                print("[Team] Routing to Worker (Complex Task)")
+                # Check if session already started?
+                session_id = self._get_jules_session_id()
+                if session_id:
+                    print("[Team] Jules session active. Checking status is async via webhook.")
+                    return "Jules is working on your task. You will be notified when a PR is created."
+                else:
+                    response = self.worker.run(message=message, stream=stream, **kwargs)
+                    executed_role = "Worker"
+            else:
+                print("[Team] Routing to Developer (Simple Task)")
+                response = self.developer.run(message=message, stream=stream, **kwargs)
+                executed_role = "Developer"
+
+        # State: REVIEW -> Reviewer
+        elif current_state == "REVIEW":
+            print("[Team] Routing to Reviewer")
+            response = self.reviewer.run(message=message, stream=stream, **kwargs)
+            executed_role = "Reviewer"
+
+        # State: VERIFY -> Verifier
+        elif current_state == "VERIFY":
+            print("[Team] Routing to Verifier")
+            response = self.verifier.run(message=message, stream=stream, **kwargs)
+            executed_role = "Verifier"
+
+        else:
+            # Default fallback
+            return super().run(message=message, stream=stream, **kwargs)
+
+        # 3. Handle Workflow State Update
+        if response and executed_role:
+            # Extract content from response
+            # Response type from .run() depends on 'stream' and 'response_model'.
+            # Agno Agent.run returns RunResponse or generator.
+            # Assuming not streaming for now or handling full response.
+
+            output_content = response # If string or object
+
+            # If response is an object with 'content' or 'messages', extract the last message content
+            if hasattr(response, "content"):
+                output_content = response.content
+
+            # Use task_id as session_id context for saving artifacts
+            session_id = self.task_id
+
+            self.transition_to_next_step(
+                task_id=self.task_id,
+                current_role=executed_role,
+                output=output_content,
+                session_id=session_id
+            )
+
+        return response
+
+
+    def _load_state(self, task_id: str) -> str:
+        """Fetches the current task status from the API/DB."""
+        # We can use TaskManagementTool logic or direct DB if available.
+        # Since we have TaskManagementTool initialized but not exposed as method...
+        # Let's verify if we can access it.
+        # For robustness, we'll try to use the API endpoint manually or via tool.
+
+        base_url = os.getenv("API_BASE_URL", "http://api:8080")
+        url = f"{base_url}/api/project-tasks/{task_id}"
+
+        try:
+            headers = {}
+            secret = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+            if secret:
+                headers["X-Internal-Secret"] = secret
+            elif self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            resp = requests.get(url, headers=headers)
+            if resp.ok:
+                data = resp.json()
+                return data.get("status", "TODO")
+        except Exception as e:
+            print(f"[Team] Error loading state: {e}")
+
+        return "TODO"
+
+    def _check_complexity(self) -> bool:
+        """
+        Determines if the task is complex (requires Jules) or simple (Developer).
+        Checks for complexity artifact or Architect Plan details.
+        """
+        if not self.workflow_storage:
+            return False # Default to simple if no storage
+
+        try:
+            # Check for ArchitectPlan
+            plan_artifact = self.workflow_storage.get_artifact_by_task(self.task_id, "ArchitectPlan")
+            if plan_artifact:
+                content = plan_artifact.get("content", {})
+                # Logic: If many files (>3) or specific flag, considered complex.
+                # For now, let's look for a flag or default to True if Architect didn't specify.
+                # Or maybe Architect should have output "Complexity: High".
+                # Let's assume High complexity for now if we are in CODING phase via Architect.
+
+                # Refined logic: If "technical_approach" mentions "Jules" or "Complex", or files > 2
+                files = content.get("files_to_modify", []) + content.get("files_to_create", [])
+                if len(files) > 2:
+                    return True
+
+            # Fallback: check if we have a "Complexity" artifact
+            comp = self.workflow_storage.get_artifact_by_task(self.task_id, "Complexity")
+            if comp and comp.get("content", {}).get("level") == "HIGH":
+                return True
+
+        except Exception as e:
+            print(f"[Team] Error checking complexity: {e}")
+
+        return False # Default to simple
+
+    def _get_jules_session_id(self) -> Optional[str]:
+        """Checks if a Jules session has been started for this task."""
+        if not self.workflow_storage:
+            return None
+
+        # Look for Worker artifact
+        worker_artifact = self.workflow_storage.get_artifact_by_task(self.task_id, "JulesSession")
+        if worker_artifact:
+            return worker_artifact.get("content", {}).get("session_id")
+        return None
+
+    def _parse_agent_output(self, output: Any, schema_class: Type[BaseModel]) -> Any:
         """Parses the agent output (string or dict). Returns Pydantic model if possible, else dict or str."""
         # Use TypeAdapter for validation if schema_class is a Model or TypeAdapter or Union
         try:
@@ -678,7 +825,7 @@ class DevelopmentTeam(Team):
         self, task_id: str, current_role: str, output: any, session_id: str
     ):
         """
-        Orchestrates the workflow state machine.
+        Orchestrates the workflow state machine updates.
         Called after an agent completes its task.
         """
         if not self.workflow_storage:
@@ -877,8 +1024,6 @@ class DevelopmentTeam(Team):
 
         agent = next((m for m in self.members if m.name == role), None)
         if agent:
-            # We might not have session_id here if called from webhook (new context).
-            # But WorkflowAgent.run looks up by task_id too.
             print(f"[Workflow] Manually triggering {role} for Task {task_id}")
 
             trigger_message = f"External trigger for {role}."
@@ -960,47 +1105,5 @@ class DevelopmentTeam(Team):
             return False
 
         # Check workflow context - if we're in active development, prefer developer for simple messages
-        if self.workflow_storage and self.task_id:
-            try:
-                # Get current phase from workflow artifacts
-                current_phase = None
-                artifacts = [
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "AnalystOutput"
-                    ),
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "ArchitectPlan"
-                    ),
-                    self.workflow_storage.get_artifact_by_task(
-                        self.task_id, "ReviewVerdict"
-                    ),
-                ]
-
-                if artifacts[2]:  # Review completed
-                    current_phase = "verification"
-                elif artifacts[1]:  # Architecture completed
-                    current_phase = "development"
-                elif artifacts[0]:  # Analysis completed
-                    current_phase = "design"
-
-                # If we're in active development phase AND this is a simple message,
-                # delegate to developer instead of analyst
-                if current_phase in ["development", "design"]:
-                    # For simple messages in development phase, don't delegate to analyst
-                    # (they'll be handled by developer instead)
-                    # But complex requests should still go to analyst for clarification
-                    is_simple_message = (
-                        any(word in message_lower for word in continuation_words)
-                        or any(phrase in message_lower for phrase in status_words)
-                        or any(word in message_lower for word in casual_words)
-                        or len(message.split()) <= 2
-                    )
-                    if is_simple_message:
-                        return False
-
-            except Exception as e:
-                print(f"[Team] Error checking workflow context: {e}")
-                # Continue with delegation on error
-
-        # Default: delegate to analyst for safety (new complex requests)
+        # Note: run() method now handles phase checking, so this might be redundant or just a helper.
         return True
