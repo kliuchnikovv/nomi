@@ -1,11 +1,11 @@
 from textwrap import dedent
-from typing import Optional, List, Any, Type
+from typing import Optional, List, Any, Type, Iterator
 import os
 import re
 import json
 from pydantic import BaseModel
 
-from agno.agent import Agent
+from agno.agent import Agent, RunResponse
 from agno.knowledge import Knowledge
 from agno.db import BaseDb
 from agno.models.base import Model
@@ -263,8 +263,8 @@ NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTAN
 
 - When WebFetch returns a message about a redirect to a different host, you should immediately make a new WebFetch request with the redirect URL provided in the response.
 - You have the capability to call multiple tools in a single response. When multiple independent pieces of information are requested, batch your tool calls together for optimal performance. When making multiple bash tool calls, you MUST send a single message with multiple tools calls to run the calls in parallel. For example, if you need to run "git status" and "git diff", send a single message with two tool calls to run the calls in parallel.
-
-
+- Jules is your execution engine. When you need to implement code, create a plan and delegate to the Worker agent who uses Jules.
+- You act as the Orchestrator (Team Lead).
 
 
 Here is useful information about the environment you are running in:
@@ -536,69 +536,9 @@ Path: task.md
 Path: implementation_plan.md
 **Purpose**: Document your technical plan during PLANNING mode.
 **Format**:
-# [Goal Description]
-Brief description of the problem and what the change accomplishes.
-## User Review Required
-Document breaking changes or significant design decisions using GitHub alerts.
-## Proposed Changes
-Group files by component. Use [NEW], [MODIFY], [DELETE] markers.
-## Verification Plan
-### Automated Tests
-- Exact commands to run
-### Manual Verification
-- Steps for manual testing
+- [NEW] path/to/file.ts: Description of changes
+- [MODIFY] path/to/file.ts: Description of changes
 </implementation_plan_artifact>
-<walkthrough_artifact>
-Path: walkthrough.md
-**Purpose**: After completing work, summarize what you accomplished.
-**Document**:
-- Changes made
-- What was tested
-- Validation results
-</walkthrough_artifact>
-<artifact_formatting_guidelines>
-<format_tips>
-# Markdown Formatting
-Use standard markdown and GitHub Flavored Markdown formatting.
-## Alerts
-Use GitHub-style alerts to emphasize critical information:
-> [!NOTE]
-> Background context, implementation details
-> [!TIP]
-> Performance optimizations, best practices
-> [!IMPORTANT]
-> Essential requirements, critical steps
-> [!WARNING]
-> Breaking changes, compatibility issues
-> [!CAUTION]
-> High-risk actions, security vulnerabilities
-## Code and Diffs
-Use fenced code blocks with language specification:
-```python
-def example_function():
-    return "Hello, World!"
-Use diff blocks to show changes:
-
--old_function_name()
-+new_function_name()
- unchanged_line()
-Mermaid Diagrams
-Create diagrams using mermaid code blocks to visualize architectures and workflows.
-
-Tables
-Use markdown tables for structured data.
-
-File Links
-Create clickable file links: 
-
-link text
-Link to line ranges: 
-
-foo
-Critical Rules
-Keep lines short and concise
-Use file basenames for readability
-Do not surround link text with backticks </format_tips> </artifact_formatting_guidelines>
 <workflow_context>
 You have access to workflow artifacts that track the current state of development:
 - **AnalystOutput**: Requirements analysis and acceptance criteria
@@ -607,21 +547,6 @@ You have access to workflow artifacts that track the current state of developmen
 
 **Check these artifacts before delegating** to understand what phase you're in and what has been completed.
 </workflow_context>
-<communication_style>
-
-Formatting: Format responses in GitHub-style markdown. Use backticks for file, directory, function, and class names.
-Proactiveness: Be proactive only in the course of completing the user task. Do not surprise the user with unexpected actions.
-Helpfulness: Respond like a helpful software engineer explaining your work to a collaborator.
-Ask for clarification: If unsure about the USER intent, always ask for clarification rather than making assumptions.
-Concise: Minimize output tokens while maintaining helpfulness, quality, and accuracy. </communication_style>
-<code_style>
-
-IMPORTANT: DO NOT ADD ANY COMMENTS unless asked
-Always follow security best practices
-Never introduce code that exposes or logs secrets and keys
-Never commit secrets or keys to the repository
-NEVER commit changes unless the user explicitly asks you to </code_style>
-The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** designs the solution 3. **Developer** implements code and tests 4. **Reviewer** validates the result 5. Create Pull Request for merge to main 
 """)
 
         super().__init__(
@@ -632,7 +557,7 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             user_id=user_id,
             debug_mode=debug_mode,
             members=[
-                Agent(
+                WorkflowAgent(
                     name="Analyst",
                     role="Analyst",
                     id="analyst",
@@ -640,8 +565,10 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                     instructions=analyst_instructions,
                     tools=analyst_tools,
                     markdown=True,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
-                Agent(
+                WorkflowAgent(
                     name="Architect",
                     role="Architect",
                     id="architect",
@@ -649,8 +576,10 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                     instructions=architect_instructions,
                     tools=architect_tools,
                     markdown=True,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
-                Agent(
+                WorkflowAgent(
                     name="Developer",
                     role="Developer",
                     id="developer",
@@ -658,8 +587,10 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                     instructions=developer_instructions,
                     tools=[github_tool] if github_tool else [],
                     markdown=True,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
-                Agent(
+                WorkflowAgent(
                     name="Reviewer",
                     role="Reviewer",
                     id="reviewer",
@@ -667,8 +598,10 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                     instructions=reviewer_instructions,
                     tools=[github_tool] if github_tool else [],
                     markdown=True,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
-                Agent(
+                WorkflowAgent(
                     name="Worker",
                     role="Worker",
                     id="worker",
@@ -676,14 +609,18 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                     instructions=worker_instructions,
                     tools=worker_tools,
                     markdown=True,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
-                Agent(
+                WorkflowAgent(
                     name="Verifier",
                     role="Verifier",
                     id="verifier",
                     model=model,
                     instructions=verifier_instructions,
                     markdown=True,
+                    workflow_storage=self.workflow_storage,
+                    on_completion=self.transition_to_next_step
                 ),
             ],
         )
@@ -743,9 +680,8 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         if not self.workflow_storage:
             return
 
-        # 0. Parse Output Output manually since we removed output_schema
         # 0. Parse Output
-        parsed_output = self._parse_agent_output(output, BaseModel) # Schema doesn't matter much if we handle dict/str
+        parsed_output = self._parse_agent_output(output, BaseModel)
 
         # 1. Save Artifact
         artifact_type = "Markdown"
@@ -775,7 +711,8 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
 
         # 2. Update Status & Determine Next Step
         next_status = None
-        next_role = None
+
+        # NOTE: Logic modified to support Human-in-the-Loop Approval for Analysis
 
         if current_role == "Analyst":
             # Check if output is complete coverage of requirements
@@ -784,12 +721,14 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                 is_complete = True
             elif isinstance(parsed_output, dict) and ("requirements" in parsed_output or "content" in parsed_output):
                 is_complete = True
-            elif isinstance(parsed_output, str) and ("## ✅ Definition of Done" in parsed_output or "## 📝 Requirements" in parsed_output):
+            elif isinstance(parsed_output, str) and ("## ✅ Definition of Done" in parsed_output or "## 📝 Requirements" in parsed_output or "## Summary" in parsed_output):
                 is_complete = True
             
             if is_complete:
-                 next_status = "PLANNING"
-                 next_role = "Architect"
+                 # STOP HERE. Do NOT transition to PLANNING automatically.
+                 # The user must approve the requirements.
+                 print("[Team] Analyst output complete. Waiting for user approval.")
+                 return
             else:
                  print("[Team] Analyst output appears to be questions/clarification. Staying in analysis phase.")
                  return
@@ -806,7 +745,6 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
 
             if is_complete:
                 next_status = "CODING"
-                next_role = "Developer"
             else:
                 print("[Team] Architect output appears incomplete. Staying in planning phase.")
                 return
@@ -823,17 +761,55 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
             
             if is_approved:
                 next_status = "VERIFY"
-                next_role = "Verifier"
             else:
                 next_status = "CODING"
-                next_role = "Developer"  # Loop back for fixes
 
         if next_status:
             self._update_task_status(task_id, next_status, artifacts=content)
 
-        # 3. DO NOT auto-trigger next agent - let Team Leader decide based on context
-        # This prevents forced delegation and allows intelligent decision-making
-        # Team Leader will check workflow artifacts and user intent before delegating
+    def run(self, message: str = None, **kwargs) -> Iterator[RunResponse]:
+        """
+        Override run to inject Human-in-the-loop messages when needed.
+        """
+        # 1. Run the default Team logic (delegates to agents)
+        # We need to capture if the Analyst was the one speaking
+
+        response_stream = super().run(message=message, **kwargs)
+
+        last_role = None
+
+        for chunk in response_stream:
+            if hasattr(chunk, 'agent_name') and chunk.agent_name:
+                last_role = chunk.agent_name
+            yield chunk
+
+        # 2. Check if we just finished Analysis and need Approval
+        # Logic: If last agent was Analyst AND task_id exists AND status is still ANALYSIS (implicit)
+        # We can also check artifacts using the storage.
+
+        if self.task_id and self.workflow_storage and last_role == "Analyst":
+            # Fetch last artifact to confirm it was an output, not just questions
+            # We use session_id from self (might be injected by Team) or look it up
+            session_id = getattr(self, 'session_id', None)
+            if not session_id:
+                 session_id = self.workflow_storage.get_session_id_by_task(self.task_id)
+
+            if session_id:
+                last_artifact = self.workflow_storage.get_last_artifact(session_id, "AnalystOutput")
+                if last_artifact:
+                    # Verify we haven't already moved past Analysis (e.g. if run was triggered manually)
+                    # But here we just finished the run.
+
+                    # Send Approval Request Message
+                    yield RunResponse(
+                        content="",
+                        metadata={
+                            "type": "approval_request",
+                            "task_id": self.task_id,
+                            "next_status": "PLANNING"
+                        },
+                        role="assistant"
+                    )
 
     def run_component(self, role: str, task_id: str):
         """
