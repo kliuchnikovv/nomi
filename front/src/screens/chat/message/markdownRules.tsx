@@ -13,7 +13,11 @@ export const createMarkdownRules = (onCodeCopy: (code: string) => void) => ({
                     pressed && { opacity: 0.8 }
                 ]}
             >
-                <Text style={styles.code_block}>
+                <Text style={{
+                    fontFamily: styles.fence?.fontFamily || 'Menlo',
+                    fontSize: styles.fence?.fontSize || 14,
+                    color: styles.fence?.color || styles.code_block?.color
+                }}>
                     {node.content}
                 </Text>
             </Pressable>

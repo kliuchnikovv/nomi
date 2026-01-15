@@ -274,23 +274,26 @@ class TaskManagementTool(Toolkit):
                 return f"Error creating subtask: {e.response.text}"
             return f"Error creating subtask: {str(e)}"
 
-    def trigger_jules_monitoring(self, task_id: str, session_id: str) -> str:
+    def trigger_jules_monitoring(self, session_id: str, task_id: Optional[str] = None) -> str:
         """
         Triggers async monitoring of a Jules session via Redis.
         The RedisWorker will poll for completion and update task status.
 
         Args:
-            task_id (str): The internal task ID to update when done.
             session_id (str): The Jules session ID to monitor.
+            task_id (str, optional): The internal task ID to update when done.
 
         Returns:
             str: Confirmation message or error.
         """
+        # Use "unknown" if task_id is not provided or is None/empty
+        effective_task_id = task_id if task_id else "unknown"
+        
         try:
             r = redis.from_url(self.redis_url)
-            message = json.dumps({"task_id": task_id, "session_id": session_id})
+            message = json.dumps({"task_id": effective_task_id, "session_id": session_id})
             r.publish("jules:monitor", message)
-            return f"Monitoring triggered for Task {task_id} (Session {session_id})"
+            return f"Monitoring triggered for Task {effective_task_id} (Session {session_id})"
         except Exception as e:
             logger.error(f"Failed to trigger Jules monitoring: {e}")
             return f"Error triggering monitoring: {str(e)}"

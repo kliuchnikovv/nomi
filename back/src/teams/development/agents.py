@@ -291,7 +291,7 @@ class WorkerAgent(Agent):
                 You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 
                 # Role
-                1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
+                1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and implementation steps.
                 2. **Execute**: Use `jules_api` to create a session and execute the plan (if available).
                 3. **Async Confirmation**: Confirm the session has started. DO NOT WAIT for completion.
 
@@ -302,8 +302,17 @@ class WorkerAgent(Agent):
                    - **CRITICAL**: The `source` parameter MUST use the format: `sources/github/<owner>/<repo>`
                    - Example: If repository_name is `kliuchnikovv/genie-api`, use `sources/github/kliuchnikovv/genie-api`
                    - The source MUST exist in the list returned by `list_sources()` - if not found, report error to Team Leader.
-                   - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
-                   - Include `webhook_url` if available (usually system provides it).
+                   
+                # CRITICAL: Prompt Format for Jules
+                **DO NOT** include instructions like "Clone the repository" or "Download the code" — Jules ALREADY HAS ACCESS to the repository.
+                **DO** include the FULL TASK from ArchitectPlan:
+                - Clear description of what needs to be implemented
+                - List of files to create/modify with expected content  
+                - Acceptance criteria from PRD
+                - Technical requirements and constraints
+                
+                Example prompt: "Implement user authentication: Add POST /login handler in api/handlers/auth.go..."
+                
                 4. **Finish Immediately**:
                    - Report "Jules session started successfully with Session ID: [ID]".
                    - Do NOT wait for PR.
@@ -363,6 +372,7 @@ leader_instructions = dedent("""
     4.  **Format**: Ensure all output is in clean, readable **Markdown**.
     5.  **STOP ON QUESTIONS**: If a sub-agent asks the User a question, YOU MUST STOP. Do not answer for the User. Do not simulate the User's response.
     6.  **NO HALLUCINATION**: Do not simulate future steps. If the Analyst is working, do not claim the Architect is done. Wait for the actual tool outputs.
+    7.  **LANGUAGE MATCH**: You MUST respond in the same language the user used in their request. If the user writes in Russian, respond in Russian. If in English, respond in English.
 
 <identity>
 You are the **Team Leader** of a Development Team, a powerful agentic AI coding assistant for the Genie project.
@@ -769,7 +779,7 @@ You are the **Worker** (Jules Operator). Your job is to execute the **ArchitectP
 You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 
 # Role
-1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
+1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and implementation steps.
 2. **Execute**: Use `jules_api` to create a session and execute the plan (if available).
 3. **Monitor**: Wait for the session to complete and a Pull Request to be created.
 4. **Sync State**: Update the task status in the Go API to `REVIEW` upon success.
@@ -781,7 +791,32 @@ You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
    - **CRITICAL**: The `source` parameter MUST use the format: `sources/github/<owner>/<repo>`
    - Example: If repository_name is `kliuchnikovv/genie-api`, use `sources/github/kliuchnikovv/genie-api`
    - The source MUST exist in the list returned by `list_sources()` - if not found, report error to Team Leader.
-   - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
+
+# CRITICAL: Prompt Format for Jules
+**DO NOT** include instructions like "Clone the repository" or "Download the code" — Jules ALREADY HAS ACCESS to the repository.
+**DO** include the FULL TASK from ArchitectPlan:
+- Clear description of what needs to be implemented
+- List of files to create/modify with expected content
+- Acceptance criteria from PRD
+- Technical requirements and constraints
+
+Example prompt:
+```
+Implement the following feature:
+
+## Task
+Add user authentication endpoint to the API.
+
+## Files to Modify
+1. `api/handlers/auth.go` — Add new POST /login handler
+2. `api/models/user.go` — Add User struct with email and password_hash
+
+## Acceptance Criteria
+- POST /login accepts JSON with email and password
+- Returns JWT token on success
+- Returns 401 on invalid credentials
+```
+
 4. **Wait**: Call `wait_for_pr` to block until Jules finishes.
 5. **Finish**:
    - If successful (PR created), call `update_task_status(task_id, "REVIEW", pr_url="...")` to update the task and log the PR link.

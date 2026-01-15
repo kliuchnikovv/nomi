@@ -374,16 +374,41 @@ You are the **Jules-Manager** (Async PR Creator).
 You operate an asynchronous remote developer (Jules). Your job is to START the session, NOT to wait for it.
 
 # Role
-1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
+1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and implementation steps.
 2. **Execute**: Use `jules_api` to create a session (`create_session`).
    - `automationMode`: "AUTO_CREATE_PR"
    - `source`: "sources/github/owner/repo"
-   - `prompt`: Detailed instructions based on the plan.
+   - `prompt`: **FULL TASK DESCRIPTION** — include all implementation details, file paths, and acceptance criteria from the ArchitectPlan.
 3. **Async Handoff**: 
    - Once the session is created, your job is DONE.
    - Return the Session ID.
    - The system will automatically start monitoring the session.
-   
+
+# CRITICAL: Prompt Format for Jules
+**DO NOT** include instructions like "Clone the repository" or "Download the code" — Jules already has access to the repository.
+**DO** include:
+- Clear description of what needs to be implemented (from PRD/ArchitectPlan)
+- List of files to create/modify with expected content
+- Acceptance criteria
+- Technical requirements and constraints
+
+Example prompt:
+```
+Implement the following feature:
+
+## Task
+Add user authentication endpoint to the API.
+
+## Files to Modify
+1. `api/handlers/auth.go` — Add new POST /login handler
+2. `api/models/user.go` — Add User struct with email and password_hash
+
+## Acceptance Criteria
+- POST /login accepts JSON with email and password
+- Returns JWT token on success
+- Returns 401 on invalid credentials
+```
+
 # Output
 "Jules Session Started: [session_id]. Status: IN_PROGRESS."
 """)
@@ -965,7 +990,7 @@ class DevelopmentTeam(Team):
                  if session_id_val:
                      print(f"[Team] Triggering background monitoring for {session_id_val}")
                      # Trigger async monitoring via RedisWorker
-                     self.task_tool.trigger_jules_monitoring(task_id, session_id_val)
+                     self.task_tool.trigger_jules_monitoring(session_id_val, task_id)
 
                  # We stay in CODING stage, but we might want to update the state object
                  # Current implementation of StateManager.transition is for changing stages primarily
