@@ -27,6 +27,7 @@ class JulesTools(Toolkit):
         self.register(self.send_message)
         self.register(self.wait_for_completion)
         self.register(self.wait_for_pr)
+        self.register(self.monitor_execution)
 
     def _parse_error(self, response: requests.Response) -> str:
         """Parses error details from Jules API response."""
@@ -249,113 +250,147 @@ class JulesTools(Toolkit):
                     return artifact["pullRequest"].get("url")
         return None
 
-    def wait_for_pr(self, session_id: str, timeout_minutes: int = 15) -> str:
+    def monitor_execution(
+        self,
+        session_id: str,
+        task_id: str,
+        architect_plan: Dict[str, Any],
+        timeout_minutes: int = 15
+    ) -> str:
         """
-        Waits for a Pull Request to be created in the session.
-        Polls the session activities and status.
+        Monitors Jules execution and updates individual step statuses in real-time.
+
+        Args:
+            session_id: Jules session ID
+            task_id: Genie ProjectTask ID
+            architect_plan: The original ArchitectPlan dict (containing 'steps')
+            timeout_minutes: Max monitoring time
+
+        Returns:
+            str: JSON result with PR URL or error.
         """
-        logger.info(f"Starting to poll Jules session {session_id} for PR creation (timeout: {timeout_minutes}m)")
+        import os
+        logger.info(f"Starting real-time monitoring for Task {task_id}, Session {session_id}")
         start_time = time.time()
         end_time = start_time + (timeout_minutes * 60)
         
-        # Normalize session_id to ensure it's a valid resource path
         resource_path = session_id if session_id.startswith("sessions/") else f"sessions/{session_id}"
-        session_url = f"{self.base_url}/{resource_path}"
         activities_url = f"{self.base_url}/{resource_path}/activities"
+
+        # Local state to track which steps are done to avoid duplicate updates
+        steps_state = {step.get('file_path'): "pending" for step in architect_plan.get('content', {}).get('steps', [])}
+
+        # API Config for updates
+        base_url = os.getenv("API_BASE_URL", "http://api:8080")
+        internal_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+        update_url = f"{base_url}/api/project-tasks/{task_id}/status"
 
         while time.time() < end_time:
             try:
-                # 1. First check the session status itself
-                session_resp = requests.get(session_url, headers=self.headers)
-                
-                if not session_resp.ok:
-                    if session_resp.status_code == 404:
-                        return f"Error: Session {session_id} not found or expired. Please retry creating a session."
-                    # Fatal client errors should stop the polling immediately
-                    if 400 <= session_resp.status_code < 500 and session_resp.status_code != 429:
-                        return f"Fatal Error checking session: {self._parse_error(session_resp)}"
-                    # Server errors (5xx) or Rate Limit (429) will be ignored for this check, hoping for recovery or just retrying via loop
-                else:
-                    session_data = session_resp.json()
-                    # Check for inactive statuses
-                    state = session_data.get("state", "STATE_UNSPECIFIED")
-                    if state in ["STOPPED", "FAILED", "INACTIVE", "CANCELLED"]:
-                        return f"Error: Session stopped prematurely with state: {state}. No PR was created."
+                # Poll activities
+                resp = requests.get(activities_url, headers=self.headers, params={"pageSize": 100})
+                if not resp.ok:
+                    logger.warning(f"Failed to poll activities: {resp.status_code}")
+                    time.sleep(10)
+                    continue
 
-                # 2. Check activities for PR existence (with pagination)
-                # We must fetch recent activities until we find the PR or exhaust the search
-                # Since order is unspecified/unreliable, we might need to sweep multiple pages 
-                # if there are many activities.
+                activities = resp.json().get("activities", [])
                 
-                activities = []
-                page_token = None
+                # Analyze activities to update steps
+                changes_detected = False
                 
-                # We limit the depth of search to avoid fetching thousands of activities if something goes wrong
-                max_pages = 5 
-                
-                for _ in range(max_pages):
-                    params = {"pageSize": 100} # Fetch more per page
-                    if page_token:
-                        params["pageToken"] = page_token
-                        
-                    resp = requests.get(activities_url, headers=self.headers, params=params)
-                    
-                    if not resp.ok:
-                        if resp.status_code == 404:
-                            # If page token becomes invalid or session lost
-                            break 
-                        if 400 <= resp.status_code < 500 and resp.status_code != 429:
-                            break # Fatal error
-                        # Ignore other errors and retry outer loop
-                        break
-                    
-                    data = resp.json()
-                    page_activities = data.get("activities", [])
-                    activities.extend(page_activities)
-                    
-                    page_token = data.get("nextPageToken")
-                    if not page_token:
-                        break
-                
-                # Now scan all collected activities
                 for activity in activities:
-                    # Look for PR creation activity
-                    if activity.get("type") == "PULL_REQUEST_CREATED":
-                        metadata = activity.get("pullRequestCreated", {})
-                        pr_url = metadata.get("url", "URL not found")
-                        return f"Success! Pull Request created: {pr_url}"
+                    # Look for file modifications/creations
+                    # Heuristic: Check specifically for "toolCall" or "file_written" type events if available,
+                    # otherwise parse generic activity if it contains file paths.
+                    # Jules API structure for file ops might vary. Assuming we look for 'toolUse' or similar.
+                    # Or simpler: Look for 'file' keys in metadata.
                     
-                    # Check for session completed (might imply PR is ready in artifacts)
+                    # Assuming we can't perfectly reverse engineer Jules internal events, we'll look for filename mentions in any text field
+                    # or if there's structured data.
+                    
+                    # Heuristic 1: If activity type is 'RunScript' or similar and mentions a file from our plan.
+                    # Heuristic 2: 'toolUse' -> 'write_file'.
+                    
+                    # Let's iterate our planned steps and see if they appear in recent activities
+                    for step in architect_plan.get('content', {}).get('steps', []):
+                        path = step.get('file_path')
+                        if not path: continue
+
+                        # If already done, skip
+                        if steps_state.get(path) == "completed":
+                            continue
+
+                        # Check if this activity corresponds to this file
+                        # We search for the filename in the activity string representation for now
+                        activity_str = json.dumps(activity)
+
+                        if path in activity_str:
+                             # Check if it indicates completion
+                             # If it's a "tool output" or "success", mark as completed.
+                             # If it's "tool call", mark as in_progress.
+
+                             new_status = "in_progress"
+                             if "output" in activity or "result" in activity or "Created" in activity_str or "Modified" in activity_str:
+                                 new_status = "completed"
+
+                             if steps_state[path] != new_status:
+                                 steps_state[path] = new_status
+                                 step['status'] = new_status
+                                 changes_detected = True
+                                 logger.info(f"Step updated: {path} -> {new_status}")
+
+                    # Check for terminal states
                     if "sessionCompleted" in activity:
-                        # Session completed - check for PR in artifacts
                         pr_url = self._extract_pr_url_from_artifacts(activity.get("artifacts", []))
+
+                        # Mark all remaining steps as completed if session succeeded
+                        for s in architect_plan.get('content', {}).get('steps', []):
+                            s['status'] = 'completed'
+
+                        # Final update
+                        self._update_task_artifacts(update_url, internal_key, architect_plan)
+
                         if pr_url:
-                            return json.dumps({"status": "success", "pr_url": pr_url})
-                        else:
-                            return json.dumps({
-                                "status": "completed_no_pr",
-                                "message": "Session completed but no PR was created"
-                            })
+                            return f"Success! PR Created: {pr_url}"
+                        return "Session completed (no PR URL found in artifacts)."
 
-                    # Check for session failed
                     if "sessionFailed" in activity:
-                        failed_data = activity.get("sessionFailed", {})
-                        reason = failed_data.get("reason", "Unknown error")
-                        logger.warning(f"Jules session {session_id} failed: {reason}")
-                        return json.dumps({
-                            "status": "failed",
-                            "error": reason
-                        })
+                        return f"Session Failed: {activity.get('sessionFailed', {}).get('reason')}"
 
-                    # Additionally: if we see an error in activities
-                    if activity.get("type") == "ERROR" or "error" in activity:
-                         return f"Error reported by Jules: {activity.get('error', {}).get('message', 'Unknown error')}"
+                # If changes detected, push update to Go API
+                if changes_detected:
+                    self._update_task_artifacts(update_url, internal_key, architect_plan)
 
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Jules API polling error: {e}")
-                # Don't exit immediately, give a chance for temporary network glitch
+            except Exception as e:
+                logger.error(f"Error in monitor_execution: {e}")
+
+            time.sleep(10)
+
+        return "Timeout waiting for session completion."
+
+    def _update_task_artifacts(self, url: str, key: str, artifacts: Dict) -> None:
+        """Helper to push updates to Go API. Wraps data in ArchitectPlan key if needed."""
+        try:
+            # Ensure proper nesting for frontend (task.artifacts.ArchitectPlan.steps)
+            # If the artifacts dict passed here is the raw plan (with 'content'), wrap it.
+            # If it already has 'ArchitectPlan' key, leave it.
             
-            time.sleep(10)  # Pause before next poll
+            final_artifacts = artifacts
+            if "ArchitectPlan" not in artifacts and ("content" in artifacts or "steps" in artifacts.get("content", {})):
+                final_artifacts = {"ArchitectPlan": artifacts}
 
-        return "Timeout: No Pull Request was created within the allocated time."
+            payload = {
+                "status": "CODING",
+                "artifacts": final_artifacts
+            }
+            resp = requests.patch(url, json=payload, headers={"X-Internal-Secret": key})
+            if not resp.ok:
+                logger.warning(f"Failed to update task artifacts: {resp.text}")
+        except Exception as e:
+            logger.warning(f"Failed to push artifact update: {e}")
+
+    def wait_for_pr(self, session_id: str, timeout_minutes: int = 15) -> str:
+        # Legacy wrapper or simple waiter
+        return self.monitor_execution(session_id, "unknown", {}, timeout_minutes)
 

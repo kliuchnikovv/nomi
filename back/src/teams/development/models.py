@@ -54,6 +54,8 @@ class ImplementationStep(BaseModel):
     file_path: str = Field(...)
     description: str = Field(...)
     action: Literal["create", "modify", "delete"] = Field(...)
+    status: Literal["pending", "in_progress", "completed", "failed"] = Field("pending")
+    logs: Optional[str] = Field(None)
 
 class ArchitectDetails(BaseModel):
     project_id: str
