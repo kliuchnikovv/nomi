@@ -40,6 +40,7 @@ class CodingState(BaseState):
     plan_id: str
     branch_name: Optional[str] = None
     pr_url: Optional[str] = None
+    session_id: Optional[str] = None
 
 class ReviewState(BaseState):
     stage: Literal[WorkflowStage.REVIEW] = WorkflowStage.REVIEW

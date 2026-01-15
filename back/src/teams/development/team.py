@@ -339,21 +339,20 @@ You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
 # Role
 1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and steps.
 2. **Execute**: Use `jules_api` to create a session and execute the plan (if available).
-3. **Monitor**: Wait for the session to complete and a Pull Request to be created.
-4. **Sync State**: Update the task status in the Go API to `REVIEW` upon success.
+3. **Async Workflow**: Do NOT wait for completion. Return the session ID and exit. The system will handle the webhook callback.
 
 # Workflow
-1. **Check Tools**: First verify if `jules_api` tool is available. If not, report to Team Leader that automated execution is not possible.
-2. **Verify Source Access**: Call `list_sources()` to get available repositories and verify the target repo is accessible.
-3. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
+1. **Check Tools**: Verify if `jules_api` tool is available.
+2. **Verify Source Access**: Call `list_sources()` to get available repositories.
+3. **Branch Naming**: You MUST define the `startingBranch` or `branchName` in the prompt to match this pattern: `feature/{task_id}/[brief-desc]`.
+   - The UUID `task_id` is CRITICAL for the webhook to identify the task later.
+4. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
    - **CRITICAL**: The `source` parameter MUST use the format: `sources/github/<owner>/<repo>`
    - Example: If repository_name is `kliuchnikovv/genie-api`, use `sources/github/kliuchnikovv/genie-api`
-   - The source MUST exist in the list returned by `list_sources()` - if not found, report error to Team Leader.
    - Prompt should include: "You are acting as a Senior Developer. Please implement the following steps... [Steps from Plan]... Reference files: [Files]... Style Guide: [Rules]".
-4. **Wait**: Call `wait_for_pr` to block until Jules finishes.
 5. **Finish**:
-   - If successful (PR created), call `update_task_status(task_id, "REVIEW", pr_url="...")` to update the task and log the PR link.
-   - If failed/timeout, report error to the Team Leader.
+   - Return a message: "Jules Session Started: [Session ID]. Status: IN_PROGRESS."
+   - Do NOT call `wait_for_pr` or block.
 
 # Jules Source Format
 The `source` parameter for `create_session` must be in the format: `sources/github/<owner>/<repo>`
@@ -361,7 +360,7 @@ The `source` parameter for `create_session` must be in the format: `sources/gith
 - Always verify the source exists by checking `list_sources()` output first!
 
 # Tools
-- `jules_api`: Create sessions, list sources, list activities (optional - requires JULES_API_KEY).
+- `jules_api`: Create sessions, list sources (optional - requires JULES_API_KEY).
 - `task_management_tool`: Update task status in Genie.
 
 **IMPORTANT**: If `jules_api` tool is not available (JULES_API_KEY not set), inform the Team Leader that the task needs manual implementation via the Developer agent instead.
@@ -879,14 +878,23 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
                       next_stage = WorkflowStage.CODING # Loop back
             
             elif current_role == "Worker":
-                # Worker (Jules) finishes coding and creates PR
-                 # Assuming Worker output contains PR URL
-                 pr_url = ""
+                 # Worker starts coding async. We do NOT transition to REVIEW yet.
+                 # Just update state with session_id if available.
+                 # Parsing output for session ID (naive check in string or dict)
+                 session_id_val = None
                  if isinstance(parsed_output, dict):
-                     pr_url = parsed_output.get("pr_url", "")
+                     session_id_val = parsed_output.get("session_id") or parsed_output.get("name") # Jules returns 'name' as full ID
+                 elif isinstance(parsed_output, str):
+                     # Try to find "sessions/..." or UUID
+                     pass
 
-                 next_stage = WorkflowStage.REVIEW
-                 context_updates = {"pr_url": pr_url}
+                 # We stay in CODING stage, but we might want to update the state object
+                 # Current implementation of StateManager.transition is for changing stages primarily
+                 # But we can "transition" to same stage with new data
+                 next_stage = WorkflowStage.CODING
+                 context_updates = {}
+                 if session_id_val:
+                     context_updates["session_id"] = session_id_val
 
 
             if next_stage:
@@ -909,6 +917,37 @@ The typical flow is: 1. **Analyst** clarifies requirements 2. **Architect** desi
         except Exception as e:
             print(f"[Team] State transition failed: {e}")
             # Do not block execution, just log error
+
+    def handle_pr_created(self, pr_url: str):
+        """
+        External event handler for PR creation (triggered by Webhook).
+        Transitions state from CODING -> REVIEW.
+        """
+        if not self.workflow_storage or not self.task_id:
+            print("[Team] Cannot handle PR event: No storage or task_id")
+            return
+
+        try:
+             state_dict = self.workflow_storage.get_workflow_state(self.task_id)
+             if not state_dict:
+                 print("[Team] No state found for PR event")
+                 return
+
+             current_state = self._parse_agent_output(state_dict, WorkflowState)
+
+             # Transition to REVIEW
+             new_state = StateManager.transition(
+                 current_state,
+                 WorkflowStage.REVIEW,
+                 {"pr_url": pr_url}
+             )
+             self.workflow_storage.save_workflow_state(self.task_id, new_state.model_dump())
+
+             # Trigger Reviewer
+             self.run_component("Reviewer", self.task_id)
+
+        except Exception as e:
+             print(f"[Team] Failed to handle PR event: {e}")
 
     def run_component(self, role: str, task_id: str):
         """

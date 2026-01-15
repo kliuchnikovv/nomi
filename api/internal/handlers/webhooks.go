@@ -156,7 +156,10 @@ func (h *WebhooksHandler) HandleGitHubWebhook(c *gin.Context) {
 		// Re-use logic from ProjectTaskHandler or duplicate it.
 		// Since we are in a different handler, duplicating the simple notification logic is fine or we can extract it.
 		// I will instantiate a ProjectTaskHandler or copy the notify logic. Copying is safer to avoid circular deps if refactoring is hard.
-		go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, storage.ProjectTaskStatusReview)
+		metadata := map[string]interface{}{
+			"pr_url": event.PullRequest.HTMLURL,
+		}
+		go h.notifyTeamLead(task.UserID, task.ProjectID, task.ID, task.Status, storage.ProjectTaskStatusReview, metadata)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "processed"})
@@ -199,7 +202,7 @@ func (h *WebhooksHandler) extractTaskID(branchName string) (uuid.UUID, error) {
 }
 
 // Copied from ProjectTaskHandler to avoid coupling for now
-func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, oldStatus, newStatus storage.ProjectTaskStatus) {
+func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, oldStatus, newStatus storage.ProjectTaskStatus, metadata map[string]interface{}) {
 	// Create a payload to match what ProjectTaskHandler sends
 	payload := map[string]interface{}{
 		"user_id":    userID,
@@ -209,6 +212,7 @@ func (h *WebhooksHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID, ol
 		"new_status": newStatus,
 		"timestamp":  "now",       // simplified
 		"event":      "pr_opened", // Extra context
+		"metadata":   metadata,
 	}
 
 	// We can use the same endpoint /api/notify-lead
