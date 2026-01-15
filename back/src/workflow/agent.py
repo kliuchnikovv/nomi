@@ -33,7 +33,7 @@ class PgWorkflowStorage:
             Base.metadata.create_all(PgWorkflowStorage._engine)
         self.Session = sessionmaker(bind=PgWorkflowStorage._engine)
 
-    def save_artifact(self, session_id: str, task_id: str, step_name: str, artifact_type: str, content: Dict[str, Any]):
+    def save_artifact(self, session_id: str, task_id: str, step_name: str, artifact_type: str, content: Dict[str, Any]) -> str:
         session = self.Session()
         try:
             artifact = WorkflowArtifact(
@@ -45,6 +45,7 @@ class PgWorkflowStorage:
             )
             session.add(artifact)
             session.commit()
+            return str(artifact.id)
         finally:
             session.close()
 
@@ -83,6 +84,16 @@ class PgWorkflowStorage:
             return None
         finally:
             session.close()
+
+    def save_workflow_state(self, task_id: str, state: Dict[str, Any]):
+        """Saves the workflow state as a special artifact"""
+        # We use a dummy session_id for now if we can't find one, or just store it.
+        # Ideally state is tied to task_id primarily.
+        session_id = self.get_session_id_by_task(task_id) or "system"
+        self.save_artifact(session_id, task_id, "System", "WorkflowState", state)
+
+    def get_workflow_state(self, task_id: str) -> Optional[Dict[str, Any]]:
+        return self.get_artifact_by_task(task_id, "WorkflowState")
 
 class WorkflowAgent(Agent):
     """
