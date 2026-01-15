@@ -178,13 +178,21 @@ class RedisWorker:
                 try:
                     await session.handle_frame(frame)
                 except asyncio.CancelledError:
-                    logger.info(f"[RedisWorker] Task cancelled for chat {chat_id}")
-                    raise
+                    # IMPORTANT: Explicitly catch and re-raise CancelledError
+                    # This ensures the task stops immediately when cancelled
+                    logger.warning(f"[RedisWorker] Task {chat_id} was cancelled correctly.")
+                    raise  # Re-raise to propagate cancellation up
                 except Exception as e:
-                    logger.error(f"[RedisWorker] Task error for chat {chat_id}: {e}")
+                    # Make sure we don't accidentally catch CancelledError here
+                    if isinstance(e, asyncio.CancelledError):
+                        logger.warning(f"[RedisWorker] Task {chat_id} cancelled (caught as Exception)")
+                        raise
+                    logger.error(f"[RedisWorker] Task error for chat {chat_id}: {e}", exc_info=True)
                 finally:
+                    # Cleanup: Remove from active tasks registry
                     if self.ACTIVE_TASKS.get(chat_id) == current_task:
                         del self.ACTIVE_TASKS[chat_id]
+                        logger.info(f"[RedisWorker] Cleaned up task registry for chat {chat_id}")
 
             # We need reference to current_task inside, but we can't get it before creation.
             # So we create it first.

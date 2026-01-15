@@ -14,6 +14,63 @@ from src.tools.jules import JulesTools
 from src.tools.client_side import ClientGmailTools, ClientRagTools
 from src.rag_service import KnowledgeSearchTool
 
+
+class SafeGithubTools(GithubTools):
+    """
+    Wrapper over GithubTools that makes 'message' optional for file operations.
+    This prevents Pydantic validation errors when the agent doesn't provide commit messages.
+    """
+    
+    def create_file(
+        self, 
+        repo_name: str, 
+        path: str, 
+        content: str, 
+        message: str = "Update via Genie Agent"
+    ) -> str:
+        """
+        Creates a file in a repository.
+        
+        Args:
+            repo_name: The name of the repository (owner/repo format).
+            path: The path to the file within the repository.
+            content: The content to write to the file.
+            message: The commit message (optional, defaults to generic message).
+        """
+        return super().create_file(
+            repo_name=repo_name, 
+            path=path, 
+            content=content, 
+            message=message
+        )
+    
+    def update_file(
+        self,
+        repo_name: str,
+        path: str,
+        content: str,
+        sha: str,
+        message: str = "Update via Genie Agent"
+    ) -> str:
+        """
+        Updates a file in a repository.
+        
+        Args:
+            repo_name: The name of the repository (owner/repo format).
+            path: The path to the file within the repository.
+            content: The new content for the file.
+            sha: The SHA of the file being replaced.
+            message: The commit message (optional, defaults to generic message).
+        """
+        return super().update_file(
+            repo_name=repo_name,
+            path=path,
+            content=content,
+            sha=sha,
+            message=message
+        )
+
+
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 logger = logging.getLogger(__name__)
@@ -158,8 +215,8 @@ def _build_rag(_: Dict[str, Any]) -> Toolkit:
     return ClientRagTools()
 
 def _build_github(params: Dict[str, Any]) -> Toolkit:
-    """Build GithubTools with access token from integration."""
-    logger.info("[GitHub] Building GithubTools with params keys: %s", list(params.keys()))
+    """Build SafeGithubTools with access token from integration."""
+    logger.info("[GitHub] Building SafeGithubTools with params keys: %s", list(params.keys()))
     
     # Extract access token from params (passed from Go API integration)
     creds_data = params.get("creds", {}) if isinstance(params.get("creds"), dict) else {}
@@ -176,8 +233,9 @@ def _build_github(params: Dict[str, Any]) -> Toolkit:
     # Mask token for logging (show first 8 and last 4 chars)
     masked_token = f"{access_token[:8]}...{access_token[-4:]}" if len(access_token) > 12 else "***"
     logger.info("[GitHub] Found access token: %s for user: %s", masked_token, username or account_email)
-    tool = GithubTools(access_token=access_token)
-    logger.info("[GitHub] Created GithubTools with access token for user: %s", username or account_email)
+    # Use SafeGithubTools to make 'message' optional for create_file/update_file
+    tool = SafeGithubTools(access_token=access_token)
+    logger.info("[GitHub] Created SafeGithubTools with access token for user: %s", username or account_email)
     
     # Add context instructions
     tool.add_instructions = True

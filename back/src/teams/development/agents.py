@@ -97,7 +97,7 @@ class AnalystAgent(Agent):
 
         task_id = self.task_id
         if not task_id:
-            return "Error: No task_id available to save requirements."
+            return "Error: No task_id available to save requirements. I lack a task_id to save requirements. Please ask the Team Leader to provide the task context or use list_projects to find available projects."
 
         # Update task status to PLANNING
         result = self.task_tool.update_task_status(

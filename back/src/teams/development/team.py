@@ -12,7 +12,7 @@ from agno.db import BaseDb
 from agno.models.base import Model
 from agno.team import Team
 from agno.tools import Toolkit
-from agno.tools.github import GithubTools
+from src.tools.factory import SafeGithubTools
 import requests
 import redis
 
@@ -427,8 +427,8 @@ class DevelopmentTeam(Team):
         client_tools: Optional[List[Toolkit]] = None,
     ):
         # Initialize GitHub tools if token is provided
-        # 1. Server-side Tools
-        github_tool = GithubTools(access_token=github_token) if github_token else None
+        # 1. Server-side Tools (use SafeGithubTools for optional 'message' param)
+        github_tool = SafeGithubTools(access_token=github_token) if github_token else None
         self.github_tool = github_tool
         
         # Initialize Git Tool (Local)
@@ -575,17 +575,31 @@ class DevelopmentTeam(Team):
         if self.check_cancellation():
              return "PROCESS_STOPPED_BY_USER"
 
-        # 0.1 Inject Repository Context
+        # 0.1 Inject Context (Project ID, Repository, etc.)
+        context_lines = []
+        
+        # Inject Project ID
+        if self.project_id:
+            context_lines.append(f"**Current Project ID**: `{self.project_id}`. ALWAYS use this ID when creating tasks or subtasks.")
+        
+        # Inject Task ID
+        if self.task_id:
+            context_lines.append(f"**Current Task ID**: `{self.task_id}`. Use this as parent_id for subtasks.")
+        
+        # Inject Repository Context from GitHub Integration
         if self.github_tool and message:
-             try:
-                 # Check if list_repos is available/callable
-                 if hasattr(self.github_tool, "list_repos"):
-                     repos_response = self.github_tool.list_repos(limit=50)
-                     # Verify format (could be list of dicts, strings, or Repo objects)
-                     # We'll just cast to string to be safe
-                     message += f"\n\n[System] You have access to the following repositories: {repos_response}. Use ONLY these names."
-             except Exception as e:
-                 print(f"[Team] Failed to list repos: {e}")
+            try:
+                if hasattr(self.github_tool, "list_repos"):
+                    repos_response = self.github_tool.list_repos(limit=50)
+                    context_lines.append(f"You have access to the following repositories: {repos_response}. Use ONLY these repository names. Do NOT invent repository names.")
+            except Exception as e:
+                print(f"[Team] Failed to list repos from GitHub integration: {e}")
+        
+        # Append context to message
+        if context_lines and message:
+            context_block = "\n\n[SYSTEM CONTEXT - IMPORTANT]\n" + "\n".join(context_lines) + "\n[END SYSTEM CONTEXT]"
+            message += context_block
+            print(f"[Team] Injected context: project_id={self.project_id}, task_id={self.task_id}")
 
         # 1. Load State
         current_state = self._load_state(self.task_id)
