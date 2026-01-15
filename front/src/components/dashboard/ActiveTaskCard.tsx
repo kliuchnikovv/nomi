@@ -63,13 +63,40 @@ export function ActiveTaskCard({ task, onDismiss }: Props) {
     const config = getStatusConfig();
     const Icon = config.icon;
 
+    // Parse Implementation Steps if available
+    const steps = task.artifacts?.ArchitectPlan?.steps || [];
+
+    const getStepIcon = (status?: string) => {
+        switch (status) {
+            case 'completed': return '🟢';
+            case 'failed': return '🔴';
+            case 'in_progress': return '🟡';
+            default: return '⚪'; // pending
+        }
+    };
+
     return (
         <Animated.View style={[styles.container, { backgroundColor: theme.card, borderColor: isDone ? palette.green : theme.border }, animatedStyle]}>
-            <View style={styles.header}>
-                <Text style={[styles.projectName, { color: theme.textSecondary }]}>{task.projectName}</Text>
-                {isDone && <Check width={16} height={16} color={palette.green} />}
+            <View>
+                <View style={styles.header}>
+                    <Text style={[styles.projectName, { color: theme.textSecondary }]}>{task.projectName}</Text>
+                    {isDone && <Check width={16} height={16} color={palette.green} />}
+                </View>
+                <Text style={[styles.title, { color: theme.textPrimary }]} numberOfLines={1}>{task.title}</Text>
             </View>
-            <Text style={[styles.title, { color: theme.textPrimary }]} numberOfLines={1}>{task.title}</Text>
+
+            {steps.length > 0 && (
+                <View style={styles.stepsContainer}>
+                    {steps.map((step: any, index: number) => (
+                        <View key={index} style={styles.stepRow}>
+                            <Text style={styles.stepIcon}>{getStepIcon(step.status)}</Text>
+                            <Text style={[styles.stepText, { color: theme.textSecondary }]} numberOfLines={1}>
+                                {step.description || step.file_path}
+                            </Text>
+                        </View>
+                    ))}
+                </View>
+            )}
 
             <View style={[styles.statusContainer, { backgroundColor: `${config.color}15` }]}>
                 <Icon width={14} height={14} color={config.color} style={{ marginRight: 6 }} />
@@ -86,7 +113,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         marginRight: 12,
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        minHeight: 120
     },
     header: {
         flexDirection: 'row',
@@ -115,5 +143,22 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 11,
         fontWeight: '600'
+    },
+    stepsContainer: {
+        marginVertical: 8,
+        flex: 1
+    },
+    stepRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4
+    },
+    stepIcon: {
+        fontSize: 10,
+        marginRight: 6
+    },
+    stepText: {
+        fontSize: 10,
+        flex: 1
     }
 });
