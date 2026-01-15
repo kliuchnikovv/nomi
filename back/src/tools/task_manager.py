@@ -21,6 +21,7 @@ class TaskManagementTool(Toolkit):
         self.auth_token = auth_token
         self.register(self.update_task_status)
         self.register(self.list_projects)
+        self.register(self.create_task)
 
 
     def update_task_status(self, task_id: str, status: str, pr_url: Optional[str] = None, artifacts: Optional[dict] = None) -> str:
