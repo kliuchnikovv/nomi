@@ -141,6 +141,9 @@ class RedisWorker:
 
             if frame.op == Op.STOP:
                 logger.info(f"[RedisWorker] Received STOP for chat {chat_id}")
+                # Set cancellation flag in Redis (expires in 60s)
+                await self.redis.set(f"chat:stop:{chat_id}", "true", ex=60)
+                
                 if chat_id in self.ACTIVE_TASKS:
                     self.ACTIVE_TASKS[chat_id].cancel()
                     # We don't remove it here immediately, let the task finish/cleanup

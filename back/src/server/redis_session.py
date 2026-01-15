@@ -146,6 +146,13 @@ class RedisSession:
             team_type = None
 
             if self.command_desc and isinstance(self.command_desc, dict):
+                # Inject auth token if available in payload but not in command_desc
+                if "auth_token" not in self.command_desc:
+                    token = payload.get("token") or payload.get("access_token")
+                    if token:
+                        self.command_desc["auth_token"] = token
+                        logger.info("[RedisSession] Injected auth_token into command_desc")
+
                 team_type = self.command_desc.get("type", "").lower()
                 # Known team types that require TeamFactory
                 known_teams = [
@@ -601,6 +608,9 @@ Continue the conversation."""
             streamed_text_len = 0
             current_agent_name = None  # Track current agent for context switching
             async for ev in result:
+                if self.cancel_event.is_set():
+                    logger.info("[RedisSession] Stream cancelled by event flag")
+                    break
                 event_type = type(ev).__name__
                 logger.info(f"[RedisSession] Stream event received: {event_type}")
                 logger.debug(f"[RedisSession] Event details: {ev}")

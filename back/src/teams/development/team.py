@@ -14,6 +14,7 @@ from agno.team import Team
 from agno.tools import Toolkit
 from agno.tools.github import GithubTools
 import requests
+import redis
 
 from src.agents.genie import GenieAgent
 from src.teams.development.models import (
@@ -55,7 +56,6 @@ from src.teams.development.agents import (
 # Set up logger
 logger = logging.getLogger(__name__)
 
-
 leader_instructions = dedent("""
     You are the **Team Lead** of a high-performance software development team.
     Your goal is to coordinate the workflow between the User and your specialist agents (Analyst, Architect, Developer, Reviewer).
@@ -63,11 +63,9 @@ leader_instructions = dedent("""
     # Coordination Rules
     1.  **Delegate Smartly**: Pass tasks to the most appropriate agent.
     2.  **Direct Communication**: Your agents (Analyst, Architect, etc.) speak directly to the user.
-    3.  **NO REPETITION**: Do not summarize or repeat what your sub-agents just said.
-    4.  **Format**: Ensure all output is in clean, readable **Markdown**.
-    5.  **STOP ON QUESTIONS**: If a sub-agent asks the User a question, YOU MUST STOP. Do not answer for the User. Do not simulate the User's response.
-    6.  **NO HALLUCINATION**: Do not simulate future steps. If the Analyst is working, do not claim the Architect is done. Wait for the actual tool outputs.
-""")
+        - Inform the user "Task stopped."
+        - Do NOT delegate to other agents.
+    7.  **NO HALLUCINATION**: Do not simulate future steps. Wait for actual tool outputs.
 
 analyst_instructions = dedent("""
     You are an experienced **Business Analyst (BA)** in an IT team. Your goal is to turn abstract requests into clear PRDs (Product Requirements Documents).
@@ -430,6 +428,7 @@ class DevelopmentTeam(Team):
         # Initialize GitHub tools if token is provided
         # 1. Server-side Tools
         github_tool = GithubTools(access_token=github_token) if github_token else None
+        self.github_tool = github_tool
         
         # Initialize Git Tool (Local)
         # Assuming we are running in the root of the repo or a specific path
@@ -508,7 +507,7 @@ class DevelopmentTeam(Team):
         )
 
         # Team Lead tools (the team itself will have these)
-        team_tools = []
+        team_tools = [task_tool] # Team Lead needs task management
         if github_tool:
             team_tools.append(github_tool)
         if knowledge_tool:
@@ -538,6 +537,25 @@ class DevelopmentTeam(Team):
         # Expose members attribute for Agno framework compatibility
         self.members = self.members
 
+    def check_cancellation(self) -> bool:
+        """Checks if the user has requested to stop the operation."""
+        if not self.task_id:
+            return False
+            
+        try:
+            # Connect to Redis to check the stop flag
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+            r = redis.from_url(redis_url, decode_responses=True)
+            
+            # Check key chat:stop:{task_id} (using task_id as session_id context)
+            if r.get(f"chat:stop:{self.task_id}"):
+                print(f"[Team] Cancellation detected for task {self.task_id}")
+                return True
+        except Exception as e:
+            print(f"[Team] Error checking cancellation: {e}")
+            
+        return False
+
     def run(
         self,
         message: Optional[str] = None,
@@ -551,6 +569,22 @@ class DevelopmentTeam(Team):
         if not self.task_id:
             # Fallback to standard team behavior if no task_id (e.g. just chatting)
             return super().run(message=message, stream=stream, **kwargs)
+
+        # 0. Check Cancellation
+        if self.check_cancellation():
+             return "PROCESS_STOPPED_BY_USER"
+
+        # 0.1 Inject Repository Context
+        if self.github_tool and message:
+             try:
+                 # Check if list_repos is available/callable
+                 if hasattr(self.github_tool, "list_repos"):
+                     repos_response = self.github_tool.list_repos(limit=50)
+                     # Verify format (could be list of dicts, strings, or Repo objects)
+                     # We'll just cast to string to be safe
+                     message += f"\n\n[System] You have access to the following repositories: {repos_response}. Use ONLY these names."
+             except Exception as e:
+                 print(f"[Team] Failed to list repos: {e}")
 
         # 1. Load State
         current_state = self._load_state(self.task_id)
@@ -566,6 +600,7 @@ class DevelopmentTeam(Team):
         # State: ANALYSIS -> Analyst
         if current_state == "ANALYSIS" or current_state == "TODO": # Default start
             if self.should_delegate_to_analyst(message or ""):
+                if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
                 print("[Team] Routing to Analyst")
                 response = self.analyst.run(message=message, stream=stream, **kwargs)
                 executed_role = "Analyst"
@@ -580,6 +615,7 @@ class DevelopmentTeam(Team):
             print("[Team] Routing to Architect")
             # We need to make sure Architect has the requirements.
             # They are in artifacts, agent should find them via context or tools.
+            if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
             response = self.architect.run(message=message, stream=stream, **kwargs)
             executed_role = "Architect"
 
@@ -600,12 +636,14 @@ class DevelopmentTeam(Team):
                     executed_role = "Worker"
             else:
                 print("[Team] Routing to Developer (Simple Task)")
+                if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
                 response = self.developer.run(message=message, stream=stream, **kwargs)
                 executed_role = "Developer"
 
         # State: REVIEW -> Reviewer
         elif current_state == "REVIEW":
             print("[Team] Routing to Reviewer")
+            if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
             response = self.reviewer.run(message=message, stream=stream, **kwargs)
             executed_role = "Reviewer"
 

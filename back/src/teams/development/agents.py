@@ -200,6 +200,10 @@ class DeveloperAgent(Agent):
                 1. Read the Architecture Plan.
                 2. Implement changes file by file.
                 3. Run tests.
+
+                # Tool Usage Rules (CRITICAL)
+                - **create_file**: You MUST provide `repo_name`, `path`, `content`, AND `message` (commit message). Do not skip `message`.
+                - **update_file**: Always provide `message`.
             """),
             tools=agent_tools,
             markdown=True,
