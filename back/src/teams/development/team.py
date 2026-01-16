@@ -105,6 +105,7 @@ analyst_instructions = dedent("""
     **Constraints**:
     - Do NOT write code. Focus on business logic and interface behavior.
     - Do NOT output JSON. Use standard Markdown.
+    - When calling `ask_clarification`, `questions` MUST be a list of strings, e.g. ["question 1", "question 2"].
     - Use the tools provided to understand the context, but rely on the standard PRD structure for output.
 """)
 

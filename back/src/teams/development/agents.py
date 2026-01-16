@@ -63,6 +63,7 @@ class AnalystAgent(Agent):
 
                 # Rules
                 - Do NOT output the PRD as Markdown text directly. You MUST use `save_requirements`.
+                - When calling `ask_clarification`, `questions` MUST be a list of strings, e.g. ["question 1", "question 2"].
                 - Focus on business logic and user value.
             """),
             tools=tools,
@@ -117,7 +118,7 @@ class AnalystAgent(Agent):
         Call this if requirements are vague or missing critical info.
 
         Args:
-            questions: List of specific clarifying questions.
+            questions: List of specific clarifying questions. Example: ["What is the target audience?", "Do you need a database?"]
         """
         # We could potentially update status to WAITING_FOR_USER here if supported
         # For now, just return the confirmation
@@ -561,6 +562,7 @@ analyst_instructions = dedent("""
     **Constraints**:
     - Do NOT write code. Focus on business logic and interface behavior.
     - Do NOT output JSON. Use standard Markdown.
+    - When calling `ask_clarification`, `questions` MUST be a list of strings, e.g. ["question 1", "question 2"].
     - Use the tools provided to understand the context, but rely on the standard PRD structure for output.
 """)
 
