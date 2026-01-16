@@ -96,22 +96,22 @@ graph LR
 
 ## 💻 Development
 
-Detailed development instructions and coding standards can be found in [AGENTS.md](AGENTS.md).
+This section provides commands to run each service individually for development purposes. For coding standards and contribution guidelines, please see [AGENTS.md](AGENTS.md).
 
-### Mobile App (`front/`)
+### Mobile App ([`front/`](./front/))
 ```bash
 cd front
 npm start
 # Press 'i' for iOS simulator or 'a' for Android emulator
 ```
 
-### API Server (`api/`)
+### API Server ([`api/`](./api/))
 ```bash
 cd api
 go run cmd/api/main.go
 ```
 
-### Agent Service (`back/`)
+### Agent Service ([`back/`](./back/))
 ```bash
 cd back
 source .venv/bin/activate
