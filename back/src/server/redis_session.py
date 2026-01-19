@@ -678,6 +678,51 @@ Continue the conversation."""
                                     "agent_name": current_agent_name,
                                 }
 
+                # Handle Workflow events (from agno.workflow.Workflow)
+                # StepCompletedEvent contains the output of each step (agent)
+                if "StepCompletedEvent" in event_type:
+                    # Get content from the event
+                    val = getattr(ev, "content", None)
+                    step_name = getattr(ev, "step_name", None)
+                    
+                    # Also check step_response for nested content
+                    step_response = getattr(ev, "step_response", None)
+                    if step_response and not val:
+                        val = getattr(step_response, "content", None)
+                    
+                    if val and str(val).strip():
+                        content = str(val)
+                        logger.info(
+                            "[RedisSession] StepCompletedEvent content from %s: %s...",
+                            step_name or "unknown",
+                            content[:100],
+                        )
+                        # Use step_name as agent_name if available
+                        yield {
+                            "type": "member_response",
+                            "content": content,
+                            "agent_name": step_name or current_agent_name,
+                        }
+                        streamed_text_len += len(content)
+
+                # WorkflowCompletedEvent contains the final aggregated result
+                if "WorkflowCompletedEvent" in event_type:
+                    val = getattr(ev, "content", None)
+                    if val and str(val).strip():
+                        content = str(val)
+                        # Only yield if we haven't already streamed this content
+                        if len(content) > streamed_text_len:
+                            remainder = content[streamed_text_len:]
+                            if remainder.strip():
+                                logger.info(
+                                    "[RedisSession] WorkflowCompletedEvent final content: %s...",
+                                    remainder[:100],
+                                )
+                                yield {
+                                    "type": "text",
+                                    "content": remainder,
+                                }
+
                 # 3. Text Content
                 if (
                     "RunContentEvent" in event_type
