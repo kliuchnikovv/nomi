@@ -732,8 +732,28 @@ class DevelopmentTeam(Team):
         elif current_stage == WorkflowStage.CLARIFICATION_NEEDED:
             logger.info("[Team] User provided clarification, returning to ANALYSIS")
             self._update_task_status(self.task_id, "ANALYSIS")
+            
+            # Contextualize the input for Analyst to prevent loops
+            # We explicitly override the 'CLARIFICATION_NEEDED' signal in the prompt
+            context_override = "\n[System] ACTION REQUIRED: The user has provided the requested clarification. The workflow state is now updated to ANALYSIS. Please proceed with analyzing the requirements and creating the PRD. Do not ask the same questions again."
+            
+            # Try to fetch previous questions for context
+            prev_questions = []
+            if self.workflow_storage and self.task_id:
+                 try:
+                     state_data = self.workflow_storage.get_workflow_state(self.task_id)
+                     if state_data and "clarification_questions" in state_data:
+                          prev_questions = state_data["clarification_questions"]
+                 except Exception:
+                     pass
+            
+            if prev_questions:
+                 context_override += "\n\nYou previously asked:\n" + "\n".join([f"- {q}" for q in prev_questions])
+
+            full_message = f"{message}\n{context_override}"
+
             if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
-            response = self.analyst.run(message=message, stream=stream, **kwargs)
+            response = self.analyst.run(message=full_message, stream=stream, **kwargs)
             executed_role = "Analyst"
 
         # State: ARCHITECTURE -> Architect
@@ -1283,54 +1303,43 @@ class DevelopmentTeam(Team):
 
     def should_delegate_to_analyst(self, message: str) -> bool:
         """Check if message needs analyst delegation based on content analysis"""
+        if not message:
+            return False
+            
         message_lower = message.lower().strip()
-
-        # Simple continuations - NO delegation
-        continuation_words = [
-            "continue",
-            "go on",
-            "proceed",
-            "yes",
-            "ok",
-            "next",
-            "давай",
-            "продолжи",
-            "далее",
-        ]
-        if any(word in message_lower for word in continuation_words):
+        
+        # Exact match check for continuations to differentiate from task descriptions
+        # "Давай" (Okay) vs "Давай напишем код" (Let's write code)
+        continuation_words = {
+            "continue", "go on", "proceed", "yes", "ok", "next",
+            "давай", "продолжи", "далее", "ок", "хорошо", "ага", "угу"
+        }
+        if message_lower in continuation_words:
             return False
 
-        # Status questions - NO delegation
+        # Cleaning for casual words check
+        clean_msg = message_lower.strip(".,!?")
+        
+        # Casual words - exact match only
+        casual_words = {
+            "hello", "hi", "hey", "greetings", "thanks", "thank you", "good job",
+            "привет", "здравствуйте", "добрый день", "хай", "спасибо"
+        }
+        if clean_msg in casual_words:
+            return False
+
+        # Status questions - basic heuristic
         status_words = [
-            "status",
-            "progress",
-            "how's",
-            "what's next",
-            "как дела",
-            "что дальше",
+            "status", "progress", "how's", "what's next",
+            "как дела", "что дальше", "статус"
         ]
-        if any(phrase in message_lower for phrase in status_words):
-            return False
+        # Only treat as status inquiry if short and contains status word
+        if any(phrase in message_lower for phrase in status_words) and len(message.split()) < 5:
+             # Exception: if it contains action verbs
+             request_words = ["create", "make", "implement", "создай", "сделай", "напиши", "обнови", "update"]
+             if not any(rw in message_lower for rw in request_words):
+                 return False
 
-        # Greetings and casual - NO delegation
-        casual_words = [
-            "hello",
-            "hi",
-            "thanks",
-            "thank you",
-            "good job",
-            "спасибо",
-            "привет",
-        ]
-        if any(word in message_lower for word in casual_words):
-            return False
-
-        # Very short messages (1-2 words) - likely continuations
-        if len(message.split()) <= 2:
-            return False
-
-        # Check workflow context - if we're in active development, prefer developer for simple messages
-        # Note: run() method now handles phase checking, so this might be redundant or just a helper.
         return True
 
     def _is_clarification_response(self, response: Any) -> bool:
