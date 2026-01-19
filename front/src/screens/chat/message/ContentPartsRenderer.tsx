@@ -112,7 +112,7 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
         let currentInternalGroup: ContentPart[] = [];
 
         const isInternal = (part: ContentPart) => {
-            return part.type === 'tool_call' || part.type === 'reasoning';
+            return part.type === 'tool_call' || part.type === 'reasoning' || (part as any).type === 'member_response';
         };
 
         const flushInternalGroup = () => {
@@ -125,9 +125,6 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
         for (const part of mergedParts) {
             if (isInternal(part)) {
                 currentInternalGroup.push(part);
-            } else if ((part as any).type === 'member_response') {
-                flushInternalGroup();
-                result.push({ type: 'member', part });
             } else {
                 // Text part
                 flushInternalGroup();
@@ -179,16 +176,7 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                             </Markdown>
                         </Pressable>
                     );
-                } else if (group.type === 'member' && group.part) {
-                    // Team member responses: show as collapsible "thinking" blocks
-                    const memberPart = group.part as any;
-                    return (
-                        <AgentThinkingBlock
-                            key={`member-${groupIndex}`}
-                            agentName={memberPart.agent_name}
-                            text={memberPart.text}
-                        />
-                    );
+
                 } else if (group.type === 'group' && group.parts) {
                     return (
                         <CollapsibleSteps key={`group-${groupIndex}`}>
@@ -197,6 +185,8 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                                     return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
                                 } else if (part.type === 'reasoning') {
                                     return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
+                                } else if ((part as any).type === 'member_response') {
+                                    return <AgentThinkingBlock key={`member-${index}`} agentName={(part as any).agent_name} text={(part as any).text} />;
                                 }
                                 return null;
                             })}

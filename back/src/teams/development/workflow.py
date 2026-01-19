@@ -58,41 +58,41 @@ class DevelopmentWorkflow(Workflow):
                     evaluator=self.should_run_clarification,
                     steps=[Step(name="Clarification Handler", executor=self.handle_clarification)]
                 ),
-                Condition(
-                    name="Architecture Phase",
-                    evaluator=self.should_run_architecture,
-                    steps=[Step(name="Architect", executor=self.run_architect)]
-                ),
-                Condition(
-                    name="Approval Pending",
-                    evaluator=self.should_run_approval,
-                    steps=[Step(name="Approval Handler", executor=self.handle_approval)]
-                ),
-                Condition(
-                    name="Development Phase",
-                    evaluator=self.should_run_development,
-                    steps=[Step(name="Developer or Worker", executor=self.execute_development)]
-                ),
-                Condition(
-                    name="Code Review Phase",
-                    evaluator=self.should_run_code_review,
-                    steps=[Step(name="Reviewer", executor=self.run_reviewer)]
-                ),
-                Condition(
-                    name="DOD Check Phase",
-                    evaluator=self.should_run_dod_check,
-                    steps=[Step(name="Verifier", executor=self.run_verifier)]
-                ),
-                Condition(
-                    name="Delivery Phase",
-                    evaluator=self.should_run_delivery,
-                    steps=[Step(name="Delivery Handler", executor=self.handle_delivery)]
-                ),
-                Condition(
-                    name="Human Intervention",
-                    evaluator=self.should_run_intervention,
-                    steps=[Step(name="Intervention Handler", executor=self.handle_intervention)]
-                ),
+                # Condition(
+                #     name="Architecture Phase",
+                #     evaluator=self.should_run_architecture,
+                #     steps=[Step(name="Architect", executor=self.run_architect)]
+                # ),
+                # Condition(
+                #     name="Approval Pending",
+                #     evaluator=self.should_run_approval,
+                #     steps=[Step(name="Approval Handler", executor=self.handle_approval)]
+                # ),
+                # Condition(
+                #     name="Development Phase",
+                #     evaluator=self.should_run_development,
+                #     steps=[Step(name="Developer or Worker", executor=self.execute_development)]
+                # ),
+                # Condition(
+                #     name="Code Review Phase",
+                #     evaluator=self.should_run_code_review,
+                #     steps=[Step(name="Reviewer", executor=self.run_reviewer)]
+                # ),
+                # Condition(
+                #     name="DOD Check Phase",
+                #     evaluator=self.should_run_dod_check,
+                #     steps=[Step(name="Verifier", executor=self.run_verifier)]
+                # ),
+                # Condition(
+                #     name="Delivery Phase",
+                #     evaluator=self.should_run_delivery,
+                #     steps=[Step(name="Delivery Handler", executor=self.handle_delivery)]
+                # ),
+                # Condition(
+                #     name="Human Intervention",
+                #     evaluator=self.should_run_intervention,
+                #     steps=[Step(name="Intervention Handler", executor=self.handle_intervention)]
+                # ),
             ],
             *args, **kwargs
         )
@@ -255,7 +255,7 @@ class DevelopmentWorkflow(Workflow):
         else:
              # Assume success if not clarification
              artifact_id = self._save_artifact("Analyst", content)
-             new_state = StateManager.transition(current_state, WorkflowStage.ARCHITECTURE, {"prd_id": artifact_id})
+             new_state = StateManager.transition(current_state, WorkflowStage.DONE, {"prd_id": artifact_id}) #TODO: 
              self._update_state(new_state)
              
         return StepOutput(content=content, success=True)

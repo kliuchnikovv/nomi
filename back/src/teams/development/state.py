@@ -15,6 +15,7 @@ class WorkflowStage(str, Enum):
     DELIVERY_HANDOFF = "delivery_handoff"
     WAITING_FOR_USER_MERGE = "waiting_for_user_merge"
     NEED_HUMAN_INTERVENTION = "need_human_intervention"
+    DONE = "done"
 
 
 class WorkflowStatus(str, Enum):
@@ -122,7 +123,14 @@ class NeedHumanInterventionState(BaseState):
     reason: str = Field(..., description="Reason for requiring human intervention")
     prd_id: Optional[str] = None
     plan_id: Optional[str] = None
+    plan_id: Optional[str] = None
     pr_url: Optional[str] = None
+
+
+class DoneState(BaseState):
+    stage: Literal[WorkflowStage.DONE] = WorkflowStage.DONE
+    status: WorkflowStatus = WorkflowStatus.COMPLETED
+    prd_id: Optional[str] = None
 
 
 WorkflowState = Union[
@@ -135,7 +143,9 @@ WorkflowState = Union[
     DODCheckState,
     DeliveryHandoffState,
     WaitingForUserMergeState,
+    WaitingForUserMergeState,
     NeedHumanInterventionState,
+    DoneState,
 ]
 
 
@@ -143,6 +153,7 @@ ALLOWED_TRANSITIONS: Dict[WorkflowStage, List[WorkflowStage]] = {
     WorkflowStage.ANALYSIS: [
         WorkflowStage.CLARIFICATION_NEEDED,
         WorkflowStage.ARCHITECTURE,
+        WorkflowStage.DONE,
     ],
     WorkflowStage.CLARIFICATION_NEEDED: [
         WorkflowStage.ANALYSIS,
@@ -302,6 +313,9 @@ class StateManager:
                     reason=reason,
                     status=WorkflowStatus.BLOCKED,
                 )
+
+            elif target_stage == WorkflowStage.DONE:
+                return DoneState(**next_data)
 
             else:
                 raise ValueError(f"Unknown target stage: {target_stage}")
