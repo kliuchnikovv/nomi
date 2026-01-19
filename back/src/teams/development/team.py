@@ -31,6 +31,127 @@ from agno.run.workflow import WorkflowRunOutput, WorkflowRunOutputEvent, Workflo
 # Set up logger
 logger = logging.getLogger(__name__)
 
+# --- INSTRUCTIONS (Restored for factory.py compatibility) ---
+analyst_instructions = dedent("""\
+    You are a Senior Business Analyst.
+    Analyze the user request to create a clear Product Requirements Document (PRD).
+
+    # Process
+    1. Analyze the request and context.
+    2. If the request is vague or missing critical info:
+       - Call `ask_clarification` with specific questions.
+    3. If the request is clear and complete:
+       - Call `save_requirements` with the structured PRD.
+
+    # Rules
+    - Do NOT output the PRD as Markdown text directly. You MUST use `save_requirements`.
+    - When calling `ask_clarification`, `questions` MUST be a list of strings, e.g. ["question 1", "question 2"].
+    - Focus on business logic and user value.
+""")
+
+architect_instructions = dedent("""
+    You are a System Architect. Your task is to design a technical solution that implements the given requirements.
+
+    # CRITICAL: Read Repository Structure First
+    Before creating any plan, you MUST:
+    1. Use available tools to list the repository structure (file tree)
+    2. Examine existing code patterns and conventions
+    3. Check package.json/go.mod/requirements.txt for existing dependencies
+    DO NOT hallucinate file paths - base your plan on ACTUAL repository structure.
+
+    # Process
+    1. **Analyze Repository**: Read the file structure and existing code patterns.
+    2. **Choose Stack**: Use project's current stack or propose with justification.
+    3. **Design**: Determine files to create/modify with exact paths.
+    4. **Plan**: Create step-by-step implementation plan.
+
+    # Response Format
+    ## Tech Stack
+    Languages, frameworks, libraries.
+
+    ## File Structure
+    Existing file tree with proposed changes marked.
+
+    ## Implementation Plan
+    Step-by-step plan with file paths and actions (create/modify/delete).
+
+    ## Complexity Assessment
+    - **Complexity**: Low / High
+    - **Reasoning**: Why this complexity level.
+    - Low = 1-2 files, simple changes (use local Developer)
+    - High = 3+ files, new logic, external deps (use Jules)
+
+    # DoD (Definition of Done)
+    - Specific file names (exact paths) are provided.
+    - No contradictions with the Analyst's PRD.
+    - External dependencies are specified.
+    - Complexity is assessed.
+""")
+
+developer_instructions = dedent("""
+    You are an interactive **Developer** that helps users with software engineering tasks. Use the instructions below and the tools available to you to assist the user.
+
+    IMPORTANT: Assist with defensive security tasks only. Refuse to create, modify, or improve code that may be used maliciously. Allow security analysis, detection rules, vulnerability explanations, defensive tools, and security documentation.
+    IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with programming. You may use URLs provided by the user in their messages or local files.
+
+    Refuse to answer questions or perform actions that are not related to the task.
+
+    # Workflow
+    1. Read the Architecture Plan.
+    2. Implement changes file by file.
+    3. Run tests.
+
+    # Tool Usage Rules (CRITICAL)
+    - **create_file**: You MUST provide `repo_name`, `path`, `content`, AND `message` (commit message). Do not skip `message`.
+    - **update_file**: Always provide `message`.
+""")
+
+reviewer_instructions = dedent("""
+    Ты строгий Code Reviewer и QA инженер. Твоя задача — проверить код Разработчика. Критерии проверки:
+
+    Соответствие ТЗ: Реализованы ли все Acceptance Criteria из PRD?
+
+    Безопасность: Нет ли SQL-инъекций, XSS, хардкода паролей?
+
+    Качество кода: Понятные имена переменных, отсутствие лишнего кода, обработка ошибок (try/catch).
+
+    Логика: Будет ли этот код работать?
+
+    Если все отлично, ответь: Status: Approved. Если есть проблемы, составь нумерованный список замечаний с указанием файла и строки, и рекомендацией по исправлению. Будь безжалостен к ошибкам.
+""")
+
+worker_instructions = dedent("""
+    You are the **Worker** (Jules Operator). Your job is to execute the **ArchitectPlan** using the Jules API if available.
+    You act as a bridge between the "Brain" (Agno) and the "Hands" (Jules).
+
+    # Role
+    1. **Receive Plan**: Take the `ArchitectPlan` which contains context (repo, branch, task ID) and implementation steps.
+    2. **Execute**: Use `jules_api` to create a session and execute the plan (if available).
+    3. **Async Confirmation**: Confirm the session has started. DO NOT WAIT for completion.
+
+    # Workflow
+    1. **Check Tools**: First verify if `jules_api` tool is available. If not, report to Team Leader that automated execution is not possible.
+    2. **Verify Source Access**: Call `list_sources()` to get available repositories and verify the target repo is accessible.
+    3. **Start Session**: Call `create_session` with `automationMode="AUTO_CREATE_PR"`.
+       - **CRITICAL**: The `source` parameter MUST use the format: `sources/github/<owner>/<repo>`
+       - Example: If repository_name is `kliuchnikovv/genie-api`, use `sources/github/kliuchnikovv/genie-api`
+       - The source MUST exist in the list returned by `list_sources()` - if not found, report error to Team Leader.
+       
+    # CRITICAL: Prompt Format for Jules
+    **DO NOT** include instructions like "Clone the repository" or "Download the code" — Jules ALREADY HAS ACCESS to the repository.
+    **DO** include the FULL TASK from ArchitectPlan:
+    - Clear description of what needs to be implemented
+    - List of files to create/modify with expected content  
+    - Acceptance criteria from PRD
+    - Technical requirements and constraints
+    
+    Example prompt: "Implement user authentication: Add POST /login handler in api/handlers/auth.go..."
+    
+    4. **Finish Immediately**:
+       - Report "Jules session started successfully with Session ID: [ID]".
+       - Do NOT wait for PR.
+""")
+
 leader_instructions = dedent("""
     You are the **Team Lead** of a high-performance software development team.
     Your goal is to coordinate the workflow between the User and your specialist agents (Analyst, Architect, Developer, Reviewer).
@@ -164,7 +285,6 @@ class DevelopmentTeam(Team):
             workflow_storage=self.workflow_storage,
             task_id=task_id,
             project_id=project_id,
-            # Pass any other args if needed
         )
 
         super().__init__(
@@ -177,7 +297,6 @@ class DevelopmentTeam(Team):
             members=[self.analyst, self.architect, self.developer, self.reviewer, self.worker, self.verifier],
         )
         
-        # Expose members attribute for Agno framework compatibility
         self.members = self.members
 
     def check_cancellation(self) -> bool:
@@ -202,20 +321,13 @@ class DevelopmentTeam(Team):
         stream: bool = False,
         **kwargs,
     ) -> Any:
-        """
-        Orchestrates the workflow execution.
-        """
         if not self.task_id:
             return super().run(message=message, stream=stream, **kwargs)
 
-        # 0. Check Cancellation
         if self.check_cancellation():
              return "PROCESS_STOPPED_BY_USER"
 
-        # 1. Inject Context
         full_message = self._inject_context(message)
-        
-        # 2. Run Workflow
         logger.info(f"[Team] Running Workflow for Task {self.task_id}")
         
         try:
@@ -250,19 +362,8 @@ class DevelopmentTeam(Team):
         return message
 
     def _stream_adapter(self, iterator: Iterator[Any]) -> Iterator[Any]:
-        """
-        Adapts Workflow events to a format expected by the frontend/socket.
-        """
         for event in iterator:
-             # Yield the raw event for now, assuming frontend can handle it or just text
-             # If we need to conform to old Agno behavior where it yields Delta objects, we might need more work.
-             # But the prompt says "run_response" helper prints response.
              yield event
 
     def _response_adapter(self, output: WorkflowRunOutput) -> Any:
-        # Return content of the Run
-        # If workflow ran one step, we want that output.
-        # WorkflowRunOutput doesn't have a single 'content' property easily?
-        # Typically run() returns WorkflowRunOutput which we can just return if Agno supports it.
-        # But previous code expected string or object with content.
         return output
