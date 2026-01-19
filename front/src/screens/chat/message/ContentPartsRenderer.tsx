@@ -78,28 +78,31 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                 return false;
             }
 
-            // Member responses (agent thinking) - respect showMemberResponses toggle
-            if ((part as any).type === 'member_response') {
-                return showMemberResponses;
-            }
+            // Member responses in team mode - always show as regular text
+            // (no longer filtered by showMemberResponses)
             return true;
         });
-    }, [parts, showToolCalls, showReasoning, showMemberResponses]);
+    }, [parts, showToolCalls, showReasoning]);
 
     // Merge consecutive text parts for proper markdown rendering
+    // Also treat member_response as text in team mode
     const mergedParts = useMemo(() => {
         const result: ContentPart[] = [];
         for (const part of filteredParts) {
-            if (part.type === 'text') {
+            // Treat both 'text' and 'member_response' as text content
+            const isTextLike = part.type === 'text' || (part as any).type === 'member_response';
+            const textContent = part.type === 'text' ? part.text : (part as any).text;
+
+            if (isTextLike && textContent) {
                 const last = result[result.length - 1];
                 if (last && last.type === 'text') {
-                    // Merge with previous text part
-                    last.text = (last.text || '') + (part.text || '');
+                    // Merge with previous text part, adding separator to avoid text gluing
+                    last.text = (last.text || '') + '\n\n' + textContent;
                 } else {
                     // Create new text part (copy to avoid mutation)
-                    result.push({ type: 'text', text: part.text || '' });
+                    result.push({ type: 'text', text: textContent });
                 }
-            } else {
+            } else if (!isTextLike) {
                 result.push(part);
             }
         }
@@ -112,7 +115,8 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
         let currentInternalGroup: ContentPart[] = [];
 
         const isInternal = (part: ContentPart) => {
-            return part.type === 'tool_call' || part.type === 'reasoning' || (part as any).type === 'member_response';
+            // member_response is now treated as regular text, not internal
+            return part.type === 'tool_call' || part.type === 'reasoning';
         };
 
         const flushInternalGroup = () => {
@@ -185,9 +189,8 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
                                     return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
                                 } else if (part.type === 'reasoning') {
                                     return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
-                                } else if ((part as any).type === 'member_response') {
-                                    return <AgentThinkingBlock key={`member-${index}`} agentName={(part as any).agent_name} text={(part as any).text} />;
                                 }
+                                // member_response is now handled as text above
                                 return null;
                             })}
                         </CollapsibleSteps>

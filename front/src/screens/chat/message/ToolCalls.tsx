@@ -173,7 +173,7 @@ export function AgentThinkingBlock({ agentName, text }: { agentName: string; tex
                 ]}
             >
                 <Text style={styles.agentThinkingHeaderText}>
-                    🧠 {agentName}: Размышления
+                    🧠 Размышления
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
                     {expanded ? '▼' : '▶'}

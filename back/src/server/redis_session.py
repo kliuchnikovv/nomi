@@ -625,6 +625,9 @@ Continue the conversation."""
                     logger.info(
                         f"[Team] Agent switched: {current_agent_name or 'Team Leader'} → {agent_name}"
                     )
+                    # Send separator between different agent responses to prevent text gluing
+                    if current_agent_name is not None:
+                        yield {"type": "text", "content": "\n\n"}
                     current_agent_name = agent_name
 
                 # 1. Tool Calls
@@ -634,6 +637,8 @@ Continue the conversation."""
                         if current_agent_name:
                             tool_data["agent_name"] = current_agent_name
                         yield tool_data
+                        # Add separator after tool call to prevent text gluing
+                        yield {"type": "text", "content": "\n\n"}
 
                 # 2. Reasoning
                 captured_reasoning = None
