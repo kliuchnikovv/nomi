@@ -164,6 +164,7 @@ class DevelopmentTeam(Workflow):
         self.workflow_storage = PgWorkflowStorage(db_url) if db_url else None
         self.user_id = user_id
         self.project_id = project_id
+        self.task_id = task_id
         self.auth_token = auth_token
         
         # Tools required for AgentOS compatibility
