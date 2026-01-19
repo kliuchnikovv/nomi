@@ -128,14 +128,23 @@ const (
 type ProjectTaskStatus string
 
 const (
-	ProjectTaskStatusBacklog   ProjectTaskStatus = "BACKLOG"
-	ProjectTaskStatusAnalysis  ProjectTaskStatus = "ANALYSIS"
-	ProjectTaskStatusPlanning  ProjectTaskStatus = "PLANNING"
-	ProjectTaskStatusCoding    ProjectTaskStatus = "CODING"
-	ProjectTaskStatusReview    ProjectTaskStatus = "REVIEW"
-	ProjectTaskStatusVerify    ProjectTaskStatus = "VERIFY"
-	ProjectTaskStatusDone      ProjectTaskStatus = "DONE"
-	ProjectTaskStatusCancelled ProjectTaskStatus = "CANCELLED"
+	ProjectTaskStatusBacklog               ProjectTaskStatus = "BACKLOG"
+	ProjectTaskStatusAnalysis              ProjectTaskStatus = "ANALYSIS"
+	ProjectTaskStatusClarificationNeeded   ProjectTaskStatus = "CLARIFICATION_NEEDED"
+	ProjectTaskStatusArchitecture          ProjectTaskStatus = "ARCHITECTURE"
+	ProjectTaskStatusPlanning              ProjectTaskStatus = "PLANNING" // Legacy
+	ProjectTaskStatusApprovalPending       ProjectTaskStatus = "APPROVAL_PENDING"
+	ProjectTaskStatusDevelopment           ProjectTaskStatus = "DEVELOPMENT"
+	ProjectTaskStatusCoding                ProjectTaskStatus = "CODING" // Legacy
+	ProjectTaskStatusCodeReview            ProjectTaskStatus = "CODE_REVIEW"
+	ProjectTaskStatusReview                ProjectTaskStatus = "REVIEW" // Legacy
+	ProjectTaskStatusDodCheck              ProjectTaskStatus = "DOD_CHECK"
+	ProjectTaskStatusVerify                ProjectTaskStatus = "VERIFY" // Legacy
+	ProjectTaskStatusDeliveryHandoff       ProjectTaskStatus = "DELIVERY_HANDOFF"
+	ProjectTaskStatusWaitingForUserMerge   ProjectTaskStatus = "WAITING_FOR_USER_MERGE"
+	ProjectTaskStatusNeedHumanIntervention ProjectTaskStatus = "NEED_HUMAN_INTERVENTION"
+	ProjectTaskStatusDone                  ProjectTaskStatus = "DONE"
+	ProjectTaskStatusCancelled             ProjectTaskStatus = "CANCELLED"
 )
 
 // Project represents a project context
@@ -167,7 +176,7 @@ type ProjectTask struct {
 	ParentID    *uuid.UUID        `gorm:"type:uuid;index" json:"parent_id,omitempty"` // For subtasks
 	Title       string            `gorm:"type:text;not null" json:"title"`
 	Description string            `gorm:"type:text" json:"description"`
-	Status      ProjectTaskStatus `gorm:"type:varchar(20);default:'BACKLOG';not null" json:"status"`
+	Status      ProjectTaskStatus `gorm:"type:varchar(50);default:'BACKLOG';not null" json:"status"`
 	Priority    string            `gorm:"type:varchar(20);default:'medium'" json:"priority"`
 	Artifacts   pgtype.JSONB      `gorm:"type:jsonb;default:'{}'" json:"artifacts"` // AnalystOutput + ArchitectPlan
 	CreatedAt   time.Time         `gorm:"not null" json:"created_at"`

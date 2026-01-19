@@ -8,6 +8,48 @@ class AgentAction(BaseModel):
     params: Dict[str, Any] = Field(default_factory=dict, description="Parameters.")
     description: str = Field(..., description="Button text (e.g., 'Create Task').")
 
+
+# --- STATE CONTEXT (Payload for State Transitions) ---
+class StateContext(BaseModel):
+    """
+    Context object passed between agents (State Payload).
+    Used by Team Lead (Orchestrator) to maintain context across state transitions.
+    """
+    task_id: str = Field(..., description="Unique task identifier")
+    current_state: str = Field(..., description="Current WorkflowStage value")
+    user_prompt: str = Field(..., description="Original user request")
+    artifacts: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Accumulated artifacts: requirements, architecture_plan, code_diff, etc."
+    )
+    review_history: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="History of review verdicts with role, status, and comment"
+    )
+    retry_count: int = Field(0, description="Number of review/development cycles")
+    jules_task_id: Optional[str] = Field(None, description="Jules session ID if applicable")
+    code_diff: Optional[str] = Field(None, description="Git diff of changes")
+    pr_url: Optional[str] = Field(None, description="Pull Request URL if created")
+    branch_name: Optional[str] = Field(None, description="Feature branch name")
+
+
+class ClarificationRequest(BaseModel):
+    """Output from Analyst when requirements are incomplete"""
+    questions: List[str] = Field(
+        ..., 
+        description="List of clarifying questions for the user",
+        min_length=1,
+        max_length=5
+    )
+    context: Optional[str] = Field(
+        None,
+        description="Additional context about why clarification is needed"
+    )
+    partial_requirements: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Partially understood requirements so far"
+    )
+
 # --- ANALYST ---
 class AnalystOutput(BaseModel):
     """

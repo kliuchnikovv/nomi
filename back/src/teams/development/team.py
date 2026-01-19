@@ -22,6 +22,8 @@ from src.teams.development.models import (
     ArchitectPlan,
     ReviewVerdict,
     FinalAcceptance,
+    StateContext,
+    ClarificationRequest,
 )
 from src.teams.development.agents import (
     leader_instructions,
@@ -37,6 +39,17 @@ from src.teams.development.state import (
     StateManager,
     WorkflowStage,
     WorkflowStatus,
+    MAX_RETRY_COUNT,
+    AnalysisState,
+    ClarificationNeededState,
+    ArchitectureState,
+    ApprovalPendingState,
+    DevelopmentState,
+    CodeReviewState,
+    DODCheckState,
+    DeliveryHandoffState,
+    WaitingForUserMergeState,
+    NeedHumanInterventionState,
 )
 from src.rag_service import KnowledgeSearchTool
 from src.workflow.agent import PgWorkflowStorage, WorkflowAgent
@@ -528,8 +541,17 @@ class DevelopmentTeam(Team):
         )
 
         # 6. Verifier
+        verifier_tools = []
+        if git_tool:
+             verifier_tools.append(git_tool)
+        if github_tool:
+             verifier_tools.append(github_tool)
+        if client_tools:
+             verifier_tools.extend(client_tools)
+
         self.verifier = VerifierAgent(
             model=model,
+            tools=verifier_tools,
             debug_mode=debug_mode
         )
 
@@ -628,71 +650,188 @@ class DevelopmentTeam(Team):
             print(f"[Team] Injected context: project_id={self.project_id}, task_id={self.task_id}")
 
         # 1. Load State
-        current_state = self._load_state(self.task_id)
-        print(f"[Team] Task {self.task_id} state: {current_state}")
+        # 1. Load State & Inject Context
+        # Map string status to WorkflowStage for cleaner matching
+        stage_map = {
+            "ANALYSIS": WorkflowStage.ANALYSIS,
+            "TODO": WorkflowStage.ANALYSIS,
+            "CLARIFICATION_NEEDED": WorkflowStage.CLARIFICATION_NEEDED,
+            "ARCHITECTURE": WorkflowStage.ARCHITECTURE,
+            "PLANNING": WorkflowStage.ARCHITECTURE,
+            "APPROVAL_PENDING": WorkflowStage.APPROVAL_PENDING,
+            "DEVELOPMENT": WorkflowStage.DEVELOPMENT,
+            "CODING": WorkflowStage.DEVELOPMENT,
+            "IN_PROGRESS": WorkflowStage.DEVELOPMENT,
+            "CODE_REVIEW": WorkflowStage.CODE_REVIEW,
+            "REVIEW": WorkflowStage.CODE_REVIEW,
+            "DOD_CHECK": WorkflowStage.DOD_CHECK,
+            "VERIFY": WorkflowStage.DOD_CHECK,
+            "VERIFICATION": WorkflowStage.DOD_CHECK,
+            "DELIVERY_HANDOFF": WorkflowStage.DELIVERY_HANDOFF,
+            "WAITING_FOR_USER_MERGE": WorkflowStage.WAITING_FOR_USER_MERGE,
+            "NEED_HUMAN_INTERVENTION": WorkflowStage.NEED_HUMAN_INTERVENTION,
+        }
+
+        current_stage = WorkflowStage.ANALYSIS
+        current_state_obj = None
+
+        # Try to load full state from storage first
+        if self.workflow_storage and self.task_id:
+            try:
+                state_dict = self.workflow_storage.get_workflow_state(self.task_id)
+                if state_dict:
+                    current_state_obj = self._parse_agent_output(state_dict, WorkflowState)
+                    if isinstance(current_state_obj, BaseModel):
+                        current_stage = current_state_obj.stage
+                        logger.info(f"[Team] Loaded state from storage: {current_stage}")
+                        
+                        # Inject State Context into Message
+                        stage_info = f"\n\n[System] Current Workflow State: {current_stage}"
+                        if hasattr(current_state_obj, "status"):
+                             stage_info += f" ({current_state_obj.status})"
+                        if hasattr(current_state_obj, "retry_count") and current_state_obj.retry_count > 0:
+                             stage_info += f"\nRetry Count: {current_state_obj.retry_count}"
+                        
+                        if message:
+                            message += stage_info
+                        else:
+                            message = stage_info
+            except Exception as e:
+                logger.error(f"[Team] Failed to load state from storage: {e}")
+
+        # Fallback to API check if storage didn't yield result
+        if not current_state_obj:
+            api_state_str = self._load_state(self.task_id)
+            print(f"[Team] Task {self.task_id} state from API: {api_state_str}")
+            current_stage = stage_map.get(api_state_str, WorkflowStage.ANALYSIS)
 
         response = None
         executed_role = None
 
-        # 2. State-Based Routing
-        # If the user message is explicit override, we might want to handle that,
-        # but generally we follow the state.
+        # 2. State-Based Routing (using current_stage enum)
+
+
 
         # State: ANALYSIS -> Analyst
-        if current_state == "ANALYSIS" or current_state == "TODO": # Default start
+        if current_stage == WorkflowStage.ANALYSIS:
             if self.should_delegate_to_analyst(message or ""):
                 if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
-                print("[Team] Routing to Analyst")
+                logger.info("[Team] Routing to Analyst")
                 response = self.analyst.run(message=message, stream=stream, **kwargs)
                 executed_role = "Analyst"
+                
+                # Check if Analyst asked for clarification
+                if self._is_clarification_response(response):
+                    self._update_task_status(self.task_id, "CLARIFICATION_NEEDED")
+                    logger.info("[Team] Analyst needs clarification -> CLARIFICATION_NEEDED")
             else:
-                # User asking simple questions, handled by Team Lead or Analyst
-                # Even if simple question, Analyst handles it contextually
                 response = self.analyst.run(message=message, stream=stream, **kwargs)
                 executed_role = "Analyst"
 
-        # State: PLANNING -> Architect
-        elif current_state == "PLANNING":
-            print("[Team] Routing to Architect")
-            # We need to make sure Architect has the requirements.
-            # They are in artifacts, agent should find them via context or tools.
+        # State: CLARIFICATION_NEEDED -> Wait for user, then return to ANALYSIS
+        elif current_stage == WorkflowStage.CLARIFICATION_NEEDED:
+            logger.info("[Team] User provided clarification, returning to ANALYSIS")
+            self._update_task_status(self.task_id, "ANALYSIS")
+            if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
+            response = self.analyst.run(message=message, stream=stream, **kwargs)
+            executed_role = "Analyst"
+
+        # State: ARCHITECTURE -> Architect
+        elif current_stage == WorkflowStage.ARCHITECTURE:
+            logger.info("[Team] Routing to Architect")
             if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
             response = self.architect.run(message=message, stream=stream, **kwargs)
             executed_role = "Architect"
 
-        # State: CODING -> Developer OR Worker (Jules)
-        elif current_state == "CODING" or current_state == "IN_PROGRESS":
-            # Complexity Routing
+        # State: APPROVAL_PENDING -> Check user approval
+        elif current_stage == WorkflowStage.APPROVAL_PENDING:
+            approval_decision = self._check_user_approval(message or "")
+            
+            if approval_decision == "APPROVED":
+                logger.info("[Team] User approved plan -> DEVELOPMENT")
+                self._update_task_status(self.task_id, "DEVELOPMENT")
+                is_complex = self._check_complexity()
+                if is_complex:
+                    response = self.worker.run(message=message, stream=stream, **kwargs)
+                    executed_role = "Worker"
+                else:
+                    response = self.developer.run(message=message, stream=stream, **kwargs)
+                    executed_role = "Developer"
+            elif approval_decision == "REJECTED_REQUIREMENTS":
+                logger.info("[Team] User rejected requirements -> ANALYSIS")
+                self._update_task_status(self.task_id, "ANALYSIS")
+                response = self.analyst.run(message=message, stream=stream, **kwargs)
+                executed_role = "Analyst"
+            elif approval_decision == "REJECTED_ARCHITECTURE":
+                logger.info("[Team] User rejected architecture -> ARCHITECTURE")
+                self._update_task_status(self.task_id, "ARCHITECTURE")
+                response = self.architect.run(message=message, stream=stream, **kwargs)
+                executed_role = "Architect"
+            else:
+                # Still waiting for explicit approval
+                return "Ожидаю вашего подтверждения плана. Ответьте 'ОК', 'утверждаю', 'approve' для продолжения, или укажите что нужно изменить."
+
+        # State: DEVELOPMENT -> Developer OR Worker (Jules)
+        elif current_stage == WorkflowStage.DEVELOPMENT:
             is_complex = self._check_complexity()
 
             if is_complex:
-                print("[Team] Routing to Worker (Complex Task)")
-                # Check if session already started?
+                logger.info("[Team] Routing to Worker (Complex Task)")
                 session_id = self._get_jules_session_id()
                 if session_id:
-                    print("[Team] Jules session active. Checking status is async via webhook.")
-                    return "Jules is working on your task. You will be notified when a PR is created."
+                    logger.info("[Team] Jules session active. Status monitored via webhook.")
+                    return "Jules работает над вашей задачей. Вы получите уведомление когда PR будет создан."
                 else:
+                    if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
                     response = self.worker.run(message=message, stream=stream, **kwargs)
                     executed_role = "Worker"
             else:
-                print("[Team] Routing to Developer (Simple Task)")
+                logger.info("[Team] Routing to Developer (Simple Task)")
                 if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
                 response = self.developer.run(message=message, stream=stream, **kwargs)
                 executed_role = "Developer"
 
-        # State: REVIEW -> Reviewer
-        elif current_state == "REVIEW":
-            print("[Team] Routing to Reviewer")
+        # State: CODE_REVIEW -> Reviewer
+        elif current_stage == WorkflowStage.CODE_REVIEW:
+            logger.info("[Team] Routing to Reviewer")
             if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
             response = self.reviewer.run(message=message, stream=stream, **kwargs)
             executed_role = "Reviewer"
+            
+            # Check review verdict and handle retries
+            verdict = self._parse_review_verdict(response)
+            if verdict == "REJECT":
+                retry_count = self._get_retry_count()
+                if retry_count >= MAX_RETRY_COUNT:
+                    logger.warning(f"[Team] Max retries ({MAX_RETRY_COUNT}) exceeded -> NEED_HUMAN_INTERVENTION")
+                    self._update_task_status(self.task_id, "NEED_HUMAN_INTERVENTION")
+                    return f"⚠️ Превышено максимальное количество попыток ревью ({MAX_RETRY_COUNT}). Требуется вмешательство человека."
+                else:
+                    self._increment_retry_count()
+                    logger.info(f"[Team] Review rejected, retry {retry_count + 1}/{MAX_RETRY_COUNT} -> DEVELOPMENT")
 
-        # State: VERIFY -> Verifier
-        elif current_state == "VERIFY":
-            print("[Team] Routing to Verifier")
+        # State: DOD_CHECK -> Verifier (DOD Checker)
+        elif current_stage == WorkflowStage.DOD_CHECK:
+            logger.info("[Team] Routing to Verifier (DOD Check)")
+            if self.check_cancellation(): return "PROCESS_STOPPED_BY_USER"
             response = self.verifier.run(message=message, stream=stream, **kwargs)
             executed_role = "Verifier"
+
+        # State: DELIVERY_HANDOFF -> Finalize PR and report
+        elif current_stage == WorkflowStage.DELIVERY_HANDOFF:
+            logger.info("[Team] Delivery Handoff - Creating final report")
+            pr_url = self._get_current_pr_url()
+            final_report = self._create_final_report(pr_url)
+            self._update_task_status(self.task_id, "WAITING_FOR_USER_MERGE")
+            return final_report
+
+        # State: WAITING_FOR_USER_MERGE -> Process complete
+        elif current_stage == WorkflowStage.WAITING_FOR_USER_MERGE:
+            return "✅ Задача выполнена. PR создан и ожидает вашего merge. После merge задача будет завершена."
+
+        # State: NEED_HUMAN_INTERVENTION -> Escalation
+        elif current_stage == WorkflowStage.NEED_HUMAN_INTERVENTION:
+            return "⚠️ Требуется вмешательство человека. Пожалуйста, проверьте историю ревью и внесите необходимые изменения вручную."
 
         else:
             # Default fallback
@@ -851,38 +990,6 @@ class DevelopmentTeam(Team):
         
         return data
 
-    def run(self, message: Optional[str] = None, **kwargs) -> Any:
-        # Load state context
-        task_id = self.task_id or kwargs.get("task_id")
-
-        # We need to make sure we don't pass task_id twice or conflict with kwargs
-        # But we need to use it for state retrieval.
-
-        if task_id and self.workflow_storage:
-             state_dict = self.workflow_storage.get_workflow_state(task_id)
-             if state_dict:
-                 try:
-                     current_state = self._parse_agent_output(state_dict, WorkflowState)
-                     # Determine message context based on state
-                     if isinstance(current_state, BaseModel): # Check if parsing succeeded
-                         stage_info = f"\n\n[System] Current Workflow State: {current_state.stage}"
-                         if hasattr(current_state, "status"):
-                              stage_info += f" ({current_state.status})"
-
-                         # Add stage-specific context
-                         if current_state.stage == WorkflowStage.CODING and hasattr(current_state, "plan_id"):
-                              stage_info += f"\nPlan ID: {current_state.plan_id} (Ready for coding)"
-                         elif current_state.stage == WorkflowStage.REVIEW and hasattr(current_state, "pr_url"):
-                              stage_info += f"\nPR URL: {current_state.pr_url} (Waiting for review)"
-
-                         if message:
-                             message += stage_info
-                         else:
-                             message = stage_info
-                 except Exception as e:
-                     print(f"[Team] Failed to parse state on run: {e}")
-
-        return super().run(message=message, **kwargs)
 
     def transition_to_next_step(
         self, task_id: str, current_role: str, output: any, session_id: str
@@ -941,79 +1048,128 @@ class DevelopmentTeam(Team):
 
             # Logic to determine NEXT stage based on CURRENT role output
             if current_role == "Analyst":
-                 # Check completeness
+                 # Check if clarification needed or complete
+                 is_clarification = self._is_clarification_response(parsed_output)
                  is_complete = False
-                 if isinstance(parsed_output, AnalystOutput) or (isinstance(parsed_output, dict) and "requirements" in parsed_output):
-                      is_complete = True
-                 elif isinstance(parsed_output, str) and "## ✅ Definition of Done" in parsed_output:
-                      is_complete = True
+                 
+                 if not is_clarification:
+                     if isinstance(parsed_output, AnalystOutput) or (isinstance(parsed_output, dict) and "summary" in parsed_output):
+                          is_complete = True
+                     elif isinstance(parsed_output, str) and ("## Summary" in parsed_output or "## Acceptance Criteria" in parsed_output):
+                          is_complete = True
 
-                 if is_complete:
+                 if is_clarification:
+                      next_stage = WorkflowStage.CLARIFICATION_NEEDED
+                      questions = []
+                      if isinstance(parsed_output, dict):
+                          questions = parsed_output.get("questions", [])
+                      context_updates = {"questions": questions}
+                 elif is_complete:
                       next_stage = WorkflowStage.ARCHITECTURE
                       context_updates = {"prd_id": artifact_id}
 
             elif current_role == "Architect":
-                 if isinstance(parsed_output, ArchitectPlan) or (isinstance(parsed_output, dict) and "implementation_plan" in parsed_output):
-                      next_stage = WorkflowStage.CODING
+                 is_complete = False
+                 if isinstance(parsed_output, ArchitectPlan) or (isinstance(parsed_output, dict) and ("implementation_plan" in parsed_output or "content" in parsed_output)):
+                      is_complete = True
+                 elif isinstance(parsed_output, str) and ("## Implementation Plan" in parsed_output or "## Tech Stack" in parsed_output):
+                      is_complete = True
+
+                 if is_complete:
+                      next_stage = WorkflowStage.APPROVAL_PENDING
                       context_updates = {"plan_id": artifact_id}
-                 elif isinstance(parsed_output, str) and "## 🛠 Implementation Plan" in parsed_output:
-                      next_stage = WorkflowStage.CODING
-                      context_updates = {"plan_id": artifact_id}
+
+            elif current_role == "Developer" or current_role == "Worker":
+                 # Check if PR was created
+                 pr_url = None
+                 if isinstance(parsed_output, dict):
+                     pr_url = parsed_output.get("pr_url")
+                 elif isinstance(parsed_output, str):
+                     # Look for PR URL in output
+                     import re
+                     pr_match = re.search(r'https://github\.com/[^\s]+/pull/\d+', parsed_output)
+                     if pr_match:
+                         pr_url = pr_match.group(0)
+
+                 if pr_url:
+                     next_stage = WorkflowStage.CODE_REVIEW
+                     context_updates = {"pr_url": pr_url}
+                 else:
+                     # Worker might have started Jules session
+                     session_id_val = None
+                     if isinstance(parsed_output, dict):
+                         session_id_val = parsed_output.get("session_id") or parsed_output.get("name")
+                     
+                     if session_id_val:
+                         logger.info(f"[Team] Jules session started: {session_id_val}")
+                         next_stage = WorkflowStage.DEVELOPMENT
+                         context_updates = {"jules_task_id": session_id_val}
 
             elif current_role == "Reviewer":
-                 is_approved = False
-                 if isinstance(parsed_output, str) and ("**Status**: Approved" in parsed_output or "Status: Approved" in parsed_output):
-                      is_approved = True
-                 elif isinstance(parsed_output, dict) and parsed_output.get("content", {}).get("approved"):
-                      is_approved = True
-                 elif hasattr(parsed_output, "content") and parsed_output.content.approved:
-                      is_approved = True
+                 verdict = self._parse_review_verdict(parsed_output)
+                 pr_url = getattr(current_state, "pr_url", "") if hasattr(current_state, "pr_url") else ""
+                 context_updates = {"review_verdict_id": artifact_id, "pr_url": pr_url}
 
-                 context_updates = {"review_verdict_id": artifact_id, "pr_url": getattr(current_state, "pr_url", "")}
+                 # Add to review history
+                 if hasattr(current_state, "review_history"):
+                     review_comment = ""
+                     if isinstance(parsed_output, str):
+                         review_comment = parsed_output[:500]
+                     current_state = StateManager.add_review_entry(
+                         current_state, "Reviewer", "APPROVED" if verdict == "APPROVED" else "REJECT", review_comment
+                     )
 
-                 if is_approved:
-                      next_stage = WorkflowStage.VERIFICATION
+                 if verdict == "APPROVED":
+                      next_stage = WorkflowStage.DOD_CHECK
                  else:
-                      next_stage = WorkflowStage.CODING # Loop back
-            
-            elif current_role == "Worker":
-                 # Worker starts coding async. We do NOT transition to REVIEW yet.
-                 # Just update state with session_id if available.
-                 # Parsing output for session ID (naive check in string or dict)
-                 session_id_val = None
-                 if isinstance(parsed_output, dict):
-                     session_id_val = parsed_output.get("session_id") or parsed_output.get("name") # Jules returns 'name' as full ID
-                 elif isinstance(parsed_output, str):
-                     # Try to find "sessions/..." or UUID
-                     pass
+                      # Check retry count
+                      retry_count = getattr(current_state, "retry_count", 0)
+                      if retry_count >= MAX_RETRY_COUNT:
+                          next_stage = WorkflowStage.NEED_HUMAN_INTERVENTION
+                          context_updates["reason"] = f"Exceeded max review retries ({MAX_RETRY_COUNT})"
+                      else:
+                          next_stage = WorkflowStage.DEVELOPMENT
+                          current_state = StateManager.increment_retry(current_state)
+                          context_updates["retry_count"] = current_state.retry_count
 
-                 # Trigger Monitoring if session found
-                 if session_id_val:
-                     print(f"[Team] Triggering background monitoring for {session_id_val}")
-                     # Trigger async monitoring via RedisWorker
-                     self.task_tool.trigger_jules_monitoring(session_id_val, task_id)
+            elif current_role == "Verifier":
+                 # Check DOD result
+                 is_pass = False
+                 if isinstance(parsed_output, str):
+                     if "**Status**: PASS" in parsed_output or "Status: PASS" in parsed_output:
+                         is_pass = True
+                 elif isinstance(parsed_output, dict):
+                     is_pass = parsed_output.get("status") == "PASS" or parsed_output.get("accepted", False)
 
-                 # We stay in CODING stage, but we might want to update the state object
-                 # Current implementation of StateManager.transition is for changing stages primarily
-                 # But we can "transition" to same stage with new data
-                 next_stage = WorkflowStage.CODING
-                 context_updates = {}
-                 if session_id_val:
-                     context_updates["session_id"] = session_id_val
+                 pr_url = getattr(current_state, "pr_url", "") if hasattr(current_state, "pr_url") else ""
+                 context_updates = {"pr_url": pr_url}
+
+                 if is_pass:
+                      next_stage = WorkflowStage.DELIVERY_HANDOFF
+                 else:
+                      next_stage = WorkflowStage.DEVELOPMENT
 
 
             if next_stage:
-                 new_state = StateManager.transition(current_state, next_stage, context_updates)
-                 self.workflow_storage.save_workflow_state(task_id, new_state.model_dump())
+                 try:
+                     new_state = StateManager.transition(current_state, next_stage, context_updates)
+                     self.workflow_storage.save_workflow_state(task_id, new_state.model_dump())
+                 except ValueError as ve:
+                     logger.warning(f"[Team] Invalid transition attempted: {ve}")
+                     # Don't save invalid state, but continue
 
                  # Map internal stage to API status string
                  api_status_map = {
                      WorkflowStage.ANALYSIS: "ANALYSIS",
-                     WorkflowStage.ARCHITECTURE: "PLANNING",
-                     WorkflowStage.CODING: "CODING", # or REVIEW if waiting for PR? Usually CODING.
-                     WorkflowStage.REVIEW: "REVIEW",
-                     WorkflowStage.VERIFICATION: "VERIFICATION",
-                     WorkflowStage.DONE: "DONE"
+                     WorkflowStage.CLARIFICATION_NEEDED: "CLARIFICATION_NEEDED",
+                     WorkflowStage.ARCHITECTURE: "ARCHITECTURE",
+                     WorkflowStage.APPROVAL_PENDING: "APPROVAL_PENDING",
+                     WorkflowStage.DEVELOPMENT: "DEVELOPMENT",
+                     WorkflowStage.CODE_REVIEW: "CODE_REVIEW",
+                     WorkflowStage.DOD_CHECK: "DOD_CHECK",
+                     WorkflowStage.DELIVERY_HANDOFF: "DELIVERY_HANDOFF",
+                     WorkflowStage.WAITING_FOR_USER_MERGE: "WAITING_FOR_USER_MERGE",
+                     WorkflowStage.NEED_HUMAN_INTERVENTION: "NEED_HUMAN_INTERVENTION",
                  }
 
                  # Update external API status
@@ -1176,3 +1332,190 @@ class DevelopmentTeam(Team):
         # Check workflow context - if we're in active development, prefer developer for simple messages
         # Note: run() method now handles phase checking, so this might be redundant or just a helper.
         return True
+
+    def _is_clarification_response(self, response: Any) -> bool:
+        """Check if the agent response indicates clarification is needed."""
+        if response is None:
+            return False
+            
+        # Check dict response with type field
+        if isinstance(response, dict):
+            return response.get("type") == "CLARIFICATION_NEEDED"
+        
+        # Check RunResponse content
+        content = response
+        if hasattr(response, "content"):
+            content = response.content
+            
+        if isinstance(content, dict):
+            return content.get("type") == "CLARIFICATION_NEEDED"
+            
+        # Check string for clarification keywords
+        if isinstance(content, str):
+            clarification_markers = [
+                "Questions for user:",
+                "CLARIFICATION_NEEDED",
+                "Уточняющие вопросы:",
+                "Пожалуйста, уточните",
+            ]
+            return any(marker in content for marker in clarification_markers)
+            
+        return False
+
+    def _check_user_approval(self, message: str) -> str:
+        """
+        Analyze user message to determine approval decision.
+        Returns: 'APPROVED', 'REJECTED_REQUIREMENTS', 'REJECTED_ARCHITECTURE', or 'PENDING'
+        """
+        message_lower = message.lower().strip()
+        
+        # Approval keywords
+        approval_words = [
+            "ok", "ок", "approve", "approved", "утверждаю", "согласен",
+            "да", "yes", "good", "отлично", "go ahead", "давай", "proceed",
+            "продолжай", "делай", "можно", "подходит", "lgtm"
+        ]
+        if any(word in message_lower for word in approval_words):
+            return "APPROVED"
+        
+        # Requirements rejection keywords
+        req_rejection_words = [
+            "изменить требования", "другие требования", "переделать prd",
+            "не так понял", "неправильно понял", "change requirements",
+            "wrong requirements", "misunderstood"
+        ]
+        if any(phrase in message_lower for phrase in req_rejection_words):
+            return "REJECTED_REQUIREMENTS"
+        
+        # Architecture rejection keywords
+        arch_rejection_words = [
+            "другая архитектура", "изменить план", "переделать план",
+            "не так", "плохой план", "change plan", "wrong architecture",
+            "bad plan", "другой подход"
+        ]
+        if any(phrase in message_lower for phrase in arch_rejection_words):
+            return "REJECTED_ARCHITECTURE"
+        
+        # General rejection - ask for explicit direction
+        rejection_words = [
+            "нет", "no", "reject", "отклонить", "не подходит",
+            "переделать", "изменить", "change"
+        ]
+        if any(word in message_lower for word in rejection_words):
+            # Generic rejection, need more info - stay in pending
+            return "PENDING"
+        
+        return "PENDING"
+
+    def _parse_review_verdict(self, response: Any) -> str:
+        """
+        Parse reviewer response to determine verdict.
+        Returns: 'APPROVED', 'REJECT', or 'UNKNOWN'
+        """
+        if response is None:
+            return "UNKNOWN"
+            
+        content = response
+        if hasattr(response, "content"):
+            content = response.content
+            
+        if isinstance(content, dict):
+            if content.get("content", {}).get("approved"):
+                return "APPROVED"
+            return "REJECT"
+            
+        if isinstance(content, str):
+            content_lower = content.lower()
+            if "approved" in content_lower or "status: approved" in content_lower:
+                return "APPROVED"
+            if "request_changes" in content_lower or "reject" in content_lower:
+                return "REJECT"
+                
+        return "UNKNOWN"
+
+    def _get_retry_count(self) -> int:
+        """Get current retry count from workflow storage."""
+        if not self.workflow_storage or not self.task_id:
+            return 0
+            
+        try:
+            state_dict = self.workflow_storage.get_workflow_state(self.task_id)
+            if state_dict:
+                return state_dict.get("retry_count", 0)
+        except Exception as e:
+            logger.error(f"[Team] Failed to get retry count: {e}")
+            
+        return 0
+
+    def _increment_retry_count(self) -> None:
+        """Increment retry count in workflow storage."""
+        if not self.workflow_storage or not self.task_id:
+            return
+            
+        try:
+            state_dict = self.workflow_storage.get_workflow_state(self.task_id)
+            if state_dict:
+                state_dict["retry_count"] = state_dict.get("retry_count", 0) + 1
+                self.workflow_storage.save_workflow_state(self.task_id, state_dict)
+                logger.info(f"[Team] Incremented retry count to {state_dict['retry_count']}")
+        except Exception as e:
+            logger.error(f"[Team] Failed to increment retry count: {e}")
+
+    def _get_current_pr_url(self) -> Optional[str]:
+        """Get the PR URL from current workflow state."""
+        if not self.workflow_storage or not self.task_id:
+            return None
+            
+        try:
+            state_dict = self.workflow_storage.get_workflow_state(self.task_id)
+            if state_dict:
+                return state_dict.get("pr_url")
+        except Exception as e:
+            logger.error(f"[Team] Failed to get PR URL: {e}")
+            
+        return None
+
+    def _create_final_report(self, pr_url: Optional[str]) -> str:
+        """Create final delivery report for the user."""
+        report_lines = [
+            "## ✅ Задача готова к мержу",
+            "",
+        ]
+        
+        if pr_url:
+            report_lines.append(f"**Pull Request**: [{pr_url}]({pr_url})")
+            report_lines.append("")
+        
+        # Try to get artifacts for summary
+        if self.workflow_storage and self.task_id:
+            try:
+                # Get PRD summary
+                prd = self.workflow_storage.get_artifact_by_task(self.task_id, "AnalystOutput")
+                if prd:
+                    summary = prd.get("summary", prd.get("content", {}).get("summary", ""))
+                    if summary:
+                        report_lines.append(f"**Что сделано**: {summary}")
+                        report_lines.append("")
+                
+                # Get review history
+                state_dict = self.workflow_storage.get_workflow_state(self.task_id)
+                if state_dict:
+                    review_history = state_dict.get("review_history", [])
+                    retry_count = state_dict.get("retry_count", 0)
+                    if retry_count > 0:
+                        report_lines.append(f"**Итераций ревью**: {retry_count}")
+                        
+            except Exception as e:
+                logger.error(f"[Team] Failed to build final report details: {e}")
+        
+        report_lines.extend([
+            "",
+            "### Следующие шаги",
+            "1. Проверьте изменения в PR",
+            "2. Запустите финальные тесты",
+            "3. Merge PR в основную ветку",
+            "",
+            "После merge статус задачи автоматически обновится на DONE.",
+        ])
+        
+        return "\n".join(report_lines)

@@ -112,17 +112,28 @@ class AnalystAgent(Agent):
         )
         return f"Requirements saved. Transitioning to PLANNING. Result: {result}"
 
-    def ask_clarification(self, questions: List[str]):
+    def ask_clarification(self, questions: List[str], context: Optional[str] = None):
         """
         Request more details from the user.
         Call this if requirements are vague or missing critical info.
+        This triggers a transition to CLARIFICATION_NEEDED state.
 
         Args:
-            questions: List of specific clarifying questions. Example: ["What is the target audience?", "Do you need a database?"]
+            questions: List of specific clarifying questions (max 5). Example: ["What is the target audience?", "Do you need a database?"]
+            context: Optional context explaining why clarification is needed.
         """
-        # We could potentially update status to WAITING_FOR_USER here if supported
-        # For now, just return the confirmation
-        return f"Questions for user: {questions}"
+        task_id = self.task_id
+        if task_id:
+            self.task_tool.update_task_status(
+                task_id=task_id,
+                status="CLARIFICATION_NEEDED"
+            )
+        
+        return {
+            "type": "CLARIFICATION_NEEDED",
+            "questions": questions,
+            "context": context
+        }
 
 
 # --- ARCHITECT ---
@@ -139,35 +150,42 @@ class ArchitectAgent(Agent):
             id="architect",
             model=model,
             instructions=dedent("""
-                You are a System Architect. You are given functional requirements. Your task is to design a technical solution that implements these requirements. Your actions:
+                You are a System Architect. Your task is to design a technical solution that implements the given requirements.
 
-                Choose a suitable stack (if not specified) or follow the project's current stack.
+                # CRITICAL: Read Repository Structure First
+                Before creating any plan, you MUST:
+                1. Use available tools to list the repository structure (file tree)
+                2. Examine existing code patterns and conventions
+                3. Check package.json/go.mod/requirements.txt for existing dependencies
+                DO NOT hallucinate file paths - base your plan on ACTUAL repository structure.
 
-                Determine the list of files that need to be created or modified.
+                # Process
+                1. **Analyze Repository**: Read the file structure and existing code patterns.
+                2. **Choose Stack**: Use project's current stack or propose with justification.
+                3. **Design**: Determine files to create/modify with exact paths.
+                4. **Plan**: Create step-by-step implementation plan.
 
-                Describe the data structure (JSON, DB schemas) and function/API signatures.
+                # Response Format
+                ## Tech Stack
+                Languages, frameworks, libraries.
 
-                Create a step-by-step plan for the Developer.
+                ## File Structure
+                Existing file tree with proposed changes marked.
 
-                Response Format:
+                ## Implementation Plan
+                Step-by-step plan with file paths and actions (create/modify/delete).
 
-                Tech Stack: Languages, libs.
+                ## Complexity Assessment
+                - **Complexity**: Low / High
+                - **Reasoning**: Why this complexity level.
+                - Low = 1-2 files, simple changes (use local Developer)
+                - High = 3+ files, new logic, external deps (use Jules)
 
-                File Structure: File tree.
-
-                Integration Plan: Which methods/classes to create, which to modify.
-
-                Be concise and technical. Do not write code implementation, only architecture.
-
-                Task: Create a technical design document.
-
-                DoD (Definition of Done):
-
-                Specific file names (paths) are provided.
-
-                No contradictions with the Analyst's PRD.
-
-                External dependencies (libraries) are specified, if needed.
+                # DoD (Definition of Done)
+                - Specific file names (exact paths) are provided.
+                - No contradictions with the Analyst's PRD.
+                - External dependencies are specified.
+                - Complexity is assessed.
             """),
             tools=tools,
             markdown=True,
@@ -324,38 +342,64 @@ class WorkerAgent(Agent):
         )
 
 
-# --- VERIFIER ---
+# --- VERIFIER (DOD Checker) ---
 class VerifierAgent(Agent):
+    """
+    Verifier Agent with DOD (Definition of Done) checking capabilities.
+    Performs final validation before task completion.
+    """
     def __init__(
         self,
         model: Model,
+        tools: Optional[List[Toolkit]] = None,
         debug_mode: bool = False
     ):
+        agent_tools = tools if tools else []
+        
         super().__init__(
             name="Verifier",
-            role="Verifier",
+            role="QA Engineer / DOD Checker",
             id="verifier",
             model=model,
             instructions=dedent("""
-                You are the **Verifier**. Your validation is the final step before the task is marked as Done.
-                You check if the changes satisfy the user's original requirements as defined by the Analyst.
+                You are the **Verifier / DOD Checker**. You are the final quality gate before delivery.
+                Your job is to verify that the implementation meets ALL acceptance criteria from the PRD.
 
-                # Goal
-                Verify that the implemented solution works and meets the acceptance criteria.
+                # Verification Checklist
+                1. **Acceptance Criteria**: Check EACH criterion from the PRD.
+                2. **Linter Check**: Run lint commands if available (e.g., `ruff check`, `eslint`).
+                3. **Test Execution**: Run test commands if available (e.g., `pytest`, `go test`).
+                4. **Security Scan**: Check for obvious security issues (hardcoded secrets, SQL injection, XSS).
+                5. **Code Quality**: Verify code follows project conventions.
 
                 # Output Format (Markdown)
-                Please structure your response as follows:
-
-                ## ✅ Verification Result
-                - **Status**: [Accepted / Rejected]
+                ## ✅ DOD Verification Result
+                - **Status**: PASS / FAIL
                 - **Reason**: [Explanation]
 
-                ## 🧪 Test Results
-                - [ ] [Test case 1]: [Pass/Fail]
-                - [ ] [Test case 2]: [Pass/Fail]
+                ## 📋 Acceptance Criteria Check
+                For each criterion from PRD:
+                - [x] Criterion 1: [Pass with evidence]
+                - [ ] Criterion 2: [Fail - reason]
 
-                IMPORTANT: Do NOT output JSON. Use standard Markdown formatting.
+                ## 🧪 Test Results
+                - Tests Run: [command used]
+                - Result: [Pass/Fail with summary]
+
+                ## 🔍 Linter Results
+                - Linter Run: [command used]
+                - Result: [Pass/Fail with issues if any]
+
+                ## 🔐 Security Check
+                - [ ] No hardcoded secrets
+                - [ ] No SQL injection vulnerabilities
+                - [ ] No XSS vulnerabilities
+
+                # Decision
+                If ALL checks pass: Return **PASS** - ready for DELIVERY_HANDOFF.
+                If ANY check fails: Return **FAIL** - needs to return to DEVELOPMENT.
             """),
+            tools=agent_tools,
             markdown=True,
             debug_mode=debug_mode,
         )
