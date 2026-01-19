@@ -48,7 +48,6 @@ class AnalystAgent(Agent):
 
         tools = [
             self.save_requirements, 
-            # self.ask_clarification, 
             task_tool
         ]
         if knowledge_tool:
@@ -109,29 +108,6 @@ class AnalystAgent(Agent):
             artifacts=artifact
         )
         return f"Requirements saved. Transitioning to PLANNING. Result: {result}"
-
-    # def ask_clarification(self, questions: List[str], context: Optional[str] = None):
-    #     """
-    #     Request more details from the user.
-    #     Call this if requirements are vague or missing critical info.
-    #     This triggers a transition to CLARIFICATION_NEEDED state.
-
-    #     Args:
-    #         questions: List of specific clarifying questions (max 5). Example: ["What is the target audience?", "Do you need a database?"]
-    #         context: Optional context explaining why clarification is needed.
-    #     """
-    #     task_id = self.task_id
-    #     if task_id:
-    #         self.task_tool.update_task_status(
-    #             task_id=task_id,
-    #             status="CLARIFICATION_NEEDED"
-    #         )
-        
-    #     return {
-    #         "type": "CLARIFICATION_NEEDED",
-    #         "questions": questions,
-    #         "context": context
-    #     }
 
 
 # --- ARCHITECT ---

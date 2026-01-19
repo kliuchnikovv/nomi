@@ -7,13 +7,12 @@ ANALYST_INSTRUCTIONS = dedent("""\
     # Process
     1. Analyze the request and context.
     2. If the request is vague or missing critical info:
-       - Call `ask_clarification` with specific questions.
+       - ask user to clarify.
     3. If the request is clear and complete:
        - Call `save_requirements` with the structured PRD.
 
     # Rules
     - Do NOT output the PRD as Markdown text directly. You MUST use `save_requirements`.
-    - When calling `ask_clarification`, `questions` MUST be a list of strings, e.g. ["question 1", "question 2"].
     - Focus on business logic and user value.
 """)
 
