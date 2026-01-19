@@ -36,7 +36,8 @@ class AnalystAgent(Agent):
         github_tool: Optional[GithubTools] = None,
         client_tools: Optional[List[Toolkit]] = None,
         debug_mode: bool = False,
-        task_id: Optional[str] = None
+        task_id: Optional[str] = None,
+        **kwargs
     ):
         self.task_tool = task_tool
         self.task_id = task_id
@@ -139,7 +140,8 @@ class ArchitectAgent(Agent):
         self,
         model: Model,
         tools: List[Toolkit],
-        debug_mode: bool = False
+        debug_mode: bool = False,
+        **kwargs
     ):
         super().__init__(
             name="Architect",
@@ -160,7 +162,8 @@ class DeveloperAgent(Agent):
         model: Model,
         tools: List[Toolkit],
         git_tool: Optional[GitTools] = None,
-        debug_mode: bool = False
+        debug_mode: bool = False,
+        **kwargs
     ):
         agent_tools = tools if tools else []
         if git_tool:
@@ -185,7 +188,8 @@ class ReviewerAgent(Agent):
         model: Model,
         tools: List[Toolkit],
         git_tool: Optional[GitTools] = None,
-        debug_mode: bool = False
+        debug_mode: bool = False,
+        **kwargs
     ):
         agent_tools = tools if tools else []
         if git_tool:
@@ -211,7 +215,8 @@ class WorkerAgent(Agent):
         task_tool: TaskManagementTool,
         jules_api_key: Optional[str] = None,
         client_tools: Optional[List[Toolkit]] = None,
-        debug_mode: bool = False
+        debug_mode: bool = False,
+        **kwargs
     ):
 
         # Build tools list
@@ -254,7 +259,8 @@ class VerifierAgent(Agent):
         self,
         model: Model,
         tools: Optional[List[Toolkit]] = None,
-        debug_mode: bool = False
+        debug_mode: bool = False,
+        **kwargs
     ):
         agent_tools = tools if tools else []
         

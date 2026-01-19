@@ -137,7 +137,7 @@ agent_os = AgentOS(
             debug_mode=debug_mode,
         ),
     ],
-    teams=[
+    workflows=[
         DevelopmentTeam(
             model=model,
             db=db,

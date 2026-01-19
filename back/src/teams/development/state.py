@@ -60,21 +60,21 @@ class ClarificationNeededState(BaseState):
 
 class ArchitectureState(BaseState):
     stage: Literal[WorkflowStage.ARCHITECTURE] = WorkflowStage.ARCHITECTURE
-    prd_id: str
+    prd_id: Optional[str] = None
 
 
 class ApprovalPendingState(BaseState):
     stage: Literal[WorkflowStage.APPROVAL_PENDING] = WorkflowStage.APPROVAL_PENDING
     status: WorkflowStatus = WorkflowStatus.WAITING_FOR_USER
-    prd_id: str
-    plan_id: str
+    prd_id: Optional[str] = None
+    plan_id: Optional[str] = None
     approval_request_summary: Optional[str] = None
 
 
 class DevelopmentState(BaseState):
     stage: Literal[WorkflowStage.DEVELOPMENT] = WorkflowStage.DEVELOPMENT
-    prd_id: str
-    plan_id: str
+    prd_id: Optional[str] = None
+    plan_id: Optional[str] = None
     branch_name: Optional[str] = None
     pr_url: Optional[str] = None
     session_id: Optional[str] = None
@@ -83,38 +83,38 @@ class DevelopmentState(BaseState):
 
 class CodeReviewState(BaseState):
     stage: Literal[WorkflowStage.CODE_REVIEW] = WorkflowStage.CODE_REVIEW
-    prd_id: str
-    plan_id: str
-    pr_url: str
+    prd_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    pr_url: Optional[str] = None
     code_diff: Optional[str] = None
     review_verdict_id: Optional[str] = None
 
 
 class DODCheckState(BaseState):
     stage: Literal[WorkflowStage.DOD_CHECK] = WorkflowStage.DOD_CHECK
-    prd_id: str
-    plan_id: str
-    pr_url: str
-    review_verdict_id: str
+    prd_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    pr_url: Optional[str] = None
+    review_verdict_id: Optional[str] = None
     test_results: Optional[Dict[str, Any]] = None
     lint_results: Optional[Dict[str, Any]] = None
 
 
 class DeliveryHandoffState(BaseState):
     stage: Literal[WorkflowStage.DELIVERY_HANDOFF] = WorkflowStage.DELIVERY_HANDOFF
-    prd_id: str
-    plan_id: str
-    pr_url: str
+    prd_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    pr_url: Optional[str] = None
     final_report: Optional[str] = None
 
 
 class WaitingForUserMergeState(BaseState):
     stage: Literal[WorkflowStage.WAITING_FOR_USER_MERGE] = WorkflowStage.WAITING_FOR_USER_MERGE
     status: WorkflowStatus = WorkflowStatus.WAITING_FOR_USER
-    prd_id: str
-    plan_id: str
-    pr_url: str
-    final_report: str
+    prd_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    pr_url: Optional[str] = None
+    final_report: Optional[str] = None
 
 
 class NeedHumanInterventionState(BaseState):
