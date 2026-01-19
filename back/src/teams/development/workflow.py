@@ -4,7 +4,7 @@ import json
 import re
 
 from agno.workflow import Workflow, Step, Condition, StepInput, StepOutput
-from agno.agent import Agent, RunResponse
+from agno.agent import Agent
 from pydantic import TypeAdapter, BaseModel
 
 from src.teams.development.state import WorkflowStage, WorkflowState, StateManager, WorkflowStatus, MAX_RETRY_COUNT, ReviewHistoryEntry
@@ -174,8 +174,6 @@ class DevelopmentWorkflow(Workflow):
         return data
 
     def _get_content_from_response(self, response: Any) -> Any:
-        if isinstance(response, RunResponse):
-             return response.content
         if hasattr(response, "content"):
              return response.content
         return response
