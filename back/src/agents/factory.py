@@ -62,7 +62,7 @@ class AgentFactory:
         """Доступ к ToolConfigClient для запроса инструментов."""
         return self._config_client
 
-    def _get_or_create_vector_db(self) -> PgVector:
+    def _get_or_create_vector_db(self) -> Optional[PgVector]:
         """Lazy initialization of shared Vector DB instance."""
         if self._vector_db is None:
             try:
@@ -100,7 +100,7 @@ class AgentFactory:
 
             # Configure thinking mode for supported models (Gemini 2.5 Pro/Flash)
             thinking_budget = None
-            include_thoughts = None
+            include_thoughts = False
 
             if thinking and thinking != "off":
                 # Defaults
@@ -125,7 +125,7 @@ class AgentFactory:
             return SafeGemini(
                 id=model_name,
                 api_key=api_key,
-                # search=web_search,
+                search=web_search,
                 thinking_budget=thinking_budget,
                 include_thoughts=include_thoughts,
             )
@@ -153,7 +153,7 @@ class AgentFactory:
             model_name = command_desc["model"]
 
         model = (
-            self.build_model(model_name, web_search=False, thinking=thinking)
+            self.build_model(model_name, web_search=web_search, thinking=thinking)
             if model_name
             else self._model
         )

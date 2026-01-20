@@ -151,7 +151,9 @@ class RedisSession:
                     token = payload.get("token") or payload.get("access_token")
                     if token:
                         self.command_desc["auth_token"] = token
-                        logger.info("[RedisSession] Injected auth_token into command_desc")
+                        logger.info(
+                            "[RedisSession] Injected auth_token into command_desc"
+                        )
 
                 team_type = self.command_desc.get("type", "").lower()
                 # Known team types that require TeamFactory
@@ -635,23 +637,27 @@ Continue the conversation."""
                 if "ToolCallStarted" in event_type:
                     # Show that a tool call is starting
                     tool_name = getattr(ev, "tool_name", None) or "unknown"
-                    tool_args = getattr(ev, "parameters", None) or getattr(ev, "tool_args", {})
+                    tool_args = getattr(ev, "parameters", None) or getattr(
+                        ev, "tool_args", {}
+                    )
                     logger.info(f"[RedisSession] Tool call started: {tool_name}")
                     tool_data = {
                         "type": "tool_call",
                         "tool": {
                             "name": tool_name,
                             "arguments": tool_args,
-                            "status": "running"
-                        }
+                            "status": "running",
+                        },
                     }
                     if current_agent_name:
                         tool_data["agent_name"] = current_agent_name
                     yield tool_data
-                    
+
                 elif "ToolCallCompleted" in event_type:
                     if hasattr(ev, "tool") and ev.tool:
-                        logger.info(f"[RedisSession] Tool call completed: {getattr(ev.tool, 'tool_name', 'unknown')}")
+                        logger.info(
+                            f"[RedisSession] Tool call completed: {getattr(ev.tool, 'tool_name', 'unknown')}"
+                        )
                         tool_data = {"type": "tool_call", "tool": ev.tool}
                         if current_agent_name:
                             tool_data["agent_name"] = current_agent_name
@@ -665,31 +671,45 @@ Continue the conversation."""
                 # - Agno's ReasoningContentDelta events
                 # - Gemini native thinking (thinking_content)
                 captured_reasoning = None
-                
+
                 # Check for Agno's reasoning_content attribute
                 if hasattr(ev, "reasoning_content") and ev.reasoning_content:
                     captured_reasoning = ev.reasoning_content
-                    logger.debug(f"[RedisSession] Found reasoning_content: {len(captured_reasoning)} chars")
-                
+                    logger.debug(
+                        f"[RedisSession] Found reasoning_content: {len(captured_reasoning)} chars"
+                    )
+
                 # Check for thinking_content (Gemini native thinking)
                 elif hasattr(ev, "thinking_content") and ev.thinking_content:
                     captured_reasoning = ev.thinking_content
-                    logger.debug(f"[RedisSession] Found thinking_content: {len(captured_reasoning)} chars")
-                
+                    logger.debug(
+                        f"[RedisSession] Found thinking_content: {len(captured_reasoning)} chars"
+                    )
+
                 # Check for thinking attribute (older format)
                 elif hasattr(ev, "thinking") and ev.thinking:
                     captured_reasoning = ev.thinking
-                    logger.debug(f"[RedisSession] Found thinking: {len(captured_reasoning)} chars")
-                
+                    logger.debug(
+                        f"[RedisSession] Found thinking: {len(captured_reasoning)} chars"
+                    )
+
                 # Check for content in Reasoning* event types
-                elif ("Reasoning" in event_type or "Thinking" in event_type) and hasattr(ev, "content") and ev.content:
+                elif (
+                    ("Reasoning" in event_type or "Thinking" in event_type)
+                    and hasattr(ev, "content")
+                    and ev.content
+                ):
                     captured_reasoning = ev.content
-                    logger.debug(f"[RedisSession] Found reasoning from {event_type}: {len(captured_reasoning)} chars")
-                
+                    logger.debug(
+                        f"[RedisSession] Found reasoning from {event_type}: {len(captured_reasoning)} chars"
+                    )
+
                 # Also check delta field for streaming reasoning
                 elif hasattr(ev, "delta") and "Reasoning" in event_type:
                     captured_reasoning = ev.delta
-                    logger.debug(f"[RedisSession] Found reasoning delta: {len(str(captured_reasoning))} chars")
+                    logger.debug(
+                        f"[RedisSession] Found reasoning delta: {len(str(captured_reasoning))} chars"
+                    )
 
                 if captured_reasoning:
                     reasoning_data = {
@@ -731,12 +751,12 @@ Continue the conversation."""
                     # Get content from the event
                     val = getattr(ev, "content", None)
                     step_name = getattr(ev, "step_name", None)
-                    
+
                     # Also check step_response for nested content
                     step_response = getattr(ev, "step_response", None)
                     if step_response and not val:
                         val = getattr(step_response, "content", None)
-                    
+
                     if val and str(val).strip():
                         content = str(val)
                         logger.info(
@@ -797,8 +817,12 @@ Continue the conversation."""
                     if chunk != captured_reasoning:
                         # Use current_agent_name to detect if we're in a member context
                         # This is more reliable than per-event agent_id
-                        is_member_context = current_agent_name is not None and current_agent_name not in ("Team Lead", "Team Leader", "Development Team")
-                        
+                        is_member_context = (
+                            current_agent_name is not None
+                            and current_agent_name
+                            not in ("Team Lead", "Team Leader", "Development Team")
+                        )
+
                         if is_member_event or is_member_context:
                             yield {
                                 "type": "member_response",
@@ -812,7 +836,7 @@ Continue the conversation."""
                                 "content": chunk,
                                 "agent_name": current_agent_name,
                             }
-                            streamed_text_len += len(chunk)
+                        streamed_text_len += len(chunk)
 
                 # --- NEW: Track Active Agents ---
                 if "RunStarted" in event_type and agent_name:

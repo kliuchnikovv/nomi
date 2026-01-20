@@ -91,14 +91,20 @@ class GenieAgent(Agent):
         thinking: str = "off",
         knowledge: Optional[Knowledge] = None,
         instructions: str | None = None,
+        **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
         base_instructions = instructions if instructions else BASE_INSTRUCTIONS
         # if thinking and thinking != "off":
         #     instructions += THINKING_INSTRUCTIONS
+        
+        # Extract name from kwargs for deep_copy() compatibility, otherwise use default
+        agent_name = kwargs.pop('name', name)
+        # Note: We don't pass **kwargs to super() because deep_copy() extracts ALL fields
+        # and we're explicitly setting all the fields we need below.
             
         super().__init__(
             db=db,
-            name=name,
+            name=agent_name,
             model=model,
             tools=tools,
             knowledge=knowledge,
@@ -106,17 +112,19 @@ class GenieAgent(Agent):
             update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             description="Genie is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
             instructions=base_instructions,
-            # expected_output=expected_output,
             add_history_to_context=True,  # Agno automatically adds session history to context
             add_datetime_to_context=True,
             debug_mode=debug_mode,
-            # read_tool_call_history=True,  # DISABLED: returns incomplete data (only system msg)
             store_tool_messages=True,  # Store tool call results
-            # read_chat_history=True,
             send_media_to_model=True,
             store_media=True,
-            # store_history_messages=True,
-            stream=True,
             reasoning=(thinking != "off"),
+            stream=True,
+            stream_events=True,
+            telemetry=False,
+            # expected_output=expected_output,
+            # read_tool_call_history=True,  # DISABLED: returns incomplete data (only system msg)
+            # read_chat_history=True,
+            # store_history_messages=True,
         )
 

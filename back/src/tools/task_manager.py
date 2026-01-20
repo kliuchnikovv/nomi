@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 import os
 import json
 import requests
@@ -7,8 +7,14 @@ from sqlalchemy import create_engine, text
 from agno.tools import Toolkit
 from agno.utils.log import logger
 
+
 class TaskManagementTool(Toolkit):
-    def __init__(self, api_url: Optional[str] = None, user_id: Optional[str] = None, auth_token: Optional[str] = None):
+    def __init__(
+        self,
+        api_url: Optional[str] = None,
+        user_id: Optional[str] = None,
+        auth_token: Optional[str] = None,
+    ):
         super().__init__(name="task_management_tool")
         # Default to localhost if not specified, but should use internal docker networking in prod
         base_url = api_url or os.getenv("GO_API_URL", "http://localhost:8080/api")
@@ -26,8 +32,13 @@ class TaskManagementTool(Toolkit):
         self.register(self.create_subtask)
         self.register(self.trigger_jules_monitoring)
 
-
-    def update_task_status(self, task_id: str, status: str, pr_url: Optional[str] = None, artifacts: Optional[dict] = None) -> str:
+    def update_task_status(
+        self,
+        task_id: str,
+        status: str,
+        pr_url: Optional[str] = None,
+        artifacts: Optional[dict] = None,
+    ) -> str:
         """
         Updates the status of a project task in the Go API.
 
@@ -44,7 +55,7 @@ class TaskManagementTool(Toolkit):
             return "Error: task_id and status are required."
 
         url = f"{self.api_url}/project-tasks/{task_id}/status"
-        payload = {"status": status}
+        payload: Dict[str, Any] = {"status": status}
         if artifacts:
             payload["artifacts"] = artifacts
 
@@ -55,12 +66,12 @@ class TaskManagementTool(Toolkit):
             headers = {}
             # Prioritize auth token if available (consistent with other methods)
             if self.auth_token:
-                 headers["Authorization"] = f"Bearer {self.auth_token}"
+                headers["Authorization"] = f"Bearer {self.auth_token}"
 
             # Use internal key as fallback or if specifically needed by backend
             internal_key = os.getenv("INTERNAL_API_KEY")
             if internal_key:
-                 headers["X-Internal-Secret"] = internal_key
+                headers["X-Internal-Secret"] = internal_key
 
             response = requests.patch(url, json=payload, headers=headers)
             response.raise_for_status()
@@ -94,12 +105,12 @@ class TaskManagementTool(Toolkit):
             headers = {}
             # This endpoint requires auth token (wrapWithAuth)
             if self.auth_token:
-                 headers["Authorization"] = f"Bearer {self.auth_token}"
+                headers["Authorization"] = f"Bearer {self.auth_token}"
 
             # Try internal secret as fallback if auth token missing (though API might not support it for GET)
             internal_key = os.getenv("INTERNAL_API_KEY")
             if not headers.get("Authorization") and internal_key:
-                 headers["X-Internal-Secret"] = internal_key
+                headers["X-Internal-Secret"] = internal_key
 
             response = requests.get(url, headers=headers)
             response.raise_for_status()
@@ -113,7 +124,13 @@ class TaskManagementTool(Toolkit):
                 return f"Error getting status: {e.response.text}"
             return f"Error getting status: {str(e)}"
 
-    def create_project_task(self, project_id: str, title: str, description: str = "", priority: str = "medium") -> str:
+    def create_project_task(
+        self,
+        project_id: str,
+        title: str,
+        description: str = "",
+        priority: str = "medium",
+    ) -> str:
         """
         Creates a new task in the specified project.
 
@@ -130,16 +147,12 @@ class TaskManagementTool(Toolkit):
             return "Error: project_id and title are required."
 
         url = f"{self.api_url}/projects/{project_id}/tasks"
-        payload = {
-            "title": title,
-            "description": description,
-            "priority": priority
-        }
+        payload = {"title": title, "description": description, "priority": priority}
 
         try:
             headers = {}
             if self.auth_token:
-                 headers["Authorization"] = f"Bearer {self.auth_token}"
+                headers["Authorization"] = f"Bearer {self.auth_token}"
             else:
                 return "Error: Authentication token required to create tasks."
 
@@ -165,13 +178,13 @@ class TaskManagementTool(Toolkit):
         """
         # If we have user_id and DB_DSN, query directly
         db_dsn = os.getenv("DB_DSN")
-        
+
         if self.user_id and db_dsn:
             try:
                 # Fix for SQLAlchemy 2.0+ handling of postgres://
                 if db_dsn.startswith("postgres://"):
                     db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
-                    
+
                 engine = create_engine(db_dsn)
                 with engine.connect() as connection:
                     # Query projects for this user that are not deleted
@@ -181,17 +194,17 @@ class TaskManagementTool(Toolkit):
                         WHERE user_id = :uid AND deleted_at IS NULL
                     """)
                     result = connection.execute(query, {"uid": self.user_id})
-                    
+
                     projects = []
                     for row in result:
-                        p_id = str(row[0]) # Start with id
+                        p_id = str(row[0])  # Start with id
                         p_name = row[1]
                         p_desc = row[2] or ""
                         projects.append(f"ID: {p_id} | Name: {p_name} | Desc: {p_desc}")
-                    
+
                     if not projects:
                         return "No projects found."
-                        
+
                     return "\n".join(projects)
             except Exception as e:
                 logger.error(f"Failed to list projects from DB: {e}")
@@ -205,27 +218,27 @@ class TaskManagementTool(Toolkit):
             headers = {}
             internal_key = os.getenv("INTERNAL_API_KEY")
             if internal_key:
-                 headers["X-Internal-Secret"] = internal_key
+                headers["X-Internal-Secret"] = internal_key
             elif self.auth_token:
-                 headers["Authorization"] = f"Bearer {self.auth_token}"
+                headers["Authorization"] = f"Bearer {self.auth_token}"
 
             response = requests.get(url, headers=headers)
             response.raise_for_status()
-            
+
             projects = response.json()
             if not projects:
                 return "No projects found."
-            
+
             # Format nicely for the LLM
             result = []
             for p in projects:
                 # Assuming the API returns keys like 'id', 'name', 'description'
                 # Adjust based on your actual Go API response structure
-                p_id = p.get('id', 'unknown')
-                p_name = p.get('name', 'No Name')
-                p_desc = p.get('description', '')
+                p_id = p.get("id", "unknown")
+                p_name = p.get("name", "No Name")
+                p_desc = p.get("description", "")
                 result.append(f"ID: {p_id} | Name: {p_name} | Desc: {p_desc}")
-            
+
             return "\n".join(result)
 
         except requests.exceptions.RequestException as e:
@@ -257,7 +270,7 @@ class TaskManagementTool(Toolkit):
             headers = {}
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
-            
+
             internal_key = os.getenv("INTERNAL_API_KEY")
             if internal_key:
                 headers["X-Internal-Secret"] = internal_key
@@ -274,7 +287,9 @@ class TaskManagementTool(Toolkit):
                 return f"Error creating subtask: {e.response.text}"
             return f"Error creating subtask: {str(e)}"
 
-    def trigger_jules_monitoring(self, session_id: str, task_id: Optional[str] = None) -> str:
+    def trigger_jules_monitoring(
+        self, session_id: str, task_id: Optional[str] = None
+    ) -> str:
         """
         Triggers async monitoring of a Jules session via Redis.
         The RedisWorker will poll for completion and update task status.
@@ -288,10 +303,12 @@ class TaskManagementTool(Toolkit):
         """
         # Use "unknown" if task_id is not provided or is None/empty
         effective_task_id = task_id if task_id else "unknown"
-        
+
         try:
             r = redis.from_url(self.redis_url)
-            message = json.dumps({"task_id": effective_task_id, "session_id": session_id})
+            message = json.dumps(
+                {"task_id": effective_task_id, "session_id": session_id}
+            )
             r.publish("jules:monitor", message)
             return f"Monitoring triggered for Task {effective_task_id} (Session {session_id})"
         except Exception as e:

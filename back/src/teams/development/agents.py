@@ -37,19 +37,17 @@ class AnalystAgent(Agent):
         client_tools: Optional[List[Toolkit]] = None,
         debug_mode: bool = False,
         task_id: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         self.task_tool = task_tool
         self.task_id = task_id
-        
+
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("[AnalystAgent] Initialized with task_id=%s", task_id)
 
-        tools = [
-            self.save_requirements, 
-            task_tool
-        ]
+        tools = [self.save_requirements, task_tool]
         if knowledge_tool:
             tools.append(knowledge_tool)
         if github_tool:
@@ -73,7 +71,7 @@ class AnalystAgent(Agent):
         summary: str,
         user_stories: List[str],
         functional_requirements: List[str],
-        acceptance_criteria: List[str]
+        acceptance_criteria: List[str],
     ):
         """
         Finalize analysis and save the PRD.
@@ -90,7 +88,7 @@ class AnalystAgent(Agent):
             "summary": summary,
             "user_stories": user_stories,
             "functional_requirements": functional_requirements,
-            "acceptance_criteria": acceptance_criteria
+            "acceptance_criteria": acceptance_criteria,
         }
 
         # Save artifact and update status to PLANNING via TaskTool
@@ -103,9 +101,7 @@ class AnalystAgent(Agent):
 
         # Update task status to PLANNING
         result = self.task_tool.update_task_status(
-            task_id=task_id,
-            status="PLANNING",
-            artifacts=artifact
+            task_id=task_id, status="PLANNING", artifacts=artifact
         )
         return f"Requirements saved. Transitioning to PLANNING. Result: {result}"
 
@@ -113,11 +109,7 @@ class AnalystAgent(Agent):
 # --- ARCHITECT ---
 class ArchitectAgent(Agent):
     def __init__(
-        self,
-        model: Model,
-        tools: List[Toolkit],
-        debug_mode: bool = False,
-        **kwargs
+        self, model: Model, tools: List[Toolkit], debug_mode: bool = False, **kwargs
     ):
         super().__init__(
             name="Architect",
@@ -139,7 +131,7 @@ class DeveloperAgent(Agent):
         tools: List[Toolkit],
         git_tool: Optional[GitTools] = None,
         debug_mode: bool = False,
-        **kwargs
+        **kwargs,
     ):
         agent_tools = tools if tools else []
         if git_tool:
@@ -165,7 +157,7 @@ class ReviewerAgent(Agent):
         tools: List[Toolkit],
         git_tool: Optional[GitTools] = None,
         debug_mode: bool = False,
-        **kwargs
+        **kwargs,
     ):
         agent_tools = tools if tools else []
         if git_tool:
@@ -192,11 +184,10 @@ class WorkerAgent(Agent):
         jules_api_key: Optional[str] = None,
         client_tools: Optional[List[Toolkit]] = None,
         debug_mode: bool = False,
-        **kwargs
+        **kwargs,
     ):
-
         # Build tools list
-        tools = [task_tool]
+        tools: List[Toolkit] = [task_tool]
 
         # Check if JulesTools is already in client_tools
         jules_tool_exists = False
@@ -208,7 +199,7 @@ class WorkerAgent(Agent):
 
         effective_key = jules_api_key or os.getenv("JULES_API_KEY", "")
         if not jules_tool_exists and effective_key:
-             tools.insert(0, JulesTools(api_key=effective_key))
+            tools.insert(0, JulesTools(api_key=effective_key))
 
         if client_tools:
             tools.extend(client_tools)
@@ -231,15 +222,16 @@ class VerifierAgent(Agent):
     Verifier Agent with DOD (Definition of Done) checking capabilities.
     Performs final validation before task completion.
     """
+
     def __init__(
         self,
         model: Model,
         tools: Optional[List[Toolkit]] = None,
         debug_mode: bool = False,
-        **kwargs
+        **kwargs,
     ):
         agent_tools = tools if tools else []
-        
+
         super().__init__(
             name="Verifier",
             role="QA Engineer / DOD Checker",
@@ -250,4 +242,3 @@ class VerifierAgent(Agent):
             markdown=True,
             debug_mode=debug_mode,
         )
-
