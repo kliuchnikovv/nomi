@@ -7,28 +7,49 @@ export const handleToolCallPayload: MessageHandler = (payload, prevMessages, mes
         const existingParts = newMessages[messageIdx].content_parts || [];
         const incomingToolCall = payload.tool;
         
-        // Check if we already have a tool call with this ID
         let updatedParts = [...existingParts];
         let foundExisting = false;
 
+        // 1. Try to match by ID (Strong match)
         if (incomingToolCall.id) {
             updatedParts = updatedParts.map(part => {
-                if (part.type === 'tool_call' && part.tool_call.id === incomingToolCall.id) {
-                    foundExisting = true;
-                    // Merge existing tool call with new data (e.g. result, status)
-                    return {
-                        ...part,
-                        tool_call: {
-                            ...part.tool_call,
-                            ...incomingToolCall
-                        }
-                    };
+                if (!foundExisting && part.type === 'tool_call') {
+                    if (part.tool_call.id === incomingToolCall.id) {
+                        foundExisting = true;
+                        return {
+                            ...part,
+                            tool_call: { ...part.tool_call, ...incomingToolCall }
+                        };
+                    }
                 }
                 return part;
             });
         }
         
-        // If not found, append it
+        // 2. Fallback: Match by Name + Running Status (Heuristic)
+        // If we didn't find it by ID, and the incoming call looks like a completion/update
+        // try to find a corresponding "running" tool call.
+        if (!foundExisting && (incomingToolCall.status === 'completed' || incomingToolCall.result)) {
+            updatedParts = updatedParts.map(part => {
+                if (!foundExisting && part.type === 'tool_call') {
+                    const existingTool = part.tool_call;
+                    // Check if names match and existing is running (or has no result yet)
+                    // We check !existingTool.status to handle legacy tools without explicit status
+                    const isRunning = existingTool.status === 'running' || (!existingTool.result && !existingTool.status);
+                    
+                    if (existingTool.name === incomingToolCall.name && isRunning) {
+                        foundExisting = true;
+                        return {
+                            ...part,
+                            tool_call: { ...existingTool, ...incomingToolCall }
+                        };
+                    }
+                }
+                return part;
+            });
+        }
+        
+        // If still not found, append it
         if (!foundExisting) {
             updatedParts.push({ type: 'tool_call', tool_call: incomingToolCall });
         }
@@ -37,14 +58,28 @@ export const handleToolCallPayload: MessageHandler = (payload, prevMessages, mes
         const currentToolCalls = newMessages[messageIdx].tool_calls || [];
         let updatedToolCalls = [...currentToolCalls];
         
-        if (foundExisting && incomingToolCall.id) {
+        let foundLegacy = false;
+        if (foundExisting) {
              updatedToolCalls = updatedToolCalls.map(tc => {
-                 if (tc.id === incomingToolCall.id) {
+                 if (foundLegacy) return tc;
+                 
+                 // ID Match
+                 if (incomingToolCall.id && tc.id === incomingToolCall.id) {
+                     foundLegacy = true;
+                     return { ...tc, ...incomingToolCall };
+                 }
+                 // Heuristic Match
+                 const isRunning = tc.status === 'running' || (!tc.result && !tc.status);
+                 if ((incomingToolCall.status === 'completed' || incomingToolCall.result) && 
+                     tc.name === incomingToolCall.name && isRunning) {
+                     foundLegacy = true;
                      return { ...tc, ...incomingToolCall };
                  }
                  return tc;
              });
-        } else {
+        }
+        
+        if (!foundLegacy) {
              updatedToolCalls.push(incomingToolCall);
         }
         

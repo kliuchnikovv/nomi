@@ -22,6 +22,7 @@ export interface ToolCall {
     name: string;
     arguments?: any;
     result?: any;
+    status?: string;
 }
 
 export interface Action {
