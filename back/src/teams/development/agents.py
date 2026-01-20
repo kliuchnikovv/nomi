@@ -1,17 +1,10 @@
-from textwrap import dedent
-from typing import List, Optional, Any
+from typing import List, Optional
 import os
 from agno.agent import Agent
 from agno.models.base import Model
 from agno.tools import Toolkit
 from agno.tools.github import GithubTools
 
-from src.teams.development.models import (
-    AnalystOutput,
-    ArchitectPlan,
-    ReviewVerdict,
-    FinalAcceptance,
-)
 from src.teams.development.prompts import (
     ANALYST_INSTRUCTIONS,
     ARCHITECT_INSTRUCTIONS,
@@ -37,6 +30,7 @@ class AnalystAgent(Agent):
         client_tools: Optional[List[Toolkit]] = None,
         debug_mode: bool = False,
         task_id: Optional[str] = None,
+        project_id: Optional[str] = None,
         **kwargs,
     ):
         self.task_tool = task_tool
@@ -55,12 +49,19 @@ class AnalystAgent(Agent):
         if client_tools:
             tools.extend(client_tools)
 
+        instructions = ANALYST_INSTRUCTIONS
+        if project_id:
+            instructions = (
+                f"**Current Project ID**: `{project_id}`. Use this ID for all project-related tools.\n\n"
+                + instructions
+            )
+
         super().__init__(
             name="Analyst",
             role="Business Analyst",
             id="analyst",
             model=model,
-            instructions=ANALYST_INSTRUCTIONS,
+            instructions=instructions,
             tools=tools,
             markdown=True,
             debug_mode=debug_mode,
