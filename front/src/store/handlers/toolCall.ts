@@ -27,9 +27,9 @@ export const handleToolCallPayload: MessageHandler = (payload, prevMessages, mes
         }
         
         // 2. Fallback: Match by Name + Running Status (Heuristic)
-        // If we didn't find it by ID, and the incoming call looks like a completion/update
-        // try to find a corresponding "running" tool call.
-        if (!foundExisting && (incomingToolCall.status === 'completed' || incomingToolCall.result)) {
+        // If we didn't find it by ID, try to find a corresponding "running" tool call by name.
+        // We do this for ANY incoming tool call that has a name, to handle both argument updates and completion.
+        if (!foundExisting && incomingToolCall.name) {
             updatedParts = updatedParts.map(part => {
                 if (!foundExisting && part.type === 'tool_call') {
                     const existingTool = part.tool_call;
@@ -70,8 +70,7 @@ export const handleToolCallPayload: MessageHandler = (payload, prevMessages, mes
                  }
                  // Heuristic Match
                  const isRunning = tc.status === 'running' || (!tc.result && !tc.status);
-                 if ((incomingToolCall.status === 'completed' || incomingToolCall.result) && 
-                     tc.name === incomingToolCall.name && isRunning) {
+                 if (incomingToolCall.name && tc.name === incomingToolCall.name && isRunning) {
                      foundLegacy = true;
                      return { ...tc, ...incomingToolCall };
                  }
