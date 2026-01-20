@@ -136,10 +136,11 @@ export class ChatSocket {
             ws.onmessage = async (e: any) => {
                 this.touchActivity();
                 const raw = typeof e.data === 'string' ? e.data : '';
-                const jsonStrings = this.splitJsonMessages(raw);
+                // NDJSON handling: split by newline
+                const lines = raw.split('\n');
 
-                for (const jsonStr of jsonStrings) {
-                    const trimmed = jsonStr.trim();
+                for (const line of lines) {
+                    const trimmed = line.trim();
                     if (!trimmed) continue;
 
                     try {
@@ -221,43 +222,7 @@ export class ChatSocket {
         }
     }
 
-    // Helper to handle concatenated JSON
-    private splitJsonMessages(raw: string): string[] {
-        const jsonStrings: string[] = [];
-        let depth = 0;
-        let inString = false;
-        let start = 0;
-
-        for (let i = 0; i < raw.length; i++) {
-            const char = raw[i];
-            if (inString) {
-                if (char === '"') {
-                    let backslashes = 0;
-                    let j = i - 1;
-                    while (j >= start && raw[j] === '\\') {
-                        backslashes++;
-                        j--;
-                    }
-                    if (backslashes % 2 === 0) inString = false;
-                }
-            } else {
-                if (char === '"') {
-                    inString = true;
-                } else if (char === '{') {
-                    depth++;
-                } else if (char === '}') {
-                    depth--;
-                    if (depth === 0) {
-                        jsonStrings.push(raw.substring(start, i + 1));
-                        start = i + 1;
-                        while (start < raw.length && /\s/.test(raw[start])) start++;
-                        i = start - 1;
-                    }
-                }
-            }
-        }
-        return jsonStrings;
-    }
+    // Helper to handle concatenated JSON - REMOVED (using NDJSON)
 
     sendMessage(
         text: string,

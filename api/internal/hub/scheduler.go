@@ -144,17 +144,21 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 		}
 	}
 
+	// Construct payload map for json.RawMessage
+	payloadMap := map[string]interface{}{
+		"message_id": msgID,
+		"message":    payload.Message,
+		"role":       "system",
+		"tools":      tools,
+	}
+	payloadBytesRaw, _ := json.Marshal(payloadMap)
+
 	frame := Frame{
 		ChatID:    task.ChatID,
 		Operation: MessageOperation,
 		Kind:      TokenKind, // Ensure Kind is set
 		Timestamp: time.Now().UTC(),
-		Payload: Payload{
-			MessageID: msgID,
-			Message:   payload.Message,
-			Role:      "system",
-			Tools:     tools, // Include tools from task creation time
-		},
+		Payload:   payloadBytesRaw,
 	}
 	frameBytes, _ := json.Marshal(frame)
 

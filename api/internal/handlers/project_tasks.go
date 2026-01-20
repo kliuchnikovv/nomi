@@ -240,25 +240,28 @@ func (h *ProjectTaskHandler) notifyTeamLead(userID, projectID, taskID uuid.UUID,
 }
 
 func (h *ProjectTaskHandler) broadcastTaskUpdate(userID uuid.UUID, task *storage.ProjectTask, projectName string, oldStatus, newStatus storage.ProjectTaskStatus) {
+	payloadData := map[string]interface{}{
+		"type": "task_updated",
+		"command": map[string]interface{}{
+			"task_id":      task.ID,
+			"task_title":   task.Title,
+			"project_id":   task.ProjectID,
+			"project_name": projectName,
+			"old_status":   oldStatus,
+			"new_status":   newStatus,
+			"updated_at":   time.Now().UTC(),
+			"artifacts":    task.Artifacts,
+		},
+	}
+	payloadBytes, _ := json.Marshal(payloadData)
+
 	frame := hub.Frame{
 		ID:        0,
 		ChatID:    userID, // Targeting user channel
 		Timestamp: time.Now().UTC(),
 		Kind:      hub.SignalKind,
 		Operation: hub.SignalOperation,
-		Payload: hub.Payload{
-			Type: "task_updated",
-			Command: map[string]interface{}{
-				"task_id":      task.ID,
-				"task_title":   task.Title,
-				"project_id":   task.ProjectID,
-				"project_name": projectName,
-				"old_status":   oldStatus,
-				"new_status":   newStatus,
-				"updated_at":   time.Now().UTC(),
-				"artifacts":    task.Artifacts,
-			},
-		},
+		Payload:   payloadBytes,
 	}
 	h.hub.BroadcastToUser(userID, frame)
 }
