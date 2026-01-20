@@ -66,7 +66,6 @@ class AnalystAgent(Agent):
             tools=tools,
             markdown=True,
             debug_mode=debug_mode,
-            stream_intermediate_steps=True,
         )
 
     def save_requirements(
@@ -129,7 +128,6 @@ class ArchitectAgent(Agent):
             tools=tools,
             markdown=True,
             debug_mode=debug_mode,
-            stream_intermediate_steps=True,
         )
 
 
@@ -156,7 +154,6 @@ class DeveloperAgent(Agent):
             tools=agent_tools,
             markdown=True,
             debug_mode=debug_mode,
-            stream_intermediate_steps=True,
         )
 
 
@@ -183,7 +180,6 @@ class ReviewerAgent(Agent):
             tools=agent_tools,
             markdown=True,
             debug_mode=debug_mode,
-            stream_intermediate_steps=True,
         )
 
 
@@ -226,7 +222,6 @@ class WorkerAgent(Agent):
             tools=tools,
             markdown=True,
             debug_mode=debug_mode,
-            stream_intermediate_steps=True,
         )
 
 
@@ -254,6 +249,5 @@ class VerifierAgent(Agent):
             tools=agent_tools,
             markdown=True,
             debug_mode=debug_mode,
-            stream_intermediate_steps=True,
         )
 
