@@ -636,10 +636,11 @@ Continue the conversation."""
                 # Handle both ToolCallStarted and ToolCallCompleted
                 if "ToolCallStarted" in event_type:
                     # Show that a tool call is starting
-                    tool_name = getattr(ev, "tool_name", None) or "unknown"
-                    tool_args = getattr(ev, "parameters", None) or getattr(
-                        ev, "tool_args", {}
-                    )
+                    # Extract tool_name and tool_args from ev.tool (ToolExecution object)
+                    tool_name = (
+                        getattr(ev.tool, "tool_name", None) if ev.tool else None
+                    ) or "unknown"
+                    tool_args = getattr(ev.tool, "tool_args", {}) if ev.tool else {}
                     logger.info(f"[RedisSession] Tool call started: {tool_name}")
                     tool_data = {
                         "type": "tool_call",
