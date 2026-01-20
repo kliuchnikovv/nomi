@@ -8,7 +8,6 @@ import redis.asyncio as redis
 from typing import Optional, List, Any, Dict
 
 from agno.agent import Agent
-from agno.models.message import Message
 from src.agents.factory import AgentFactory
 from src.server.models import Frame, Op, Kind
 from src.server.utils import make_meta, make_error, make_done, make_data
@@ -641,10 +640,17 @@ Continue the conversation."""
                         getattr(ev.tool, "tool_name", None) if ev.tool else None
                     ) or "unknown"
                     tool_args = getattr(ev.tool, "tool_args", {}) if ev.tool else {}
-                    logger.info(f"[RedisSession] Tool call started: {tool_name}")
+                    tool_id = (
+                        getattr(ev.tool, "tool_call_id", None) if ev.tool else None
+                    )
+
+                    logger.info(
+                        f"[RedisSession] Tool call started: {tool_name} (id={tool_id})"
+                    )
                     tool_data = {
                         "type": "tool_call",
                         "tool": {
+                            "id": tool_id,
                             "name": tool_name,
                             "arguments": tool_args,
                             "status": "running",
@@ -656,10 +662,23 @@ Continue the conversation."""
 
                 elif "ToolCallCompleted" in event_type:
                     if hasattr(ev, "tool") and ev.tool:
-                        logger.info(
-                            f"[RedisSession] Tool call completed: {getattr(ev.tool, 'tool_name', 'unknown')}"
-                        )
-                        tool_data = {"type": "tool_call", "tool": ev.tool}
+                        tool_name = getattr(ev.tool, "tool_name", "unknown")
+                        logger.info(f"[RedisSession] Tool call completed: {tool_name}")
+
+                        # Ensure we extract the ID
+                        tool_obj = ev.tool
+                        tool_id = getattr(tool_obj, "tool_call_id", None)
+
+                        # Construct a clean dictionary ensuring 'id' is present
+                        tool_dict = {
+                            "id": tool_id,
+                            "name": tool_name,
+                            "arguments": getattr(tool_obj, "tool_args", {}),
+                            "result": getattr(tool_obj, "result", None),
+                            "status": "completed",
+                        }
+
+                        tool_data = {"type": "tool_call", "tool": tool_dict}
                         if current_agent_name:
                             tool_data["agent_name"] = current_agent_name
                         yield tool_data
