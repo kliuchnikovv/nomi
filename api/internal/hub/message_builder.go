@@ -49,11 +49,63 @@ func (b *MessageBuilder) AppendMemberResponse(agentName, delta string) {
 }
 
 func (b *MessageBuilder) AddToolCall(toolCall interface{}) {
-	b.ToolCalls = append(b.ToolCalls, toolCall)
-	b.ContentParts = append(b.ContentParts, map[string]interface{}{
-		"type":      "tool_call",
-		"tool_call": toolCall,
-	})
+	// Try to identify by ID to update existing tool call instead of appending
+	var toolID string
+	if tcMap, ok := toolCall.(map[string]interface{}); ok {
+		if id, ok := tcMap["id"].(string); ok {
+			toolID = id
+		}
+	}
+
+	if toolID != "" {
+		// 1. Update in ToolCalls slice
+		found := false
+		for i, existing := range b.ToolCalls {
+			if existingMap, ok := existing.(map[string]interface{}); ok {
+				if existingID, ok := existingMap["id"].(string); ok && existingID == toolID {
+					// Merge/Replace
+					// For now, we assume the new event contains the latest state (e.g. result added)
+					// But we might want to ensure we don't overwrite arguments if they are missing in the new event (though they shouldn't be)
+					b.ToolCalls[i] = toolCall
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			b.ToolCalls = append(b.ToolCalls, toolCall)
+		}
+
+		// 2. Update in ContentParts
+		foundPart := false
+		for i, part := range b.ContentParts {
+			if partMap, ok := part.(map[string]interface{}); ok {
+				if partMap["type"] == "tool_call" {
+					if innerTC, ok := partMap["tool_call"].(map[string]interface{}); ok {
+						if innerID, ok := innerTC["id"].(string); ok && innerID == toolID {
+							partMap["tool_call"] = toolCall
+							b.ContentParts[i] = partMap
+							foundPart = true
+							break
+						}
+					}
+				}
+			}
+		}
+		if !foundPart {
+			b.ContentParts = append(b.ContentParts, map[string]interface{}{
+				"type":      "tool_call",
+				"tool_call": toolCall,
+			})
+		}
+	} else {
+		// Fallback: No ID, always append (legacy behavior)
+		b.ToolCalls = append(b.ToolCalls, toolCall)
+		b.ContentParts = append(b.ContentParts, map[string]interface{}{
+			"type":      "tool_call",
+			"tool_call": toolCall,
+		})
+	}
 }
 
 func (b *MessageBuilder) SetMetadata(model string, toolCalls interface{}, actions interface{}) {
