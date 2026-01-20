@@ -117,7 +117,7 @@ class GenieAgent(Agent):
             store_media=True,
             # store_history_messages=True,
             stream=True,
-            stream_intermediate_steps=True,
+            # stream_intermediate_steps=True,
             reasoning=(thinking != "off"),
         )
 
