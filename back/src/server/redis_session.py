@@ -2,12 +2,12 @@ import asyncio
 import json
 import logging
 import os
-import time
 import uuid
 import redis.asyncio as redis
-from typing import Optional, List, Any, Dict
+from datetime import datetime, timezone
+from typing import Optional, List, Any, Dict, AsyncIterator
 
-from agno.agent import Agent
+from agno.media import Image
 from src.agents.factory import AgentFactory
 from src.server.models import Frame, Op, Kind
 from src.server.utils import make_meta, make_error, make_done, make_data
@@ -36,7 +36,7 @@ class RedisSession:
         self.chat_id = chat_id or session_id
 
         self.redis_client = None
-        self.agent: Optional[Agent] = None
+        self.agent: Optional[Any] = None
         self.tools_specs: List[ToolSpec] = []
         self.active_agents: set[str] = set()
 
@@ -49,7 +49,6 @@ class RedisSession:
         # Initialize Redis for sending responses
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         self.redis_client = redis.from_url(redis_url, decode_responses=True)
-        self.next_id = 0
         self.next_id = 0
         self.cancel_event = asyncio.Event()
 
@@ -67,7 +66,7 @@ class RedisSession:
 
         frame = Frame(
             id=self.next_id,
-            ts=time.time(),
+            ts=datetime.now(timezone.utc),
             kind=Kind.SIGNAL,
             op=Op.SIGNAL,
             chat_id=self.chat_id,
@@ -484,7 +483,9 @@ class RedisSession:
                 make_error(self.next_id, "stream_failed", msg_chat_id, str(e), 500)
             )
 
-    async def _stream_agent_events(self, text: str, attachments: Optional[list]) -> Any:
+    async def _stream_agent_events(
+        self, text: str, attachments: Optional[list]
+    ) -> AsyncIterator[Any]:
         # Prepare inputs
         kwargs = {}
         # Only pass session_id for non-team mode
@@ -545,17 +546,9 @@ Continue the conversation."""
                         content = att.get("content", "")
                         if content:
                             image_bytes = base64.b64decode(content)
-                            if attrs := getattr(Image, "__annotations__", None):
-                                # Agno Image check
-                                images.append(
-                                    Image(
-                                        content=image_bytes, format=att.get("file_type")
-                                    )
-                                )
-                            else:
-                                logger.warning(
-                                    "[RedisSession] Unknown Image class structure, skipping"
-                                )
+                            images.append(
+                                Image(content=image_bytes, format=att.get("file_type"))
+                            )
                     except Exception as e:
                         logger.error("[RedisSession] Image decode error: %s", e)
             if images:
@@ -636,13 +629,39 @@ Continue the conversation."""
                 if "ToolCallStarted" in event_type:
                     # Show that a tool call is starting
                     # Extract tool_name and tool_args from ev.tool (ToolExecution object)
-                    tool_name = (
-                        getattr(ev.tool, "tool_name", None) if ev.tool else None
-                    ) or "unknown"
-                    tool_args = getattr(ev.tool, "tool_args", {}) if ev.tool else {}
-                    tool_id = (
-                        getattr(ev.tool, "tool_call_id", None) if ev.tool else None
-                    )
+                    tool_obj = ev.tool if ev.tool else None
+
+                    if tool_obj:
+                        if isinstance(tool_obj, dict):
+                            tool_name = (
+                                tool_obj.get("tool_name")
+                                or tool_obj.get("name")
+                                or "unknown"
+                            )
+                            tool_args = (
+                                tool_obj.get("tool_args")
+                                or tool_obj.get("arguments")
+                                or {}
+                            )
+                            tool_id = (
+                                tool_obj.get("tool_call_id")
+                                or tool_obj.get("call_id")
+                                or tool_obj.get("id")
+                            )
+                        else:
+                            tool_name = getattr(tool_obj, "tool_name", None) or getattr(
+                                tool_obj, "name", "unknown"
+                            )
+                            tool_args = getattr(tool_obj, "tool_args", {})
+                            tool_id = (
+                                getattr(tool_obj, "tool_call_id", None)
+                                or getattr(tool_obj, "call_id", None)
+                                or getattr(tool_obj, "id", None)
+                            )
+                    else:
+                        tool_name = "unknown"
+                        tool_args = {}
+                        tool_id = None
 
                     logger.info(
                         f"[RedisSession] Tool call started: {tool_name} (id={tool_id})"
@@ -662,19 +681,47 @@ Continue the conversation."""
 
                 elif "ToolCallCompleted" in event_type:
                     if hasattr(ev, "tool") and ev.tool:
-                        tool_name = getattr(ev.tool, "tool_name", "unknown")
-                        logger.info(f"[RedisSession] Tool call completed: {tool_name}")
-
-                        # Ensure we extract the ID
                         tool_obj = ev.tool
-                        tool_id = getattr(tool_obj, "tool_call_id", None)
+
+                        if isinstance(tool_obj, dict):
+                            tool_name = (
+                                tool_obj.get("tool_name")
+                                or tool_obj.get("name")
+                                or "unknown"
+                            )
+                            tool_args = (
+                                tool_obj.get("tool_args")
+                                or tool_obj.get("arguments")
+                                or {}
+                            )
+                            tool_result = tool_obj.get("result")
+                            tool_id = (
+                                tool_obj.get("tool_call_id")
+                                or tool_obj.get("call_id")
+                                or tool_obj.get("id")
+                            )
+                        else:
+                            tool_name = getattr(tool_obj, "tool_name", None) or getattr(
+                                tool_obj, "name", "unknown"
+                            )
+                            tool_args = getattr(tool_obj, "tool_args", {})
+                            tool_result = getattr(tool_obj, "result", None)
+                            tool_id = (
+                                getattr(tool_obj, "tool_call_id", None)
+                                or getattr(tool_obj, "call_id", None)
+                                or getattr(tool_obj, "id", None)
+                            )
+
+                        logger.info(
+                            f"[RedisSession] Tool call completed: {tool_name} (id={tool_id})"
+                        )
 
                         # Construct a clean dictionary ensuring 'id' is present
                         tool_dict = {
                             "id": tool_id,
                             "name": tool_name,
-                            "arguments": getattr(tool_obj, "tool_args", {}),
-                            "result": getattr(tool_obj, "result", None),
+                            "arguments": tool_args,
+                            "result": tool_result,
                             "status": "completed",
                         }
 
