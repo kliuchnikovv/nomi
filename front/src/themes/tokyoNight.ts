@@ -56,6 +56,9 @@ export const tokyoNightTheme: ThemeDescriptor = {
         codeBg: '#292e42',           // currentLine - lighter than bg for visibility
         codeInlineBg: '#24283b',       // surface
         codeText: palette.fg,          // #c0caf5 - readable code color
+        // Blockquote colors
+        blockquoteBg: '#1f2335',       // surfaceAlt - subtle highlight
+        blockquoteBorder: palette.blue, // #7aa2f7 - accent color for emphasis
     },
 };
 

@@ -52,6 +52,9 @@ export const visualStudioLightTheme: ThemeDescriptor = {
         calendar: '#4285F4',
         email: '#EA4335',
         task: '#34A853',
+        // Blockquote colors
+        blockquoteBg: '#f3f3f3',       // gutterGrey - subtle highlight
+        blockquoteBorder: palette.cyan, // #0451a5 - accent for emphasis
     },
 };
 

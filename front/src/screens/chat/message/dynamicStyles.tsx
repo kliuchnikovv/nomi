@@ -367,9 +367,13 @@ export const createMarkdownStyles = (theme: ThemeColors) => ({
         color: theme.codeText || '#a9b1d6',
     },
     blockquote: {
+        backgroundColor: theme.blockquoteBg || theme.surfaceAlt,
         borderLeftWidth: 3,
-        borderLeftColor: '#4b5263',
+        borderLeftColor: theme.blockquoteBorder || theme.accent,
         paddingLeft: 8,
+        paddingVertical: 4,
+        marginVertical: 4,
+        borderRadius: 4,
         color: theme.textPrimary,
     },
     heading1: {

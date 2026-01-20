@@ -765,13 +765,14 @@ Continue the conversation."""
                             step_name or "unknown",
                             content[:100],
                         )
-                        # Use step_name as agent_name if available
-                        yield {
-                            "type": "member_response",
-                            "content": content,
-                            "agent_name": step_name or current_agent_name,
-                        }
-                        streamed_text_len += len(content)
+                        # Skip yielding content here to avoid duplication with RunContentEvent
+                        # RunContentEvent + RunCompletedEvent already handle the streaming
+                        # yield {
+                        #     "type": "member_response",
+                        #     "content": content,
+                        #     "agent_name": step_name or current_agent_name,
+                        # }
+                        # streamed_text_len += len(content)
 
                 # WorkflowCompletedEvent contains the final aggregated result
                 if "WorkflowCompletedEvent" in event_type:

@@ -42,7 +42,7 @@ export const retroPastelTheme: ThemeDescriptor = {
         textPrimary: palette.fg,
         surface: '#FFFFFF',
         surfaceAlt: '#F5EDE0',
-        surfaceHighlight: palette.selection,
+        surfaceHighlight: palette.selection ?? '#F5C79A',
         primary: palette.cyan,
         error: palette.red,
         card: '#FFFFFF',
@@ -54,6 +54,13 @@ export const retroPastelTheme: ThemeDescriptor = {
         calendar: palette.magenta,
         email: palette.red,
         task: palette.green,
+        // Code colors
+        codeBg: palette.currentLine,
+        codeInlineBg: '#FFFFFF',
+        codeText: palette.fg,
+        // Blockquote colors
+        blockquoteBg: '#F5EDE0',       // surfaceAlt
+        blockquoteBorder: palette.cyan, // accent
     },
 };
 

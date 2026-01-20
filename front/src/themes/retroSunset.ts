@@ -52,6 +52,13 @@ export const retroSunsetTheme: ThemeDescriptor = {
         calendar: palette.cyan,
         email: palette.red,
         task: palette.green,
+        // Code colors
+        codeBg: palette.currentLine,
+        codeInlineBg: '#1C4A62',
+        codeText: palette.fg,
+        // Blockquote colors
+        blockquoteBg: '#0F2A3A',       // surfaceAlt
+        blockquoteBorder: palette.cyan, // accent
     },
 };
 

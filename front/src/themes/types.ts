@@ -51,6 +51,9 @@ export type ThemeColors = {
     codeBg?: string;
     codeInlineBg?: string;
     codeText?: string;
+    // Blockquote colors
+    blockquoteBg?: string;
+    blockquoteBorder?: string;
 };
 
 export type ThemeDescriptor = {

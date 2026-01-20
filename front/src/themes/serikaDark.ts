@@ -52,6 +52,13 @@ export const serikaDarkTheme: ThemeDescriptor = {
         calendar: palette.blue,
         email: palette.red,
         task: palette.green,
+        // Code colors
+        codeBg: palette.currentLine,
+        codeInlineBg: '#3b3e42',
+        codeText: palette.fg,
+        // Blockquote colors
+        blockquoteBg: '#2c2e31',       // surfaceAlt
+        blockquoteBorder: palette.yellow, // accent
     },
 };
 

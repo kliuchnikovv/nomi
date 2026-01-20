@@ -56,6 +56,9 @@ export const deepOceanTheme: ThemeDescriptor = {
         codeBg: '#152e33',           // darker surface for code blocks
         codeInlineBg: '#1a3a3f',     // surface
         codeText: palette.fg,        // readable code color
+        // Blockquote colors
+        blockquoteBg: '#152e33',     // surfaceAlt
+        blockquoteBorder: palette.cyan, // accent
     },
 };
 

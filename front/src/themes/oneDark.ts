@@ -52,6 +52,13 @@ export const oneDarkTheme: ThemeDescriptor = {
         calendar: palette.blue,
         email: palette.red,
         task: palette.green,
+        // Code colors
+        codeBg: palette.currentLine,
+        codeInlineBg: '#2c313a',
+        codeText: palette.fg,
+        // Blockquote colors
+        blockquoteBg: '#262b33',       // surfaceAlt
+        blockquoteBorder: palette.blue, // accent
     },
 };
 

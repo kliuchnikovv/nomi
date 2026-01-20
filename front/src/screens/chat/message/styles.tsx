@@ -360,9 +360,13 @@ export const markdownStyles = {
         color: theme.codeText || '#a9b1d6',
     },
     blockquote: {
+        backgroundColor: theme.blockquoteBg || theme.surfaceAlt || '#1f2335',
         borderLeftWidth: 3,
-        borderLeftColor: '#4b5263',
+        borderLeftColor: theme.blockquoteBorder || theme.accent || '#4b5263',
         paddingLeft: 8,
+        paddingVertical: 4,
+        marginVertical: 4,
+        borderRadius: 4,
         color: theme.textPrimary,
     },
     heading1: {

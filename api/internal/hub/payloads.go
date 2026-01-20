@@ -35,7 +35,7 @@ type TextPayload struct {
 type ToolCallPayload struct {
 	Type      PayloadType `json:"type"`
 	MessageID uuid.UUID   `json:"message_id"`
-	ToolCall  interface{} `json:"tool_call"`
+	ToolCall  interface{} `json:"tool"`
 }
 
 // ReasoningPayload carries reasoning/thinking deltas
