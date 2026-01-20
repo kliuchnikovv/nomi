@@ -31,10 +31,13 @@ func (r *Room) DispatchPayload(frame Frame) error {
 
 	typeStr, ok := rawMap["type"].(string)
 	if !ok {
-		// Some legacy messages might not have "type".
-		// We can try to infer or just log.
-		r.logger.Warn("missing type in payload", zap.ByteString("payload", frame.Payload))
-		return fmt.Errorf("missing type in payload")
+		// Fallback: if 'message' is present, assume 'text' (legacy Python backend behavior)
+		if _, hasMsg := rawMap["message"]; hasMsg {
+			typeStr = string(PayloadTypeText)
+		} else {
+			r.logger.Warn("missing type in payload", zap.ByteString("payload", frame.Payload))
+			return fmt.Errorf("missing type in payload")
+		}
 	}
 
 	handler, ok := payloadHandlers[PayloadType(typeStr)]
@@ -62,8 +65,12 @@ func handleTextPayload(r *Room, data []byte) error {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
+	delta := p.Delta
+	if delta == "" {
+		delta = p.Message
+	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
-	builder.AppendText(p.Delta)
+	builder.AppendText(delta)
 	return builder.Persist(context.Background(), r.store, r.initiatorID)
 }
 
@@ -82,8 +89,12 @@ func handleReasoningPayload(r *Room, data []byte) error {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
+	delta := p.Delta
+	if delta == "" {
+		delta = p.Content
+	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
-	builder.AppendReasoning(p.Delta)
+	builder.AppendReasoning(delta)
 	return builder.Persist(context.Background(), r.store, r.initiatorID)
 }
 
@@ -92,8 +103,12 @@ func handleMemberResponsePayload(r *Room, data []byte) error {
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
 	}
+	delta := p.Delta
+	if delta == "" {
+		delta = p.Message
+	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
-	builder.AppendMemberResponse(p.AgentName, p.Delta)
+	builder.AppendMemberResponse(p.AgentName, delta)
 	return builder.Persist(context.Background(), r.store, r.initiatorID)
 }
 

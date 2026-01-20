@@ -27,7 +27,8 @@ type BasePayload struct {
 type TextPayload struct {
 	Type      PayloadType `json:"type"`
 	MessageID uuid.UUID   `json:"message_id"`
-	Delta     string      `json:"delta"`
+	Delta     string      `json:"delta,omitempty"`
+	Message   string      `json:"message,omitempty"` // Fallback for legacy backend
 }
 
 // ToolCallPayload carries tool call information
@@ -41,7 +42,8 @@ type ToolCallPayload struct {
 type ReasoningPayload struct {
 	Type      PayloadType `json:"type"`
 	MessageID uuid.UUID   `json:"message_id"`
-	Delta     string      `json:"delta"`
+	Delta     string      `json:"delta,omitempty"`
+	Content   string      `json:"content,omitempty"` // Fallback for legacy backend
 }
 
 // MemberResponsePayload carries team member responses
@@ -49,7 +51,8 @@ type MemberResponsePayload struct {
 	Type      PayloadType `json:"type"`
 	MessageID uuid.UUID   `json:"message_id"`
 	AgentName string      `json:"agent_name"`
-	Delta     string      `json:"delta"`
+	Delta     string      `json:"delta,omitempty"`
+	Message   string      `json:"message,omitempty"` // Fallback
 }
 
 // MetadataPayload carries message metadata (model, full tool calls list, etc)
@@ -97,4 +100,5 @@ type UserMessagePayload struct {
 	Team      interface{} `json:"team,omitempty"`
 	AgentType string      `json:"agent_type,omitempty"`
 	Tools     interface{} `json:"tools,omitempty"` // User-provided tools/integrations
+	UserID    uuid.UUID   `json:"user_id,omitempty"`
 }
