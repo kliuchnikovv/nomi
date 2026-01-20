@@ -638,9 +638,16 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// Since we modified payload (Tools, Command), let's marshal it.
 		// But we also need History which is not in UserMessagePayload.
 		// So we unmarshal the payload back to map, add History, and send.
+
+		// Set user_id so Python backend knows who to respond to
+		payload.UserID = r.initiatorID
+
 		finalPayloadBytes, _ := json.Marshal(payload)
 		var finalMap map[string]interface{}
 		json.Unmarshal(finalPayloadBytes, &finalMap)
+
+		// Ensure user_id is present in finalMap
+		finalMap["user_id"] = r.initiatorID.String()
 
 		if len(messages) > 0 {
 			historyData := make([]map[string]interface{}, 0, len(messages))
