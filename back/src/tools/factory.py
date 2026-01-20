@@ -8,10 +8,13 @@ from agno.tools import Toolkit
 from agno.tools.gmail import GmailTools
 from agno.tools.googlecalendar import GoogleCalendarTools
 from agno.tools.github import GithubTools
-from src.tools.duckduckgo_custom import DuckDuckGoTools as WebSearchTools  # Use our custom version
+from src.tools.duckduckgo_custom import (
+    DuckDuckGoTools as WebSearchTools,
+)  # Use our custom version
 from google.oauth2.credentials import Credentials
 from src.tools.jules import JulesTools
 from src.tools.client_side import ClientGmailTools, ClientRagTools
+from src.tools.ui import ClientUITools
 from src.rag_service import KnowledgeSearchTool
 
 
@@ -20,17 +23,17 @@ class SafeGithubTools(GithubTools):
     Wrapper over GithubTools that makes 'message' optional for file operations.
     This prevents Pydantic validation errors when the agent doesn't provide commit messages.
     """
-    
+
     def create_file(
-        self, 
-        repo_name: str, 
-        path: str, 
-        content: str, 
-        message: str = "Update via Genie Agent"
+        self,
+        repo_name: str,
+        path: str,
+        content: str,
+        message: str = "Update via Genie Agent",
     ) -> str:
         """
         Creates a file in a repository.
-        
+
         Args:
             repo_name: The name of the repository (owner/repo format).
             path: The path to the file within the repository.
@@ -38,23 +41,20 @@ class SafeGithubTools(GithubTools):
             message: The commit message (optional, defaults to generic message).
         """
         return super().create_file(
-            repo_name=repo_name, 
-            path=path, 
-            content=content, 
-            message=message
+            repo_name=repo_name, path=path, content=content, message=message
         )
-    
+
     def update_file(
         self,
         repo_name: str,
         path: str,
         content: str,
         sha: str,
-        message: str = "Update via Genie Agent"
+        message: str = "Update via Genie Agent",
     ) -> str:
         """
         Updates a file in a repository.
-        
+
         Args:
             repo_name: The name of the repository (owner/repo format).
             path: The path to the file within the repository.
@@ -63,11 +63,7 @@ class SafeGithubTools(GithubTools):
             message: The commit message (optional, defaults to generic message).
         """
         return super().update_file(
-            repo_name=repo_name,
-            path=path,
-            content=content,
-            sha=sha,
-            message=message
+            repo_name=repo_name, path=path, content=content, sha=sha, message=message
         )
 
 
@@ -99,7 +95,11 @@ class ToolsConfig:
             yield ToolItem(name=name, params=params)
 
 
-def _instantiate_tool(cls: type[Toolkit], kwargs_list: List[Dict[str, Any]] | Dict[str, Any], tool_name: str) -> Toolkit:
+def _instantiate_tool(
+    cls: type[Toolkit],
+    kwargs_list: List[Dict[str, Any]] | Dict[str, Any],
+    tool_name: str,
+) -> Toolkit:
     """
     Пытается создать тул с вариациями kwargs; если все варианты отклонены,
     возвращает инстанс по умолчанию.
@@ -116,7 +116,9 @@ def _instantiate_tool(cls: type[Toolkit], kwargs_list: List[Dict[str, Any]] | Di
 
 def _make_credentials(params: Dict[str, Any]) -> Credentials | None:
     # Support nested creds dict
-    creds_data = params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
+    creds_data = (
+        params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
+    )
 
     token = creds_data.get("access_token") or creds_data.get("token")
     refresh = creds_data.get("refresh_token")
@@ -155,7 +157,7 @@ def _build_gmail(params: Dict[str, Any]) -> Toolkit:
         tool = ClientGmailTools()
 
     # Add account context for multi-account support
-    
+
     # Add account context for multi-account support
     account_email = params.get("account_email", "")
     if account_email:
@@ -163,7 +165,7 @@ def _build_gmail(params: Dict[str, Any]) -> Toolkit:
         tool.instructions = f"""This Gmail tool operates the mailbox: {account_email}
 Only use this tool when the user wants to interact with {account_email}."""
         logger.debug("[Gmail] Added account context for %s", account_email)
-    
+
     return tool
 
 
@@ -173,7 +175,7 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
     variants: List[Dict[str, Any]] = []
 
     creds = _make_credentials(params)
-    
+
     if creds:
         # GoogleCalendarTools не принимает creds в __init__, но использует их в _auth
         # Поэтому создаем тул и проставляем creds вручную
@@ -182,11 +184,12 @@ def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
     else:
         # If no credentials, use Client Side Tools
         from src.tools.client_side import ClientCalendarTools
+
         logger.info("[GC] No credentials provided, using ClientCalendarTools")
         tool = ClientCalendarTools()
 
     now = datetime.now(timezone.utc)
-    
+
     # Add account context for multi-account support
     account_email = params.get("account_email", "")
     account_context = f" for {account_email}" if account_email else ""
@@ -204,9 +207,8 @@ Treat current time as {now}.
 - If there are multiple calendar accounts available, clarify which one to use before proceeding."""
 
     logger.debug(f"[GC] instructions are: {tool.instructions}")
-    
-    return tool
 
+    return tool
 
 
 def _build_rag(_: Dict[str, Any]) -> Toolkit:
@@ -214,29 +216,46 @@ def _build_rag(_: Dict[str, Any]) -> Toolkit:
     logger.info("[RAG] Using ClientRagTools for local knowledge search")
     return ClientRagTools()
 
+
 def _build_github(params: Dict[str, Any]) -> Toolkit:
     """Build SafeGithubTools with access token from integration."""
-    logger.info("[GitHub] Building SafeGithubTools with params keys: %s", list(params.keys()))
-    
+    logger.info(
+        "[GitHub] Building SafeGithubTools with params keys: %s", list(params.keys())
+    )
+
     # Extract access token from params (passed from Go API integration)
-    creds_data = params.get("creds", {}) if isinstance(params.get("creds"), dict) else {}
-    logger.debug("[GitHub] creds_data keys: %s", list(creds_data.keys()) if creds_data else "empty")
-    
+    creds_data = (
+        params.get("creds", {}) if isinstance(params.get("creds"), dict) else {}
+    )
+    logger.debug(
+        "[GitHub] creds_data keys: %s",
+        list(creds_data.keys()) if creds_data else "empty",
+    )
+
     access_token = creds_data.get("token") or params.get("access_token")
     username = params.get("username", "")
     account_email = params.get("account_email", "")
-    
+
     if not access_token:
         logger.warning("[GitHub] No access token found in params")
         raise ValueError("GitHub access token is required")
-    
+
     # Mask token for logging (show first 8 and last 4 chars)
-    masked_token = f"{access_token[:8]}...{access_token[-4:]}" if len(access_token) > 12 else "***"
-    logger.info("[GitHub] Found access token: %s for user: %s", masked_token, username or account_email)
+    masked_token = (
+        f"{access_token[:8]}...{access_token[-4:]}" if len(access_token) > 12 else "***"
+    )
+    logger.info(
+        "[GitHub] Found access token: %s for user: %s",
+        masked_token,
+        username or account_email,
+    )
     # Use SafeGithubTools to make 'message' optional for create_file/update_file
     tool = SafeGithubTools(access_token=access_token)
-    logger.info("[GitHub] Created SafeGithubTools with access token for user: %s", username or account_email)
-    
+    logger.info(
+        "[GitHub] Created SafeGithubTools with access token for user: %s",
+        username or account_email,
+    )
+
     # Add context instructions
     tool.add_instructions = True
     account_context = f" for GitHub user: {username}" if username else ""
@@ -249,7 +268,7 @@ You can:
 - Access user information
 
 Always confirm repository ownership before making changes."""
-    
+
     return tool
 
 
@@ -269,10 +288,14 @@ def _build_jules(params: Dict[str, Any]) -> Toolkit:
     logger.info("[Jules] Building JulesTools")
 
     # Check for credentials in nested 'creds' or directly in params
-    creds_data = params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
+    creds_data = (
+        params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
+    )
 
     # Support 'key', 'api_key', or 'token'
-    api_key = creds_data.get("api_key") or creds_data.get("key") or creds_data.get("token")
+    api_key = (
+        creds_data.get("api_key") or creds_data.get("key") or creds_data.get("token")
+    )
 
     if not api_key:
         logger.warning("[Jules] No API key found in params")
@@ -297,6 +320,12 @@ def _build_knowledge_search(params: Dict[str, Any]) -> Toolkit:
     return KnowledgeSearchTool(user_id=user_id)
 
 
+def _build_ui(_: Dict[str, Any]) -> Toolkit:
+    """Build client-side UI tools."""
+    logger.info("[UI] Using ClientUITools")
+    return ClientUITools()
+
+
 TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "Gmail": _build_gmail,
     "Google Calendar": _build_google_calendar,
@@ -306,8 +335,8 @@ TOOL_BUILDERS: Dict[str, ToolBuilder] = {
     "web_search": _build_web_search,
     "Jules": _build_jules,
     "knowledge_search": _build_knowledge_search,
+    "ui": _build_ui,
 }
-
 
 
 def register_tool(name: str, builder: ToolBuilder) -> None:
@@ -317,27 +346,31 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
 
 async def build(config: ToolsConfig) -> List[Toolkit]:
     tools: List[Toolkit] = []
-    logger.debug("[Tools] Building tools from config with %d entries", len(config.entries))
+    logger.debug(
+        "[Tools] Building tools from config with %d entries", len(config.entries)
+    )
     logger.debug("[Tools] Registered builders: %s", list(TOOL_BUILDERS.keys()))
-    
+
     for item in config:
         logger.debug("[Tools] Processing tool item: %s", item.name)
         # Try exact match first
         builder = TOOL_BUILDERS.get(item.name)
-        
+
         # If no exact match, try prefix match (e.g., "Gmail (email)" matches "Gmail")
         if not builder:
             item_name_lower = item.name.lower()
             for registered_name, registered_builder in TOOL_BUILDERS.items():
                 if item_name_lower.startswith(registered_name.lower()):
                     builder = registered_builder
-                    logger.debug(f"[Tools] Matched '{item.name}' to builder '{registered_name}' (case-insensitive)")
+                    logger.debug(
+                        f"[Tools] Matched '{item.name}' to builder '{registered_name}' (case-insensitive)"
+                    )
                     break
-        
+
         if not builder:
             logger.warning(f"[Tools] No builder found for tool: {item.name}")
             continue
-        
+
         # Gracefully skip tools that fail to initialize (e.g., missing credentials)
         try:
             tool = builder(item.params)
@@ -345,10 +378,8 @@ async def build(config: ToolsConfig) -> List[Toolkit]:
             logger.debug(f"[Tools] Successfully built tool: {item.name}")
         except Exception as exc:
             logger.warning(
-                "[Tools] Failed to build tool '%s': %s - skipping",
-                item.name,
-                exc
+                "[Tools] Failed to build tool '%s': %s - skipping", item.name, exc
             )
             continue
-    
+
     return tools

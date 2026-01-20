@@ -123,10 +123,10 @@ export function ChatProvider({
     const [thinkingLevel, setThinkingLevel] = useState<string>('off');
 
     // Display settings (persists within chat session)
-    const [showToolCalls, setShowToolCalls] = useState<boolean>(false);
-    const [showReasoning, setShowReasoning] = useState<boolean>(false);
-    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(false);
-    const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('hide');
+    const [showToolCalls, setShowToolCalls] = useState<boolean>(true);
+    const [showReasoning, setShowReasoning] = useState<boolean>(true);
+    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(true);
+    const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('all');
 
     const setDetailLevel = useCallback((level: DetailLevel) => {
         setDetailLevelInternal(level);
