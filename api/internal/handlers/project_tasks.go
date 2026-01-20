@@ -169,7 +169,7 @@ func isValidTransition(current, next storage.ProjectTaskStatus) bool {
 
 	switch current {
 	case storage.ProjectTaskStatusBacklog:
-		return next == storage.ProjectTaskStatusAnalysis
+		return next == storage.ProjectTaskStatusAnalysis || next == storage.ProjectTaskStatusPlanning
 	case storage.ProjectTaskStatusAnalysis:
 		return next == storage.ProjectTaskStatusCoding || next == storage.ProjectTaskStatusPlanning // Added Planning
 	case storage.ProjectTaskStatusPlanning:

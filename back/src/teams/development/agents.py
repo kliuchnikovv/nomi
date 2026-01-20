@@ -104,6 +104,10 @@ class AnalystAgent(Agent):
         result = self.task_tool.update_task_status(
             task_id=task_id, status="PLANNING", artifacts=artifact
         )
+
+        if result.startswith("Error") or "Error updating status" in result:
+            return f"FAILED to save requirements. {result}"
+
         return f"Requirements saved. Transitioning to PLANNING. Result: {result}"
 
 

@@ -57,6 +57,14 @@ func (b *MessageBuilder) AddToolCall(toolCall interface{}) {
 		}
 	}
 
+	// Helper to extract name
+	var toolName string
+	if tcMap, ok := toolCall.(map[string]interface{}); ok {
+		if name, ok := tcMap["name"].(string); ok {
+			toolName = name
+		}
+	}
+
 	if toolID != "" {
 		// 1. Update in ToolCalls slice
 		found := false
@@ -98,8 +106,63 @@ func (b *MessageBuilder) AddToolCall(toolCall interface{}) {
 				"tool_call": toolCall,
 			})
 		}
+	} else if toolName != "" {
+		// Fallback: Try to match by name if ID is missing (common with some models)
+		// We look for a pending tool call with the same name.
+
+		// 1. Update in ToolCalls slice
+		found := false
+		for i, existing := range b.ToolCalls {
+			if existingMap, ok := existing.(map[string]interface{}); ok {
+				// Check if name matches
+				if name, ok := existingMap["name"].(string); ok && name == toolName {
+					// Check if existing is pending (no result or status != completed)
+					status, _ := existingMap["status"].(string)
+					result := existingMap["result"]
+
+					// If existing is not completed, we assume this new event updates it
+					if result == nil && status != "completed" {
+						b.ToolCalls[i] = toolCall
+						found = true
+						break
+					}
+				}
+			}
+		}
+		if !found {
+			b.ToolCalls = append(b.ToolCalls, toolCall)
+		}
+
+		// 2. Update in ContentParts
+		foundPart := false
+		for i, part := range b.ContentParts {
+			if partMap, ok := part.(map[string]interface{}); ok {
+				if partMap["type"] == "tool_call" {
+					if innerTC, ok := partMap["tool_call"].(map[string]interface{}); ok {
+						if name, ok := innerTC["name"].(string); ok && name == toolName {
+							// Check if pending
+							status, _ := innerTC["status"].(string)
+							result := innerTC["result"]
+
+							if result == nil && status != "completed" {
+								partMap["tool_call"] = toolCall
+								b.ContentParts[i] = partMap
+								foundPart = true
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+		if !foundPart {
+			b.ContentParts = append(b.ContentParts, map[string]interface{}{
+				"type":      "tool_call",
+				"tool_call": toolCall,
+			})
+		}
 	} else {
-		// Fallback: No ID, always append (legacy behavior)
+		// Fallback: No ID and No Name, always append
 		b.ToolCalls = append(b.ToolCalls, toolCall)
 		b.ContentParts = append(b.ContentParts, map[string]interface{}{
 			"type":      "tool_call",
