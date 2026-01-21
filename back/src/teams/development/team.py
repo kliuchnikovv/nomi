@@ -183,7 +183,7 @@ class DevelopmentTeam(Workflow):
                 Condition(
                     name="Analysis Phase",
                     evaluator=self.should_run_analysis,
-                    steps=[Step(name="Analyst", agent=self.analyst)],
+                    steps=[Step(name="Analyst", executor=self.run_analyst)],
                 ),
                 Condition(
                     name="Clarification Needed",
@@ -198,7 +198,7 @@ class DevelopmentTeam(Workflow):
                 Condition(
                     name="Architecture Phase",
                     evaluator=self.should_run_architecture,
-                    steps=[Step(name="Architect", agent=self.architect)],
+                    steps=[Step(name="Architect", executor=self.run_architect)],
                 ),
                 Condition(
                     name="Approval Pending",
@@ -220,12 +220,12 @@ class DevelopmentTeam(Workflow):
                 Condition(
                     name="Code Review Phase",
                     evaluator=self.should_run_code_review,
-                    steps=[Step(name="Reviewer", agent=self.reviewer)],
+                    steps=[Step(name="Reviewer", executor=self.run_reviewer)],
                 ),
                 Condition(
                     name="DOD Check Phase",
                     evaluator=self.should_run_dod_check,
-                    steps=[Step(name="Verifier", agent=self.verifier)],
+                    steps=[Step(name="Verifier", executor=self.run_verifier)],
                 ),
                 Condition(
                     name="Delivery Phase",

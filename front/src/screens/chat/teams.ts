@@ -46,7 +46,7 @@ export const AVAILABLE_TEAMS: TeamDetails[] = [
     // },
     {
         id: 'development_team',
-        name: 'Development Team',
+        name: 'Development',
         description: 'Analyst, Architect, Developer, and Reviewer to solve coding tasks.',
         command: {
             type: 'development_team',
@@ -112,7 +112,7 @@ export const AVAILABLE_TEAMS: TeamDetails[] = [
     // },
     {
         id: 'dnd_team',
-        name: 'D&D Team',
+        name: 'D&D',
         description: 'Immersive 5e campaigns with a DM, Rules Lawyer, and Party management.',
         command: {
             type: 'dnd_team',

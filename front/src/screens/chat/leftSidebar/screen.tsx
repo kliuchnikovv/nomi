@@ -81,7 +81,7 @@ function ChatListContent({
     const filters = useMemo(() => {
         const list: { id: string; title: string; color?: string }[] = [
             { id: 'all', title: 'All', color: theme.accent },
-            { id: 'agent', title: 'Agent', color: theme.success || '#9ECE6A' },
+            { id: 'agent', title: 'Genie', color: theme.success || '#9ECE6A' },
         ];
         AVAILABLE_TEAMS.forEach(t => {
             let color = theme.info;
@@ -92,21 +92,21 @@ function ChatListContent({
                 case 'dnd_team':
                     color = theme.accent || '#BB9AF7';
                     break;
-                case 'analyst':
-                    color = '#7AA2F7'; // Blue for analysis
-                    break;
-                case 'architect':
-                    color = '#9ECE6A'; // Green for design
-                    break;
-                case 'developer':
-                    color = '#E0AF68'; // Orange for coding
-                    break;
-                case 'worker':
-                    color = '#73DACA'; // Cyan for automation
-                    break;
-                case 'reviewer':
-                    color = '#F7768E'; // Red for review
-                    break;
+                // case 'analyst':
+                //     color = '#7AA2F7'; // Blue for analysis
+                //     break;
+                // case 'architect':
+                //     color = '#9ECE6A'; // Green for design
+                //     break;
+                // case 'developer':
+                //     color = '#E0AF68'; // Orange for coding
+                //     break;
+                // case 'worker':
+                //     color = '#73DACA'; // Cyan for automation
+                //     break;
+                // case 'reviewer':
+                //     color = '#F7768E'; // Red for review
+                //     break;
             }
             list.push({ id: t.id, title: t.name, color });
         });
