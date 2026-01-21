@@ -602,7 +602,7 @@ class DevelopmentTeam(Workflow):
     def run_analyst(self, step_input: StepInput):
         # Ensure input is a string for WorkflowAgent
         msg = str(step_input.input or "")
-        stream = self.analyst.run(message=msg, stream=True)  # type: ignore
+        stream = self.analyst.run(msg, stream=True)  # type: ignore
         accumulated_content = ""
 
         for event in stream:
@@ -664,7 +664,7 @@ class DevelopmentTeam(Workflow):
 
     def run_architect(self, step_input: StepInput):
         msg = str(step_input.input or "")
-        stream = self.architect.run(message=msg, stream=True)  # type: ignore
+        stream = self.architect.run(msg, stream=True)  # type: ignore
         accumulated_content = ""
 
         for event in stream:
@@ -723,7 +723,7 @@ class DevelopmentTeam(Workflow):
                 )
                 return
 
-            stream = self.worker.run(message=msg, stream=True)  # type: ignore
+            stream = self.worker.run(msg, stream=True)  # type: ignore
             accumulated_content = ""
 
             for event in stream:
@@ -748,7 +748,7 @@ class DevelopmentTeam(Workflow):
 
             yield StepOutput(content=parsed_content, success=True)
         else:
-            stream = self.developer.run(message=msg, stream=True)  # type: ignore
+            stream = self.developer.run(msg, stream=True)  # type: ignore
             accumulated_content = ""
 
             for event in stream:
@@ -779,7 +779,7 @@ class DevelopmentTeam(Workflow):
 
     def run_reviewer(self, step_input: StepInput):
         msg = str(step_input.input or "")
-        stream = self.reviewer.run(message=msg, stream=True)  # type: ignore
+        stream = self.reviewer.run(msg, stream=True)  # type: ignore
         accumulated_content = ""
 
         for event in stream:
@@ -833,7 +833,7 @@ class DevelopmentTeam(Workflow):
 
     def run_verifier(self, step_input: StepInput):
         msg = str(step_input.input or "")
-        stream = self.verifier.run(message=msg, stream=True)  # type: ignore
+        stream = self.verifier.run(msg, stream=True)  # type: ignore
         accumulated_content = ""
 
         for event in stream:
