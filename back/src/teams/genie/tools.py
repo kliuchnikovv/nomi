@@ -5,7 +5,6 @@ Tools for Genie team
 from typing import List
 from agno.tools import Toolkit
 
-from ...tools.factory import ToolFactory
 
 
 class GenieTools(Toolkit):

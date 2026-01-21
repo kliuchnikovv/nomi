@@ -2,18 +2,13 @@ import asyncio
 import json
 import logging
 import os
-import signal
 import redis.asyncio as redis
-from typing import Optional, Dict, Set
+from typing import Dict
 
-from agno.agent import Agent
-from agno.models.base import Model
 
 from src.server.models import Frame, Op
-from src.server.utils import make_error
 from src.server.redis_session import RedisSession
 from src.agents.factory import AgentFactory
-from src.tools.config import ToolConfigClient
 from src.tools.jules import JulesTools
 from src.tools.task_manager import TaskManagementTool
 

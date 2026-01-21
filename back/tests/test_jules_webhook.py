@@ -1,7 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch, ANY
-import json
-import os
+from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
 # Mock settings before importing app
@@ -13,7 +11,7 @@ with patch.dict(
         "GO_API_URL": "http://localhost:8080",
     },
 ):
-    from src.server.webhooks import router, JulesWebhookPayload
+    from src.server.webhooks import router
 
 from fastapi import FastAPI
 

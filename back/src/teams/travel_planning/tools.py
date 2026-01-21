@@ -5,7 +5,6 @@ Tools for Travel Planning team
 from typing import List
 from agno.tools import Toolkit
 
-from ...tools.factory import ToolFactory
 
 
 class TravelPlanningTools(Toolkit):

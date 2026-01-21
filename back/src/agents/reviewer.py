@@ -1,9 +1,8 @@
 from textwrap import dedent
-from typing import Optional
 
 from agno.agent import Agent
 from agno.models.base import Model
-from src.teams.development.models import ReviewerInput, ReviewVerdict
+from src.teams.development.models import ReviewVerdict
 
 reviewer_agent_instructions = dedent('''
 You are a **Senior Quality Assurance & Security Engineer**. Your job is to act as a strict Quality Gate for code changes.

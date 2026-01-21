@@ -2,7 +2,7 @@ import os
 import logging
 import uuid
 import inspect
-from typing import Optional, Any
+from typing import Optional
 from pydantic import BaseModel
 
 from agno.db.postgres import PostgresDb
@@ -15,7 +15,6 @@ from src.agents.genie import GenieAgent
 from src.server import webhooks
 from src.agents.factory import AgentFactory
 from src.tools.config import ToolConfigClient
-from src.tools.factory import ToolsConfig
 from src.tools.client_side import start_action_tracking, get_client_actions
 from src.teams.development.team import (
     DevelopmentTeam,
@@ -495,7 +494,7 @@ class RepoListRequest(BaseModel):
 @app.post("/api/github/repos")
 async def list_github_repos(request: RepoListRequest):
     """List repositories for the authenticated user."""
-    from github import Github, GithubException
+    from github import Github
     import asyncio
 
     token = request.github_token or os.environ.get("GITHUB_TOKEN")

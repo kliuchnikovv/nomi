@@ -1,6 +1,5 @@
 from typing import Optional, Dict, Any, List
 import logging
-import base64
 import os
 import httpx
 

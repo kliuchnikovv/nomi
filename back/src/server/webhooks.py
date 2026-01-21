@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import requests
 from typing import Dict, Any, Optional, List
 
 from fastapi import APIRouter, Request, Header, HTTPException, BackgroundTasks

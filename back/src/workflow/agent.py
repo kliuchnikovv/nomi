@@ -1,12 +1,10 @@
-from typing import Any, Dict, Optional, Type, Callable
+from typing import Any, Dict, Optional, Callable
 import json
-import os
 from datetime import datetime
 
 from agno.agent import Agent, RunOutput
-from agno.models.base import Model
-from sqlalchemy import create_engine, Column, String, JSON, DateTime, Integer
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy import create_engine, Column, String, JSON, DateTime
+from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 

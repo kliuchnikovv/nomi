@@ -1,7 +1,6 @@
 from textwrap import dedent
-from typing import Optional, List
+from typing import Optional
 
-from agno.agent import Agent
 from agno.models.base import Model
 from agno.team import Team
 from agno.db import BaseDb

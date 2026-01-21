@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import MagicMock
 from agno.models.base import Model
 from src.teams.development.agents import ArchitectAgent

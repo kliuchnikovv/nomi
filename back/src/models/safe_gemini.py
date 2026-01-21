@@ -13,7 +13,7 @@ See:
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Iterator, AsyncIterator
+from typing import List, Iterator, AsyncIterator
 
 from agno.models.google import Gemini
 from agno.models.message import Message

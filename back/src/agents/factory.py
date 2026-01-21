@@ -33,7 +33,6 @@ from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
 from src.tools.scheduler import SchedulerTools
 from agno.tools import Toolkit
-from google.oauth2.credentials import Credentials
 
 logger = logging.getLogger(__name__)
 
