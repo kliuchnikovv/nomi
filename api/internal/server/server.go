@@ -79,6 +79,7 @@ func New(
 		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance)
 		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
 		toolsHandler         = handlers.NewToolsHandler(db, logger)
+		integrationsHandler  = handlers.NewIntegrationsHandler(db, logger)
 	)
 
 	// Initialize Scheduler (Task Manager)
@@ -113,6 +114,11 @@ func New(
 			http.HandlerFunc(authHandler.UpdateMe),
 		),
 	))
+
+	// Integrations API
+	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
+	r.GET("/api/integrations/:id", wrapWithAuth(integrationsHandler.GetIntegration, authMiddleware))
+	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
 
 	// Jules Integration
 	r.POST("/api/jules/connect", wrapWithAuth(julesHandler.Connect, authMiddleware))

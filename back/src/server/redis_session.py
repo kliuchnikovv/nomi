@@ -356,8 +356,14 @@ class RedisSession:
         # Actually, Go backend already has the message ID from the user?
         # No, this message_id is for the Response.
         # We still send it.
+        # FIX: Added "type": "metadata" to satisfy Go backend validation
         await self._send_frame(
-            make_meta(self.next_id, Op.MESSAGE, msg_chat_id, {"message_id": message_id})
+            make_meta(
+                self.next_id,
+                Op.MESSAGE,
+                msg_chat_id,
+                {"message_id": message_id, "type": "metadata"},
+            )
         )
 
         start_action_tracking()
