@@ -1,5 +1,6 @@
 from typing import Optional, List, Any, Type
 import os
+from datetime import datetime
 import redis
 import logging
 import json
@@ -59,7 +60,7 @@ leader_instructions = TEAM_LEAD_INSTRUCTIONS
 class DevelopmentTeam(Workflow):
     def __init__(
         self,
-        model: Model | None = None,
+        model: Model,
         db: BaseDb | None = None,
         github_token: Optional[str] = None,
         jules_api_key: Optional[str] = None,
@@ -73,6 +74,9 @@ class DevelopmentTeam(Workflow):
         client_tools: Optional[List[Toolkit]] = None,
         **kwargs,
     ):
+        if model is None:
+            raise ValueError("DevelopmentTeam requires a valid Model instance.")
+
         self.github_token = github_token
         self.jules_api_key = jules_api_key
         self.db_url = db_url
@@ -108,7 +112,7 @@ class DevelopmentTeam(Workflow):
         )
 
         # 2. Architect
-        architect_tools = [task_tool]
+        architect_tools: List[Toolkit] = [task_tool]
         if github_tool:
             architect_tools.append(github_tool)
         if client_tools:
@@ -119,7 +123,7 @@ class DevelopmentTeam(Workflow):
         )
 
         # 3. Developer
-        developer_tools = []
+        developer_tools: List[Toolkit] = []
         if github_tool:
             developer_tools.append(github_tool)
         if client_tools:
@@ -130,7 +134,7 @@ class DevelopmentTeam(Workflow):
         )
 
         # 4. Reviewer
-        reviewer_tools = []
+        reviewer_tools: List[Toolkit] = []
         if github_tool:
             reviewer_tools.append(github_tool)
         if client_tools:
@@ -150,7 +154,7 @@ class DevelopmentTeam(Workflow):
         )
 
         # 6. Verifier
-        verifier_tools = []
+        verifier_tools: List[Toolkit] = []
         if git_tool:
             verifier_tools.append(git_tool)
         if github_tool:
@@ -275,10 +279,10 @@ class DevelopmentTeam(Workflow):
         """Override deep_copy to preserve custom parameters like model."""
         return DevelopmentTeam(
             model=self.model,
-            db=self.db,
+            db=self.db,  # type: ignore
             github_token=self.github_token,
             jules_api_key=self.jules_api_key,
-            debug_mode=self.debug_mode,
+            debug_mode=self.debug_mode or False,
             user_id=self.user_id,
             auth_token=self.auth_token,
             project_id=self.project_id,
@@ -308,19 +312,19 @@ class DevelopmentTeam(Workflow):
 
         return False
 
-    async def run(
+    async def run(  # type: ignore[override]
         self,
-        message: Optional[str] = None,
+        input: Optional[str] = None,
         stream: bool = False,
         **kwargs,
     ) -> Any:
         if self.check_cancellation():
             return "PROCESS_STOPPED_BY_USER"
 
-        full_message = self._inject_context(message)
+        full_message = self._inject_context(input)
         logger.info(f"[Team] Running Workflow for Task {self.task_id}")
 
-        if "input" not in kwargs and message:
+        if "input" not in kwargs and input:
             kwargs["input"] = full_message
         elif "input" in kwargs:
             kwargs["input"] = self._inject_context(kwargs["input"])
@@ -353,6 +357,8 @@ class DevelopmentTeam(Workflow):
         # Helper to process events
         async def process_event(event):
             try:
+                event_type = type(event).__name__
+
                 # Check for Step Events
                 if hasattr(event, "step") and event.step:
                     step_name = event.step.name
@@ -363,7 +369,12 @@ class DevelopmentTeam(Workflow):
                             )
 
                 # If the event itself has 'content', yield it
-                if hasattr(event, "content") and event.content:
+                # SKIP StepCompletedEvent to avoid duplicating content (streaming vs bulk)
+                if (
+                    hasattr(event, "content")
+                    and event.content
+                    and event_type != "StepCompletedEvent"
+                ):
                     agent_name = (
                         getattr(event.step, "name", "Development Team")
                         if hasattr(event, "step")
@@ -397,7 +408,7 @@ class DevelopmentTeam(Workflow):
         if self.github_tool:
             try:
                 if hasattr(self.github_tool, "list_repos"):
-                    repos = self.github_tool.list_repos(limit=50)
+                    repos = getattr(self.github_tool, "list_repos")(limit=50)
                     context_lines.append(f"Repos: {repos}")
             except Exception:
                 pass
@@ -588,15 +599,36 @@ class DevelopmentTeam(Workflow):
         return self._get_current_state().stage == WorkflowStage.NEED_HUMAN_INTERVENTION
 
     # --- Executors ---
-    def run_analyst(self, step_input: StepInput) -> StepOutput:
-        response = self.analyst.run(input=step_input.input)
-        content = self._get_content_from_response(response)
+    def run_analyst(self, step_input: StepInput):
+        # Ensure input is a string for WorkflowAgent
+        msg = str(step_input.input or "")
+        stream = self.analyst.run(message=msg, stream=True)  # type: ignore
+        accumulated_content = ""
+
+        for event in stream:
+            if hasattr(event, "content") and event.content:
+                accumulated_content += str(event.content)
+            yield event
+
+        # Parse content
+        parsed_content = self._parse_agent_output(accumulated_content, BaseModel)
 
         # State Transition Logic
         current_state = self._get_current_state()
-        if self._is_clarification_response(response):
+
+        # Check for clarification
+        is_clarification = False
+        if (
+            isinstance(parsed_content, dict)
+            and parsed_content.get("type") == "CLARIFICATION_NEEDED"
+        ):
+            is_clarification = True
+
+        if is_clarification:
             questions = (
-                content.get("questions", []) if isinstance(content, dict) else []
+                parsed_content.get("questions", [])
+                if isinstance(parsed_content, dict)
+                else []
             )
             new_state = StateManager.transition(
                 current_state,
@@ -606,21 +638,19 @@ class DevelopmentTeam(Workflow):
             self._update_state(new_state)
         else:
             # Assume success if not clarification
-            artifact_id = self._save_artifact("Analyst", content)
+            artifact_id = self._save_artifact("Analyst", parsed_content)
             new_state = StateManager.transition(
                 current_state, WorkflowStage.ARCHITECTURE, {"prd_id": artifact_id}
             )
             self._update_state(new_state)
 
-        return StepOutput(content=content, success=True)
+        yield StepOutput(content=parsed_content, success=True)
 
     def handle_clarification(self, step_input: StepInput) -> StepOutput:
         current_state = self._get_current_state()
         try:
             # Transition to ANALYSIS
-            prev_questions = (
-                current_state.questions if hasattr(current_state, "questions") else []
-            )
+            prev_questions = getattr(current_state, "questions", [])
             new_state = StateManager.transition(
                 current_state, WorkflowStage.ANALYSIS, {}
             )
@@ -632,22 +662,30 @@ class DevelopmentTeam(Workflow):
         except Exception as e:
             return StepOutput(content=f"Error: {e}", success=False)
 
-    def run_architect(self, step_input: StepInput) -> StepOutput:
-        response = self.architect.run(input=step_input.input)
-        content = self._get_content_from_response(response)
+    def run_architect(self, step_input: StepInput):
+        msg = str(step_input.input or "")
+        stream = self.architect.run(message=msg, stream=True)  # type: ignore
+        accumulated_content = ""
 
-        artifact_id = self._save_artifact("Architect", content)
+        for event in stream:
+            if hasattr(event, "content") and event.content:
+                accumulated_content += str(event.content)
+            yield event
+
+        parsed_content = self._parse_agent_output(accumulated_content, BaseModel)
+
+        artifact_id = self._save_artifact("Architect", parsed_content)
         current_state = self._get_current_state()
         new_state = StateManager.transition(
             current_state, WorkflowStage.APPROVAL_PENDING, {"plan_id": artifact_id}
         )
         self._update_state(new_state)
 
-        return StepOutput(content=content, success=True)
+        yield StepOutput(content=parsed_content, success=True)
 
     def handle_approval(self, step_input: StepInput) -> StepOutput:
         message = step_input.input or ""
-        approval = self._check_user_approval(message)
+        approval = self._check_user_approval(str(message))
         current_state = self._get_current_state()
 
         if approval == "APPROVED":
@@ -671,45 +709,63 @@ class DevelopmentTeam(Workflow):
 
         return StepOutput(content="Waiting for approval", success=True)
 
-    def execute_development(self, step_input: StepInput) -> StepOutput:
+    def execute_development(self, step_input: StepInput):
         is_complex = self._check_complexity()
         current_state = self._get_current_state()
+        msg = str(step_input.input or "")
 
         if is_complex:
             session_id = self._get_jules_session_id()
             if session_id:
                 # Jules is already running
-                return StepOutput(
+                yield StepOutput(
                     content=f"Jules running task {session_id}", success=True
                 )
+                return
 
-            response = self.worker.run(input=step_input.input)
-            content = self._get_content_from_response(response)
+            stream = self.worker.run(message=msg, stream=True)  # type: ignore
+            accumulated_content = ""
+
+            for event in stream:
+                if hasattr(event, "content") and event.content:
+                    accumulated_content += str(event.content)
+                yield event
+
+            parsed_content = self._parse_agent_output(accumulated_content, BaseModel)
 
             # Check if session started
             sess_id = None
-            if isinstance(content, dict):
-                sess_id = content.get("session_id")
+            if isinstance(parsed_content, dict):
+                sess_id = parsed_content.get("session_id")
 
             if sess_id:
                 context_updates = {"jules_task_id": sess_id}
-                self._save_artifact("Worker", content)
+                self._save_artifact("Worker", parsed_content)
                 new_state = StateManager.transition(
                     current_state, WorkflowStage.DEVELOPMENT, context_updates
                 )  # Re-enter dev with ID
                 self._update_state(new_state)
 
-            return StepOutput(content=content, success=True)
+            yield StepOutput(content=parsed_content, success=True)
         else:
-            response = self.developer.run(input=step_input.input)
-            content = self._get_content_from_response(response)
+            stream = self.developer.run(message=msg, stream=True)  # type: ignore
+            accumulated_content = ""
+
+            for event in stream:
+                if hasattr(event, "content") and event.content:
+                    accumulated_content += str(event.content)
+                yield event
+
+            parsed_content = self._parse_agent_output(accumulated_content, BaseModel)
 
             # Check for PR URL
             pr_url = None
-            if isinstance(content, dict):
-                pr_url = content.get("pr_url")
-            if isinstance(content, str):
-                match = re.search(r"https://github\\.com/[^\\s]+/pull/\\d+", content)
+            if isinstance(parsed_content, dict):
+                pr_url = parsed_content.get("pr_url")
+            if isinstance(parsed_content, str):
+                match = re.search(
+                    r"https://github\\.com/[^\\s]+/pull/\\d+", parsed_content
+                )
                 if match:
                     pr_url = match.group(0)
 
@@ -719,26 +775,34 @@ class DevelopmentTeam(Workflow):
                 )
                 self._update_state(new_state)
 
-            return StepOutput(content=content, success=True)
+            yield StepOutput(content=parsed_content, success=True)
 
-    def run_reviewer(self, step_input: StepInput) -> StepOutput:
-        response = self.reviewer.run(input=step_input.input)
-        content = self._get_content_from_response(response)
+    def run_reviewer(self, step_input: StepInput):
+        msg = str(step_input.input or "")
+        stream = self.reviewer.run(message=msg, stream=True)  # type: ignore
+        accumulated_content = ""
 
-        artifact_id = self._save_artifact("Reviewer", content)
+        for event in stream:
+            if hasattr(event, "content") and event.content:
+                accumulated_content += str(event.content)
+            yield event
+
+        parsed_content = self._parse_agent_output(accumulated_content, BaseModel)
+
+        artifact_id = self._save_artifact("Reviewer", parsed_content)
         current_state = self._get_current_state()
 
         # Parse verdict
         verdict = "REJECT"
-        if isinstance(content, str) and "Status: Approved" in content:
+        if isinstance(parsed_content, str) and "Status: Approved" in parsed_content:
             verdict = "APPROVED"
 
         # Add history
-        # ReviewHistoryEntry is a Pydantic model
-        # We need to perform the logic here similar to workflow.py
-
         review_entry = ReviewHistoryEntry(
-            role="Reviewer", status=verdict, comment=str(content)[:100]
+            role="Reviewer",
+            status=verdict,
+            comment=str(parsed_content)[:100],
+            timestamp=datetime.now().isoformat(),
         )
         current_state.review_history.append(review_entry)
 
@@ -765,18 +829,26 @@ class DevelopmentTeam(Workflow):
                 )
 
         self._update_state(new_state)
-        return StepOutput(content=content, success=True)
+        yield StepOutput(content=parsed_content, success=True)
 
-    def run_verifier(self, step_input: StepInput) -> StepOutput:
-        response = self.verifier.run(input=step_input.input)
-        content = self._get_content_from_response(response)
+    def run_verifier(self, step_input: StepInput):
+        msg = str(step_input.input or "")
+        stream = self.verifier.run(message=msg, stream=True)  # type: ignore
+        accumulated_content = ""
 
-        self._save_artifact("Verifier", content)
+        for event in stream:
+            if hasattr(event, "content") and event.content:
+                accumulated_content += str(event.content)
+            yield event
+
+        parsed_content = self._parse_agent_output(accumulated_content, BaseModel)
+
+        self._save_artifact("Verifier", parsed_content)
         current_state = self._get_current_state()
 
         is_pass = False
-        if isinstance(content, str) and (
-            "Status: PASS" in content or "**Status**: PASS" in content
+        if isinstance(parsed_content, str) and (
+            "Status: PASS" in parsed_content or "**Status**: PASS" in parsed_content
         ):
             is_pass = True
 
@@ -790,7 +862,7 @@ class DevelopmentTeam(Workflow):
             )
 
         self._update_state(new_state)
-        return StepOutput(content=content, success=True)
+        yield StepOutput(content=parsed_content, success=True)
 
     def handle_delivery(self, step_input: StepInput) -> StepOutput:
         current_state = self._get_current_state()
