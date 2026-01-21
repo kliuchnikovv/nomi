@@ -3,14 +3,13 @@ package storage
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat" // Added for logging
 	"gorm.io/gorm"
-	// Added for OnConflict clause
+	"gorm.io/gorm/clause"
 )
 
 var ZeroUUID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
@@ -426,71 +425,73 @@ func (s *Storage) UpdateMessageText(ctx context.Context, userID uuid.UUID, messa
 }
 
 func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.Message) error {
-	_, err := s.GetMessage(ctx, userID, m.ID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Message doesn't exist, create it
-			if _, err = s.CreateMessage(ctx, userID, m); err != nil {
-				return fmt.Errorf("failed to create message in upsert: %w", err)
-			}
-			return nil
-		}
-		return fmt.Errorf("failed to get message in upsert: %w", err)
+	if m.ID == ZeroUUID {
+		return fmt.Errorf("upsert requires a valid message ID")
 	}
 
-	// Message exists, update all fields
-	// NOTE: Text is REPLACED, not appended. Caller is responsible for accumulation.
-	updates := map[string]interface{}{
-		"text":       m.Text,
-		"updated_at": time.Now().UTC(),
+	messageModel := &Message{
+		ID:        m.ID,
+		ChatID:    m.ChatID,
+		UserID:    userID,
+		Role:      string(m.Role),
+		Text:      m.Text,
+		Reasoning: m.Reasoning,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	// Update model if provided
 	if m.Model != "" {
-		updates["model"] = m.Model
+		messageModel.Model = m.Model
 	}
 
-	// Update tool_calls if provided
+	// Handle ToolCalls if provided
 	if m.ToolCalls != nil {
 		toolCallsJSON, err := json.Marshal(m.ToolCalls)
 		if err == nil {
-			updates["tool_calls"] = toolCallsJSON
+			messageModel.ToolCalls = toolCallsJSON
 		}
 	}
 
-	// Update content_parts if provided
+	// Handle ContentParts if provided
 	if m.ContentParts != nil {
 		contentPartsJSON, err := json.Marshal(m.ContentParts)
 		if err == nil {
-			updates["content_parts"] = contentPartsJSON
+			messageModel.ContentParts = contentPartsJSON
 		}
 	}
 
-	// Update reasoning if provided
-	if m.Reasoning != "" {
-		updates["reasoning"] = m.Reasoning
-	}
-
-	// Update actions if provided
+	// Handle Actions if provided
 	if m.Actions != nil {
 		actionsJSON, err := json.Marshal(m.Actions)
 		if err == nil {
-			updates["actions"] = actionsJSON
+			messageModel.Actions = actionsJSON
 		}
 	}
 
-	result := s.DB.WithContext(ctx).
-		Model(&Message{}).
-		Where("id = ? AND user_id = ?", m.ID, userID).
-		Updates(updates)
+	// Use OnConflict to handle race conditions between Create and Update.
+	// We only update fields that should be changed during an upsert.
+	// We don't update user_id or chat_id to prevent accidental reassignment.
+	err := s.DB.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"text", "reasoning", "tool_calls", "content_parts", "actions", "updated_at", "model",
+		}),
+	}).Create(messageModel).Error
 
-	if result.Error != nil {
-		return fmt.Errorf("failed to update message in upsert: %w", result.Error)
+	if err != nil {
+		return fmt.Errorf("failed to upsert message: %w", err)
 	}
 
-	// Log if no rows were affected - this indicates user_id mismatch
-	if result.RowsAffected == 0 {
-		fmt.Printf("[WARN] UpsertMessage: UPDATE affected 0 rows for msg_id=%s user_id=%s - possible user_id mismatch\n", m.ID, userID)
+	// Link attachments if provided (idempotent)
+	if len(m.AttachmentIDs) > 0 {
+		res := s.DB.WithContext(ctx).Model(&Attachment{}).
+			Where("id IN ? AND user_id = ?", m.AttachmentIDs, userID).
+			Update("message_id", messageModel.ID)
+
+		if res.Error != nil {
+			return fmt.Errorf("failed to link attachments in upsert: %w", res.Error)
+		}
 	}
 
 	// Update the chat's updated_at timestamp
