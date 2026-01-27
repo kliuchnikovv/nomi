@@ -3,11 +3,15 @@
 
 Определяет маппинг провайдеров на builders и метаданные о типах инструментов.
 """
-from typing import Dict, Callable, Optional
+from typing import Dict, Callable, Optional, TYPE_CHECKING, Any
 from enum import Enum
 from agno.tools import Toolkit
 
-from src.tools.factory import ToolBuilder
+if TYPE_CHECKING:
+    from src.tools.factory import ToolBuilder
+else:
+    # Для runtime используем Callable как алиас
+    ToolBuilder = Callable[[Dict[str, Any]], Toolkit]
 
 
 class StorageType(str, Enum):
