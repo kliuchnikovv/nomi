@@ -14,12 +14,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/container"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/handlers/team"
 	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/notifier"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
@@ -31,7 +31,7 @@ type Server struct {
 func New(
 	logger *zap.Logger,
 	cfg *config.Config,
-	db *storage.Storage,
+	ctr *container.Container,
 	oauthConfigs map[string]*oauth2.Config,
 	oidcProviders map[string]*oidc.Provider,
 	llmService *llm.Service,
@@ -45,45 +45,43 @@ func New(
 	// Initialize notifier first
 	n := notifier.New()
 
-	// Initialize Hub
-	hubInstance := hub.NewHub(db, logger, cfg.LLM.BaseURL)
-	go hubInstance.Run()
+	// Используем Hub из Container
+	hubInstance := ctr.Hub
 
 	// Инициализация обработчиков
 	var (
-		chatHandler        = handlers.NewChatHandler(db)
-		messageHandler     = handlers.NewMessageHandler(db)
-		sidebarHandler     = handlers.NewSidebarHandler(db, llmService)
-		pluginChatsHandler = handlers.NewPluginChatsHandler(db)
-		inboxHandler       = handlers.NewInboxHandler(db, logger)
-		tokenManager       = auth.NewTokenManager(cfg.Token.JWTSecret)
-		authMiddleware     = auth.NewAuthMiddleware(tokenManager, db)
-		authHandler        = handlers.NewAuthHandler(db, tokenManager)
-		streamHandler      = handlers.NewStreamHandler(logger, hubInstance, db)
+		chatHandler        = handlers.NewChatHandler(ctr.ChatService)
+		messageHandler     = handlers.NewMessageHandler(ctr.MessageService)
+		sidebarHandler     = handlers.NewSidebarHandler(ctr.Storage, llmService)
+		pluginChatsHandler = handlers.NewPluginChatsHandler(ctr.Storage)
+		inboxHandler       = handlers.NewInboxHandler(ctr.Storage, logger)
+		authMiddleware     = auth.NewAuthMiddleware(ctr.TokenManager, ctr.Storage)
+		authHandler        = handlers.NewAuthHandler(ctr.AuthService)
+		streamHandler      = handlers.NewStreamHandler(logger, hubInstance, ctr.Storage)
 		modelsHandler      = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
-		uploadHandler      = handlers.NewUploadHandler(db)
-		teamHandler        = team.NewHandler(db)
+		uploadHandler      = handlers.NewUploadHandler(ctr.Storage)
+		teamHandler        = team.NewHandler(ctr.Storage)
 
 		mobileOAuthHandler = func() *handlers.MobileOAuthHandler {
-			h, err := handlers.NewMobileOAuthHandler(logger, cfg, db)
+			h, err := handlers.NewMobileOAuthHandler(logger, cfg, ctr.Storage)
 			if err != nil {
 				logger.Fatal("failed to initialize mobile oauth handler", zap.Error(err))
 			}
 			return h
 		}()
-		briefingHandler      = handlers.NewBriefingHandler(db, llmService)
-		emailAnalysisHandler = handlers.NewEmailAnalysisHandler(db, llmService)
-		dashboardHandler     = handlers.NewDashboardHandler(db)
-		julesHandler         = handlers.NewJulesAuthHandler(db, logger)
-		projectTaskHandler   = handlers.NewProjectTaskHandler(db, logger, cfg, hubInstance)
-		projectHandler       = handlers.NewProjectHandler(db, logger, cfg, hubInstance)
-		webhooksHandler      = handlers.NewWebhooksHandler(db, logger, cfg)
-		toolsHandler         = handlers.NewToolsHandler(db, logger)
-		integrationsHandler  = handlers.NewIntegrationsHandler(db, logger)
+		briefingHandler      = handlers.NewBriefingHandler(ctr.Storage, llmService)
+		emailAnalysisHandler = handlers.NewEmailAnalysisHandler(ctr.Storage, llmService)
+		dashboardHandler     = handlers.NewDashboardHandler(ctr.Storage)
+		julesHandler         = handlers.NewJulesAuthHandler(ctr.Storage, logger)
+		projectTaskHandler   = handlers.NewProjectTaskHandler(ctr.Storage, logger, cfg, hubInstance)
+		projectHandler       = handlers.NewProjectHandler(ctr.Storage, logger, cfg, hubInstance)
+		webhooksHandler      = handlers.NewWebhooksHandler(ctr.Storage, logger, cfg)
+		toolsHandler         = handlers.NewToolsHandler(ctr.Storage, logger)
+		integrationsHandler  = handlers.NewIntegrationsHandler(ctr.Storage, logger)
 	)
 
 	// Initialize Scheduler (Task Manager)
-	scheduler := hub.NewScheduler(db, hubInstance, logger)
+	scheduler := hub.NewScheduler(ctr.Storage, hubInstance, logger)
 	go scheduler.Start()
 
 	_ = n // notifier will be used when needed
@@ -139,7 +137,7 @@ func New(
 
 	// Task API (protected)
 	// Allow INTERNAL_API_KEY for system calls (like from Python backend)
-	tasksHandler := handlers.Handler{Store: db, Logger: logger} // TODO: Refactor handlers to common struct
+	tasksHandler := handlers.Handler{Store: ctr.Storage, Logger: logger} // TODO: Refactor handlers to common struct
 
 	taskAuth := func(c *gin.Context) {
 		// Check for Internal Secret

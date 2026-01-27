@@ -1,25 +1,22 @@
 package handlers
 
 import (
-	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/auth"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/genie-api/internal/apierror"
+	"github.com/kliuchnikovv/genie-api/internal/services"
 )
 
 type MessageHandler struct {
-	storage *storage.Storage
+	service *services.MessageService
 }
 
-func NewMessageHandler(storage *storage.Storage) *MessageHandler {
+func NewMessageHandler(service *services.MessageService) *MessageHandler {
 	return &MessageHandler{
-		storage: storage,
+		service: service,
 	}
 }
 
@@ -28,31 +25,28 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 
 	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chat UUID"})
+		apierror.Respond(c, apierror.NewBadRequest("Invalid chat UUID", nil))
 		return
 	}
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
-	var newMessage chat.Message
-	if err := c.ShouldBindJSON(&newMessage); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req services.CreateMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierror.Respond(c, apierror.NewBadRequest(err.Error(), nil))
 		return
 	}
 
-	log.Printf("CreateMessage: payload has %d attachments. IDs: %v", len(newMessage.AttachmentIDs), newMessage.AttachmentIDs)
-
-	newMessage.ChatID = chatID
-	createdMessage, err := h.storage.CreateMessage(ctx, user.ID, &newMessage)
+	createdMessage, err := h.service.CreateMessage(ctx, user.ID, chatID, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
-	log.Printf("message: user=%s chat=%s created message id=%s", user.ID, createdMessage.ChatID, createdMessage.ID)
+
 	c.JSON(http.StatusCreated, createdMessage)
 }
 
@@ -61,60 +55,41 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 
 	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chat UUID"})
+		apierror.Respond(c, apierror.NewBadRequest("Invalid chat UUID", nil))
 		return
 	}
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
 	// Check for If-Modified-Since query param for conditional GET
 	ifModifiedSinceStr := c.Query("if_modified_since")
-	var messages []*chat.Message
+	var ifModifiedSince *time.Time
 
 	if ifModifiedSinceStr != "" {
 		since, err := time.Parse(time.RFC3339, ifModifiedSinceStr)
 		if err == nil {
-			messages, err = h.storage.GetMessagesAfter(ctx, user.ID, chatID, since)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch messages"})
-				return
-			}
-			// If no messages were created after timestamp, return 304 Not Modified
-			if len(messages) == 0 {
-				c.Status(http.StatusNotModified)
-				return
-			}
+			ifModifiedSince = &since
 		}
 	}
 
-	// Fallback to getting all messages if no timestamp or invalid timestamp
-	if messages == nil {
-		messages, err = h.storage.GetMessages(ctx, user.ID, chatID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
+	req := &services.GetMessagesRequest{
+		IfModifiedSince: ifModifiedSince,
+	}
+	messages, err := h.service.GetMessages(ctx, user.ID, chatID, req)
+	if err != nil {
+		apierror.Respond(c, apierror.NewInternalServerError("Failed to fetch messages"))
+		return
+	}
+
+	// If no messages were created after timestamp, return 304 Not Modified
+	if ifModifiedSince != nil && len(messages) == 0 {
+		c.Status(http.StatusNotModified)
+		return
 	}
 
 	c.JSON(http.StatusOK, messages)
-}
-
-// userFromCtx mirrors the helper in message handler to extract authenticated user
-func userFromCtx(ctx interface{ Value(key any) any }) (*storage.User, error) {
-	v := ctx.Value(auth.UserContextKey)
-	if v == nil {
-		return nil, fmt.Errorf("user not found in context")
-	}
-	switch u := v.(type) {
-	case *storage.User:
-		return u, nil
-	case storage.User:
-		return &u, nil
-	default:
-		return nil, fmt.Errorf("user found with different type")
-	}
 }

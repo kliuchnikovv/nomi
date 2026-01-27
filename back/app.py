@@ -21,6 +21,8 @@ from src.teams.development.team import (
 )  # Import for type hinting if needed, or dynamic loading
 
 from dotenv import load_dotenv
+from src.core.config import Config
+from src.core.container import Container
 
 # Загружаем переменные окружения из .env файла, если он существует
 # Если файл не найден, используем переменные окружения из системы (для продакшн)
@@ -92,55 +94,26 @@ def _init_logging():
     logging.info("Logging initialized at %s", level_name)
 
 
-debug_mode = os.getenv("DEBUG") == "True"
 _init_logging()
 
-model = Gemini(
-    id="gemini-2.0-flash",
-    api_key=os.getenv("GOOGLE_API_KEY"),
-)
+# Инициализация конфигурации и контейнера
+config = Config.from_env()
+container = Container(config=config)
 
-# Initialize embedder for /api/embeddings endpoint
-embedder = GeminiEmbedder(
-    id="text-embedding-004",
-    api_key=os.getenv("GOOGLE_API_KEY"),
-    dimensions=768,
-)
-
-db: PostgresDb | None = None
-db_dsn = os.getenv("DB_DSN")
-if db_dsn:
-    # Fix for SQLAlchemy 2.0+: convert postgres:// to postgresql://
-    # Railway's pgvector uses old format
-    if db_dsn.startswith("postgres://"):
-        db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
-    db = PostgresDb(db_dsn)
-
-
-tool_config_url = os.getenv("GO_API_URL", "http://localhost:8080")
-tool_config_client = ToolConfigClient(tool_config_url)
-agent_factory = AgentFactory(
-    db=db,
-    model=model,
-    config_client=tool_config_client,
-    debug_mode=debug_mode,
-)
-
-result = tool_config_client.fetch_tools("00000000-0000-0000-0000-000000000000")
-
+# Инициализация AgentOS для совместимости с существующим кодом
 agent_os = AgentOS(
     agents=[
         GenieAgent(
-            db=db,
-            model=model,
-            debug_mode=debug_mode,
+            db=container.db,
+            model=container.model,
+            debug_mode=config.debug_mode,
         ),
     ],
     workflows=[
         DevelopmentTeam(
-            model=model,
-            db=db,
-            debug_mode=debug_mode,
+            model=container.model,
+            db=container.db,
+            debug_mode=config.debug_mode,
             github_token=os.getenv("GITHUB_TOKEN"),
         )
     ],
@@ -158,10 +131,8 @@ async def lifespan(app: FastAPI):
     print("[Lifespan] Starting up...")
     logging.warning("[Lifespan] Initializing Redis Worker...")
     try:
-        from src.server.redis_worker import RedisWorker
-
-        global redis_worker
-        redis_worker = RedisWorker(agent_factory)
+        # Используем redis_worker из container
+        redis_worker = container.redis_worker
         await redis_worker.start()
         logging.warning("[Lifespan] Redis Worker started successfully")
     except Exception as e:
@@ -173,9 +144,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("[Lifespan] Shutting down...")
     logging.warning("[Lifespan] Shutting down resources...")
-    await tool_config_client.close()
-    if "redis_worker" in globals():
-        await redis_worker.stop()
+    await container.close()
 
 
 # Assign lifespan to the app
@@ -201,8 +170,8 @@ class QueryRequest(BaseModel):
 async def run_query(request: QueryRequest):
     start_action_tracking()
     session_id = str(uuid.uuid4())
-    # AgentFactory is already configured
-    agent = await agent_factory.build(session_id=session_id)
+    # Используем agent_factory из container
+    agent = await container.agent_factory.build(session_id=session_id)
 
     # Run agent non-streaming
     # arun might be a coroutine function or a regular function returning a coroutine/generator
@@ -256,8 +225,8 @@ async def get_briefing(request: BriefingRequest):
 
     start_action_tracking()
     session_id = str(uuid.uuid4())
-    # Build BriefingAgent
-    agent = await agent_factory.build(
+    # Build BriefingAgent используя container
+    agent = await container.agent_factory.build(
         session_id=session_id,
         user_id=request.user_id,
         agent_type="briefing",
@@ -352,7 +321,7 @@ class AnalysisRequest(BaseModel):
 @app.post("/api/analyze")
 async def analyze_text(request: AnalysisRequest):
     session_id = str(uuid.uuid4())
-    agent = await agent_factory.build(session_id=session_id, agent_type="extraction")
+    agent = await container.agent_factory.build(session_id=session_id, agent_type="extraction")
 
     prompt = f"Extract events and tasks from this text:\n\n{request.text}"
 
@@ -402,7 +371,7 @@ async def analyze_email(request: EmailAnalysisRequest):
     logging.info(f"Analyzing email: {request.email_id} subject='{request.subject}'")
 
     session_id = str(uuid.uuid4())
-    agent = await agent_factory.build(
+    agent = await container.agent_factory.build(
         session_id=session_id, agent_type="email_analyzer"
     )
 
@@ -477,8 +446,7 @@ Extract urgency, connections, time frames, and suggest 2-5 actions."""
 
 
 # Sessions for OAuth state (required for request.session)
-session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")
-app.add_middleware(SessionMiddleware, secret_key=session_secret)
+app.add_middleware(SessionMiddleware, secret_key=config.session_secret)
 
 try:
     app.include_router(webhooks.router)
@@ -707,13 +675,13 @@ async def get_embedding(request: EmbeddingRequest):
 
             embeddings = []
             for text in request.texts:
-                embedding = embedder.get_embedding(text)
+                embedding = container.embedder.get_embedding(text)
                 embeddings.append(embedding)
             return {"embeddings": embeddings}
 
         # Single mode (backward compatible)
         if request.text is not None:
-            embedding = embedder.get_embedding(request.text)
+            embedding = container.embedder.get_embedding(request.text)
             return {"embedding": embedding}
 
         return {"error": "Either 'text' or 'texts' must be provided"}
