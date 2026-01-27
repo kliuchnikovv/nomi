@@ -108,7 +108,7 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 
 	// Unmarshal ToolCalls if present
 	if len(messageModel.ToolCalls) > 0 {
-		var toolCalls interface{}
+		var toolCalls []chat.ToolCall
 		if err := json.Unmarshal(messageModel.ToolCalls, &toolCalls); err == nil {
 			result.ToolCalls = toolCalls
 		}
@@ -116,7 +116,7 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 
 	// Unmarshal ContentParts if present
 	if len(messageModel.ContentParts) > 0 {
-		var contentParts interface{}
+		var contentParts []chat.ContentPart
 		if err := json.Unmarshal(messageModel.ContentParts, &contentParts); err == nil {
 			result.ContentParts = contentParts
 		}
@@ -124,7 +124,7 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 
 	// Unmarshal Actions if present
 	if len(messageModel.Actions) > 0 {
-		var actions interface{}
+		var actions []chat.Action
 		if err := json.Unmarshal(messageModel.Actions, &actions); err == nil {
 			result.Actions = actions
 		}
@@ -179,7 +179,7 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 
 	// Unmarshal ToolCalls if present
 	if len(message.ToolCalls) > 0 {
-		var toolCalls interface{}
+		var toolCalls []chat.ToolCall
 		if err := json.Unmarshal(message.ToolCalls, &toolCalls); err == nil {
 			result.ToolCalls = toolCalls
 		}
@@ -187,7 +187,7 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 
 	// Unmarshal ContentParts if present
 	if len(message.ContentParts) > 0 {
-		var contentParts interface{}
+		var contentParts []chat.ContentPart
 		if err := json.Unmarshal(message.ContentParts, &contentParts); err == nil {
 			result.ContentParts = contentParts
 		}
@@ -196,36 +196,24 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 	// Backfill reasoning into ContentParts if missing but present in Reasoning column
 	if message.Reasoning != "" {
 		hasReasoning := false
-		if parts, ok := result.ContentParts.([]interface{}); ok {
-			for _, p := range parts {
-				if partMap, ok := p.(map[string]interface{}); ok {
-					if partMap["type"] == "reasoning" {
-						hasReasoning = true
-						break
-					}
-				}
+		for _, p := range result.ContentParts {
+			if p.Type == "reasoning" {
+				hasReasoning = true
+				break
 			}
-			if !hasReasoning {
-				// Append reasoning part
-				result.ContentParts = append(parts, map[string]interface{}{
-					"type":      "reasoning",
-					"reasoning": message.Reasoning,
-				})
-			}
-		} else if result.ContentParts == nil {
-			// Create new ContentParts with reasoning
-			result.ContentParts = []interface{}{
-				map[string]interface{}{
-					"type":      "reasoning",
-					"reasoning": message.Reasoning,
-				},
-			}
+		}
+		if !hasReasoning {
+			// Append reasoning part
+			result.ContentParts = append(result.ContentParts, chat.ContentPart{
+				Type:      "reasoning",
+				Reasoning: message.Reasoning,
+			})
 		}
 	}
 
 	// Unmarshal Actions if present
 	if len(message.Actions) > 0 {
-		var actions interface{}
+		var actions []chat.Action
 		if err := json.Unmarshal(message.Actions, &actions); err == nil {
 			result.Actions = actions
 		}
@@ -279,7 +267,7 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 
 		// Unmarshal ToolCalls if present
 		if len(msg.ToolCalls) > 0 {
-			var toolCalls interface{}
+			var toolCalls []chat.ToolCall
 			if err := json.Unmarshal(msg.ToolCalls, &toolCalls); err == nil {
 				m.ToolCalls = toolCalls
 			}
@@ -287,7 +275,7 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 
 		// Unmarshal ContentParts if present
 		if len(msg.ContentParts) > 0 {
-			var contentParts interface{}
+			var contentParts []chat.ContentPart
 			if err := json.Unmarshal(msg.ContentParts, &contentParts); err == nil {
 				m.ContentParts = contentParts
 			}
@@ -297,36 +285,24 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 		// This handles cases where ContentParts were not correctly saved or are from legacy messages
 		if m.Reasoning != "" {
 			hasReasoning := false
-			if parts, ok := m.ContentParts.([]interface{}); ok {
-				for _, p := range parts {
-					if partMap, ok := p.(map[string]interface{}); ok {
-						if partMap["type"] == "reasoning" {
-							hasReasoning = true
-							break
-						}
-					}
+			for _, p := range m.ContentParts {
+				if p.Type == "reasoning" {
+					hasReasoning = true
+					break
 				}
-				if !hasReasoning {
-					// Append reasoning part
-					m.ContentParts = append(parts, map[string]interface{}{
-						"type":      "reasoning",
-						"reasoning": m.Reasoning,
-					})
-				}
-			} else if m.ContentParts == nil {
-				// Create new ContentParts with reasoning
-				m.ContentParts = []interface{}{
-					map[string]interface{}{
-						"type":      "reasoning",
-						"reasoning": m.Reasoning,
-					},
-				}
+			}
+			if !hasReasoning {
+				// Append reasoning part
+				m.ContentParts = append(m.ContentParts, chat.ContentPart{
+					Type:      "reasoning",
+					Reasoning: m.Reasoning,
+				})
 			}
 		}
 
 		// Unmarshal Actions if present
 		if len(msg.Actions) > 0 {
-			var actions interface{}
+			var actions []chat.Action
 			if err := json.Unmarshal(msg.Actions, &actions); err == nil {
 				m.Actions = actions
 			}
@@ -380,7 +356,7 @@ func (s *Storage) GetMessagesAfter(ctx context.Context, userID uuid.UUID, chatID
 
 		// Unmarshal ToolCalls if present
 		if len(msg.ToolCalls) > 0 {
-			var toolCalls interface{}
+			var toolCalls []chat.ToolCall
 			if err := json.Unmarshal(msg.ToolCalls, &toolCalls); err == nil {
 				m.ToolCalls = toolCalls
 			}
@@ -388,7 +364,7 @@ func (s *Storage) GetMessagesAfter(ctx context.Context, userID uuid.UUID, chatID
 
 		// Unmarshal ContentParts if present
 		if len(msg.ContentParts) > 0 {
-			var contentParts interface{}
+			var contentParts []chat.ContentPart
 			if err := json.Unmarshal(msg.ContentParts, &contentParts); err == nil {
 				m.ContentParts = contentParts
 			}
@@ -396,7 +372,7 @@ func (s *Storage) GetMessagesAfter(ctx context.Context, userID uuid.UUID, chatID
 
 		// Unmarshal Actions if present
 		if len(msg.Actions) > 0 {
-			var actions interface{}
+			var actions []chat.Action
 			if err := json.Unmarshal(msg.Actions, &actions); err == nil {
 				m.Actions = actions
 			}

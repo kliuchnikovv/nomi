@@ -33,7 +33,7 @@ type Streamer struct {
 	source             string
 	initialMessage     string
 	initialAttachments []chat.Attachment
-	commandPayload     interface{}
+	commandPayload     chat.Command
 	chatHistory        []*chat.Message
 	historyChatID      *uuid.UUID
 }
@@ -46,7 +46,7 @@ func New(
 	initialMessage string,
 	initialAttachments []chat.Attachment,
 	source string,
-	commandPayload interface{},
+	commandPayload chat.Command,
 	chatHistory []*chat.Message,
 	historyChatID *uuid.UUID,
 ) *Streamer {
@@ -180,7 +180,7 @@ func (streamer *Streamer) Stream(client *Socket) {
 	type MessageMetadata struct {
 		MessageID uuid.UUID
 		Model     string
-		ToolCalls interface{}
+		ToolCalls []chat.ToolCall
 	}
 	var currentMessageMetadata MessageMetadata
 

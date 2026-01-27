@@ -118,7 +118,8 @@ func handleMetadataPayload(r *Room, data []byte) error {
 		return err
 	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
-	builder.SetMetadata(p.Model, p.ToolCalls, nil)
+	builder.SetModel(p.Model)
+	builder.SetToolCalls(p.ToolCalls)
 	return builder.Persist(context.Background(), r.store, r.initiatorID)
 }
 
@@ -128,7 +129,7 @@ func handleActionsPayload(r *Room, data []byte) error {
 		return err
 	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
-	builder.SetMetadata("", nil, p.Actions)
+	builder.SetActions(p.Actions)
 	return builder.Persist(context.Background(), r.store, r.initiatorID)
 }
 

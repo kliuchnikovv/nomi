@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/apierror"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
@@ -25,13 +26,13 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
 	var newChat chat.Chat
 	if err := c.ShouldBindJSON(&newChat); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewBadRequest(err.Error(), nil))
 		return
 	}
 
@@ -49,7 +50,7 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 		DeletedAt:  nil,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
 
@@ -63,19 +64,19 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 
 	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		apierror.Respond(c, apierror.NewBadRequest("Invalid UUID", nil))
 		return
 	}
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
 	chat, err := h.storage.GetChat(ctx, user.ID, chatID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
+		apierror.Respond(c, apierror.NewNotFound("Chat not found"))
 		return
 	}
 
@@ -89,7 +90,7 @@ func (h *ChatHandler) ListChats(c *gin.Context) {
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
@@ -102,7 +103,7 @@ func (h *ChatHandler) ListChats(c *gin.Context) {
 		if err == nil {
 			chats, err = h.storage.GetUserChatsModifiedAfter(ctx, user.ID, since)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chats"})
+				apierror.Respond(c, apierror.NewInternalServerError("Failed to fetch chats"))
 				return
 			}
 			// If no chats were modified, return 304 Not Modified
@@ -117,7 +118,7 @@ func (h *ChatHandler) ListChats(c *gin.Context) {
 	if chats == nil {
 		chats, err = h.storage.GetUserChats(ctx, user.ID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
+			apierror.Respond(c, apierror.NewNotFound("Chat not found"))
 			return
 		}
 	}
@@ -134,26 +135,26 @@ func (h *ChatHandler) UpdateChat(c *gin.Context) {
 
 	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		apierror.Respond(c, apierror.NewBadRequest("Invalid UUID", nil))
 		return
 	}
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
 	var updatedChat chat.Chat
 	if err := c.ShouldBindJSON(&updatedChat); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewBadRequest(err.Error(), nil))
 		return
 	}
 
 	updatedChat.ID = chatID
 	chat, err := h.storage.UpdateChat(ctx, user.ID, &updatedChat)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
 
@@ -167,18 +168,18 @@ func (h *ChatHandler) DeleteChat(c *gin.Context) {
 
 	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		apierror.Respond(c, apierror.NewBadRequest("Invalid UUID", nil))
 		return
 	}
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
 	if err := h.storage.DeleteChat(ctx, user.ID, chatID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
 

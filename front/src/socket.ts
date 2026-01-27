@@ -21,6 +21,11 @@ export class ChatSocket {
     private outbox: any[] = [];
     private idleTimer: any = null;
     private idleTimeoutMs = 5 * 60 * 1000; // 5 minutes
+
+    private shouldReconnect = false;
+    private reconnectDelay = 1000;
+    private reconnectTimer: any = null;
+
     // private sentCommandFrame = false; // Command frames are per-message/chat context now?
     // Actually, team commands are sent once per session usually. But in a global socket, we might switch contexts.
     // For now, let's keep it simple: we send commands when sending a message if needed, or rely on the backend session.
@@ -29,8 +34,10 @@ export class ChatSocket {
 
     setToken(token: string | null) {
         this.token = token;
-        // If we have a token and not connected, maybe we should connect?
-        // But let's leave explicit connect() call to the consumer (App/AuthContext).
+        // Auto-connect if we have a token and not already connected/connecting
+        if (token && !this.isReady() && !this.ws) {
+            this.connect();
+        }
     }
 
     setHandlers(h: Handlers) {
@@ -51,6 +58,19 @@ export class ChatSocket {
         }, this.idleTimeoutMs);
     }
 
+    private scheduleReconnect() {
+        if (this.reconnectTimer || !this.token) return;
+
+        console.log(`[Socket] Reconnecting in ${this.reconnectDelay}ms...`);
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.open();
+        }, this.reconnectDelay);
+
+        // Exponential backoff with cap
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+    }
+
     private touchActivity() {
         this.scheduleIdleClose();
     }
@@ -61,6 +81,7 @@ export class ChatSocket {
 
     // Alias for open to match expected API
     connect() {
+        this.shouldReconnect = true;
         this.open();
     }
 
@@ -87,11 +108,20 @@ export class ChatSocket {
             return;
         }
 
+        // Safety: ensure we want to be connected
+        this.shouldReconnect = true;
+
         if (this.ws) {
             try {
                 this.ws.close();
             } catch { }
             this.ws = null;
+        }
+
+        // Clear any pending reconnect timer since we are connecting now
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
         }
 
         const rootUrl = getApiUrl();
@@ -129,6 +159,8 @@ export class ChatSocket {
             this.ws = ws;
 
             ws.onopen = () => {
+                console.log('[Socket] Connected');
+                this.reconnectDelay = 1000; // Reset backoff
                 this.touchActivity();
                 this.processOutbox(); // Replaced inline loop with method call
             };
@@ -210,10 +242,16 @@ export class ChatSocket {
                 // Unauthorized
                 if ((code === 4401 || code === 4001 || code === 1008) && !retried) {
                     retried = true;
+                    this.shouldReconnect = false; // Stop auto-reconnect on auth error
                     const ok = await (this.handlers.onUnauthorized?.() ?? false);
                     if (ok) {
-                        this.open();
+                        this.connect();
+                        return;
                     }
+                }
+
+                if (this.shouldReconnect) {
+                    this.scheduleReconnect();
                 }
             };
 
@@ -304,6 +342,12 @@ export class ChatSocket {
     }
 
     close() {
+        this.shouldReconnect = false;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
         try {
             this.ws?.close();
         } catch { }

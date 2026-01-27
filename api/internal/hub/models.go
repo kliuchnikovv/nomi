@@ -39,6 +39,7 @@ const (
 type Frame struct {
 	ID        int             `json:"id"`
 	ChatID    uuid.UUID       `json:"chat_id"`
+	TraceID   string          `json:"trace_id,omitempty"`
 	Timestamp time.Time       `json:"ts"`
 	Kind      Kind            `json:"kind"`
 	Channel   string          `json:"channel"`
