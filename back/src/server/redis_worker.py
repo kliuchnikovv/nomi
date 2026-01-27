@@ -6,8 +6,9 @@ import redis.asyncio as redis
 from typing import Dict
 
 
-from src.server.models import Frame, Op
+from src.server.models import Frame, Op, Kind
 from src.server.redis_session import RedisSession
+from src.server.utils import make_error
 from src.agents.factory import AgentFactory
 from src.tools.jules import JulesTools
 from src.tools.task_manager import TaskManagementTool
@@ -205,7 +206,6 @@ class RedisWorker:
                     )
                     # Try to send error frame to client
                     try:
-                        from src.server.utils import make_error
                         trace_id = frame.trace_id if hasattr(frame, 'trace_id') else None
                         error_frame = make_error(
                             session.next_id,
@@ -251,21 +251,13 @@ class RedisWorker:
                     frame_payload = raw_payload.get("payload", {})
                     user_id = frame_payload.get("user_id") or frame_payload.get("sender")
                     if user_id:
-                        from src.server.utils import make_error
-                        from src.server.models import Frame, Op, Kind
-                        from datetime import datetime, timezone
-                        error_frame = Frame(
-                            id=0,
-                            ts=datetime.now(timezone.utc),
-                            kind=Kind.ERROR,
-                            op=Op.ERROR,
-                            chat_id=chat_id,
-                            error={
-                                "code": "parse_failed",
-                                "http": 400,
-                                "message": f"Failed to parse request JSON: {str(e)}",
-                                "details": {"error_type": "JSONDecodeError", "chat_id": chat_id}
-                            }
+                        error_frame = make_error(
+                            0,
+                            "parse_failed",
+                            chat_id,
+                            f"Failed to parse request JSON: {str(e)}",
+                            http=400,
+                            details={"error_type": "JSONDecodeError", "chat_id": chat_id}
                         )
                         # Publish directly to Redis
                         channel = f"chat:user:{user_id}"
@@ -290,26 +282,18 @@ class RedisWorker:
                     user_id = frame_payload.get("user_id") or frame_payload.get("sender")
                     trace_id = raw_payload.get("trace_id")
                     if user_id:
-                        from src.server.utils import make_error
-                        from src.server.models import Frame, Op, Kind
-                        from datetime import datetime, timezone
-                        error_frame = Frame(
-                            id=0,
-                            ts=datetime.now(timezone.utc),
-                            kind=Kind.ERROR,
-                            op=Op.ERROR,
-                            chat_id=chat_id,
-                            trace_id=trace_id,
-                            error={
-                                "code": "worker_error",
-                                "http": 500,
-                                "message": f"Worker processing failed: {str(e)}",
-                                "details": {
-                                    "error_type": type(e).__name__,
-                                    "chat_id": chat_id,
-                                    "trace_id": trace_id
-                                }
-                            }
+                        error_frame = make_error(
+                            0,
+                            "worker_error",
+                            chat_id,
+                            f"Worker processing failed: {str(e)}",
+                            http=500,
+                            details={
+                                "error_type": type(e).__name__,
+                                "chat_id": chat_id,
+                                "trace_id": trace_id
+                            },
+                            trace_id=trace_id
                         )
                         channel = f"chat:user:{user_id}"
                         await self.redis.publish(channel, json_lib.dumps(error_frame.marshal()))
