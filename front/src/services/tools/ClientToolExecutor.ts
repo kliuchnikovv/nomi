@@ -1,5 +1,6 @@
 import { gmailClient } from '../integrations/clients/GmailClient';
 import { calendarClient } from '../integrations/clients/CalendarClient';
+import { getIntegrationMetadata, isClientOnly } from '../integrations/registry';
 
 export interface ClientToolAction {
     tool: string;
@@ -14,6 +15,12 @@ export class ClientToolExecutor {
     async execute(action: ClientToolAction): Promise<string> {
         console.log(`[ClientToolExecutor] Executing ${action.tool}.${action.method}`, action.params);
 
+        // Проверяем через реестр, является ли это клиентской интеграцией
+        const metadata = getIntegrationMetadata(action.tool);
+        if (metadata && !isClientOnly(action.tool)) {
+            throw new Error(`Tool ${action.tool} is not a client-side tool. It should be executed on the server.`);
+        }
+
         try {
             switch (action.tool) {
                 case 'gmail':
@@ -23,6 +30,10 @@ export class ClientToolExecutor {
                 case 'rag':
                     return await this.executeRagAction(action.method, action.params);
                 default:
+                    // Проверяем через реестр, есть ли такой провайдер
+                    if (metadata) {
+                        throw new Error(`Tool ${action.tool} is registered but not implemented in ClientToolExecutor`);
+                    }
                     throw new Error(`Unknown tool: ${action.tool}`);
             }
         } catch (error: any) {
@@ -40,6 +51,12 @@ export class ClientToolExecutor {
         // For now, let's default to the first available Gmail integration or a fixed ID if we only support one.
         // IMPORTANT: The backend 'client_side.py' doesn't send integrationId currently.
         // We will need to look it up.
+
+        // Проверяем через реестр, что Gmail - это клиентская интеграция
+        const metadata = getIntegrationMetadata('gmail');
+        if (!metadata || !isClientOnly('gmail')) {
+            throw new Error('Gmail is not configured as a client-side integration');
+        }
 
         // Dynamic import to avoid circular depends if necessary, although here it's fine.
         const { integrationStorage } = await import('../integrations/IntegrationStorage');
@@ -115,6 +132,12 @@ export class ClientToolExecutor {
     }
 
     private async executeCalendarAction(method: string, params: Record<string, any>): Promise<string> {
+        // Проверяем через реестр, что Calendar - это клиентская интеграция
+        const metadata = getIntegrationMetadata('calendar');
+        if (!metadata || !isClientOnly('calendar')) {
+            throw new Error('Calendar is not configured as a client-side integration');
+        }
+
         const { integrationStorage } = await import('../integrations/IntegrationStorage');
         const integrations = await integrationStorage.getIntegrations();
         const calInteg = integrations.find(i => i.provider === 'calendar' && i.enabled);

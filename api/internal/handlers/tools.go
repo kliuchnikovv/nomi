@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -71,12 +72,12 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 	}
 
 	// 3. Fetch Integrations
-	var integrations []storage.Integration
-	if err := h.store.DB.Where("user_id = ? AND enabled = ?", userID, true).Find(&integrations).Error; err != nil {
+	var userIntegrations []storage.Integration
+	if err := h.store.DB.Where("user_id = ? AND enabled = ?", userID, true).Find(&userIntegrations).Error; err != nil {
 		h.logger.Error("failed to fetch integrations", zap.Error(err))
 		// Proceed with default tools even if integrations fail
 	}
-	h.logger.Info("fetched integrations", zap.Int("count", len(integrations)), zap.String("user_id", userID.String()))
+	h.logger.Info("fetched integrations", zap.Int("count", len(userIntegrations)), zap.String("user_id", userID.String()))
 
 	// 4. Build Response
 	type ToolConfig struct {
@@ -104,7 +105,26 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 	})
 
 	// Add Integrations
-	for _, integration := range integrations {
+	// Фильтруем: только серверные интеграции передаются в Python backend
+	// Клиентские интеграции (ClientOnly) выполняются локально на устройстве
+	for _, integration := range userIntegrations {
+		// Проверяем тип интеграции через реестр
+		provider, ok := integrations.GetProvider(integration.Provider)
+		if !ok {
+			h.logger.Warn("provider not found in registry, skipping",
+				zap.String("provider", integration.Provider),
+			)
+			continue
+		}
+
+		// Пропускаем клиентские интеграции - они выполняются локально
+		if provider.StorageType == integrations.StorageTypeClientOnly {
+			h.logger.Debug("skipping client-only integration",
+				zap.String("provider", integration.Provider),
+			)
+			continue
+		}
+
 		var params map[string]interface{}
 		if integration.Params != "" {
 			// Try to unmarshal params if it's a JSON string

@@ -36,6 +36,8 @@ export interface Connector {
     connected: boolean;
 }
 
+export type StorageType = 'client' | 'server' | 'hybrid';
+
 export interface Integration {
     id: string;
     type: string;
@@ -44,6 +46,9 @@ export interface Integration {
     status: 'connected' | 'disconnected' | 'error';
     created_at: string;
     updated_at: string;
+    storageType?: StorageType; // Тип хранения данных
+    supportsBackgroundTasks?: boolean; // Поддерживает ли фоновые процессы
+    systemEventListeners?: string[]; // Список системных событий
 }
 
 export interface Tool {

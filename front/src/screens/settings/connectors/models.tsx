@@ -58,11 +58,16 @@ export type Connector = {
     glyph: string;
 };
 
+export type StorageType = 'client' | 'server' | 'hybrid';
+
 export type Integration = {
     id: string;
     name: string;
     provider: string;
     connected: boolean;
+    storageType?: StorageType; // Тип хранения данных
+    supportsBackgroundTasks?: boolean; // Поддерживает ли фоновые процессы
+    systemEventListeners?: string[]; // Список системных событий
     info?: Record<string, any>;
     state?: Record<string, any>;
     params?: Record<string, any>;

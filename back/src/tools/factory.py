@@ -16,6 +16,11 @@ from src.tools.jules import JulesTools
 from src.tools.client_side import ClientGmailTools, ClientRagTools
 from src.tools.ui import ClientUITools
 from src.rag_service import KnowledgeSearchTool
+from src.integrations.registry import (
+    get_provider,
+    is_server_side,
+    should_include_in_tools,
+)
 
 
 class SafeGithubTools(GithubTools):
@@ -353,6 +358,16 @@ async def build(config: ToolsConfig) -> List[Toolkit]:
 
     for item in config:
         logger.debug("[Tools] Processing tool item: %s", item.name)
+
+        # Проверяем через реестр, является ли это серверной интеграцией
+        # Клиентские интеграции не должны обрабатываться здесь
+        provider = get_provider(item.name.lower())
+        if provider and not should_include_in_tools(item.name.lower()):
+            logger.debug(
+                f"[Tools] Skipping client-side integration: {item.name} (executes on device)"
+            )
+            continue
+
         # Try exact match first
         builder = TOOL_BUILDERS.get(item.name)
 
