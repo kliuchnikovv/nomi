@@ -13,6 +13,61 @@ import (
 	"go.uber.org/zap"
 )
 
+// sendErrorFrame logs an error and sends an error frame to all clients in the room
+func (r *Room) sendErrorFrame(code string, message string, err error, traceID string, details map[string]interface{}) {
+	// Log error with full context
+	logFields := []zap.Field{
+		zap.String("error_code", code),
+		zap.String("chat_id", r.ID.String()),
+		zap.String("user_id", r.initiatorID.String()),
+		zap.String("message", message),
+	}
+	if traceID != "" {
+		logFields = append(logFields, zap.String("trace_id", traceID))
+	}
+	if err != nil {
+		logFields = append(logFields, zap.Error(err))
+	}
+	r.logger.Error("sending error frame to clients", logFields...)
+
+	// Create error frame
+	errorFrame := Frame{
+		ID:        0,
+		ChatID:    r.ID,
+		TraceID:   traceID,
+		Kind:      ErrorKind,
+		Operation: ErrorOperation,
+		Timestamp: time.Now().UTC(),
+		Error: ErrorInfo{
+			Code:     code,
+			CodeHTTP: 500,
+			Message:  message,
+			Details:  details,
+		},
+	}
+
+	// Marshal and broadcast to all clients
+	b, marshalErr := json.Marshal(errorFrame)
+	if marshalErr != nil {
+		r.logger.Error("failed to marshal error frame", zap.Error(marshalErr))
+		return
+	}
+	b = append(b, '\n') // NDJSON
+
+	for client := range r.clients {
+		if client.send == nil {
+			continue
+		}
+		select {
+		case client.send <- b:
+		default:
+			// Channel full, close and remove client
+			close(client.send)
+			delete(r.clients, client)
+		}
+	}
+}
+
 func (r *Room) InjectMessage(userID uuid.UUID, payload []byte) {
 	// Create a "fake" client message
 	msg := &ClientMessage{
@@ -92,6 +147,17 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	var frame Frame
 	if err := json.Unmarshal(msg.Payload, &frame); err != nil {
 		r.logger.Warn("failed to parse user message", zap.Error(err))
+		// Try to extract trace_id from raw payload if possible
+		traceID := ""
+		var rawFrame map[string]interface{}
+		if json.Unmarshal(msg.Payload, &rawFrame) == nil {
+			if tid, ok := rawFrame["trace_id"].(string); ok {
+				traceID = tid
+			}
+		}
+		r.sendErrorFrame(ErrorCodeParseFailed, "Failed to parse message", err, traceID, map[string]interface{}{
+			"operation": "parse_message",
+		})
 		return
 	}
 
@@ -99,6 +165,10 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	var payload UserMessagePayload
 	if err := json.Unmarshal(frame.Payload, &payload); err != nil {
 		r.logger.Warn("failed to parse user payload", zap.Error(err))
+		r.sendErrorFrame(ErrorCodeParseFailed, "Failed to parse message payload", err, frame.TraceID, map[string]interface{}{
+			"operation": "parse_payload",
+			"chat_id":    frame.ChatID.String(),
+		})
 		return
 	}
 
@@ -132,6 +202,11 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			atts, err := r.store.GetAttachmentsByIDs(context.Background(), payload.AttachmentIDs)
 			if err != nil {
 				r.logger.Error("failed to fetch attachments", zap.Error(err))
+				// Send error frame but continue processing (non-critical)
+				r.sendErrorFrame(ErrorCodeAttachmentFailed, "Failed to fetch attachments", err, payload.TraceID, map[string]interface{}{
+					"operation":      "fetch_attachments",
+					"attachment_ids": payload.AttachmentIDs,
+				})
 			} else {
 				var enriched []chat.Attachment
 				for _, att := range atts {
@@ -181,6 +256,10 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		})
 		if err != nil {
 			r.logger.Error("failed to save user message", zap.Error(err))
+			r.sendErrorFrame(ErrorCodeSaveFailed, "Failed to save message to database", err, payload.TraceID, map[string]interface{}{
+				"operation": "save_message",
+				"message_id": msgID.String(),
+			})
 		}
 
 		// Update Chat Title if empty (or default)
@@ -373,8 +452,16 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 		if err := r.hub.redis.Publish(context.Background(), fmt.Sprintf("chat:request:%s", r.ID.String()), payloadBytes).Err(); err != nil {
 			r.logger.Error("failed to publish to redis", zap.Error(err))
+			// CRITICAL: This prevents the message from reaching the Python backend
+			r.sendErrorFrame(ErrorCodeRedisFailed, "Failed to forward message to AI backend", err, payload.TraceID, map[string]interface{}{
+				"operation": "redis_publish",
+				"channel":   fmt.Sprintf("chat:request:%s", r.ID.String()),
+			})
+			// Reset generation state since we failed to send
+			r.generationInProgress = false
+		} else {
+			r.generationInProgress = true
 		}
-		r.generationInProgress = true
 
 	} else if r.Type == RoomTypeChat {
 		// Pass through other frames
@@ -404,6 +491,12 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	b, err := json.Marshal(frame)
 	if err != nil {
 		r.logger.Error("failed to marshal llm frame", zap.Error(err))
+		// Send error frame to clients about the marshal failure
+		r.sendErrorFrame(ErrorCodeMarshalFailed, "Failed to process AI response", err, frame.TraceID, map[string]interface{}{
+			"operation": "marshal_llm_frame",
+			"kind":       string(frame.Kind),
+			"op":         string(frame.Operation),
+		})
 		return
 	}
 	// Append newline for NDJSON
@@ -445,6 +538,10 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	if frame.Operation == MessageOperation {
 		if err := r.DispatchPayload(frame); err != nil {
 			r.logger.Error("dispatch failed", zap.Error(err))
+			// Send error frame but don't block - message was already broadcast
+			r.sendErrorFrame(ErrorCodeDispatchFailed, "Failed to save AI response to database", err, frame.TraceID, map[string]interface{}{
+				"operation": "dispatch_payload",
+			})
 		}
 	}
 

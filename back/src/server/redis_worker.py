@@ -203,6 +203,24 @@ class RedisWorker:
                         f"[RedisWorker] Task error for chat {chat_id}: {e}",
                         exc_info=True,
                     )
+                    # Try to send error frame to client
+                    try:
+                        from src.server.utils import make_error
+                        trace_id = frame.trace_id if hasattr(frame, 'trace_id') else None
+                        error_frame = make_error(
+                            session.next_id,
+                            "task_failed",
+                            chat_id,
+                            f"Task processing failed: {str(e)}",
+                            http=500,
+                            details={"error_type": type(e).__name__, "chat_id": chat_id, "trace_id": trace_id}
+                        )
+                        await session._send_frame(error_frame)
+                    except Exception as send_err:
+                        logger.error(
+                            f"[RedisWorker] Failed to send error frame for chat {chat_id}: {send_err}",
+                            exc_info=True,
+                        )
                 finally:
                     # Cleanup: Remove from active tasks registry
                     if self.active_tasks.get(chat_id) == current_task:
@@ -219,8 +237,43 @@ class RedisWorker:
 
             await t
 
-        except json.JSONDecodeError:
-            logger.error(f"[RedisWorker] Failed to decode JSON for chat {chat_id}")
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"[RedisWorker] Failed to decode JSON for chat {chat_id}: {e}",
+                exc_info=True,
+            )
+            # Try to send error frame if we have user_id
+            try:
+                # Extract user_id from raw_data if possible
+                import json as json_lib
+                try:
+                    raw_payload = json_lib.loads(raw_data)
+                    frame_payload = raw_payload.get("payload", {})
+                    user_id = frame_payload.get("user_id") or frame_payload.get("sender")
+                    if user_id:
+                        from src.server.utils import make_error
+                        from src.server.models import Frame, Op, Kind
+                        from datetime import datetime, timezone
+                        error_frame = Frame(
+                            id=0,
+                            ts=datetime.now(timezone.utc),
+                            kind=Kind.ERROR,
+                            op=Op.ERROR,
+                            chat_id=chat_id,
+                            error={
+                                "code": "parse_failed",
+                                "http": 400,
+                                "message": f"Failed to parse request JSON: {str(e)}",
+                                "details": {"error_type": "JSONDecodeError", "chat_id": chat_id}
+                            }
+                        )
+                        # Publish directly to Redis
+                        channel = f"chat:user:{user_id}"
+                        await self.redis.publish(channel, json_lib.dumps(error_frame.marshal()))
+                except Exception:
+                    pass  # If we can't send error, at least we logged it
+            except Exception:
+                pass
         except asyncio.CancelledError:
             pass  # Expected
         except Exception as e:
@@ -228,6 +281,42 @@ class RedisWorker:
                 f"[RedisWorker] Error processing request for {chat_id}: {e}",
                 exc_info=True,
             )
+            # Try to send error frame if possible
+            try:
+                import json as json_lib
+                try:
+                    raw_payload = json_lib.loads(raw_data)
+                    frame_payload = raw_payload.get("payload", {})
+                    user_id = frame_payload.get("user_id") or frame_payload.get("sender")
+                    trace_id = raw_payload.get("trace_id")
+                    if user_id:
+                        from src.server.utils import make_error
+                        from src.server.models import Frame, Op, Kind
+                        from datetime import datetime, timezone
+                        error_frame = Frame(
+                            id=0,
+                            ts=datetime.now(timezone.utc),
+                            kind=Kind.ERROR,
+                            op=Op.ERROR,
+                            chat_id=chat_id,
+                            trace_id=trace_id,
+                            error={
+                                "code": "worker_error",
+                                "http": 500,
+                                "message": f"Worker processing failed: {str(e)}",
+                                "details": {
+                                    "error_type": type(e).__name__,
+                                    "chat_id": chat_id,
+                                    "trace_id": trace_id
+                                }
+                            }
+                        )
+                        channel = f"chat:user:{user_id}"
+                        await self.redis.publish(channel, json_lib.dumps(error_frame.marshal()))
+                except Exception:
+                    pass
+            except Exception:
+                pass
 
     async def _poll_jules_status(self, task_id: str, session_id: str):
         """

@@ -87,6 +87,8 @@ export function ChatProvider({
     const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
     const [teamCommand, setTeamCommand] = useState<any>(null);
     const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
+    const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const RESPONSE_TIMEOUT_MS = 60000; // 60 seconds
 
     // Model selection state
     const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash-exp');
@@ -394,6 +396,25 @@ export function ChatProvider({
                 return;
             }
 
+            // Clear any existing timeout
+            if (responseTimeoutRef.current) {
+                clearTimeout(responseTimeoutRef.current);
+                responseTimeoutRef.current = null;
+            }
+
+            // Set timeout for response
+            responseTimeoutRef.current = setTimeout(() => {
+                setAssistantWorking((current) => {
+                    if (current) {
+                        setActiveAgentsCount(0);
+                        setError('Превышено время ожидания ответа. Попробуйте отправить сообщение снова.');
+                        responseTimeoutRef.current = null;
+                        return false;
+                    }
+                    return current;
+                });
+            }, RESPONSE_TIMEOUT_MS);
+
             socket.sendMessage(
                 text.trim(),
                 chatIdToUse,
@@ -570,11 +591,26 @@ export function ChatProvider({
     // We can use a side effect to track "assistantWorking".
 
     useEffect(() => {
+        // Clear timeout on unmount
+        return () => {
+            if (responseTimeoutRef.current) {
+                clearTimeout(responseTimeoutRef.current);
+                responseTimeoutRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
         // We set handlers to the global socket to update local state like 'assistantWorking'
         socket.setHandlers({
             onDone: () => {
                 setAssistantWorking(false);
                 setActiveAgentsCount(0);
+                // Clear timeout when response is received
+                if (responseTimeoutRef.current) {
+                    clearTimeout(responseTimeoutRef.current);
+                    responseTimeoutRef.current = null;
+                }
             },
             onSignal: (payload: any) => {
                 if (payload.type === 'system_status' && typeof payload.active_agents_count === 'number') {
@@ -583,7 +619,25 @@ export function ChatProvider({
             },
             onError: (err: any) => {
                 setAssistantWorking(false);
-                const message = err?.message || 'Ошибка соединения';
+                setActiveAgentsCount(0);
+                // Clear timeout when error is received
+                if (responseTimeoutRef.current) {
+                    clearTimeout(responseTimeoutRef.current);
+                    responseTimeoutRef.current = null;
+                }
+                // Extract error message from frame
+                let message = 'Ошибка соединения';
+                if (err?.error?.message) {
+                    message = err.error.message;
+                } else if (err?.message) {
+                    message = err.message;
+                } else if (typeof err === 'string') {
+                    message = err;
+                }
+                // Show error details if available
+                if (err?.error?.details) {
+                    console.error('Error details:', err.error.details);
+                }
                 setError(message);
             },
             onUnauthorized: async () => {

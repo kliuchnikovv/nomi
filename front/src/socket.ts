@@ -212,15 +212,58 @@ export class ChatSocket {
                                 this.handlers.onPing?.(frame);
                                 break;
                             case 'error':
-                                if (frame.payload?.code === 401 && !retried) {
-                                    retried = true;
-                                    const ok = await (this.handlers.onUnauthorized?.() ?? false);
-                                    if (ok) {
-                                        try { ws.close(); } catch { }
-                                        this.open();
+                                // Handle error frames with improved error extraction
+                                const errorInfo = frame.error || frame.payload?.error || frame.payload;
+                                const errorCode = errorInfo?.code || frame.payload?.code;
+                                const errorMessage = errorInfo?.message || frame.payload?.message || 'Произошла ошибка';
+                                const errorDetails = errorInfo?.details || frame.payload?.details;
+
+                                // Log error details for debugging
+                                if (errorDetails) {
+                                    console.error('Error details:', errorDetails);
+                                }
+
+                                // Handle 401 unauthorized
+                                if (errorCode === 401 || frame.payload?.code === 401) {
+                                    if (!retried) {
+                                        retried = true;
+                                        const ok = await (this.handlers.onUnauthorized?.() ?? false);
+                                        if (ok) {
+                                            try { ws.close(); } catch { }
+                                            this.open();
+                                        }
                                     }
                                 } else {
-                                    this.handlers.onError?.(frame);
+                                    // Map error codes to user-friendly messages
+                                    let userMessage = errorMessage;
+                                    if (errorCode) {
+                                        const errorMessages: Record<string, string> = {
+                                            'parse_failed': 'Ошибка обработки сообщения',
+                                            'save_failed': 'Ошибка сохранения данных',
+                                            'redis_failed': 'Ошибка соединения с сервером',
+                                            'marshal_failed': 'Ошибка обработки ответа',
+                                            'dispatch_failed': 'Ошибка сохранения ответа',
+                                            'attachment_failed': 'Ошибка загрузки вложений',
+                                            'agent_failed': 'Ошибка выполнения задачи',
+                                            'task_failed': 'Ошибка обработки запроса',
+                                            'worker_error': 'Ошибка сервера',
+                                            'build_failed': 'Ошибка инициализации',
+                                            'stream_failed': 'Ошибка генерации ответа',
+                                            'timeout': 'Превышено время ожидания',
+                                        };
+                                        userMessage = errorMessages[errorCode] || errorMessage;
+                                    }
+
+                                    // Pass enhanced error object to handler
+                                    this.handlers.onError?.({
+                                        ...frame,
+                                        error: {
+                                            code: errorCode,
+                                            message: userMessage,
+                                            details: errorDetails,
+                                        },
+                                        message: userMessage,
+                                    });
                                 }
                                 break;
                         }

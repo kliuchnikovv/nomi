@@ -56,3 +56,18 @@ type ErrorInfo struct {
 	Message  string `json:"message"`
 	Details  any    `json:"details"`
 }
+
+// Error codes for structured error handling
+const (
+	ErrorCodeParseFailed      = "parse_failed"
+	ErrorCodeSaveFailed       = "save_failed"
+	ErrorCodeRedisFailed      = "redis_failed"
+	ErrorCodeMarshalFailed    = "marshal_failed"
+	ErrorCodeDispatchFailed   = "dispatch_failed"
+	ErrorCodeAttachmentFailed = "attachment_failed"
+	ErrorCodeWebSocketClosed  = "websocket_closed"
+	ErrorCodeAgentFailed      = "agent_failed"
+	ErrorCodeTaskFailed       = "task_failed"
+	ErrorCodeWorkerError      = "worker_error"
+	ErrorCodeTimeout          = "timeout"
+)

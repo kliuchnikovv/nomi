@@ -92,7 +92,38 @@ class RedisSession:
                     len(data),
                 )
             except Exception as e:
-                logger.error(f"[RedisSession] Publish failed: {e}")
+                logger.error(
+                    f"[RedisSession] Publish failed: {e}",
+                    exc_info=True,
+                    extra={
+                        "channel": channel,
+                        "frame_op": frame.op,
+                        "chat_id": self.chat_id,
+                        "user_id": self.user_id,
+                        "trace_id": getattr(frame, 'trace_id', None),
+                    }
+                )
+                # Try to send error frame through alternative channel if this is not already an error frame
+                if frame.kind != Kind.ERROR:
+                    try:
+                        error_frame = make_error(
+                            self.next_id,
+                            "publish_failed",
+                            self.chat_id,
+                            f"Failed to publish frame to Redis: {str(e)}",
+                            http=500,
+                            details={
+                                "original_op": frame.op,
+                                "channel": channel,
+                                "error_type": type(e).__name__,
+                            }
+                        )
+                        # Try direct Redis publish as last resort
+                        if self.redis_client:
+                            alt_channel = f"chat:user:{self.user_id or self.session_id}"
+                            await self.redis_client.publish(alt_channel, json.dumps(error_frame.marshal()))
+                    except Exception:
+                        pass  # If we can't send error about error, at least we logged it
 
         self.next_id = frame.id + 1
         return self.next_id
@@ -209,9 +240,29 @@ class RedisSession:
                     chat_id=self.chat_id,
                 )
         except Exception as e:
-            logger.error(f"[RedisSession] Failed to build agent: {e}")
+            logger.error(
+                f"[RedisSession] Failed to build agent: {e}",
+                exc_info=True,
+                extra={
+                    "chat_id": self.chat_id,
+                    "user_id": self.user_id,
+                    "agent_type": self.agent_type,
+                }
+            )
             await self._send_frame(
-                make_error(self.next_id, "build_failed", self.chat_id, str(e), 500)
+                make_error(
+                    self.next_id,
+                    "build_failed",
+                    self.chat_id,
+                    f"Failed to build agent: {str(e)}",
+                    http=500,
+                    details={
+                        "error_type": type(e).__name__,
+                        "agent_type": self.agent_type,
+                        "chat_id": self.chat_id,
+                        "user_id": self.user_id,
+                    }
+                )
             )
             raise
 
@@ -484,9 +535,30 @@ class RedisSession:
             logger.info("[RedisSession] Streaming cancelled by user")
             raise  # Re-raise to propagate cancellation
         except Exception as e:
-            logger.error(f"[RedisSession] Error streaming: {e}", exc_info=True)
+            trace_id = frame.trace_id if hasattr(frame, 'trace_id') else None
+            logger.error(
+                f"[RedisSession] Error streaming: {e}",
+                exc_info=True,
+                extra={
+                    "chat_id": msg_chat_id,
+                    "user_id": self.user_id,
+                    "trace_id": trace_id,
+                }
+            )
             await self._send_frame(
-                make_error(self.next_id, "stream_failed", msg_chat_id, str(e), 500)
+                make_error(
+                    self.next_id,
+                    "stream_failed",
+                    msg_chat_id,
+                    f"Streaming failed: {str(e)}",
+                    http=500,
+                    details={
+                        "error_type": type(e).__name__,
+                        "chat_id": msg_chat_id,
+                        "user_id": self.user_id,
+                        "trace_id": trace_id,
+                    }
+                )
             )
 
     async def _stream_agent_events(
@@ -596,11 +668,56 @@ Continue the conversation."""
                         result = await run_fn(fn)
                         break
         except Exception as e:
-            logger.error("[RedisSession] Agent invocation failed: %s", e)
+            logger.error(
+                "[RedisSession] Agent invocation failed: %s",
+                e,
+                exc_info=True,
+                extra={"chat_id": self.chat_id, "user_id": self.user_id}
+            )
+            # Send error frame before raising
+            try:
+                msg_chat_id = self.chat_id
+                await self._send_frame(
+                    make_error(
+                        self.next_id,
+                        "agent_failed",
+                        msg_chat_id,
+                        f"Agent invocation failed: {str(e)}",
+                        http=500,
+                        details={
+                            "error_type": type(e).__name__,
+                            "chat_id": msg_chat_id,
+                            "user_id": self.user_id,
+                        }
+                    )
+                )
+            except Exception as send_err:
+                logger.error(f"[RedisSession] Failed to send error frame: {send_err}")
             raise
 
         if not result:
-            logger.error("[RedisSession] No callable method found on agent")
+            logger.error(
+                "[RedisSession] No callable method found on agent",
+                extra={"chat_id": self.chat_id, "user_id": self.user_id}
+            )
+            # Send error frame
+            try:
+                msg_chat_id = self.chat_id
+                await self._send_frame(
+                    make_error(
+                        self.next_id,
+                        "agent_not_found",
+                        msg_chat_id,
+                        "No callable method found on agent",
+                        http=500,
+                        details={
+                            "chat_id": msg_chat_id,
+                            "user_id": self.user_id,
+                        }
+                    )
+                )
+            except Exception as send_err:
+                logger.error(f"[RedisSession] Failed to send error frame: {send_err}")
             return
 
         # Iterate stream
