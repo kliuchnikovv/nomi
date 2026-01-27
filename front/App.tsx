@@ -28,7 +28,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
 import { initDatabase } from './src/services/database/database';
-import { registerBackgroundSync } from './src/services/background/backgroundSyncService';
+// BackgroundTaskManager инициализируется через ConnectorsProvider
 import { socket } from './src/socket';
 
 function App() {
@@ -53,10 +53,11 @@ function App() {
                 await Promise.race([initDatabase(), timeout]);
                 console.log('[App] Database initialized');
 
-                setInitStatus('Registering Background Sync...');
-                // Don't let background sync block app load
-                registerBackgroundSync().catch(e => console.error('[App] Background sync failed:', e));
-                console.log('[App] Background sync registered (async)');
+                setInitStatus('Registering Background Tasks...');
+                // Don't let background tasks block app load
+                // BackgroundTaskManager будет инициализирован через ConnectorsProvider
+                // после загрузки интеграций из базы данных
+                console.log('[App] Background tasks will be initialized by ConnectorsProvider');
 
             } catch (e) {
                 console.error("Failed to initialize app:", e);

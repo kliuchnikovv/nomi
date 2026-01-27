@@ -186,6 +186,23 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             setTools(toolsList);
 
             console.log(`[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`);
+            
+            // Обновляем фоновые задачи на основе текущего состояния интеграций
+            refreshBackgroundTasks().catch(e => {
+                console.error('[ConnectorsProvider] Failed to refresh background tasks:', e);
+            });
+            
+            // Регистрируем обработчики системных событий для каждой интеграции
+            for (const integration of localIntegrations) {
+                if (integration.enabled) {
+                    const metadata = getIntegrationMetadata(integration.provider);
+                    if (metadata?.supportsBackgroundTasks) {
+                        registerSystemEventListeners(integration.id, integration.provider).catch(e => {
+                            console.error(`[ConnectorsProvider] Failed to register system listeners for ${integration.provider}:`, e);
+                        });
+                    }
+                }
+            }
         } catch (e) {
             console.warn('Failed to load integrations', e);
             setConfigs([]);
@@ -284,6 +301,16 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             setAuthStatus(`Connected ${provider} (${data.account_email})`);
 
             await getIntegrations();
+            
+            // Регистрируем фоновые задачи для новой интеграции, если она поддерживает их
+            const metadata = getIntegrationMetadata(provider);
+            if (metadata?.supportsBackgroundTasks) {
+                const localIntegration = await integrationStorage.getIntegrationByEmail(provider, data.account_email);
+                if (localIntegration) {
+                    await refreshBackgroundTasks();
+                    await registerSystemEventListeners(localIntegration.id, provider);
+                }
+            }
         } catch (e) {
             console.error('[ConnectorsProvider] Token exchange failed:', e);
             setAuthStatus(`Failed to connect ${provider}`);
@@ -362,6 +389,9 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             // Update in local storage
             await integrationStorage.updateIntegration(integration.id, { enabled });
             await getIntegrations();
+            
+            // Обновляем фоновые задачи при изменении состояния интеграции
+            await refreshBackgroundTasks();
         } catch (e) {
             console.warn('Failed to update integration', e);
         }
@@ -416,6 +446,9 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
             // Delete from local storage
             await integrationStorage.deleteIntegration(id);
+            
+            // Обновляем фоновые задачи после удаления интеграции
+            await refreshBackgroundTasks();
             await getIntegrations();
         } catch (e) {
             console.warn('Failed to delete integration', e);

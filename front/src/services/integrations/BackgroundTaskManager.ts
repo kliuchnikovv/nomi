@@ -269,7 +269,9 @@ export class SystemEventListener {
         
         console.log(`[BackgroundTaskManager] Triggering event ${eventType} for ${handlers.size} handlers`);
         
-        for (const handler of handlers) {
+        // Конвертируем Set в массив для итерации
+        const handlersArray = Array.from(handlers);
+        for (const handler of handlersArray) {
             try {
                 await handler(data);
             } catch (error) {
