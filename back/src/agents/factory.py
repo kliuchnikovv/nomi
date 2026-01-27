@@ -276,6 +276,7 @@ class AgentFactory:
                     model=model,
                     tools=tools,
                     debug_mode=self._debug_mode,
+                    knowledge=knowledge,
                 )
             elif agent_type and agent_type.lower() == "rag":
                 agent = RagAgent(

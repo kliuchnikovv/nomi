@@ -35,6 +35,7 @@ class RagAgent(Agent):
             tools=tools,
             knowledge=knowledge,
             search_knowledge=True,  # Enable agentic search
+            update_knowledge=True,  # Enable automatic fact storage
             read_chat_history=True,
             description="RAG-based agent that can retrieve context and generate answers.",
             add_datetime_to_context=True,

@@ -1,8 +1,9 @@
-from typing import Sequence
+from typing import Sequence, Optional
 
 from agno.db.postgres import PostgresDb
 from agno.agent import Agent
 from agno.models.base import Model
+from agno.knowledge import Knowledge
 from agno.tools import Toolkit, Function
 
 name = 'Mailer'
@@ -39,12 +40,16 @@ class MailerAgent(Agent):
         db: PostgresDb | None = None,
         tools: Sequence[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
+        knowledge: Optional[Knowledge] = None,
     ):
         super().__init__(
             db=db,
             name=name,
             model=model,
             tools=tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             description=description,
             instructions=instructions,
             expected_output=expected_output,
@@ -54,8 +59,6 @@ class MailerAgent(Agent):
             read_tool_call_history=True,  # Enable reading tool call history
             store_tool_messages=True,  # Store tool call results
             # read_chat_history=True,
-            # search_knowledge=True,
-            # update_knowledge=True,
             send_media_to_model=True,
             store_media=True,
             # store_history_messages=True,

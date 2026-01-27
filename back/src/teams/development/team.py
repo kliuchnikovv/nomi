@@ -19,6 +19,8 @@ from src.workflow.agent import PgWorkflowStorage
 from src.tools.task_manager import TaskManagementTool
 from src.rag_service import KnowledgeSearchTool
 from src.tools.git import GitTools
+from src.knowledge.factory import build_vector_db
+from src.knowledge.user_knowledge import UserScopedKnowledge
 
 # Import agents
 from src.teams.development.agents import (
@@ -99,6 +101,19 @@ class DevelopmentTeam(Workflow):
             else None
         )
 
+        # Build User-Scoped Knowledge Base for RAG
+        knowledge = None
+        if user_id:
+            try:
+                vector_db = build_vector_db(db_url=db_url)
+                if vector_db:
+                    knowledge = UserScopedKnowledge(
+                        user_id=user_id, vector_db=vector_db
+                    )
+                    logger.info("[DevelopmentTeam] Created UserScopedKnowledge for user_id=%s", user_id)
+            except Exception as e:
+                logger.warning("[DevelopmentTeam] Failed to create knowledge base: %s", e)
+
         # 1. Analyst
         self.analyst = AnalystAgent(
             model=model,
@@ -109,6 +124,7 @@ class DevelopmentTeam(Workflow):
             debug_mode=debug_mode,
             task_id=task_id,
             project_id=project_id,
+            knowledge=knowledge,
         )
 
         # 2. Architect
@@ -119,7 +135,7 @@ class DevelopmentTeam(Workflow):
             architect_tools.extend(client_tools)
 
         self.architect = ArchitectAgent(
-            model=model, tools=architect_tools, debug_mode=debug_mode
+            model=model, tools=architect_tools, debug_mode=debug_mode, knowledge=knowledge
         )
 
         # 3. Developer
@@ -130,7 +146,7 @@ class DevelopmentTeam(Workflow):
             developer_tools.extend(client_tools)
 
         self.developer = DeveloperAgent(
-            model=model, tools=developer_tools, git_tool=git_tool, debug_mode=debug_mode
+            model=model, tools=developer_tools, git_tool=git_tool, debug_mode=debug_mode, knowledge=knowledge
         )
 
         # 4. Reviewer
@@ -141,7 +157,7 @@ class DevelopmentTeam(Workflow):
             reviewer_tools.extend(client_tools)
 
         self.reviewer = ReviewerAgent(
-            model=model, tools=reviewer_tools, git_tool=git_tool, debug_mode=debug_mode
+            model=model, tools=reviewer_tools, git_tool=git_tool, debug_mode=debug_mode, knowledge=knowledge
         )
 
         # 5. Worker
@@ -151,6 +167,7 @@ class DevelopmentTeam(Workflow):
             jules_api_key=jules_api_key,
             client_tools=client_tools,
             debug_mode=debug_mode,
+            knowledge=knowledge,
         )
 
         # 6. Verifier
@@ -163,7 +180,7 @@ class DevelopmentTeam(Workflow):
             verifier_tools.extend(client_tools)
 
         self.verifier = VerifierAgent(
-            model=model, tools=verifier_tools, debug_mode=debug_mode
+            model=model, tools=verifier_tools, debug_mode=debug_mode, knowledge=knowledge
         )
 
         # Workflow Storage

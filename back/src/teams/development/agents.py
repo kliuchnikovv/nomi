@@ -2,6 +2,7 @@ from typing import List, Optional
 import os
 from agno.agent import Agent
 from agno.models.base import Model
+from agno.knowledge import Knowledge
 from agno.tools import Toolkit
 from agno.tools.github import GithubTools
 
@@ -31,6 +32,7 @@ class AnalystAgent(Agent):
         debug_mode: bool = False,
         task_id: Optional[str] = None,
         project_id: Optional[str] = None,
+        knowledge: Optional[Knowledge] = None,
         **kwargs,
     ):
         self.task_tool = task_tool
@@ -63,6 +65,9 @@ class AnalystAgent(Agent):
             model=model,
             instructions=instructions,
             tools=tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             markdown=True,
             debug_mode=debug_mode,
         )
@@ -114,7 +119,7 @@ class AnalystAgent(Agent):
 # --- ARCHITECT ---
 class ArchitectAgent(Agent):
     def __init__(
-        self, model: Model, tools: List[Toolkit], debug_mode: bool = False, **kwargs
+        self, model: Model, tools: List[Toolkit], debug_mode: bool = False, knowledge: Optional[Knowledge] = None, **kwargs
     ):
         super().__init__(
             name="Architect",
@@ -123,6 +128,9 @@ class ArchitectAgent(Agent):
             model=model,
             instructions=ARCHITECT_INSTRUCTIONS,
             tools=tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             markdown=True,
             debug_mode=debug_mode,
         )
@@ -136,6 +144,7 @@ class DeveloperAgent(Agent):
         tools: List[Toolkit],
         git_tool: Optional[GitTools] = None,
         debug_mode: bool = False,
+        knowledge: Optional[Knowledge] = None,
         **kwargs,
     ):
         agent_tools = tools if tools else []
@@ -149,6 +158,9 @@ class DeveloperAgent(Agent):
             model=model,
             instructions=DEVELOPER_INSTRUCTIONS,
             tools=agent_tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             markdown=True,
             debug_mode=debug_mode,
         )
@@ -162,6 +174,7 @@ class ReviewerAgent(Agent):
         tools: List[Toolkit],
         git_tool: Optional[GitTools] = None,
         debug_mode: bool = False,
+        knowledge: Optional[Knowledge] = None,
         **kwargs,
     ):
         agent_tools = tools if tools else []
@@ -175,6 +188,9 @@ class ReviewerAgent(Agent):
             model=model,
             instructions=REVIEWER_INSTRUCTIONS,
             tools=agent_tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             markdown=True,
             debug_mode=debug_mode,
         )
@@ -189,6 +205,7 @@ class WorkerAgent(Agent):
         jules_api_key: Optional[str] = None,
         client_tools: Optional[List[Toolkit]] = None,
         debug_mode: bool = False,
+        knowledge: Optional[Knowledge] = None,
         **kwargs,
     ):
         # Build tools list
@@ -216,6 +233,9 @@ class WorkerAgent(Agent):
             model=model,
             instructions=WORKER_INSTRUCTIONS,
             tools=tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             markdown=True,
             debug_mode=debug_mode,
         )
@@ -233,6 +253,7 @@ class VerifierAgent(Agent):
         model: Model,
         tools: Optional[List[Toolkit]] = None,
         debug_mode: bool = False,
+        knowledge: Optional[Knowledge] = None,
         **kwargs,
     ):
         agent_tools = tools if tools else []
@@ -244,6 +265,9 @@ class VerifierAgent(Agent):
             model=model,
             instructions=VERIFIER_INSTRUCTIONS,
             tools=agent_tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             markdown=True,
             debug_mode=debug_mode,
         )

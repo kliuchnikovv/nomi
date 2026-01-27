@@ -50,6 +50,9 @@ class MemoriserAgent(Agent):
             name="Memoriser",
             model=model,
             tools=tools,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             description="Extracts memory cards from user messages.",
             instructions=self.MEMORY_PROMPT,
             add_datetime_to_context=False,

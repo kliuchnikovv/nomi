@@ -123,6 +123,7 @@ class BriefingAgent(Agent):
             tools=tools,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             output_schema=BriefingResponse,
             # NOTE: structured_outputs=True removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
             debug_mode=debug_mode,
