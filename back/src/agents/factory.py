@@ -129,15 +129,15 @@ class AgentFactory:
                 include_thoughts=include_thoughts,
             )
 
-        # Support OpenCode Zen models
-        elif model_name.startswith("opencode-zen/"):
+        # Support OpenCode models
+        elif model_name.startswith("opencode/"):
             api_key = os.getenv("OPENCODE_API_KEY")
             if not api_key:
                 raise ValueError("OPENCODE_API_KEY environment variable not set")
 
             from agno.models.openai import OpenAIChat
 
-            logger.info("[Factory] Creating OpenCode Zen model: %s", model_name)
+            logger.info("[Factory] Creating OpenCode model: %s", model_name)
             return OpenAIChat(
                 id=model_name,
                 api_key=api_key,
