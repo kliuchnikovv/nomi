@@ -90,6 +90,71 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true
+    },
+    {
+      "id": "opencode-zen/big-pickle",
+      "name": "OpenCode Zen - Big Pickle",
+      "provider": "opencode",
+      "description": "Big Pickle model for advanced software engineering",
+      "context_window": 128000,
+      "max_output_tokens": 8192,
+      "rpm_limit": 100,
+      "rpd_limit": 10000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false
+    },
+    {
+      "id": "opencode-zen/gpt-5-nano",
+      "name": "OpenCode Zen - GPT 5 Nano",
+      "provider": "opencode",
+      "description": "GPT 5 Nano lightweight model for coding tasks",
+      "context_window": 128000,
+      "max_output_tokens": 8192,
+      "rpm_limit": 150,
+      "rpd_limit": 15000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false
+    },
+    {
+      "id": "openrouter/glm/glm-4.5-air",
+      "name": "GLM 4.5 Air (OpenRouter)",
+      "provider": "openrouter",
+      "description": "GLM 4.5 Air via OpenRouter",
+      "context_window": 128000,
+      "max_output_tokens": 4096,
+      "rpm_limit": 60,
+      "rpd_limit": 6000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false
+    },
+    {
+      "id": "openrouter/microsoft/gpt-oss-20b",
+      "name": "GPT OSS 20B (OpenRouter)",
+      "provider": "openrouter",
+      "description": "Microsoft GPT OSS 20B via OpenRouter",
+      "context_window": 8192,
+      "max_output_tokens": 2048,
+      "rpm_limit": 80,
+      "rpd_limit": 8000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false
+    },
+    {
+      "id": "openrouter/meta-llama/llama-3.3-70b-instruct",
+      "name": "Llama 3.3 70B Instruct (OpenRouter)",
+      "provider": "openrouter",
+      "description": "Meta Llama 3.3 70B Instruct via OpenRouter",
+      "context_window": 131072,
+      "max_output_tokens": 4096,
+      "rpm_limit": 30,
+      "rpd_limit": 3000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false
     }
   ]
 }
