@@ -264,7 +264,8 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			zap.String("msg_id", msgID.String()),
 		)
 
-		err := r.store.UpsertMessage(context.Background(), senderID, &chat.Message{
+		ctx := context.Background()
+		err := r.store.UpsertMessage(ctx, senderID, &chat.Message{
 			ID:        msgID,
 			ChatID:    r.ID,
 			Sender:    senderID,
@@ -281,8 +282,11 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			})
 		}
 
+		// Пользовательское сообщение всегда считаем содержательной активностью чата.
+		_ = r.store.TouchChatActivity(ctx, r.ID, time.Now().UTC())
+
 		// Update Chat Title if empty (or default)
-		ctx := context.Background()
+		// Переиспользуем тот же ctx для обновления заголовка и активности.
 		c, err := r.store.GetChat(ctx, r.initiatorID, r.ID)
 		if err == nil && (c.Title == "" || c.Title == "New Chat") {
 			newTitle := payload.Message
@@ -513,6 +517,12 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	}
 	// #endregion
 
+	// Only process LLM frames in the chat room that matches frame.ChatID.
+	// User rooms receive all frames (fallback for "user-only" clients); other chat rooms skip.
+	if r.Type == RoomTypeChat && frame.ChatID != uuid.Nil && frame.ChatID != r.ID {
+		return
+	}
+
 	// Broadcast to clients
 	b, err := json.Marshal(frame)
 	if err != nil {
@@ -574,9 +584,8 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	if frame.Operation == DoneOperation {
 		// Generation complete - room can now close if no clients
 		r.generationInProgress = false
-		// Extract message ID from payload if possible
-		// But in new model, Done payload might differ.
-		// For now, just log.
+		// Touch chat activity once per generation (we only process in the matching room)
+		_ = r.store.TouchChatActivity(context.Background(), r.ID, time.Now().UTC())
 		r.logger.Info("generation complete")
 	}
 }

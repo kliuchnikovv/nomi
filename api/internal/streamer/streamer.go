@@ -294,15 +294,20 @@ func (streamer *Streamer) Stream(client *Socket) {
 						Status:        "read",
 					})
 				} else {
+					now := time.Now().UTC()
+					msgID := uuid.New()
 					_ = streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
-						ID:        uuid.New(),
+						ID:        msgID,
 						ChatID:    frame.ChatID,
 						Sender:    streamer.userID,
 						Role:      chat.RoleUser,
 						Text:      frame.Payload.Message,
 						Model:     frame.Payload.Model,
-						CreatedAt: time.Now().UTC(),
+						CreatedAt: now,
 					})
+					// Пользовательское сообщение через WebSocket также считаем
+					// содержательной активностью чата.
+					_ = streamer.storage.TouchChatActivity(ctx, frame.ChatID, now)
 				}
 			}
 

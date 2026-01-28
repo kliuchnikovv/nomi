@@ -130,12 +130,10 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
-	// Update the chat's updated_at timestamp to reflect the new message
-	// This allows clients to sort chats by latest activity and sync only changed chats
-	s.DB.WithContext(ctx).
-		Model(&Chat{}).
-		Where("id = ?", m.ChatID).
-		Update("updated_at", messageModel.CreatedAt)
+	// Обновляем updated_at для этого чата, чтобы отразить новую "содержательную" активность.
+	// Здесь создаётся новое сообщение (не стриминг кадр), поэтому это валидная точка
+	// для сдвига чата наверх списков активности.
+	_ = s.TouchChatActivity(ctx, m.ChatID, messageModel.CreatedAt)
 
 	return result, nil
 }
@@ -469,12 +467,6 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 			return fmt.Errorf("failed to link attachments in upsert: %w", res.Error)
 		}
 	}
-
-	// Update the chat's updated_at timestamp
-	s.DB.WithContext(ctx).
-		Model(&Chat{}).
-		Where("id = ?", m.ChatID).
-		Update("updated_at", time.Now())
 
 	return nil
 }

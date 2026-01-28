@@ -243,7 +243,7 @@ func (b *MessageBuilder) Persist(ctx context.Context, store *storage.Storage, us
 	// needs to handle the conversion.
 	// Let's verify storage.UpsertMessage first.
 
-	return store.UpsertMessage(ctx, userID, &chat.Message{
+	if err := store.UpsertMessage(ctx, userID, &chat.Message{
 		ID:           b.ID,
 		ChatID:       b.ChatID,
 		Sender:       storage.ZeroUUID, // Assistant
@@ -255,5 +255,9 @@ func (b *MessageBuilder) Persist(ctx context.Context, store *storage.Storage, us
 		ContentParts: b.ContentParts,
 		Actions:      b.Actions,
 		CreatedAt:    time.Now().UTC(),
-	})
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }

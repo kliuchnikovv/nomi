@@ -149,6 +149,18 @@ func (s *Storage) GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUI
 	return chats, nil
 }
 
+// TouchChatActivity обновляет updated_at для конкретного чата.
+// Используется, чтобы отражать "последнюю содержательную активность" в чате,
+// не привязываясь к каждому фрейму стриминга.
+func (s *Storage) TouchChatActivity(ctx context.Context, chatID uuid.UUID, at time.Time) error {
+	result := s.DB.WithContext(ctx).
+		Model(&Chat{}).
+		Where("id = ?", chatID).
+		Update("updated_at", at)
+
+	return result.Error
+}
+
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {
 	result := s.DB.WithContext(ctx).Where("id = ? AND user_id = ?", chatID, userID).Delete(&Chat{})
 	if result.Error != nil {
