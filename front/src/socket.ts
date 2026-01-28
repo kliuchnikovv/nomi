@@ -1,5 +1,6 @@
 import { Frame } from './screens/main/models';
 import { useChatStore } from './store/chatStore';
+import { emitGenerationDone } from './store/generationDoneStore';
 import { getApiUrl } from './config';
 
 type Handlers = {
@@ -348,6 +349,7 @@ export class ChatSocket {
                                     // #region agent log
                                     fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:285',message:'calling onDone handler',data:{hasHandler:!!this.handlers.onDone},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
                                     // #endregion
+                                    emitGenerationDone(String(chatId));
                                     this.handlers.onDone?.(frame);
                                 } else if (op === 'signal') {
                                     this.handlers.onSignal?.(frame);

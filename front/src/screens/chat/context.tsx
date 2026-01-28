@@ -18,6 +18,7 @@ import { AVAILABLE_TEAMS } from './teams';
 import { useMain } from '../main/context';
 import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
+import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import { v4 as uuidv4 } from 'uuid';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
@@ -87,22 +88,8 @@ export function ChatProvider({
     const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
     const [teamCommand, setTeamCommand] = useState<any>(null);
     const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
-    const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const RESPONSE_TIMEOUT_MS = 60000; // 60 seconds
-
-    // Ensure chat socket is connected to the active chat room (RoomTypeChat)
-    useEffect(() => {
-        if (!activeChatID || activeChatID === emptyChatID) return;
-        if (!token) return;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat/context.tsx:chat-socket-effect',message:'configuring global socket for chat',data:{activeChatID:String(activeChatID).slice(0,8)+'…',socket:socket.getDebugState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-        socket.setChannel('chat');
-        socket.setChatId(activeChatID);
-        if (!socket.isReady()) {
-            socket.connect();
-        }
-    }, [activeChatID, token]);
 
     // Model selection state
     const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash');
@@ -172,6 +159,24 @@ export function ChatProvider({
 
     const { user, token, refreshToken } = useAuth();
     const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter } = useMain();
+
+    // Ensure chat socket is connected to the active chat room (RoomTypeChat).
+    // Reconnect when activeChatID changes so we join the new room (avoid DONE only on user channel).
+    useEffect(() => {
+        if (!activeChatID || activeChatID === emptyChatID) return;
+        if (!token) return;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat/context.tsx:chat-socket-effect',message:'configuring global socket for chat',data:{activeChatID:String(activeChatID).slice(0,8)+'…',socket:socket.getDebugState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        socket.setChannel('chat');
+        socket.setChatId(activeChatID);
+        if (socket.isReady()) {
+            socket.close();
+        }
+        if (!socket.isReady()) {
+            socket.connect();
+        }
+    }, [activeChatID, token]);
 
     const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0].id);
 
@@ -664,6 +669,21 @@ export function ChatProvider({
         // Ideally we should manage multiple listeners.
         // For now, this component is the main consumer.
     }, [refreshToken]);
+
+    // Clear "Assistant is thinking" when DONE is received on user channel (or any socket).
+    useEffect(() => {
+        const unsubscribe = subscribeGenerationDone((chatId) => {
+            if (chatId === activeChatID) {
+                setAssistantWorking(false);
+                setActiveAgentsCount(0);
+                if (responseTimeoutRef.current) {
+                    clearTimeout(responseTimeoutRef.current);
+                    responseTimeoutRef.current = null;
+                }
+            }
+        });
+        return unsubscribe;
+    }, [activeChatID]);
 
 
     const refreshPluginThread = useCallback(async () => {
