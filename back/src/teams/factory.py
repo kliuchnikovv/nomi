@@ -102,7 +102,7 @@ class TeamFactory:
             logger.info("[WS] Instantiating DnDTeam with room_id=%s", session_id)
             
             # Define model IDs
-            # fast_model_id = 'gemini-2.0-flash-exp'
+            # fast_model_id = 'gemini-2.0-flash'
             # pro_model_id = 'gemini-1.5-pro'
             
             # Models from screenshot (Free Tier)

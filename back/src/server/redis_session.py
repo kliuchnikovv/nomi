@@ -205,7 +205,7 @@ class RedisSession:
 
                 # Build model for the team
                 model = self.agent_factory.build_model(
-                    self.current_model_name or "gemini-2.0-flash-exp",
+                    self.current_model_name or "gemini-2.0-flash",
                     web_search=False,
                     thinking=self.current_thinking,
                 )
