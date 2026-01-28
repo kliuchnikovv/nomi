@@ -526,6 +526,37 @@ class RedisSession:
                             )
                         )
 
+                elif evt_type == "error":
+                    # Handle agent errors (e.g., RunErrorEvent from Agno)
+                    error_message = event.get("message", "Agent execution failed")
+                    error_code = event.get("code", "agent_error")
+                    error_details = event.get("details", {})
+                    error_http = event.get("http", 500)
+                    
+                    logger.error(
+                        "[RedisSession] Agent error event: %s",
+                        error_message,
+                        extra={
+                            "chat_id": msg_chat_id,
+                            "user_id": self.user_id,
+                            "error_code": error_code,
+                            "error_details": error_details,
+                        }
+                    )
+                    
+                    await self._send_frame(
+                        make_error(
+                            self.next_id,
+                            error_code,
+                            msg_chat_id,
+                            error_message,
+                            http=error_http,
+                            details=error_details
+                        )
+                    )
+                    # Don't send done frame after error - error frame is terminal
+                    return
+
             # Done
             await self._send_frame(
                 make_done(self.next_id, msg_chat_id, {"message_id": message_id})
@@ -1041,6 +1072,66 @@ Continue the conversation."""
                     # Reset current_agent_name so next content goes to Team Lead
                     current_agent_name = None
                 # --------------------------------
+
+                # Handle RunErrorEvent from Agno agent
+                if "RunError" in event_type:
+                    error_content = getattr(ev, "content", None)
+                    error_message = "Agent execution failed"
+                    error_code = "agent_error"
+                    error_details = {}
+                    
+                    # Try to parse error content if it's JSON
+                    if error_content:
+                        try:
+                            import json
+                            if isinstance(error_content, str):
+                                error_data = json.loads(error_content)
+                            else:
+                                error_data = error_content
+                            
+                            # Extract error info from Agno's error format
+                            if isinstance(error_data, dict):
+                                error_obj = error_data.get("error", {})
+                                if isinstance(error_obj, dict):
+                                    error_message = error_obj.get("message", error_message)
+                                    error_code = error_obj.get("code", error_code)
+                                    error_status = error_obj.get("status", "")
+                                    if error_status:
+                                        error_code = error_status.lower().replace("_", "-")
+                                    error_details = {
+                                        "error_type": type(ev).__name__,
+                                        "agent_id": getattr(ev, "agent_id", None),
+                                        "run_id": getattr(ev, "run_id", None),
+                                        "raw_error": str(error_content)[:500],  # Limit size
+                                    }
+                        except Exception:
+                            # If parsing fails, use raw content as message
+                            error_message = str(error_content)[:500]
+                            error_details = {
+                                "error_type": type(ev).__name__,
+                                "raw_error": str(error_content)[:500],
+                            }
+                    
+                    logger.error(
+                        "[RedisSession] RunErrorEvent received: %s",
+                        error_message,
+                        extra={
+                            "chat_id": self.chat_id,
+                            "user_id": self.user_id,
+                            "error_code": error_code,
+                            "error_details": error_details,
+                        }
+                    )
+                    
+                    # Yield error event that will be handled in handle_user_message
+                    yield {
+                        "type": "error",
+                        "message": error_message,
+                        "code": error_code,
+                        "http": 500,
+                        "details": error_details,
+                    }
+                    return  # Stop streaming after error
 
         elif hasattr(result, "__iter__") and not isinstance(result, (str, bytes)):
             # Sync iterator fallback

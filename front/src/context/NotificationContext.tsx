@@ -46,61 +46,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
         if (!socketRef.current) {
             console.log('[NotificationContext] Connecting to User Channel...');
-            // Initialize socket connecting to user channel
-            // We pass 'user' as context which makes ChatSocket append source=user (not what we want)
-            // But ChatSocket is flexible. We need to pass source as 'user' or modify ChatSocket?
-            // Wait, I updated backend to look for `channel=user`.
-            // ChatSocket doesn't natively support custom query params easily except via constructor getters.
-            // Let's check ChatSocket implementation I read earlier.
-            // It appends `source` from `getContext()`.
-            // But backend looks for `channel` query param.
-            // ChatSocket doesn't seem to support adding arbitrary query params.
-            // BUT, looking at ChatSocket.open():
-            // `if (context) qs.append('source', context);`
-            // `if (chatId) qs.append('chat_id', chatId);`
-
-            // If I pass `channel=user` via one of the existing fields? No, that's hacky.
-            // However, the backend implementation I wrote:
-            // `channel := c.Query("channel")`
-            // If I can't change ChatSocket easily (it's in a shared file), I might need to subclass it or modify it.
-            // Wait, I can modify `ChatSocket` in `front/src/socket/index.ts`.
-            // But `activeTasks` feature depends on it.
-            // Let's look at `ChatSocket` again.
-
-            // Actually, I can use `getContext` to pass "user_channel" and update backend to also check "source" or update ChatSocket to support "channel".
-            // Updating ChatSocket is cleaner.
-
-            // Let's assume I will update ChatSocket to support `getChannel`.
-            // For now, I will use a work-around or update `ChatSocket` in the next step if needed.
-            // Actually, I can pass `channel=user` by appending it to the rootUrl?
-            // `const httpUrl = ${this.rootUrl}/chat/ws?${qs.toString()}`;`
-            // If I pass `rootUrl` as `https://api.genie.com?channel=user`, `qs.toString()` will be appended with `&` or `?`?
-            // `URLSearchParams` handles it? No, string concatenation.
-            // If `rootUrl` has query params, `${rootUrl}/chat/ws` might be weird.
-
-            // Best way: Update ChatSocket to accept `extraParams` or specific `channel` getter.
-
-            // Let's write this provider assuming `ChatSocket` supports `getChannel` or I will add it.
-            // I'll add `getChannel` to the constructor options in this file, and then update `ChatSocket` file.
-
-            const socket = new ChatSocket(
-                getApiUrl(),
-                () => token,
-                () => 'user', // chatId - passing 'user' just in case, but backend ignores if channel=user
-                () => null, // messageId
-                () => null, // model
-                () => 'user_channel', // context (source)
-                () => 'agent',
-                () => null
-            );
-
-            // Monkey-patching or extending ChatSocket to send channel=user
-            // Since I can't easily modify ChatSocket class instance behavior without changing the class,
-            // I will modify `front/src/socket.ts` in a moment to support `channel`.
-            // For now, let's proceed with logic.
+            // Dedicated socket for user notifications (channel=user)
+            const socket = new ChatSocket();
+            socket.setToken(token);
+            socket.setChannel('user');
+            socket.setChatId(null);
 
             socket.setHandlers({
                 onMessage: (frame: Frame) => {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotificationContext.tsx:onMessage',message:'notification socket onMessage',data:{op:frame.op,kind:frame.kind,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null,payloadType:(frame as any).payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
+                    // #endregion
                     // We expect 'signal' frames for task updates
                     if (frame.op === 'signal' && frame.payload.type === 'task_updated') {
                         const command = frame.payload.command as any;
@@ -108,6 +64,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                             handleTaskUpdate(command);
                         }
                     }
+                },
+                onMeta: (frame: Frame) => {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotificationContext.tsx:onMeta',message:'notification socket onMeta',data:{op:frame.op,kind:frame.kind,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null,payloadType:(frame as any).payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
+                    // #endregion
+                },
+                onSignal: (frame: Frame) => {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotificationContext.tsx:onSignal',message:'notification socket onSignal',data:{op:frame.op,kind:frame.kind,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null,payloadType:(frame as any).payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
+                    // #endregion
+                },
+                onDone: (frame: Frame) => {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotificationContext.tsx:onDone',message:'notification socket onDone',data:{op:frame.op,kind:frame.kind,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
+                    // #endregion
                 },
                 onUnauthorized: async () => {
                     return await refreshToken();
@@ -118,7 +89,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             });
 
             socketRef.current = socket;
-            socket.open();
+            socket.connect();
         }
 
         return () => {

@@ -90,9 +90,23 @@ export function ChatProvider({
     const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const RESPONSE_TIMEOUT_MS = 60000; // 60 seconds
 
+    // Ensure chat socket is connected to the active chat room (RoomTypeChat)
+    useEffect(() => {
+        if (!activeChatID || activeChatID === emptyChatID) return;
+        if (!token) return;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat/context.tsx:chat-socket-effect',message:'configuring global socket for chat',data:{activeChatID:String(activeChatID).slice(0,8)+'…',socket:socket.getDebugState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        socket.setChannel('chat');
+        socket.setChatId(activeChatID);
+        if (!socket.isReady()) {
+            socket.connect();
+        }
+    }, [activeChatID, token]);
+
     // Model selection state
-    const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash-exp');
-    const selectedModelRef = useRef<string | null>('gemini-2.0-flash-exp');
+    const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash');
+    const selectedModelRef = useRef<string | null>('gemini-2.0-flash');
     const manualModelSelectionRef = useRef<boolean>(false);
 
     const setSelectedModel = useCallback((model: string, isManual: boolean = true) => {
@@ -198,7 +212,7 @@ export function ChatProvider({
                     setSelectedModel(lastModel, false);
                 } else {
                     console.log('No model found in history, resetting to default');
-                    setSelectedModel('gemini-2.0-flash-exp', false);
+                    setSelectedModel('gemini-2.0-flash', false);
                 }
             }
 
@@ -234,7 +248,7 @@ export function ChatProvider({
                 `${getApiUrl()}/chats`,
                 {
                     "title": title,
-                    "model": selectedModelRef.current || 'gemini-2.0-flash-exp',
+                    "model": selectedModelRef.current || 'gemini-2.0-flash',
                     "mode": chatMode,
                     // Pass team_id for teams, OR for individual agents (agent_type)
                     "team_id": teamIdToSend,
@@ -425,7 +439,8 @@ export function ChatProvider({
                 thinking,
                 role,
                 selectedModelRef.current || undefined,
-                tools // Pass enabled integrations to backend
+                tools, // Pass enabled integrations to backend
+                user.id // user_id for backend routing
             );
         },
         [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, setLastFailedMessage, tools],

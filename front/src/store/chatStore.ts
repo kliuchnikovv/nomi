@@ -34,14 +34,23 @@ export const useChatStore = create<ChatStore>()(
             },
 
             addMessage: (chatId, payload) => {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatStore.ts:36',message:'addMessage called',data:{chatId,payloadType:payload?.type,messageId:payload?.message_id,role:payload?.role},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
+                // #endregion
                 set((state) => {
                     const currentMessages = state.chats[chatId] || [];
                     const newMessages = onReceivedMessage(payload, currentMessages, chatId);
 
                     if (newMessages === currentMessages) {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatStore.ts:41',message:'messages unchanged',data:{chatId,currentCount:currentMessages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
+                        // #endregion
                         return state;
                     }
 
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatStore.ts:48',message:'messages updated',data:{chatId,oldCount:currentMessages.length,newCount:newMessages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
+                    // #endregion
                     return {
                         chats: {
                             ...state.chats,
@@ -60,10 +69,16 @@ export const useChatStore = create<ChatStore>()(
 
 // Pure function extracted from ChatContext to handle message accumulation
 function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: string): Message[] {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatStore.ts:62',message:'onReceivedMessage called',data:{messageId:payload?.message_id,payloadType:payload?.type,role:payload?.role,prevCount:prevMessages.length},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
+    // #endregion
     let newMessages: Message[] = [...prevMessages];
 
     const messageID = payload.message_id;
     if (!messageID) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatStore.ts:66',message:'no message_id in payload',data:{payloadType:payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
+        // #endregion
         // console.error(`Frame got no message_id`, payload);
         return newMessages;
     }
@@ -73,6 +88,9 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
 
     // For user messages: if already exists with same text, skip (optimistic duplicate)
     if (existingMessage && existingMessage.role === 'user') {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatStore.ts:72',message:'duplicate user message detected',data:{messageId:messageID,existingRole:existingMessage.role,payloadRole:payload.role},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
+        // #endregion
         // console.log('Dedup: skipping duplicate user message', messageID);
         return prevMessages; // Return unchanged
     }
@@ -90,6 +108,9 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         // Use role from payload if available (for multi-device sync)
         const role = payload.role || 'assistant';
         const sender = payload.sender || (role === 'user' ? 'user' : 'assistant');
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatStore.ts:88',message:'creating new message',data:{messageId:messageID,role,sender,payloadRole:payload.role,payloadSender:payload.sender},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
+        // #endregion
         
         newMessages[messageIdx] = {
             id: messageID,
@@ -104,6 +125,9 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         };
         // For user messages from other devices, we're done - don't accumulate
         if (role === 'user') {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chatStore.ts:106',message:'user message from other device',data:{messageId:messageID},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
+            // #endregion
             // console.log('Received user message from other device', messageID);
             return newMessages;
         }
