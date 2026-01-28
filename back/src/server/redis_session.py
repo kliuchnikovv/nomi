@@ -151,6 +151,7 @@ class RedisSession:
         """Build the agent based on payload parameters."""
         # Extract params from payload or defaults
         self.current_model_name = payload.get("model")
+        provider = payload.get("provider")
 
         thinking = payload.get("thinking")
         if thinking is not None:
@@ -206,6 +207,7 @@ class RedisSession:
                 # Build model for the team
                 model = self.agent_factory.build_model(
                     self.current_model_name or "gemini-2.0-flash",
+                    provider=provider,
                     web_search=False,
                     thinking=self.current_thinking,
                 )

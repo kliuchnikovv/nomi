@@ -76,7 +76,12 @@ class AgentFactory:
     # ... (build_model omitted)
 
     def build_model(
-        self, model_name: str, web_search: bool = False, thinking: str = "off"
+        self,
+        model_name: str,
+        *,
+        provider: str | None = None,
+        web_search: bool = False,
+        thinking: str = "off",
     ) -> Model:
         """Build a model instance from model name.
 
@@ -91,8 +96,11 @@ class AgentFactory:
         Raises:
             ValueError: If model name is not supported
         """
+        # Normalize provider if explicitly provided
+        provider_norm = (provider or "").strip().lower() or None
+
         # Support Gemini and Gemma models
-        if model_name.startswith("gemini-") or model_name.startswith("gemma-"):
+        if provider_norm == "google" or model_name.startswith("gemini-") or model_name.startswith("gemma-"):
             api_key = os.getenv("GOOGLE_API_KEY")
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable not set")
@@ -130,22 +138,32 @@ class AgentFactory:
             )
 
         # Support OpenCode models
-        elif model_name.startswith("opencode/"):
+        elif provider_norm == "opencode" or model_name in ["big-pickle", "gpt-5-nano"]:
             api_key = os.getenv("OPENCODE_API_KEY")
             if not api_key:
                 raise ValueError("OPENCODE_API_KEY environment variable not set")
 
             from agno.models.openai import OpenAIChat
 
-            logger.info("[Factory] Creating OpenCode model: %s", model_name)
+            # Convert to proper OpenCode format
+            full_model_id = f"opencode/{model_name}"
+            logger.info("[Factory] Creating OpenCode model: %s", full_model_id)
             return OpenAIChat(
-                id=model_name,
+                id=full_model_id,
                 api_key=api_key,
                 base_url="https://opencode.ai/zen/v1",
             )
 
-        # Support OpenRouter models
-        elif model_name.startswith("openrouter/"):
+        # Support OpenRouter models (all models containing /)
+        elif (
+            provider_norm == "openrouter"
+            or provider_norm == "openrouter.ai"
+            or provider_norm == "openrouter_ai"
+        ) or (
+            "/" in model_name
+            and not model_name.startswith("gemini-")
+            and not model_name.startswith("gemma-")
+        ):
             api_key = os.getenv("OPENROUTER_API_KEY")
             if not api_key:
                 raise ValueError("OPENROUTER_API_KEY environment variable not set")

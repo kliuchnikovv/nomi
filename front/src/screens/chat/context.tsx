@@ -94,12 +94,19 @@ export function ChatProvider({
     // Model selection state
     const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash');
     const selectedModelRef = useRef<string | null>('gemini-2.0-flash');
+    const selectedProviderRef = useRef<string | undefined>(undefined);
     const manualModelSelectionRef = useRef<boolean>(false);
+    const [availableModels, setAvailableModels] = useState<Model[]>([]);
 
     const setSelectedModel = useCallback((model: string, isManual: boolean = true) => {
         console.log('setSelectedModel called with:', model, 'isManual:', isManual);
         setSelectedModelInternal(model);
         selectedModelRef.current = model;
+
+        // Keep provider in sync with model selection (best-effort)
+        const nextProvider = availableModels.find(m => m.id === model)?.provider;
+        selectedProviderRef.current = nextProvider;
+
         if (isManual) {
             manualModelSelectionRef.current = true;
         }
@@ -109,8 +116,7 @@ export function ChatProvider({
             console.log('Notifying WebSocket about model change to:', model);
             socket.changeModel(activeChatID, model);
         }
-    }, [activeChatID]);
-    const [availableModels, setAvailableModels] = useState<Model[]>([]);
+    }, [activeChatID, availableModels]);
 
     // Error state management
     const [error, setError] = useState<string | null>(null);
@@ -444,6 +450,7 @@ export function ChatProvider({
                 thinking,
                 role,
                 selectedModelRef.current || undefined,
+                selectedProviderRef.current,
                 tools, // Pass enabled integrations to backend
                 user.id // user_id for backend routing
             );
@@ -566,6 +573,9 @@ export function ChatProvider({
                 const models = await modelsApi.getModels();
                 if (mounted && models && models.length > 0) {
                     setAvailableModels(models);
+                    // Initialize provider ref for default model (or currently selected)
+                    const current = selectedModelRef.current || 'gemini-2.0-flash';
+                    selectedProviderRef.current = models.find(m => m.id === current)?.provider;
                 } else if (mounted && retryCount < 3) {
                     console.log(`Fetch models returned empty list, retrying... (${retryCount + 1}/3)`);
                     setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));

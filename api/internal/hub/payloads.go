@@ -104,6 +104,7 @@ type UserMessagePayload struct {
 	Message       string      `json:"message"`
 	Role          string      `json:"role,omitempty"`
 	Model         string      `json:"model,omitempty"`
+	Provider      string      `json:"provider,omitempty"`
 	AttachmentIDs []uuid.UUID `json:"attachment_ids,omitempty"`
 	Attachments   interface{} `json:"attachments,omitempty"`
 	WebSearch     bool        `json:"web_search,omitempty"`

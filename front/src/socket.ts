@@ -539,6 +539,7 @@ export class ChatSocket {
         thinking?: string,
         role: string = 'user',
         model?: string,
+        provider?: string,
         tools?: any[],
         userId?: string
     ) {
@@ -566,6 +567,7 @@ export class ChatSocket {
                 message: text,
                 role: role,
                 model: model,
+                provider: provider,
                 sessionId: sessionId,
                 attachment_ids: attachmentIDs,
                 web_search: webSearch,

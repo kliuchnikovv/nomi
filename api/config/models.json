@@ -92,7 +92,7 @@
       "supports_thinking": true
     },
     {
-      "id": "opencode/big-pickle",
+      "id": "big-pickle",
       "name": "OpenCode - Big Pickle",
       "provider": "opencode",
       "description": "Big Pickle model for advanced software engineering",
@@ -105,7 +105,7 @@
       "supports_thinking": false
     },
     {
-      "id": "opencode/gpt-5-nano",
+      "id": "gpt-5-nano",
       "name": "OpenCode - GPT 5 Nano",
       "provider": "opencode",
       "description": "GPT 5 Nano lightweight model for coding tasks",
@@ -118,25 +118,25 @@
       "supports_thinking": false
     },
     {
-      "id": "openrouter/z-ai/glm-4.5-air",
-      "name": "GLM 4.5 Air (OpenRouter)",
+      "id": "meta-llama/llama-3.3-70b-instruct:free",
+      "name": "Z.AI: Llama 3.3 70B Instruct (free)",
       "provider": "openrouter",
-      "description": "GLM 4.5 Air via OpenRouter",
+      "description": "The Meta Llama 3.3 multilingual large language model (LLM) is a pretrained and instruction tuned generative model in 70B (text in/text out). The Llama 3.3 instruction tuned text only model is optimized for multilingual dialogue use cases and outperforms many of the available open source and closed chat models on common industry benchmarks.\n\nSupported languages: English, German, French, Italian, Portuguese, Hindi, Spanish, and Thai.",
       "context_window": 131072,
-      "max_output_tokens": 4096,
-      "rpm_limit": 60,
-      "rpd_limit": 6000,
+      "max_output_tokens": null,
+      "rpm_limit": 30,
+      "rpd_limit": 3000,
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false
     },
     {
-      "id": "openrouter/openai/gpt-oss-20b",
-      "name": "GPT OSS 20B (OpenRouter)",
+      "id": "openai/gpt-oss-20b:free",
+      "name": "OpenAI: gpt-oss-20b (free)",
       "provider": "openrouter",
-      "description": "OpenAI GPT OSS 20B via OpenRouter",
+      "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for lower-latency inference and deployability on consumer or single-GPU hardware. The model is trained in OpenAI's Harmony response format and supports reasoning level configuration, fine-tuning, and agentic capabilities including function calling, tool use, and structured outputs.",
       "context_window": 131072,
-      "max_output_tokens": 4096,
+      "max_output_tokens": null,
       "rpm_limit": 80,
       "rpd_limit": 8000,
       "supports_streaming": true,
@@ -144,14 +144,14 @@
       "supports_thinking": false
     },
     {
-      "id": "openrouter/meta-llama/llama-3.3-70b-instruct",
-      "name": "Llama 3.3 70B Instruct (OpenRouter)",
+      "id": "z-ai/glm-4.5-air:free",
+      "name": "Z.AI: GLM 4.5 Air (free)",
       "provider": "openrouter",
-      "description": "Meta Llama 3.3 70B Instruct via OpenRouter",
+      "description": "GLM-4.5-Air is a lightweight variant of our latest flagship model family, also purpose-built for agent-centric applications. Like GLM-4.5, it adopts a Mixture-of-Experts (MoE) architecture but with a more compact parameter size. GLM-4.5-Air also supports hybrid inference modes, offering a \"thinking mode\" for advanced reasoning and tool use, and a \"non-thinking mode\" for real-time interaction. Users can control reasoning behaviour with the `reasoning` `enabled` boolean.",
       "context_window": 131072,
-      "max_output_tokens": 16384,
-      "rpm_limit": 30,
-      "rpd_limit": 3000,
+      "max_output_tokens": 96000,
+      "rpm_limit": 60,
+      "rpd_limit": 6000,
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false
