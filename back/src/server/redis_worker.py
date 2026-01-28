@@ -6,7 +6,7 @@ import redis.asyncio as redis
 from typing import Dict
 
 
-from src.server.models import Frame, Op, Kind
+from src.server.models import Frame, Op
 from src.server.redis_session import RedisSession
 from src.server.utils import make_error
 from src.agents.factory import AgentFactory

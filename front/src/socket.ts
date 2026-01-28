@@ -316,16 +316,23 @@ export class ChatSocket {
                             // #endregion
                             if (chatId) {
                                 // 1. Update Global Store
-                                // IMPORTANT: notification (channel=user) socket must NOT write chat message frames into chat store.
-                                // Otherwise it duplicates meta/signal/done that are forwarded to user rooms by backend.
-                                if (this.channel !== 'user' && op === 'message') {
+                                // NOTE: backend can forward the same chat stream into both:
+                                // - chat room websocket (channel=chat&chat_id=...)
+                                // - user notification websocket (channel=user)
+                                //
+                                // Previously we skipped *all* op=message frames on the user channel,
+                                // which caused the UI to never render assistant replies when the app
+                                // happened to stay connected only on channel=user.
+                                //
+                                // To avoid duplication/noise, we only write DATA messages to the store.
+                                if (op === 'message' && frame.kind === 'data') {
                                     // #region agent log
                                     fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:addMessage',message:'calling addMessage',data:{instanceId:this.instanceId,channel:this.channel,configuredChatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,chatId:chatId?String(chatId).slice(0,8)+'…':null,op:frame.op,kind:frame.kind,payloadType:frame.payload?.type,messageId:frame.payload?.message_id?String(frame.payload?.message_id).slice(0,8)+'…':null,role:frame.payload?.role,sender:frame.payload?.sender,hasMessage:!!frame.payload?.message,messagePreview:frame.payload?.message?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'M'})}).catch(()=>{});
                                     // #endregion
                                     useChatStore.getState().addMessage(chatId, frame.payload);
-                                } else if (this.channel === 'user' && op === 'message') {
+                                } else if (op === 'message') {
                                     // #region agent log
-                                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:addMessage',message:'skipped addMessage on user channel',data:{instanceId:this.instanceId,channel:this.channel,chatId:chatId?String(chatId).slice(0,8)+'…':null,kind:frame.kind,payloadType:frame.payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'M'})}).catch(()=>{});
+                                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:addMessage',message:'skipped non-data message for store',data:{instanceId:this.instanceId,channel:this.channel,chatId:chatId?String(chatId).slice(0,8)+'…':null,kind:frame.kind,payloadType:frame.payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'M'})}).catch(()=>{});
                                     // #endregion
                                 }
 

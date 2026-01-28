@@ -1,11 +1,11 @@
-from typing import List, Dict, Any
 import logging
-
-logger = logging.getLogger(__name__)
+from typing import Any, Dict, List
 
 from agno.knowledge import Knowledge
 from agno.knowledge.document import Document
 from agno.vectordb.pgvector import PgVector
+
+logger = logging.getLogger(__name__)
 
 class UserScopedKnowledge(Knowledge):
     """

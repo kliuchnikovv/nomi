@@ -106,8 +106,7 @@ async def test_agent_factory_build_with_tools(agent_factory):
 
         # Verify build_tools was called with correct config
         mock_build_tools.assert_called_once()
-        args, _ = mock_build_tools.call_args
-        config = args[0]
+        # We don't inspect ToolsConfig internals here; it's enough that it was called.
         # We can't easily inspect ToolsConfig internals without importing it,
         # but we assume if it called build_tools it processed the specs.
 
@@ -163,7 +162,7 @@ async def test_agent_factory_build_with_web_search(agent_factory):
 
         assert isinstance(agent.model, Gemini)
         assert agent.model.id == "gemini-2.0-flash"
-        assert agent.model.search == True  # Verify search is enabled
+        assert agent.model.search  # Verify search is enabled
 
 
 @pytest.mark.asyncio
@@ -183,7 +182,7 @@ async def test_agent_factory_build_without_web_search(agent_factory):
         )
 
         assert isinstance(agent.model, Gemini)
-        assert agent.model.search == False  # Verify search is disabled
+        assert not agent.model.search  # Verify search is disabled
 
 
 @pytest.mark.asyncio
@@ -206,7 +205,7 @@ async def test_agent_factory_build_with_thinking(agent_factory):
         assert agent.model.id == "gemini-2.5-flash"
         # Verify thinking config is passed
         assert agent.model.thinking_budget == 8192
-        assert agent.model.include_thoughts == True
+        assert agent.model.include_thoughts
 
 
 @pytest.mark.asyncio

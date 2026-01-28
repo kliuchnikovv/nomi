@@ -326,7 +326,8 @@ class JulesTools(Toolkit):
                     # Let's iterate our planned steps and see if they appear in recent activities
                     for step in architect_plan.get('content', {}).get('steps', []):
                         path = step.get('file_path')
-                        if not path: continue
+                        if not path:
+                            continue
 
                         # If already done, skip
                         if steps_state.get(path) == "completed":

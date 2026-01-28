@@ -472,7 +472,8 @@ class ProjectKnowledgeManager:
                     clean_fields = []
                     for f in fields_raw.split("\n"):
                         f = f.split("//")[0].split("/*")[0].strip()
-                        if not f: continue
+                        if not f:
+                            continue
                         # Remove json tags
                         f = re.sub(r'`[^`]+`', '', f).strip()
                         if f:

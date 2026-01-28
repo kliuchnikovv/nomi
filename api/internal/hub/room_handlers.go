@@ -183,11 +183,28 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	// Preserve original ChatID for routing in User rooms
 	originalChatID := frame.ChatID
 
-	// Basic validation - for Chat rooms, warn if mismatch but allow processing
+	// Basic validation / routing:
+	// - For Chat rooms, if the incoming frame.ChatID doesn't match the room ID, it means
+	//   the client is sending a message for a different chat while connected to this room.
+	//   In that case we MUST route the message to the correct chat room, otherwise the
+	//   reply will be published/broadcast to the wrong chat and the UI will appear "stuck".
 	if frame.ChatID != uuid.Nil && frame.ChatID != r.ID {
 		if r.Type == RoomTypeChat {
-			r.logger.Warn("message chat_id mismatch in chat room", zap.String("msg_chat_id", frame.ChatID.String()), zap.String("room_id", r.ID.String()))
-			frame.ChatID = r.ID
+			msgChatID := frame.ChatID
+			r.logger.Warn(
+				"message chat_id mismatch in chat room; rerouting to correct room",
+				zap.String("msg_chat_id", msgChatID.String()),
+				zap.String("room_id", r.ID.String()),
+			)
+
+			// Route to the correct chat room and stop processing in this room.
+			// We reuse the same client message payload; the target room will parse it again.
+			if targetRoom, err := r.hub.GetOrCreateRoom(msgChatID, RoomTypeChat, r.initiatorID, r.mode, r.command); err != nil {
+				r.logger.Error("failed to get/create target chat room for reroute", zap.Error(err), zap.String("msg_chat_id", msgChatID.String()))
+			} else if targetRoom.ID != r.ID {
+				targetRoom.ingress <- msg
+				return
+			}
 		} else if r.Type == RoomTypeUser {
 			// For User rooms, we explicitly ALLOW mismatch because we route based on it
 			// We do NOT overwrite frame.ChatID here, so we can use it for routing later

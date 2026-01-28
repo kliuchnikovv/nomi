@@ -2,19 +2,17 @@ import os
 import logging
 import uuid
 import inspect
+from contextlib import asynccontextmanager
 from typing import Optional
+
+from fastapi import FastAPI
 from pydantic import BaseModel
 
-from agno.db.postgres import PostgresDb
 from agno.os import AgentOS
-from agno.models.google import Gemini
-from agno.knowledge.embedder.google import GeminiEmbedder
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.agents.genie import GenieAgent
 from src.server import webhooks
-from src.agents.factory import AgentFactory
-from src.tools.config import ToolConfigClient
 from src.tools.client_side import start_action_tracking, get_client_actions
 from src.teams.development.team import (
     DevelopmentTeam,
@@ -120,9 +118,6 @@ agent_os = AgentOS(
 )
 global app
 app = agent_os.get_app()
-
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
 
 
 @asynccontextmanager

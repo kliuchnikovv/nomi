@@ -18,7 +18,6 @@ from src.tools.ui import ClientUITools
 from src.rag_service import KnowledgeSearchTool
 from src.integrations.registry import (
     get_provider,
-    is_server_side,
     should_include_in_tools,
 )
 
@@ -175,8 +174,6 @@ Only use this tool when the user wants to interact with {account_email}."""
 
 
 def _build_google_calendar(params: Dict[str, Any]) -> Toolkit:
-    base_allowed = {"name"}  # Calendar инструмент не использует порт
-    base = {k: v for k, v in params.items() if k in base_allowed and v is not None}
     variants: List[Dict[str, Any]] = []
 
     creds = _make_credentials(params)
