@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -167,7 +169,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		r.logger.Warn("failed to parse user payload", zap.Error(err))
 		r.sendErrorFrame(ErrorCodeParseFailed, "Failed to parse message payload", err, frame.TraceID, map[string]interface{}{
 			"operation": "parse_payload",
-			"chat_id":    frame.ChatID.String(),
+			"chat_id":   frame.ChatID.String(),
 		})
 		return
 	}
@@ -257,7 +259,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		if err != nil {
 			r.logger.Error("failed to save user message", zap.Error(err))
 			r.sendErrorFrame(ErrorCodeSaveFailed, "Failed to save message to database", err, payload.TraceID, map[string]interface{}{
-				"operation": "save_message",
+				"operation":  "save_message",
 				"message_id": msgID.String(),
 			})
 		}
@@ -487,6 +489,13 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 		zap.String("trace_id", frame.TraceID),
 	)
 
+	// #region agent log (ndjson to file)
+	if f, err := os.OpenFile("/Users/kliuchnikovv/go/src/github.com/kliuchnikovv/genie-api/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		_, _ = f.WriteString(`{"location":"api/hub/room_handlers.go:handleLLMMessage","message":"llm frame in room","data":{"roomId":"` + r.ID.String() + `","roomType":"` + string(r.Type) + `","initiatorId":"` + r.initiatorID.String() + `","clientCount":` + strconv.Itoa(len(r.clients)) + `,"frameKind":"` + string(frame.Kind) + `","frameOp":"` + string(frame.Operation) + `","frameChatId":"` + frame.ChatID.String() + `"},"timestamp":` + strconv.FormatInt(time.Now().UnixMilli(), 10) + `,"sessionId":"debug-session","runId":"run5","hypothesisId":"K"}` + "\n")
+		_ = f.Close()
+	}
+	// #endregion
+
 	// Broadcast to clients
 	b, err := json.Marshal(frame)
 	if err != nil {
@@ -494,8 +503,8 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 		// Send error frame to clients about the marshal failure
 		r.sendErrorFrame(ErrorCodeMarshalFailed, "Failed to process AI response", err, frame.TraceID, map[string]interface{}{
 			"operation": "marshal_llm_frame",
-			"kind":       string(frame.Kind),
-			"op":         string(frame.Operation),
+			"kind":      string(frame.Kind),
+			"op":        string(frame.Operation),
 		})
 		return
 	}
