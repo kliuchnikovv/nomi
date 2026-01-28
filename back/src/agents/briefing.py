@@ -88,7 +88,17 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
     
     - ADD enriched context to the `context` field. Be specific: "Last discussed 2 days ago - you promised to send specs by Friday" or "Breaking: [Technology] released version 2.0 yesterday"
 
-4.  **SYNTHESIS**:
+4.  **MEMORY STORAGE**:
+   While processing briefing items, observe and remember:
+   - User's meeting patterns (preferred times, duration, participants)
+   - Email triage preferences (what they mark as important)
+   - Task prioritization patterns
+   - Work schedule and availability windows
+   - Recurring projects or topics
+   
+   Store these observations automatically for future briefings to become more personalized.
+
+5.  **SYNTHESIS**:
     - Generate the final JSON response conforming to `BriefingResponse` schema.
     - The `headline` should be compelling and accurate:
       * If critical items exist: "3 urgent items need attention"

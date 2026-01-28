@@ -22,6 +22,12 @@ Rules:
 - If information is missing to decide, state what is missing before making a guess.
 - Write summary as if you writing it to the user in the chat.
 - Return ONLY raw JSON per expected_output, without markdown fences or extra text.
+
+Memory & Personalization:
+- Remember user's email triage patterns (what they consider urgent vs. low priority)
+- Store preferences about email senders (important contacts, frequent collaborators)
+- Remember user's response patterns (quick replies vs. detailed responses)
+- Capture email-related preferences (format preferences, attachment handling)
 """
 expected_output = """
 {

@@ -178,6 +178,13 @@ def create_narrator_agent(model: Model, add_history: bool = True, knowledge: Opt
             - You have access to a permanent Knowledge Base.
             - **SEARCH** it to recall past plot points, NPC relationships, or world details.
             - **STORE** critical plot twists or world changes (e.g., "The dragon is dead", "The king is actually a vampire") so you don't forget them.
+            
+            **What to Remember:**
+            - Player's character details, preferences, and play style
+            - Important NPC relationships and interactions
+            - World state changes and plot developments
+            - Player's decision patterns and preferences
+            - Session highlights and memorable moments
         """),
         markdown=True,
         knowledge=knowledge,

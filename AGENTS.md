@@ -91,37 +91,273 @@ Communication between Go Hub, Python Brain, and Client uses a JSON Frame protoco
 
 ## Integrations & Tools
 
+### Integration Architecture
+
+Genie uses a **registry-based integration system** that simplifies adding new providers and clearly separates client-side and server-side integrations.
+
+#### Integration Types
+
+**Client-Only Integrations (`StorageTypeClientOnly`)**:
+- **Storage**: Data stored only in SQLite on the device
+- **Credentials**: Tokens stored locally in SecureStore, never sent to server
+- **Sync**: NOT synchronized with server (PostgreSQL)
+- **Execution**: Uses `ClientToolExecutor` on the device
+- **Background Tasks**: Can run background processes on device (e.g., periodic email sync)
+- **System Events**: Can listen to system events (push notifications, app lifecycle)
+- **Examples**: Gmail, Calendar (personal user data)
+
+**Server Integrations (`StorageTypeServer`)**:
+- **Storage**: Data stored on server in PostgreSQL
+- **Credentials**: Tokens stored on server, can be passed to Python tools
+- **Sync**: Synchronized with client for metadata display
+- **Execution**: Uses Python tools on server
+- **Examples**: GitHub, Jules (API keys for server operations)
+
+**Hybrid Integrations (`StorageTypeHybrid`)**:
+- **Storage**: Metadata on server, data on client
+- **Use Case**: Future integrations that need both server and client components
+
+#### Integration Registry System
+
+All integrations are registered in three centralized registries:
+
+1. **Go Registry** (`api/internal/integrations/registry.go`):
+   - Provider definitions with metadata (StorageType, OAuth config, scopes)
+   - Functions: `GetProvider()`, `GetClientOnlyProviders()`, `GetServerProviders()`, `ShouldSync()`
+
+2. **Python Registry** (`back/src/integrations/registry.py`):
+   - Tool type definitions (server-side vs client-side)
+   - Functions: `is_server_side()`, `should_include_in_tools()`
+
+3. **Frontend Registry** (`front/src/services/integrations/registry.ts`):
+   - UI metadata (icons, descriptions, background task support)
+   - Functions: `getClientOnlyIntegrations()`, `getServerIntegrations()`, `supportsBackgroundTasks()`
+
+#### Adding a New Integration
+
+To add a new integration, update **3 registries** (instead of 10+ files):
+
+1. **Go Registry** (`api/internal/integrations/registry.go`):
+```go
+"slack": {
+    Name: "slack",
+    DisplayName: "Slack",
+    Type: "oauth2",
+    StorageType: StorageTypeServer, // or StorageTypeClientOnly
+    OAuthConfig: &OAuthConfig{...},
+    RequiresSync: true,
+    SupportsBackgroundTasks: false,
+    // ...
+}
+```
+
+2. **Python Registry** (`back/src/integrations/registry.py`):
+```python
+"slack": ProviderDefinition(
+    name="slack",
+    storage_type=StorageType.SERVER,
+    tool_type=ToolType.SERVER_SIDE,
+    # ...
+)
+```
+
+3. **Frontend Registry** (`front/src/services/integrations/registry.ts`):
+```typescript
+slack: {
+    id: 'slack',
+    storageType: 'server',
+    supportsBackgroundTasks: false,
+    // ...
+}
+```
+
 ### 1. Server-Side Tools (`back/src/tools/`)
 - Executed by the Python backend.
-- **Use Case:** Web Search (DuckDuckGo), Public Data, Computation.
+- **Use Case:** Web Search (DuckDuckGo), Public Data, Computation, GitHub operations.
 - **Definition:** Standard Agno `Toolkit`.
+- **Filtering:** Only integrations with `StorageTypeServer` are included in tools list for Python backend.
+- **Registry:** Uses `back/src/integrations/registry.py` to determine which integrations should be included.
 
 ### 2. Client-Side Tools (`back/src/tools/client_side.py` & `front/src/services/tools/`)
 - **Concept:** "Remote Brain, Local Hands".
+- **Storage Type:** Only `StorageTypeClientOnly` integrations execute on client.
 - **Workflow:**
     1. Python Agent calls a "Mock" tool (e.g., `ClientGmailTools.send_email`).
     2. This mock records a `ClientAction` in context.
     3. `RedisSession` publishes a `client_action` frame to Redis.
     4. Go Hub receives frame and forwards to Frontend `ChatContext`.
     5. `ChatContext` calls `ClientToolExecutor.ts`.
-    6. `ClientToolExecutor` uses local `GmailClient` with local auth tokens.
-    7. Result is displayed/fed back to chat.
+    6. `ClientToolExecutor` validates integration is client-side via registry.
+    7. `ClientToolExecutor` uses local `GmailClient` with local auth tokens.
+    8. Result is displayed/fed back to chat.
+
+### 3. Background Tasks (`front/src/services/integrations/BackgroundTaskManager.ts`)
+- **Purpose:** Manage background processes for client-only integrations.
+- **Features:**
+    - Automatic registration based on integration registry
+    - Periodic tasks (e.g., email sync every 15 minutes)
+    - System event listeners (push notifications, app lifecycle)
+    - Lifecycle management (start/stop on integration enable/disable)
+- **Usage:**
+    - Automatically initialized by `ConnectorsProvider`
+    - Tasks registered when integration is enabled
+    - Tasks stopped when integration is disabled or deleted
+- **Supported Events:**
+    - `push_notifications`: Trigger sync on push notification
+    - `app_lifecycle`: React to app state changes (foreground/background)
 
 ---
 
 ## RAG (Retrieval-Augmented Generation)
 
-Genie uses a **Hybrid RAG** approach:
+Genie uses a **Hybrid RAG** approach with multiple layers:
 
-1. **Global/Server RAG (`back/src/rag_service.py`):**
-    - Uses `LightRAG` (remote service).
-    - Stores shared or public knowledge.
-    - Accessed via REST API from Python.
+### 1. Built-in Agno RAG (Primary Memory System)
 
-2. **Local/Personal RAG (`front/src/services/database/VectorStore.ts`):**
-    - Runs on the phone (SQLite/Vector).
-    - Stores private user data (Emails, Notes, Tasks).
-    - **Access:** Python agent calls `ClientRagTools.search()`, which triggers a `client_action`. The phone runs the vector search locally and returns text snippets.
+**Framework:** Agno's built-in `Knowledge` system with PgVector and GeminiEmbedder.
+
+**Architecture:**
+- **Vector Database:** PostgreSQL with `pgvector` extension
+- **Embedder:** Google Gemini `text-embedding-004` (768 dimensions)
+- **Storage:** `agent_knowledge` table in PostgreSQL
+- **Isolation:** `UserScopedKnowledge` wrapper enforces user_id isolation via metadata filters
+
+**How It Works:**
+
+#### Automatic Search (`search_knowledge=True`)
+When enabled, Agno automatically:
+1. Performs semantic search in the knowledge base before generating responses
+2. Retrieves relevant documents (default: 5 results)
+3. Injects retrieved context into the prompt automatically
+4. No explicit tool calls needed — works transparently
+
+**Example:**
+```python
+agent = GenieAgent(
+    knowledge=UserScopedKnowledge(user_id=user_id, vector_db=vector_db),
+    search_knowledge=True,  # Automatic search enabled
+    # ...
+)
+```
+
+#### Automatic Storage (`update_knowledge=True`)
+When enabled, Agno automatically:
+1. Analyzes conversation history
+2. Extracts important facts, preferences, and context
+3. Stores them in the knowledge base with metadata (user_id, timestamp)
+4. Works transparently — no explicit save calls needed
+
+**Example:**
+```python
+agent = GenieAgent(
+    knowledge=UserScopedKnowledge(user_id=user_id, vector_db=vector_db),
+    update_knowledge=True,  # Automatic fact storage enabled
+    # ...
+)
+```
+
+**Agent Integration:**
+All agents in Genie support built-in RAG:
+- ✅ `GenieAgent` — Full RAG support (search + update)
+- ✅ `RagAgent` — Full RAG support
+- ✅ `BriefingAgent` — Full RAG support
+- ✅ `MailerAgent` — Full RAG support
+- ✅ `MemoriserAgent` — Full RAG support
+- ✅ `DevelopmentTeam` agents (Analyst, Architect, Developer, Reviewer, Worker, Verifier) — Full RAG support
+- ✅ D&D Team agents — Full RAG support
+
+**Files:**
+- `back/src/knowledge/factory.py` — Knowledge base factory (`build_vector_db`, `build_knowledge_base`)
+- `back/src/knowledge/user_knowledge.py` — `UserScopedKnowledge` wrapper for user isolation
+- `back/src/agents/factory.py` — Creates `UserScopedKnowledge` for all agents
+
+### 2. Project Knowledge Manager (`back/src/rag_service.py`)
+
+**Purpose:** Explicit project-scoped knowledge search via tools.
+
+**Features:**
+- Project-specific knowledge indexing (docs, structure, API endpoints, components, dependencies)
+- GitHub repository ingestion with structured summaries
+- Explicit search via `KnowledgeSearchTool` (complements automatic RAG)
+
+**Use Case:** When agents need to search specific project knowledge by `project_id`.
+
+**Example:**
+```python
+knowledge_tool = KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
+# Agent can explicitly call: knowledge_tool.search_knowledge(query="...", project_id="...")
+```
+
+**Files:**
+- `back/src/rag_service.py` — `ProjectKnowledgeManager` and `KnowledgeSearchTool`
+
+### 3. Local/Personal RAG (`front/src/services/database/VectorStore.ts`)
+
+**Purpose:** Private user data search on device.
+
+**Architecture:**
+- Runs on the phone (SQLite/Vector)
+- Stores private user data (Emails, Notes, Tasks)
+- **Access:** Python agent calls `ClientRagTools.search()`, which triggers a `client_action`. The phone runs the vector search locally and returns text snippets.
+
+**Files:**
+- `front/src/services/database/VectorStore.ts` — Local vector store
+- `back/src/tools/client_side.py` — `ClientRagTools` for triggering local search
+
+### RAG Architecture Summary
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              UserScopedKnowledge (Agno RAG)              │
+│  - Automatic search (search_knowledge=True)             │
+│  - Automatic storage (update_knowledge=True)            │
+│  - User isolation via metadata filters                  │
+│  - PgVector + GeminiEmbedder                           │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          │ used by all agents
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│              All Agno Agents                            │
+│  - GenieAgent, BriefingAgent, MailerAgent, etc.        │
+│  - DevelopmentTeam agents                               │
+│  - D&D Team agents                                      │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          │ explicit search via tools
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│         KnowledgeSearchTool (Project RAG)               │
+│  - Project-specific knowledge                           │
+│  - GitHub repository ingestion                         │
+│  - Explicit tool calls                                 │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          │ client_action
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│      ClientRagTools → Local VectorStore (Frontend)      │
+│  - Private user data (emails, notes, tasks)            │
+│  - Local SQLite/Vector search                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Best Practices
+
+1. **Use Built-in RAG for General Memory:**
+   - All agents should have `knowledge` parameter with `UserScopedKnowledge`
+   - Enable `search_knowledge=True` and `update_knowledge=True` for automatic memory
+   - Works transparently — no explicit tool calls needed
+
+2. **Use KnowledgeSearchTool for Project-Specific Search:**
+   - When searching for project documentation, code structure, or API endpoints
+   - When you need to filter by `project_id`
+   - Complements automatic RAG, doesn't replace it
+
+3. **Use ClientRagTools for Private Data:**
+   - When searching user's private emails, notes, or tasks
+   - Executes on device for privacy
+   - Triggered via `client_action` pattern
 
 ---
 
@@ -164,6 +400,8 @@ Genie uses a **Hybrid RAG** approach:
 - Use `zap` for logging (structured logs)
 - New handlers go in `api/internal/handlers/`
 - New models go in `api/internal/storage/models.go`
+- **Integrations**: Use `api/internal/integrations/registry.go` for provider definitions
+- **OAuth**: Use `api/internal/integrations/oauth_factory.go` for OAuth configuration generation
 
 ### Testing
 ```bash
@@ -189,11 +427,56 @@ cd api && go build ./...
 - **Entry point**: `back/app.py`
 - **Main agent**: `back/src/agents/genie.py`
 
+### Agent Memory (RAG Integration)
+
+All agents in Genie support built-in memory via Agno's RAG system:
+
+**Creating Agents with Memory:**
+```python
+from src.knowledge.factory import build_vector_db
+from src.knowledge.user_knowledge import UserScopedKnowledge
+
+# Build vector database
+vector_db = build_vector_db(db_url=db_url)
+
+# Create user-scoped knowledge (enforces user_id isolation)
+knowledge = UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
+
+# Create agent with memory
+agent = GenieAgent(
+    model=model,
+    knowledge=knowledge,
+    search_knowledge=True,   # Automatic search in knowledge base
+    update_knowledge=True,   # Automatic fact storage from conversations
+    # ...
+)
+```
+
+**How Memory Works:**
+- **Automatic Search:** When `search_knowledge=True`, Agno automatically searches the knowledge base before generating responses
+- **Automatic Storage:** When `update_knowledge=True`, Agno automatically extracts and stores important facts from conversations
+- **User Isolation:** `UserScopedKnowledge` ensures each user's data is isolated via metadata filters
+- **No Explicit Calls:** Memory works transparently — no need to call tools explicitly
+
+**Agent Factory Pattern:**
+`AgentFactory.build()` automatically creates `UserScopedKnowledge` for all agents:
+- Uses `user_id` or `session_id` for anonymous users
+- Creates `UserScopedKnowledge` wrapper for user isolation
+- Passes `knowledge` to all agent constructors
+
+**Files:**
+- `back/src/agents/factory.py` — Agent factory with automatic knowledge creation
+- `back/src/knowledge/factory.py` — Knowledge base factory functions
+- `back/src/knowledge/user_knowledge.py` — `UserScopedKnowledge` wrapper
+
 ### Coding Rules
 - Use type hints for all function signatures
 - Use Pydantic models for data validation
 - Async functions preferred for I/O operations
 - Use `logging` module, not `print()`
+- **Integrations**: Use `back/src/integrations/registry.py` to check integration types
+- **Tools**: Client-side integrations are filtered out in `tools/factory.py` - only server-side tools are built
+- **Memory**: Always pass `knowledge` parameter to agents when `user_id` is available. Use `UserScopedKnowledge` for user isolation.
 
 ### Testing
 ```bash
@@ -208,6 +491,7 @@ cd back && ruff check .
 ### Forbidden Actions
 - Do NOT use synchronous blocking calls in async functions
 - Do NOT modify `src/teams/` structure without explicit instruction
+- Do NOT create agents without `knowledge` parameter when `user_id` is available — all agents should have memory support
 
 ---
 
@@ -225,6 +509,9 @@ cd back && ruff check .
 - Screens go in `front/src/screens/`
 - Reusable components go in `front/src/components/`
 - Hooks go in `front/src/hooks/` or screen-specific `hooks/` folders
+- **Integrations**: Use `front/src/services/integrations/registry.ts` for metadata
+- **Background Tasks**: Use `front/src/services/integrations/BackgroundTaskManager.ts` for managing background processes
+- **Client Tools**: Only client-only integrations execute via `ClientToolExecutor`
 
 ### Testing
 ```bash
@@ -378,3 +665,116 @@ repos = self.github_tool.list_repos(limit=50)
 ```
 
 **File:** `back/src/teams/development/team.py`
+
+---
+
+### 5. Agent Memory (RAG Integration)
+
+**IMPORTANT**: All agents should support memory via Agno's built-in RAG system.
+
+**Creating Agents with Memory:**
+
+```python
+from src.knowledge.factory import build_vector_db
+from src.knowledge.user_knowledge import UserScopedKnowledge
+
+# Build vector database (shared across users)
+vector_db = build_vector_db(db_url=db_url)
+
+# Create user-scoped knowledge (enforces user_id isolation)
+knowledge = UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
+
+# Create agent with memory enabled
+agent = GenieAgent(
+    model=model,
+    knowledge=knowledge,
+    search_knowledge=True,   # Automatic search enabled
+    update_knowledge=True,   # Automatic storage enabled
+    # ...
+)
+```
+
+**Agent Factory Pattern:**
+
+`AgentFactory.build()` automatically creates knowledge for all agents:
+
+```python
+# In AgentFactory.build()
+rag_user_id = user_id or session_id
+vector_db = self._get_or_create_vector_db()
+knowledge = None
+if vector_db:
+    knowledge = UserScopedKnowledge(user_id=rag_user_id, vector_db=vector_db)
+
+# Pass to all agents
+agent = GenieAgent(
+    model=model,
+    knowledge=knowledge,  # Automatically provided
+    # ...
+)
+```
+
+**DevelopmentTeam Pattern:**
+
+When creating DevelopmentTeam, knowledge is created and passed to all sub-agents:
+
+```python
+# In DevelopmentTeam.__init__()
+knowledge = None
+if user_id:
+    try:
+        vector_db = build_vector_db(db_url=db_url)
+        if vector_db:
+            knowledge = UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
+    except Exception as e:
+        logger.warning("Failed to create knowledge base: %s", e)
+
+# Pass to all agents
+self.analyst = AnalystAgent(..., knowledge=knowledge)
+self.architect = ArchitectAgent(..., knowledge=knowledge)
+# ... etc
+```
+
+**Key Points:**
+- Always use `UserScopedKnowledge` for user isolation (never use raw `Knowledge`)
+- Enable both `search_knowledge` and `update_knowledge` for full memory support
+- Memory works automatically — no explicit tool calls needed
+- `KnowledgeSearchTool` is for explicit project-specific search (complements automatic RAG)
+
+**Files:**
+- `back/src/agents/factory.py` — Agent factory with automatic knowledge creation
+- `back/src/teams/development/team.py` — DevelopmentTeam with knowledge for all agents
+- `back/src/knowledge/user_knowledge.py` — UserScopedKnowledge implementation
+
+---
+
+### 6. Integration Registry System
+
+**IMPORTANT**: All integrations must be registered in the three registries. Do NOT hardcode provider names or OAuth configurations.
+
+**Adding a new integration:**
+1. Add to `api/internal/integrations/registry.go` with StorageType
+2. Add to `back/src/integrations/registry.py` with tool type
+3. Add to `front/src/services/integrations/registry.ts` with UI metadata
+
+**OAuth Configuration:**
+- Use `integrations.OAuthFactory` instead of manually creating OAuth configs
+- OAuth configs are automatically generated from registry
+
+**Tool Filtering:**
+- Client-only integrations are automatically filtered out in `handlers/tools.go`
+- Only server integrations are passed to Python backend
+- Client integrations execute locally via `ClientToolExecutor`
+
+**Background Tasks:**
+- Client-only integrations can register background tasks via `BackgroundTaskManager`
+- Tasks are automatically managed based on integration state (enabled/disabled)
+- System event listeners are registered from integration metadata
+
+**Files:**
+- `api/internal/integrations/registry.go` - Go registry
+- `api/internal/integrations/oauth_factory.go` - OAuth factory
+- `api/internal/integrations/sync.go` - Sync utilities
+- `back/src/integrations/registry.py` - Python registry
+- `front/src/services/integrations/registry.ts` - Frontend registry
+- `front/src/services/integrations/BackgroundTaskManager.ts` - Background task manager

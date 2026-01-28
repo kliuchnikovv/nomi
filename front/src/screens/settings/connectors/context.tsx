@@ -303,7 +303,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             await getIntegrations();
             
             // Регистрируем фоновые задачи для новой интеграции, если она поддерживает их
-            const metadata = getIntegrationMetadata(provider);
+            // Используем уже объявленную переменную metadata из строки 281
             if (metadata?.supportsBackgroundTasks) {
                 const localIntegration = await integrationStorage.getIntegrationByEmail(provider, data.account_email);
                 if (localIntegration) {

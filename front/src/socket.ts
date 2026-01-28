@@ -25,6 +25,8 @@ export class ChatSocket {
     private shouldReconnect = false;
     private reconnectDelay = 1000;
     private reconnectTimer: any = null;
+    private isIntentionallyClosed = false;
+    private isConnecting = false;
 
     // private sentCommandFrame = false; // Command frames are per-message/chat context now?
     // Actually, team commands are sent once per session usually. But in a global socket, we might switch contexts.
@@ -81,6 +83,7 @@ export class ChatSocket {
 
     // Alias for open to match expected API
     connect() {
+        this.isIntentionallyClosed = false;
         this.shouldReconnect = true;
         this.open();
     }
@@ -108,7 +111,20 @@ export class ChatSocket {
             return;
         }
 
+        // Prevent multiple simultaneous connection attempts
+        if (this.isConnecting) {
+            console.log('[Socket] Connection already in progress, skipping');
+            return;
+        }
+
+        // If already connected, don't reconnect
+        if (this.isReady()) {
+            console.log('[Socket] Already connected, skipping');
+            return;
+        }
+
         // Safety: ensure we want to be connected
+        this.isIntentionallyClosed = false;
         this.shouldReconnect = true;
 
         if (this.ws) {
@@ -149,6 +165,7 @@ export class ChatSocket {
         console.log('Attempting to connect to Global WebSocket:', wsUrl);
 
         let retried = false;
+        this.isConnecting = true;
 
         try {
             const ws: any = new (WebSocket as any)(
@@ -160,6 +177,7 @@ export class ChatSocket {
 
             ws.onopen = () => {
                 console.log('[Socket] Connected');
+                this.isConnecting = false;
                 this.reconnectDelay = 1000; // Reset backoff
                 this.touchActivity();
                 this.processOutbox(); // Replaced inline loop with method call
@@ -275,15 +293,23 @@ export class ChatSocket {
 
             ws.onerror = (e: any) => {
                 console.log('WebSocket onerror event:', e);
+                this.isConnecting = false;
             };
 
             ws.onclose = async (e: any) => {
                 console.log('WebSocket onclose event:', e.code, e.reason);
+                this.isConnecting = false;
                 if (this.ws === ws) this.ws = null;
                 const code = e?.code;
 
+                // Don't reconnect if intentionally closed
+                if (this.isIntentionallyClosed) {
+                    console.log('[Socket] Connection intentionally closed, skipping reconnect');
+                    return;
+                }
+
                 // Unauthorized
-                if ((code === 4401 || code === 4001 || code === 1008) && !retried) {
+                if ((code === 4401 || code === 4001 || code === 1008 || code === 1006) && !retried) {
                     retried = true;
                     this.shouldReconnect = false; // Stop auto-reconnect on auth error
                     const ok = await (this.handlers.onUnauthorized?.() ?? false);
@@ -291,14 +317,24 @@ export class ChatSocket {
                         this.connect();
                         return;
                     }
+                    return;
                 }
 
+                // Normal closure (1000) - only reconnect if shouldReconnect is true
+                // This handles cases where server closes connection normally but we want to stay connected
+                if (code === 1000 && !this.shouldReconnect) {
+                    console.log('[Socket] Normal closure with shouldReconnect=false, skipping reconnect');
+                    return;
+                }
+
+                // Reconnect for unexpected closures or when shouldReconnect is true
                 if (this.shouldReconnect) {
                     this.scheduleReconnect();
                 }
             };
 
         } catch (e) {
+            this.isConnecting = false;
             this.handlers.onError?.(e);
         }
     }
@@ -385,7 +421,9 @@ export class ChatSocket {
     }
 
     close() {
+        this.isIntentionallyClosed = true;
         this.shouldReconnect = false;
+        this.isConnecting = false;
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;

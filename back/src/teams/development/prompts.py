@@ -28,6 +28,11 @@ ANALYST_INSTRUCTIONS = dedent("""\
     4. **Finalization**:
        - Call `save_requirements`.
 
+    ## 🧠 Memory & Context
+    - Remember user's project preferences and working style
+    - Store common patterns in user's requirements (preferred tech stack, architectural patterns)
+    - Remember user's communication style and feedback patterns
+
     ## ⚠️ Critical Rules
     - **No Markdown Output**: Do not write the PRD in chat. Use `save_requirements`.
     - **Context First**: Never guess. If you don't know the DB schema, search for it.
@@ -59,6 +64,11 @@ ARCHITECT_INSTRUCTIONS = dedent("""\
     4. **Complexity Check**:
        - **Low**: Simple edits.
        - **High**: New modules, database migrations.
+
+    ## 🧠 Memory & Context
+    - Remember user's architectural preferences and patterns
+    - Store preferred libraries, frameworks, and design patterns
+    - Remember user's code style preferences (if mentioned)
 
     ## 📤 Output Format (Markdown)
     ### 1. Technology Stack

@@ -74,8 +74,11 @@ function App() {
         // 1. AppState: Reconnect when returning from background
         const handleAppStateChange = (nextAppState: AppStateStatus) => {
             if (nextAppState === 'active') {
-                console.log('[App] Active: Force Reconnect');
-                socket.connect();
+                console.log('[App] Active: Checking socket connection');
+                // Only reconnect if not already connected
+                if (!socket.isReady()) {
+                    socket.connect();
+                }
                 socket.processOutbox(); // Push queue
             }
         };
@@ -84,8 +87,11 @@ function App() {
         // 2. NetInfo: Reconnect when internet becomes reachable
         const unsubscribeNet = NetInfo.addEventListener(state => {
             if (state.isConnected && state.isInternetReachable) {
-                console.log('[App] Network Online: Force Reconnect');
-                socket.connect();
+                console.log('[App] Network Online: Checking socket connection');
+                // Only reconnect if not already connected
+                if (!socket.isReady()) {
+                    socket.connect();
+                }
                 socket.processOutbox();
             }
         });
