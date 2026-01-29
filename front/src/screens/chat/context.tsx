@@ -20,6 +20,7 @@ import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import { v4 as uuidv4 } from 'uuid';
+import { generateChatTitle } from '../../services/chatTitleGenerator';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -164,7 +165,7 @@ export function ChatProvider({
     }, []);
 
     const { user, token, refreshToken } = useAuth();
-    const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter } = useMain();
+    const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter, renameChat, getChats } = useMain();
 
     // Ensure chat socket is connected to the active chat room (RoomTypeChat).
     // Reconnect when activeChatID changes so we join the new room (avoid DONE only on user channel).
@@ -364,7 +365,12 @@ export function ChatProvider({
                 }
             } else {
                 if (!chatIdToUse || chatIdToUse === emptyChatID) {
-                    chatIdToUse = await createChat(text) || activeChatID;
+                    chatIdToUse = await createChat('New Chat') || activeChatID;
+                    if (chatIdToUse) {
+                        generateChatTitle(text).then((title) => {
+                            if (title) renameChat(chatIdToUse!, title);
+                        }).catch(() => {});
+                    }
                 }
 
                 if (!chatIdToUse) {
@@ -456,7 +462,7 @@ export function ChatProvider({
                 selectedEndpoint
             );
         },
-        [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, setLastFailedMessage, tools, availableModels],
+        [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, renameChat, setLastFailedMessage, tools, availableModels],
     );
 
     const sendMessage = useCallback(
@@ -674,12 +680,17 @@ export function ChatProvider({
             onUnauthorized: async () => {
                 return await refreshToken();
             },
+            onMeta: (frame: Frame) => {
+                if (frame.payload?.type === 'chat_update') {
+                    getChats({ preserveActiveChat: true });
+                }
+            },
         });
 
         // No explicit cleanup to remove handlers for now as they are simple and global-ish.
         // Ideally we should manage multiple listeners.
         // For now, this component is the main consumer.
-    }, [refreshToken]);
+    }, [refreshToken, getChats]);
 
     // Clear "Assistant is thinking" when DONE is received on user channel (or any socket).
     useEffect(() => {

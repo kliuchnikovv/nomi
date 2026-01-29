@@ -331,8 +331,53 @@ export function useGiftedChatRenderers({
             />
         );
 
-        // EXCLUSIVE PATH: If we have content parts, use ContentPartsRenderer ONLY.
+        const messageText = props.currentMessage?.text || '';
+
+        // If we have content parts, check whether they're all plain text (no tool_call, reasoning, member_response).
+        // For plain-text-only messages, use message.text as single source of truth to avoid
+        // duplication/merge bugs from content_parts (e.g. duplicate frames, \n\n gluing).
+        // member_response is excluded: it updates only content_parts, not message.text.
         if (contentParts && contentParts.length > 0) {
+            const allPlainText = contentParts.every((p: any) => p.type === 'text');
+            if (allPlainText && isAssistant) {
+                return (
+                    <View style={{ width: '100%' }}>
+                        {showAttachmentsInside && renderAttachments()}
+                        <Pressable
+                            onLongPress={() => handleTextLongPress(messageText)}
+                            delayLongPress={300}
+                        >
+                            <Markdown
+                                style={markdownStyles as any}
+                                rules={markdownRules}
+                                onLinkPress={(url) => {
+                                    const openLink = async () => {
+                                        try {
+                                            if (await InAppBrowser.isAvailable()) {
+                                                await InAppBrowser.open(url, {
+                                                    showTitle: true,
+                                                    dismissButtonStyle: 'close',
+                                                    modalEnabled: true,
+                                                    enableDefaultShare: false,
+                                                });
+                                            } else {
+                                                await Linking.openURL(url);
+                                            }
+                                        } catch {
+                                            await Linking.openURL(url).catch(() => { });
+                                        }
+                                    };
+                                    openLink();
+                                    return false;
+                                }}
+                            >
+                                {messageText}
+                            </Markdown>
+                        </Pressable>
+                        {renderActions()}
+                    </View>
+                );
+            }
             return (
                 <View style={{ width: '100%' }}>
                     {showAttachmentsInside && renderAttachments()}
@@ -344,8 +389,6 @@ export function useGiftedChatRenderers({
                 </View>
             );
         }
-
-        const messageText = props.currentMessage?.text || '';
 
         // User message
         if (!isAssistant) {
