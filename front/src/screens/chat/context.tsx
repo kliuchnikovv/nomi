@@ -171,9 +171,6 @@ export function ChatProvider({
     useEffect(() => {
         if (!activeChatID || activeChatID === emptyChatID) return;
         if (!token) return;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'chat/context.tsx:chat-socket-effect',message:'configuring global socket for chat',data:{activeChatID:String(activeChatID).slice(0,8)+'…',socket:socket.getDebugState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         socket.setChannel('chat');
         socket.setChatId(activeChatID);
         if (socket.isReady()) {
@@ -440,6 +437,9 @@ export function ChatProvider({
                 });
             }, RESPONSE_TIMEOUT_MS);
 
+            const selectedEndpoint = availableModels.find(
+                (m) => m.id === (selectedModelRef.current ?? '')
+            )?.endpoint;
             socket.sendMessage(
                 text.trim(),
                 chatIdToUse,
@@ -452,10 +452,11 @@ export function ChatProvider({
                 selectedModelRef.current || undefined,
                 selectedProviderRef.current,
                 tools, // Pass enabled integrations to backend
-                user.id // user_id for backend routing
+                user.id, // user_id for backend routing
+                selectedEndpoint
             );
         },
-        [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, setLastFailedMessage, tools],
+        [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, setLastFailedMessage, tools, availableModels],
     );
 
     const sendMessage = useCallback(

@@ -11,7 +11,8 @@
       "rpd_limit": 1500,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "endpoint": ""
     },
     {
       "id": "gemini-2.0-flash",
@@ -24,7 +25,8 @@
       "rpd_limit": 1500,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "endpoint": ""
     },
     {
       "id": "gemini-2.5-flash-lite",
@@ -37,7 +39,8 @@
       "rpd_limit": 1500,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "endpoint": ""
     },
     {
       "id": "gemini-2.5-flash",
@@ -50,7 +53,8 @@
       "rpd_limit": 500,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": true
+      "supports_thinking": true,
+      "endpoint": ""
     },
     {
       "id": "gemini-2.5-pro",
@@ -63,7 +67,8 @@
       "rpd_limit": 100,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": true
+      "supports_thinking": true,
+      "endpoint": ""
     },
     {
       "id": "gemini-3-flash-preview",
@@ -76,7 +81,8 @@
       "rpd_limit": 500,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": true
+      "supports_thinking": true,
+      "endpoint": ""
     },
     {
       "id": "gemini-3-pro-preview",
@@ -89,7 +95,8 @@
       "rpd_limit": 100,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": true
+      "supports_thinking": true,
+      "endpoint": ""
     },
     {
       "id": "big-pickle",
@@ -102,7 +109,8 @@
       "rpd_limit": 10000,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "endpoint": "https://opencode.ai/zen/v1/chat/completions"
     },
     {
       "id": "gpt-5-nano",
@@ -115,7 +123,8 @@
       "rpd_limit": 15000,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "endpoint": "https://opencode.ai/zen/v1/responses"
     },
     {
       "id": "meta-llama/llama-3.3-70b-instruct:free",
@@ -128,7 +137,8 @@
       "rpd_limit": 3000,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "endpoint": "https://openrouter.ai/api/v1"
     },
     {
       "id": "openai/gpt-oss-20b:free",
@@ -141,7 +151,8 @@
       "rpd_limit": 8000,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "endpoint": "https://openrouter.ai/api/v1"
     },
     {
       "id": "z-ai/glm-4.5-air:free",
@@ -154,7 +165,8 @@
       "rpd_limit": 6000,
       "supports_streaming": true,
       "supports_tools": true,
-      "supports_thinking": false
+      "supports_thinking": false,
+      "endpoint": "https://openrouter.ai/api/v1"
     }
   ]
 }

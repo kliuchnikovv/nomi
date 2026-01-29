@@ -81,24 +81,15 @@ export class ChatSocket {
             this.idleTimer = null;
         }
         this.idleTimer = setTimeout(() => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:58',message:'idle timeout triggered',data:{idleTimeoutMs:this.idleTimeoutMs,isReady:this.isReady()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
             this.close();
         }, this.idleTimeoutMs);
     }
 
     private scheduleReconnect() {
         if (this.reconnectTimer || !this.token) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:63',message:'scheduleReconnect blocked',data:{hasTimer:!!this.reconnectTimer,hasToken:!!this.token},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
             return;
         }
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:66',message:'scheduling reconnect',data:{reconnectDelay:this.reconnectDelay,hasToken:!!this.token},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
         console.log(`[Socket] Reconnecting in ${this.reconnectDelay}ms...`);
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
@@ -154,9 +145,6 @@ export class ChatSocket {
         // If we're trying to connect to a chat channel, we must have an active chatId.
         // Otherwise backend will likely close the connection (and we can end up in reconnect loops).
         if (this.channel === 'chat' && !this.chatId) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:open',message:'open blocked - chat channel without chatId',data:{channel:this.channel,hasChatId:!!this.chatId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-            // #endregion
             return;
         }
 
@@ -170,9 +158,6 @@ export class ChatSocket {
         // But allow retry if connection is stuck
         if (this.isConnecting && this.ws) {
             const wsState = this.ws.readyState;
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:120',message:'multiple connection attempt detected',data:{wsState,isConnecting:this.isConnecting,hasWs:!!this.ws},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
             console.log(`[Socket] Connection in progress, state: ${wsState}`, {
                 readyState: wsState,
                 isConnecting: this.isConnecting
@@ -245,9 +230,6 @@ export class ChatSocket {
             ? httpUrl.replace('https://', 'wss://')
             : httpUrl.replace('http://', 'ws://');
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:open',message:'open attempting',data:{instanceId:this.instanceId,channel:this.channel,hasChatId:!!this.chatId,chatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,wsUrlSafe:wsUrl.replace(/token=[^&]+/,'token=REDACTED')},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         console.log('Attempting to connect to Global WebSocket:', wsUrl);
 
         let retried = false;
@@ -270,9 +252,6 @@ export class ChatSocket {
             this.ws = ws;
 
             ws.onopen = () => {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:onopen',message:'onopen - connection established',data:{instanceId:this.instanceId,channel:this.channel,hasChatId:!!this.chatId,chatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,readyState:ws.readyState,shouldReconnect:this.shouldReconnect,wsUrlSafe:wsUrl.replace(/token=[^&]+/,'token=REDACTED')},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
-                // #endregion
                 console.log('[Socket] Connected successfully', {
                     readyState: ws.readyState,
                     url: wsUrl.substring(0, 50) + '...'
@@ -287,9 +266,6 @@ export class ChatSocket {
             };
 
             ws.onmessage = async (e: any) => {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:onmessage',message:'onmessage received',data:{instanceId:this.instanceId,channel:this.channel,configuredChatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,dataLength:e?.data?.length,dataType:typeof e?.data,readyState:ws.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
-                // #endregion
                 this.touchActivity();
                 const raw = typeof e.data === 'string' ? e.data : '';
                 // NDJSON handling: split by newline
@@ -305,16 +281,10 @@ export class ChatSocket {
 
                         const frame = rawJson as Frame;
                         const op = frame.op;
-                        // #region agent log
-                        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:frame',message:'frame parsed',data:{instanceId:this.instanceId,channel:this.channel,configuredChatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,op,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null,kind:frame.kind,payloadType:frame.payload?.type,payloadKeys:frame.payload?Object.keys(frame.payload):[],hasMessage:!!frame.payload?.message,messagePreview:frame.payload?.message?.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
-                        // #endregion
 
                         // Handle global routing
                         if (op === 'message' || op === 'tools' || op === 'model' || op === 'done' || op === 'signal') {
                             const chatId = frame.chat_id;
-                            // #region agent log
-                            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:route',message:'routing frame',data:{instanceId:this.instanceId,channel:this.channel,configuredChatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,op,chatId:chatId?String(chatId).slice(0,8)+'…':null,kind:frame.kind,hasPayload:!!frame.payload},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
-                            // #endregion
                             if (chatId) {
                                 // 1. Update Global Store
                                 // NOTE: backend can forward the same chat stream into both:
@@ -327,28 +297,16 @@ export class ChatSocket {
                                 //
                                 // To avoid duplication/noise, we only write DATA messages to the store.
                                 if (op === 'message' && frame.kind === 'data') {
-                                    // #region agent log
-                                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:addMessage',message:'calling addMessage',data:{instanceId:this.instanceId,channel:this.channel,configuredChatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,chatId:chatId?String(chatId).slice(0,8)+'…':null,op:frame.op,kind:frame.kind,payloadType:frame.payload?.type,messageId:frame.payload?.message_id?String(frame.payload?.message_id).slice(0,8)+'…':null,role:frame.payload?.role,sender:frame.payload?.sender,hasMessage:!!frame.payload?.message,messagePreview:frame.payload?.message?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'M'})}).catch(()=>{});
-                                    // #endregion
                                     useChatStore.getState().addMessage(chatId, frame.payload);
                                 } else if (op === 'message') {
-                                    // #region agent log
-                                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:addMessage',message:'skipped non-data message for store',data:{instanceId:this.instanceId,channel:this.channel,chatId:chatId?String(chatId).slice(0,8)+'…':null,kind:frame.kind,payloadType:frame.payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run7',hypothesisId:'M'})}).catch(()=>{});
-                                    // #endregion
                                 }
 
                                 // 2. Notify Listeners (legacy handlers for specific effects)
                                 // Only call legacy handlers if they are still relevant.
                                 // ChatContext might still want to know about completion or errors.
                                 if (op === 'message' && frame.kind === 'data') {
-                                    // #region agent log
-                                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:283',message:'calling onMessage handler',data:{hasHandler:!!this.handlers.onMessage},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
-                                    // #endregion
                                     this.handlers.onMessage?.(frame);
                                 } else if (op === 'done') {
-                                    // #region agent log
-                                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:285',message:'calling onDone handler',data:{hasHandler:!!this.handlers.onDone},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
-                                    // #endregion
                                     emitGenerationDone(String(chatId));
                                     this.handlers.onDone?.(frame);
                                 } else if (op === 'signal') {
@@ -356,10 +314,6 @@ export class ChatSocket {
                                 } else {
                                     this.handlers.onMeta?.(frame);
                                 }
-                            } else {
-                                // #region agent log
-                                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:293',message:'frame skipped - no chatId',data:{op,kind:frame.kind},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'})}).catch(()=>{});
-                                // #endregion
                             }
                         }
 
@@ -441,9 +395,6 @@ export class ChatSocket {
             };
 
             ws.onclose = async (e: any) => {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:337',message:'onclose event',data:{code:e?.code,reason:e?.reason,shouldReconnect:this.shouldReconnect,isIntentionallyClosed:this.isIntentionallyClosed,readyState:ws.readyState,hasToken:!!this.token},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A,D'})}).catch(()=>{});
-                // #endregion
                 console.log('[Socket] WebSocket onclose event:', e.code, e.reason, {
                     shouldReconnect: this.shouldReconnect,
                     isIntentionallyClosed: this.isIntentionallyClosed,
@@ -456,9 +407,6 @@ export class ChatSocket {
 
                 // Don't reconnect if intentionally closed
                 if (this.isIntentionallyClosed) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:349',message:'intentionally closed, skipping reconnect',data:{code},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                    // #endregion
                     console.log('[Socket] Connection intentionally closed, skipping reconnect');
                     return;
                 }
@@ -466,9 +414,6 @@ export class ChatSocket {
                 // Code 0 usually means connection closed before establishment or network error
                 // Don't reconnect immediately for code 0 - it might be a server rejection
                 if (code === 0) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:357',message:'code 0 detected',data:{code,shouldReconnect:this.shouldReconnect,wasConnected:ws.readyState===1},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A,D'})}).catch(()=>{});
-                    // #endregion
                     console.log('[Socket] Connection closed with code 0 (before establishment or network error)');
                     // Code 0 with readyState 3 (CLOSED) means connection never fully established
                     // This is likely a server rejection or network error - don't reconnect immediately
@@ -488,9 +433,6 @@ export class ChatSocket {
 
                 // Unauthorized
                 if ((code === 4401 || code === 4001 || code === 1008 || code === 1006) && !retried) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:370',message:'unauthorized error',data:{code,retried},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-                    // #endregion
                     retried = true;
                     this.shouldReconnect = false; // Stop auto-reconnect on auth error
                     const ok = await (this.handlers.onUnauthorized?.() ?? false);
@@ -504,18 +446,12 @@ export class ChatSocket {
                 // Normal closure (1000) - only reconnect if shouldReconnect is true
                 // This handles cases where server closes connection normally but we want to stay connected
                 if (code === 1000 && !this.shouldReconnect) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:383',message:'normal closure, skipping reconnect',data:{code,shouldReconnect:this.shouldReconnect},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                    // #endregion
                     console.log('[Socket] Normal closure with shouldReconnect=false, skipping reconnect');
                     return;
                 }
 
                 // Reconnect for unexpected closures or when shouldReconnect is true
                 if (this.shouldReconnect) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:391',message:'scheduling reconnect',data:{code,shouldReconnect:this.shouldReconnect},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                    // #endregion
                     this.scheduleReconnect();
                 }
             };
@@ -541,15 +477,10 @@ export class ChatSocket {
         model?: string,
         provider?: string,
         tools?: any[],
-        userId?: string
+        userId?: string,
+        endpoint?: string
     ) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:sendMessage',message:'sendMessage called',data:{instanceId:this.instanceId,channel:this.channel,configuredChatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,targetChatId:chatId?String(chatId).slice(0,8)+'…':null,textLength:text?.length,role,hasUserId:!!userId,isReady:this.isReady(),hasWs:!!this.ws,readyState:this.ws?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run6',hypothesisId:'L'})}).catch(()=>{});
-        // #endregion
         if (!chatId) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:451',message:'sendMessage blocked - no chatId',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'F'})}).catch(()=>{});
-            // #endregion
             return;
         }
 
@@ -557,45 +488,40 @@ export class ChatSocket {
         // unless explicitly needed. For "team" mode, we might need to handle it.
         // But let's assume the context is handled by the backend or initial setup.
 
+        const payload: Record<string, unknown> = {
+            message_id: messageID,
+            message: text,
+            role: role,
+            model: model,
+            provider: provider,
+            sessionId: sessionId,
+            attachment_ids: attachmentIDs,
+            web_search: webSearch,
+            thinking: thinking,
+            tools: tools, // Pass integrations to backend
+            // Required for Python RedisSession routing: it publishes to chat:user:<user_id>
+            // Without this, it falls back to session_id (=chat_id) and Go Hub can't map frames to user rooms.
+            user_id: userId,
+        };
+        if (endpoint !== undefined && endpoint !== '') {
+            payload.endpoint = endpoint;
+        }
         const msg = {
             id: 0,
             kind: 'data',
             chat_id: chatId,
             op: 'message',
-            payload: {
-                message_id: messageID,
-                message: text,
-                role: role,
-                model: model,
-                provider: provider,
-                sessionId: sessionId,
-                attachment_ids: attachmentIDs,
-                web_search: webSearch,
-                thinking: thinking,
-                tools: tools, // Pass integrations to backend
-                // Required for Python RedisSession routing: it publishes to chat:user:<user_id>
-                // Without this, it falls back to session_id (=chat_id) and Go Hub can't map frames to user rooms.
-                user_id: userId,
-            },
+            payload,
         };
 
         if (this.isReady()) {
             try {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:ws.send',message:'sending message via ws.send',data:{instanceId:this.instanceId,channel:this.channel,configuredChatId:this.chatId?String(this.chatId).slice(0,8)+'…':null,targetChatId:chatId?String(chatId).slice(0,8)+'…':null,textLength:text?.length,messageId:messageID?String(messageID).slice(0,8)+'…':null,hasUserId:!!userId},timestamp:Date.now(),sessionId:'debug-session',runId:'run6',hypothesisId:'L'})}).catch(()=>{});
-                // #endregion
                 this.ws.send(JSON.stringify(msg));
                 this.touchActivity();
             } catch (err) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:481',message:'send failed, adding to outbox',data:{error:err?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'F'})}).catch(()=>{});
-                // #endregion
                 this.outbox.push(msg);
             }
         } else {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'socket.ts:485',message:'not ready, adding to outbox',data:{isReady:this.isReady(),hasWs:!!this.ws,readyState:this.ws?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'F'})}).catch(()=>{});
-            // #endregion
             this.outbox.push(msg);
             // If not connected, we should probably try to connect?
             // But open() doesn't take params anymore.

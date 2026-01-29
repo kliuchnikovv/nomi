@@ -54,9 +54,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
             socket.setHandlers({
                 onMessage: (frame: Frame) => {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotificationContext.tsx:onMessage',message:'notification socket onMessage',data:{op:frame.op,kind:frame.kind,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null,payloadType:(frame as any).payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
-                    // #endregion
                     // We expect 'signal' frames for task updates
                     if (frame.op === 'signal' && frame.payload.type === 'task_updated') {
                         const command = frame.payload.command as any;
@@ -64,21 +61,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                             handleTaskUpdate(command);
                         }
                     }
-                },
-                onMeta: (frame: Frame) => {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotificationContext.tsx:onMeta',message:'notification socket onMeta',data:{op:frame.op,kind:frame.kind,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null,payloadType:(frame as any).payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
-                    // #endregion
-                },
-                onSignal: (frame: Frame) => {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotificationContext.tsx:onSignal',message:'notification socket onSignal',data:{op:frame.op,kind:frame.kind,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null,payloadType:(frame as any).payload?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
-                    // #endregion
-                },
-                onDone: (frame: Frame) => {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NotificationContext.tsx:onDone',message:'notification socket onDone',data:{op:frame.op,kind:frame.kind,chatId:frame.chat_id?String(frame.chat_id).slice(0,8)+'…':null},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'J'})}).catch(()=>{});
-                    // #endregion
                 },
                 onUnauthorized: async () => {
                     return await refreshToken();

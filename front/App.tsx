@@ -77,9 +77,6 @@ function App() {
                 console.log('[App] Active: Checking socket connection');
                 // Only reconnect if not already connected
                 if (!socket.isReady()) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:AppState',message:'AppState active triggered socket.connect',data:{socket:socket.getDebugState()},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'})}).catch(()=>{});
-                    // #endregion
                     socket.connect();
                 }
                 socket.processOutbox(); // Push queue

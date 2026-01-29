@@ -2,8 +2,6 @@ package hub
 
 import (
 	"encoding/json"
-	"fmt"
-	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -44,6 +42,7 @@ type Room struct {
 
 	// Generation state - prevents room from closing while LLM is generating
 	generationInProgress bool
+	generationTimer      *time.Timer
 
 	// Message builders state (replacing currentMessageMetadata)
 	messageBuilders map[uuid.UUID]*MessageBuilder
@@ -75,6 +74,9 @@ func (r *Room) Run() {
 
 	// Idle timeout: close the room if no activity/clients for 5 minutes.
 	const idleTimeout = 5 * time.Minute
+	// Generation timeout: force stop generation if it takes too long
+	const generationTimeout = 10 * time.Minute
+
 	timer := time.NewTimer(idleTimeout)
 	defer timer.Stop()
 
@@ -143,24 +145,47 @@ func (r *Room) Run() {
 			}
 			// If clients exist, reset timer (shouldn't happen if resetTimer works, but safety)
 			timer.Reset(idleTimeout)
+
 		}
 	}
 }
 
-// Helper for URL building
-func buildPathForWS(baseUrl string) (*url.URL, error) {
-	result, err := url.Parse(baseUrl)
+// sendGenerationTimeoutError sends a timeout error to all clients
+func (r *Room) sendGenerationTimeoutError() {
+	payload := map[string]interface{}{
+		"code":    "GENERATION_TIMEOUT",
+		"message": "Generation timed out after 10 minutes. Please try again.",
+		"type":    "timeout",
+	}
+
+	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("bad upstream base URL: %w", err)
+		r.logger.Error("failed to marshal timeout payload", zap.Error(err))
+		return
 	}
-	switch result.Scheme {
-	case "http":
-		result.Scheme = "ws"
-	case "https":
-		result.Scheme = "wss"
+
+	errorFrame := Frame{
+		ID:        int(time.Now().Unix()),
+		Kind:      SignalKind,
+		Operation: ErrorOperation,
+		ChatID:    r.ID,
+		TraceID:   uuid.New().String(),
+		Timestamp: time.Now(),
+		Payload:   json.RawMessage(payloadBytes),
 	}
-	if result.Path, err = url.JoinPath(result.Path, "/llm/ws"); err != nil {
-		return nil, fmt.Errorf("can't join path: %w", err)
+
+	frameBytes, err := json.Marshal(errorFrame)
+	if err != nil {
+		r.logger.Error("failed to marshal timeout error frame", zap.Error(err))
+		return
 	}
-	return result, nil
+
+	for client := range r.clients {
+		select {
+		case client.send <- frameBytes:
+		default:
+			close(client.send)
+			delete(r.clients, client)
+		}
+	}
 }

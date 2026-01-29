@@ -82,6 +82,7 @@ class AgentFactory:
         provider: str | None = None,
         web_search: bool = False,
         thinking: str = "off",
+        endpoint: str | None = None,
     ) -> Model:
         """Build a model instance from model name.
 
@@ -89,6 +90,7 @@ class AgentFactory:
             model_name: Name of the model (e.g., 'gemini-2.0-flash', 'gemini-1.5-pro')
             web_search: If True, enable native Gemini search grounding
             thinking: Thinking level ("off", "low", "medium", "high")
+            endpoint: Optional full API endpoint URL (overrides provider default base_url).
 
         Returns:
             Model instance
@@ -137,7 +139,7 @@ class AgentFactory:
                 include_thoughts=include_thoughts,
             )
 
-        # Support OpenCode models
+        # Support OpenCode models (base_url from config endpoint, no hardcoding)
         elif provider_norm == "opencode" or model_name in ["big-pickle", "gpt-5-nano"]:
             api_key = os.getenv("OPENCODE_API_KEY")
             if not api_key:
@@ -145,16 +147,27 @@ class AgentFactory:
 
             from agno.models.openai import OpenAIChat
 
-            # Convert to proper OpenCode format
+            # Prefer endpoint from config (payload). Normalize: strip trailing slash and
+            # if full .../chat/completions or .../responses URL, use base only.
+            if endpoint and endpoint.strip():
+                ep = endpoint.strip().rstrip("/")
+                if ep.endswith("chat/completions"):
+                    base_url = ep[: -len("chat/completions")].rstrip("/")
+                elif ep.endswith("responses"):
+                    base_url = ep[: -len("responses")].rstrip("/")
+                else:
+                    base_url = ep
+            else:
+                base_url = "https://opencode.ai/zen/v1"  # fallback for legacy configs
+            logger.info("[Factory] Creating OpenCode model: %s (base_url=%s)", model_name, base_url)
             full_model_id = f"opencode/{model_name}"
-            logger.info("[Factory] Creating OpenCode model: %s", full_model_id)
             return OpenAIChat(
                 id=full_model_id,
                 api_key=api_key,
-                base_url="https://opencode.ai/zen/v1",
+                base_url=base_url,
             )
 
-        # Support OpenRouter models (all models containing /)
+        # Support OpenRouter models (base_url from config endpoint, no hardcoding)
         elif (
             provider_norm == "openrouter"
             or provider_norm == "openrouter.ai"
@@ -170,11 +183,20 @@ class AgentFactory:
 
             from agno.models.openai import OpenAIChat
 
-            logger.info("[Factory] Creating OpenRouter model: %s", model_name)
+            # Prefer endpoint from config (payload)
+            if endpoint and endpoint.strip():
+                ep = endpoint.strip().rstrip("/")
+                if ep.endswith("chat/completions"):
+                    base_url = ep[: -len("chat/completions")].rstrip("/")
+                else:
+                    base_url = ep
+            else:
+                base_url = "https://openrouter.ai/api/v1"  # fallback for legacy configs
+            logger.info("[Factory] Creating OpenRouter model: %s (base_url=%s)", model_name, base_url)
             return OpenAIChat(
                 id=model_name,
                 api_key=api_key,
-                base_url="https://openrouter.ai/api/v1",
+                base_url=base_url,
             )
 
         # Add support for other providers as needed
@@ -193,6 +215,7 @@ class AgentFactory:
         chat_id: Optional[str] = None,
         timezone: Optional[str] = None,
         timezone_offset: Optional[str] = None,
+        endpoint: Optional[str] = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -200,7 +223,12 @@ class AgentFactory:
             model_name = command_desc["model"]
 
         model = (
-            self.build_model(model_name, web_search=web_search, thinking=thinking)
+            self.build_model(
+                model_name,
+                web_search=web_search,
+                thinking=thinking,
+                endpoint=endpoint,
+            )
             if model_name
             else self._model
         )

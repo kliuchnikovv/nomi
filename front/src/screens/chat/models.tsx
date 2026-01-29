@@ -74,6 +74,7 @@ export interface Model {
     description?: string;
     provider?: string;
     supports_thinking?: boolean;
+    endpoint?: string;
 }
 
 export interface ModelDetail {

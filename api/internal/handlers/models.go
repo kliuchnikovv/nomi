@@ -22,6 +22,7 @@ type Model struct {
 	SupportsStreaming bool   `json:"supports_streaming"`
 	SupportsTools     bool   `json:"supports_tools"`
 	SupportsThinking  bool   `json:"supports_thinking"`
+	Endpoint          string `json:"endpoint,omitempty"`
 }
 
 type ModelsResponse struct {

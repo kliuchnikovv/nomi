@@ -5,8 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -484,6 +482,16 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			r.generationInProgress = false
 		} else {
 			r.generationInProgress = true
+			// Start generation timeout timer
+			if r.generationTimer != nil {
+				r.generationTimer.Stop()
+			}
+			r.generationTimer = time.AfterFunc(10*time.Minute, func() {
+				r.logger.Warn("generation timeout reached, forcing stop")
+				r.generationInProgress = false
+				r.generationTimer = nil
+				r.sendGenerationTimeoutError()
+			})
 		}
 
 	} else if r.Type == RoomTypeChat {
@@ -509,13 +517,6 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 		zap.String("chat_id", frame.ChatID.String()),
 		zap.String("trace_id", frame.TraceID),
 	)
-
-	// #region agent log (ndjson to file)
-	if f, err := os.OpenFile("/Users/kliuchnikovv/go/src/github.com/kliuchnikovv/genie-api/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		_, _ = f.WriteString(`{"location":"api/hub/room_handlers.go:handleLLMMessage","message":"llm frame in room","data":{"roomId":"` + r.ID.String() + `","roomType":"` + string(r.Type) + `","initiatorId":"` + r.initiatorID.String() + `","clientCount":` + strconv.Itoa(len(r.clients)) + `,"frameKind":"` + string(frame.Kind) + `","frameOp":"` + string(frame.Operation) + `","frameChatId":"` + frame.ChatID.String() + `"},"timestamp":` + strconv.FormatInt(time.Now().UnixMilli(), 10) + `,"sessionId":"debug-session","runId":"run5","hypothesisId":"K"}` + "\n")
-		_ = f.Close()
-	}
-	// #endregion
 
 	// Only process LLM frames in the chat room that matches frame.ChatID.
 	// User rooms receive all frames (fallback for "user-only" clients); other chat rooms skip.
@@ -584,6 +585,11 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	if frame.Operation == DoneOperation {
 		// Generation complete - room can now close if no clients
 		r.generationInProgress = false
+		// Stop generation timer
+		if r.generationTimer != nil {
+			r.generationTimer.Stop()
+			r.generationTimer = nil
+		}
 		// Touch chat activity once per generation (we only process in the matching room)
 		_ = r.store.TouchChatActivity(context.Background(), r.ID, time.Now().UTC())
 		r.logger.Info("generation complete")

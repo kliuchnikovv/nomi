@@ -152,6 +152,7 @@ class RedisSession:
         # Extract params from payload or defaults
         self.current_model_name = payload.get("model")
         provider = payload.get("provider")
+        endpoint = payload.get("endpoint")
 
         thinking = payload.get("thinking")
         if thinking is not None:
@@ -210,6 +211,7 @@ class RedisSession:
                     provider=provider,
                     web_search=False,
                     thinking=self.current_thinking,
+                    endpoint=endpoint,
                 )
 
                 team_factory = TeamFactory(
@@ -240,6 +242,7 @@ class RedisSession:
                     thinking=self.current_thinking,
                     user_id=rag_user_id,
                     chat_id=self.chat_id,
+                    endpoint=endpoint,
                 )
         except Exception as e:
             logger.error(

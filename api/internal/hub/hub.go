@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -133,13 +132,6 @@ func (h *Hub) subscribeRedis() {
 			h.logger.Warn("failed to parse redis message payload", zap.Error(err))
 			continue
 		}
-
-		// #region agent log (ndjson to file)
-		if f, err := os.OpenFile("/Users/kliuchnikovv/go/src/github.com/kliuchnikovv/genie-api/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-			_, _ = f.WriteString(`{"location":"api/hub/hub.go:subscribeRedis","message":"redis frame received","data":{"redisChannel":"` + msg.Channel + `","userId":"` + userID.String() + `","frameKind":"` + string(frame.Kind) + `","frameOp":"` + string(frame.Operation) + `","frameChatId":"` + frame.ChatID.String() + `"},"timestamp":` + strconv.FormatInt(time.Now().UnixMilli(), 10) + `,"sessionId":"debug-session","runId":"run5","hypothesisId":"K"}` + "\n")
-			_ = f.Close()
-		}
-		// #endregion
 
 		// Broadcast to user's connected clients
 		h.BroadcastToUser(userID, frame)

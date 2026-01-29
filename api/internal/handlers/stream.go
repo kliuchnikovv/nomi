@@ -3,9 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"os"
-	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -105,13 +102,6 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		zap.String("mode", mode),
 		zap.Bool("has_command", command != ""),
 		zap.String("room_type", string(roomType)))
-
-	// #region agent log (ndjson to file)
-	if f, err := os.OpenFile("/Users/kliuchnikovv/go/src/github.com/kliuchnikovv/genie-api/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		_, _ = f.WriteString(`{"location":"api/handlers/stream.go:ChatWS","message":"ws connect","data":{"userId":"` + user.ID.String() + `","roomType":"` + string(roomType) + `","resolvedRoomId":"` + chatID.String() + `","queryChannel":"` + channel + `","queryChatId":"` + c.Query("chat_id") + `"},"timestamp":` + strconv.FormatInt(time.Now().UnixMilli(), 10) + `,"sessionId":"debug-session","runId":"run5","hypothesisId":"K"}` + "\n")
-		_ = f.Close()
-	}
-	// #endregion
 
 	h.hub.ServeWs(c.Writer, c.Request, chatID, roomType, user, mode, command)
 }
