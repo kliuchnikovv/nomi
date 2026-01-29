@@ -1036,9 +1036,11 @@ Continue the conversation."""
                                     "content": remainder,
                                 }
 
-                # 3. Text Content
+                # 3. Text Content (streaming deltas only)
+                # Exclude RunContentCompletedEvent: it contains "RunContentEvent" in its name
+                # but carries full aggregated content; we must not re-send it to avoid duplication.
                 if (
-                    "RunContentEvent" in event_type
+                    ("RunContentEvent" in event_type and "RunContentCompleted" not in event_type)
                     or "ModelContentEvent" in event_type
                     or "TextDeltaEvent" in event_type
                     or "TextEvent" in event_type
