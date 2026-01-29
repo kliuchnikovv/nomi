@@ -51,7 +51,7 @@ export const AVAILABLE_TEAMS: TeamDetails[] = [
         command: {
             type: 'development_team',
             name: 'Development Team',
-            model: 'gemini-2.0-flash', // Prefer a strong model for coding
+            model: 'gemini-2.5-pro', // Prefer a strong model for coding
         }
     },
     // Individual Development Team Agents (for direct 1:1 chat)
@@ -117,7 +117,7 @@ export const AVAILABLE_TEAMS: TeamDetails[] = [
         command: {
             type: 'dnd_team',
             name: 'D&D Team',
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-pro',
         }
     }
 ];

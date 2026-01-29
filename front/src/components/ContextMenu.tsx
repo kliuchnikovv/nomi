@@ -22,10 +22,18 @@ export type ContextMenuItem = {
     switchValue?: boolean;
 };
 
+export type ContextMenuSection = {
+    title: string;
+    items: ContextMenuItem[];
+};
+
 type Props = {
     visible: boolean;
     onClose: () => void;
-    items: ContextMenuItem[];
+    /** Flat list of items (used when sections is not provided) */
+    items?: ContextMenuItem[];
+    /** Grouped items by section (when provided, items is ignored) */
+    sections?: ContextMenuSection[];
     title?: string;
     position?: 'bottom-left' | 'center';
     anchorOffset?: { x: number; y: number };
@@ -34,13 +42,72 @@ type Props = {
 export const ContextMenu = ({
     visible,
     onClose,
-    items,
+    items = [],
+    sections,
     title,
     position = 'bottom-left',
 }: Props) => {
     const insets = useSafeAreaInsets();
     const { theme } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
+
+    const renderItem = (item: ContextMenuItem, showBorder: boolean) => (
+        <Pressable
+            key={item.id}
+            onPress={() => {
+                item.onPress();
+                if (!item.isSwitch) {
+                    onClose();
+                }
+            }}
+            style={({ pressed }) => [
+                styles.item,
+                pressed && !item.isSwitch && styles.itemPressed,
+                showBorder && styles.itemBorder,
+            ]}
+        >
+            <Text
+                style={[
+                    styles.itemText,
+                    item.destructive && styles.destructiveText,
+                ]}
+            >
+                {item.label}
+            </Text>
+            <View style={styles.rightContainer}>
+                {item.isSwitch ? (
+                    <Switch
+                        value={item.switchValue}
+                        onValueChange={() => {
+                            item.onPress();
+                        }}
+                        trackColor={{ false: theme.border, true: theme.accent }}
+                        thumbColor="#fff"
+                        ios_backgroundColor={theme.border}
+                        style={{ transform: [{ scale: 0.8 }] }}
+                    />
+                ) : (
+                    item.icon && <View style={styles.icon}>{item.icon}</View>
+                )}
+            </View>
+        </Pressable>
+    );
+
+    const content = sections ? (
+        sections.map((section, sectionIndex) => (
+            <View key={section.title + sectionIndex}>
+                <Text style={styles.sectionHeader}>{section.title}</Text>
+                {section.items.map((item, index) => {
+                    const isLastInSection = index === section.items.length - 1;
+                    const isLastSection = sectionIndex === sections.length - 1;
+                    const showBorder = !isLastInSection || !isLastSection;
+                    return renderItem(item, showBorder);
+                })}
+            </View>
+        ))
+    ) : (
+        items.map((item, index) => renderItem(item, index < items.length - 1))
+    );
 
     return (
         <Modal
@@ -67,48 +134,7 @@ export const ContextMenu = ({
                 >
                     {title && <Text style={styles.title}>{title}</Text>}
                     <ScrollView style={{ maxHeight: 320 }} bounces={false} showsVerticalScrollIndicator={true}>
-                        {items.map((item, index) => (
-                            <Pressable
-                                key={item.id}
-                                onPress={() => {
-                                    item.onPress();
-                                    if (!item.isSwitch) {
-                                        onClose();
-                                    }
-                                }}
-                                style={({ pressed }) => [
-                                    styles.item,
-                                    pressed && !item.isSwitch && styles.itemPressed,
-                                    index < items.length - 1 && styles.itemBorder,
-                                ]}
-                            >
-                                <Text
-                                    style={[
-                                        styles.itemText,
-                                        item.destructive && styles.destructiveText,
-                                    ]}
-                                >
-                                    {item.label}
-                                </Text>
-                                <View style={styles.rightContainer}>
-                                    {item.isSwitch ? (
-                                        <Switch
-                                            value={item.switchValue}
-                                            onValueChange={() => {
-                                                item.onPress();
-                                                // Do not close menu
-                                            }}
-                                            trackColor={{ false: theme.border, true: theme.accent }}
-                                            thumbColor="#fff"
-                                            ios_backgroundColor={theme.border}
-                                            style={{ transform: [{ scale: 0.8 }] }}
-                                        />
-                                    ) : (
-                                        item.icon && <View style={styles.icon}>{item.icon}</View>
-                                    )}
-                                </View>
-                            </Pressable>
-                        ))}
+                        {content}
                     </ScrollView>
                 </View>
             </Pressable>
@@ -141,6 +167,16 @@ const createStyles = (theme: ThemeColors) => StyleSheet.create({
         paddingTop: 12,
         paddingBottom: 4,
         fontWeight: '600',
+    },
+    sectionHeader: {
+        fontSize: 12,
+        color: theme.textSecondary,
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 4,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     item: {
         flexDirection: 'row',

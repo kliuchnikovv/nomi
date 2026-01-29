@@ -93,8 +93,8 @@ export function ChatProvider({
     const RESPONSE_TIMEOUT_MS = 60000; // 60 seconds
 
     // Model selection state
-    const [selectedModel, setSelectedModelInternal] = useState<string | null>('gemini-2.0-flash');
-    const selectedModelRef = useRef<string | null>('gemini-2.0-flash');
+    const [selectedModel, setSelectedModelInternal] = useState<string | null>('big-pickle');
+    const selectedModelRef = useRef<string | null>('big-pickle');
     const selectedProviderRef = useRef<string | undefined>(undefined);
     const manualModelSelectionRef = useRef<boolean>(false);
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
@@ -221,7 +221,7 @@ export function ChatProvider({
                     setSelectedModel(lastModel, false);
                 } else {
                     console.log('No model found in history, resetting to default');
-                    setSelectedModel('gemini-2.0-flash', false);
+                    setSelectedModel('gpt-5-nano', false);
                 }
             }
 
@@ -257,7 +257,7 @@ export function ChatProvider({
                 `${getApiUrl()}/chats`,
                 {
                     "title": title,
-                    "model": selectedModelRef.current || 'gemini-2.0-flash',
+                    "model": selectedModelRef.current || 'gpt-5-nano',
                     "mode": chatMode,
                     // Pass team_id for teams, OR for individual agents (agent_type)
                     "team_id": teamIdToSend,
@@ -581,7 +581,7 @@ export function ChatProvider({
                 if (mounted && models && models.length > 0) {
                     setAvailableModels(models);
                     // Initialize provider ref for default model (or currently selected)
-                    const current = selectedModelRef.current || 'gemini-2.0-flash';
+                    const current = selectedModelRef.current || 'gpt-5-nano';
                     selectedProviderRef.current = models.find(m => m.id === current)?.provider;
                 } else if (mounted && retryCount < 3) {
                     console.log(`Fetch models returned empty list, retrying... (${retryCount + 1}/3)`);

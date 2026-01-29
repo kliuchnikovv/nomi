@@ -139,10 +139,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 	}
 
-	// Suppress unused variable warning
-	_ = broadcast
-	_ = broadcastExcept
-
 	// Parse
 	var frame Frame
 	if err := json.Unmarshal(msg.Payload, &frame); err != nil {

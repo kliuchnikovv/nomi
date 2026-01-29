@@ -25,7 +25,7 @@ import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, Acti
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from './styles.tsx';
 import { useChat } from '../context';
-import { ContextMenu, ContextMenuItem } from '../../../components/ContextMenu';
+import { ContextMenu, ContextMenuItem, ContextMenuSection } from '../../../components/ContextMenu';
 import { useTheme } from '../../../context/ThemeContext.tsx';
 import { useAuth } from '../../auth/context';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
@@ -315,30 +315,40 @@ export default function ChatInput(props: Props) {
         setModelMenuVisible(true);
     }, []);
 
-    const modelMenuItems: ContextMenuItem[] = useMemo(() => {
+    const modelMenuSections: ContextMenuSection[] = useMemo(() => {
         // Filter models: when thinking is enabled, show only models that support it
         let filteredModels = thinkingLevel !== 'off'
             ? availableModels.filter(model => model.supports_thinking === true)
             : availableModels;
 
-        // Fallback: If filtering leaves no models (e.g. user selected High thinking but no models support it yet due to API change or bug),
-        // show all models to avoid empty menu.
         if (filteredModels.length === 0) {
             filteredModels = availableModels;
         }
 
-        return filteredModels.map(model => ({
-            id: model.id,
-            label: model.name || model.id,
-            icon: model.id === selectedModel ? (
-                <Check width={20} height={20} color={theme.accent} />
-            ) : undefined,
-            onPress: () => {
-                const selectedModelId = model.id;
-                setSelectedModel(selectedModelId);
-                // Team command update is handled by effect in context
-                setModelMenuVisible(false);
-            },
+        const providerDisplayName = (provider: string | undefined) =>
+            provider ? provider.charAt(0).toUpperCase() + provider.slice(1).toLowerCase() : 'Other';
+
+        const byProvider = new Map<string, ContextMenuItem[]>();
+        for (const model of filteredModels) {
+            const provider = model.provider ?? 'other';
+            const items = byProvider.get(provider) ?? [];
+            items.push({
+                id: model.id,
+                label: model.name || model.id,
+                icon: model.id === selectedModel ? (
+                    <Check width={20} height={20} color={theme.accent} />
+                ) : undefined,
+                onPress: () => {
+                    setSelectedModel(model.id);
+                    setModelMenuVisible(false);
+                },
+            });
+            byProvider.set(provider, items);
+        }
+
+        return Array.from(byProvider.entries()).map(([provider, items]) => ({
+            title: providerDisplayName(provider),
+            items,
         }));
     }, [availableModels, selectedModel, setSelectedModel, theme.accent, thinkingLevel]);
 
@@ -540,7 +550,7 @@ export default function ChatInput(props: Props) {
             <ContextMenu
                 visible={modelMenuVisible}
                 onClose={() => setModelMenuVisible(false)}
-                items={modelMenuItems}
+                sections={modelMenuSections}
                 position="bottom-left"
                 title="Select Model"
             />

@@ -80,11 +80,11 @@ async def test_agent_factory_build_with_model_override(agent_factory):
 
         # Using gemini model name triggers build_model
         agent = await agent_factory.build(
-            session_id="sess-1", model_name="gemini-2.0-flash"
+            session_id="sess-1", model_name="gpt-5-nano"
         )
 
         assert isinstance(agent.model, Gemini)
-        assert agent.model.id == "gemini-2.0-flash"
+        assert agent.model.id == "gpt-5-nano"
 
 
 @pytest.mark.asyncio
@@ -161,7 +161,7 @@ async def test_agent_factory_build_with_web_search(agent_factory):
         )
 
         assert isinstance(agent.model, Gemini)
-        assert agent.model.id == "gemini-2.0-flash"
+        assert agent.model.id == "gpt-5-nano"
         assert agent.model.search  # Verify search is enabled
 
 
@@ -178,7 +178,7 @@ async def test_agent_factory_build_without_web_search(agent_factory):
 
         # Build with web_search=False (default)
         agent = await agent_factory.build(
-            session_id="sess-1", model_name="gemini-2.0-flash", web_search=False
+            session_id="sess-1", model_name="gpt-5-nano", web_search=False
         )
 
         assert isinstance(agent.model, Gemini)
@@ -223,11 +223,11 @@ async def test_agent_factory_build_thinking_not_supported_for_older_models(
 
         # Build with thinking=True for a 2.0 model (should not enable thinking)
         agent = await agent_factory.build(
-            session_id="sess-1", model_name="gemini-2.0-flash", thinking=True
+            session_id="sess-1", model_name="gpt-5-nano", thinking=True
         )
 
         assert isinstance(agent.model, Gemini)
-        assert agent.model.id == "gemini-2.0-flash"
+        assert agent.model.id == "gpt-5-nano"
         # Thinking IS enabled because factory blindly applies it
         assert agent.model.thinking_budget == 8192
 
