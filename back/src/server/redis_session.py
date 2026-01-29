@@ -760,6 +760,8 @@ Continue the conversation."""
         if hasattr(result, "__aiter__"):
             streamed_text_len = 0
             current_agent_name = None  # Track current agent for context switching
+            last_yielded_text = ""  # Skip duplicate consecutive text chunks (e.g. OpenCode)
+            last_yielded_reasoning = ""  # Skip duplicate consecutive reasoning chunks
             async for ev in result:
                 if self.cancel_event.is_set():
                     logger.info("[RedisSession] Stream cancelled by event flag")
@@ -938,13 +940,16 @@ Continue the conversation."""
                     )
 
                 if captured_reasoning:
-                    reasoning_data = {
-                        "type": "reasoning",
-                        "content": captured_reasoning,
-                    }
-                    if current_agent_name:
-                        reasoning_data["agent_name"] = current_agent_name
-                    yield reasoning_data
+                    # Skip duplicate consecutive reasoning chunk (e.g. OpenCode sends same twice)
+                    if captured_reasoning != last_yielded_reasoning:
+                        last_yielded_reasoning = captured_reasoning
+                        reasoning_data = {
+                            "type": "reasoning",
+                            "content": captured_reasoning,
+                        }
+                        if current_agent_name:
+                            reasoning_data["agent_name"] = current_agent_name
+                        yield reasoning_data
 
                 if "RunCompleted" in event_type:
                     val = getattr(ev, "content", None)
@@ -1042,28 +1047,33 @@ Continue the conversation."""
                         continue
 
                     if chunk != captured_reasoning:
-                        # Use current_agent_name to detect if we're in a member context
-                        # This is more reliable than per-event agent_id
-                        is_member_context = (
-                            current_agent_name is not None
-                            and current_agent_name
-                            not in ("Team Lead", "Team Leader", "Development Team")
-                        )
-
-                        if is_member_event or is_member_context:
-                            yield {
-                                "type": "member_response",
-                                "content": chunk,
-                                "agent_id": agent_id or current_agent_name,
-                                "agent_name": agent_name or current_agent_name,
-                            }
+                        # Skip duplicate consecutive text chunk (e.g. OpenCode sends same twice)
+                        if chunk == last_yielded_text:
+                            pass  # skip duplicate
                         else:
-                            yield {
-                                "type": "text",
-                                "content": chunk,
-                                "agent_name": current_agent_name,
-                            }
-                        streamed_text_len += len(chunk)
+                            last_yielded_text = chunk
+                            # Use current_agent_name to detect if we're in a member context
+                            # This is more reliable than per-event agent_id
+                            is_member_context = (
+                                current_agent_name is not None
+                                and current_agent_name
+                                not in ("Team Lead", "Team Leader", "Development Team")
+                            )
+
+                            if is_member_event or is_member_context:
+                                yield {
+                                    "type": "member_response",
+                                    "content": chunk,
+                                    "agent_id": agent_id or current_agent_name,
+                                    "agent_name": agent_name or current_agent_name,
+                                }
+                            else:
+                                yield {
+                                    "type": "text",
+                                    "content": chunk,
+                                    "agent_name": current_agent_name,
+                                }
+                            streamed_text_len += len(chunk)
 
                 # --- NEW: Track Active Agents ---
                 if "RunStarted" in event_type and agent_name:
