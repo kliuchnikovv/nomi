@@ -12,6 +12,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "streaming": true,
       "endpoint": ""
     },
     {
@@ -26,6 +27,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "streaming": true,
       "endpoint": ""
     },
     {
@@ -40,6 +42,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "streaming": true,
       "endpoint": ""
     },
     {
@@ -54,6 +57,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
+      "streaming": true,
       "endpoint": ""
     },
     {
@@ -68,6 +72,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
+      "streaming": true,
       "endpoint": ""
     },
     {
@@ -82,6 +87,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
+      "streaming": true,
       "endpoint": ""
     },
     {
@@ -96,6 +102,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
+      "streaming": true,
       "endpoint": ""
     },
     {
@@ -110,6 +117,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "streaming": true,
       "endpoint": "https://opencode.ai/zen/v1/chat/completions"
     },
     {
@@ -124,6 +132,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "streaming": true,
       "endpoint": "https://opencode.ai/zen/v1/responses"
     },
     {
@@ -138,6 +147,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "streaming": true,
       "endpoint": "https://openrouter.ai/api/v1"
     },
     {
@@ -152,6 +162,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "streaming": true,
       "endpoint": "https://openrouter.ai/api/v1"
     },
     {
@@ -166,6 +177,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "streaming": true,
       "endpoint": "https://openrouter.ai/api/v1"
     }
   ]

@@ -22,6 +22,7 @@ type Model struct {
 	SupportsStreaming bool   `json:"supports_streaming"`
 	SupportsTools     bool   `json:"supports_tools"`
 	SupportsThinking  bool   `json:"supports_thinking"`
+	Streaming         bool   `json:"streaming"` // if true, do not persist text chunks; only DONE overwrite
 	Endpoint          string `json:"endpoint,omitempty"`
 }
 

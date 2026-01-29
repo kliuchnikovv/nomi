@@ -153,6 +153,7 @@ class RedisSession:
         self.current_model_name = payload.get("model")
         provider = payload.get("provider")
         endpoint = payload.get("endpoint")
+        self.streaming = bool(payload.get("streaming", False))
 
         thinking = payload.get("thinking")
         if thinking is not None:
@@ -167,6 +168,19 @@ class RedisSession:
 
         self.agent_type = payload.get("agent_type", "genie")
         self.command_desc = payload.get("command") or payload.get("team")
+        if self.command_desc is None:
+            self.command_desc = {}
+        elif not isinstance(self.command_desc, dict):
+            try:
+                self.command_desc = (
+                    json.loads(self.command_desc)
+                    if isinstance(self.command_desc, str)
+                    else {}
+                )
+            except (json.JSONDecodeError, TypeError):
+                self.command_desc = {}
+        if isinstance(self.command_desc, dict):
+            self.command_desc["streaming"] = self.streaming
 
         rag_user_id = self.user_id or self.session_id
 

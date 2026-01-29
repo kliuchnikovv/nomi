@@ -447,6 +447,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 		// Ensure user_id is present in finalMap
 		finalMap["user_id"] = r.initiatorID.String()
+		finalMap["streaming"] = r.hub.Streaming(payload.Model)
 
 		if len(messages) > 0 {
 			historyData := make([]map[string]interface{}, 0, len(messages))
@@ -462,6 +463,8 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// Update frame payload with the map
 		finalMapBytes, _ := json.Marshal(finalMap)
 		frame.Payload = finalMapBytes
+
+		r.currentModelID = payload.Model
 
 		payloadBytes, _ := json.Marshal(frame)
 		r.logger.Info("REDIS PUBLISH",
@@ -593,6 +596,7 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 		// Touch chat activity once per generation (we only process in the matching room)
 		_ = r.store.TouchChatActivity(context.Background(), r.ID, time.Now().UTC())
 		r.logger.Info("generation complete")
+		r.currentModelID = ""
 
 		// Overwrite stored message with canonical full content when provided (RunCompletedEvent).
 		// This fixes duplication and wrong order from chunk accumulation in DB.

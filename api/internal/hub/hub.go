@@ -27,6 +27,9 @@ type Hub struct {
 	redis      *redis.Client
 
 	upgrader websocket.Upgrader
+
+	streamingMu  sync.RWMutex
+	streamingMap map[string]bool // model ID -> streaming
 }
 
 func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub {
@@ -71,6 +74,7 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub 
 		},
 	}
 
+	h.initStreamingMap()
 	// Start Redis Subscriber
 	go h.subscribeRedis()
 

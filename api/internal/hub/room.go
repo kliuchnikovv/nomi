@@ -44,6 +44,9 @@ type Room struct {
 	generationInProgress bool
 	generationTimer      *time.Timer
 
+	// Model for current generation (set when forwarding user message to Redis)
+	currentModelID string
+
 	// Message builders state (replacing currentMessageMetadata)
 	messageBuilders map[uuid.UUID]*MessageBuilder
 }
