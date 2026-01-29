@@ -593,5 +593,16 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 		// Touch chat activity once per generation (we only process in the matching room)
 		_ = r.store.TouchChatActivity(context.Background(), r.ID, time.Now().UTC())
 		r.logger.Info("generation complete")
+
+		// Overwrite stored message with canonical full content when provided (RunCompletedEvent).
+		// This fixes duplication and wrong order from chunk accumulation in DB.
+		var done DonePayload
+		if err := json.Unmarshal(frame.Payload, &done); err == nil && done.Content != "" && done.MessageID != uuid.Nil {
+			b := r.getOrCreateBuilder(done.MessageID, r.ID)
+			b.SetFinalText(done.Content)
+			if err := b.Persist(context.Background(), r.store, r.initiatorID); err != nil {
+				r.logger.Error("failed to persist DONE final text", zap.Error(err), zap.String("message_id", done.MessageID.String()))
+			}
+		}
 	}
 }

@@ -424,6 +424,7 @@ class RedisSession:
 
         start_action_tracking()
 
+        self._last_run_completed_content = None
         idx = 0
         try:
             # Stream agent events for real-time response
@@ -562,10 +563,12 @@ class RedisSession:
                     # Don't send done frame after error - error frame is terminal
                     return
 
-            # Done
-            await self._send_frame(
-                make_done(self.next_id, msg_chat_id, {"message_id": message_id})
-            )
+            # Done — include full content from RunCompletedEvent so Go can overwrite DB
+            # and fix duplication/wrong-order from chunk accumulation.
+            done_payload = {"message_id": message_id}
+            if getattr(self, "_last_run_completed_content", None):
+                done_payload["content"] = self._last_run_completed_content
+            await self._send_frame(make_done(self.next_id, msg_chat_id, done_payload))
 
         except asyncio.CancelledError:
             logger.info("[RedisSession] Streaming cancelled by user")
@@ -965,8 +968,13 @@ Continue the conversation."""
                             reasoning_data["agent_name"] = current_agent_name
                         yield reasoning_data
 
+                # RunCompletedEvent contains the full message. We only send the *remainder*
+                # (content[streamed_text_len:]) when the stream was incomplete (e.g. provider
+                # sent no deltas or fewer than full length). Never re-send full content here.
                 if "RunCompleted" in event_type:
                     val = getattr(ev, "content", None)
+                    if val:
+                        self._last_run_completed_content = str(val)
                     if val and len(str(val)) > streamed_text_len:
                         remainder = str(val)[streamed_text_len:]
                         if remainder.strip():

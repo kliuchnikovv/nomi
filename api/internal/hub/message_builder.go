@@ -188,6 +188,14 @@ func (b *MessageBuilder) SetActions(actions []chat.Action) {
 	}
 }
 
+// SetFinalText overwrites accumulated text with the canonical full message
+// (e.g. from RunCompletedEvent). ContentParts are left unchanged to preserve
+// tool_call / reasoning structure. Use on DONE to fix duplication or wrong
+// order from chunk accumulation before persisting.
+func (b *MessageBuilder) SetFinalText(content string) {
+	b.Text = content
+}
+
 func (b *MessageBuilder) appendContentPart(partType, delta string) {
 	if len(b.ContentParts) > 0 {
 		lastIdx := len(b.ContentParts) - 1

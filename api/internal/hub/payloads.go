@@ -97,6 +97,14 @@ type ClientActionPayload struct {
 	Tool        string                 `json:"tool,omitempty"` // e.g. "gmail", "calendar"
 }
 
+// DonePayload is sent with Op.DONE. Optional "content" is the canonical full
+// message from RunCompletedEvent; when present, Go overwrites the stored
+// message to fix duplication or wrong order from chunk accumulation.
+type DonePayload struct {
+	MessageID uuid.UUID `json:"message_id"`
+	Content   string    `json:"content,omitempty"`
+}
+
 // UserMessagePayload represents a message sent by the user
 type UserMessagePayload struct {
 	MessageID     uuid.UUID   `json:"message_id,omitempty"`
