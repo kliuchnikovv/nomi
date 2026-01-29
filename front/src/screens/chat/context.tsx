@@ -52,6 +52,7 @@ export function ChatProvider({
     const setMessagesToStore = useChatStore((state) => state.setMessages);
 
     const [messagesLoading, setMessagesLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const { tools } = useConnectors();
     const [externalTitle, setExternalTitle] = useState<string | null>(null);
     const seededChatRef = useRef<string | null>(null);
@@ -191,18 +192,24 @@ export function ChatProvider({
 
 
     // Keep getMessages for initial load and manual refresh if needed
-    const getMessages = useCallback(async (chatID: string) => {
+    const getMessages = useCallback(async (chatID: string, opts?: { isRefresh?: boolean }) => {
         if (!chatID || chatID === emptyChatID) return;
-        setMessagesLoading(true);
+        const isRefresh = opts?.isRefresh === true;
+        if (isRefresh) {
+            setRefreshing(true);
+        } else {
+            setMessagesLoading(true);
+        }
         try {
             const data = await apiClient.get<Message[]>(
                 `${getApiUrl()}/chats/${chatID}/messages`,
+                isRefresh ? { headers: { 'Cache-Control': 'no-cache, no-store' } } : undefined,
             );
             if (!data) {
                 return;
             }
 
-            // Update store
+            // Update store (always replace so refresh shows latest from server)
             setMessagesToStore(chatID, data);
 
             // Sync model from last assistant message or any message that has a model field
@@ -231,7 +238,11 @@ export function ChatProvider({
                 error,
             );
         } finally {
-            setMessagesLoading(false);
+            if (isRefresh) {
+                setRefreshing(false);
+            } else {
+                setMessagesLoading(false);
+            }
         }
     }, [setSelectedModel, setMessagesToStore]);
 
@@ -367,9 +378,17 @@ export function ChatProvider({
                 if (!chatIdToUse || chatIdToUse === emptyChatID) {
                     chatIdToUse = await createChat('New Chat') || activeChatID;
                     if (chatIdToUse) {
+                        console.log('[ChatContext] New chat created, starting title generation for', chatIdToUse);
                         generateChatTitle(text).then((title) => {
-                            if (title) renameChat(chatIdToUse!, title);
-                        }).catch(() => {});
+                            if (title) {
+                                console.log('[ChatContext] Title generated, renaming chat to:', title);
+                                renameChat(chatIdToUse!, title);
+                            } else {
+                                console.log('[ChatContext] No title from generator (e.g. Android or fallback empty)');
+                            }
+                        }).catch((e) => {
+                            console.warn('[ChatContext] Title generation failed:', e);
+                        });
                     }
                 }
 
@@ -806,6 +825,7 @@ export function ChatProvider({
         messages: storeMessages, // Use the selected messages
         messagesLoading,
         getMessages,
+        refreshing,
         sendMessage,
         executeMessageAction,
         assistantWorking,

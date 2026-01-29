@@ -61,9 +61,8 @@ func (r *Room) getOrCreateBuilder(msgID, chatID uuid.UUID) *MessageBuilder {
 }
 
 func handleTextPayload(r *Room, data []byte) error {
-	if r.hub.Streaming(r.currentModelID) {
-		return nil
-	}
+	// Persist text chunks even when streaming so GET /messages returns full state
+	// on other devices; DONE frame still overwrites with canonical content.
 	var p TextPayload
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
@@ -102,9 +101,7 @@ func handleReasoningPayload(r *Room, data []byte) error {
 }
 
 func handleMemberResponsePayload(r *Room, data []byte) error {
-	if r.hub.Streaming(r.currentModelID) {
-		return nil
-	}
+	// Persist member response chunks even when streaming for multi-device sync.
 	var p MemberResponsePayload
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err

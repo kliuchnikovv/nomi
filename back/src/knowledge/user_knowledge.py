@@ -7,24 +7,81 @@ from agno.vectordb.pgvector import PgVector
 
 logger = logging.getLogger(__name__)
 
+# Minimum cosine similarity (0..1) to consider a document relevant. Below this, results are
+# filtered out so the agent does not receive unrelated docs (e.g. Genie README for "эффект Долины").
+DEFAULT_MIN_SIMILARITY_THRESHOLD = 0.5
+
+
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Compute cosine similarity between two vectors. Result in [-1, 1]; we clamp to [0, 1] for thresholding."""
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(x * x for x in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    sim = dot / (norm_a * norm_b)
+    return max(0.0, min(1.0, sim))
+
+
 class UserScopedKnowledge(Knowledge):
     """
     Knowledge Base wrapper that enforces user isolation using metadata filtering.
+    Optionally filters out low-relevance results so the agent does not receive unrelated documents.
     """
-    def __init__(self, user_id: str, vector_db: PgVector, max_results: int = 5):
+    def __init__(
+        self,
+        user_id: str,
+        vector_db: PgVector,
+        max_results: int = 5,
+        min_similarity_threshold: float | None = DEFAULT_MIN_SIMILARITY_THRESHOLD,
+    ):
         super().__init__(vector_db=vector_db)
         self.max_results = max_results
         self.user_id = user_id
+        self.min_similarity_threshold = min_similarity_threshold
 
     def search(self, query: str, max_results: int | None = None, filters: dict | None = None) -> List[Document]:
         """
-        Search with enforced user_id filter.
+        Search with enforced user_id filter and optional minimum relevance threshold.
+        Documents below min_similarity_threshold are excluded so the agent does not
+        get unrelated results (e.g. project README when the user asks about something else).
         """
         effective_filter = (filters or {}).copy()
-        # PgVector in Agno treats 'filters' as a metadata filter dictionary
         effective_filter["user_id"] = self.user_id
-        logger.info(f"UserScopedKnowledge search: query='{query}', filters={effective_filter}")
-        return super().search(query, max_results, filters=effective_filter)
+        logger.info("UserScopedKnowledge search: query=%r, filters=%s", query, effective_filter)
+
+        raw = super().search(query, max_results, filters=effective_filter)
+        if not raw or self.min_similarity_threshold is None:
+            return raw
+
+        # Filter by relevance: require query embedding and document embeddings
+        embedder = getattr(self.vector_db, "embedder", None)
+        if not embedder or not hasattr(embedder, "get_embedding"):
+            return raw
+        query_embedding = embedder.get_embedding(query)
+        if not query_embedding:
+            return raw
+
+        filtered: List[Document] = []
+        for doc in raw:
+            emb = getattr(doc, "embedding", None)
+            if emb is None:
+                filtered.append(doc)
+                continue
+            sim = _cosine_similarity(query_embedding, emb)
+            if sim >= self.min_similarity_threshold:
+                filtered.append(doc)
+            else:
+                logger.debug(
+                    "Filtered low-relevance doc: id=%s sim=%.3f threshold=%.3f",
+                    getattr(doc, "id", None),
+                    sim,
+                    self.min_similarity_threshold,
+                )
+        logger.info("UserScopedKnowledge search: %d results after relevance filter (min_sim=%.2f)", len(filtered), self.min_similarity_threshold)
+        return filtered
 
     def load_text(self, text: str, meta_data: dict = None):
         """

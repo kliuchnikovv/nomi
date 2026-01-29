@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity } from 'react-native';
+import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity, RefreshControl } from 'react-native';
 import { getApiUrl, API_URL } from '../../config';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +12,7 @@ import * as Sharing from 'expo-sharing';
 
 import { useChat } from './context';
 import { useAuth } from '../auth/context';
-import { useMain } from '../main/context';
+import { emptyChatID, useMain } from '../main/context';
 import { ASSISTANT_BUBBLE_WIDTH_RATIO, createChatTheme } from './theme';
 import { createStyles } from './styles';
 import { useGiftedMessages } from './hooks/useGiftedMessages';
@@ -49,6 +49,8 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const {
         messages,
         messagesLoading,
+        getMessages,
+        refreshing,
         sendMessage,
         assistantWorking,
         externalTitle,
@@ -174,6 +176,11 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const handleDismissError = useCallback(() => {
         setError(null);
     }, [setError]);
+
+    const handleRefreshHistory = useCallback(() => {
+        if (!activeChatID || activeChatID === emptyChatID || isPluginThread) return;
+        getMessages(activeChatID, { isRefresh: true });
+    }, [activeChatID, getMessages, isPluginThread]);
 
     // Attachment Handlers
     const handleAttachmentPress = useCallback(async (attachment: Attachment) => {
@@ -511,6 +518,20 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                 isScrollToBottomEnabled={true}
                                 timeFormat="HH:mm"
                                 onLongPress={onLongPressMessage}
+                                listProps={
+                                    activeChatID && activeChatID !== emptyChatID && !isPluginThread
+                                        ? {
+                                            refreshControl: (
+                                                <RefreshControl
+                                                    refreshing={refreshing}
+                                                    onRefresh={handleRefreshHistory}
+                                                    tintColor={theme.accent}
+                                                    colors={[theme.accent]}
+                                                />
+                                            ),
+                                        }
+                                        : undefined
+                                }
                                 renderChatEmpty={() => {
                                     if (messagesLoading) {
                                         return (

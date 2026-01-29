@@ -1,21 +1,6 @@
 {
   "models": [
     {
-      "id": "big-pickle",
-      "name": "Big Pickle",
-      "provider": "opencode",
-      "description": "Big Pickle model for advanced software engineering",
-      "context_window": 128000,
-      "max_output_tokens": 8192,
-      "rpm_limit": 100,
-      "rpd_limit": 10000,
-      "supports_streaming": true,
-      "supports_tools": true,
-      "supports_thinking": false,
-      "streaming": true,
-      "endpoint": "https://opencode.ai/zen/v1/chat/completions"
-    },
-    {
       "id": "gpt-5-nano",
       "name": "GPT 5 Nano",
       "provider": "opencode",
@@ -29,6 +14,21 @@
       "supports_thinking": false,
       "streaming": true,
       "endpoint": "https://opencode.ai/zen/v1/responses"
+    },
+    {
+      "id": "big-pickle",
+      "name": "Big Pickle",
+      "provider": "opencode",
+      "description": "Big Pickle model for advanced software engineering",
+      "context_window": 128000,
+      "max_output_tokens": 8192,
+      "rpm_limit": 100,
+      "rpd_limit": 10000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": false,
+      "streaming": true,
+      "endpoint": "https://opencode.ai/zen/v1/chat/completions"
     },
     {
       "id": "meta-llama/llama-3.3-70b-instruct:free",

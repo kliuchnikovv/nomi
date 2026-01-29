@@ -21,8 +21,11 @@ function fallbackTitle(message: string): string {
  * Generates a short chat title (3–6 words) from the first message.
  * Returns fallback (truncated message) on Android, on error, or on timeout.
  */
+const LOG_TAG = '[ChatTitleGenerator]';
+
 export async function generateChatTitle(firstMessage: string): Promise<string> {
   if (Platform.OS !== 'ios') {
+    console.log(LOG_TAG, 'Skipping (not iOS), backend will set title');
     return ''; // Backend will set title from first message
   }
 
@@ -30,10 +33,11 @@ export async function generateChatTitle(firstMessage: string): Promise<string> {
   if (!trimmed) return '';
 
   try {
+    console.log(LOG_TAG, 'Loading Apple FM and generating title...');
     const { apple } = require('@react-native-ai/apple');
     const { generateText } = require('ai');
 
-    const prompt = `Generate a very short chat title (3 to 6 words) for this message. Reply with only the title, no quotes.
+    const prompt = `Generate a very short chat title (3 to 6 words) for this message. Use the same language as the message. Reply with only the title, no quotes.
 
 Message: ${trimmed.slice(0, 500)}`;
 
@@ -53,11 +57,15 @@ Message: ${trimmed.slice(0, 500)}`;
         title.length > TITLE_MAX_LENGTH
           ? title.slice(0, TITLE_MAX_LENGTH) + '...'
           : title;
+      console.log(LOG_TAG, 'Generated title:', truncated);
       return truncated;
     }
-  } catch (_) {
-    // Apple FM unavailable, old iOS, or error — use fallback
+    console.log(LOG_TAG, 'Empty result from Apple FM, using fallback');
+  } catch (e) {
+    console.warn(LOG_TAG, 'Apple FM unavailable or error, using fallback:', e);
   }
 
-  return fallbackTitle(firstMessage);
+  const fallback = fallbackTitle(firstMessage);
+  console.log(LOG_TAG, 'Returning fallback title:', fallback || '(empty)');
+  return fallback;
 }
