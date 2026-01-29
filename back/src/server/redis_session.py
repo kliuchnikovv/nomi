@@ -760,8 +760,10 @@ Continue the conversation."""
         if hasattr(result, "__aiter__"):
             streamed_text_len = 0
             current_agent_name = None  # Track current agent for context switching
-            last_yielded_text = ""  # Skip duplicate consecutive text chunks (e.g. OpenCode)
+            last_yielded_text = ""  # Skip duplicate consecutive text chunks
             last_yielded_reasoning = ""  # Skip duplicate consecutive reasoning chunks
+            accumulated_text = ""  # For APIs that send cumulative content instead of deltas (e.g. OpenCode)
+            accumulated_reasoning = ""  # Same for reasoning stream
             async for ev in result:
                 if self.cancel_event.is_set():
                     logger.info("[RedisSession] Stream cancelled by event flag")
@@ -784,6 +786,11 @@ Continue the conversation."""
                     if current_agent_name is not None:
                         yield {"type": "text", "content": "\n\n"}
                     current_agent_name = agent_name
+                    # Reset accumulated stream state so new agent's content is not compared to previous
+                    accumulated_text = ""
+                    accumulated_reasoning = ""
+                    last_yielded_text = ""
+                    last_yielded_reasoning = ""
 
                 # 1. Tool Calls
                 # Handle both ToolCallStarted and ToolCallCompleted
@@ -940,12 +947,19 @@ Continue the conversation."""
                     )
 
                 if captured_reasoning:
-                    # Skip duplicate consecutive reasoning chunk (e.g. OpenCode sends same twice)
-                    if captured_reasoning != last_yielded_reasoning:
-                        last_yielded_reasoning = captured_reasoning
+                    # Handle cumulative stream: if chunk extends previous, yield only the new suffix
+                    if captured_reasoning.startswith(accumulated_reasoning) and len(captured_reasoning) > len(accumulated_reasoning):
+                        to_yield = captured_reasoning[len(accumulated_reasoning):]
+                        new_accumulated = captured_reasoning
+                    else:
+                        to_yield = captured_reasoning
+                        new_accumulated = accumulated_reasoning + to_yield
+                    if to_yield and to_yield != last_yielded_reasoning:
+                        last_yielded_reasoning = to_yield
+                        accumulated_reasoning = new_accumulated
                         reasoning_data = {
                             "type": "reasoning",
-                            "content": captured_reasoning,
+                            "content": to_yield,
                         }
                         if current_agent_name:
                             reasoning_data["agent_name"] = current_agent_name
@@ -1047,13 +1061,17 @@ Continue the conversation."""
                         continue
 
                     if chunk != captured_reasoning:
-                        # Skip duplicate consecutive text chunk (e.g. OpenCode sends same twice)
-                        if chunk == last_yielded_text:
-                            pass  # skip duplicate
+                        # Handle cumulative stream: if chunk extends previous, yield only the new suffix
+                        if chunk.startswith(accumulated_text) and len(chunk) > len(accumulated_text):
+                            to_yield = chunk[len(accumulated_text):]
+                            new_accumulated = chunk
                         else:
-                            last_yielded_text = chunk
+                            to_yield = chunk
+                            new_accumulated = accumulated_text + to_yield
+                        if to_yield and to_yield != last_yielded_text:
+                            last_yielded_text = to_yield
+                            accumulated_text = new_accumulated
                             # Use current_agent_name to detect if we're in a member context
-                            # This is more reliable than per-event agent_id
                             is_member_context = (
                                 current_agent_name is not None
                                 and current_agent_name
@@ -1063,17 +1081,17 @@ Continue the conversation."""
                             if is_member_event or is_member_context:
                                 yield {
                                     "type": "member_response",
-                                    "content": chunk,
+                                    "content": to_yield,
                                     "agent_id": agent_id or current_agent_name,
                                     "agent_name": agent_name or current_agent_name,
                                 }
                             else:
                                 yield {
                                     "type": "text",
-                                    "content": chunk,
+                                    "content": to_yield,
                                     "agent_name": current_agent_name,
                                 }
-                            streamed_text_len += len(chunk)
+                            streamed_text_len += len(to_yield)
 
                 # --- NEW: Track Active Agents ---
                 if "RunStarted" in event_type and agent_name:
