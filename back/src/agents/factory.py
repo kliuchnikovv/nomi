@@ -160,9 +160,9 @@ class AgentFactory:
             else:
                 base_url = "https://opencode.ai/zen/v1"  # fallback for legacy configs
             logger.info("[Factory] Creating OpenCode model: %s (base_url=%s)", model_name, base_url)
-            full_model_id = f"opencode/{model_name}"
+            # Send model name without opencode/ prefix — API expects e.g. "big-pickle"
             return OpenAIChat(
-                id=full_model_id,
+                id=model_name,
                 api_key=api_key,
                 base_url=base_url,
             )
