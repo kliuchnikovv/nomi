@@ -351,6 +351,13 @@ async def analyze_text(request: AnalysisRequest):
         return {"events": [], "tasks": [], "error": str(e)}
 
 
+class StoreFactsRequest(BaseModel):
+    """Request to store client-extracted facts into user's knowledge base."""
+
+    user_id: str
+    extracted_facts: list[str]
+
+
 class EmailAnalysisRequest(BaseModel):
     email_id: str  # ID of the email for tracking
     subject: Optional[str] = None
@@ -438,6 +445,31 @@ Extract urgency, connections, time frames, and suggest 2-5 actions."""
             "suggested_actions": [],
             "error": str(e),
         }
+
+
+@app.post("/api/store-facts")
+async def store_facts(request: StoreFactsRequest):
+    """
+    Store client-extracted facts into user's knowledge base.
+    Called by Go backend when client sends store_facts via WebSocket.
+    HTTP is used instead of Redis pub/sub for reliability.
+    """
+    if not request.user_id or not request.extracted_facts:
+        return {"status": "skipped", "reason": "missing user_id or facts"}
+    knowledge = container.agent_factory.get_or_create_knowledge(request.user_id)
+    if not knowledge:
+        logging.warning("[store-facts] get_or_create_knowledge returned None for user=%s", request.user_id)
+        return {"status": "error", "reason": "knowledge base unavailable"}
+    stored = 0
+    for fact in request.extracted_facts:
+        if isinstance(fact, str) and fact.strip():
+            try:
+                knowledge.load_text(fact.strip())
+                stored += 1
+            except Exception as e:
+                logging.warning("[store-facts] Failed to store fact: %s", e)
+    logging.info("[store-facts] Stored %d fact(s) for user=%s", stored, request.user_id)
+    return {"status": "ok", "stored": stored}
 
 
 # Sessions for OAuth state (required for request.session)

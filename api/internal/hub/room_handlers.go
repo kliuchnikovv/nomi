@@ -1,10 +1,13 @@
 package hub
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -157,7 +160,8 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		return
 	}
 
-	// Handle store_facts (async client-extracted facts) — no chat pipeline, just forward to Redis
+	// Handle store_facts (async client-extracted facts) — call Python HTTP endpoint directly
+	// HTTP is more reliable than Redis pub/sub for this request-response flow
 	if frame.Operation == StoreFactsOperation {
 		var storePayload StoreFactsPayload
 		if err := json.Unmarshal(frame.Payload, &storePayload); err != nil {
@@ -171,17 +175,41 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		if userID == "" || len(storePayload.ExtractedFacts) == 0 {
 			return
 		}
-		storeFrame := map[string]interface{}{
-			"op":              string(StoreFactsOperation),
-			"user_id":         userID,
-			"extracted_facts": storePayload.ExtractedFacts,
-		}
-		storeBytes, _ := json.Marshal(storeFrame)
-		if err := r.hub.redis.Publish(context.Background(), "chat:store_facts", storeBytes).Err(); err != nil {
-			r.logger.Error("failed to publish store_facts", zap.Error(err))
-		} else {
-			r.logger.Info("published store_facts", zap.String("user_id", userID), zap.Int("count", len(storePayload.ExtractedFacts)))
-		}
+		// Call Python backend via HTTP
+		go func() {
+			pythonURL := os.Getenv("LLM_BASE_URL")
+			if pythonURL == "" {
+				pythonURL = "http://localhost:7777"
+			}
+			// Strip trailing slash for consistent URL building
+			if len(pythonURL) > 0 && pythonURL[len(pythonURL)-1] == '/' {
+				pythonURL = pythonURL[:len(pythonURL)-1]
+			}
+			payload := map[string]interface{}{
+				"user_id":         userID,
+				"extracted_facts": storePayload.ExtractedFacts,
+			}
+			body, _ := json.Marshal(payload)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			req, err := http.NewRequestWithContext(ctx, "POST", pythonURL+"/api/store-facts", bytes.NewReader(body))
+			if err != nil {
+				r.logger.Error("failed to create store_facts request", zap.Error(err))
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				r.logger.Error("failed to call store_facts", zap.Error(err), zap.String("url", pythonURL+"/api/store-facts"))
+				return
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				r.logger.Warn("store_facts returned non-200", zap.Int("status", resp.StatusCode))
+				return
+			}
+			r.logger.Info("store_facts succeeded", zap.String("user_id", userID), zap.Int("count", len(storePayload.ExtractedFacts)))
+		}()
 		return
 	}
 
