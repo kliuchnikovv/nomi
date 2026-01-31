@@ -51,37 +51,71 @@ class UserScopedKnowledge(Knowledge):
         """
         effective_filter = (filters or {}).copy()
         effective_filter["user_id"] = self.user_id
-        logger.info("UserScopedKnowledge search: query=%r, filters=%s", query, effective_filter)
+        logger.info(
+            "[RAG Search] user_id=%s query=%r max_results=%s filters=%s",
+            self.user_id,
+            query,
+            max_results or self.max_results,
+            effective_filter,
+        )
 
         raw = super().search(query, max_results, filters=effective_filter)
+        logger.info("[RAG Search] Found %d raw results from vector DB", len(raw) if raw else 0)
+        
         if not raw or self.min_similarity_threshold is None:
+            if not raw:
+                logger.info("[RAG Search] No results found in knowledge base")
+            else:
+                logger.info("[RAG Search] Returning %d results (no similarity filtering)", len(raw))
             return raw
 
         # Filter by relevance: require query embedding and document embeddings
         embedder = getattr(self.vector_db, "embedder", None)
         if not embedder or not hasattr(embedder, "get_embedding"):
+            logger.warning("[RAG Search] No embedder available, returning raw results")
             return raw
+        
         query_embedding = embedder.get_embedding(query)
         if not query_embedding:
+            logger.warning("[RAG Search] Failed to get query embedding, returning raw results")
             return raw
 
         filtered: List[Document] = []
         for doc in raw:
             emb = getattr(doc, "embedding", None)
+            doc_id = getattr(doc, "id", None)
+            doc_content = getattr(doc, "content", "")
+            doc_preview = doc_content[:100] if doc_content else "(empty)"
+            
             if emb is None:
+                logger.debug("[RAG Search] Document id=%s has no embedding, including by default", doc_id)
                 filtered.append(doc)
                 continue
+            
             sim = _cosine_similarity(query_embedding, emb)
             if sim >= self.min_similarity_threshold:
+                logger.info(
+                    "[RAG Search] ✓ Relevant document: id=%s similarity=%.3f content_preview=%r",
+                    doc_id,
+                    sim,
+                    doc_preview,
+                )
                 filtered.append(doc)
             else:
-                logger.debug(
-                    "Filtered low-relevance doc: id=%s sim=%.3f threshold=%.3f",
-                    getattr(doc, "id", None),
+                logger.info(
+                    "[RAG Search] ✗ Filtered low-relevance document: id=%s similarity=%.3f (threshold=%.3f) content_preview=%r",
+                    doc_id,
                     sim,
                     self.min_similarity_threshold,
+                    doc_preview,
                 )
-        logger.info("UserScopedKnowledge search: %d results after relevance filter (min_sim=%.2f)", len(filtered), self.min_similarity_threshold)
+        
+        logger.info(
+            "[RAG Search] Relevance filtering complete: %d/%d documents passed (threshold=%.2f)",
+            len(filtered),
+            len(raw),
+            self.min_similarity_threshold,
+        )
         return filtered
 
     def load_text(self, text: str, meta_data: dict = None):
@@ -98,16 +132,30 @@ class UserScopedKnowledge(Knowledge):
         """
         Load documents with enforced user_id in metadata.
         """
-        for doc in documents:
+        logger.info(
+            "[RAG Store] Storing %d document(s) for user_id=%s",
+            len(documents),
+            self.user_id,
+        )
+        
+        for idx, doc in enumerate(documents):
             if doc.meta_data is None:
                 doc.meta_data = {}
             doc.meta_data["user_id"] = self.user_id
+            
+            # Log document content being stored
+            doc_content = getattr(doc, "content", "")
+            doc_preview = doc_content[:200] if doc_content else "(empty)"
+            logger.info(
+                "[RAG Store] Document %d/%d: content_preview=%r metadata=%s",
+                idx + 1,
+                len(documents),
+                doc_preview,
+                doc.meta_data,
+            )
+        
         if self.vector_db:
             try:
-                # Debug logging to identify the correct method signature
-                # logger.info(f"Vector DB Type: {type(self.vector_db)}")
-                # logger.info(f"Vector DB Dir: {dir(self.vector_db)}")
-
                 # Try explicit load_documents if available on API, otherwise use upsert on vector_db
                 if hasattr(self.vector_db, "upsert"):
                     # The error "missing 1 required positional argument: 'documents'" or 'content_hash'
@@ -115,21 +163,25 @@ class UserScopedKnowledge(Knowledge):
                     # We try providing content_hash as None, and use kwargs to be safe.
                     try:
                         self.vector_db.upsert(documents=documents, content_hash=None)
+                        logger.info("[RAG Store] Successfully stored %d document(s) via upsert", len(documents))
                     except TypeError as te:
-                         logger.warning(f"upsert(documents=..., content_hash=None) failed: {te}. Retrying with positional args.")
+                         logger.warning(f"[RAG Store] upsert(documents=..., content_hash=None) failed: {te}. Retrying with positional args.")
                          # Try pure positional: upsert(documents) or upsert(documents, content_hash)
                          try:
                              self.vector_db.upsert(documents)
+                             logger.info("[RAG Store] Successfully stored %d document(s) via upsert (positional)", len(documents))
                          except TypeError:
                              self.vector_db.upsert(documents, None)
+                             logger.info("[RAG Store] Successfully stored %d document(s) via upsert (positional with None)", len(documents))
 
                 elif hasattr(self.vector_db, "add_documents"):
                     self.vector_db.add_documents(documents)
+                    logger.info("[RAG Store] Successfully stored %d document(s) via add_documents", len(documents))
                 else:
-                    logger.warning("Could not find method to add documents to vector_db")
+                    logger.warning("[RAG Store] Could not find method to add documents to vector_db")
             except Exception as e:
                 # Log detailed error to help debugging if it fails again
-                logger.error(f"Failed to upsert documents: {e}", exc_info=True)
+                logger.error(f"[RAG Store] Failed to store documents: {e}", exc_info=True)
                 raise e
 
     def delete(self, filters: Dict[str, Any] | None = None) -> None:

@@ -52,6 +52,7 @@ function App() {
                 setInitStatus('Initializing Database...');
                 await Promise.race([initDatabase(), timeout]);
                 console.log('[App] Database initialized');
+                console.log('[App] Local RAG logging enabled. You will see [Local RAG Search] and [Client Tool Executor] when the agent runs a local search (e.g. "search my emails" or "find in my notes").');
 
                 setInitStatus('Registering Background Tasks...');
                 // Don't let background tasks block app load

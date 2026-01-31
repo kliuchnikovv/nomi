@@ -373,6 +373,13 @@ class AgentFactory:
                 knowledge = UserScopedKnowledge(
                     user_id=rag_user_id, vector_db=vector_db
                 )
+                logger.info(
+                    "[Factory] Created UserScopedKnowledge for rag_user_id=%s (min_similarity=%.2f)",
+                    rag_user_id,
+                    knowledge.min_similarity_threshold or 0.0,
+                )
+            else:
+                logger.warning("[Factory] Vector DB not available, agent will not have memory")
 
             if command_desc and command_desc.get("type"):
                 agent_type = command_desc["type"]

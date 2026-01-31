@@ -537,7 +537,16 @@ export class ChatSocket {
      * Does not block chat; used for personalization in future sessions.
      */
     sendStoreFacts(chatId: string, userId: string, extractedFacts: string[]) {
-        if (!userId || !extractedFacts?.length) return;
+        if (!userId || !extractedFacts?.length) {
+            console.log('[Socket] sendStoreFacts: no userId or empty facts, skipping');
+            return;
+        }
+
+        console.log(`[Socket] Sending ${extractedFacts.length} extracted fact(s) to server for user ${userId}`);
+        extractedFacts.forEach((fact, idx) => {
+            console.log(`[Socket]   Fact ${idx + 1}: ${fact}`);
+        });
+
         const msg = {
             id: 0,
             kind: 'data',
@@ -552,10 +561,13 @@ export class ChatSocket {
             try {
                 this.ws.send(JSON.stringify(msg));
                 this.touchActivity();
+                console.log('[Socket] ✓ Facts sent successfully via WebSocket');
             } catch (err) {
                 // Non-critical: log only
                 console.warn('[Socket] sendStoreFacts failed', err);
             }
+        } else {
+            console.warn('[Socket] Cannot send facts: WebSocket not ready');
         }
     }
 

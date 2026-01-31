@@ -484,13 +484,19 @@ export function ChatProvider({
 
             // Async local extraction (e.g. Apple FM): send facts when done; does not block chat
             if (role === 'user' && user?.id && text?.trim()) {
+                console.log('[ChatContext] Starting async user facts extraction from message');
                 extractUserFacts(text.trim())
                     .then((facts) => {
                         if (facts.length > 0) {
+                            console.log(`[ChatContext] Extracted ${facts.length} fact(s), sending to server`);
                             socket.sendStoreFacts(chatIdToUse, user.id, facts);
+                        } else {
+                            console.log('[ChatContext] No facts extracted from message');
                         }
                     })
-                    .catch(() => {});
+                    .catch((error) => {
+                        console.error('[ChatContext] Fact extraction failed:', error);
+                    });
             }
         },
         [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, renameChat, setLastFailedMessage, tools, availableModels],
@@ -515,6 +521,23 @@ export function ChatProvider({
             );
         }
     }, [lastFailedMessage, sendStreamingMessage]);
+
+    const handleClientAction = useCallback(async (payload: any) => {
+        console.log('[ChatContext] Handling client action:', payload);
+        const { tool, method, params } = payload;
+
+        try {
+            const { clientToolExecutor } = await import('../../services/tools/ClientToolExecutor');
+            const result = await clientToolExecutor.execute({ tool, method, params });
+
+            console.log('[ChatContext] Action executed, sending result:', result);
+            await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`, [], false, undefined, 'system');
+
+        } catch (error) {
+            console.error('[ChatContext] Action failed:', error);
+            await sendMessage(`[System] Tool ${tool}.${method} Failed: ${error}`, [], false, undefined, 'system');
+        }
+    }, [sendMessage]);
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
@@ -716,12 +739,19 @@ export function ChatProvider({
                     getChats({ preserveActiveChat: true });
                 }
             },
+            onMessage: (frame: Frame) => {
+                const payload = frame.payload;
+                if (payload?.type === 'client_action') {
+                    console.log('[ChatContext] Received client_action, executing locally:', payload.tool, payload.method, payload.params);
+                    handleClientAction(payload);
+                }
+            },
         });
 
         // No explicit cleanup to remove handlers for now as they are simple and global-ish.
         // Ideally we should manage multiple listeners.
         // For now, this component is the main consumer.
-    }, [refreshToken, getChats]);
+    }, [refreshToken, getChats, handleClientAction]);
 
     // Clear "Assistant is thinking" when DONE is received on user channel (or any socket).
     useEffect(() => {
@@ -801,23 +831,6 @@ export function ChatProvider({
         setExternalTitle(null);
         // Messages will clear because selector depends on pluginThreadMeta
     }, []);
-
-    const handleClientAction = useCallback(async (payload: any) => {
-        console.log('[ChatContext] Handling client action:', payload);
-        const { tool, method, params } = payload;
-
-        try {
-            const { clientToolExecutor } = await import('../../services/tools/ClientToolExecutor');
-            const result = await clientToolExecutor.execute({ tool, method, params });
-
-            console.log('[ChatContext] Action executed, sending result:', result);
-            await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`, [], false, undefined, 'system');
-
-        } catch (error) {
-            console.error('[ChatContext] Action failed:', error);
-            await sendMessage(`[System] Tool ${tool}.${method} Failed: ${error}`, [], false, undefined, 'system');
-        }
-    }, [sendMessage]);
 
     const executeMessageAction = useCallback(async (action: any, messageId: string) => {
         console.log('[ChatContext] Executing action:', action.label, 'for message:', messageId);

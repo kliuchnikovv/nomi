@@ -203,17 +203,26 @@ export class ClientToolExecutor {
     }
 
     private async executeRagAction(method: string, params: Record<string, any>): Promise<string> {
+        console.log(`[Client Tool Executor] Executing RAG action - method=${method} params=${JSON.stringify(params)}`);
+        
         const { vectorStore } = await import('../database/VectorStore');
 
         switch (method) {
             case 'search':
+                console.log('[Client Tool Executor] Starting local RAG search...');
+                const searchStartTime = Date.now();
+                
                 const results = await vectorStore.search(
                     params.query,
                     params.limit || 5,
                     params.source_type || undefined
                 );
 
+                const searchTime = Date.now() - searchStartTime;
+                console.log(`[Client Tool Executor] Local RAG search completed in ${searchTime}ms - found ${results.length} results`);
+
                 if (results.length === 0) {
+                    console.log('[Client Tool Executor] No results found in local knowledge base');
                     return 'No relevant information found in local knowledge base.';
                 }
 
@@ -223,7 +232,9 @@ export class ClientToolExecutor {
                     return `${idx + 1}. [Score: ${r.score.toFixed(3)}]${meta}\n${r.content}`;
                 }).join('\n\n---\n\n');
 
-                return `Found ${results.length} relevant items:\n\n${formattedResults}`;
+                const response = `Found ${results.length} relevant items:\n\n${formattedResults}`;
+                console.log(`[Client Tool Executor] Formatted response: ${response.length} characters`);
+                return response;
 
             default:
                 throw new Error(`Unknown RAG method: ${method}`);

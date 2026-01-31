@@ -1,4 +1,5 @@
 from typing import Sequence, Optional
+import logging
 
 from agno.db.postgres import PostgresDb
 from agno.agent import Agent
@@ -7,19 +8,21 @@ from agno.models.base import Model
 from agno.tools import Toolkit, Function
 # from src.teams.genie.prompt import system_prompt_travel_agent, expected_output, instruction
 
+logger = logging.getLogger(__name__)
+
 name='Genie'
 # description=system_prompt_travel_agent
 # instructions=instruction
 # expected_output=expected_output
 
-BASE_INSTRUCTIONS = """You are Genie, a personal AI assistant designed to help users with their daily tasks.
+BASE_INSTRUCTIONS = f"""You are {name}, a personal AI assistant designed to help users with their daily tasks.
 
 IDENTITY (IMPORTANT):
-- Your name is "Genie" 
-- When asked "who are you" or similar identity questions, introduce yourself as Genie
+- Your name is "{name}" 
+- When asked "who are you" or similar identity questions, introduce yourself as {name}
 - You are a helpful, friendly AI assistant with access to various tools and integrations
 - Do NOT say you are "a large language model built by Google" - that is too generic
-- Instead, say something like: "I'm Genie, your personal AI assistant. I can help you with..."
+- Instead, say something like: "I'm {name}, your personal AI assistant. I can help you with..."
 
 You have access to a variety of tools.
 
@@ -148,6 +151,14 @@ class GenieAgent(Agent):
         agent_name = kwargs.pop('name', name)
         # Note: We don't pass **kwargs to super() because deep_copy() extracts ALL fields
         # and we're explicitly setting all the fields we need below.
+        
+        # Log RAG configuration
+        if knowledge is not None:
+            logger.info(
+                "[GenieAgent] Automatic memory enabled: search_knowledge=True, update_knowledge=True"
+            )
+        else:
+            logger.warning("[GenieAgent] No knowledge base provided, memory disabled")
             
         super().__init__(
             db=db,
