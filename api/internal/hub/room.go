@@ -96,6 +96,16 @@ func (r *Room) Run() {
 	for {
 		select {
 		case client := <-r.register:
+			// One client per user per room: disconnect any existing connection from the same user
+			// so rapid close+connect (e.g. switching chats or Strict Mode) doesn't leave two
+			// clients in the room both receiving the same broadcast.
+			for c := range r.clients {
+				if c.userID == client.userID {
+					delete(r.clients, c)
+					close(c.send)
+					r.logger.Info("evicted previous client for same user", zap.String("user_id", c.userID.String()))
+				}
+			}
 			r.clients[client] = true
 			r.logger.Info("client joined room", zap.String("user_id", client.userID.String()))
 			// Send initial sync if needed? Client fetches DB history.

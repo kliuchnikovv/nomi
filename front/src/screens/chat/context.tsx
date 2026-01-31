@@ -94,8 +94,8 @@ export function ChatProvider({
     const RESPONSE_TIMEOUT_MS = 60000; // 60 seconds
 
     // Model selection state
-    const [selectedModel, setSelectedModelInternal] = useState<string | null>('big-pickle');
-    const selectedModelRef = useRef<string | null>('big-pickle');
+    const [selectedModel, setSelectedModelInternal] = useState<string | null>('gpt-5-nano');
+    const selectedModelRef = useRef<string | null>('gpt-5-nano');
     const selectedProviderRef = useRef<string | undefined>(undefined);
     const manualModelSelectionRef = useRef<boolean>(false);
     const [availableModels, setAvailableModels] = useState<Model[]>([]);

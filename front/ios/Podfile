@@ -34,7 +34,19 @@ target 'genie' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+    hermes_include = "#{Pod::Config.instance.installation_root}/Pods/hermes-engine/destroot/include"
     installer.pods_project.targets.each do |target|
+      # Fix: React-RuntimeHermes не находит hermes/hermes.h при prebuilt Hermes (XCFramework без заголовков)
+      if target.name == 'React-RuntimeHermes'
+        target.build_configurations.each do |config|
+          paths = config.build_settings['HEADER_SEARCH_PATHS'] || '$(inherited)'
+          paths = paths.is_a?(Array) ? paths.join(' ') : paths
+          unless paths.include?(hermes_include)
+            config.build_settings['HEADER_SEARCH_PATHS'] = "#{paths} #{hermes_include}"
+          end
+        end
+      end
+
       # Remove ReactCodegen script phase if it causes issues (assuming files are generated manually or by pre-build)
       if target.name == 'ReactCodegen'
         target.build_phases.dup.each do |phase|

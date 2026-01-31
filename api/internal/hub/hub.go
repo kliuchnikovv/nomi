@@ -156,6 +156,9 @@ func (h *Hub) GetOrCreateRoom(roomID uuid.UUID, roomType RoomType, userID uuid.U
 	return room, nil
 }
 
+// BroadcastToUser sends a frame to the user's rooms. Stream chunks (op=message, kind=data)
+// are sent only to the matching chat room to avoid duplicate delivery when the same
+// user has both a chat connection and a user-channel connection (e.g. NotificationContext).
 func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -164,11 +167,24 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 
 	found := 0
 	for _, room := range h.rooms {
-		if room.initiatorID == userID {
-			h.logger.Info("found matching room for user", zap.String("room_id", room.ID.String()))
-			room.HandleRemoteLLMFrame(frame)
-			found++
+		if room.initiatorID != userID {
+			continue
 		}
+		// Stream chunks (message/data) go only to the chat room for this chat.
+		// User room gets done, signal, error etc. so NotificationContext still receives task updates.
+		if room.Type == RoomTypeUser {
+			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
+				continue // do not send stream chunks to user channel — prevents duplicate addMessage on front
+			}
+		}
+		if room.Type == RoomTypeChat {
+			if frame.ChatID != uuid.Nil && frame.ChatID != room.ID {
+				continue // send only to the room that matches this chat
+			}
+		}
+		h.logger.Info("found matching room for user", zap.String("room_id", room.ID.String()))
+		room.HandleRemoteLLMFrame(frame)
+		found++
 	}
 	if found == 0 {
 		h.logger.Warn("no active rooms found for user", zap.String("user_id", userID.String()))
