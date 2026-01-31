@@ -193,7 +193,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 });
 
                 if (!response.ok) {
-                    await logout();
+                    // Only logout on permanent auth errors (invalid/expired refresh token)
+                    if (response.status === 401 || response.status === 403) {
+                        console.warn('[Auth] Refresh failed: invalid refresh token, logging out');
+                        await logout();
+                    } else {
+                        // Server errors (5xx) or other issues - temporary, do not logout
+                        console.warn(`[Auth] Refresh failed: HTTP ${response.status}, will retry on next request`);
+                    }
                     return false;
                 }
 
@@ -202,8 +209,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 return true;
             } catch (error) {
-                console.error(`error while refreshing token: ${error}`);
-                await logout();
+                // Network errors (timeout, no connection, app backgrounded) - temporary, do not logout
+                console.warn('[Auth] Refresh failed (network error):', error);
                 return false;
             } finally {
                 refreshPromise = null;

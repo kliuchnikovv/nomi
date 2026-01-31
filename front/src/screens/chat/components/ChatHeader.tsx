@@ -4,6 +4,7 @@ import { Menu, Mail, MagicWand, Code, Airplane, Cube, Plus, Group } from 'iconoi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from '../styles';
 import { useTheme } from '../../../context/ThemeContext';
+import { TypingIndicator } from './TypingIndicator';
 
 
 interface ChatHeaderProps {
@@ -109,7 +110,15 @@ export function ChatHeader({
                             {title}
                         </Text>
                     </View>
-
+                    {subtitle ? (
+                        subtitle === 'typing...' ? (
+                            <TypingIndicator />
+                        ) : (
+                            <Text style={[styles.headerSubtitle, { marginTop: 0, marginLeft: 6, flexShrink: 0 }]} numberOfLines={1}>
+                                {subtitle}
+                            </Text>
+                        )
+                    ) : null}
                     {activeAgentsCount > 0 && (
                         <View style={{
                             flexDirection: 'row',
@@ -132,11 +141,6 @@ export function ChatHeader({
                         </View>
                     )}
                 </View>
-                {subtitle ? (
-                    <Text style={styles.headerSubtitle} numberOfLines={1}>
-                        {subtitle}
-                    </Text>
-                ) : null}
             </View>
             {onNewTaskPress && (
                 <TouchableOpacity style={styles.menuButton} onPress={onNewTaskPress}>

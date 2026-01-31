@@ -9,7 +9,8 @@ logger = logging.getLogger(__name__)
 
 # Minimum cosine similarity (0..1) to consider a document relevant. Below this, results are
 # filtered out so the agent does not receive unrelated docs (e.g. Genie README for "эффект Долины").
-DEFAULT_MIN_SIMILARITY_THRESHOLD = 0.5
+# Higher value (0.6) reduces irrelevant facts in responses (e.g. no "you love chebureki" on "Hi!").
+DEFAULT_MIN_SIMILARITY_THRESHOLD = 0.6
 
 
 def _cosine_similarity(a: List[float], b: List[float]) -> float:

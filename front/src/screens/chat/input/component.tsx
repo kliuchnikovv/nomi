@@ -444,6 +444,7 @@ export default function ChatInput(props: Props) {
                 {/* Top row: Input field */}
                 <TextInput
                     multiline
+                    autoCapitalize="sentences"
                     style={styles.input}
                     placeholder="Type a message..."
                     placeholderTextColor="rgba(192, 202, 245, 0.6)"

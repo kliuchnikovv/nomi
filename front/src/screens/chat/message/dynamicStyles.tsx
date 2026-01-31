@@ -354,7 +354,8 @@ export const createMarkdownStyles = (theme: ThemeColors) => ({
         lineHeight: 24,
     },
     link: {
-        color: theme.accent,
+        color: '#4A9EFF',
+        textDecorationLine: 'underline',
     },
     code_inline: {
         backgroundColor: theme.codeInlineBg || '#24283b',
