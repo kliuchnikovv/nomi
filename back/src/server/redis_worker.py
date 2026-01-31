@@ -93,7 +93,6 @@ class RedisWorker:
                 await asyncio.sleep(1)
 
     async def _handle_message(self, message: dict):
-        """Handle a single message from Redis."""
         # Normalize channel: redis-py may return bytes or str; psubscribe uses "pattern"
         channel = message.get("channel") or message.get("pattern") or ""
         if isinstance(channel, bytes):

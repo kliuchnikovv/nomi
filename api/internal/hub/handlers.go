@@ -101,7 +101,6 @@ func handleReasoningPayload(r *Room, data []byte) error {
 }
 
 func handleMemberResponsePayload(r *Room, data []byte) error {
-	// Persist member response chunks even when streaming for multi-device sync.
 	var p MemberResponsePayload
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
