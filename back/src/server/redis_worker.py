@@ -94,7 +94,10 @@ class RedisWorker:
 
     async def _handle_message(self, message: dict):
         """Handle a single message from Redis."""
-        channel = message.get("channel", "")
+        # Normalize channel: redis-py may return bytes or str; psubscribe uses "pattern"
+        channel = message.get("channel") or message.get("pattern") or ""
+        if isinstance(channel, bytes):
+            channel = channel.decode("utf-8", errors="replace")
         data = message.get("data")
 
         if not channel or not data:
@@ -121,14 +124,21 @@ class RedisWorker:
 
         # Case 2: Store facts (async client-extracted facts, no chat pipeline)
         if channel == "chat:store_facts":
+            logger.info("[RedisWorker] RECEIVED chat:store_facts (len=%d)", len(data) if data else 0)
             try:
                 payload = json.loads(data) if isinstance(data, str) else data
                 user_id = payload.get("user_id")
                 facts = payload.get("extracted_facts", [])
                 if not user_id or not facts:
+                    logger.warning(
+                        "[RedisWorker] store_facts: missing user_id or facts (user_id=%s, facts_count=%d)",
+                        "present" if user_id else "missing",
+                        len(facts) if facts else 0,
+                    )
                     return
                 knowledge = self.agent_factory.get_or_create_knowledge(str(user_id))
                 if not knowledge:
+                    logger.warning("[RedisWorker] store_facts: get_or_create_knowledge returned None for user=%s", user_id)
                     return
                 for fact in facts:
                     if isinstance(fact, str) and fact.strip():

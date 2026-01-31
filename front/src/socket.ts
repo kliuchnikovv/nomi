@@ -563,11 +563,14 @@ export class ChatSocket {
                 this.touchActivity();
                 console.log('[Socket] ✓ Facts sent successfully via WebSocket');
             } catch (err) {
-                // Non-critical: log only
-                console.warn('[Socket] sendStoreFacts failed', err);
+                // Non-critical: put in outbox so it gets sent when connection is restored
+                console.warn('[Socket] sendStoreFacts failed, queuing for retry', err);
+                this.outbox.push(msg);
             }
         } else {
-            console.warn('[Socket] Cannot send facts: WebSocket not ready');
+            // Queue for later — same as sendMessage; processOutbox will send when socket connects
+            this.outbox.push(msg);
+            console.log('[Socket] Facts queued (socket not ready), will send when connected');
         }
     }
 
