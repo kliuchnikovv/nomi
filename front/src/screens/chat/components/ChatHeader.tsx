@@ -103,10 +103,12 @@ export function ChatHeader({
                 )}
             </View>
             <View style={[styles.headerBody, { flex: 1, minWidth: 0 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={styles.headerTitle} numberOfLines={2} ellipsizeMode="tail">
-                        {title}
-                    </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+                            {title}
+                        </Text>
+                    </View>
 
                     {activeAgentsCount > 0 && (
                         <View style={{
@@ -117,7 +119,6 @@ export function ChatHeader({
                             paddingVertical: 2,
                             borderRadius: 8,
                             marginLeft: 8,
-                            marginBottom: 4, // Align better with multiline title if fits, or just aesthetics
                         }}>
                             <Group width={12} height={12} color={theme.success} strokeWidth={2.5} />
                             <Text style={{

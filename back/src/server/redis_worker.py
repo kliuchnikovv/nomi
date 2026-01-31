@@ -46,12 +46,12 @@ class RedisWorker:
             self.redis = redis.from_url(self.redis_url, decode_responses=True)
             self.pubsub = self.redis.pubsub()
 
-            # Subscribe to chat requests AND jules monitoring events
+            # Subscribe to chat requests, store_facts (client-extracted facts), and jules monitoring
             await self.pubsub.psubscribe("chat:request:*")
-            await self.pubsub.subscribe("jules:monitor")
+            await self.pubsub.subscribe("jules:monitor", "chat:store_facts")
 
             logger.warning(
-                "[RedisWorker] Successfully subscribed to chat:request:* and jules:monitor"
+                "[RedisWorker] Successfully subscribed to chat:request:*, chat:store_facts, jules:monitor"
             )
 
             asyncio.create_task(self._process_messages())
@@ -119,7 +119,29 @@ class RedisWorker:
                 logger.error(f"[RedisWorker] Failed to handle jules:monitor: {e}")
             return
 
-        # Case 2: Chat Request (pattern match)
+        # Case 2: Store facts (async client-extracted facts, no chat pipeline)
+        if channel == "chat:store_facts":
+            try:
+                payload = json.loads(data) if isinstance(data, str) else data
+                user_id = payload.get("user_id")
+                facts = payload.get("extracted_facts", [])
+                if not user_id or not facts:
+                    return
+                knowledge = self.agent_factory.get_or_create_knowledge(str(user_id))
+                if not knowledge:
+                    return
+                for fact in facts:
+                    if isinstance(fact, str) and fact.strip():
+                        try:
+                            knowledge.load_text(fact.strip())
+                            logger.info("[RedisWorker] Stored client fact: %s", fact[:80])
+                        except Exception as e:
+                            logger.warning("[RedisWorker] Failed to store fact: %s", e)
+            except Exception as e:
+                logger.warning("[RedisWorker] store_facts failed: %s", e)
+            return
+
+        # Case 3: Chat Request (pattern match)
         # channel: chat:request:<chat_id>
         parts = channel.split(":")
         if len(parts) >= 3 and parts[0] == "chat" and parts[1] == "request":

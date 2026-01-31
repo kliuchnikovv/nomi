@@ -20,14 +20,17 @@ class MemoriserAgent(Agent):
     """
 
     MEMORY_PROMPT = (
-        "You receive the last N user replies and a task description. "
-        "Extract 0-3 facts/preferences/goals that should be remembered long-term. "
-        "If nothing is important, return an empty list.\n\n"
-        "Examples of memorable facts:\n"
-        "- 'User prefers no meetings before 11 AM'\n"
-        "- 'User's favorite programming language is Python'\n"
-        "- 'User is working on a D&D game project'\n\n"
-        "Format each fact as a clear, standalone statement."
+        "You receive conversation history and the latest user message. "
+        "Extract 0-5 facts, preferences, or constraints that should be remembered long-term for personalization. "
+        "If nothing is important, return nothing.\n\n"
+        "Capture BOTH explicit and IMPLICIT information:\n"
+        "- Explicit: 'User prefers no meetings before 11 AM', 'User loves Python', 'User is working on a D&D project'\n"
+        "- Implicit: 'User does not speak Spanish' (from 'we only know English'), "
+        "'User is going with their spouse' (from 'with my wife'), "
+        "'User prefers English only', 'User has dietary restrictions', "
+        "languages they know or don't know, who they travel with, constraints they mention.\n\n"
+        "Format each fact as a single clear line, one per line. No numbering or bullets. "
+        "Each line must be a standalone statement about the user (e.g. 'User prefers X', 'User does not Y')."
     )
 
     def __init__(

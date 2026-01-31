@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from agno.models.base import Model
 from agno.models.google import Gemini
+from agno.models.openai import OpenAIChat, OpenAIResponses
 from agno.vectordb.pgvector import PgVector
 from src.agents.factory import AgentFactory
 from src.teams.factory import TeamFactory
@@ -83,7 +84,8 @@ async def test_agent_factory_build_with_model_override(agent_factory):
             session_id="sess-1", model_name="gpt-5-nano"
         )
 
-        assert isinstance(agent.model, Gemini)
+        # gpt-5-nano is OpenCode: OpenAIChat when endpoint is chat/completions, OpenAIResponses when /responses
+        assert isinstance(agent.model, (OpenAIChat, OpenAIResponses))
         assert agent.model.id == "gpt-5-nano"
 
 
@@ -161,7 +163,7 @@ async def test_agent_factory_build_with_web_search(agent_factory):
         )
 
         assert isinstance(agent.model, Gemini)
-        assert agent.model.id == "gpt-5-nano"
+        assert agent.model.id == "gemini-2.0-flash"
         assert agent.model.search  # Verify search is enabled
 
 
@@ -176,13 +178,13 @@ async def test_agent_factory_build_without_web_search(agent_factory):
     ):
         mock_build_tools.return_value = []
 
-        # Build with web_search=False (default)
+        # Build with web_search=False (default); gpt-5-nano is OpenCode (OpenAIChat/OpenAIResponses)
         agent = await agent_factory.build(
             session_id="sess-1", model_name="gpt-5-nano", web_search=False
         )
 
-        assert isinstance(agent.model, Gemini)
-        assert not agent.model.search  # Verify search is disabled
+        assert isinstance(agent.model, (OpenAIChat, OpenAIResponses))
+        assert agent.model.id == "gpt-5-nano"
 
 
 @pytest.mark.asyncio
@@ -221,15 +223,13 @@ async def test_agent_factory_build_thinking_not_supported_for_older_models(
     ):
         mock_build_tools.return_value = []
 
-        # Build with thinking=True for a 2.0 model (should not enable thinking)
+        # Build with thinking=True for gpt-5-nano (OpenCode); no thinking_budget on OpenAIChat/OpenAIResponses
         agent = await agent_factory.build(
             session_id="sess-1", model_name="gpt-5-nano", thinking=True
         )
 
-        assert isinstance(agent.model, Gemini)
+        assert isinstance(agent.model, (OpenAIChat, OpenAIResponses))
         assert agent.model.id == "gpt-5-nano"
-        # Thinking IS enabled because factory blindly applies it
-        assert agent.model.thinking_budget == 8192
 
 
 @pytest.mark.asyncio

@@ -21,6 +21,7 @@ import { useChatStore } from '../../store/chatStore';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import { v4 as uuidv4 } from 'uuid';
 import { generateChatTitle } from '../../services/chatTitleGenerator';
+import { extractUserFacts } from '../../services/userFactsExtraction';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -480,6 +481,17 @@ export function ChatProvider({
                 user.id, // user_id for backend routing
                 selectedEndpoint
             );
+
+            // Async local extraction (e.g. Apple FM): send facts when done; does not block chat
+            if (role === 'user' && user?.id && text?.trim()) {
+                extractUserFacts(text.trim())
+                    .then((facts) => {
+                        if (facts.length > 0) {
+                            socket.sendStoreFacts(chatIdToUse, user.id, facts);
+                        }
+                    })
+                    .catch(() => {});
+            }
         },
         [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, renameChat, setLastFailedMessage, tools, availableModels],
     );

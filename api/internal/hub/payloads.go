@@ -119,9 +119,16 @@ type UserMessagePayload struct {
 	WebSearch     bool        `json:"web_search,omitempty"`
 
 	// Command/Team specific
-	Command   chat.Command `json:"command,omitempty"`
-	Team      interface{}  `json:"team,omitempty"`
-	AgentType string       `json:"agent_type,omitempty"`
-	Tools     interface{}  `json:"tools,omitempty"` // User-provided tools/integrations
-	UserID    uuid.UUID    `json:"user_id,omitempty"`
+	Command        chat.Command `json:"command,omitempty"`
+	Team           interface{}  `json:"team,omitempty"`
+	AgentType      string       `json:"agent_type,omitempty"`
+	Tools          interface{}  `json:"tools,omitempty"` // User-provided tools/integrations
+	UserID         uuid.UUID    `json:"user_id,omitempty"`
+	ExtractedFacts []string     `json:"extracted_facts,omitempty"` // Optional client-extracted facts (sync path)
+}
+
+// StoreFactsPayload is used for op "store_facts" (async client-side extraction result)
+type StoreFactsPayload struct {
+	UserID         string   `json:"user_id"`
+	ExtractedFacts []string `json:"extracted_facts"`
 }

@@ -384,6 +384,68 @@ class RedisSession:
                     self.chat_history[-1]["role"] if self.chat_history else "N/A",
                 )
 
+    async def _extract_and_store_facts(self, text: str) -> None:
+        """
+        Run memory extraction in background: extract facts from current message + recent
+        history and store in UserScopedKnowledge. Does not block the main chat response.
+        """
+        user_id = self.user_id
+        if not user_id or not (text or "").strip():
+            return
+        try:
+            knowledge = self.agent_factory.get_or_create_knowledge(user_id)
+            if not knowledge:
+                return
+            model = self.agent_factory.build_model(
+                self.current_model_name or "gemini-2.0-flash",
+                thinking="off",
+            )
+            from src.agents.memoriser import MemoriserAgent
+
+            memoriser = MemoriserAgent(
+                db=self.agent_factory._db,
+                model=model,
+                knowledge=knowledge,
+                debug_mode=self.agent_factory._debug_mode,
+            )
+            last_n = 5
+            history_snippet = ""
+            if self.chat_history:
+                recent = self.chat_history[-last_n:]
+                lines = [
+                    f"{'User' if h['role'] == 'user' else 'Assistant'}: {h['content']}"
+                    for h in recent
+                ]
+                history_snippet = "Conversation:\n" + "\n".join(lines) + "\n\n"
+            prompt = (
+                f"{history_snippet}User message: {text.strip()}\n\n"
+                "Extract 0-5 facts/preferences/constraints to remember (one per line, clear standalone statements)."
+            )
+            response = await memoriser.arun(prompt, stream=False)
+            content = getattr(response, "content", None) or ""
+            if isinstance(content, str):
+                for line in content.splitlines():
+                    fact = line.strip()
+                    if not fact or len(fact) < 3:
+                        continue
+                    if fact.startswith(("-", "*", "•", "1.", "2.", "3.", "4.", "5.")):
+                        fact = fact.lstrip("-*•0123456789. ")
+                    if fact:
+                        try:
+                            knowledge.load_text(fact)
+                            logger.info("[RedisSession] Stored fact: %s", fact[:80])
+                        except Exception as e:
+                            logger.warning("[RedisSession] Failed to store fact %s: %s", fact[:50], e)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(
+                "[RedisSession] Memory extraction failed (non-fatal): %s",
+                e,
+                exc_info=False,
+                extra={"user_id": user_id},
+            )
+
     async def handle_user_message(self, frame: Frame):
         payload = frame.payload or {}
         text = payload.get("message", "")
@@ -414,6 +476,26 @@ class RedisSession:
 
         # Build agent
         await self.build_agent_instance(payload)
+
+        # Optionally store client-extracted facts from payload (e.g. from sync path)
+        incoming_facts = payload.get("extracted_facts")
+        if incoming_facts and self.user_id:
+            try:
+                knowledge = self.agent_factory.get_or_create_knowledge(str(self.user_id))
+                if knowledge and isinstance(incoming_facts, list):
+                    for fact in incoming_facts:
+                        if isinstance(fact, str) and fact.strip():
+                            try:
+                                knowledge.load_text(fact.strip())
+                                logger.info("[RedisSession] Stored client fact: %s", fact[:80])
+                            except Exception as e:
+                                logger.warning("[RedisSession] Failed to store client fact: %s", e)
+            except Exception as e:
+                logger.warning("[RedisSession] Failed to store extracted_facts: %s", e)
+
+        # Run memory extraction in background (does not block response)
+        if payload.get("role") != "system":
+            asyncio.create_task(self._extract_and_store_facts(text))
 
         # If we have history and the agent supports it, we might want to load it.
         # But commonly the Agent loads from DB based on session_id.

@@ -73,6 +73,13 @@ class AgentFactory:
                 )
         return self._vector_db
 
+    def get_or_create_knowledge(self, user_id: str) -> Optional[UserScopedKnowledge]:
+        """Return UserScopedKnowledge for the given user_id (for memory extraction, store_facts, etc.)."""
+        vector_db = self._get_or_create_vector_db()
+        if not vector_db:
+            return None
+        return UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
+
     # ... (build_model omitted)
 
     def build_model(
@@ -139,13 +146,12 @@ class AgentFactory:
                 include_thoughts=include_thoughts,
             )
 
-        # Support OpenCode models (base_url from config endpoint, no hardcoding)
+        # Support OpenCode models (base_url from config endpoint, no hardcoding).
+        # gpt-5-nano uses Responses API (/v1/responses); big-pickle uses Chat Completions (/v1/chat/completions).
         elif provider_norm == "opencode" or model_name in ["big-pickle", "gpt-5-nano"]:
             api_key = os.getenv("OPENCODE_API_KEY")
             if not api_key:
                 raise ValueError("OPENCODE_API_KEY environment variable not set")
-
-            from agno.models.openai import OpenAIChat
 
             # Prefer endpoint from config (payload). Normalize: strip trailing slash and
             # if full .../chat/completions or .../responses URL, use base only.
@@ -153,14 +159,38 @@ class AgentFactory:
                 ep = endpoint.strip().rstrip("/")
                 if ep.endswith("chat/completions"):
                     base_url = ep[: -len("chat/completions")].rstrip("/")
+                    use_responses_api = False
                 elif ep.endswith("responses"):
                     base_url = ep[: -len("responses")].rstrip("/")
+                    use_responses_api = True
                 else:
                     base_url = ep
+                    use_responses_api = False
             else:
                 base_url = "https://opencode.ai/zen/v1"  # fallback for legacy configs
-            logger.info("[Factory] Creating OpenCode model: %s (base_url=%s)", model_name, base_url)
-            # Send model name without opencode/ prefix — API expects e.g. "big-pickle"
+                use_responses_api = False
+
+            # Send model name without opencode/ prefix — API expects e.g. "big-pickle" or "gpt-5-nano"
+            if use_responses_api:
+                from agno.models.openai import OpenAIResponses
+
+                logger.info(
+                    "[Factory] Creating OpenCode model (Responses API): %s (base_url=%s)",
+                    model_name,
+                    base_url,
+                )
+                return OpenAIResponses(
+                    id=model_name,
+                    api_key=api_key,
+                    base_url=base_url,
+                )
+            from agno.models.openai import OpenAIChat
+
+            logger.info(
+                "[Factory] Creating OpenCode model (Chat Completions): %s (base_url=%s)",
+                model_name,
+                base_url,
+            )
             return OpenAIChat(
                 id=model_name,
                 api_key=api_key,

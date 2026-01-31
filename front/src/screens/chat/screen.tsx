@@ -429,12 +429,15 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
 
     const headerTitle = externalTitle || activeChat?.title || (messages.length === 0 ? 'Dashboard' : 'New Chat');
     const headerSubtitle = useMemo(() => {
+        if (assistantWorking) {
+            return 'typing...';
+        }
         if (chatMode === 'team') {
             const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
             return team?.name || '';
         }
         return '';
-    }, [chatMode, selectedTeamId]);
+    }, [assistantWorking, chatMode, selectedTeamId]);
 
     return (
         <View style={styles.container}>
@@ -504,7 +507,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                 renderBubble={renderBubble}
                                 renderMessageText={renderMessageText}
                                 renderInputToolbar={renderInputToolbar}
-                                isTyping={assistantWorking}
+                                isTyping={false}
                                 renderFooter={renderFooter}
                                 inverted={true}
                                 minInputToolbarHeight={60}

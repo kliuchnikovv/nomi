@@ -451,18 +451,7 @@ export function useGiftedChatRenderers({
         );
     }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend, onMessageAction, showToolCalls]);
 
-    const renderFooter = useCallback(() => {
-        if (!assistantWorking) {
-            return null;
-        }
-
-        return (
-            <View style={styles.footerContainer}>
-                <View style={styles.typingDot} />
-                <Text style={styles.footerText}>Assistant is thinking…</Text>
-            </View>
-        );
-    }, [assistantWorking, styles]);
+    const renderFooter = useCallback(() => null, []);
 
     return {
         renderBubble,

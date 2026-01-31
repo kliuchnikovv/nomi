@@ -157,6 +157,34 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		return
 	}
 
+	// Handle store_facts (async client-extracted facts) — no chat pipeline, just forward to Redis
+	if frame.Operation == StoreFactsOperation {
+		var storePayload StoreFactsPayload
+		if err := json.Unmarshal(frame.Payload, &storePayload); err != nil {
+			r.logger.Warn("failed to parse store_facts payload", zap.Error(err))
+			return
+		}
+		userID := storePayload.UserID
+		if userID == "" {
+			userID = r.initiatorID.String()
+		}
+		if userID == "" || len(storePayload.ExtractedFacts) == 0 {
+			return
+		}
+		storeFrame := map[string]interface{}{
+			"op":              string(StoreFactsOperation),
+			"user_id":         userID,
+			"extracted_facts": storePayload.ExtractedFacts,
+		}
+		storeBytes, _ := json.Marshal(storeFrame)
+		if err := r.hub.redis.Publish(context.Background(), "chat:store_facts", storeBytes).Err(); err != nil {
+			r.logger.Error("failed to publish store_facts", zap.Error(err))
+		} else {
+			r.logger.Info("published store_facts", zap.String("user_id", userID), zap.Int("count", len(storePayload.ExtractedFacts)))
+		}
+		return
+	}
+
 	// Parse Payload
 	var payload UserMessagePayload
 	if err := json.Unmarshal(frame.Payload, &payload); err != nil {

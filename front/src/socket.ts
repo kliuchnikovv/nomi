@@ -532,6 +532,33 @@ export class ChatSocket {
         }
     }
 
+    /**
+     * Send client-extracted facts to backend (async, after local extraction completes).
+     * Does not block chat; used for personalization in future sessions.
+     */
+    sendStoreFacts(chatId: string, userId: string, extractedFacts: string[]) {
+        if (!userId || !extractedFacts?.length) return;
+        const msg = {
+            id: 0,
+            kind: 'data',
+            chat_id: chatId,
+            op: 'store_facts',
+            payload: {
+                user_id: userId,
+                extracted_facts: extractedFacts,
+            },
+        };
+        if (this.isReady()) {
+            try {
+                this.ws.send(JSON.stringify(msg));
+                this.touchActivity();
+            } catch (err) {
+                // Non-critical: log only
+                console.warn('[Socket] sendStoreFacts failed', err);
+            }
+        }
+    }
+
     // Send a command or tools frame
     sendMeta(chatId: string, op: string, payload: any) {
         const frame = {

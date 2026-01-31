@@ -28,12 +28,13 @@ const (
 	SelectModelOperation Operation = "select_model"
 	ChangeModelOperation Operation = "change_model"
 
-	AckOperation    Operation = "ack"
-	NackOperation   Operation = "nack"
-	JoinOperation   Operation = "join"
-	LeaveOperation  Operation = "leave"
-	PongOperation   Operation = "pong"
-	SignalOperation Operation = "signal"
+	AckOperation        Operation = "ack"
+	NackOperation       Operation = "nack"
+	JoinOperation       Operation = "join"
+	LeaveOperation      Operation = "leave"
+	PongOperation       Operation = "pong"
+	SignalOperation     Operation = "signal"
+	StoreFactsOperation Operation = "store_facts"
 )
 
 type Frame struct {
