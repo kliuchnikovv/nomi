@@ -764,7 +764,10 @@ class KnowledgeSearchTool(Toolkit):
         list_id: Optional[str] = None,
     ) -> str:
         """
-        Add an item to a list (fact, link, or document). Use when the user asks to save something to the list.
+        Add an item to a list. Use when the user asks to save something.
+        - type "fact": short note (default when user just wrote text, e.g. "add Atomic Heart").
+        - type "link": only when user provided a URL (url required).
+        - type "document": only when user attached a file or pasted long text as document.
         In list chat context, list_id can be omitted (uses current list).
         """
         lid = list_id or self.list_id
