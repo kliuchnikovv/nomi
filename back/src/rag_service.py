@@ -3,9 +3,9 @@ import logging
 import os
 import httpx
 
-from agno.knowledge import Knowledge
 from agno.tools import Toolkit
 from agno.knowledge.document import Document
+
 # Adjusted import to be relative or absolute based on running from root/back
 # Since we are running from root, and PYTHONPATH includes '.',
 # back.src.knowledge.factory should work, but src... fails if src is not in python path directly
@@ -15,43 +15,56 @@ from github import Github, GithubException
 
 logger = logging.getLogger(__name__)
 
+
 class ProjectKnowledgeManager:
     """
     Manages user knowledge using a shared vector database
     with metadata filtering for isolation and project scoping.
     """
 
-    def __init__(self, user_id: str, db_url: Optional[str] = None):
+    def __init__(
+        self,
+        user_id: str,
+        db_url: Optional[str] = None,
+        vector_db: Optional[Any] = None,
+    ):
         self.user_id = user_id
-        self.vector_db = build_vector_db(db_url=db_url)
+        # Use provided vector_db (singleton) or build new one (legacy/fallback)
+        self.vector_db = vector_db if vector_db else build_vector_db(db_url=db_url)
         # Use UserScopedKnowledge to enforce user_id isolation automatically
         self.knowledge = UserScopedKnowledge(user_id=user_id, vector_db=self.vector_db)
-        # Base knowledge for searching without user_id enforcement (for project-scoped search)
-        self.base_knowledge = Knowledge(vector_db=self.vector_db)
+        # base_knowledge removed to prevent accidental leakage; use self.knowledge with filters instead
 
     def add_document(
         self,
         content: str,
         project_id: Optional[str] = None,
         list_id: Optional[str] = None,
+        item_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Add a document to the knowledge base.
-        If project_id is provided, it's added to metadata (project scope).
-        If list_id is provided, it's added to metadata (list scope); list_id takes precedence over project_id for this doc.
-        If both are None, it's treated as general knowledge.
         """
         # Create a copy to avoid side effects on the passed dictionary
         meta = metadata.copy() if metadata else {}
 
         if list_id:
             meta["list_id"] = list_id
-            # Do not set project_id so list docs are only returned when searching by list_id
+            if item_id:
+                meta["item_id"] = item_id
+                # Deduplication: Delete existing document for this item before adding
+                logger.info(
+                    f"Removing stale documents for item {item_id} in list {list_id}"
+                )
+                self.knowledge.delete(filters={"list_id": list_id, "item_id": item_id})
+
             logger.info(f"Adding document for user {self.user_id} (list: {list_id})")
         elif project_id:
             meta["project_id"] = project_id
-            logger.info(f"Adding document for user {self.user_id} (project: {project_id})")
+            logger.info(
+                f"Adding document for user {self.user_id} (project: {project_id})"
+            )
         else:
             meta["project_id"] = "general"
             logger.info(f"Adding document for user {self.user_id} (general)")
@@ -67,46 +80,48 @@ class ProjectKnowledgeManager:
         max_results: int = 5,
     ) -> List[Document]:
         """
-        Search for documents.
-        If list_id is provided, filters by that list (user-scoped via knowledge).
-        If project_id is provided (and not "*"), filters by that project using base knowledge.
-        If project_id is "*", searches across all projects for this user.
-        If both are None, searches general knowledge for this user.
+        Search for documents with strict user isolation.
         """
-        if list_id:
-            filters = {"list_id": list_id}
-            logger.info(f"Searching knowledge for list {list_id} with query: {query}")
-            results = self.knowledge.search(query=query, max_results=max_results, filters=filters)
-            logger.info(f"Found {len(results)} results in list {list_id}")
-            return results
-
         filters = {}
-        if project_id and project_id != "*":
-             filters["project_id"] = project_id
-             logger.info(f"Searching knowledge for project {project_id} with query: {query}")
-             results = self.base_knowledge.search(query=query, max_results=max_results, filters=filters)
-             logger.info(f"Found {len(results)} results in project {project_id}")
-             return results
-        
-        elif project_id == "*":
-            # Search across all projects (no project_id filter)
-            logger.info(f"Searching across all projects for user {self.user_id} with query: {query}")
-            results = self.knowledge.search(query=query, max_results=max_results)
-            logger.info(f"Found {len(results)} results across projects for user {self.user_id}")
-            return results
-        else:
-             filters["project_id"] = "general"
 
-        logger.info(f"Searching general knowledge for user {self.user_id} with query: {query}")
-        # UserScopedKnowledge.search adds user_id to filter.
-        results = self.knowledge.search(query=query, max_results=max_results, filters=filters)
-        logger.info(f"Found {len(results)} general results for user {self.user_id}")
+        if list_id:
+            filters["list_id"] = list_id
+            logger.info(f"Searching knowledge for list {list_id} with query: {query}")
+        elif project_id and project_id != "*":
+            filters["project_id"] = project_id
+            logger.info(
+                f"Searching knowledge for project {project_id} with query: {query}"
+            )
+        elif project_id == "*":
+            # Search across all projects (no project_id filter), but still scoped to user
+            logger.info(
+                f"Searching across all projects for user {self.user_id} with query: {query}"
+            )
+        else:
+            filters["project_id"] = "general"
+            logger.info(
+                f"Searching general knowledge for user {self.user_id} with query: {query}"
+            )
+
+        # Always use self.knowledge (UserScopedKnowledge) to enforce user_id
+        results = self.knowledge.search(
+            query=query, max_results=max_results, filters=filters
+        )
+
+        scope = (
+            f"list {list_id}"
+            if list_id
+            else (f"project {project_id}" if project_id else "general")
+        )
+        logger.info(f"Found {len(results)} results in {scope} for user {self.user_id}")
         return results
 
-    def ingest_repository(self, repo_name: str, project_id: str, github_token: Optional[str] = None) -> None:
+    def ingest_repository(
+        self, repo_name: str, project_id: str, github_token: Optional[str] = None
+    ) -> None:
         """
         Ingest repository as structured project knowledge.
-        
+
         Instead of copying all files, creates structured summaries:
         1. docs — README.md, AGENTS.md (full text)
         2. structure — Project directory layout
@@ -114,7 +129,9 @@ class ProjectKnowledgeManager:
         4. components — Key classes/functions with signatures
         5. dependencies — From package.json, go.mod, requirements.txt
         """
-        logger.info(f"Starting structured ingestion for repo {repo_name} (project: {project_id})")
+        logger.info(
+            f"Starting structured ingestion for repo {repo_name} (project: {project_id})"
+        )
 
         documents = []
 
@@ -122,7 +139,9 @@ class ProjectKnowledgeManager:
             if github_token:
                 g = Github(github_token)
             else:
-                logger.warning("No GitHub token provided - using unauthenticated access (60 requests/hour limit)")
+                logger.warning(
+                    "No GitHub token provided - using unauthenticated access (60 requests/hour limit)"
+                )
                 g = Github()
             repo = g.get_repo(repo_name)
 
@@ -145,7 +164,9 @@ class ProjectKnowledgeManager:
 
             # 5. Batch upsert
             if documents:
-                logger.info(f"Upserting {len(documents)} structured documents for {repo_name}")
+                logger.info(
+                    f"Upserting {len(documents)} structured documents for {repo_name}"
+                )
                 self.knowledge.load_documents(documents)
                 logger.info(f"Structured ingestion complete for {repo_name}")
             else:
@@ -155,82 +176,128 @@ class ProjectKnowledgeManager:
             logger.error(f"Failed to ingest repository {repo_name}: {e}")
             raise
 
-    def _ingest_documentation(self, repo, repo_name: str, project_id: str) -> List[Document]:
+    def _ingest_documentation(
+        self, repo, repo_name: str, project_id: str
+    ) -> List[Document]:
         """Fetch documentation files (full text)."""
         documents = []
         doc_files = ["README.md", "AGENTS.md", "CONTRIBUTING.md", "docs/README.md"]
-        
+
         for file_path in doc_files:
             try:
                 content = repo.get_contents(file_path)
                 if not isinstance(content, list):
-                    decoded_content = content.decoded_content.decode('utf-8')
-                    documents.append(Document(
-                        content=decoded_content,
-                        meta_data={
-                            "project_id": project_id,
-                            "doc_type": "docs",
-                            "source": f"github://{repo_name}/{file_path}",
-                            "filename": file_path
-                        }
-                    ))
+                    decoded_content = content.decoded_content.decode("utf-8")
+                    documents.append(
+                        Document(
+                            content=decoded_content,
+                            meta_data={
+                                "project_id": project_id,
+                                "doc_type": "docs",
+                                "source": f"github://{repo_name}/{file_path}",
+                                "filename": file_path,
+                            },
+                        )
+                    )
                     logger.debug(f"Indexed documentation: {file_path}")
             except GithubException as e:
                 if e.status != 404:
                     logger.error(f"Error fetching {file_path}: {e}")
             except Exception as e:
                 logger.error(f"Error processing {file_path}: {e}")
-        
+
         return documents
 
-    def _build_project_structure(self, repo, repo_name: str, project_id: str) -> Optional[Document]:
-        """Build a structured description of project directories."""
+    def _build_project_structure(
+        self, repo, repo_name: str, project_id: str
+    ) -> Optional[Document]:
+        """Build a structured description of project directories using Git Tree API (faster)."""
         try:
+            # Use get_git_tree with recursive=True to get flat list of all files in one API call
+            # This avoids N+1 API calls and rate limits
+            try:
+                # Use HEAD or main branch
+                sha = repo.default_branch
+                tree = repo.get_git_tree(sha=sha, recursive=True)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to get git tree: {e}. Falling back to non-recursive."
+                )
+                return None
+
             structure_lines = [f"# Project Structure: {repo_name}\n"]
-            
-            def describe_dir(path: str, depth: int = 0):
-                if depth > 5:
-                    return
-                try:
-                    contents = repo.get_contents(path)
-                    if not isinstance(contents, list):
-                        contents = [contents]
-                    
-                    dirs = []
-                    files = []
-                    for item in contents:
-                        if item.type == "dir":
-                            dirs.append(item.name)
-                        else:
-                            files.append(item.name)
-                    
-                    indent = "  " * depth
-                    if path == "":
-                        structure_lines.append(f"{indent}Root:\n")
-                    
-                    for d in sorted(dirs):
-                        purpose = self._guess_dir_purpose(d)
-                        structure_lines.append(f"{indent}- **{d}/** — {purpose}\n")
-                        describe_dir(f"{path}/{d}" if path else d, depth + 1)
-                    
-                    if files and depth == 0:
-                        key_files = [f for f in files if f in ["README.md", "package.json", "go.mod", "requirements.txt", "Makefile", "docker-compose.yml"]]
-                        if key_files:
-                            structure_lines.append(f"{indent}- Config files: {', '.join(key_files)}\n")
-                            
-                except Exception as e:
-                    logger.debug(f"Could not read {path}: {e}")
-            
-            describe_dir("")
-            
+            if tree.truncated:
+                structure_lines.append(
+                    "> Note: Project is too large, structure is truncated.\n"
+                )
+
+            # Process tree elements
+            # Sort by path to ensure deterministic order
+            elements = sorted(tree.tree, key=lambda x: x.path)
+
+            # Helper to check if path is too deep (e.g. > 5 levels)
+            def get_depth(path):
+                return path.count("/")
+
+            # Track which directories we've already described to avoid noise
+            described_dirs = set()
+
+            root_files = []
+
+            for element in elements:
+                path = element.path
+                depth = get_depth(path)
+
+                # Skip deep nesting
+                if depth > 4:
+                    continue
+
+                # Skip hidden files/dirs
+                if "/." in f"/{path}" or path.startswith("."):
+                    continue
+
+                if element.type == "tree":  # Directory
+                    # Only describe top-level and second-level directories
+                    if depth <= 2:
+                        name = path.split("/")[-1]
+                        indent = "  " * depth
+                        purpose = self._guess_dir_purpose(name)
+                        structure_lines.append(f"{indent}- **{name}/** — {purpose}\n")
+                        described_dirs.add(path)
+
+                elif element.type == "blob":  # File
+                    # Only list root files
+                    if depth == 0:
+                        root_files.append(path)
+
+            if root_files:
+                key_files = [
+                    f
+                    for f in root_files
+                    if f
+                    in [
+                        "README.md",
+                        "package.json",
+                        "go.mod",
+                        "requirements.txt",
+                        "Makefile",
+                        "docker-compose.yml",
+                        "pyproject.toml",
+                    ]
+                ]
+                if key_files:
+                    structure_lines.append(
+                        f"Root Config files: {', '.join(key_files)}\n"
+                    )
+
             return Document(
                 content="".join(structure_lines),
                 meta_data={
                     "project_id": project_id,
                     "doc_type": "structure",
                     "source": f"github://{repo_name}",
-                    "filename": "_project_structure.md"
-                }
+                    "filename": "_project_structure.md",
+                },
             )
         except Exception as e:
             logger.error(f"Failed to build project structure: {e}")
@@ -280,7 +347,9 @@ class ProjectKnowledgeManager:
         }
         return purposes.get(dir_name.lower(), "Project directory")
 
-    def _extract_dependencies(self, repo, repo_name: str, project_id: str) -> List[Document]:
+    def _extract_dependencies(
+        self, repo, repo_name: str, project_id: str
+    ) -> List[Document]:
         """Extract dependencies from package files."""
         documents = []
         dep_files = {
@@ -289,60 +358,65 @@ class ProjectKnowledgeManager:
             "requirements.txt": self._parse_requirements,
             "pyproject.toml": self._parse_pyproject,
         }
-        
+
         for file_path, parser in dep_files.items():
             try:
                 content = repo.get_contents(file_path)
                 if not isinstance(content, list):
-                    decoded = content.decoded_content.decode('utf-8')
+                    decoded = content.decoded_content.decode("utf-8")
                     deps_summary = parser(decoded)
                     if deps_summary:
-                        documents.append(Document(
-                            content=deps_summary,
-                            meta_data={
-                                "project_id": project_id,
-                                "doc_type": "dependencies",
-                                "source": f"github://{repo_name}/{file_path}",
-                                "filename": file_path
-                            }
-                        ))
+                        documents.append(
+                            Document(
+                                content=deps_summary,
+                                meta_data={
+                                    "project_id": project_id,
+                                    "doc_type": "dependencies",
+                                    "source": f"github://{repo_name}/{file_path}",
+                                    "filename": file_path,
+                                },
+                            )
+                        )
                         logger.debug(f"Indexed dependencies from: {file_path}")
             except GithubException:
                 pass
             except Exception as e:
                 logger.debug(f"Could not parse {file_path}: {e}")
-        
+
         return documents
 
     def _parse_package_json(self, content: str) -> str:
         """Parse package.json and return dependency summary."""
         import json
+
         try:
             pkg = json.loads(content)
             lines = ["# Node.js Dependencies\n"]
-            
+
             if "name" in pkg:
                 lines.append(f"Package: {pkg['name']}\n")
             if "description" in pkg:
                 lines.append(f"Description: {pkg['description']}\n")
-            
+
             if "dependencies" in pkg:
                 lines.append("\n## Dependencies:\n")
                 for dep, ver in pkg["dependencies"].items():
                     lines.append(f"- {dep}: {ver}\n")
-            
+
             if "devDependencies" in pkg:
                 lines.append("\n## Dev Dependencies:\n")
                 for dep, ver in list(pkg["devDependencies"].items())[:10]:
                     lines.append(f"- {dep}: {ver}\n")
                 if len(pkg["devDependencies"]) > 10:
                     lines.append(f"- ... and {len(pkg['devDependencies']) - 10} more\n")
-            
+
             if "scripts" in pkg:
                 lines.append("\n## Available Scripts:\n")
                 for script, cmd in pkg["scripts"].items():
-                    lines.append(f"- `npm run {script}`: {cmd[:50]}{'...' if len(cmd) > 50 else ''}\n")
-            
+                    lines.append(
+                        f"- `npm run {script}`: {cmd[:50]}{'...' if len(cmd) > 50 else ''}\n"
+                    )
+
             return "".join(lines)
         except Exception:
             return ""
@@ -352,7 +426,7 @@ class ProjectKnowledgeManager:
         lines = ["# Go Dependencies\n"]
         in_require = False
         deps = []
-        
+
         for line in content.split("\n"):
             line = line.strip()
             if line.startswith("module "):
@@ -367,51 +441,53 @@ class ProjectKnowledgeManager:
                 parts = line.split()
                 if len(parts) >= 2:
                     deps.append(f"- {parts[0]}")
-        
+
         if deps:
             lines.append("\n## Dependencies:\n")
             lines.extend([d + "\n" for d in deps[:20]])
             if len(deps) > 20:
                 lines.append(f"- ... and {len(deps) - 20} more\n")
-        
+
         return "".join(lines)
 
     def _parse_requirements(self, content: str) -> str:
         """Parse requirements.txt and return dependency summary."""
         lines = ["# Python Dependencies\n\n"]
         deps = []
-        
+
         for line in content.split("\n"):
             line = line.strip()
             if line and not line.startswith("#") and not line.startswith("-"):
                 deps.append(f"- {line.split('==')[0].split('>=')[0].split('<=')[0]}")
-        
+
         if deps:
             lines.extend([d + "\n" for d in deps[:30]])
             if len(deps) > 30:
                 lines.append(f"- ... and {len(deps) - 30} more\n")
-        
+
         return "".join(lines)
 
     def _parse_pyproject(self, content: str) -> str:
         """Parse pyproject.toml and return summary."""
         lines = ["# Python Project (pyproject.toml)\n"]
         quote = '"'
-        
+
         for line in content.split("\n"):
             if line.startswith("name = "):
-                value = line.split('=')[1].strip().strip(quote)
+                value = line.split("=")[1].strip().strip(quote)
                 lines.append(f"Name: {value}\n")
             elif line.startswith("description = "):
-                value = line.split('=')[1].strip().strip(quote)
+                value = line.split("=")[1].strip().strip(quote)
                 lines.append(f"Description: {value}\n")
-        
+
         return "".join(lines) if len(lines) > 1 else ""
 
-    def _extract_key_components(self, repo, repo_name: str, project_id: str) -> List[Document]:
+    def _extract_key_components(
+        self, repo, repo_name: str, project_id: str
+    ) -> List[Document]:
         """Extract key components (APIs, main classes) from source files."""
         documents = []
-        
+
         api_patterns = [
             # Go API
             ("api/internal/http", "go", "API routes and handlers"),
@@ -442,52 +518,61 @@ class ProjectKnowledgeManager:
             ("back", "py", "Backend entry point"),
             ("api", "go", "API root files"),
         ]
-        
+
         for path, ext, description in api_patterns:
             try:
                 contents = repo.get_contents(path)
                 if not isinstance(contents, list):
                     contents = [contents]
-                
+
                 for item in contents:
                     if item.type == "file" and item.name.endswith(f".{ext}"):
                         try:
                             # Use decoded_content for better safety than base64
-                            decoded = item.decoded_content.decode('utf-8')
-                            summary = self._extract_file_summary(decoded, ext, item.name)
+                            decoded = item.decoded_content.decode("utf-8")
+                            summary = self._extract_file_summary(
+                                decoded, ext, item.name
+                            )
                             if summary:
-                                documents.append(Document(
-                                    content=f"# {description}: {item.name}\n\n{summary}",
-                                    meta_data={
-                                        "project_id": project_id,
-                                        "doc_type": "components",
-                                        "source": f"github://{repo_name}/{path}/{item.name}",
-                                        "filename": item.name
-                                    }
-                                ))
+                                documents.append(
+                                    Document(
+                                        content=f"# {description}: {item.name}\n\n{summary}",
+                                        meta_data={
+                                            "project_id": project_id,
+                                            "doc_type": "components",
+                                            "source": f"github://{repo_name}/{path}/{item.name}",
+                                            "filename": item.name,
+                                        },
+                                    )
+                                )
                                 logger.debug(f"Indexed component: {path}/{item.name}")
                         except Exception as e:
-                            logger.error(f"Error extracting summary from {item.name}: {e}")
+                            logger.error(
+                                f"Error extracting summary from {item.name}: {e}"
+                            )
                             pass
-                    
+
             except GithubException:
                 pass
             except Exception as e:
                 logger.debug(f"Could not extract from {path}: {e}")
-        
+
         return documents
 
     def _extract_file_summary(self, content: str, ext: str, filename: str) -> str:
         """Extract function/class signatures from a source file."""
         lines = []
-        
+
         if ext == "go":
             # Special handling for models.go to include struct fields
             if "models.go" in filename.lower():
                 import re
+
                 # Match: type Name struct { ... }
                 # Note: This is a simple regex that works for most Go model files
-                struct_matches = re.finditer(r'type\s+(\w+)\s+struct\s+\{([^}]+)\}', content)
+                struct_matches = re.finditer(
+                    r"type\s+(\w+)\s+struct\s+\{([^}]+)\}", content
+                )
                 for match in struct_matches:
                     name = match.group(1)
                     fields_raw = match.group(2)
@@ -498,14 +583,16 @@ class ProjectKnowledgeManager:
                         if not f:
                             continue
                         # Remove json tags
-                        f = re.sub(r'`[^`]+`', '', f).strip()
+                        f = re.sub(r"`[^`]+`", "", f).strip()
                         if f:
                             # Collapse multiple spaces
-                            f = re.sub(r'\s+', ' ', f)
+                            f = re.sub(r"\s+", " ", f)
                             clean_fields.append(f)
-                    
-                    lines.append(f"- `type {name} struct` {{ {', '.join(clean_fields[:15])} }}")
-                
+
+                    lines.append(
+                        f"- `type {name} struct` {{ {', '.join(clean_fields[:15])} }}"
+                    )
+
                 # Also include regular signatures for anything missed
                 if not lines:
                     for line in content.split("\n"):
@@ -520,9 +607,11 @@ class ProjectKnowledgeManager:
                     if line.startswith("func ") and "(" in line:
                         sig = line.split("{")[0].strip()
                         lines.append(f"- `{sig}`")
-                    elif line.startswith("type ") and ("struct" in line or "interface" in line):
+                    elif line.startswith("type ") and (
+                        "struct" in line or "interface" in line
+                    ):
                         lines.append(f"- `{line.split('{')[0].strip()}`")
-        
+
         elif ext in ("py", "python"):
             for line in content.split("\n"):
                 if line.startswith("def ") or line.startswith("async def "):
@@ -531,13 +620,16 @@ class ProjectKnowledgeManager:
                 elif line.startswith("class "):
                     sig = line.rstrip(":").strip()
                     lines.append(f"- `{sig}`")
-        
+
         elif ext in ("ts", "tsx", "js", "jsx"):
             import re
-            func_pattern = re.compile(r'(export\s+)?(async\s+)?function\s+(\w+)')
-            const_pattern = re.compile(r'(export\s+)?const\s+(\w+)\s*[=:]\s*(async\s+)?\(')
-            class_pattern = re.compile(r'(export\s+)?class\s+(\w+)')
-            
+
+            func_pattern = re.compile(r"(export\s+)?(async\s+)?function\s+(\w+)")
+            const_pattern = re.compile(
+                r"(export\s+)?const\s+(\w+)\s*[=:]\s*(async\s+)?\("
+            )
+            class_pattern = re.compile(r"(export\s+)?class\s+(\w+)")
+
             for line in content.split("\n"):
                 if match := func_pattern.search(line):
                     lines.append(f"- `function {match.group(3)}()`")
@@ -545,14 +637,16 @@ class ProjectKnowledgeManager:
                     lines.append(f"- `const {match.group(2)}`")
                 elif match := class_pattern.search(line):
                     lines.append(f"- `class {match.group(2)}`")
-        
+
         return "\n".join(lines[:20]) if lines else ""
 
     def delete_project_knowledge(self, project_id: str) -> None:
         """
         Delete all knowledge associated with a project.
         """
-        logger.info(f"Deleting knowledge for user {self.user_id} (project: {project_id})")
+        logger.info(
+            f"Deleting knowledge for user {self.user_id} (project: {project_id})"
+        )
         # Ensure we filter by project_id. UserScopedKnowledge ensures user_id.
         self.knowledge.delete(filters={"project_id": project_id})
 
@@ -563,7 +657,9 @@ class ProjectKnowledgeManager:
         logger.info(f"Deleting knowledge for user {self.user_id} (list: {list_id})")
         self.knowledge.delete(filters={"list_id": list_id})
 
-    def reindex_repository(self, repo_name: str, project_id: str, github_token: Optional[str] = None) -> None:
+    def reindex_repository(
+        self, repo_name: str, project_id: str, github_token: Optional[str] = None
+    ) -> None:
         """
         Re-index repository: delete existing knowledge and re-ingest.
         """
@@ -573,9 +669,9 @@ class ProjectKnowledgeManager:
         logger.info(f"Reindex complete for project {project_id}")
 
 
-
 # Alias for backward compatibility if needed, though we updated usage below
 KnowledgeManager = ProjectKnowledgeManager
+
 
 class KnowledgeSearchTool(Toolkit):
     """
@@ -598,7 +694,9 @@ class KnowledgeSearchTool(Toolkit):
             try:
                 manager = ProjectKnowledgeManager(user_id=user_id)
             except Exception as e:
-                logger.warning(f"Failed to initialize ProjectKnowledgeManager in tool: {e}")
+                logger.warning(
+                    f"Failed to initialize ProjectKnowledgeManager in tool: {e}"
+                )
                 self.manager = None
                 self.register(self.list_projects)
                 self.register(self.list_lists)
@@ -629,22 +727,22 @@ class KnowledgeSearchTool(Toolkit):
                          Bad examples (too vague):
                          - "code"
                          - "files"
-            
+
             project_id (Optional[str]): The ID of the project to search in.
                                         - Get this from session context (session.context.project_id)
                                         - Use "*" to search across ALL projects
                                         - Leave None for general (non-project) knowledge
-        
+
         Returns:
             str: Formatted search results with relevant code snippets and documentation.
-        
+
         Knowledge Types Available (indexed per project):
             - docs: Full README.md, AGENTS.md content
             - structure: Project directory layout with descriptions
             - api: Endpoint definitions and routes
             - components: Key classes and function signatures
             - dependencies: Libraries and versions from package files
-        
+
         Example Queries:
             - "project structure" -> Get directory layout
             - "api endpoints handlers" -> Find REST API routes
@@ -728,7 +826,9 @@ class KnowledgeSearchTool(Toolkit):
                     return "Error: Not authorized. Please ensure you are logged in."
 
                 if response.status_code != 200:
-                    logger.error(f"Failed to list lists: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Failed to list lists: {response.status_code} - {response.text}"
+                    )
                     return f"Error fetching lists: HTTP {response.status_code}"
 
                 lists_data = response.json()
@@ -786,13 +886,22 @@ class KnowledgeSearchTool(Toolkit):
             headers = {"Content-Type": "application/json"}
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
-            body = {"type": type, "title": title or "", "content": content or "", "url": url or ""}
+            body = {
+                "type": type,
+                "title": title or "",
+                "content": content or "",
+                "url": url or "",
+            }
             with httpx.Client(timeout=15.0) as client:
-                response = client.post(f"{api_url}/lists/{lid}/items", json=body, headers=headers)
+                response = client.post(
+                    f"{api_url}/lists/{lid}/items", json=body, headers=headers
+                )
             if response.status_code == 401:
                 return "Error: Not authorized. Please ensure you are logged in."
             if response.status_code not in (200, 201):
-                return f"Error adding item: HTTP {response.status_code} - {response.text}"
+                return (
+                    f"Error adding item: HTTP {response.status_code} - {response.text}"
+                )
             data = response.json()
             item_id = data.get("id") or data.get("ID") or "saved"
             return f"Added item to list (id: {item_id})."
@@ -839,7 +948,9 @@ class KnowledgeSearchTool(Toolkit):
             if not body:
                 return "No updates provided (title, content, url, or type)."
             with httpx.Client(timeout=15.0) as client:
-                response = client.put(f"{api_url}/lists/{lid}/items/{item_id}", json=body, headers=headers)
+                response = client.put(
+                    f"{api_url}/lists/{lid}/items/{item_id}", json=body, headers=headers
+                )
             if response.status_code == 401:
                 return "Error: Not authorized."
             if response.status_code != 200:
@@ -867,7 +978,9 @@ class KnowledgeSearchTool(Toolkit):
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
             with httpx.Client(timeout=15.0) as client:
-                response = client.delete(f"{api_url}/lists/{lid}/items/{item_id}", headers=headers)
+                response = client.delete(
+                    f"{api_url}/lists/{lid}/items/{item_id}", headers=headers
+                )
             if response.status_code == 401:
                 return "Error: Not authorized."
             if response.status_code != 200:
@@ -880,14 +993,14 @@ class KnowledgeSearchTool(Toolkit):
     def list_projects(self) -> str:
         """
         List all available projects for the current user.
-        
+
         Use this tool when you need to discover which projects exist and get their IDs.
         This is especially useful when the user asks about a project by name but you don't
         know its ID.
-        
+
         Returns:
             str: A formatted list of projects with their IDs, names, descriptions, and repo URLs.
-        
+
         Example Usage:
             - User asks: "What do you know about genie?"
             - Call list_projects() to find the project ID for "genie"
@@ -898,31 +1011,39 @@ class KnowledgeSearchTool(Toolkit):
             headers = {}
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
-            
+
             with httpx.Client(timeout=10.0) as client:
                 response = client.get(f"{api_url}/api/projects", headers=headers)
-                
+
                 if response.status_code == 401:
                     return "Error: Not authorized. Please ensure you are logged in."
-                
+
                 if response.status_code != 200:
-                    logger.error(f"Failed to list projects: {response.status_code} - {response.text}")
+                    logger.error(
+                        f"Failed to list projects: {response.status_code} - {response.text}"
+                    )
                     return f"Error fetching projects: HTTP {response.status_code}"
-                
+
                 projects = response.json()
-                
+
                 if not projects:
                     return "No projects found. The user hasn't added any projects yet."
-                
+
                 # Format projects list
                 lines = ["# Available Projects\n"]
                 for project in projects:
                     project_id = project.get("id") or project.get("ID") or "unknown"
                     name = project.get("name") or project.get("Name") or "Unnamed"
-                    description = project.get("description") or project.get("Description") or "No description"
-                    repo_url = project.get("repo_url") or project.get("Repository") or ""
+                    description = (
+                        project.get("description")
+                        or project.get("Description")
+                        or "No description"
+                    )
+                    repo_url = (
+                        project.get("repo_url") or project.get("Repository") or ""
+                    )
                     status = project.get("status") or project.get("Status") or "unknown"
-                    
+
                     lines.append(f"## {name}")
                     lines.append(f"- **Project ID**: `{project_id}`")
                     lines.append(f"- **Description**: {description}")
@@ -930,9 +1051,9 @@ class KnowledgeSearchTool(Toolkit):
                         lines.append(f"- **Repository**: {repo_url}")
                     lines.append(f"- **Status**: {status}")
                     lines.append("")
-                
+
                 return "\n".join(lines)
-                
+
         except httpx.TimeoutException:
             logger.error("Timeout while fetching projects list")
             return "Error: Timeout while fetching projects. Please try again."

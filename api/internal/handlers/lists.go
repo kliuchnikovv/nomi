@@ -37,12 +37,13 @@ func NewListHandler(store *storage.Storage, logger *zap.Logger, cfg *config.Conf
 }
 
 // indexListItemInRAG calls Python to index one list item in RAG (async, fire-and-forget)
-func (h *ListHandler) indexListItemInRAG(listID string, userID uuid.UUID, title, content, url string) {
+func (h *ListHandler) indexListItemInRAG(listID string, userID uuid.UUID, itemID uuid.UUID, title, content, url string) {
 	payload := map[string]interface{}{
-		"content":  content,
+		"content": content,
 		"title":   title,
 		"url":     url,
 		"user_id": userID.String(),
+		"item_id": itemID.String(), // Send item_id for deduplication
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -311,7 +312,7 @@ func (h *ListHandler) CreateListItem(c *gin.Context) {
 		contentForRAG += item.Content
 	}
 	if contentForRAG != "" {
-		go h.indexListItemInRAG(listID.String(), userID, item.Title, contentForRAG, item.URL)
+		go h.indexListItemInRAG(listID.String(), userID, item.ID, item.Title, contentForRAG, item.URL)
 	}
 	c.JSON(http.StatusCreated, item)
 }
@@ -443,7 +444,7 @@ func (h *ListHandler) UpdateListItem(c *gin.Context) {
 		contentForRAG += item.Content
 	}
 	if contentForRAG != "" {
-		go h.indexListItemInRAG(item.ListID.String(), userID, item.Title, contentForRAG, item.URL)
+		go h.indexListItemInRAG(item.ListID.String(), userID, item.ID, item.Title, contentForRAG, item.URL)
 	}
 	c.JSON(http.StatusOK, item)
 }

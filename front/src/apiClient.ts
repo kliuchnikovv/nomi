@@ -318,7 +318,6 @@ export interface List {
 }
 
 export type ListItemType = 'fact' | 'link' | 'document';
-
 export interface ListItem {
     id: string;
     list_id: string;
@@ -329,7 +328,6 @@ export interface ListItem {
     created_at: string;
     updated_at: string;
 }
-
 export const listsApi = {
     list: () => apiClient.get<Array<List>>(`${API_URL()}/lists`),
     get: (id: string) => apiClient.get<List>(`${API_URL()}/lists/${id}`),
@@ -349,4 +347,3 @@ export const listsApi = {
     deleteItem: (listId: string, itemId: string) =>
         apiClient.delete<void>(`${API_URL()}/lists/${listId}/items/${itemId}`),
 };
-

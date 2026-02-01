@@ -466,6 +466,21 @@ export function ChatProvider({
             const selectedEndpoint = availableModels.find(
                 (m) => m.id === (selectedModelRef.current ?? '')
             )?.endpoint;
+
+            // Prepare command (context) to send
+            let commandToSend = teamCommand;
+            if (!commandToSend && activeChat) {
+                // If not in team mode, but we have context (list, project, task), pass it
+                if (activeChat.list_id || activeChat.project_id || activeChat.task_id) {
+                    commandToSend = {
+                        list_id: activeChat.list_id,
+                        project_id: activeChat.project_id,
+                        task_id: activeChat.task_id,
+                        auth_token: token
+                    };
+                }
+            }
+
             socket.sendMessage(
                 text.trim(),
                 chatIdToUse,
@@ -480,7 +495,8 @@ export function ChatProvider({
                 tools, // Pass enabled integrations to backend
                 user.id, // user_id for backend routing
                 selectedEndpoint,
-                token ?? undefined // auth_token for list/agent tools that call Go API
+                token ?? undefined, // auth_token for list/agent tools that call Go API
+                commandToSend
             );
 
             // Async local extraction (e.g. Apple FM): send facts when done; does not block chat

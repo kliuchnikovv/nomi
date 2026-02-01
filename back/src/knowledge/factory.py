@@ -6,10 +6,12 @@ This module provides factory functions to create and configure:
 - GeminiEmbedder for generating embeddings via Google Gemini API
 - Knowledge base for RAG functionality
 """
+
 import logging
 import os
 from typing import Optional
 
+from sqlalchemy import create_engine
 from agno.knowledge import Knowledge
 from agno.vectordb.pgvector import PgVector
 from agno.knowledge.embedder.google import GeminiEmbedder
@@ -22,6 +24,11 @@ DEFAULT_EMBEDDER_MODEL = "text-embedding-004"  # Google's latest embedding model
 DEFAULT_CHUNK_SIZE = 3000  # Good for code and documents
 DEFAULT_CHUNK_OVERLAP = 300  # 10% overlap for context continuity
 
+# Embedding dimensions by model
+EMBEDDING_DIMENSIONS = {
+    "text-embedding-004": 768,
+    "models/text-embedding-004": 768,
+}
 
 
 def build_vector_db(
@@ -39,33 +46,48 @@ def build_vector_db(
             raise ValueError(
                 "Database URL not provided and DB_DSN environment variable not set"
             )
-    
+
     # Fix for SQLAlchemy 2.0+: convert postgres:// to postgresql://
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
-    
+
     # Get Google API key for embeddings
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError("GOOGLE_API_KEY environment variable not set")
-    
+
+    # Determine dimensions
+    dimensions = EMBEDDING_DIMENSIONS.get(embedder_model)
+    if not dimensions:
+        logger.warning(
+            "[KnowledgeFactory] Unknown dimensions for model '%s'. Defaulting to 768.",
+            embedder_model,
+        )
+        dimensions = 768
+
     logger.info(
-        "[KnowledgeFactory] Building PgVector + GeminiEmbedder (table=%s, model=%s)",
+        "[KnowledgeFactory] Building PgVector + GeminiEmbedder (table=%s, model=%s, dim=%d)",
         table_name,
         embedder_model,
+        dimensions,
     )
-    
+
     # Create Gemini embedder
     embedder = GeminiEmbedder(
         id=embedder_model,  # Use 'id' parameter, not 'model'
         api_key=api_key,
-        dimensions=768,  # Default for text-embedding-004
+        dimensions=dimensions,
     )
-    
+
     # Create vector database with Gemini embedder
     try:
+        # Create engine with connection pooling
+        engine = create_engine(
+            db_url, pool_size=10, max_overflow=20, pool_pre_ping=True
+        )
+
         vector_db = PgVector(
-            db_url=db_url,
+            db_engine=engine,
             table_name=table_name,
             embedder=embedder,
         )
@@ -80,6 +102,7 @@ def build_vector_db(
             )
         raise
 
+
 def build_knowledge_base(
     db_url: Optional[str] = None,
     table_name: str = DEFAULT_TABLE_NAME,
@@ -91,14 +114,13 @@ def build_knowledge_base(
     Use UserScopedKnowledge with build_vector_db for multi-user support.
     """
     vector_db = build_vector_db(db_url, table_name, embedder_model)
-    
+
     # Create knowledge base
     knowledge = Knowledge(
         vector_db=vector_db,
         max_results=5,  # Number of documents to return on search
     )
-    
-    logger.info("[KnowledgeFactory] Knowledge created successfully")
-    
-    return knowledge
 
+    logger.info("[KnowledgeFactory] Knowledge created successfully")
+
+    return knowledge

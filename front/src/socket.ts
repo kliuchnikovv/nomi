@@ -479,7 +479,8 @@ export class ChatSocket {
         tools?: any[],
         userId?: string,
         endpoint?: string,
-        authToken?: string
+        authToken?: string,
+        command?: any
     ) {
         if (!chatId) {
             return;
@@ -503,6 +504,7 @@ export class ChatSocket {
             // Required for Python RedisSession routing: it publishes to chat:user:<user_id>
             // Without this, it falls back to session_id (=chat_id) and Go Hub can't map frames to user rooms.
             user_id: userId,
+            command: command,
         };
         if (endpoint !== undefined && endpoint !== '') {
             payload.endpoint = endpoint;

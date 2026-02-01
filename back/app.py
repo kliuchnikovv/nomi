@@ -3,9 +3,9 @@ import logging
 import uuid
 import inspect
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 
 from agno.os import AgentOS
@@ -21,10 +21,14 @@ from src.teams.development.team import (
 from dotenv import load_dotenv
 from src.core.config import Config
 from src.core.container import Container
+from src.knowledge.factory import build_vector_db
 
 # Загружаем переменные окружения из .env файла, если он существует
 # Если файл не найден, используем переменные окружения из системы (для продакшн)
 load_dotenv()
+
+# Global singleton for Vector DB to avoid connection pool exhaustion
+global_vector_db: Optional[Any] = None
 
 
 # ---- Logging ----
@@ -124,6 +128,20 @@ app = agent_os.get_app()
 async def lifespan(app: FastAPI):
     # Startup
     print("[Lifespan] Starting up...")
+
+    # Initialize global Vector DB
+    global global_vector_db
+    try:
+        logging.info("[Lifespan] Initializing global Vector DB...")
+        global_vector_db = build_vector_db()
+        logging.info("[Lifespan] Global Vector DB initialized successfully")
+    except Exception as e:
+        logging.error(
+            f"[Lifespan] Failed to initialize global Vector DB: {e}", exc_info=True
+        )
+        # We don't raise here to allow app to start without RAG if DB is down,
+        # but RAG endpoints will fail gracefully.
+
     logging.warning("[Lifespan] Initializing Redis Worker...")
     try:
         # Используем redis_worker из container
@@ -316,7 +334,9 @@ class AnalysisRequest(BaseModel):
 @app.post("/api/analyze")
 async def analyze_text(request: AnalysisRequest):
     session_id = str(uuid.uuid4())
-    agent = await container.agent_factory.build(session_id=session_id, agent_type="extraction")
+    agent = await container.agent_factory.build(
+        session_id=session_id, agent_type="extraction"
+    )
 
     prompt = f"Extract events and tasks from this text:\n\n{request.text}"
 
@@ -458,7 +478,10 @@ async def store_facts(request: StoreFactsRequest):
         return {"status": "skipped", "reason": "missing user_id or facts"}
     knowledge = container.agent_factory.get_or_create_knowledge(request.user_id)
     if not knowledge:
-        logging.warning("[store-facts] get_or_create_knowledge returned None for user=%s", request.user_id)
+        logging.warning(
+            "[store-facts] get_or_create_knowledge returned None for user=%s",
+            request.user_id,
+        )
         return {"status": "error", "reason": "knowledge base unavailable"}
     stored = 0
     for fact in request.extracted_facts:
@@ -567,7 +590,10 @@ async def analyze_project(request: ProjectAnalysisRequest):
             github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
             # Token is now optional - public repos work without it (with rate limits)
 
-            manager = ProjectKnowledgeManager(user_id=request.user_id or "system")
+            # Use global_vector_db to reuse connection pool
+            manager = ProjectKnowledgeManager(
+                user_id=request.user_id or "system", vector_db=global_vector_db
+            )
             await asyncio.to_thread(
                 manager.ingest_repository,
                 request.repository,
@@ -611,13 +637,15 @@ async def delete_project_knowledge_endpoint(
             f"Received request to delete knowledge for project {project_id} (user: {user_id})"
         )
 
-        manager = ProjectKnowledgeManager(user_id=user_id or "system")
+        manager = ProjectKnowledgeManager(
+            user_id=user_id or "system", vector_db=global_vector_db
+        )
         await asyncio.to_thread(manager.delete_project_knowledge, project_id)
 
         return {"status": "deleted", "project_id": project_id}
     except Exception as e:
         logging.error(f"Failed to delete project knowledge: {e}", exc_info=True)
-        return {"error": str(e), "status": "failed"}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class ReindexProjectRequest(BaseModel):
@@ -661,7 +689,9 @@ async def reindex_project(project_id: str, request: ReindexProjectRequest):
 
             github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
 
-            manager = ProjectKnowledgeManager(user_id=request.user_id or "system")
+            manager = ProjectKnowledgeManager(
+                user_id=request.user_id or "system", vector_db=global_vector_db
+            )
             await asyncio.to_thread(
                 manager.reindex_repository, request.repository, project_id, github_token
             )
@@ -681,11 +711,13 @@ async def reindex_project(project_id: str, request: ReindexProjectRequest):
 
 # --- Lists RAG ---
 
+
 class IndexListItemRequest(BaseModel):
     content: str
     title: Optional[str] = None
     url: Optional[str] = None
     user_id: Optional[str] = None
+    item_id: Optional[str] = None  # For deduplication
 
 
 @app.post("/api/lists/{list_id}/items/index")
@@ -708,13 +740,19 @@ async def index_list_item(list_id: str, request: IndexListItemRequest):
         parts.append(request.content)
         content = "\n".join(parts)
 
-        manager = ProjectKnowledgeManager(user_id=user_id)
-        await asyncio.to_thread(manager.add_document, content, project_id=None, list_id=list_id)
+        manager = ProjectKnowledgeManager(user_id=user_id, vector_db=global_vector_db)
+        await asyncio.to_thread(
+            manager.add_document,
+            content,
+            project_id=None,
+            list_id=list_id,
+            item_id=request.item_id,
+        )
 
         return {"status": "indexed", "list_id": list_id}
     except Exception as e:
         logging.error(f"Failed to index list item: {e}", exc_info=True)
-        return {"error": str(e), "status": "failed"}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class DeleteListKnowledgeRequest(BaseModel):
@@ -734,15 +772,19 @@ async def delete_list_knowledge_endpoint(
         from src.rag_service import ProjectKnowledgeManager
 
         user_id = request.user_id if request else None
-        logging.info(f"Received request to delete knowledge for list {list_id} (user: {user_id})")
+        logging.info(
+            f"Received request to delete knowledge for list {list_id} (user: {user_id})"
+        )
 
-        manager = ProjectKnowledgeManager(user_id=user_id or "system")
+        manager = ProjectKnowledgeManager(
+            user_id=user_id or "system", vector_db=global_vector_db
+        )
         await asyncio.to_thread(manager.delete_list_knowledge, list_id)
 
         return {"status": "deleted", "list_id": list_id}
     except Exception as e:
         logging.error(f"Failed to delete list knowledge: {e}", exc_info=True)
-        return {"error": str(e), "status": "failed"}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class EmbeddingRequest(BaseModel):
@@ -751,36 +793,52 @@ class EmbeddingRequest(BaseModel):
 
 
 @app.post("/api/embeddings")
-async def get_embedding(request: EmbeddingRequest):
+async def get_embedding(
+    request: EmbeddingRequest,
+    x_internal_secret: Optional[str] = Header(None, alias="X-Internal-Secret"),
+):
     """
     Generate embeddings for text(s).
     Transient processing: The text is NOT saved or logged.
+    Requires internal authentication.
 
     Accepts either:
     - `text`: Single string → returns `embedding`
     - `texts`: Array of strings → returns `embeddings`
     """
+    # Verify internal secret
+    internal_key = os.getenv("INTERNAL_API_KEY", "jules-secret-key")
+    if x_internal_secret != internal_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
     try:
         # Batch mode
         if request.texts is not None:
             if len(request.texts) == 0:
                 return {"embeddings": []}
 
-            embeddings = []
-            for text in request.texts:
-                embedding = container.embedder.get_embedding(text)
-                embeddings.append(embedding)
+            # Use native batch embedding for efficiency
+            (
+                embeddings,
+                _,
+            ) = await container.embedder.async_get_embeddings_batch_and_usage(
+                request.texts
+            )
             return {"embeddings": embeddings}
 
         # Single mode (backward compatible)
         if request.text is not None:
-            embedding = container.embedder.get_embedding(request.text)
+            embedding = await container.embedder.async_get_embedding(request.text)
             return {"embedding": embedding}
 
-        return {"error": "Either 'text' or 'texts' must be provided"}
+        raise HTTPException(
+            status_code=400, detail="Either 'text' or 'texts' must be provided"
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Embedding generation failed: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

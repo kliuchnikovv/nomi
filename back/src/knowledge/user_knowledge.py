@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 from typing import Any, Dict, List
 
 from agno.knowledge import Knowledge
@@ -33,6 +34,7 @@ class UserScopedKnowledge(Knowledge):
     Knowledge Base wrapper that enforces user isolation using metadata filtering.
     Optionally filters out low-relevance results so the agent does not receive unrelated documents.
     """
+
     def __init__(
         self,
         user_id: str,
@@ -45,13 +47,46 @@ class UserScopedKnowledge(Knowledge):
         self.user_id = user_id
         self.min_similarity_threshold = min_similarity_threshold
 
-    def search(self, query: str, max_results: int | None = None, filters: dict | None = None) -> List[Document]:
+        # Optimization: Apply LRU cache to embedder to avoid double API calls
+        # (once in PgVector.search and once in our filter)
+        # This modifies the shared embedder instance, acting as a global cache.
+        embedder = getattr(vector_db, "embedder", None)
+        if embedder and hasattr(embedder, "get_embedding"):
+            # Check if already wrapped to avoid infinite wrapping recursion
+            if not hasattr(embedder.get_embedding, "cache_info"):
+                original_method = embedder.get_embedding
+
+                @lru_cache(maxsize=128)
+                def cached_get_embedding(text):
+                    return original_method(text)
+
+                embedder.get_embedding = cached_get_embedding
+                logger.debug("[UserKnowledge] Applied LRU cache to shared embedder")
+
+    def search(
+        self,
+        query: str,
+        max_results: int | None = None,
+        filters: Dict[str, Any] | List[Any] | None = None,
+        search_type: str | None = None,
+    ) -> List[Document]:
         """
         Search with enforced user_id filter and optional minimum relevance threshold.
         Documents below min_similarity_threshold are excluded so the agent does not
         get unrelated results (e.g. project README when the user asks about something else).
         """
-        effective_filter = (filters or {}).copy()
+        effective_filter: Dict[str, Any] = {}
+        if filters is None:
+            effective_filter = {}
+        elif isinstance(filters, dict):
+            effective_filter = filters.copy()
+        else:
+            # TODO: Support List[FilterExpr] by appending EQ("user_id", self.user_id)
+            logger.warning(
+                "UserScopedKnowledge: List filters not supported yet, ignoring provided filters to enforce user isolation."
+            )
+            effective_filter = {}
+
         effective_filter["user_id"] = self.user_id
         logger.info(
             "[RAG Search] user_id=%s query=%r max_results=%s filters=%s",
@@ -61,25 +96,42 @@ class UserScopedKnowledge(Knowledge):
             effective_filter,
         )
 
-        raw = super().search(query, max_results, filters=effective_filter)
-        logger.info("[RAG Search] Found %d raw results from vector DB", len(raw) if raw else 0)
-        
+        # Optimization: Cache embedding generation to avoid double API calls
+        # (once in super().search() -> PgVector.search(), and once here for filtering)
+        embedder = getattr(self.vector_db, "embedder", None)
+        query_embedding = None
+
+        # We rely on the LRU cache applied in __init__ to make this cheap
+        raw = super().search(
+            query, max_results, filters=effective_filter, search_type=search_type
+        )
+
+        if embedder and hasattr(embedder, "get_embedding"):
+            query_embedding = embedder.get_embedding(query)
+        else:
+            logger.warning("[RAG Search] No embedder available")
+
+        logger.info(
+            "[RAG Search] Found %d raw results from vector DB", len(raw) if raw else 0
+        )
+
         if not raw or self.min_similarity_threshold is None:
             if not raw:
                 logger.info("[RAG Search] No results found in knowledge base")
             else:
-                logger.info("[RAG Search] Returning %d results (no similarity filtering)", len(raw))
+                logger.info(
+                    "[RAG Search] Returning %d results (no similarity filtering)",
+                    len(raw),
+                )
             return raw
 
         # Filter by relevance: require query embedding and document embeddings
-        embedder = getattr(self.vector_db, "embedder", None)
-        if not embedder or not hasattr(embedder, "get_embedding"):
-            logger.warning("[RAG Search] No embedder available, returning raw results")
-            return raw
-        
-        query_embedding = embedder.get_embedding(query)
-        if query_embedding is None or (hasattr(query_embedding, "__len__") and len(query_embedding) == 0):
-            logger.warning("[RAG Search] Failed to get query embedding, returning raw results")
+        if query_embedding is None or (
+            hasattr(query_embedding, "__len__") and len(query_embedding) == 0
+        ):
+            logger.warning(
+                "[RAG Search] Failed to get query embedding, returning raw results"
+            )
             return raw
 
         filtered: List[Document] = []
@@ -88,12 +140,30 @@ class UserScopedKnowledge(Knowledge):
             doc_id = getattr(doc, "id", None)
             doc_content = getattr(doc, "content", "")
             doc_preview = doc_content[:100] if doc_content else "(empty)"
-            
+
             if emb is None:
-                logger.debug("[RAG Search] Document id=%s has no embedding, including by default", doc_id)
-                filtered.append(doc)
+                # If embedding is missing, try to generate it to ensure filtering works
+                logger.debug(
+                    "[RAG Search] Document id=%s has no embedding, attempting to generate",
+                    doc_id,
+                )
+                try:
+                    doc.embed(embedder=embedder)
+                    emb = doc.embedding
+                except Exception as e:
+                    logger.warning(
+                        "[RAG Search] Failed to generate embedding for doc %s: %s",
+                        doc_id,
+                        e,
+                    )
+
+            if emb is None:
+                logger.warning(
+                    "[RAG Search] Document id=%s still has no embedding, excluding from results (strict filtering)",
+                    doc_id,
+                )
                 continue
-            
+
             sim = _cosine_similarity(query_embedding, emb)
             if sim >= self.min_similarity_threshold:
                 logger.info(
@@ -111,7 +181,7 @@ class UserScopedKnowledge(Knowledge):
                     self.min_similarity_threshold,
                     doc_preview,
                 )
-        
+
         logger.info(
             "[RAG Search] Relevance filtering complete: %d/%d documents passed (threshold=%.2f)",
             len(filtered),
@@ -120,16 +190,16 @@ class UserScopedKnowledge(Knowledge):
         )
         return filtered
 
-    def load_text(self, text: str, meta_data: dict = None):
+    def load_text(self, text: str, meta_data: Dict[str, Any] | None = None):
         """
         Load text with enforced user_id in metadata.
         """
         meta_data = meta_data or {}
         meta_data["user_id"] = self.user_id
-        
+
         doc = Document(content=text, meta_data=meta_data)
         self.load_documents([doc])
-        
+
     def load_documents(self, documents: List[Document], upsert: bool = False):
         """
         Load documents with enforced user_id in metadata.
@@ -139,12 +209,12 @@ class UserScopedKnowledge(Knowledge):
             len(documents),
             self.user_id,
         )
-        
+
         for idx, doc in enumerate(documents):
             if doc.meta_data is None:
                 doc.meta_data = {}
             doc.meta_data["user_id"] = self.user_id
-            
+
             # Log document content being stored
             doc_content = getattr(doc, "content", "")
             doc_preview = doc_content[:200] if doc_content else "(empty)"
@@ -155,35 +225,45 @@ class UserScopedKnowledge(Knowledge):
                 doc_preview,
                 doc.meta_data,
             )
-        
+
         if self.vector_db:
             try:
-                # Try explicit load_documents if available on API, otherwise use upsert on vector_db
-                if hasattr(self.vector_db, "upsert"):
-                    # The error "missing 1 required positional argument: 'documents'" or 'content_hash'
-                    # suggests differing signatures in versions.
-                    # We try providing content_hash as None, and use kwargs to be safe.
-                    try:
-                        self.vector_db.upsert(documents=documents, content_hash=None)
-                        logger.info("[RAG Store] Successfully stored %d document(s) via upsert", len(documents))
-                    except TypeError as te:
-                         logger.warning(f"[RAG Store] upsert(documents=..., content_hash=None) failed: {te}. Retrying with positional args.")
-                         # Try pure positional: upsert(documents) or upsert(documents, content_hash)
-                         try:
-                             self.vector_db.upsert(documents)
-                             logger.info("[RAG Store] Successfully stored %d document(s) via upsert (positional)", len(documents))
-                         except TypeError:
-                             self.vector_db.upsert(documents, None)
-                             logger.info("[RAG Store] Successfully stored %d document(s) via upsert (positional with None)", len(documents))
-
-                elif hasattr(self.vector_db, "add_documents"):
-                    self.vector_db.add_documents(documents)
-                    logger.info("[RAG Store] Successfully stored %d document(s) via add_documents", len(documents))
+                # Use concrete signatures for Agno's PgVector
+                if upsert:
+                    # upsert(content_hash, documents, ...)
+                    if hasattr(self.vector_db, "upsert"):
+                        # We pass empty content_hash as UserScopedKnowledge manages general docs
+                        self.vector_db.upsert(content_hash="", documents=documents)
+                        logger.info(
+                            "[RAG Store] Successfully stored %d document(s) via upsert",
+                            len(documents),
+                        )
+                    else:
+                        logger.warning("[RAG Store] vector_db does not support upsert")
                 else:
-                    logger.warning("[RAG Store] Could not find method to add documents to vector_db")
+                    # insert(content_hash, documents, ...)
+                    if hasattr(self.vector_db, "insert"):
+                        self.vector_db.insert(content_hash="", documents=documents)
+                        logger.info(
+                            "[RAG Store] Successfully stored %d document(s) via insert",
+                            len(documents),
+                        )
+                    elif hasattr(self.vector_db, "add_documents"):
+                        # Fallback for generic VectorDb
+                        self.vector_db.add_documents(documents)
+                        logger.info(
+                            "[RAG Store] Successfully stored %d document(s) via add_documents",
+                            len(documents),
+                        )
+                    else:
+                        logger.warning(
+                            "[RAG Store] Could not find method to add documents to vector_db"
+                        )
             except Exception as e:
                 # Log detailed error to help debugging if it fails again
-                logger.error(f"[RAG Store] Failed to store documents: {e}", exc_info=True)
+                logger.error(
+                    f"[RAG Store] Failed to store documents: {e}", exc_info=True
+                )
                 raise e
 
     def delete(self, filters: Dict[str, Any] | None = None) -> None:
@@ -192,28 +272,28 @@ class UserScopedKnowledge(Knowledge):
         """
         effective_filter = filters or {}
         effective_filter["user_id"] = self.user_id
-        
+
         if self.vector_db:
             try:
-                # Try explicit delete method suitable for metadata filtering
+                # Use standard delete_by_metadata method
                 if hasattr(self.vector_db, "delete_by_metadata"):
-                     self.vector_db.delete_by_metadata(metadata=effective_filter)
+                    self.vector_db.delete_by_metadata(metadata=effective_filter)
+                    logger.info(
+                        "[RAG Delete] Deleted documents with filters: %s",
+                        effective_filter,
+                    )
                 elif hasattr(self.vector_db, "delete_documents"):
-                     # Some implementations might use delete_documents with filters
-                     self.vector_db.delete_documents(filters=effective_filter)
+                    self.vector_db.delete_documents(filters=effective_filter)
                 elif hasattr(self.vector_db, "delete"):
-                     # Fallback to delete if it accepts filters (older versions might, but recent inspection showed it takes no args)
-                     # Attempting to call with filters if signature allows, or log warning
-                     import inspect
-                     sig = inspect.signature(self.vector_db.delete)
-                     if "filters" in sig.parameters:
-                        self.vector_db.delete(filters=effective_filter)
-                     elif "metadata" in sig.parameters:
-                        self.vector_db.delete(metadata=effective_filter)
-                     else:
-                        logger.warning(f"PgVector.delete signature {sig} does not appear to support filters/metadata. Skipping delete.")
+                    # Fallback if specific method missing, but avoid runtime inspection
+                    logger.warning(
+                        "[RAG Delete] Falling back to generic delete(), hope it supports filters"
+                    )
+                    self.vector_db.delete(filters=effective_filter)
                 else:
-                    logger.warning("Could not find method to delete documents from vector_db")
+                    logger.warning(
+                        "Could not find method to delete documents from vector_db"
+                    )
             except Exception as e:
                 logger.error(f"Failed to delete documents: {e}", exc_info=True)
                 raise e
