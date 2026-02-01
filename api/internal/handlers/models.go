@@ -22,6 +22,8 @@ type Model struct {
 	SupportsStreaming bool   `json:"supports_streaming"`
 	SupportsTools     bool   `json:"supports_tools"`
 	SupportsThinking  bool   `json:"supports_thinking"`
+	Streaming         bool   `json:"streaming"` // if true, do not persist text chunks; only DONE overwrite
+	Endpoint          string `json:"endpoint,omitempty"`
 }
 
 type ModelsResponse struct {
@@ -77,16 +79,16 @@ func (h *ModelsHandler) loadModels() (*ModelsResponse, error) {
 	// Let's try relative path assuming execution from project root
 	// Adjust path as necessary based on deployment
 	path := "api/config/models.json"
-	
-    // Ensure we can find the file. If running inside docker or built binary, location might differ.
-    // For local dev "api/config/models.json" seems correct based on file structure.
+
+	// Ensure we can find the file. If running inside docker or built binary, location might differ.
+	// For local dev "api/config/models.json" seems correct based on file structure.
 	file, err := os.Open(path)
 	if err != nil {
-        // Fallback to "config/models.json" if "api/config/models.json" fails (e.g. running from api dir)
-        file, err = os.Open("config/models.json")
-        if err != nil {
-		    return nil, fmt.Errorf("failed to open models config: %w", err)
-        }
+		// Fallback to "config/models.json" if "api/config/models.json" fails (e.g. running from api dir)
+		file, err = os.Open("config/models.json")
+		if err != nil {
+			return nil, fmt.Errorf("failed to open models config: %w", err)
+		}
 	}
 	defer file.Close()
 

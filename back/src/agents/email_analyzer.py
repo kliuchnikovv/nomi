@@ -3,7 +3,7 @@ Email Analyzer Agent
 Analyzes emails to extract urgency, connections, time frames, and suggested actions.
 """
 import json
-from typing import List, Optional
+from typing import List, Optional, Any
 from agno.agent import Agent
 from agno.models.base import Model
 from pydantic import BaseModel, Field
@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 class SuggestedAction(BaseModel):
     """A suggested action for an email."""
     action_type: str = Field(..., description="Action type: 'reply', 'forward', 'schedule', 'delegate', 'archive', 'followup'")
-    label: str = Field(..., description="Human-readable action label in English")
+    label: str = Field(..., description="Human-readable action label in the user's language")
     params: dict = Field(default_factory=dict, description="Parameters for action execution")
 
 
@@ -83,14 +83,14 @@ Suggest 2-5 actions. Action types:
 }
 ```
 
-**Email**: "Can we meet next Monday regarding the budget?" (Assuming next Monday is 2023-10-23)
-**Analysis**:
+**Email**: "Can we meet next Monday regarding the budget?"
+**Analysis** (assuming today is {current_date}):
 ```
 {
   "urgency": "normal",
   "connections": ["Budget"],
   "time_frame": "Next Monday",
-  "target_date": "2023-10-23",
+  "target_date": "<next Monday's date in YYYY-MM-DD>",
   "suggested_actions": [
     {"action_type": "reply", "label": "Reply to schedule", "params": {"suggested_text": "Sure, what time works for you?"}}
   ]
@@ -119,7 +119,10 @@ class EmailAnalyzerAgent(Agent):
     def __init__(
         self,
         model: Model,
+        db: Optional[Any] = None,
         debug_mode: bool = False,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         from datetime import datetime
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -130,9 +133,12 @@ class EmailAnalyzerAgent(Agent):
         instructions = instructions.replace("{current_date}", current_date)
         
         super().__init__(
+            db=db,
             model=model,
             name="EmailAnalyzerAgent",
             instructions=instructions,
             debug_mode=debug_mode,
+            user_id=user_id,
+            learning=learning,
             description="Analyzes emails to extract urgency, connections, time frames, and suggested actions.",
         )

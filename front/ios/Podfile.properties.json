@@ -1,0 +1,5 @@
+{
+  "expo.sqlite.useLibSQL": "false",
+  "expo.sqlite.useSQLCipher": "false",
+  "expo.sqlite.enableFTS": "true"
+}

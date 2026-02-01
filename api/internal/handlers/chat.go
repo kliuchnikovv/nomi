@@ -6,17 +6,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/chat"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/genie-api/internal/apierror"
+	"github.com/kliuchnikovv/genie-api/internal/services"
 )
 
 type ChatHandler struct {
-	storage *storage.Storage
+	service *services.ChatService
 }
 
-func NewChatHandler(storage *storage.Storage) *ChatHandler {
+func NewChatHandler(service *services.ChatService) *ChatHandler {
 	return &ChatHandler{
-		storage: storage,
+		service: service,
 	}
 }
 
@@ -25,35 +25,23 @@ func (h *ChatHandler) CreateChat(c *gin.Context) {
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
-	var newChat chat.Chat
-	if err := c.ShouldBindJSON(&newChat); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req services.CreateChatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierror.Respond(c, apierror.NewBadRequest(err.Error(), nil))
 		return
 	}
 
-	chat, err := h.storage.CreateChat(ctx, user.ID, &chat.Chat{
-		ID:         uuid.New(),
-		Model:      newChat.Model,
-		Title:      newChat.Title,
-		Mode:       newChat.Mode,
-		TeamID:     newChat.TeamID,
-		CreatedAt:  time.Now().UTC(),
-		UpdatedAt:  time.Now().UTC(),
-		ArchivedAt: nil,
-		DeletedAt:  nil,
-	})
+	createdChat, err := h.service.CreateChat(ctx, user.ID, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
-	
-	chat.Icon = getIconForTeam(chat.TeamID)
 
-	c.JSON(http.StatusOK, chat)
+	c.JSON(http.StatusOK, createdChat)
 }
 
 func (h *ChatHandler) GetChat(c *gin.Context) {
@@ -61,23 +49,21 @@ func (h *ChatHandler) GetChat(c *gin.Context) {
 
 	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		apierror.Respond(c, apierror.NewBadRequest("Invalid UUID", nil))
 		return
 	}
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
-	chat, err := h.storage.GetChat(ctx, user.ID, chatID)
+	chat, err := h.service.GetChat(ctx, user.ID, chatID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
+		apierror.Respond(c, apierror.NewNotFound("Chat not found"))
 		return
 	}
-	
-	chat.Icon = getIconForTeam(chat.TeamID)
 
 	c.JSON(http.StatusOK, chat)
 }
@@ -87,41 +73,31 @@ func (h *ChatHandler) ListChats(c *gin.Context) {
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
 	// Check for If-Modified-Since query param for conditional GET
 	ifModifiedSinceStr := c.Query("if_modified_since")
-	var chats []*chat.Chat
+	var ifModifiedSince *time.Time
 
 	if ifModifiedSinceStr != "" {
 		since, err := time.Parse(time.RFC3339, ifModifiedSinceStr)
 		if err == nil {
-			chats, err = h.storage.GetUserChatsModifiedAfter(ctx, user.ID, since)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chats"})
-				return
-			}
-			// If no chats were modified, return 304 Not Modified
-			if len(chats) == 0 {
-				c.Status(http.StatusNotModified)
-				return
-			}
+			ifModifiedSince = &since
 		}
 	}
 
-	// Fallback to getting all chats if no timestamp or invalid timestamp
-	if chats == nil {
-		chats, err = h.storage.GetUserChats(ctx, user.ID)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
-			return
-		}
+	chats, err := h.service.ListChats(ctx, user.ID, ifModifiedSince)
+	if err != nil {
+		apierror.Respond(c, apierror.NewInternalServerError("Failed to fetch chats"))
+		return
 	}
 
-	for i := range chats {
-		chats[i].Icon = getIconForTeam(chats[i].TeamID)
+	// If no chats were modified, return 304 Not Modified
+	if ifModifiedSince != nil && len(chats) == 0 {
+		c.Status(http.StatusNotModified)
+		return
 	}
 
 	c.JSON(http.StatusOK, chats)
@@ -132,30 +108,27 @@ func (h *ChatHandler) UpdateChat(c *gin.Context) {
 
 	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		apierror.Respond(c, apierror.NewBadRequest("Invalid UUID", nil))
 		return
 	}
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
-	var updatedChat chat.Chat
-	if err := c.ShouldBindJSON(&updatedChat); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req services.UpdateChatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierror.Respond(c, apierror.NewBadRequest(err.Error(), nil))
 		return
 	}
 
-	updatedChat.ID = chatID
-	chat, err := h.storage.UpdateChat(ctx, user.ID, &updatedChat)
+	chat, err := h.service.UpdateChat(ctx, user.ID, chatID, &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
-	
-	chat.Icon = getIconForTeam(chat.TeamID)
 
 	c.JSON(http.StatusOK, chat)
 }
@@ -165,38 +138,20 @@ func (h *ChatHandler) DeleteChat(c *gin.Context) {
 
 	chatID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		apierror.Respond(c, apierror.NewBadRequest("Invalid UUID", nil))
 		return
 	}
 
 	user, err := userFromCtx(ctx)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
 		return
 	}
 
-	if err := h.storage.DeleteChat(ctx, user.ID, chatID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.service.DeleteChat(ctx, user.ID, chatID); err != nil {
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
 
 	c.JSON(http.StatusNoContent, nil)
-}
-
-func getIconForTeam(teamID *string) string {
-	if teamID == nil {
-		return ""
-	}
-	switch *teamID {
-	case "dnd_team":
-		return "d20"
-	case "genie":
-		return "sparkles"
-	case "development_team":
-		return "code"
-	case "travel_planning":
-		return "plane"
-	default:
-		return ""
-	}
 }

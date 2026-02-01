@@ -14,6 +14,18 @@ import { pluginsApi, authStore } from '../../../apiClient.ts';
 import { OAUTH_CALLBACK_URL, getApiUrl } from '../../../config.ts';
 import * as DatabaseModule from '../../../services/database/database';
 import { integrationStorage, Integration as LocalIntegration } from '../../../services/integrations/IntegrationStorage';
+import { 
+    getIntegrationMetadata, 
+    isServer, 
+    getServerIntegrations,
+    INTEGRATION_REGISTRY 
+} from '../../../services/integrations/registry';
+import {
+    initializeBackgroundTasks,
+    refreshBackgroundTasks,
+    registerSystemEventListeners,
+    initializeSystemEventListeners,
+} from '../../../services/integrations/BackgroundTaskManager';
 
 // Safe wrapper for initDatabase that handles edge cases during startup
 async function safeInitDatabase(): Promise<void> {
@@ -60,6 +72,19 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             });
     }, []);
 
+    // Initialize background tasks and system event listeners
+    useEffect(() => {
+        if (dbReady) {
+            // Инициализируем обработчики системных событий
+            initializeSystemEventListeners();
+            
+            // Инициализируем фоновые задачи для активных интеграций
+            initializeBackgroundTasks().catch(e => {
+                console.error('[ConnectorsProvider] Failed to initialize background tasks:', e);
+            });
+        }
+    }, [dbReady]);
+
     // Load integrations once database is ready
     useEffect(() => {
         if (dbReady) {
@@ -84,56 +109,23 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             if (!response.ok) return;
 
             const data = await response.json();
-            const items: any[] = data.items || [];
+            const items: any[] = data.items || data || [];
 
+            // Умная синхронизация: синхронизируем только серверные интеграции
+            // Клиентские интеграции загружаются только из локального SQLite
             for (const item of items) {
-                // Check if we have this integration locally
-                // The item.params string contains credentials
-                if (!item.params) continue;
-
-                try {
-                    const params = JSON.parse(item.params);
-                    const creds = params.creds;
-                    const accountEmail = params.account_email;
-
-                    // Credentials are no longer synced from backend
-                    if (false && creds && creds.token) {
-                        // Upsert into local storage
-                        // We use the backend ID as the local ID if possible, but local uses UUID. 
-                        // Actually storage generates its own ID. Ideally we should map them. 
-                        // For now, let's just ensure we have an integration with this provider and email.
-                        // Wait, using backend ID would be better but local storage generates one.
-                        // Let's check if we have one with the same provider and account_email
-                        const existing = await integrationStorage.getIntegrationByEmail(item.provider, accountEmail);
-
-                        if (!existing) {
-                            console.log(`[ConnectorsProvider] Syncing new integration from backend: ${item.provider} (${accountEmail})`);
-                            await integrationStorage.createIntegration({
-                                provider: item.provider,
-                                name: item.name,
-                                enabled: item.enabled,
-                                accountEmail: accountEmail,
-                            }, {
-                                accessToken: creds.token,
-                                refreshToken: creds.refresh_token,
-                                tokenExpiry: creds.expiry ? new Date(creds.expiry) : undefined,
-                            });
-                        } else {
-                            // Optionally update credentials if needed
-                            console.log(`[ConnectorsProvider] Syncing existing integration: ${item.provider} (${accountEmail})`);
-                            // We might want to update tokens here if backend has newer ones? 
-                            // For now, assume if it exists locally, it's fine. 
-                            // BUT if the user re-authed, we want the new tokens.
-                            // So actually we should update credentials.
-                            // However, updateIntegrationCredentials isn't exposed properly? 
-                            // integrationStorage.updateIntegration doesn't update creds.
-                            // Re-creating it might be messy (duplicates).
-                            // Let's skip update for now to avoid complexity unless user reports issues.
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Failed to parse integration params', e);
+                // Проверяем через реестр, является ли это серверной интеграцией
+                if (!isServer(item.provider)) {
+                    console.log(`[ConnectorsProvider] Skipping client-only integration: ${item.provider} (stored locally)`);
+                    continue;
                 }
+
+                // Серверные интеграции синхронизируются для отображения метаданных
+                // Но токены не синхронизируются (они остаются на сервере)
+                console.log(`[ConnectorsProvider] Server integration found: ${item.provider} (metadata only)`);
+                
+                // Можно добавить логику для синхронизации метаданных серверных интеграций
+                // если это необходимо для UI
             }
         } catch (e) {
             console.warn('Failed to sync from backend', e);
@@ -154,6 +146,9 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             const toolsList: Tool[] = [];
 
             for (const p of localIntegrations) {
+                // Получаем метаданные из реестра
+                const metadata = getIntegrationMetadata(p.provider);
+                
                 // Fetch credentials
                 const creds = await integrationStorage.getCredentials(p.id);
                 const params: any = { account_email: p.accountEmail };
@@ -166,11 +161,15 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                     }
                 }
 
+                // Добавляем метаданные из реестра
                 normalized.push({
                     id: p.id,
                     name: p.name,
                     provider: p.provider,
                     connected: p.enabled,
+                    storageType: metadata?.storageType,
+                    supportsBackgroundTasks: metadata?.supportsBackgroundTasks,
+                    systemEventListeners: metadata?.systemEventListeners,
                     params: params,
                 });
 
@@ -187,6 +186,23 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             setTools(toolsList);
 
             console.log(`[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`);
+            
+            // Обновляем фоновые задачи на основе текущего состояния интеграций
+            refreshBackgroundTasks().catch(e => {
+                console.error('[ConnectorsProvider] Failed to refresh background tasks:', e);
+            });
+            
+            // Регистрируем обработчики системных событий для каждой интеграции
+            for (const integration of localIntegrations) {
+                if (integration.enabled) {
+                    const metadata = getIntegrationMetadata(integration.provider);
+                    if (metadata?.supportsBackgroundTasks) {
+                        registerSystemEventListeners(integration.id, integration.provider).catch(e => {
+                            console.error(`[ConnectorsProvider] Failed to register system listeners for ${integration.provider}:`, e);
+                        });
+                    }
+                }
+            }
         } catch (e) {
             console.warn('Failed to load integrations', e);
             setConfigs([]);
@@ -261,12 +277,20 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
             const data = await response.json();
 
+            // Получаем метаданные из реестра
+            const metadata = getIntegrationMetadata(data.provider);
+            const displayName = metadata?.displayName || data.provider.charAt(0).toUpperCase() + data.provider.slice(1);
+
             // Save integration and credentials locally
+            // Для клиентских интеграций сохраняем метаданные из реестра
             await integrationStorage.createIntegration({
                 provider: data.provider as LocalIntegration['provider'],
-                name: `${data.provider.charAt(0).toUpperCase() + data.provider.slice(1)} (${data.account_email})`,
+                name: `${displayName} (${data.account_email})`,
                 enabled: true,
                 accountEmail: data.account_email,
+                storageType: metadata?.storageType,
+                supportsBackgroundTasks: metadata?.supportsBackgroundTasks,
+                systemEventListeners: metadata?.systemEventListeners,
             }, {
                 accessToken: data.access_token,
                 refreshToken: data.refresh_token,
@@ -277,6 +301,16 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             setAuthStatus(`Connected ${provider} (${data.account_email})`);
 
             await getIntegrations();
+            
+            // Регистрируем фоновые задачи для новой интеграции, если она поддерживает их
+            // Используем уже объявленную переменную metadata из строки 281
+            if (metadata?.supportsBackgroundTasks) {
+                const localIntegration = await integrationStorage.getIntegrationByEmail(provider, data.account_email);
+                if (localIntegration) {
+                    await refreshBackgroundTasks();
+                    await registerSystemEventListeners(localIntegration.id, provider);
+                }
+            }
         } catch (e) {
             console.error('[ConnectorsProvider] Token exchange failed:', e);
             setAuthStatus(`Failed to connect ${provider}`);
@@ -355,6 +389,9 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             // Update in local storage
             await integrationStorage.updateIntegration(integration.id, { enabled });
             await getIntegrations();
+            
+            // Обновляем фоновые задачи при изменении состояния интеграции
+            await refreshBackgroundTasks();
         } catch (e) {
             console.warn('Failed to update integration', e);
         }
@@ -409,6 +446,9 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
             // Delete from local storage
             await integrationStorage.deleteIntegration(id);
+            
+            // Обновляем фоновые задачи после удаления интеграции
+            await refreshBackgroundTasks();
             await getIntegrations();
         } catch (e) {
             console.warn('Failed to delete integration', e);

@@ -1,7 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
-import { createStyles } from './dynamicStyles';
+import { createStyles, createMarkdownStyles } from './dynamicStyles';
+import Markdown from 'react-native-markdown-display';
+import { createMarkdownRules } from './markdownRules';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
     const [expanded, setExpanded] = useState(false);
@@ -36,20 +39,34 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
                                 {toolCall.name === 'delegate_task_to_member' ? 'Delegating...' : toolCall.name}
                             </Text>
                             {toolCall.arguments && (
-                                <Text style={styles.toolCallArgs}>
-                                    {typeof toolCall.arguments === 'string'
-                                        ? toolCall.arguments
-                                        : JSON.stringify(toolCall.arguments, null, 2)}
-                                </Text>
+                                <ScrollView 
+                                    style={styles.toolCallScrollable} 
+                                    nestedScrollEnabled={true} 
+                                    persistentScrollbar={true}
+                                    indicatorStyle="white"
+                                >
+                                    <Text style={styles.toolCallArgs}>
+                                        {typeof toolCall.arguments === 'string'
+                                            ? toolCall.arguments
+                                            : JSON.stringify(toolCall.arguments, null, 2)}
+                                    </Text>
+                                </ScrollView>
                             )}
                             {toolCall.result && (
                                 <View style={{ marginTop: 8 }}>
-                                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#888', marginBottom: 4 }}>Result:</Text>
-                                    <Text style={styles.toolCallArgs}>
-                                        {typeof toolCall.result === 'string'
-                                            ? toolCall.result
-                                            : JSON.stringify(toolCall.result, null, 2)}
-                                    </Text>
+                                    <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 4 }}>Result:</Text>
+                                    <ScrollView 
+                                        style={styles.toolCallScrollable} 
+                                        nestedScrollEnabled={true} 
+                                        persistentScrollbar={true}
+                                        indicatorStyle="white"
+                                    >
+                                        <Text style={styles.toolCallArgs}>
+                                            {typeof toolCall.result === 'string'
+                                                ? toolCall.result
+                                                : JSON.stringify(toolCall.result, null, 2)}
+                                        </Text>
+                                    </ScrollView>
                                 </View>
                             )}
                         </View>
@@ -87,20 +104,34 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
             {expanded && (
                 <View style={styles.singleToolCallDetails}>
                     {toolCall.arguments && (
-                        <Text style={styles.toolCallArgs}>
-                            {typeof toolCall.arguments === 'string'
-                                ? toolCall.arguments
-                                : JSON.stringify(toolCall.arguments, null, 2)}
-                        </Text>
+                        <ScrollView 
+                            style={styles.toolCallScrollable} 
+                            nestedScrollEnabled={true} 
+                            persistentScrollbar={true}
+                            indicatorStyle="white"
+                        >
+                            <Text style={styles.toolCallArgs}>
+                                {typeof toolCall.arguments === 'string'
+                                    ? toolCall.arguments
+                                    : JSON.stringify(toolCall.arguments, null, 2)}
+                            </Text>
+                        </ScrollView>
                     )}
                     {toolCall.result && (
                         <View style={{ marginTop: 4 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#888', marginBottom: 2 }}>Result:</Text>
-                            <Text style={styles.toolCallArgs}>
-                                {typeof toolCall.result === 'string'
-                                    ? toolCall.result
-                                    : JSON.stringify(toolCall.result, null, 2)}
-                            </Text>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary, marginBottom: 2 }}>Result:</Text>
+                            <ScrollView 
+                                style={styles.toolCallScrollable} 
+                                nestedScrollEnabled={true} 
+                                persistentScrollbar={true}
+                                indicatorStyle="white"
+                            >
+                                <Text style={styles.toolCallArgs}>
+                                    {typeof toolCall.result === 'string'
+                                        ? toolCall.result
+                                        : JSON.stringify(toolCall.result, null, 2)}
+                                </Text>
+                            </ScrollView>
                         </View>
                     )}
                 </View>
@@ -144,40 +175,51 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
     );
 }
 
-// Team member response block for showing agent activity
-export function MemberResponseBlock({ agentName, text }: { agentName: string; text: string }) {
+// Agent thinking block - shows team member agent responses as collapsible "thinking"
+// This displays other agents' work as internal reflections, not direct messages
+export function AgentThinkingBlock({ agentName, text }: { agentName: string; text: string }) {
     const [expanded, setExpanded] = useState(false);
     const { theme, palette } = useTheme();
     const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+
+    const handleCodeCopy = (code: string) => {
+        Clipboard.setString(code);
+    };
+
+    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), []);
 
     if (!text) return null;
 
     return (
-        <View style={styles.memberResponseContainer}>
+        <View style={styles.agentThinkingContainer}>
             <Pressable
                 onPress={() => setExpanded(!expanded)}
                 style={({ pressed }) => [
-                    styles.memberResponseHeader,
+                    styles.agentThinkingHeader,
                     pressed && { opacity: 0.7 },
                 ]}
             >
-                <Text style={styles.memberResponseHeaderText}>
-                    👤 {agentName}
+                <Text style={styles.agentThinkingHeaderText}>
+                    🧠 Размышления
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
                     {expanded ? '▼' : '▶'}
                 </Text>
             </Pressable>
             {expanded && (
-                <View style={styles.memberResponseContent}>
-                    <Text style={styles.memberResponseText}>
+                <View style={styles.agentThinkingContent}>
+                    <Markdown style={markdownStyles as any} rules={markdownRules}>
                         {text}
-                    </Text>
+                    </Markdown>
                 </View>
             )}
         </View>
     );
 }
+
+// Legacy alias for backward compatibility
+export const MemberResponseBlock = AgentThinkingBlock;
 
 // Collapsible steps container for grouping internal parts
 export function CollapsibleSteps({ children, defaultExpanded = false }: { children: React.ReactNode, defaultExpanded?: boolean }) {

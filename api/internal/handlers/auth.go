@@ -1,46 +1,27 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"strings"
-	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/genie-api/internal/services"
 )
 
 type AuthHandler struct {
-	storage      *storage.Storage
-	tokenManager *auth.TokenManager
+	service *services.AuthService
 }
 
-func NewAuthHandler(storage *storage.Storage, tokenManager *auth.TokenManager) *AuthHandler {
+func NewAuthHandler(service *services.AuthService) *AuthHandler {
 	return &AuthHandler{
-		storage:      storage,
-		tokenManager: tokenManager,
+		service: service,
 	}
 }
 
-type RegisterRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
-}
-
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type AuthResponse struct {
-	Token        string        `json:"token"`
-	RefreshToken string        `json:"refresh_token"`
-	User         *storage.User `json:"user"`
-}
+// Используем типы из services
+type RegisterRequest = services.RegisterRequest
+type LoginRequest = services.LoginRequest
+type AuthResponse = services.AuthResponse
 
 // Register обрабатывает регистрацию нового пользователя
 // @Summary Регистрация нового пользователя
@@ -60,38 +41,18 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем, что все необходимые поля заполнены
-	if req.Email == "" || req.Password == "" {
-		http.Error(w, "Email and password are required", http.StatusBadRequest)
+	resp, err := h.service.Register(r.Context(), &req)
+	if err != nil {
+		if err == services.ErrInvalidRequest {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
 
-	// Создаем нового пользователя
-	user, err := h.storage.CreateUser(r.Context(), req.Email, req.Password, req.Name)
-	if err != nil {
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
-		return
-	}
-
-	// Генерируем JWT токен + refresh
-	token, err := h.tokenManager.GenerateToken(user)
-	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	rtoken, err := h.tokenManager.GenerateRefreshToken()
-	if err != nil {
-		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
-		return
-	}
-	if err := h.storage.SaveRefreshToken(r.Context(), user.ID, rtoken, 30*24*time.Hour); err != nil { // 30d
-		http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	// Отправляем ответ
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{Token: token, RefreshToken: rtoken, User: user})
+	json.NewEncoder(w).Encode(resp)
 }
 
 // Login обрабатывает вход пользователя
@@ -113,45 +74,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверяем, что все необходимые поля заполнены
-	if req.Email == "" || req.Password == "" {
-		http.Error(w, "Email and password are required", http.StatusBadRequest)
-		return
-	}
-
-	// Получаем пользователя по email
-	user, err := h.storage.GetUserByEmail(r.Context(), req.Email)
+	resp, err := h.service.Login(r.Context(), &req)
 	if err != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		if err == services.ErrInvalidCredentials || err == services.ErrInvalidRequest {
+			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, "Failed to login", http.StatusInternalServerError)
 		return
 	}
 
-	// Проверяем пароль
-	if !user.VerifyPassword(req.Password) {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-		return
-	}
-
-	// Генерируем JWT токен + refresh
-	token, err := h.tokenManager.GenerateToken(user)
-	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	rtoken, err := h.tokenManager.GenerateRefreshToken()
-	if err != nil {
-		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
-		return
-	}
-	if err := h.storage.SaveRefreshToken(r.Context(), user.ID, rtoken, 30*24*time.Hour); err != nil {
-		http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
-		return
-	}
-
-	// Отправляем ответ
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{Token: token, RefreshToken: rtoken, User: user})
-
+	json.NewEncoder(w).Encode(resp)
 }
 
 // Refresh принимает refresh_token и возвращает новую пару access+refresh (ротация)
@@ -163,32 +97,19 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	rec, err := h.storage.ConsumeRefreshToken(r.Context(), body.RefreshToken)
+
+	resp, err := h.service.Refresh(r.Context(), body.RefreshToken)
 	if err != nil {
-		http.Error(w, "Invalid or expired refresh token", http.StatusUnauthorized)
+		if err == services.ErrInvalidRefreshToken || err == services.ErrUserNotFound {
+			http.Error(w, "Invalid or expired refresh token", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, "Failed to refresh token", http.StatusInternalServerError)
 		return
 	}
-	user, err := h.storage.GetUserByID(r.Context(), rec.UserID)
-	if err != nil {
-		http.Error(w, "User not found", http.StatusUnauthorized)
-		return
-	}
-	access, err := h.tokenManager.GenerateToken(user)
-	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	newRefresh, err := h.tokenManager.GenerateRefreshToken()
-	if err != nil {
-		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
-		return
-	}
-	if err := h.storage.SaveRefreshToken(r.Context(), user.ID, newRefresh, 30*24*time.Hour); err != nil {
-		http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
-		return
-	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{Token: access, RefreshToken: newRefresh, User: user})
+	json.NewEncoder(w).Encode(resp)
 }
 
 // GetMe возвращает информацию о текущем пользователе
@@ -232,34 +153,24 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body struct {
-		WebSearchEnabled *bool `json:"web_search_enabled"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	var req services.UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	updated := false
-	if body.WebSearchEnabled != nil {
-		user.WebSearchEnabled = *body.WebSearchEnabled
-		updated = true
-	}
-
-	if updated {
-		if err := h.storage.UpdateUser(r.Context(), user); err != nil {
-			http.Error(w, "Failed to update user", http.StatusInternalServerError)
-			return
-		}
+	updatedUser, err := h.service.UpdateUser(r.Context(), user, &req)
+	if err != nil {
+		http.Error(w, "Failed to update user", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(updatedUser)
 }
 
-type GoogleLoginRequest struct {
-	IDToken string `json:"id_token"`
-}
+// GoogleLoginRequest представляет запрос на вход через Google
+type GoogleLoginRequest = services.GoogleLoginRequest
 
 // GoogleLogin handles Google Sign-In
 // @Summary Google Sign-In
@@ -280,74 +191,16 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.IDToken == "" {
-		http.Error(w, "id_token is required", http.StatusBadRequest)
-		return
-	}
-
-	ctx := r.Context()
-	provider, err := oidc.NewProvider(ctx, "https://accounts.google.com")
+	resp, err := h.service.GoogleLogin(r.Context(), &req)
 	if err != nil {
-		http.Error(w, "Failed to get OIDC provider", http.StatusInternalServerError)
-		return
-	}
-
-	verifier := provider.Verifier(&oidc.Config{
-		SkipClientIDCheck: true, // Client ID is checked on client side
-	})
-
-	idToken, err := verifier.Verify(ctx, req.IDToken)
-	if err != nil {
-		http.Error(w, "Invalid token: "+err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	var claims struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
-	}
-	if err := idToken.Claims(&claims); err != nil {
-		http.Error(w, "Failed to parse claims", http.StatusInternalServerError)
-		return
-	}
-
-	// Check if user exists
-	user, err := h.storage.GetUserByEmail(ctx, claims.Email)
-	if err != nil {
-		// User does not exist, create new one
-		// Generate random password
-		randomBytes := make([]byte, 16)
-		_, _ = rand.Read(randomBytes)
-		randomPassword := hex.EncodeToString(randomBytes)
-
-		name := claims.Name
-		if name == "" {
-			name = strings.Split(claims.Email, "@")[0]
-		}
-
-		user, err = h.storage.CreateUser(ctx, claims.Email, randomPassword, name)
-		if err != nil {
-			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		if err == services.ErrInvalidRequest || err == services.ErrInvalidToken {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-	}
-
-	// Generate tokens
-	token, err := h.tokenManager.GenerateToken(user)
-	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
-		return
-	}
-	rtoken, err := h.tokenManager.GenerateRefreshToken()
-	if err != nil {
-		http.Error(w, "Failed to generate refresh token", http.StatusInternalServerError)
-		return
-	}
-	if err := h.storage.SaveRefreshToken(ctx, user.ID, rtoken, 30*24*time.Hour); err != nil {
-		http.Error(w, "Failed to persist refresh token", http.StatusInternalServerError)
+		http.Error(w, "Failed to authenticate with Google", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(AuthResponse{Token: token, RefreshToken: rtoken, User: user})
+	json.NewEncoder(w).Encode(resp)
 }

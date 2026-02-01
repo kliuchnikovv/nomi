@@ -1,7 +1,6 @@
 from textwrap import dedent
-from typing import Optional, List
+from typing import Optional
 
-from agno.agent import Agent
 from agno.models.base import Model
 from agno.team import Team
 from agno.db import BaseDb
@@ -81,25 +80,18 @@ class DnDTeam(Team):
             ### Step 7: NARRATOR - Scene & Final Output (MANDATORY)
             - **ALWAYS CALL THIS!** The Narrator is the DM and Storyteller.
             - Provide all context (diceroll results, NPC actions, rules).
-            - Ask Narrator to describe the scene in Russian.
-            - `delegate_task_to_member("narrator", "Player attack hit (18 vs AC 12). Goblins invoke nimble escape. Describe scene in Russian.")`
+            - Ask Narrator to describe the scene in the player's language.
+            - `delegate_task_to_member("narrator", "Player attack hit (18 vs AC 12). Goblins invoke nimble escape. Describe the scene.")`
             
-            ### Step 8: SUGGEST ACTIONS - Player Options (⛔ FINAL STEP!)
-            - ALWAYS CALL as the VERY LAST action of your turn
-            - `suggest_actions(["Option 1", "Option 2", "Option 3"])` - 3-5 contextual options
-            - If dice roll is needed: `suggest_actions(["🎲 Бросить кубик (Ловкость +3)"])`
-            
-            ## ⛔⛔⛔ CRITICAL: YOUR TURN ENDS AFTER suggest_actions! ⛔⛔⛔
-            Once you call `suggest_actions()`, your work is DONE:
-            - Do NOT call any more tools
-            - Do NOT delegate to any more agents
-            - Do NOT generate any more text
-            - STOP IMMEDIATELY and wait for player input
-            
+            ### Step 8: SUGGEST ACTIONS - Player Options (MANDATORY FINAL STEP)
+            - ALWAYS CALL as the VERY LAST action of your turn.
+            - `suggest_actions(["Option 1", "Option 2", "Option 3"])` — 3-5 contextual options in the player's language.
+            - Once you call `suggest_actions()`, STOP. Do not call any more tools, do not generate text. Wait for player input.
+
             ---
-            
+
             ## QUICK REFERENCE - When to Skip
-            
+
             | Agent | Skip When |
             |-------|-----------|
             | secretary (load) | Same scene continues |
@@ -107,29 +99,15 @@ class DnDTeam(Team):
             | npcagent | No world NPCs present |
             | partyagent | Player is alone |
             | secretary (save) | No state changes |
-            
+
             ## Member IDs (lowercase!)
             `narrator`, `ruleslawyer`, `secretary`, `partyagent`, `npcagent`
-            
+
             ## Available Tools
             - `delegate_task_to_member(member_id, task)`
-            - `roll_dice(expression, dc=None)` - Signals user to roll. Stop and wait for result.
+            - `roll_dice(expression, dc=None)` — Signals user to roll. Stop and wait for result.
             - `load_state(key)` / `save_state(key, value)`
-            - `suggest_actions(actions)` - list of 3-5 options
-            
-            ## ⛔ MANDATORY FINAL STEP - YOU MUST DO THIS! ⛔
-            
-            **EVERY SINGLE RESPONSE must end with a call to `suggest_actions()`!**
-            
-            This is NOT optional. After presenting narrative via Narrator:
-            1. Call `suggest_actions(["Option 1", "Option 2", "Option 3"])` with 3-5 Russian options
-            2. STOP generating - your turn is complete
-            
-            Examples:
-            - `suggest_actions(["Поговорить с барменом", "Осмотреть таверну", "Выйти на улицу"])`
-            - `suggest_actions(["🎲 Бросить кубик (Ловкость +5)", "Отступить", "Атаковать"])`
-            
-            If you don't call suggest_actions, THE PLAYER CANNOT RESPOND!
+            - `suggest_actions(actions)` — list of 3-5 options. **Must be the last call in every turn.**
         """)
 
         # Initialize tools
@@ -179,7 +157,7 @@ class DnDTeam(Team):
             show_members_responses=True,   # Show member responses during streaming
             stream_member_events=False,     # Stream member agent events
             # CRITICAL: Must end with suggest_actions tool call
-            expected_output="Narrative in Russian followed by a call to suggest_actions tool with 3-5 player options in Russian. YOUR TURN IS COMPLETE ONLY AFTER CALLING suggest_actions().",
+            expected_output="Narrative in the player's language followed by a call to suggest_actions tool with 3-5 player options. YOUR TURN IS COMPLETE ONLY AFTER CALLING suggest_actions().",
             tool_call_limit=15,  # Prevent runaway generation
             # NOTE: reasoning=True removed - use Gemini native thinking_budget instead
         )

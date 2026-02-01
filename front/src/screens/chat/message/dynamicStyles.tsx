@@ -154,9 +154,10 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             marginBottom: 4,
         },
         toolCallArgs: {
-            color: withAlpha(theme.textPrimary, 0.9),
-            fontSize: 11,
+            color: theme.codeText || '#a9b1d6',
+            fontSize: 12,
             fontFamily: 'Menlo',
+            lineHeight: 18,
         },
         modelText: {
             color: theme.textSecondary,
@@ -199,6 +200,14 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             paddingHorizontal: 10,
             paddingBottom: 8,
         },
+        toolCallScrollable: {
+            maxHeight: 200,
+            backgroundColor: theme.codeBg || withAlpha(palette.bg, 0.5),
+            borderRadius: 6,
+            padding: 8,
+            borderWidth: 1,
+            borderColor: withAlpha(theme.textSecondary, 0.15),
+        },
         // Reasoning block styles
         reasoningContainer: {
             marginVertical: 6,
@@ -228,10 +237,33 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             lineHeight: 18,
             fontStyle: 'italic',
         },
-        // Member response block styles (for team member agent activity)
+        // Agent thinking block styles (for team member agent responses as collapsible "thinking")
+        agentThinkingContainer: {
+            marginVertical: 6,
+            backgroundColor: withAlpha(palette.purple || palette.magenta, 0.08),
+            borderRadius: 8,
+            overflow: 'hidden',
+        },
+        agentThinkingHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingVertical: 6,
+            paddingHorizontal: 10,
+        },
+        agentThinkingHeaderText: {
+            color: palette.purple || palette.magenta,
+            fontSize: 12,
+            fontWeight: '600',
+        },
+        agentThinkingContent: {
+            paddingHorizontal: 10,
+            paddingBottom: 8,
+        },
+        // Legacy member response styles (kept for backward compatibility)
         memberResponseContainer: {
             marginVertical: 6,
-            backgroundColor: withAlpha(palette.cyan, 0.08),
+            backgroundColor: withAlpha(palette.purple || palette.magenta, 0.08),
             borderRadius: 8,
             overflow: 'hidden',
         },
@@ -243,9 +275,9 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             paddingHorizontal: 10,
         },
         memberResponseHeaderText: {
-            color: palette.cyan,
+            color: palette.purple || palette.magenta,
             fontSize: 12,
-            fontWeight: '600',
+            fontWeight: '700',
         },
         memberResponseContent: {
             paddingHorizontal: 10,
@@ -253,8 +285,8 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
         },
         memberResponseText: {
             color: theme.textPrimary,
-            fontSize: 13,
-            lineHeight: 18,
+            fontSize: 15,
+            lineHeight: 22,
         },
         // Collapsible steps styles - now theme-aware!
         collapsibleStepsContainer: {
@@ -280,6 +312,37 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             paddingHorizontal: 10,
             paddingBottom: 10,
         },
+        // Document block styles
+        documentContainer: {
+            marginVertical: 8,
+            borderRadius: 8,
+            backgroundColor: theme.surfaceHighlight,
+            borderWidth: 1,
+            borderColor: withAlpha(theme.textSecondary, 0.1),
+            overflow: 'hidden',
+        },
+        documentHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 12,
+            backgroundColor: withAlpha(theme.accent, 0.15), // Highlighted header
+            borderBottomWidth: 1,
+            borderBottomColor: withAlpha(theme.accent, 0.1),
+        },
+        documentTitle: {
+            fontSize: 14,
+            fontWeight: 'bold',
+            color: theme.accent, // Highlighted text
+        },
+        documentChevron: {
+            fontSize: 12,
+            color: theme.textSecondary,
+        },
+        documentBody: {
+            padding: 12,
+            backgroundColor: theme.codeBg || '#1a1b26',
+        },
     });
 };
 
@@ -291,28 +354,41 @@ export const createMarkdownStyles = (theme: ThemeColors) => ({
         lineHeight: 24,
     },
     link: {
-        color: theme.accent,
+        color: '#4A9EFF',
+        textDecorationLine: 'underline',
     },
     code_inline: {
-        backgroundColor: 'rgba(192, 202, 245, 0.1)',
-        paddingHorizontal: 4,
-        paddingVertical: 2,
-        borderRadius: 4,
+        backgroundColor: theme.codeInlineBg || '#24283b',
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: 6,
+        overflow: 'hidden',
         fontFamily: 'Menlo',
-        fontSize: 14,
+        fontSize: 12,
+        color: theme.codeText || '#a9b1d6',
+        borderColor: withAlpha(theme.codeText || '#a9b1d6', 0.1),
+        borderWidth: 0.5,
     },
     code_block: {
-        backgroundColor: 'rgba(192, 202, 245, 0.05)',
+        backgroundColor: theme.codeBg || '#1a1b26',
         padding: 12,
-        borderRadius: 8,
+        borderRadius: 16,
         marginVertical: 8,
+        overflow: 'hidden',
         fontFamily: 'Menlo',
-        fontSize: 14,
+        fontSize: 13,
+        color: theme.codeText || '#a9b1d6',
+        borderColor: withAlpha(theme.codeText || '#a9b1d6', 0.1),
+        borderWidth: 1,
     },
     blockquote: {
+        backgroundColor: theme.blockquoteBg || theme.surfaceAlt,
         borderLeftWidth: 3,
-        borderLeftColor: '#4b5263',
+        borderLeftColor: theme.blockquoteBorder || theme.accent,
         paddingLeft: 8,
+        paddingVertical: 4,
+        marginVertical: 4,
+        borderRadius: 4,
         color: theme.textPrimary,
     },
     heading1: {
@@ -327,10 +403,12 @@ export const createMarkdownStyles = (theme: ThemeColors) => ({
     bullet_list: {
         marginTop: 4,
         marginBottom: 4,
+        color: theme.textPrimary,
     },
     ordered_list: {
         marginTop: 4,
         marginBottom: 4,
+        color: theme.textPrimary,
     },
     list_item: {
         marginTop: 2,
@@ -338,24 +416,64 @@ export const createMarkdownStyles = (theme: ThemeColors) => ({
         flexDirection: 'row',
         flexWrap: 'wrap',
         width: '100%',
+        color: theme.textPrimary,
     },
     // Fix for list content width
     bullet_list_icon: {
         marginRight: 8,
+        color: theme.textPrimary,
     },
     bullet_list_content: {
         flex: 1,
         flexShrink: 1,
+        color: theme.textPrimary,
     },
     ordered_list_icon: {
         marginRight: 8,
+        color: theme.textPrimary,
     },
     ordered_list_content: {
         flex: 1,
         flexShrink: 1,
+        color: theme.textPrimary,
     },
     paragraph: {
         marginTop: 4,
         marginBottom: 4,
+        color: theme.textPrimary,
+        fontSize: 16,
+        lineHeight: 24,
+    },
+    // Missing rules often causing white background defaults
+    fence: {
+        backgroundColor: theme.codeBg || '#1a1b26',
+        padding: 12,
+        borderRadius: 8,
+        marginVertical: 8,
+        fontFamily: 'Menlo',
+        fontSize: 14,
+        color: theme.codeText || '#a9b1d6',
+    },
+    table: {
+        borderWidth: 1,
+        borderColor: theme.border,
+        borderRadius: 8,
+    },
+    tr: {
+        backgroundColor: theme.background,
+        borderBottomWidth: 1,
+        borderColor: theme.border,
+        flexDirection: 'row',
+    },
+    th: {
+        flex: 1,
+        padding: 5,
+        fontWeight: 'bold',
+        color: theme.textPrimary,
+    },
+    td: {
+        flex: 1,
+        padding: 5,
+        color: theme.textPrimary,
     },
 });

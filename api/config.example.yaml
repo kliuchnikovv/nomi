@@ -28,7 +28,7 @@ token:
   jwt_secret: "your-super-secret-key-change-in-production"
 
 llm:
-  base_url: "http://localhost:7777"
+  base_url: "${LLM_BASE_URL:-http://localhost:7777}"
 
 plugins:
   gmail:

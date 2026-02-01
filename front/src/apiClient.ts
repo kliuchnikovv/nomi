@@ -1,5 +1,5 @@
 import { getApiUrl } from './config';
-import { SidebarChatsResponse, SidebarChatMessagesResponse, SidebarResponse } from './screens/rightsidebar/models';
+import { SidebarChatsResponse, SidebarChatMessagesResponse, SidebarResponse } from './screens/integrationsSidebar/models';
 
 // Helper to get current API URL (reads from cache, falls back to default)
 const API_URL = () => getApiUrl();
@@ -267,3 +267,83 @@ export const weatherApi = {
     },
 };
 
+export interface Project {
+    id: string;
+    user_id: string;
+    name: string;
+    description?: string;
+    repository?: string;
+    status: 'PENDING' | 'ANALYZING' | 'READY' | 'FAILED';
+    last_indexed_at?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export const projectsApi = {
+    listRepositories: (githubToken?: string) => apiClient.post<{ repos: Array<{ id: number; name: string; url: string; private: boolean; description?: string }> }>(`${API_URL()}/github/repos`, { github_token: githubToken }),
+    list: () => apiClient.get<Array<Project>>(`${API_URL()}/projects`),
+    get: (id: string) => apiClient.get<Project>(`${API_URL()}/projects/${id}`),
+    create: (body: { name: string; description?: string; repository?: string; github_token?: string }) =>
+        apiClient.post<Project>(`${API_URL()}/projects`, body),
+    update: (id: string, body: { name?: string; description?: string; repository?: string }) =>
+        apiClient.put<Project>(`${API_URL()}/projects/${id}`, body),
+    delete: (id: string) => apiClient.delete<void>(`${API_URL()}/projects/${id}`),
+    updateStatus: (id: string, status: Project['status']) =>
+        apiClient.patch<void>(`${API_URL()}/projects/${id}/status`, { status }),
+    reindex: (id: string, githubToken?: string) =>
+        apiClient.post<{ status: string; project_id: string }>(`${API_URL()}/projects/${id}/reindex`, { github_token: githubToken }),
+    createTask: (projectId: string, body: { title: string; description?: string; priority?: string }) =>
+        apiClient.post<{ id: string; title: string; status: string; project_id: string }>(`${API_URL()}/projects/${projectId}/tasks`, body),
+};
+
+export const projectTasksApi = {
+    getActiveTasks: () => apiClient.get<Array<{
+        id: string;
+        title: string;
+        project_id: string;
+        project_name: string;
+        status: any;
+        updated_at: string;
+    }>>(`${API_URL()}/active-tasks`),
+};
+
+// Lists (user lists with per-list RAG)
+export interface List {
+    id: string;
+    user_id: string;
+    name: string;
+    description?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export type ListItemType = 'fact' | 'link' | 'document';
+export interface ListItem {
+    id: string;
+    list_id: string;
+    type: ListItemType;
+    title?: string;
+    content: string;
+    url?: string;
+    created_at: string;
+    updated_at: string;
+}
+export const listsApi = {
+    list: () => apiClient.get<Array<List>>(`${API_URL()}/lists`),
+    get: (id: string) => apiClient.get<List>(`${API_URL()}/lists/${id}`),
+    create: (body: { name: string; description?: string }) =>
+        apiClient.post<List>(`${API_URL()}/lists`, body),
+    update: (id: string, body: { name?: string; description?: string }) =>
+        apiClient.put<List>(`${API_URL()}/lists/${id}`, body),
+    delete: (id: string) => apiClient.delete<void>(`${API_URL()}/lists/${id}`),
+    listItems: (listId: string) =>
+        apiClient.get<Array<ListItem>>(`${API_URL()}/lists/${listId}/items`),
+    getItem: (listId: string, itemId: string) =>
+        apiClient.get<ListItem>(`${API_URL()}/lists/${listId}/items/${itemId}`),
+    addItem: (listId: string, body: { type: ListItemType; title?: string; content?: string; url?: string }) =>
+        apiClient.post<ListItem>(`${API_URL()}/lists/${listId}/items`, body),
+    updateItem: (listId: string, itemId: string, body: { type?: ListItemType; title?: string; content?: string; url?: string }) =>
+        apiClient.put<ListItem>(`${API_URL()}/lists/${listId}/items/${itemId}`, body),
+    deleteItem: (listId: string, itemId: string) =>
+        apiClient.delete<void>(`${API_URL()}/lists/${listId}/items/${itemId}`),
+};

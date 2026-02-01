@@ -60,7 +60,7 @@ export const createStyles = (theme: ThemeColors) => {
         headerSubtitle: {
             fontSize: 12,
             color: theme.fadedText,
-            marginTop: 2,
+            marginTop: 0,
         },
         headerBadge: {
             paddingHorizontal: 8,

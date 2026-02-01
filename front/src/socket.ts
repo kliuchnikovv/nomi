@@ -1,52 +1,70 @@
-import { Frame } from './screens/main/models.tsx';
-
+import { Frame } from './screens/main/models';
+import { useChatStore } from './store/chatStore';
+import { emitGenerationDone } from './store/generationDoneStore';
+import { getApiUrl } from './config';
 
 type Handlers = {
-    // onToken?: (frame: Frame) => void;
-    onMessage?: (frame: Frame) => void; // For full messages
     onDone?: (frame: Frame) => void;
     onError?: (err: any) => void;
-    // onAnnounce?: (chatId: string) => void;
     onUnauthorized?: () => Promise<boolean> | boolean; // return true if token refreshed
-    onMeta?: (meta: Frame) => void;
     onPing?: (ping: Frame) => Promise<boolean> | boolean;
     onTools?: (frame: Frame) => void; // For tools list
+    // Legacy handlers that might still be useful
+    onMessage?: (frame: Frame) => void;
+    onMeta?: (meta: Frame) => void;
+    onSignal?: (frame: Frame) => void;
 };
 
 export class ChatSocket {
     private ws: any | null = null;
-    private readonly rootUrl: string;
-    private readonly getToken: () => string | null;
-    private readonly getChatId: () => string | null;
-    private readonly getMessageId: () => string | null;
-    private readonly getModel: () => string | null;
-    private readonly getContext: () => string | null;
-    private readonly getMode?: () => 'agent' | 'team' | null | undefined;
-    private readonly getCommand?: () => any;
+    private token: string | null = null;
     private handlers: Handlers = {};
     private outbox: any[] = [];
     private idleTimer: any = null;
     private idleTimeoutMs = 5 * 60 * 1000; // 5 minutes
-    private sentCommandFrame = false;
 
-    constructor(
-        rootUrl: string,
-        getToken: () => string | null,
-        getChatId: () => string | null,
-        getMessageId: () => string | null,
-        getModel: () => string | null,
-        getContext: () => string | null,
-        getMode?: () => 'agent' | 'team' | null | undefined,
-        getCommand?: () => any,
-    ) {
-        this.rootUrl = rootUrl;
-        this.getToken = getToken;
-        this.getChatId = getChatId;
-        this.getMessageId = getMessageId;
-        this.getModel = getModel;
-        this.getContext = getContext;
-        this.getMode = getMode;
-        this.getCommand = getCommand;
+    private readonly instanceId = `${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 8)}`;
+    private shouldReconnect = false;
+    private reconnectDelay = 1000;
+    private reconnectTimer: any = null;
+    private isIntentionallyClosed = false;
+    private isConnecting = false;
+    private channel: 'chat' | 'user' = 'chat';
+    private chatId: string | null = null;
+
+    // private sentCommandFrame = false; // Command frames are per-message/chat context now?
+    // Actually, team commands are sent once per session usually. But in a global socket, we might switch contexts.
+    // For now, let's keep it simple: we send commands when sending a message if needed, or rely on the backend session.
+
+    constructor() { }
+
+    getDebugState() {
+        return {
+            instanceId: this.instanceId,
+            channel: this.channel,
+            chatId: this.chatId,
+            hasWs: !!this.ws,
+            readyState: this.ws?.readyState,
+            isConnecting: this.isConnecting,
+            shouldReconnect: this.shouldReconnect,
+            isIntentionallyClosed: this.isIntentionallyClosed,
+        };
+    }
+
+    setToken(token: string | null) {
+        this.token = token;
+        // Auto-connect if we have a token and not already connected/connecting
+        if (token && !this.isReady() && !this.ws) {
+            this.connect();
+        }
+    }
+
+    setChannel(channel: 'chat' | 'user') {
+        this.channel = channel;
+    }
+
+    setChatId(chatId: string | null) {
+        this.chatId = chatId;
     }
 
     setHandlers(h: Handlers) {
@@ -67,23 +85,111 @@ export class ChatSocket {
         }, this.idleTimeoutMs);
     }
 
+    private scheduleReconnect() {
+        if (this.reconnectTimer || !this.token) {
+            return;
+        }
+
+        console.log(`[Socket] Reconnecting in ${this.reconnectDelay}ms...`);
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.open();
+        }, this.reconnectDelay);
+
+        // Exponential backoff with cap
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+    }
+
     private touchActivity() {
         this.scheduleIdleClose();
     }
 
     isReady(): boolean {
-        return !!this.ws && this.ws.readyState === 1;
+        const ready = !!this.ws && this.ws.readyState === 1;
+        if (this.ws && !ready) {
+            console.log(`[Socket] Not ready: ws exists=${!!this.ws}, readyState=${this.ws?.readyState}`);
+        }
+        return ready;
     }
 
-    open(initialQ?: string, initialSessionId?: string) {
-        const chatId = this.getChatId();
-        const token = this.getToken();
-        // messageId is per-message and should not be required to open a long-lived socket
-        // const messageId = this.getMessageId();
+    // Alias for open to match expected API
+    connect() {
+        this.isIntentionallyClosed = false;
+        this.shouldReconnect = true;
+        this.open();
+    }
+
+    processOutbox() {
+        if (this.isReady() && this.outbox.length > 0) {
+            const queue = this.outbox;
+            this.outbox = [];
+            for (const msg of queue) {
+                try {
+                    this.ws.send(JSON.stringify(msg));
+                } catch {
+                    // If send fails, put it back or retry?
+                    // For now, fire and forget or it will be lost.
+                }
+            }
+        }
+    }
+
+    // Global connection doesn't take chat-specific params initially
+    open() {
+        const token = this.token;
         if (!token) {
-            console.log("WS open blocked: missing token", token);
+            console.log("WS open blocked: missing token");
             return;
         }
+
+        // If we're trying to connect to a chat channel, we must have an active chatId.
+        // Otherwise backend will likely close the connection (and we can end up in reconnect loops).
+        if (this.channel === 'chat' && !this.chatId) {
+            return;
+        }
+
+        // If already connected, don't reconnect
+        if (this.isReady()) {
+            console.log('[Socket] Already connected, skipping');
+            return;
+        }
+
+        // Prevent multiple simultaneous connection attempts
+        // But allow retry if connection is stuck
+        if (this.isConnecting && this.ws) {
+            const wsState = this.ws.readyState;
+            console.log(`[Socket] Connection in progress, state: ${wsState}`, {
+                readyState: wsState,
+                isConnecting: this.isConnecting
+            });
+            // If WebSocket is already connected (1), skip
+            if (wsState === 1) {
+                console.log('[Socket] Already connected, skipping');
+                return;
+            }
+            // If WebSocket is in connecting state (0), wait a bit before retrying
+            // This prevents closing connections that are still establishing
+            if (wsState === 0) {
+                console.log('[Socket] Connection still establishing, skipping duplicate attempt');
+                return;
+            }
+            // If closing (2) or closed (3), allow retry
+            if (wsState === 2 || wsState === 3) {
+                console.log('[Socket] Connection closing/closed, allowing retry');
+                try {
+                    this.ws.close();
+                } catch { }
+                this.ws = null;
+                this.isConnecting = false;
+            } else {
+                console.log('[Socket] Connection already in progress, skipping');
+                return;
+            }
+        }
+
+        // Safety: ensure we want to be connected
+        this.isIntentionallyClosed = false;
+        this.shouldReconnect = true;
 
         if (this.ws) {
             try {
@@ -92,128 +198,81 @@ export class ChatSocket {
             this.ws = null;
         }
 
+        // Clear any pending reconnect timer since we are connecting now
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        const rootUrl = getApiUrl();
         const qs = new URLSearchParams();
-        if (chatId) qs.append('chat_id', chatId);
-        if (token) qs.append('token', token);
-        if (initialSessionId) qs.append('sessionId', initialSessionId);
-
-        // Add model parameter if selected
-        const model = this.getModel();
-        if (model) qs.append('model', model);
-
-        // Add context parameter
-        const context = this.getContext();
-        if (context) qs.append('source', context);
-
-        const mode = this.getMode?.() || 'agent';
-        if (mode) qs.append('mode', mode);
+        qs.append('token', token);
+        if (this.channel === 'user') {
+            qs.append('channel', 'user');
+        } else if (this.chatId) {
+            qs.append('chat_id', this.chatId);
+        }
 
         // Add user's timezone information
         try {
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
             if (tz) {
                 qs.append('timezone', tz);
-                console.log('[Socket] Detected timezone:', tz);
             }
-
-            // Fallback: Send raw offset (in minutes)
             const offset = new Date().getTimezoneOffset();
             qs.append('timezone_offset', String(offset));
-            console.log('[Socket] Detected timezone offset:', offset);
         } catch (e) {
             console.warn('[Socket] Failed to get timezone info', e);
         }
 
-        const command = this.getCommand?.();
-        if (command) {
-            try {
-                const serialized = typeof command === 'string' ? command : JSON.stringify(command);
-                qs.append('command', serialized);
-            } catch (err) {
-                console.warn('Failed to serialize command for query', err);
-            }
-        }
-
-        const httpUrl = `${this.rootUrl}/chat/ws?${qs.toString()}`;
+        const httpUrl = `${rootUrl}/chat/ws?${qs.toString()}`;
         const wsUrl = httpUrl.startsWith('https://')
             ? httpUrl.replace('https://', 'wss://')
             : httpUrl.replace('http://', 'ws://');
 
-        console.log('Attempting to connect to WebSocket:', wsUrl); // Add this log
-        // console.log('Chat ID:', chatId); // Add this log
-        console.log('Token (first 10 chars):', token ? token.substring(0, 10) + '...' : 'null'); // Add this log
+        console.log('Attempting to connect to Global WebSocket:', wsUrl);
 
         let retried = false;
+        this.isConnecting = true;
+
+        // Set a timeout to reset isConnecting flag if connection takes too long
+        const connectionTimeout = setTimeout(() => {
+            if (this.isConnecting && this.ws && this.ws.readyState !== 1) {
+                console.warn('[Socket] Connection timeout, resetting isConnecting flag');
+                this.isConnecting = false;
+            }
+        }, 10000); // 10 seconds timeout
+
         try {
             const ws: any = new (WebSocket as any)(
                 wsUrl,
-                [], // Explicitly pass an empty array for protocols
-                token
-                    ? { headers: { Authorization: `Bearer ${token}` } }
-                    : undefined,
+                [],
+                token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
             );
             this.ws = ws;
 
             ws.onopen = () => {
+                console.log('[Socket] Connected successfully', {
+                    readyState: ws.readyState,
+                    url: wsUrl.substring(0, 50) + '...'
+                });
+                // Mark that connection was successfully established
+                (ws as any)._wasConnected = true;
+                clearTimeout(connectionTimeout);
+                this.isConnecting = false;
+                this.reconnectDelay = 1000; // Reset backoff
                 this.touchActivity();
-                this.sentCommandFrame = false;
-                this.enqueueCommandFrame();
-                const queue = this.outbox;
-                this.outbox = [];
-                for (const msg of queue) {
-                    try {
-                        ws.send(JSON.stringify(msg));
-                    } catch { }
-                }
+                this.processOutbox(); // Replaced inline loop with method call
             };
 
             ws.onmessage = async (e: any) => {
                 this.touchActivity();
                 const raw = typeof e.data === 'string' ? e.data : '';
+                // NDJSON handling: split by newline
+                const lines = raw.split('\n');
 
-                // Handle potentially concatenated JSON messages (can happen when phone is locked/unlocked)
-                // Split on }{ pattern to separate multiple JSON objects
-                // Handle concatenated JSON messages using bracket counting
-                const jsonStrings: string[] = [];
-                let depth = 0;
-                let inString = false;
-                let start = 0;
-
-                for (let i = 0; i < raw.length; i++) {
-                    const char = raw[i];
-                    if (inString) {
-                        if (char === '"') {
-                            let backslashes = 0;
-                            let j = i - 1;
-                            while (j >= start && raw[j] === '\\') {
-                                backslashes++;
-                                j--;
-                            }
-                            if (backslashes % 2 === 0) inString = false;
-                        }
-                    } else {
-                        if (char === '"') {
-                            inString = true;
-                        } else if (char === '{') {
-                            // If starting a top-level object, ensure start points here? 
-                            // Actually start is updated after push.
-                            // If raw starts with whitespace, start handles it via skip logic below.
-                            depth++;
-                        } else if (char === '}') {
-                            depth--;
-                            if (depth === 0) {
-                                jsonStrings.push(raw.substring(start, i + 1));
-                                start = i + 1;
-                                // Skip whitespace
-                                while (start < raw.length && /\s/.test(raw[start])) start++;
-                                i = start - 1;
-                            }
-                        }
-                    }
-                }
-
-                for (const jsonStr of jsonStrings) {
-                    const trimmed = jsonStr.trim();
+                for (const line of lines) {
+                    const trimmed = line.trim();
                     if (!trimmed) continue;
 
                     try {
@@ -221,109 +280,108 @@ export class ChatSocket {
                         if (!rawJson) continue;
 
                         const frame = rawJson as Frame;
+                        const op = frame.op;
 
-                        const kind = frame.kind;
-                        const data = frame.payload;
-                        const operation = frame.op;
+                        // Handle global routing
+                        if (op === 'message' || op === 'tools' || op === 'model' || op === 'done' || op === 'signal') {
+                            const chatId = frame.chat_id;
+                            if (chatId) {
+                                // 1. Update Global Store
+                                // NOTE: backend can forward the same chat stream into both:
+                                // - chat room websocket (channel=chat&chat_id=...)
+                                // - user notification websocket (channel=user)
+                                //
+                                // Previously we skipped *all* op=message frames on the user channel,
+                                // which caused the UI to never render assistant replies when the app
+                                // happened to stay connected only on channel=user.
+                                //
+                                // To avoid duplication/noise, we only write DATA messages to the store.
+                                if (op === 'message' && frame.kind === 'data') {
+                                    useChatStore.getState().addMessage(chatId, frame.payload);
+                                } else if (op === 'message') {
+                                }
 
-                        // console.log(`${operation} with kind ${kind}`, frame);
-                        switch (operation) {
+                                // 2. Notify Listeners (legacy handlers for specific effects)
+                                // Only call legacy handlers if they are still relevant.
+                                // ChatContext might still want to know about completion or errors.
+                                if (op === 'message' && frame.kind === 'data') {
+                                    this.handlers.onMessage?.(frame);
+                                } else if (op === 'done') {
+                                    emitGenerationDone(String(chatId));
+                                    this.handlers.onDone?.(frame);
+                                } else if (op === 'signal') {
+                                    this.handlers.onSignal?.(frame);
+                                } else {
+                                    this.handlers.onMeta?.(frame);
+                                }
+                            }
+                        }
+
+                        // Handle errors and system ops
+                        switch (op) {
                             case 'ping':
                                 this.handlers.onPing?.(frame);
                                 break;
                             case 'error':
-                                if (data?.code !== 401 || retried) {
-                                    // Extract error message from various possible locations
-                                    let errorMessage = 'Ошибка соединения';
+                                // Handle error frames with improved error extraction
+                                const errorInfo = frame.error || frame.payload?.error || frame.payload;
+                                const errorCode = errorInfo?.code || frame.payload?.code;
+                                const errorMessage = errorInfo?.message || frame.payload?.message || 'Произошла ошибка';
+                                const errorDetails = errorInfo?.details || frame.payload?.details;
 
-                                    // Check frame.error (preferred source from backend)
-                                    if (frame.error) {
-                                        if (typeof frame.error === 'string') {
-                                            errorMessage = frame.error;
-                                        } else if (frame.error.message && typeof frame.error.message === 'string') {
-                                            errorMessage = frame.error.message;
-                                        }
-                                    }
-                                    // Fallback to legacy checks on payload (data)
-                                    else if (data && typeof data === 'object') {
-                                        if (data.error) {
-                                            errorMessage = typeof data.error === 'string'
-                                                ? data.error
-                                                : data.error.message || JSON.stringify(data.error);
-                                        } else if (data.message) {
-                                            errorMessage = data.message;
-                                        }
-                                    }
-
-                                    // Provide user-friendly message for backend connection errors
-                                    if (errorMessage.includes('dial tcp') || errorMessage.includes('connection refused')) {
-                                        errorMessage = 'Не удалось подключиться к AI сервису. Попробуйте позже.';
-                                    }
-
-                                    this.handlers.onError?.({ ...frame, message: errorMessage });
-                                    break;
+                                // Log error details for debugging
+                                if (errorDetails) {
+                                    console.error('Error details:', errorDetails);
                                 }
 
-                                retried = true;
-                                const ok = await (this.handlers.onUnauthorized?.() ?? false);
-                                if (!ok) {
-                                    break;
-                                }
-
-                                try { ws.close(); } catch { }
-                                this.open();
-
-                                break;
-                            case 'message':
-                                if (kind === 'data') {
-                                    this.handlers.onMessage?.(frame);
+                                // Handle 401 unauthorized
+                                if (errorCode === 401 || frame.payload?.code === 401) {
+                                    if (!retried) {
+                                        retried = true;
+                                        const ok = await (this.handlers.onUnauthorized?.() ?? false);
+                                        if (ok) {
+                                            try { ws.close(); } catch { }
+                                            this.open();
+                                        }
+                                    }
                                 } else {
-                                    this.handlers.onMeta?.(frame);
-                                }
+                                    // Map error codes to user-friendly messages
+                                    let userMessage = errorMessage;
+                                    if (errorCode) {
+                                        const errorMessages: Record<string, string> = {
+                                            'parse_failed': 'Ошибка обработки сообщения',
+                                            'save_failed': 'Ошибка сохранения данных',
+                                            'redis_failed': 'Ошибка соединения с сервером',
+                                            'marshal_failed': 'Ошибка обработки ответа',
+                                            'dispatch_failed': 'Ошибка сохранения ответа',
+                                            'attachment_failed': 'Ошибка загрузки вложений',
+                                            'agent_failed': 'Ошибка выполнения задачи',
+                                            'agent_error': 'Ошибка выполнения задачи',
+                                            'agent_not_found': 'Агент не найден',
+                                            'task_failed': 'Ошибка обработки запроса',
+                                            'worker_error': 'Ошибка сервера',
+                                            'build_failed': 'Ошибка инициализации',
+                                            'stream_failed': 'Ошибка генерации ответа',
+                                            'timeout': 'Превышено время ожидания',
+                                            'not_found': 'Ресурс не найден',
+                                            'not-found': 'Ресурс не найден',
+                                        };
+                                        userMessage = errorMessages[errorCode] || errorMessage;
+                                    }
 
-                                break;
-                            case 'done':
-                                this.handlers.onDone?.(frame);
-                                break;
-                            case 'model':
-                                break;
-                            case 'tools':
-                                this.handlers.onTools?.(frame);
-                                break;
-                            default:
-                                console.warn(`Unknown message op: ${operation}`, rawJson);
+                                    // Pass enhanced error object to handler
+                                    this.handlers.onError?.({
+                                        ...frame,
+                                        error: {
+                                            code: errorCode,
+                                            message: userMessage,
+                                            details: errorDetails,
+                                        },
+                                        message: userMessage,
+                                    });
+                                }
                                 break;
                         }
-
-                        // if (frame.op === 'announce' || data?.chat_id || data?.chatId) {
-                        //     const announcedId = data?.chat_id || data?.chatId || data?.id;
-                        //     if (announcedId) this.handlers.onAnnounce?.(String(announcedId));
-                        // }
-                        //
-                        // if (kind === 'data' && typeof data?.message === 'string') {
-                        //     if (data.eof) {
-                        //         // This is a full message
-                        //         this.handlers.onMessage?.(data.message, data.message_id);
-                        //     } else {
-                        //         // This is a streaming token
-                        //         this.handlers.onToken?.(data.message);
-                        //     }
-                        // } else if (kind === 'done') {
-                        //     this.handlers.onDone?.(data?.message_id);
-                        // } else if (
-                        //     kind === 'error' &&
-                        //     (data?.code === 401 || data?.status === 401)
-                        // ) {
-                        //     if (!retried) {
-                        //         retried = true;
-                        //         const ok = await (this.handlers.onUnauthorized?.() ?? false);
-                        //         if (ok) {
-                        //             try { ws.close(); } catch {}
-                        //             this.open();
-                        //             return;
-                        //         }
-                        //     }
-                        // }
                     } catch (err) {
                         console.warn('Failed to parse WS message:', err, trimmed);
                     }
@@ -331,200 +389,237 @@ export class ChatSocket {
             };
 
             ws.onerror = (e: any) => {
-                // WebSocket errors are usually connection drops (phone locked, network change)
-                // We just log them - actual error handling with codes happens in onclose
-                console.log('WebSocket onerror event (connection issue):', e);
-                // Don't call onError here - it shows confusing messages to users
-                // this.handlers.onError?.(e);
+                console.log('WebSocket onerror event:', e);
+                clearTimeout(connectionTimeout);
+                this.isConnecting = false;
             };
 
             ws.onclose = async (e: any) => {
-                console.log('WebSocket onclose event:', e.code, e.reason); // Log code and reason
+                console.log('[Socket] WebSocket onclose event:', e.code, e.reason, {
+                    shouldReconnect: this.shouldReconnect,
+                    isIntentionallyClosed: this.isIntentionallyClosed,
+                    readyState: ws.readyState
+                });
+                clearTimeout(connectionTimeout);
+                this.isConnecting = false;
                 if (this.ws === ws) this.ws = null;
                 const code = e?.code;
-                const unauthorized = code === 4401 || code === 4001 || code === 1008;
 
-                // Handle unauthorized
-                if (unauthorized && !retried) {
-                    retried = true;
-                    const ok = await (this.handlers.onUnauthorized?.() ?? false);
-                    if (ok) {
-                        this.open();
-                        return;
-                    }
-                }
-
-                // For normal disconnects (phone locked, network change, etc.), 
-                // don't show error - will reconnect on next user action
-                const normalDisconnect = code === 1006 || code === 1001 || code === 1000;
-                if (normalDisconnect) {
-                    console.log('Normal disconnect, will reconnect on next action');
-                    // Don't call onError for normal disconnects
+                // Don't reconnect if intentionally closed
+                if (this.isIntentionallyClosed) {
+                    console.log('[Socket] Connection intentionally closed, skipping reconnect');
                     return;
                 }
+
+                // Code 0 usually means connection closed before establishment or network error
+                // Don't reconnect immediately for code 0 - it might be a server rejection
+                if (code === 0) {
+                    console.log('[Socket] Connection closed with code 0 (before establishment or network error)');
+                    // Code 0 with readyState 3 (CLOSED) means connection never fully established
+                    // This is likely a server rejection or network error - don't reconnect immediately
+                    // Only reconnect if we were actually connected (readyState was 1) before closing
+                    // But readyState in onclose is always 3 (CLOSED), so we need to track connection state
+                    const wasConnected = ws.readyState === 1 || (ws as any)._wasConnected;
+                    if (wasConnected && this.shouldReconnect) {
+                        console.log('[Socket] Was connected before close, scheduling reconnect');
+                        this.scheduleReconnect();
+                    } else {
+                        console.log('[Socket] Connection never fully established (code 0), not reconnecting to avoid loop');
+                        // Don't reconnect - this prevents infinite reconnection loops
+                        // The connection will be retried when token changes or user action triggers it
+                    }
+                    return;
+                }
+
+                // Unauthorized
+                if ((code === 4401 || code === 4001 || code === 1008 || code === 1006) && !retried) {
+                    retried = true;
+                    this.shouldReconnect = false; // Stop auto-reconnect on auth error
+                    const ok = await (this.handlers.onUnauthorized?.() ?? false);
+                    if (ok) {
+                        this.connect();
+                        return;
+                    }
+                    return;
+                }
+
+                // Normal closure (1000) - only reconnect if shouldReconnect is true
+                // This handles cases where server closes connection normally but we want to stay connected
+                if (code === 1000 && !this.shouldReconnect) {
+                    console.log('[Socket] Normal closure with shouldReconnect=false, skipping reconnect');
+                    return;
+                }
+
+                // Reconnect for unexpected closures or when shouldReconnect is true
+                if (this.shouldReconnect) {
+                    this.scheduleReconnect();
+                }
             };
+
         } catch (e) {
+            clearTimeout(connectionTimeout);
+            this.isConnecting = false;
             this.handlers.onError?.(e);
         }
     }
 
-    sendMessage(message: string, sessionId: string, messageID?: string, attachmentIDs?: string[], webSearch?: boolean, thinking?: string, role: string = 'user') {
-        // console.log('Sending message:', message, sessionId, attachmentIDs, webSearch, thinking);
-        const chatID = this.getChatId();
-        const model = this.getModel();
-        // const messageID = this.getMessageId();
-        if (!chatID) return;
+    // Helper to handle concatenated JSON - REMOVED (using NDJSON)
 
-        this.enqueueCommandFrame(chatID);
-
-        const msg = {
-            id: 0,
-            kind: 'data',
-            chat_id: chatID,
-            op: 'message',
-            payload: {
-                message_id: messageID,
-                message: message,
-                role: role, // Use provided role
-                model: model, // Include user's model choice
-                sessionId: sessionId, // Keep sending for server-side logging if needed
-                attachment_ids: attachmentIDs,
-                web_search: webSearch,
-                thinking: thinking,
-            },
-        };
-        // console.log('Sending message:', msg);
-
-        if (!this.ws) {
-            // Queue the message and open the connection; onopen flushes outbox
-            this.outbox.push(msg);
-            this.open(message, sessionId);
+    sendMessage(
+        text: string,
+        chatId: string,
+        sessionId: string,
+        messageID?: string,
+        attachmentIDs?: string[],
+        webSearch?: boolean,
+        thinking?: string,
+        role: string = 'user',
+        model?: string,
+        provider?: string,
+        tools?: any[],
+        userId?: string,
+        endpoint?: string,
+        authToken?: string,
+        command?: any
+    ) {
+        if (!chatId) {
             return;
         }
 
+        // Note: we don't assume we need to send "tools" command frame here anymore
+        // unless explicitly needed. For "team" mode, we might need to handle it.
+        // But let's assume the context is handled by the backend or initial setup.
+
+        const payload: Record<string, unknown> = {
+            message_id: messageID,
+            message: text,
+            role: role,
+            model: model,
+            provider: provider,
+            sessionId: sessionId,
+            attachment_ids: attachmentIDs,
+            web_search: webSearch,
+            thinking: thinking,
+            tools: tools, // Pass integrations to backend
+            // Required for Python RedisSession routing: it publishes to chat:user:<user_id>
+            // Without this, it falls back to session_id (=chat_id) and Go Hub can't map frames to user rooms.
+            user_id: userId,
+            command: command,
+        };
+        if (endpoint !== undefined && endpoint !== '') {
+            payload.endpoint = endpoint;
+        }
+        if (authToken) {
+            payload.auth_token = authToken; // For list/agent tools that call Go API (e.g. list items)
+        }
+        const msg = {
+            id: 0,
+            kind: 'data',
+            chat_id: chatId,
+            op: 'message',
+            payload,
+        };
+
         if (this.isReady()) {
             try {
-                // console.log('send', JSON.stringify(msg));
                 this.ws.send(JSON.stringify(msg));
                 this.touchActivity();
-            } catch {
+            } catch (err) {
                 this.outbox.push(msg);
             }
         } else {
             this.outbox.push(msg);
+            // If not connected, we should probably try to connect?
+            // But open() doesn't take params anymore.
+            // We assume open() is called by App.
+            if (!this.ws) {
+                this.open();
+            }
         }
     }
 
-    private enqueueCommandFrame(chatID?: string | null) {
-        const mode = this.getMode?.() || 'agent';
-        const command = this.getCommand?.();
-        if (!command || mode !== 'team') return;
-        if (this.sentCommandFrame) return;
+    /**
+     * Send client-extracted facts to backend (async, after local extraction completes).
+     * Does not block chat; used for personalization in future sessions.
+     */
+    sendStoreFacts(chatId: string, userId: string, extractedFacts: string[]) {
+        if (!userId || !extractedFacts?.length) {
+            console.log('[Socket] sendStoreFacts: no userId or empty facts, skipping');
+            return;
+        }
 
-        const payloadValue = command;
-        const frame = {
+        console.log(`[Socket] Sending ${extractedFacts.length} extracted fact(s) to server for user ${userId}`);
+        extractedFacts.forEach((fact, idx) => {
+            console.log(`[Socket]   Fact ${idx + 1}: ${fact}`);
+        });
+
+        const msg = {
             id: 0,
-            kind: 'meta',
-            op: 'tools',
-            chat_id: chatID || this.getChatId(),
+            kind: 'data',
+            chat_id: chatId,
+            op: 'store_facts',
             payload: {
-                command: payloadValue,
-                team: payloadValue,
-                team_desc: payloadValue,
+                user_id: userId,
+                extracted_facts: extractedFacts,
             },
         };
-        this.sentCommandFrame = true;
-        this.outbox.unshift(frame);
+        if (this.isReady()) {
+            try {
+                this.ws.send(JSON.stringify(msg));
+                this.touchActivity();
+                console.log('[Socket] ✓ Facts sent successfully via WebSocket');
+            } catch (err) {
+                // Non-critical: put in outbox so it gets sent when connection is restored
+                console.warn('[Socket] sendStoreFacts failed, queuing for retry', err);
+                this.outbox.push(msg);
+            }
+        } else {
+            // Queue for later — same as sendMessage; processOutbox will send when socket connects
+            this.outbox.push(msg);
+            console.log('[Socket] Facts queued (socket not ready), will send when connected');
+        }
     }
 
-    sendTools(tools: any[]) {
-        const chatID = this.getChatId();
+    // Send a command or tools frame
+    sendMeta(chatId: string, op: string, payload: any) {
         const frame = {
             id: 0,
             kind: 'meta',
-            op: 'tools',
-            chat_id: chatID,
-            payload: {
-                tools: tools,
-            },
+            op: op,
+            chat_id: chatId,
+            payload: payload
         };
 
         if (this.isReady()) {
-            try {
-                // console.log('Sending tools frame:', JSON.stringify(frame));
-                this.ws.send(JSON.stringify(frame));
-            } catch (err) {
-                console.error('Failed to send tools frame:', err);
-            }
+            this.ws.send(JSON.stringify(frame));
         } else {
-            // Queue it? Ideally yes, but tools are usually sent on connect.
-            // If we put it in outbox, it will be sent on open.
             this.outbox.push(frame);
         }
     }
 
-    sendStop() {
-        const chatID = this.getChatId();
-        const frame = {
-            id: 0,
-            kind: 'meta',
-            op: 'stop',
-            chat_id: chatID,
-            payload: {},
-        };
-
-        if (this.isReady()) {
-            try {
-                console.log('Sending stop frame');
-                this.ws.send(JSON.stringify(frame));
-            } catch (err) {
-                console.error('Failed to send stop frame:', err);
-            }
-        }
-        // Close the connection to ensure agent stops
-        this.close();
+    changeModel(chatId: string, newModel: string) {
+        this.sendMeta(chatId, 'model', { model: newModel });
     }
 
-    changeModel(newModel: string) {
-        if (!this.isReady()) {
-            // console.warn('Cannot change model: WebSocket not ready');
-            return;
-        }
-
-        const chatID = this.getChatId();
-        const frame = {
-            id: 0,
-            kind: 'meta',
-            op: 'model',
-            chat_id: chatID,
-            payload: {
-                model: newModel,
-            },
-        };
-
-        try {
-            console.log('Changing model to:', newModel);
-            this.ws.send(JSON.stringify(frame));
-            this.touchActivity();
-        } catch (err) {
-            console.error('Failed to send model change frame:', err);
-        }
+    sendStop(chatId: string) {
+        this.sendMeta(chatId, 'stop', {});
     }
 
     close() {
+        this.isIntentionallyClosed = true;
+        this.shouldReconnect = false;
+        this.isConnecting = false;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
         try {
             this.ws?.close();
         } catch { }
-
         this.ws = null;
         this.outbox = [];
-        this.sentCommandFrame = false;
-
-        if (this.idleTimer) {
-            try {
-                clearTimeout(this.idleTimer);
-            } catch { }
-            this.idleTimer = null;
-        }
     }
 }
+
+export const socket = new ChatSocket();

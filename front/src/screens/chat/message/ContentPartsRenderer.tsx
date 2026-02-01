@@ -1,87 +1,142 @@
 import React, { useMemo } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, Alert } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import Markdown from 'react-native-markdown-display';
 import { useChat } from '../context';
 import { ContentPart } from './models';
 import { useTheme } from '../../../context/ThemeContext';
 import { createMarkdownStyles } from './dynamicStyles';
-import { SingleToolCall, ReasoningBlock, MemberResponseBlock, CollapsibleSteps } from './ToolCalls';
+import { createMarkdownRules } from './markdownRules';
+import { SingleToolCall, ReasoningBlock, AgentThinkingBlock, CollapsibleSteps } from './ToolCalls';
+import { DocumentBlock } from './DocumentBlock';
+import { PollComponent, ButtonsComponent } from './UIComponents';
+
+/**
+ * Detects if a string is a backend JSON log message that shouldn't be displayed in chat.
+ * Attributes looked for: "level", "logger", "timestamp", "message" inside a JSON object.
+ */
+function isLogMessage(text: string): boolean {
+    if (!text || !text.trim().startsWith('{')) return false;
+    try {
+        // Quick heuristic check before parsing to avoid perf hit on all messages
+        if (!text.includes('"level"') && !text.includes('"timestamp"')) return false;
+
+        const obj = JSON.parse(text);
+        if (typeof obj === 'object' && obj !== null) {
+            // Check for common log fields from backend (RailwayJsonFormatter)
+            if ('level' in obj && 'timestamp' in obj && 'message' in obj) {
+                return true;
+            }
+        }
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Helper to parse "Document" JSON from text (AnalystOutput, ArchitectPlan, etc.)
+function parseDocument(text: string): { msg: string, content: any } | null {
+    if (!text) return null;
+
+    // Look for JSON code block: ```json { ... } ```
+    const jsonBlockRegex = /```json\s*(\{[\s\S]*?\})\s*```/;
+    const match = text.match(jsonBlockRegex);
+
+    if (match && match[1]) {
+        try {
+            const obj = JSON.parse(match[1]);
+            // Check for our specific schema signatures
+            if (obj && typeof obj === 'object' && 'msg' in obj && 'content' in obj) {
+                return { msg: obj.msg, content: obj.content };
+            }
+        } catch (e) {
+            // Failed to parse, ignore
+        }
+    }
+    return null;
+}
 
 export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
     const { showToolCalls, showReasoning, showMemberResponses } = useChat();
     const { theme } = useTheme();
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
+    const handleCodeCopy = (code: string) => {
+        Clipboard.setString(code);
+        // Optional: visible feedback
+        console.log('Code copied to clipboard');
+    };
+
+    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), []);
+
     const filteredParts = useMemo(() => {
-        // Optional debug logging, can be removed later
-        // console.log('[ContentPartsRenderer] Filtering parts:', { partsLength: parts.length });
         return parts.filter(part => {
             if (part.type === 'tool_call' && !showToolCalls) return false;
             if (part.type === 'reasoning' && !showReasoning) return false;
-            if ((part as any).type === 'member_response') {
-                const memberPart = part as any;
-                // Always show Narrator, otherwise respect the toggle
-                if (memberPart.agent_name !== 'Narrator' && !showMemberResponses) {
-                    return false;
-                }
+
+            // Filter out backend leaked logs
+            if (part.type === 'text' && isLogMessage(part.text)) {
+                return false;
             }
+
+            // Member responses in team mode - always show as regular text
+            // (no longer filtered by showMemberResponses)
             return true;
         });
-    }, [parts, showToolCalls, showReasoning, showMemberResponses]);
+    }, [parts, showToolCalls, showReasoning]);
 
     // Merge consecutive text parts for proper markdown rendering
+    // Also treat member_response as text in team mode
     const mergedParts = useMemo(() => {
         const result: ContentPart[] = [];
         for (const part of filteredParts) {
-            if (part.type === 'text') {
+            // Treat both 'text' and 'member_response' as text content
+            const isTextLike = part.type === 'text' || (part as any).type === 'member_response';
+            const textContent = part.type === 'text' ? part.text : (part as any).text;
+
+            if (isTextLike && textContent) {
                 const last = result[result.length - 1];
                 if (last && last.type === 'text') {
-                    // Merge with previous text part
-                    last.text = (last.text || '') + (part.text || '');
+                    // Merge with previous text part, adding separator to avoid text gluing
+                    last.text = (last.text || '') + '\n\n' + textContent;
                 } else {
                     // Create new text part (copy to avoid mutation)
-                    result.push({ type: 'text', text: part.text || '' });
+                    result.push({ type: 'text', text: textContent });
                 }
-            } else {
+            } else if (!isTextLike) {
                 result.push(part);
             }
         }
         return result;
     }, [filteredParts]);
 
-    // Group parts for rendering: consecutive "internal" parts (tool_call, reasoning, member_response) should be grouped
+    // Group parts for rendering: consecutive "internal" parts (tool_call, reasoning) should be grouped
     const groupedParts = useMemo(() => {
-        const result: { type: 'group' | 'text', parts?: ContentPart[], part?: ContentPart }[] = [];
-        let currentGroup: ContentPart[] = [];
+        const result: { type: 'group' | 'text' | 'member', parts?: ContentPart[], part?: ContentPart }[] = [];
+        let currentInternalGroup: ContentPart[] = [];
 
         const isInternal = (part: ContentPart) => {
-            return part.type === 'tool_call' || part.type === 'reasoning' || (part as any).type === 'member_response';
+            // member_response is now treated as regular text, not internal
+            return part.type === 'tool_call' || part.type === 'reasoning';
+        };
+
+        const flushInternalGroup = () => {
+            if (currentInternalGroup.length > 0) {
+                result.push({ type: 'group', parts: [...currentInternalGroup] });
+                currentInternalGroup = [];
+            }
         };
 
         for (const part of mergedParts) {
             if (isInternal(part)) {
-                // Special case: Narrator member_response should be treated as text
-                if ((part as any).type === 'member_response' && (part as any).agent_name === 'Narrator') {
-                    if (currentGroup.length > 0) {
-                        result.push({ type: 'group', parts: [...currentGroup] });
-                        currentGroup = [];
-                    }
-                    // Treat as text part for rendering purposes
-                    result.push({ type: 'text', part: { type: 'text', text: `**Narrator:** ${(part as any).text}` } });
-                } else {
-                    currentGroup.push(part);
-                }
+                currentInternalGroup.push(part);
             } else {
-                if (currentGroup.length > 0) {
-                    result.push({ type: 'group', parts: [...currentGroup] });
-                    currentGroup = [];
-                }
+                // Text part
+                flushInternalGroup();
                 result.push({ type: 'text', part });
             }
         }
-        if (currentGroup.length > 0) {
-            result.push({ type: 'group', parts: [...currentGroup] });
-        }
+        flushInternalGroup();
         return result;
     }, [mergedParts]);
 
@@ -90,32 +145,80 @@ export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPar
             {groupedParts.map((group, groupIndex) => {
                 if (group.type === 'text' && group.part) {
                     const part = group.part;
-                    // Ensure part is text type for TS
-                    if (part.type !== 'text') return null;
+                    const textContent = (part as any).text || '';
+
+                    // Try to parse as a structured Document first
+                    const documentData = parseDocument(textContent);
+
+                    if (documentData) {
+                        // Team Lead text: render as plain Markdown (no bubble)
+                        return (
+                            <View key={`doc-${groupIndex}`}>
+                                <Pressable
+                                    onLongPress={() => onLongPress(documentData.msg)}
+                                    delayLongPress={250}
+                                    style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+                                >
+                                    <Markdown style={markdownStyles as any} rules={markdownRules}>
+                                        {documentData.msg}
+                                    </Markdown>
+                                </Pressable>
+                                <DocumentBlock title="Детали" content={documentData.content} />
+                            </View>
+                        );
+                    }
+
+                    // Team Lead text: render as plain Markdown (no bubble) - same for both modes
                     return (
                         <Pressable
                             key={`text-${groupIndex}`}
-                            onLongPress={() => onLongPress(part.text || '')}
+                            onLongPress={() => onLongPress(textContent)}
                             delayLongPress={250}
                             style={({ pressed }) => [pressed && { opacity: 0.75 }]}
                         >
-                            <Markdown style={markdownStyles as any}>
-                                {part.text || ''}
+                            <Markdown style={markdownStyles as any} rules={markdownRules}>
+                                {textContent}
                             </Markdown>
                         </Pressable>
                     );
+
                 } else if (group.type === 'group' && group.parts) {
                     return (
                         <CollapsibleSteps key={`group-${groupIndex}`}>
                             {group.parts.map((part, index) => {
                                 if (part.type === 'tool_call') {
+                                    // Custom UI Renderers
+                                    if (part.tool_call.name === 'ui_client_show_poll') {
+                                        const args = typeof part.tool_call.arguments === 'string' 
+                                            ? JSON.parse(part.tool_call.arguments) 
+                                            : part.tool_call.arguments;
+                                        return (
+                                            <PollComponent 
+                                                key={`poll-${index}`}
+                                                question={args.question}
+                                                options={args.options}
+                                                allowMultiple={args.allow_multiple}
+                                            />
+                                        );
+                                    }
+                                    if (part.tool_call.name === 'ui_client_show_buttons') {
+                                        const args = typeof part.tool_call.arguments === 'string' 
+                                            ? JSON.parse(part.tool_call.arguments) 
+                                            : part.tool_call.arguments;
+                                        return (
+                                            <ButtonsComponent
+                                                key={`btns-${index}`}
+                                                text={args.text}
+                                                buttons={args.buttons}
+                                            />
+                                        );
+                                    }
+                                    // Default Tool Call Renderer
                                     return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
                                 } else if (part.type === 'reasoning') {
                                     return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
-                                } else if ((part as any).type === 'member_response') {
-                                    const memberPart = part as any;
-                                    return <MemberResponseBlock key={`member-${index}`} agentName={memberPart.agent_name} text={memberPart.text} />;
                                 }
+                                // member_response is now handled as text above
                                 return null;
                             })}
                         </CollapsibleSteps>

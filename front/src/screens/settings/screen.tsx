@@ -116,12 +116,9 @@ export default function SettingsModal({ visible, onClose }: Props) {
         { label: 'Local', url: 'http://localhost:8080/api' },
     ];
 
-    const themesList: { label: string; value: ThemeName }[] = [
-        { label: 'Tokyo Night', value: 'tokyoNight' },
-        { label: 'One Dark', value: 'oneDark' },
-        { label: 'Serika Dark', value: 'serikaDark' },
-        { label: 'Light (Visual Studio)', value: 'visualStudioLight' },
-    ];
+    const themesList: { label: string; value: ThemeName }[] = Object.entries(themes).map(
+        ([key, descriptor]) => ({ label: descriptor.name, value: key as ThemeName })
+    );
 
     return (
         <>

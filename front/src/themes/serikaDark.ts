@@ -8,6 +8,7 @@ const palette: ThemePalette = {
     cyan: '#56b6c2',
     blue: '#61afef',
     magenta: '#c678dd',
+    purple: '#c678dd',  // Same as magenta
     black: '#1e2023',
     white: '#d1d0c5',
     fg: '#d1d0c5',
@@ -40,6 +41,24 @@ export const serikaDarkTheme: ThemeDescriptor = {
         surface: '#3b3e42',
         surfaceAlt: '#2c2e31',
         surfaceHighlight: palette.selection ?? '#4e5157',
+        primary: palette.yellow,
+        error: palette.red,
+        card: '#3b3e42',
+        // Extended semantic colors
+        warning: palette.orange,
+        success: palette.green,
+        info: palette.cyan,
+        // Source-specific colors
+        calendar: palette.blue,
+        email: palette.red,
+        task: palette.green,
+        // Code colors
+        codeBg: palette.currentLine,
+        codeInlineBg: '#3b3e42',
+        codeText: palette.fg,
+        // Blockquote colors
+        blockquoteBg: '#2c2e31',       // surfaceAlt
+        blockquoteBorder: palette.yellow, // accent
     },
 };
 

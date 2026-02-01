@@ -5,34 +5,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/datatypes"
 )
 
-// TaskStatus defines the state of a task
-type TaskStatus string
-
-const (
-	TaskStatusPending   TaskStatus = "pending"
-	TaskStatusRunning   TaskStatus = "running"
-	TaskStatusCompleted TaskStatus = "completed"
-	TaskStatusFailed    TaskStatus = "failed"
-)
-
-// Task represents a scheduled job
-type Task struct {
-	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	UserID    uuid.UUID      `gorm:"type:uuid;not null"`
-	ChatID    uuid.UUID      `gorm:"type:uuid;not null"`
-	Type      string         `gorm:"type:varchar(50);not null"` // e.g. "agent_message"
-	Payload   datatypes.JSON `gorm:"type:jsonb;not null"`       // e.g. {"message": "check news"}
-	Tools     datatypes.JSON `gorm:"type:jsonb"`                // Tools that were active when task was created
-	CronExpr  string         `gorm:"type:varchar(50)"`          // Optional cron expression
-	ExecuteAt time.Time      `gorm:"not null"`
-	Status    TaskStatus     `gorm:"type:varchar(20);default:'pending';not null"`
-	Error     string         `gorm:"type:text"`
-	CreatedAt time.Time      `gorm:"not null"`
-	UpdatedAt time.Time      `gorm:"not null"`
-}
+// Methods for Task are kept here while models are in models.go
 
 // CreateTask creates a new task
 func (s *Storage) CreateTask(ctx context.Context, task *Task) error {

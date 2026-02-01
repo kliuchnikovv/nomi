@@ -12,7 +12,10 @@ type Chat struct {
 	Title      string     `json:"title"`
 	Mode       string     `json:"mode"`              // 'agent' or 'team'
 	TeamID     *string    `json:"team_id,omitempty"` // null for agent mode
-	Icon       string     `json:"icon,omitempty"`    // Icon name provided by backend
+	ProjectID  *uuid.UUID `json:"project_id,omitempty"`
+	TaskID     *uuid.UUID `json:"task_id,omitempty"`
+	ListID     *uuid.UUID `json:"list_id,omitempty"` // list chat: manage list items via agent
+	Icon       string     `json:"icon,omitempty"`   // Icon name provided by backend
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 	ArchivedAt *time.Time `json:"archived_at"`
@@ -36,18 +39,19 @@ type Attachment struct {
 }
 
 type Message struct {
-	ID            uuid.UUID    `json:"id"`
-	ChatID        uuid.UUID    `json:"chat_id"`
-	Sender        uuid.UUID    `json:"sender"`
-	Role          Role         `json:"role"`
-	Text          string       `json:"text"`
-	ToolCalls     interface{}  `json:"tool_calls,omitempty"`
-	ContentParts  interface{}  `json:"content_parts,omitempty"`
-	Reasoning     string       `json:"reasoning,omitempty"`
-	Model         string       `json:"model,omitempty"`
-	Actions       interface{}  `json:"actions,omitempty"`       // D&D action buttons
-	Attachments   []Attachment `json:"attachments,omitempty"`    // For reading
-	AttachmentIDs []uuid.UUID  `json:"attachment_ids,omitempty"` // For writing
-	WebSearch     bool         `json:"web_search,omitempty"`     // For writing
-	CreatedAt     time.Time    `json:"created_at"`
+	ID            uuid.UUID     `json:"id"`
+	ChatID        uuid.UUID     `json:"chat_id"`
+	Sender        uuid.UUID     `json:"sender"`
+	Role          Role          `json:"role"`
+	Text          string        `json:"text"`
+	AgentID       *string       `json:"agent_id,omitempty"` // For multi-agent teams
+	ToolCalls     []ToolCall    `json:"tool_calls,omitempty"`
+	ContentParts  []ContentPart `json:"content_parts,omitempty"`
+	Reasoning     string        `json:"reasoning,omitempty"`
+	Model         string        `json:"model,omitempty"`
+	Actions       []Action      `json:"actions,omitempty"`        // D&D action buttons
+	Attachments   []Attachment  `json:"attachments,omitempty"`    // For reading
+	AttachmentIDs []uuid.UUID   `json:"attachment_ids,omitempty"` // For writing
+	WebSearch     bool          `json:"web_search,omitempty"`     // For writing
+	CreatedAt     time.Time     `json:"created_at"`
 }

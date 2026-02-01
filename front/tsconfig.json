@@ -1,5 +1,12 @@
 {
   "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "react-native-gifted-chat": ["src/types/gifted-chat-shim.d.ts"],
+      "react-native-gifted-chat/*": ["src/types/gifted-chat-shim.d.ts"]
+    }
+  },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["**/node_modules", "**/Pods"]
 }

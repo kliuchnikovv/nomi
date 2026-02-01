@@ -15,14 +15,17 @@ import {
 
     Square,
     Eye,
-    EyeClosed
+    EyeClosed,
+    MagicWand,
+    Code
 } from 'iconoir-react-native';
+
 
 import { ActionSheetIOS, Keyboard, Pressable, Text, TextInput, View, Image, ActivityIndicator, ScrollView, StyleSheet, Alert, NativeModules } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from './styles.tsx';
 import { useChat } from '../context';
-import { ContextMenu, ContextMenuItem } from '../../../components/ContextMenu';
+import { ContextMenu, ContextMenuItem, ContextMenuSection } from '../../../components/ContextMenu';
 import { useTheme } from '../../../context/ThemeContext.tsx';
 import { useAuth } from '../../auth/context';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
@@ -50,6 +53,8 @@ export default function ChatInput(props: Props) {
     const [modelMenuVisible, setModelMenuVisible] = useState(false);
     const [teamMenuVisible, setTeamMenuVisible] = useState(false);
     const [plusMenuVisible, setPlusMenuVisible] = useState(false);
+    const [detailMenuVisible, setDetailMenuVisible] = useState(false);
+
 
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
 
@@ -58,25 +63,33 @@ export default function ChatInput(props: Props) {
     const styles = useMemo(() => createStyles(theme), [theme]);
 
 
-    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration, showToolCalls, setShowToolCalls, showReasoning, setShowReasoning, showMemberResponses, setShowMemberResponses } = useChat();
+    const { selectedModel, setSelectedModel, availableModels, chatMode, setChatMode, teamCommand, setTeamCommand, messages, sendMessage, selectedTeamId, selectTeam, thinkingLevel, setThinkingLevel, assistantWorking, stopGeneration, detailLevel, setDetailLevel, showToolCalls } = useChat();
     const { user, updateUser } = useAuth();
     const { activeChatID } = useMain();
 
 
-    const handleSend = useCallback(() => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSend = useCallback(async () => {
+        if (isSubmitting) return;
         const text = (value ?? '').trim();
         const hasAttachments = attachments.length > 0 && !attachments.some(a => a.loading);
 
         if (!text && !hasAttachments) return;
 
-        // Pass full attachments (including URI) to sendMessage for optimistic updates
-        // webSearchEnabled is now always valid/handled, but we can pass true or ignore it if backend handles it
-        sendMessage(text, attachments, true, thinkingLevel);
+        setIsSubmitting(true);
+        try {
+            // Pass full attachments (including URI) to sendMessage for optimistic updates
+            // webSearchEnabled is now always valid/handled, but we can pass true or ignore it if backend handles it
+            await sendMessage(text, attachments, true, thinkingLevel);
+        } finally {
+            setIsSubmitting(false);
+        }
 
         Keyboard.dismiss();
         setValue('');
         setAttachments([]);
-    }, [value, attachments, sendMessage, thinkingLevel]);
+    }, [value, attachments, sendMessage, thinkingLevel, isSubmitting]);
 
     // Reset input when switching chats
     useEffect(() => {
@@ -240,20 +253,46 @@ export default function ChatInput(props: Props) {
             onPress: () => executeWithDelay(takePhoto),
         },
 
-        // Display settings - single toggle for all details
+        // Detail levels - single item to open sub-menu
         {
-            id: 'toggle_details',
-            label: `Details: ${showToolCalls ? 'Show' : 'Hide'}`,
-            icon: showToolCalls ? <Eye width={20} height={20} color={theme.accent} /> : <EyeClosed width={20} height={20} color="#fff" />,
+            id: 'detail_level',
+            label: 'Detail Level',
+            icon: <Eye width={20} height={20} color={theme.accent} />,
             onPress: () => {
-                const newValue = !showToolCalls;
-                setShowToolCalls(newValue);
-                setShowReasoning(newValue);
-                setShowMemberResponses(newValue);
                 setPlusMenuVisible(false);
+                // Mini delay to ensure first menu closes before second opens (optional but smoother)
+                setTimeout(() => setDetailMenuVisible(true), 300);
             }
         },
-    ], [pickDocument, pickImage, takePhoto, executeWithDelay, theme.accent, showToolCalls, setShowToolCalls, setShowReasoning, setShowMemberResponses]);
+    ], [pickDocument, pickImage, takePhoto, executeWithDelay, theme.accent, detailLevel, setDetailLevel]);
+
+    const detailMenuItems: ContextMenuItem[] = useMemo(() => [
+        {
+            id: 'hide',
+            label: 'Hide Details',
+            icon: <EyeClosed width={20} height={20} color={detailLevel === 'hide' ? theme.accent : "#fff"} />,
+            onPress: () => { setDetailLevel('hide'); setDetailMenuVisible(false); }
+        },
+        {
+            id: 'tool_calls',
+            label: 'Tool Calls Only',
+            icon: <Code width={20} height={20} color={detailLevel === 'tool_calls' ? theme.accent : "#fff"} />,
+            onPress: () => { setDetailLevel('tool_calls'); setDetailMenuVisible(false); }
+        },
+        {
+            id: 'think',
+            label: 'Thinking Only',
+            icon: <MagicWand width={20} height={20} color={detailLevel === 'think' ? theme.accent : "#fff"} />,
+            onPress: () => { setDetailLevel('think'); setDetailMenuVisible(false); }
+        },
+        {
+            id: 'all',
+            label: 'Show Everything',
+            icon: <Eye width={20} height={20} color={detailLevel === 'all' ? theme.accent : "#fff"} />,
+            onPress: () => { setDetailLevel('all'); setDetailMenuVisible(false); }
+        },
+    ], [detailLevel, setDetailLevel, theme.accent]);
+
 
     const removeAttachment = (id: string) => {
         setAttachments(prev => prev.filter(a => a.id !== id));
@@ -276,30 +315,40 @@ export default function ChatInput(props: Props) {
         setModelMenuVisible(true);
     }, []);
 
-    const modelMenuItems: ContextMenuItem[] = useMemo(() => {
+    const modelMenuSections: ContextMenuSection[] = useMemo(() => {
         // Filter models: when thinking is enabled, show only models that support it
         let filteredModels = thinkingLevel !== 'off'
             ? availableModels.filter(model => model.supports_thinking === true)
             : availableModels;
 
-        // Fallback: If filtering leaves no models (e.g. user selected High thinking but no models support it yet due to API change or bug),
-        // show all models to avoid empty menu.
         if (filteredModels.length === 0) {
             filteredModels = availableModels;
         }
 
-        return filteredModels.map(model => ({
-            id: model.id,
-            label: model.name || model.id,
-            icon: model.id === selectedModel ? (
-                <Check width={20} height={20} color={theme.accent} />
-            ) : undefined,
-            onPress: () => {
-                const selectedModelId = model.id;
-                setSelectedModel(selectedModelId);
-                // Team command update is handled by effect in context
-                setModelMenuVisible(false);
-            },
+        const providerDisplayName = (provider: string | undefined) =>
+            provider ? provider.charAt(0).toUpperCase() + provider.slice(1).toLowerCase() : 'Other';
+
+        const byProvider = new Map<string, ContextMenuItem[]>();
+        for (const model of filteredModels) {
+            const provider = model.provider ?? 'other';
+            const items = byProvider.get(provider) ?? [];
+            items.push({
+                id: model.id,
+                label: model.name || model.id,
+                icon: model.id === selectedModel ? (
+                    <Check width={20} height={20} color={theme.accent} />
+                ) : undefined,
+                onPress: () => {
+                    setSelectedModel(model.id);
+                    setModelMenuVisible(false);
+                },
+            });
+            byProvider.set(provider, items);
+        }
+
+        return Array.from(byProvider.entries()).map(([provider, items]) => ({
+            title: providerDisplayName(provider),
+            items,
         }));
     }, [availableModels, selectedModel, setSelectedModel, theme.accent, thinkingLevel]);
 
@@ -395,6 +444,7 @@ export default function ChatInput(props: Props) {
                 {/* Top row: Input field */}
                 <TextInput
                     multiline
+                    autoCapitalize="sentences"
                     style={styles.input}
                     placeholder="Type a message..."
                     placeholderTextColor="rgba(192, 202, 245, 0.6)"
@@ -456,7 +506,7 @@ export default function ChatInput(props: Props) {
                     </View>
 
                     <View style={styles.rightActions}>
-                        {assistantWorking ? (
+                        {(assistantWorking && chatMode === 'agent') ? (
                             <Pressable
                                 onPress={stopGeneration}
                                 style={({ pressed }) => [
@@ -478,15 +528,19 @@ export default function ChatInput(props: Props) {
                                 style={({ pressed }) => [
                                     styles.sendBtn,
                                     isSendDisabled && styles.iconBtnDisabled,
-                                    pressed && !isSendDisabled && styles.sendBtnPressed,
+                                    (pressed && !isSendDisabled && !isSubmitting) && styles.sendBtnPressed,
                                 ]}
-                                disabled={isSendDisabled}
+                                disabled={isSendDisabled || isSubmitting}
                             >
-                                <ArrowUp
-                                    width={24}
-                                    height={24}
-                                    color={theme.background}
-                                />
+                                {isSubmitting ? (
+                                    <ActivityIndicator size="small" color={theme.background} />
+                                ) : (
+                                    <ArrowUp
+                                        width={24}
+                                        height={24}
+                                        color={theme.background}
+                                    />
+                                )}
                             </Pressable>
                         )}
                     </View>
@@ -497,7 +551,7 @@ export default function ChatInput(props: Props) {
             <ContextMenu
                 visible={modelMenuVisible}
                 onClose={() => setModelMenuVisible(false)}
-                items={modelMenuItems}
+                sections={modelMenuSections}
                 position="bottom-left"
                 title="Select Model"
             />
@@ -516,6 +570,15 @@ export default function ChatInput(props: Props) {
                 items={plusMenuItems}
                 position="bottom-left"
             />
+
+            <ContextMenu
+                visible={detailMenuVisible}
+                onClose={() => setDetailMenuVisible(false)}
+                items={detailMenuItems}
+                position="bottom-left"
+                title="Select Detail Level"
+            />
+
 
 
 

@@ -4,6 +4,7 @@ from agno.models.base import Model
 from agno.db.postgres import PostgresDb
 from agno.tools import Toolkit, Function
 from src.models.safe_gemini import SafeGemini
+from src.tools.models import ToolSpec
 import logging
 import os
 
@@ -17,8 +18,11 @@ class TeamFactory:
         self.model = model
         self.debug_mode = debug_mode
 
-    async def build(self, command_desc: dict, session_id: str) -> Team:
+    async def build(self, command_desc: dict, session_id: str, tools_specs: Optional[List[ToolSpec]] = None, user_id: Optional[str] = None) -> Team:
         logger.info("[WS] Building Team from command description: %s", command_desc)
+        
+        # Priority for user_id: 1. Explicitly passed argument, 2. Command description, 3. Session/Chat ID
+        effective_user_id = user_id or command_desc.get("user_id") or session_id
         
         team_type = command_desc.get("type", "").lower()
         
@@ -48,11 +52,48 @@ class TeamFactory:
 
         elif team_type == "development_team":
             from src.teams.development.team import DevelopmentTeam
+            from src.tools.factory import build as build_tools, ToolsConfig
             logger.info("[WS] Instantiating DevelopmentTeam")
+            
+            # Try to get GitHub token from command_desc or environment
+            github_token = command_desc.get("github_token") or os.getenv("GITHUB_TOKEN")
+            
+            # Get Jules API key from user integration (passed from Go API)
+            jules_api_key = command_desc.get("jules_api_key")
+            
+            # Get auth token for API calls
+            auth_token = command_desc.get("auth_token")
+
+            # Get project_id and task_id context
+            project_id = command_desc.get("project_id")
+            task_id = command_desc.get("task_id")
+            
+            logger.info(
+                "[TeamFactory] Building DevelopmentTeam with context: project_id=%s, task_id=%s, user_id=%s",
+                project_id, task_id, effective_user_id
+            )
+
+            # Build client tools if specs provided
+            client_tools = []
+            if tools_specs:
+                config = ToolsConfig()
+                for spec in tools_specs:
+                    if spec.enabled:
+                        config.add(spec.name, **spec.params)
+                client_tools = await build_tools(config)
+
             return DevelopmentTeam(
                 model=self.model,
                 db=self.db,
-                debug_mode=self.debug_mode
+                github_token=github_token,
+                jules_api_key=jules_api_key,
+                debug_mode=self.debug_mode,
+                user_id=effective_user_id,
+                project_id=project_id,
+                task_id=task_id,
+                auth_token=auth_token,
+                db_url=self.db.db_url if self.db else None,
+                client_tools=client_tools,
             )
 
         elif team_type == "dnd_team":
@@ -61,7 +102,7 @@ class TeamFactory:
             logger.info("[WS] Instantiating DnDTeam with room_id=%s", session_id)
             
             # Define model IDs
-            # fast_model_id = 'gemini-2.0-flash-exp'
+            # fast_model_id = 'gemini-2.0-flash'
             # pro_model_id = 'gemini-1.5-pro'
             
             # Models from screenshot (Free Tier)
@@ -97,7 +138,7 @@ class TeamFactory:
             logger.info("[WS] DnDTeam using Fast Model: %s, Pro Model: %s", fast_model_id, pro_model_id)
             
             # Get Knowledge from agent_factory
-            knowledge = self.agent_factory._get_or_create_knowledge() if hasattr(self.agent_factory, '_get_or_create_knowledge') else None
+            knowledge = self.agent_factory.get_knowledge()
             
             team = DnDTeam(
                 fast_model=fast_model,
@@ -122,7 +163,10 @@ class TeamFactory:
                     session_id=session_id,
                     model_name=p_model,
                     agent_type=p_type,
-                    command_desc=p_data
+                    command_desc=p_data,
+                    user_id=effective_user_id,
+                    chat_id=session_id, # Fallback chat_id
+                    tools_specs=tools_specs
                 )
                 members.append(member)
         

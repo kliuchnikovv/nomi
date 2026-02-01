@@ -82,14 +82,15 @@ export const GreetingCard = ({ userName }: { userName?: string }) => {
         return 'Good evening';
     };
 
-    const getWeatherIcon = (code: number) => {
-        // WMO Weather interpretation codes
-        if (code === 0) return 'sunny';
-        if (code <= 3) return 'partly-sunny';
-        if (code <= 67) return 'rainy';
-        if (code <= 77) return 'snow';
-        if (code <= 99) return 'thunderstorm';
-        return 'cloudy';
+    const getWeatherIconAndColor = (code: number) => {
+        // WMO Weather interpretation codes with distinct colors
+        if (code === 0) return { icon: 'sunny', color: '#FFB800' };           // Clear sky - warm yellow
+        if (code <= 3) return { icon: 'partly-sunny', color: '#F59E0B' };     // Partly cloudy - orange
+        if (code <= 48) return { icon: 'cloudy', color: '#94A3B8' };          // Foggy/cloudy - grey
+        if (code <= 67) return { icon: 'rainy', color: '#3B82F6' };           // Rain - blue
+        if (code <= 77) return { icon: 'snow', color: '#67E8F9' };            // Snow - light cyan
+        if (code <= 99) return { icon: 'thunderstorm', color: '#A855F7' };    // Thunderstorm - purple
+        return { icon: 'cloudy', color: '#94A3B8' };
     };
 
     const formatDate = () => {
@@ -102,6 +103,8 @@ export const GreetingCard = ({ userName }: { userName?: string }) => {
         };
         return now.toLocaleDateString('en-US', options);
     };
+
+    const weatherInfo = weather ? getWeatherIconAndColor(weather.weathercode) : null;
 
     return (
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -116,12 +119,12 @@ export const GreetingCard = ({ userName }: { userName?: string }) => {
                 </View>
                 {loading ? (
                     <ActivityIndicator size="small" color={theme.primary} />
-                ) : weather ? (
+                ) : weather && weatherInfo ? (
                     <TouchableOpacity onPress={handleWeatherPress} style={styles.weatherContainer}>
                         <Ionicons
-                            name={getWeatherIcon(weather.weathercode) as any}
+                            name={weatherInfo.icon as any}
                             size={32}
-                            color={theme.primary}
+                            color={weatherInfo.color}
                         />
                         <Text style={[styles.temperature, { color: theme.text }]}>
                             {Math.round(weather.temperature)}°

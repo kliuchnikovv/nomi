@@ -16,12 +16,17 @@ function generateUUID(): string {
 }
 
 // Types
+export type StorageType = 'client' | 'server' | 'hybrid';
+
 export interface Integration {
     id: string;
     provider: 'gmail' | 'calendar' | 'github' | 'jules';
     name: string;
     enabled: boolean;
     accountEmail?: string;
+    storageType?: StorageType; // Тип хранения данных
+    supportsBackgroundTasks?: boolean; // Поддерживает ли фоновые процессы
+    systemEventListeners?: string[]; // Список системных событий
     createdAt: Date;
     updatedAt: Date;
 }

@@ -5,7 +5,6 @@ from agno.agent import Agent
 from agno.models.base import Model
 from agno.db.postgres import PostgresDb
 from agno.knowledge import Knowledge
-from agno.knowledge.document import Document
 from agno.tools import Toolkit, Function
 from src.knowledge.factory import build_knowledge_base
 
@@ -20,14 +19,17 @@ class MemoriserAgent(Agent):
     """
 
     MEMORY_PROMPT = (
-        "You receive the last N user replies and a task description. "
-        "Extract 0-3 facts/preferences/goals that should be remembered long-term. "
-        "If nothing is important, return an empty list.\n\n"
-        "Examples of memorable facts:\n"
-        "- 'User prefers no meetings before 11 AM'\n"
-        "- 'User's favorite programming language is Python'\n"
-        "- 'User is working on a D&D game project'\n\n"
-        "Format each fact as a clear, standalone statement."
+        "You receive conversation history and the latest user message. "
+        "Extract 0-5 facts, preferences, or constraints that should be remembered long-term for personalization. "
+        "If nothing is important, return nothing.\n\n"
+        "Capture BOTH explicit and IMPLICIT information:\n"
+        "- Explicit: 'User prefers no meetings before 11 AM', 'User loves Python', 'User is working on a D&D project'\n"
+        "- Implicit: 'User does not speak Spanish' (from 'we only know English'), "
+        "'User is going with their spouse' (from 'with my wife'), "
+        "'User prefers English only', 'User has dietary restrictions', "
+        "languages they know or don't know, who they travel with, constraints they mention.\n\n"
+        "Format each fact as a single clear line, one per line. No numbering or bullets. "
+        "Each line must be a standalone statement about the user (e.g. 'User prefers X', 'User does not Y')."
     )
 
     def __init__(
@@ -37,7 +39,9 @@ class MemoriserAgent(Agent):
         model: Model,
         tools: Sequence[Toolkit | Function] | None = None,
         debug_mode: bool = False,
-        knowledge: Optional[Knowledge] = None
+        knowledge: Optional[Knowledge] = None,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         # Initialize knowledge base for storing memories
         if knowledge is None:
@@ -50,6 +54,11 @@ class MemoriserAgent(Agent):
             name="Memoriser",
             model=model,
             tools=tools,
+            user_id=user_id,
+            learning=learning,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             description="Extracts memory cards from user messages.",
             instructions=self.MEMORY_PROMPT,
             add_datetime_to_context=False,
@@ -64,23 +73,11 @@ class MemoriserAgent(Agent):
     async def store_fact(self, fact: str, metadata: dict = None) -> bool:
         """
         Store a fact in the knowledge base.
-        
-        Args:
-            fact: The fact to store (e.g., "User prefers no meetings before 11 AM")
-            metadata: Optional metadata to attach (e.g., source, timestamp)
-            
-        Returns:
-            True if stored successfully, False otherwise
+        Uses insert() so UserKnowledgeAdapter (if present) adds user_id to metadata.
         """
         try:
-            document = Document(
-                content=fact,
-                meta_data=metadata or {},
-            )
-            
-            # Load the document into the knowledge base
-            self.knowledge.load_documents([document])
-            
+            meta = dict(metadata or {})
+            self.knowledge.insert(text_content=fact, metadata=meta)
             logger.info("[MemoriserAgent] Stored fact: %s", fact[:100])
             return True
         except Exception as e:

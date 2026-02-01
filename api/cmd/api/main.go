@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/container"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/server"
-	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
 
@@ -63,9 +63,10 @@ func main() {
 		logger.Info("skipping swagger generation due to SKIP_SWAG=1")
 	}
 
-	db, err := storage.New(cfg)
+	// Создаем DI Container
+	ctr, err := container.NewContainer(cfg, logger)
 	if err != nil {
-		logger.Fatal("failed to connect to database: %v", zap.Error(err))
+		logger.Fatal("failed to create container: %v", zap.Error(err))
 	}
 
 	llmService := llm.NewService(cfg.LLM.BaseURL)
@@ -75,7 +76,7 @@ func main() {
 		logger.Fatal("failed to initialize oauth providers", zap.Error(err))
 	}
 
-	srv := server.New(logger, cfg, db, oauthConfigs, oidcProviders, llmService)
+	srv := server.New(logger, cfg, ctr, oauthConfigs, oidcProviders, llmService)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

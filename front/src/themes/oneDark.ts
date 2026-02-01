@@ -8,6 +8,7 @@ const palette: ThemePalette = {
     cyan: '#56b6c2',
     blue: '#61afef',
     magenta: '#c678dd',
+    purple: '#c678dd',  // Same as magenta
     black: '#282c34',
     white: '#abb2bf',
     fg: '#abb2bf',
@@ -40,6 +41,24 @@ export const oneDarkTheme: ThemeDescriptor = {
         surface: '#2c313a',
         surfaceAlt: '#262b33',
         surfaceHighlight: palette.selection ?? '#3e4451',
+        primary: palette.blue,
+        error: palette.red,
+        card: '#2c313a',
+        // Extended semantic colors
+        warning: palette.orange,
+        success: palette.green,
+        info: palette.cyan,
+        // Source-specific colors
+        calendar: palette.blue,
+        email: palette.red,
+        task: palette.green,
+        // Code colors
+        codeBg: palette.currentLine,
+        codeInlineBg: '#2c313a',
+        codeText: palette.fg,
+        // Blockquote colors
+        blockquoteBg: '#262b33',       // surfaceAlt
+        blockquoteBorder: palette.blue, // accent
     },
 };
 

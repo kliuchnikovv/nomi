@@ -6,36 +6,25 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/providers"
+	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/github"
-	"golang.org/x/oauth2/google"
 )
 
-const (
-	ProviderGmail    = "gmail"
-	ProviderCalendar = "calendar"
-	ProviderGitHub   = "github"
-)
-
-// MobileOAuthHandler handles OAuth flows for mobile clients.
-// Unlike regular OAuth, tokens are returned to the client instead of being stored on the backend.
 // MobileOAuthHandler handles OAuth flows for mobile clients.
 // Unlike regular OAuth, tokens are returned to the client instead of being stored on the backend.
 type MobileOAuthHandler struct {
-	cfg            *config.Config
-	storage        *storage.Storage
-	logger         *zap.Logger
-	gmailConfig    *oauth2.Config
-	calendarConfig *oauth2.Config
-	githubConfig   *oauth2.Config
-	oidcProvider   *oidc.Provider
+	cfg          *config.Config
+	storage      *storage.Storage
+	logger       *zap.Logger
+	oauthFactory *integrations.OAuthFactory
+	oidcProvider *oidc.Provider
 }
 
 // MobileOAuthResponse contains tokens returned to the mobile client
@@ -65,66 +54,24 @@ func NewMobileOAuthHandler(
 	cfg *config.Config,
 	db *storage.Storage,
 ) (*MobileOAuthHandler, error) {
-	googleCfg, ok := cfg.OAuth2.Providers["google"]
-	if !ok {
-		return nil, fmt.Errorf("google provider config not found")
-	}
-
-	// Gmail Config
-	gmailScopes := []string{oidc.ScopeOpenID, "email", "profile"}
-	gmailScopes = append(gmailScopes, providers.GetGoogleScope("gmail:read")...)
-	gmailScopes = append(gmailScopes, providers.GetGoogleScope("gmail:write")...)
-
-	gmailConfig := &oauth2.Config{
-		ClientID:     googleCfg.ClientID,
-		ClientSecret: googleCfg.ClientSecret,
-		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderGmail),
-		Scopes:       gmailScopes,
-		Endpoint:     google.Endpoint,
-	}
-
-	// Calendar Config
-	calScopes := []string{oidc.ScopeOpenID, "email", "profile"}
-	calScopes = append(calScopes, providers.GetGoogleScope("calendar:read")...)
-	calScopes = append(calScopes, providers.GetGoogleScope("calendar:write")...)
-
-	calendarConfig := &oauth2.Config{
-		ClientID:     googleCfg.ClientID,
-		ClientSecret: googleCfg.ClientSecret,
-		RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderCalendar),
-		Scopes:       calScopes,
-		Endpoint:     google.Endpoint,
-	}
-
-	// GitHub Config
-	var githubConfig *oauth2.Config
-	if githubCfg, ok := cfg.OAuth2.Providers["github"]; ok {
-		githubConfig = &oauth2.Config{
-			ClientID:     githubCfg.ClientID,
-			ClientSecret: githubCfg.ClientSecret,
-			RedirectURL:  fmt.Sprintf("%s/api/oauth/%s/callback", cfg.OAuth2.CallbackBase, ProviderGitHub),
-			Scopes:       []string{"repo", "user", "read:org"},
-			Endpoint:     github.Endpoint,
-		}
-	} else {
-		// Log warning or just skip? User might not have configured it.
-		// For now, we allow it to be nil, but Login will fail if used.
-		logger.Warn("github provider config not found")
-	}
-
-	provider, err := oidc.NewProvider(context.Background(), "https://accounts.google.com")
+	// Создаем OAuth фабрику из реестра
+	oauthFactory, err := integrations.NewOAuthFactory(cfg, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create google oidc provider: %w", err)
+		return nil, fmt.Errorf("failed to create OAuth factory: %w", err)
+	}
+
+	// Получаем OIDC провайдер для Google (используется для gmail и calendar)
+	oidcProvider, err := oauthFactory.GetOIDCProvider("https://accounts.google.com")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OIDC provider: %w", err)
 	}
 
 	return &MobileOAuthHandler{
-		cfg:            cfg,
-		storage:        db,
-		logger:         logger,
-		gmailConfig:    gmailConfig,
-		calendarConfig: calendarConfig,
-		githubConfig:   githubConfig,
-		oidcProvider:   provider,
+		cfg:          cfg,
+		storage:     db,
+		logger:      logger,
+		oauthFactory: oauthFactory,
+		oidcProvider: oidcProvider,
 	}, nil
 }
 
@@ -178,19 +125,31 @@ func (h *MobileOAuthHandler) Callback(c *gin.Context) {
 func (h *MobileOAuthHandler) Login(c *gin.Context) {
 	providerName := c.Param("provider")
 
-	var oauthConfig *oauth2.Config
-	if providerName == ProviderGmail {
-		oauthConfig = h.gmailConfig
-	} else if providerName == ProviderCalendar {
-		oauthConfig = h.calendarConfig
-	} else if providerName == ProviderGitHub {
-		if h.githubConfig == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "github provider not configured"})
-			return
-		}
-		oauthConfig = h.githubConfig
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported for mobile OAuth", providerName)})
+	// Проверяем, существует ли провайдер в реестре
+	_, ok := integrations.GetProvider(providerName)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", providerName)})
+		return
+	}
+
+	// Получаем permissions для провайдера
+	var permissions []string
+	switch providerName {
+	case "gmail":
+		permissions = []string{"gmail:read", "gmail:write"}
+	case "calendar":
+		permissions = []string{"calendar:read", "calendar:write"}
+	case "github":
+		permissions = []string{}
+	default:
+		permissions = []string{}
+	}
+
+	// Создаем OAuth конфигурацию из реестра
+	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, permissions)
+	if err != nil {
+		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", providerName))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build OAuth configuration"})
 		return
 	}
 
@@ -216,19 +175,30 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	ctx := c.Request.Context()
 	providerName := c.Param("provider")
 
-	var oauthConfig *oauth2.Config
-	if providerName == ProviderGmail {
-		oauthConfig = h.gmailConfig
-	} else if providerName == ProviderCalendar {
-		oauthConfig = h.calendarConfig
-	} else if providerName == ProviderGitHub {
-		oauthConfig = h.githubConfig
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported for mobile OAuth", providerName)})
+	// Проверяем, существует ли провайдер в реестре
+	_, ok := integrations.GetProvider(providerName)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", providerName)})
 		return
 	}
 
-	if oauthConfig == nil {
+	// Получаем permissions для провайдера
+	var permissions []string
+	switch providerName {
+	case "gmail":
+		permissions = []string{"gmail:read", "gmail:write"}
+	case "calendar":
+		permissions = []string{"calendar:read", "calendar:write"}
+	case "github":
+		permissions = []string{}
+	default:
+		permissions = []string{}
+	}
+
+	// Создаем OAuth конфигурацию из реестра
+	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, permissions)
+	if err != nil {
+		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", providerName))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "provider configuration missing"})
 		return
 	}
@@ -250,8 +220,8 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	}
 
 	var accountEmail string
-	
-	if providerName == ProviderGitHub {
+
+	if providerName == "github" {
 		// GitHub does not return ID Token. Fetch user email manually.
 		client := oauthConfig.Client(ctx, token)
 		userResp, err := client.Get("https://api.github.com/user")
@@ -342,6 +312,63 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		zap.String("email", accountEmail),
 	)
 
+	// Save integration to backend database so Python agent can use it
+	user, err := userFromCtxMobile(c.Request.Context())
+	if err == nil && user != nil {
+		params := map[string]interface{}{
+			"access_token":  token.AccessToken,
+			"refresh_token": token.RefreshToken,
+			"token_expiry":  token.Expiry.Unix(),
+			"account_email": accountEmail,
+			"client_id":     oauthConfig.ClientID,
+			"client_secret": oauthConfig.ClientSecret,
+			"token_type":    token.TokenType,
+		}
+
+		// Определяем token_uri на основе провайдера
+		provider, _ := integrations.GetProvider(providerName)
+		if provider != nil && provider.OAuthConfig != nil {
+			if providerName == "github" {
+				params["token_uri"] = "https://github.com/login/oauth/access_token"
+			} else {
+				params["token_uri"] = "https://oauth2.googleapis.com/token"
+			}
+		}
+
+		paramsJSON, _ := json.Marshal(params)
+
+		var integration storage.Integration
+		err := h.storage.DB.Where("user_id = ? AND provider = ?", user.ID, providerName).First(&integration).Error
+
+		if err == nil {
+			// Update existing
+			integration.Params = string(paramsJSON)
+			integration.Name = accountEmail // Update name to match email
+			integration.Enabled = true
+			integration.UpdatedAt = time.Now()
+			h.storage.DB.Save(&integration)
+			h.logger.Info("updated integration", zap.String("provider", providerName), zap.String("user_id", user.ID.String()))
+		} else {
+			// Create new
+			newIntegration := storage.Integration{
+				UserID:    user.ID,
+				Name:      accountEmail,
+				Provider:  providerName,
+				Params:    string(paramsJSON),
+				Enabled:   true,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if err := h.storage.DB.Create(&newIntegration).Error; err != nil {
+				h.logger.Error("failed to create integration", zap.Error(err))
+			} else {
+				h.logger.Info("created integration", zap.String("provider", providerName), zap.String("user_id", user.ID.String()))
+			}
+		}
+	} else {
+		h.logger.Warn("could not save integration: user not found in context", zap.Error(err))
+	}
+
 	c.JSON(http.StatusOK, response)
 }
 
@@ -359,13 +386,29 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	var oauthConfig *oauth2.Config
-	if req.Provider == ProviderGmail {
-		oauthConfig = h.gmailConfig
-	} else if req.Provider == ProviderCalendar {
-		oauthConfig = h.calendarConfig
-	} else {
+	// Проверяем, существует ли провайдер в реестре
+	_, ok := integrations.GetProvider(req.Provider)
+	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", req.Provider)})
+		return
+	}
+
+	// Получаем permissions для провайдера
+	var permissions []string
+	switch req.Provider {
+	case "gmail":
+		permissions = []string{"gmail:read", "gmail:write"}
+	case "calendar":
+		permissions = []string{"calendar:read", "calendar:write"}
+	default:
+		permissions = []string{}
+	}
+
+	// Создаем OAuth конфигурацию из реестра
+	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(req.Provider, permissions)
+	if err != nil {
+		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", req.Provider))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "provider configuration missing"})
 		return
 	}
 

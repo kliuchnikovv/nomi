@@ -3,6 +3,7 @@
  * Generates daily briefings from analyzed emails, events, and tasks
  */
 
+import { apiClient } from '../../apiClient';
 import { getApiUrl } from '../../config';
 import {
     integrationStorage,
@@ -41,25 +42,17 @@ class BriefingGenerator {
      */
     async analyzeEmail(email: Email): Promise<EmailAnalysisResult | null> {
         try {
-            const response = await fetch(`${getBackendUrl()}/api/analyze-email`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email_id: email.id,
-                    subject: email.subject,
-                    from_email: email.fromEmail,
-                    from_name: email.fromName,
-                    body: email.bodyText || email.snippet || '',
-                    date: email.date?.toISOString(),
-                }),
+            // Use apiClient for automatic token management and error handling
+            const result = await apiClient.post<EmailAnalysisResult>(`${getApiUrl()}/analyze-email`, {
+                email_id: email.id,
+                subject: email.subject,
+                from_email: email.fromEmail,
+                from_name: email.fromName,
+                body: email.bodyText || email.snippet || '',
+                date: email.date?.toISOString(),
             });
 
-            if (!response.ok) {
-                console.error('[BriefingGenerator] Email analysis failed:', response.status);
-                return null;
-            }
-
-            return await response.json();
+            return result;
         } catch (error) {
             console.error('[BriefingGenerator] Failed to analyze email:', error);
             return null;
@@ -150,10 +143,10 @@ class BriefingGenerator {
         const isToday = this.formatDate(now) === dateStr;
 
         const events = allEvents.filter(event => {
-             if (isToday && event.endDate) {
-                 return event.endDate > now;
-             }
-             return true;
+            if (isToday && event.endDate) {
+                return event.endDate > now;
+            }
+            return true;
         });
 
         // Get pending tasks
@@ -204,7 +197,7 @@ class BriefingGenerator {
         // Add today's events
         for (const event of events) {
             const isCompleted = completionMap.get(event.sourceId) ?? (event.endDate ? now > event.endDate : false);
-            
+
             let timeString = `Starts: ${event.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
             if (event.endDate) {
                 timeString += ` - Ends: ${event.endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -308,7 +301,7 @@ class BriefingGenerator {
         const isFallback = !targetDate; // ASAP/High fallback
 
         if (!isToday && !isOverdue && !isFallback) {
-             return false;
+            return false;
         }
 
         // Add to existing briefing

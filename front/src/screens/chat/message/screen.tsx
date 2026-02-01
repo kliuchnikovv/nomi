@@ -14,12 +14,15 @@ import { ToolCallsSection, SingleToolCall, ReasoningBlock, MemberResponseBlock }
 import Markdown from 'react-native-markdown-display';
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { Action, Props, Role, Attachment, ContentPart } from './models'
-import { styles, markdownStyles } from './styles.tsx';
+import { createStyles, createMarkdownStyles } from './dynamicStyles';
+import { useTheme } from '../../../context/ThemeContext';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { authStore } from '../../../apiClient';
 import { getApiUrl, API_URL } from '../../../config';
 import { useChat } from '../context';
+import { getAgentIcon } from '../../../utils/agentAvatars';
+import ApprovalCard from '../components/ApprovalCard';
 
 function AttachmentImage({ attachment }: { attachment: Attachment }) {
     const [token, setToken] = useState<string | null>(authStore.getToken());
@@ -59,6 +62,10 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
 import { ContentPartsRenderer } from './ContentPartsRenderer';
 export default function MessageScreen(props: Props) {
     const { showToolCalls, showReasoning } = useChat();
+    const { theme, palette } = useTheme();
+
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
     // Debug logging
     console.log('[MessageScreen] Render:', {
@@ -122,6 +129,13 @@ export default function MessageScreen(props: Props) {
 
     return (
         <View style={containerStylesByType[props.message.role]}>
+            {props.message.agent_id && (
+                <View style={styles.agentLabel}>
+                    <Text style={styles.agentLabelText}>
+                        {getAgentIcon(props.message.agent_id)} {props.message.agent_id}
+                    </Text>
+                </View>
+            )}
             {props.header && (
                 <Text style={styles.daemonHeader}>{props.header}</Text>
             )}
@@ -148,7 +162,19 @@ export default function MessageScreen(props: Props) {
                                 return false;
                             }}
                         >
-                            {props.message.text || ''}
+                            {(() => {
+                                const rawText = props.message.text || '';
+                                try {
+                                    // Attempt to parse JSON and show 'msg' if available
+                                    const parsed = JSON.parse(rawText);
+                                    if (parsed && typeof parsed === 'object' && 'msg' in parsed && typeof parsed.msg === 'string') {
+                                        return parsed.msg;
+                                    }
+                                    return rawText;
+                                } catch (e) {
+                                    return rawText;
+                                }
+                            })()}
                         </Markdown>
                     </Pressable>
                     {showToolCalls && props.message.tool_calls && props.message.tool_calls.length > 0 && (
@@ -196,6 +222,12 @@ export default function MessageScreen(props: Props) {
                     </View>
                 </View>
             )}
+            {props.message.metadata?.type === 'approval_request' && props.message.metadata.task_id && (
+                <ApprovalCard
+                    taskId={props.message.metadata.task_id}
+                    nextStatus={props.message.metadata.next_status || 'PLANNING'}
+                />
+            )}
         </View>
     );
 }
@@ -211,6 +243,9 @@ export function ActionScreen({
     onActionPress?: (action: Action) => Promise<void>;
     messageID: string;
 }) {
+    const { theme, palette } = useTheme();
+    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+
     const openWeb = useCallback(async (url: string) => {
         try {
             const isAvailable = await InAppBrowser.isAvailable();

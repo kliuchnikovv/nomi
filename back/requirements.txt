@@ -1,5 +1,5 @@
 # Core dependencies (versions pinned for stability)
-agno>=2.3.21
+agno==2.4.0
 alembic>=1.13.0
 fastapi>=0.100.0
 SQLAlchemy>=2.0.0
@@ -22,12 +22,12 @@ asyncpg>=0.29.0
 psycopg2-binary>=2.9.0
 greenlet>=3.0.0
 pgvector>=0.2.0
+redis>=5.0.0
 
 # HTTP/Network
 httpx>=0.25.0
 httpcore>=1.0.0
 requests>=2.30.0
-websockets>=12.0
 
 # Utilities
 python-dotenv>=1.0.0

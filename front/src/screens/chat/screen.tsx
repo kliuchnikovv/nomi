@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity } from 'react-native';
+import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity, RefreshControl } from 'react-native';
 import { getApiUrl, API_URL } from '../../config';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,14 +12,14 @@ import * as Sharing from 'expo-sharing';
 
 import { useChat } from './context';
 import { useAuth } from '../auth/context';
-import { useMain } from '../main/context';
+import { emptyChatID, useMain } from '../main/context';
 import { ASSISTANT_BUBBLE_WIDTH_RATIO, createChatTheme } from './theme';
 import { createStyles } from './styles';
 import { useGiftedMessages } from './hooks/useGiftedMessages';
 import { useGiftedChatRenderers } from './hooks/useGiftedChatRenderers';
 import { ChatHeader } from './components/ChatHeader';
-import { ChatSidebar } from './sidebar/screen';
-import RightSidebar from '../rightsidebar/screen';
+import { ChatSidebar } from './leftSidebar/screen';
+import RightSidebar from '../integrationsSidebar/screen';
 import { useTheme } from '../../context/ThemeContext';
 import { Skeleton } from '../../components/Skeleton';
 import { Attachment, MessageAction } from '../main/models';
@@ -49,6 +49,8 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const {
         messages,
         messagesLoading,
+        getMessages,
+        refreshing,
         sendMessage,
         assistantWorking,
         externalTitle,
@@ -60,13 +62,18 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         clearPluginThread,
         chatMode,
         selectedTeamId,
+        activeAgentsCount,
     } = useChat();
     const { user, token } = useAuth();
     const { theme } = useTheme();
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const insets = useSafeAreaInsets();
     const { width: windowWidth } = useWindowDimensions();
-    const { chats, chatsLoading, activeChatID, activeChat, setActiveChatID, getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat } = useMain();
+    const {
+        chats, chatsLoading, activeChatID, activeChat, setActiveChatID,
+        getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat,
+        setNewTaskModalVisible
+    } = useMain();
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
     const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
@@ -170,6 +177,11 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
         setError(null);
     }, [setError]);
 
+    const handleRefreshHistory = useCallback(() => {
+        if (!activeChatID || activeChatID === emptyChatID || isPluginThread) return;
+        getMessages(activeChatID, { isRefresh: true });
+    }, [activeChatID, getMessages, isPluginThread]);
+
     // Attachment Handlers
     const handleAttachmentPress = useCallback(async (attachment: Attachment) => {
         if (attachment.file_type?.startsWith('image/')) {
@@ -200,14 +212,14 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                     // Remote file
                     const isAvailable = await Sharing.isAvailableAsync();
                     if (isAvailable) {
-                        const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'download');
+                        const fileUri = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + '/' + (attachment.file_name || 'download');
                         const downloadRes = await FileSystem.downloadAsync(attachment.uri, fileUri);
                         await Sharing.shareAsync(downloadRes.uri);
                     }
                 } else if (attachment.content) {
                     // Base64 content
-                    const fileUri = FileSystem.documentDirectory + (attachment.file_name || 'file');
-                    await FileSystem.writeAsStringAsync(fileUri, attachment.content, { encoding: FileSystem.EncodingType.Base64 });
+                    const fileUri = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + '/' + (attachment.file_name || 'file');
+                    await FileSystem.writeAsStringAsync(fileUri, attachment.content, { encoding: 'base64' });
                     await Sharing.shareAsync(fileUri);
                 }
             } catch (e) {
@@ -417,12 +429,15 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
 
     const headerTitle = externalTitle || activeChat?.title || (messages.length === 0 ? 'Dashboard' : 'New Chat');
     const headerSubtitle = useMemo(() => {
+        if (assistantWorking) {
+            return 'typing...';
+        }
         if (chatMode === 'team') {
             const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
             return team?.name || '';
         }
         return '';
-    }, [chatMode, selectedTeamId]);
+    }, [assistantWorking, chatMode, selectedTeamId]);
 
     return (
         <View style={styles.container}>
@@ -450,16 +465,20 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         subtitle={headerSubtitle}
                         onMenuPress={handleOpenMenu}
                         onInboxPress={handleOpenInbox}
+                        onNewTaskPress={() => setNewTaskModalVisible(true)}
                         showMenu={!isWide}
                         showInbox={!isWide}
                         isInboxMode={isPluginThread}
                         icon={activeChat?.icon}
+                        chatMode={chatMode}
+                        teamId={selectedTeamId}
+                        activeAgentsCount={activeAgentsCount}
                     />
 
 
 
-                    {/* Show Dashboard when no messages, Chat when there are messages */}
-                    {messages.length === 0 && !messagesLoading ? (
+                    {/* Show Dashboard when no messages AND it's a new chat placeholder, Chat when there are messages or it's a persisted chat */}
+                    {messages.length === 0 && !messagesLoading && activeChatID === '00000000-0000-0000-0000-000000000000' ? (
                         <KeyboardAvoidingView
                             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             style={{ flex: 1 }}
@@ -488,7 +507,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                 renderBubble={renderBubble}
                                 renderMessageText={renderMessageText}
                                 renderInputToolbar={renderInputToolbar}
-                                isTyping={assistantWorking}
+                                isTyping={false}
                                 renderFooter={renderFooter}
                                 inverted={true}
                                 minInputToolbarHeight={60}
@@ -502,6 +521,20 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                 isScrollToBottomEnabled={true}
                                 timeFormat="HH:mm"
                                 onLongPress={onLongPressMessage}
+                                listProps={
+                                    activeChatID && activeChatID !== emptyChatID && !isPluginThread
+                                        ? {
+                                            refreshControl: (
+                                                <RefreshControl
+                                                    refreshing={refreshing}
+                                                    onRefresh={handleRefreshHistory}
+                                                    tintColor={theme.accent}
+                                                    colors={[theme.accent]}
+                                                />
+                                            ),
+                                        }
+                                        : undefined
+                                }
                                 renderChatEmpty={() => {
                                     if (messagesLoading) {
                                         return (

@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -9,9 +10,10 @@ import (
 type Kind string
 
 const (
-	TokenKind Kind = "data"
-	MetaKind  Kind = "meta"
-	ErrorKind Kind = "error"
+	TokenKind  Kind = "data"
+	MetaKind   Kind = "meta"
+	ErrorKind  Kind = "error"
+	SignalKind Kind = "signal"
 )
 
 type Operation string
@@ -26,63 +28,28 @@ const (
 	SelectModelOperation Operation = "select_model"
 	ChangeModelOperation Operation = "change_model"
 
-	AckOperation   Operation = "ack"
-	NackOperation  Operation = "nack"
-	JoinOperation  Operation = "join"
-	LeaveOperation Operation = "leave"
-	PongOperation  Operation = "pong"
+	AckOperation        Operation = "ack"
+	NackOperation       Operation = "nack"
+	JoinOperation       Operation = "join"
+	LeaveOperation      Operation = "leave"
+	PongOperation       Operation = "pong"
+	SignalOperation     Operation = "signal"
+	StoreFactsOperation Operation = "store_facts"
 )
 
 type Frame struct {
-	ID        int       `json:"id"`
-	ChatID    uuid.UUID `json:"chat_id"`
-	Timestamp time.Time `json:"ts"`
-	Kind      Kind      `json:"kind"`
-	Channel   string    `json:"channel"`
-	Operation Operation `json:"op"`
-	Payload   Payload   `json:"payload"`
-	Error     ErrorInfo `json:"error"`
+	ID        int             `json:"id"`
+	ChatID    uuid.UUID       `json:"chat_id"`
+	TraceID   string          `json:"trace_id,omitempty"`
+	Timestamp time.Time       `json:"ts"`
+	Kind      Kind            `json:"kind"`
+	Channel   string          `json:"channel"`
+	Operation Operation       `json:"op"`
+	Payload   json.RawMessage `json:"payload"`
+	Error     ErrorInfo       `json:"error"`
 }
 
-type Payload struct {
-	MessageID   uuid.UUID   `json:"message_id,omitempty"`
-	Message     string      `json:"message,omitempty"`
-	Model       string      `json:"model,omitempty"`
-	ToolCalls   interface{} `json:"tool_calls,omitempty"`
-	Reason      string      `json:"reason,omitempty"`
-	// ReasoningSteps contains "thinking" content from models that support it
-	ReasoningSteps []string `json:"reasoning_steps,omitempty"`
-	Index          uint     `json:"ix,omitempty"`
-	EndOfBuffer bool        `json:"eof,omitempty"`
-
-	// Role and Sender for multi-device sync (to distinguish user/assistant messages)
-	Role   string    `json:"role,omitempty"`   // "user" or "assistant"
-	Sender uuid.UUID `json:"sender,omitempty"` // User ID who sent the message
-
-	Type             string      `json:"type,omitempty"`
-	Content          string      `json:"content,omitempty"` // Generic content field (e.g., reasoning text)
-	AgentName        string      `json:"agent_name,omitempty"` // For team member responses
-	CompletionTokens uint        `json:"completion_tokens,omitempty"`
-	ElapsedMS        uint        `json:"elapsed_ms,omitempty"`
-	Tool             interface{} `json:"tool,omitempty"`
-	Tools            interface{} `json:"tools,omitempty"`
-	History          interface{} `json:"history,omitempty"`
-	Attachments      interface{} `json:"attachments,omitempty"`
-	AttachmentIDs    []uuid.UUID `json:"attachment_ids,omitempty"`
-	WebSearch        bool        `json:"web_search,omitempty"`
-
-	// Command/Team specific
-	Command interface{} `json:"command,omitempty"`
-	Team    interface{} `json:"team,omitempty"`
-	
-	// Client Action fields
-	Method      string                 `json:"method,omitempty"`
-	Params      map[string]interface{} `json:"params,omitempty"`
-	Description string                 `json:"description,omitempty"`
-
-	// Actions for action buttons
-	Actions interface{} `json:"actions,omitempty"`
-}
+// Payload struct removed in favor of typed payloads in payloads.go
 
 type ErrorInfo struct {
 	Code     string `json:"code"`
@@ -90,3 +57,18 @@ type ErrorInfo struct {
 	Message  string `json:"message"`
 	Details  any    `json:"details"`
 }
+
+// Error codes for structured error handling
+const (
+	ErrorCodeParseFailed      = "parse_failed"
+	ErrorCodeSaveFailed       = "save_failed"
+	ErrorCodeRedisFailed      = "redis_failed"
+	ErrorCodeMarshalFailed    = "marshal_failed"
+	ErrorCodeDispatchFailed   = "dispatch_failed"
+	ErrorCodeAttachmentFailed = "attachment_failed"
+	ErrorCodeWebSocketClosed  = "websocket_closed"
+	ErrorCodeAgentFailed      = "agent_failed"
+	ErrorCodeTaskFailed       = "task_failed"
+	ErrorCodeWorkerError      = "worker_error"
+	ErrorCodeTimeout          = "timeout"
+)

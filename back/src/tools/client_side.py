@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from contextvars import ContextVar
 from pydantic import BaseModel, Field
 
@@ -194,7 +194,7 @@ class ClientCalendarTools(Toolkit):
                 "end_time": end_time,
                 "max_results": max_results
             },
-            description=f"List calendar events"
+            description="List calendar events"
         )
         return "Action delegated: Listing calendar events. The client application will display them."
 

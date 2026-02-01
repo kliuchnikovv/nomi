@@ -1,4 +1,4 @@
-export type ThemeName = 'tokyoNight' | 'oneDark' | 'visualStudioLight' | 'serikaDark';
+export type ThemeName = 'tokyoNight' | 'oneDark' | 'visualStudioLight' | 'serikaDark' | 'retroSunset' | 'retroPastel' | 'deepOcean';
 
 export type ThemePalette = {
     red: string;
@@ -8,6 +8,7 @@ export type ThemePalette = {
     cyan: string;
     blue: string;
     magenta: string;
+    purple: string;  // Added for ActiveTaskCard component
     white: string;
     fg: string;
     black: string;
@@ -35,6 +36,24 @@ export type ThemeColors = {
     surface: string;
     surfaceAlt: string;
     surfaceHighlight: string;
+    primary?: string;
+    error?: string;
+    card?: string;
+    // Extended semantic colors
+    warning?: string;
+    success?: string;
+    info?: string;
+    // Source-specific colors for visual diversity
+    calendar?: string;
+    email?: string;
+    task?: string;
+    // Code colors
+    codeBg?: string;
+    codeInlineBg?: string;
+    codeText?: string;
+    // Blockquote colors
+    blockquoteBg?: string;
+    blockquoteBorder?: string;
 };
 
 export type ThemeDescriptor = {

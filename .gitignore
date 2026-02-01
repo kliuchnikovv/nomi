@@ -20,3 +20,10 @@ __debug*
 
 # Config with secrets (use .example.yaml as template)
 api/config.yaml
+
+# Compiled API binary
+api/api
+
+.DS_Store
+.env
+.cursor

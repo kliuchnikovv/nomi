@@ -8,6 +8,7 @@ const palette: ThemePalette = {
     cyan: '#7dcfff',
     blue: '#7aa2f7',
     magenta: '#bb9af7',
+    purple: '#bb9af7',  // Same as magenta for now
     white: '#a9b1d6',
     fg: '#c0caf5',
     black: '#414868',
@@ -37,10 +38,29 @@ export const tokyoNightTheme: ThemeDescriptor = {
         border: palette.gutterGrey,
         textSecondary: palette.commentGrey,
         textPrimary: palette.fg,
-        surface: '#24283b', // Slightly lighter background for cards/sidebars
+        surface: '#24283b',
         surfaceAlt: '#1f2335',
-        surfaceHighlight: '#2f3549', // Hover/Active state
+        surfaceHighlight: '#2f3549',
+        primary: palette.blue,
+        error: palette.red,
+        card: '#24283b',
+        // Extended semantic colors
+        warning: palette.orange,
+        success: palette.green,
+        info: palette.cyan,
+        // Source-specific colors
+        calendar: palette.blue,
+        email: palette.red,
+        task: palette.green,
+        // Code colors
+        codeBg: '#292e42',           // currentLine - lighter than bg for visibility
+        codeInlineBg: '#24283b',       // surface
+        codeText: palette.fg,          // #c0caf5 - readable code color
+        // Blockquote colors
+        blockquoteBg: '#1f2335',       // surfaceAlt - subtle highlight
+        blockquoteBorder: palette.blue, // #7aa2f7 - accent color for emphasis
     },
 };
 
 export const tokyoNight = tokyoNightTheme.colors;
+export const tokyoNightPalette = palette;

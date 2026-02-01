@@ -3,9 +3,13 @@ import { View, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, Text }
 import { useTheme } from '../../context/ThemeContext';
 import { DashboardHeader } from './components/DashboardHeader';
 import { GreetingCard } from './components/GreetingCard';
+import { ActiveTasksList } from '../../components/dashboard/ActiveTasksList';
 
 import { BriefingCard } from '../chat/components/BriefingCard';
-import { dashboardApi } from '../../apiClient';
+import { dashboardApi, apiClient } from '../../apiClient';
+import { getApiUrl } from '../../config';
+import { Chat } from '../main/models';
+import { useMain } from '../main/context';
 
 interface DashboardScreenProps {
     onNavigateToChat: (chatId: string) => void;
@@ -19,6 +23,7 @@ export const DashboardScreen = ({ onNavigateToChat, onNewChatPress, onOpenChats,
     const { theme } = useTheme();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const { setNewTaskModalVisible } = useMain();
     const [dashboardData, setDashboardData] = useState<{
         user: { name: string };
         recent_chats: any[];
@@ -80,6 +85,7 @@ export const DashboardScreen = ({ onNavigateToChat, onNewChatPress, onOpenChats,
                 <DashboardHeader
                     onMenuPress={onOpenChats}
                     onInboxPress={onOpenInbox}
+                    onNewTaskPress={() => setNewTaskModalVisible(true)}
                 />
             )}
             <ScrollView
@@ -94,6 +100,8 @@ export const DashboardScreen = ({ onNavigateToChat, onNewChatPress, onOpenChats,
                 }
             >
                 <GreetingCard userName={dashboardData?.user?.name} />
+
+                <ActiveTasksList />
 
                 <BriefingCard />
 

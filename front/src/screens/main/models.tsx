@@ -10,11 +10,16 @@ export interface MainContextType {
     getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
     createNewChatWithMode: (mode: 'agent' | 'team', teamId: string | null) => void;
+    createNewChatForList: (listId: string, listName: string) => Promise<void>;
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
     deleteChat: (chatId: string) => void;
     setActiveChatID: (id: string | null) => void;
-    pendingChatMode?: { mode: 'agent' | 'team'; teamId: string | null } | null;
+    sidebarFilter: string;
+    setSidebarFilter: (filter: string) => void;
+    pendingChatMode?: { mode: 'agent' | 'team'; teamId: string | null; initialMessage?: string } | null;
     clearPendingChatMode?: () => void;
+    newTaskModalVisible: boolean;
+    setNewTaskModalVisible: (visible: boolean) => void;
 }
 
 export type Chat = {
@@ -27,6 +32,9 @@ export type Chat = {
     updated_at: number
     archived_at: number | null
     deleted_at: number | null
+    project_id?: string | null
+    task_id?: string | null
+    list_id?: string | null
     messages: Message[]
     icon?: string
 }
@@ -73,6 +81,7 @@ export type Message = {
     sender: string
     role: string
     text: string
+    agent_id?: string // For multi-agent teams
     created_at: number
     actions?: MessageAction[]
     importance?: string
@@ -82,6 +91,8 @@ export type Message = {
     content_parts?: ContentPart[] // For inline tool call rendering
     model?: string
     attachments?: Attachment[]
+    /** Last processed stream chunk index (ix); used for dedup when same frame arrives from multiple channels. */
+    _stream_ix?: number
 }
 
 export type Frame = {

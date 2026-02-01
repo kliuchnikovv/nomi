@@ -54,6 +54,33 @@ func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	}
 
 	// Add icons to chats
+	getIconForTeam := func(teamID *string) string {
+		if teamID == nil {
+			return ""
+		}
+		switch *teamID {
+		case "dnd_team":
+			return "d20"
+		case "genie":
+			return "sparkles"
+		case "development_team":
+			return "code"
+		case "travel_planning":
+			return "plane"
+		case "analyst":
+			return "search"
+		case "architect":
+			return "building"
+		case "developer":
+			return "terminal"
+		case "worker":
+			return "cog"
+		case "reviewer":
+			return "check"
+		default:
+			return ""
+		}
+	}
 	for i := range recentChats {
 		recentChats[i].Icon = getIconForTeam(recentChats[i].TeamID)
 	}

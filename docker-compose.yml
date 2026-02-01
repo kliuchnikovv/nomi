@@ -7,26 +7,41 @@ services:
       - "8080:8080"
     environment:
       - SKIP_SWAG=1
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=genie
+      - PGHOST=db
+      - PGPORT=5432
+      - PGUSER=postgres
+      - PGPASSWORD=postgres
+      - PGDATABASE=genie
+      - PORT=8080
+      - CALLBACK_BASE=http://localhost:8080
+      - GOOGLE_REDIRECT_URL=http://localhost:8080/auth/google/callback
+      - LLM_BASE_URL=http://back:8000
+      - REDIS_URL=redis://redis:6379
+      - RAILWAY_ENVIRONMENT=true
     depends_on:
       db:
         condition: service_healthy
+      back:
+        condition: service_started
     volumes:
       - ./config:/config:ro
 
-  agent:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  back:
     build:
       context: ./back
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
+      - PORT=8000
       - DATABASE_URL=postgres://postgres:postgres@db:5432/genie?sslmode=disable
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
@@ -42,11 +57,10 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
   pgdata:
-

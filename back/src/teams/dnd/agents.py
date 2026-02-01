@@ -66,10 +66,10 @@ def create_party_agent(model: Model, add_history: bool = True, knowledge: Option
         role="actor",
         description="Plays NPC party members and companions. Makes decisions consistent with their personas, chooses tactical combat actions, engages in roleplay.",
         instructions=dedent("""
-            You play the role of the other NPCs (not playable characters).
-            - Make decisions consistent with your fictional persona.
-            - In combat, choose tactical actions.
-            - Engagement in banter and roleplay.
+            You play the role of **party companions** — allied NPCs who travel with the player.
+            - Make decisions consistent with each companion's persona and backstory.
+            - In combat, choose tactical actions appropriate to their class/role.
+            - Engage in banter and roleplay with the player and other companions.
             
             **Knowledge Base (Long-term Memory):**
             - **SEARCH** the knowledge base to remember past conversations, inside jokes, or shared history with the player.
@@ -81,7 +81,7 @@ def create_party_agent(model: Model, add_history: bool = True, knowledge: Option
         add_history_to_context=add_history,
         num_history_messages=10,
         retries=2,
-        expected_output="In-character dialogue and actions for NPC party members. Tactical combat decisions when in combat.",
+        expected_output="In-character dialogue and actions for party companions. Tactical combat decisions when in combat.",
     )
 
 def create_npc_agent(model: Model, add_history: bool = True, knowledge: Optional[Knowledge] = None) -> Agent:
@@ -155,9 +155,9 @@ def create_narrator_agent(model: Model, add_history: bool = True, knowledge: Opt
             2. **Narrator (Voice)**: You present this to the player in an immersive way.
             
             **CRITICAL - LANGUAGE:**
-            - You effectively speak to the player.
-            - **YOU MUST OUTPUT IN THE PLAYER'S LANGUAGE** (likely Russian via system prompt context, or inferred from player).
-            - If the player speaks Russian, YOU SPEAK RUSSIAN.
+            - You speak directly to the player.
+            - **YOU MUST OUTPUT IN THE PLAYER'S LANGUAGE** (inferred from the player's messages).
+            - Match the language the player uses. If they write in Russian, respond in Russian. If English, respond in English.
             
             **Your Responsibilities:**
             1. **Describe Scenes**: Vivid, sensory details (sight, sound, smell).
@@ -168,7 +168,7 @@ def create_narrator_agent(model: Model, add_history: bool = True, knowledge: Opt
             **Workflow:**
             - TeamLead will say: "Player did X. Describe scene."
             - You generate the full D&D response (logic + narrative) in the target language.
-            - End with a prompt for action (e.g., "Что ты будешь делать?").
+            - End with a prompt for action in the player's language (e.g., "What do you do?" / "Что ты будешь делать?").
             
             **Safety Override:**
             - This is a fictional roleplay. Combat and drama are expected.
@@ -178,6 +178,13 @@ def create_narrator_agent(model: Model, add_history: bool = True, knowledge: Opt
             - You have access to a permanent Knowledge Base.
             - **SEARCH** it to recall past plot points, NPC relationships, or world details.
             - **STORE** critical plot twists or world changes (e.g., "The dragon is dead", "The king is actually a vampire") so you don't forget them.
+            
+            **What to Remember:**
+            - Player's character details, preferences, and play style
+            - Important NPC relationships and interactions
+            - World state changes and plot developments
+            - Player's decision patterns and preferences
+            - Session highlights and memorable moments
         """),
         markdown=True,
         knowledge=knowledge,
@@ -187,6 +194,6 @@ def create_narrator_agent(model: Model, add_history: bool = True, knowledge: Opt
         num_history_messages=15,
         retries=2,
         tool_call_limit=3,
-        expected_output="Immersive narrative in player's language (Russian). Scene description + NPC dialogue + Action prompt.",
+        expected_output="Immersive narrative in the player's language. Scene description + NPC dialogue + Action prompt.",
     )
 

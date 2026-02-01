@@ -153,9 +153,24 @@ export const styles = StyleSheet.create({
         marginBottom: 4,
     },
     toolCallArgs: {
-        color: theme.textSecondary,
+        color: theme.codeText || '#a9b1d6',
         fontSize: 11,
         fontFamily: 'Menlo',
+    },
+    agentLabel: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+        paddingBottom: 4,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    agentLabelText: {
+        color: theme.accent,
+        fontSize: 12,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     modelText: {
         color: theme.textSecondary,
@@ -285,6 +300,35 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingBottom: 10,
     },
+    // Document block styles
+    documentContainer: {
+        marginVertical: 8,
+        borderRadius: 8,
+        backgroundColor: theme.surfaceHighlight, // or use palette.bg with alpha
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        overflow: 'hidden',
+    },
+    documentHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    },
+    documentTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: theme.accent, // A distinct color, e.g. blue/cyan
+    },
+    documentChevron: {
+        fontSize: 12,
+        color: theme.textSecondary,
+    },
+    documentBody: {
+        padding: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.1)', // Slightly darker for contrast
+    },
 });
 
 // Markdown styles - separate from StyleSheet.create() due to custom properties
@@ -298,25 +342,31 @@ export const markdownStyles = {
         color: theme.accent,
     },
     code_inline: {
-        backgroundColor: 'rgba(192, 202, 245, 0.1)',
+        backgroundColor: theme.codeInlineBg || '#24283b',
         paddingHorizontal: 4,
         paddingVertical: 2,
         borderRadius: 4,
         fontFamily: 'Menlo',
         fontSize: 14,
+        color: theme.codeText || '#a9b1d6',
     },
     code_block: {
-        backgroundColor: 'rgba(192, 202, 245, 0.05)',
+        backgroundColor: theme.codeBg || '#1a1b26',
         padding: 12,
         borderRadius: 8,
         marginVertical: 8,
         fontFamily: 'Menlo',
         fontSize: 14,
+        color: theme.codeText || '#a9b1d6',
     },
     blockquote: {
+        backgroundColor: theme.blockquoteBg || theme.surfaceAlt || '#1f2335',
         borderLeftWidth: 3,
-        borderLeftColor: '#4b5263',
+        borderLeftColor: theme.blockquoteBorder || theme.accent || '#4b5263',
         paddingLeft: 8,
+        paddingVertical: 4,
+        marginVertical: 4,
+        borderRadius: 4,
         color: theme.textPrimary,
     },
     heading1: {

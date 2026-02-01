@@ -3,16 +3,18 @@ import { Linking, View, Text, ActionSheetIOS, Pressable } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
-import { createChatTheme, createMarkdownStyles } from '../theme';
+import { createChatTheme } from '../theme';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ThemeColors } from '../../../themes/types';
+import { useTheme } from '../../../context/ThemeContext';
 import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ToolCallsSection } from '../message/ToolCalls';
 import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
-import { styles as messageStyles } from '../message/styles';
+import { createStyles, createMarkdownStyles } from '../message/dynamicStyles';
+import { createMarkdownRules } from '../message/markdownRules';
 import { useChat } from '../context';
 import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
 
@@ -20,29 +22,38 @@ function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
     const [expanded, setExpanded] = React.useState(false);
 
     // Create markdown styles with theme
-    const markdownStyles = useMemo(() => createMarkdownStyles(createChatTheme(theme)), [theme]);
+    const { palette } = useTheme(); // We need palette for createStyles
+    // Assuming 'theme' prop passed to SystemMessageBubble is ThemeColors
+    const dynamicStyles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+
+    const handleCodeCopy = (code: string) => {
+        Clipboard.setString(code);
+        console.log('System code copied');
+    };
+    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), []);
 
     return (
         <View style={{ marginBottom: 8, paddingHorizontal: 16 }}>
-            <View style={messageStyles.toolCallsContainer}>
+            <View style={dynamicStyles.toolCallsContainer}>
                 <Pressable
                     onPress={() => setExpanded(!expanded)}
                     style={({ pressed }) => [
-                        messageStyles.toolCallsHeader,
+                        dynamicStyles.toolCallsHeader,
                         pressed && { opacity: 0.7 },
                     ]}
                 >
-                    <Text style={messageStyles.toolCallsHeaderText}>
+                    <Text style={dynamicStyles.toolCallsHeaderText}>
                         System Activity
                     </Text>
-                    <Text style={messageStyles.toolCallsExpandIcon}>
+                    <Text style={dynamicStyles.toolCallsExpandIcon}>
                         {expanded ? '▼' : '▶'}
                     </Text>
                 </Pressable>
                 {expanded && (
-                    <View style={messageStyles.toolCallsList}>
-                        <View style={messageStyles.toolCallItem}>
-                            <Markdown style={markdownStyles as any}>
+                    <View style={dynamicStyles.toolCallsList}>
+                        <View style={dynamicStyles.toolCallItem}>
+                            <Markdown style={markdownStyles as any} rules={markdownRules}>
                                 {text}
                             </Markdown>
                         </View>
@@ -83,7 +94,15 @@ export function useGiftedChatRenderers({
     onMessageAction,
 }: GiftedChatRenderersParams) {
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
-    const markdownStyles = useMemo(() => createMarkdownStyles(chatTheme), [chatTheme]);
+    // Use dynamicStyles createMarkdownStyles which takes MessageTheme (ThemeColors)
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+
+    const handleCodeCopy = useCallback((code: string) => {
+        Clipboard.setString(code);
+        console.log('Code copied to clipboard');
+    }, []);
+    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), [handleCodeCopy]);
+
     const { showToolCalls } = useChat();
 
     const handleLongPress = useCallback((context: any, message: any) => {
@@ -312,8 +331,53 @@ export function useGiftedChatRenderers({
             />
         );
 
-        // EXCLUSIVE PATH: If we have content parts, use ContentPartsRenderer ONLY.
+        const messageText = props.currentMessage?.text || '';
+
+        // If we have content parts, check whether they're all plain text (no tool_call, reasoning, member_response).
+        // For plain-text-only messages, use message.text as single source of truth to avoid
+        // duplication/merge bugs from content_parts (e.g. duplicate frames, \n\n gluing).
+        // member_response is excluded: it updates only content_parts, not message.text.
         if (contentParts && contentParts.length > 0) {
+            const allPlainText = contentParts.every((p: any) => p.type === 'text');
+            if (allPlainText && isAssistant) {
+                return (
+                    <View style={{ width: '100%' }}>
+                        {showAttachmentsInside && renderAttachments()}
+                        <Pressable
+                            onLongPress={() => handleTextLongPress(messageText)}
+                            delayLongPress={300}
+                        >
+                            <Markdown
+                                style={markdownStyles as any}
+                                rules={markdownRules}
+                                onLinkPress={(url) => {
+                                    const openLink = async () => {
+                                        try {
+                                            if (await InAppBrowser.isAvailable()) {
+                                                await InAppBrowser.open(url, {
+                                                    showTitle: true,
+                                                    dismissButtonStyle: 'close',
+                                                    modalEnabled: true,
+                                                    enableDefaultShare: false,
+                                                });
+                                            } else {
+                                                await Linking.openURL(url);
+                                            }
+                                        } catch {
+                                            await Linking.openURL(url).catch(() => { });
+                                        }
+                                    };
+                                    openLink();
+                                    return false;
+                                }}
+                            >
+                                {messageText}
+                            </Markdown>
+                        </Pressable>
+                        {renderActions()}
+                    </View>
+                );
+            }
             return (
                 <View style={{ width: '100%' }}>
                     {showAttachmentsInside && renderAttachments()}
@@ -325,8 +389,6 @@ export function useGiftedChatRenderers({
                 </View>
             );
         }
-
-        const messageText = props.currentMessage?.text || '';
 
         // User message
         if (!isAssistant) {
@@ -353,6 +415,7 @@ export function useGiftedChatRenderers({
                 >
                     <Markdown
                         style={markdownStyles as any}
+                        rules={markdownRules}
                         onLinkPress={(url) => {
                             const openLink = async () => {
                                 try {
@@ -388,18 +451,7 @@ export function useGiftedChatRenderers({
         );
     }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend, onMessageAction, showToolCalls]);
 
-    const renderFooter = useCallback(() => {
-        if (!assistantWorking) {
-            return null;
-        }
-
-        return (
-            <View style={styles.footerContainer}>
-                <View style={styles.typingDot} />
-                <Text style={styles.footerText}>Assistant is thinking…</Text>
-            </View>
-        );
-    }, [assistantWorking, styles]);
+    const renderFooter = useCallback(() => null, []);
 
     return {
         renderBubble,

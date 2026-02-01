@@ -10,10 +10,14 @@ import (
 )
 
 func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
-	// Default mode to 'agent' if not specified
+	// Default mode to 'agent' if not specified, or 'team' if team_id is present
 	mode := c.Mode
 	if mode == "" {
-		mode = "agent"
+		if c.TeamID != nil && *c.TeamID != "" {
+			mode = "team"
+		} else {
+			mode = "agent"
+		}
 	}
 
 	chatModel := &Chat{
@@ -23,6 +27,9 @@ func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 		Title:     c.Title,
 		Mode:      mode,
 		TeamID:    c.TeamID,
+		ProjectID: c.ProjectID,
+		TaskID:    c.TaskID,
+		ListID:    c.ListID,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -37,6 +44,9 @@ func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 		Title:     chatModel.Title,
 		Mode:      chatModel.Mode,
 		TeamID:    chatModel.TeamID,
+		ProjectID: chatModel.ProjectID,
+		TaskID:    chatModel.TaskID,
+		ListID:    chatModel.ListID,
 		CreatedAt: chatModel.CreatedAt,
 		UpdatedAt: chatModel.UpdatedAt,
 	}, nil
@@ -56,6 +66,9 @@ func (s *Storage) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUI
 		Title:      chatModel.Title,
 		Mode:       chatModel.Mode,
 		TeamID:     chatModel.TeamID,
+		ProjectID:  chatModel.ProjectID,
+		TaskID:     chatModel.TaskID,
+		ListID:     chatModel.ListID,
 		CreatedAt:  chatModel.CreatedAt,
 		UpdatedAt:  chatModel.UpdatedAt,
 		ArchivedAt: chatModel.ArchivedAt,
@@ -79,6 +92,9 @@ func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.C
 			Title:      model.Title,
 			Mode:       model.Mode,
 			TeamID:     model.TeamID,
+			ProjectID:  model.ProjectID,
+			TaskID:     model.TaskID,
+			ListID:     model.ListID,
 			CreatedAt:  model.CreatedAt,
 			UpdatedAt:  model.UpdatedAt,
 			ArchivedAt: model.ArchivedAt,
@@ -127,12 +143,27 @@ func (s *Storage) GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUI
 			Title:      model.Title,
 			Mode:       model.Mode,
 			TeamID:     model.TeamID,
+			ProjectID:  model.ProjectID,
+			TaskID:     model.TaskID,
+			ListID:     model.ListID,
 			CreatedAt:  model.CreatedAt,
 			UpdatedAt:  model.UpdatedAt,
 			ArchivedAt: model.ArchivedAt,
 		}
 	}
 	return chats, nil
+}
+
+// TouchChatActivity обновляет updated_at для конкретного чата.
+// Используется, чтобы отражать "последнюю содержательную активность" в чате,
+// не привязываясь к каждому фрейму стриминга.
+func (s *Storage) TouchChatActivity(ctx context.Context, chatID uuid.UUID, at time.Time) error {
+	result := s.DB.WithContext(ctx).
+		Model(&Chat{}).
+		Where("id = ?", chatID).
+		Update("updated_at", at)
+
+	return result.Error
 }
 
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {

@@ -25,7 +25,19 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
     return useMemo(() => {
         const sorted = [...messages].sort((a, b) => getTimestamp(b.created_at) - getTimestamp(a.created_at));
 
-        return sorted.map((msg): ExtendedIMessage => {
+        // Filter out empty messages (e.g. initial meta frames from backend)
+        const filtered = sorted.filter(msg => {
+            const hasText = msg.text && msg.text.trim().length > 0;
+            const hasAttachments = msg.attachments && msg.attachments.length > 0;
+            const hasToolCalls = msg.tool_calls && msg.tool_calls.length > 0;
+            const hasActions = msg.actions && msg.actions.length > 0;
+            const hasContentParts = msg.content_parts && msg.content_parts.length > 0;
+
+            // Should show if contains any meaningful content
+            return hasText || hasAttachments || hasToolCalls || hasActions || hasContentParts;
+        });
+
+        return filtered.map((msg): ExtendedIMessage => {
             const isUserMessage = msg.role === 'user';
             const isSystemMessage = msg.role === 'system';
 

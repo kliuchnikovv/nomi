@@ -5,18 +5,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgtype"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
 // Chat представляет чат в базе данных
 type Chat struct {
-	ID         uuid.UUID  `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	UserID     uuid.UUID  `gorm:"type:uuid;not null;index:idx_chats_user_updated,priority:1"`
-	Model      string     `gorm:"type:text;not null"`
-	Title      string     `gorm:"not null"`
-	Mode       string     `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
-	TeamID     *string    `gorm:"type:varchar(50);default:null"`             // e.g. 'dnd_team', 'travel_planning'
+	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID uuid.UUID `gorm:"type:uuid;not null;index:idx_chats_user_updated,priority:1"`
+	Model  string    `gorm:"type:text;not null"`
+	Title  string    `gorm:"not null"`
+	Mode   string    `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
+
+	TeamID     *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
+	ProjectID  *uuid.UUID `gorm:"type:uuid;default:null;index"`
+	TaskID     *uuid.UUID `gorm:"type:uuid;default:null;index"`
+	ListID     *uuid.UUID `gorm:"type:uuid;default:null;index"` // list chat: manage list items via agent
 	CreatedAt  time.Time  `gorm:"not null"`
 	UpdatedAt  time.Time  `gorm:"not null;index;index:idx_chats_user_updated,priority:2,sort:desc"`
 	ArchivedAt *time.Time `gorm:"default:null"`
@@ -37,19 +42,20 @@ type Attachment struct {
 
 // Message represents a message in the database
 type Message struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	ChatID      uuid.UUID      `gorm:"type:uuid;not null;index:idx_messages_chat_created,priority:1"`
-	UserID      uuid.UUID      `gorm:"type:uuid;not null"`
-	Role        string         `gorm:"type:varchar(20);not null"`
-	Text        string         `gorm:"type:text;not null"`
+	ID           uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	ChatID       uuid.UUID      `gorm:"type:uuid;not null;index:idx_messages_chat_created,priority:1"`
+	UserID       uuid.UUID      `gorm:"type:uuid;not null"`
+	Role         string         `gorm:"type:varchar(20);not null"`
+	Text         string         `gorm:"type:text;not null"`
+	AgentID      *string        `gorm:"type:varchar(50);default:null;index"` // For multi-agent teams
 	ToolCalls    datatypes.JSON `gorm:"type:jsonb"`
 	ContentParts datatypes.JSON `gorm:"type:jsonb"` // Stores ordered text, tool_calls, reasoning
 	Reasoning    string         `gorm:"type:text"`  // Stores accumulated reasoning/thinking steps
 	Model        string         `gorm:"type:text"`
 	Actions      datatypes.JSON `gorm:"type:jsonb"` // Stores potential user actions (buttons)
 	Attachments  []Attachment   `gorm:"foreignKey:MessageID"`
-	CreatedAt   time.Time      `gorm:"not null;index:idx_messages_chat_created,priority:2,sort:desc"`
-	UpdatedAt   time.Time      `gorm:"not null"`
+	CreatedAt    time.Time      `gorm:"not null;index:idx_messages_chat_created,priority:2,sort:desc"`
+	UpdatedAt    time.Time      `gorm:"not null"`
 }
 
 type Integration struct {
@@ -105,4 +111,135 @@ func (s *Storage) GetAttachmentsByIDs(ctx context.Context, ids []uuid.UUID) ([]A
 		return nil, err
 	}
 	return attachments, nil
+}
+
+// --- Project and Task Models ---
+
+// ProjectStatus defines the state of repository analysis
+type ProjectStatus string
+
+const (
+	ProjectStatusPending   ProjectStatus = "PENDING"
+	ProjectStatusAnalyzing ProjectStatus = "ANALYZING"
+	ProjectStatusReady     ProjectStatus = "READY"
+	ProjectStatusFailed    ProjectStatus = "FAILED"
+)
+
+// ProjectTaskStatus defines the state of a project task
+type ProjectTaskStatus string
+
+const (
+	ProjectTaskStatusBacklog               ProjectTaskStatus = "BACKLOG"
+	ProjectTaskStatusAnalysis              ProjectTaskStatus = "ANALYSIS"
+	ProjectTaskStatusClarificationNeeded   ProjectTaskStatus = "CLARIFICATION_NEEDED"
+	ProjectTaskStatusArchitecture          ProjectTaskStatus = "ARCHITECTURE"
+	ProjectTaskStatusPlanning              ProjectTaskStatus = "PLANNING" // Legacy
+	ProjectTaskStatusApprovalPending       ProjectTaskStatus = "APPROVAL_PENDING"
+	ProjectTaskStatusDevelopment           ProjectTaskStatus = "DEVELOPMENT"
+	ProjectTaskStatusCoding                ProjectTaskStatus = "CODING" // Legacy
+	ProjectTaskStatusCodeReview            ProjectTaskStatus = "CODE_REVIEW"
+	ProjectTaskStatusReview                ProjectTaskStatus = "REVIEW" // Legacy
+	ProjectTaskStatusDodCheck              ProjectTaskStatus = "DOD_CHECK"
+	ProjectTaskStatusVerify                ProjectTaskStatus = "VERIFY" // Legacy
+	ProjectTaskStatusDeliveryHandoff       ProjectTaskStatus = "DELIVERY_HANDOFF"
+	ProjectTaskStatusWaitingForUserMerge   ProjectTaskStatus = "WAITING_FOR_USER_MERGE"
+	ProjectTaskStatusNeedHumanIntervention ProjectTaskStatus = "NEED_HUMAN_INTERVENTION"
+	ProjectTaskStatusDone                  ProjectTaskStatus = "DONE"
+	ProjectTaskStatusCancelled             ProjectTaskStatus = "CANCELLED"
+)
+
+// Project represents a project context
+type Project struct {
+	ID            uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	UserID        uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
+	Name          string         `gorm:"type:text;not null" json:"name"`
+	Description   string         `gorm:"type:text" json:"description"`
+	Repository    string         `gorm:"type:text" json:"repository"` // e.g. "owner/repo"
+	Status        ProjectStatus  `gorm:"type:varchar(20);default:'READY';not null" json:"status"`
+	LastIndexedAt *time.Time     `gorm:"type:timestamp" json:"last_indexed_at"`
+	CreatedAt     time.Time      `gorm:"not null" json:"created_at"`
+	UpdatedAt     time.Time      `gorm:"not null" json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+func (base *Project) BeforeCreate(tx *gorm.DB) (err error) {
+	if base.ID == uuid.Nil {
+		base.ID = uuid.New()
+	}
+	return
+}
+
+// ProjectTask represents a task within a project
+type ProjectTask struct {
+	ID          uuid.UUID         `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	UserID      uuid.UUID         `gorm:"type:uuid;not null;index" json:"user_id"`
+	ProjectID   uuid.UUID         `gorm:"type:uuid;not null;index" json:"project_id"`
+	ParentID    *uuid.UUID        `gorm:"type:uuid;index" json:"parent_id,omitempty"` // For subtasks
+	Title       string            `gorm:"type:text;not null" json:"title"`
+	Description string            `gorm:"type:text" json:"description"`
+	Status      ProjectTaskStatus `gorm:"type:varchar(50);default:'BACKLOG';not null" json:"status"`
+	Priority    string            `gorm:"type:varchar(20);default:'medium'" json:"priority"`
+	Artifacts   pgtype.JSONB      `gorm:"type:jsonb;default:'{}'" json:"artifacts"` // AnalystOutput + ArchitectPlan
+	CreatedAt   time.Time         `gorm:"not null" json:"created_at"`
+	UpdatedAt   time.Time         `gorm:"not null" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt    `gorm:"index" json:"-"`
+}
+
+// TaskStatus defines the state of a scheduled task
+type TaskStatus string
+
+const (
+	TaskStatusPending   TaskStatus = "pending"
+	TaskStatusRunning   TaskStatus = "running"
+	TaskStatusCompleted TaskStatus = "completed"
+	TaskStatusFailed    TaskStatus = "failed"
+)
+
+// Task represents a scheduled job
+type Task struct {
+	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID    uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
+	ChatID    uuid.UUID      `gorm:"type:uuid;not null" json:"chat_id"`
+	Type      string         `gorm:"type:varchar(50);not null" json:"type"` // e.g. "agent_message"
+	Payload   datatypes.JSON `gorm:"type:jsonb;not null" json:"payload"`    // e.g. {"message": "check news"}
+	Tools     datatypes.JSON `gorm:"type:jsonb" json:"tools"`               // Tools that were active when task was created
+	CronExpr  string         `gorm:"type:varchar(50)" json:"cron_expr"`     // Optional cron expression
+	ExecuteAt time.Time      `gorm:"not null" json:"execute_at"`
+	Status    TaskStatus     `gorm:"type:varchar(20);default:'pending';not null" json:"status"`
+	Error     string         `gorm:"type:text" json:"error"`
+	CreatedAt time.Time      `gorm:"not null" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"not null" json:"updated_at"`
+}
+
+// List represents a user list (facts, links, documents with per-list RAG)
+type List struct {
+	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	UserID      uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
+	Name        string         `gorm:"type:text;not null" json:"name"`
+	Description string         `gorm:"type:text" json:"description"`
+	CreatedAt   time.Time      `gorm:"not null" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"not null" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// ListItemType is fact, link, or document
+type ListItemType string
+
+const (
+	ListItemTypeFact     ListItemType = "fact"
+	ListItemTypeLink     ListItemType = "link"
+	ListItemTypeDocument ListItemType = "document"
+)
+
+// ListItem represents an item in a list (indexed in RAG per list)
+type ListItem struct {
+	ID        uuid.UUID    `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	ListID    uuid.UUID    `gorm:"type:uuid;not null;index" json:"list_id"`
+	Type      ListItemType `gorm:"type:varchar(20);not null" json:"type"` // fact, link, document
+	Title     string       `gorm:"type:text" json:"title"`
+	Content   string       `gorm:"type:text;not null" json:"content"`
+	URL       string       `gorm:"type:text" json:"url"` // for link type
+	CreatedAt time.Time    `gorm:"not null" json:"created_at"`
+	UpdatedAt time.Time    `gorm:"not null" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 }

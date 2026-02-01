@@ -1,6 +1,9 @@
 import { Chat, GetChatsOptions, Message } from '../main/models';
 import { ReactNode } from 'react';
-import { PluginChatMessage } from '../rightsidebar/models';
+import { PluginChatMessage } from '../integrationsSidebar/models';
+
+export type DetailLevel = 'hide' | 'tool_calls' | 'think' | 'all';
+
 
 export type Props = {
     children: ReactNode;
@@ -21,8 +24,9 @@ export interface MainContextType {
 export interface ChatContextType {
     messages: Message[];
     messagesLoading: boolean;
-    getMessages: (chatId: string) => void;
-    sendMessage: (text: string, attachments?: any[], webSearch?: boolean, thinking?: string) => void;
+    getMessages: (chatId: string, opts?: { isRefresh?: boolean }) => void;
+    refreshing: boolean;
+    sendMessage: (text: string, attachments?: any[], webSearch?: boolean, thinking?: string, role?: string) => void;
     executeMessageAction: (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => Promise<void>;
     assistantWorking: boolean;
     externalTitle?: string | null;
@@ -59,7 +63,11 @@ export interface ChatContextType {
     setShowReasoning: (show: boolean) => void;
     showMemberResponses: boolean;
     setShowMemberResponses: (show: boolean) => void;
+    detailLevel: DetailLevel;
+    setDetailLevel: (level: DetailLevel) => void;
+    activeAgentsCount?: number;
 }
+
 
 export interface Model {
     id: string;
@@ -67,6 +75,7 @@ export interface Model {
     description?: string;
     provider?: string;
     supports_thinking?: boolean;
+    endpoint?: string;
 }
 
 export interface ModelDetail {

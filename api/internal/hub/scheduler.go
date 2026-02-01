@@ -108,7 +108,8 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 	// Or force create a room.
 
 	// Let's modify Hub to expose GetOrCreateRoom
-	room, err := s.hub.GetOrCreateRoom(task.ChatID, task.UserID, "agent", "") // Scheduled tasks use agent mode
+	// Added RoomTypeChat as the second argument
+	room, err := s.hub.GetOrCreateRoom(task.ChatID, RoomTypeChat, task.UserID, "agent", "") // Scheduled tasks use agent mode
 	if err != nil {
 		return err
 	}
@@ -134,7 +135,7 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 
 	// For now, let's construct a minimal valid frame and inject.
 	msgID := uuid.New()
-	
+
 	// Unmarshal tools from task if they exist
 	var tools interface{}
 	if len(task.Tools) > 0 {
@@ -142,18 +143,22 @@ func (s *Scheduler) executeAgentMessage(ctx context.Context, task storage.Task) 
 			s.logger.Warn("failed to unmarshal task tools", zap.Error(err))
 		}
 	}
-	
+
+	// Construct payload map for json.RawMessage
+	payloadMap := map[string]interface{}{
+		"message_id": msgID,
+		"message":    payload.Message,
+		"role":       "system",
+		"tools":      tools,
+	}
+	payloadBytesRaw, _ := json.Marshal(payloadMap)
+
 	frame := Frame{
 		ChatID:    task.ChatID,
 		Operation: MessageOperation,
 		Kind:      TokenKind, // Ensure Kind is set
 		Timestamp: time.Now().UTC(),
-		Payload: Payload{
-			MessageID: msgID,
-			Message:   payload.Message,
-			Role:      "system",
-			Tools:     tools, // Include tools from task creation time
-		},
+		Payload:   payloadBytesRaw,
 	}
 	frameBytes, _ := json.Marshal(frame)
 

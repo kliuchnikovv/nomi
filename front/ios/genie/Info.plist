@@ -51,7 +51,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Genie needs access to your camera to take photos for attachments</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>Genie needs access to your location to provide location-based services</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Genie needs access to your microphone to record voice messages</string>
 	<key>NSPhotoLibraryUsageDescription</key>

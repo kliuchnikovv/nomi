@@ -1,8 +1,9 @@
-from typing import Sequence
+from typing import Sequence, Optional
 
 from agno.db.postgres import PostgresDb
 from agno.agent import Agent
 from agno.models.base import Model
+from agno.knowledge import Knowledge
 from agno.tools import Toolkit, Function
 
 name = 'Mailer'
@@ -21,10 +22,16 @@ Rules:
 - If information is missing to decide, state what is missing before making a guess.
 - Write summary as if you writing it to the user in the chat.
 - Return ONLY raw JSON per expected_output, without markdown fences or extra text.
+
+Memory & Personalization:
+- Remember user's email triage patterns (what they consider urgent vs. low priority)
+- Store preferences about email senders (important contacts, frequent collaborators)
+- Remember user's response patterns (quick replies vs. detailed responses)
+- Capture email-related preferences (format preferences, attachment handling)
 """
 expected_output = """
 {
-  "title": "{email_subject}",
+  "title": "string — the email subject line",
   "importance": {"level": "high|medium|low", "reason": "short reason"},
   "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
   "summary": "2-3 sentence summary focusing on intent and key asks/dates",
@@ -39,12 +46,20 @@ class MailerAgent(Agent):
         db: PostgresDb | None = None,
         tools: Sequence[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
+        knowledge: Optional[Knowledge] = None,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         super().__init__(
             db=db,
             name=name,
             model=model,
             tools=tools,
+            user_id=user_id,
+            learning=learning,
+            knowledge=knowledge,
+            search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
+            update_knowledge=(knowledge is not None),  # Enable automatic fact storage
             description=description,
             instructions=instructions,
             expected_output=expected_output,
@@ -54,8 +69,6 @@ class MailerAgent(Agent):
             read_tool_call_history=True,  # Enable reading tool call history
             store_tool_messages=True,  # Store tool call results
             # read_chat_history=True,
-            # search_knowledge=True,
-            # update_knowledge=True,
             send_media_to_model=True,
             store_media=True,
             # store_history_messages=True,
