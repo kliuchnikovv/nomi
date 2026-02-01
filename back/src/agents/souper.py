@@ -44,7 +44,7 @@ class SouperAgent(Agent):
         self,
         db: PostgresDb,
         model: Model,
-        user_id: str,
+        user_id: str = "",
         tools: Sequence[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
         thinking: str = "off",
