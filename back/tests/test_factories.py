@@ -3,14 +3,18 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from agno.models.base import Model
 from agno.models.google import Gemini
 from agno.models.openai import OpenAIChat, OpenAIResponses
-from agno.vectordb.pgvector import PgVector
-from src.agents.factory import AgentFactory
+from src.agents.factory import AgentFactory, AgentRunWrapper
 from src.teams.factory import TeamFactory
 from src.tools.models import ToolSpec
 from src.agents.genie import GenieAgent
 from src.agents.rag import RagAgent
 from src.agents.memoriser import MemoriserAgent
 from src.agents.mailer import MailerAgent
+
+
+def _unwrap(agent):
+    """Unwrap AgentRunWrapper to get the inner agent for isinstance checks."""
+    return getattr(agent, "_agent", agent)
 
 
 # Mocks
@@ -36,7 +40,8 @@ async def test_agent_factory_build_default(agent_factory):
 
         agent = await agent_factory.build(session_id="sess-1")
 
-        assert isinstance(agent, GenieAgent)
+        assert isinstance(agent, AgentRunWrapper)
+        assert isinstance(_unwrap(agent), GenieAgent)
         # Session ID is not set on the agent instance by the factory currently,
         # it just logs it.
         # assert agent.session_id == "sess-1"
@@ -50,22 +55,22 @@ async def test_agent_factory_build_specific_types(agent_factory):
         patch(
             "src.agents.factory.build_tools", new_callable=AsyncMock
         ) as mock_build_tools,
-        patch("src.agents.factory.build_vector_db") as mock_build_db,
+        patch("src.agents.factory.build_knowledge_base") as mock_build_kb,
     ):
         mock_build_tools.return_value = []
-        mock_build_db.return_value = MagicMock(spec=PgVector)
+        mock_build_kb.return_value = MagicMock()
 
         # Mailer
         agent = await agent_factory.build(session_id="sess-1", agent_type="mailer")
-        assert isinstance(agent, MailerAgent)
+        assert isinstance(_unwrap(agent), MailerAgent)
 
         # Rag
         agent = await agent_factory.build(session_id="sess-1", agent_type="rag")
-        assert isinstance(agent, RagAgent)
+        assert isinstance(_unwrap(agent), RagAgent)
 
         # Memoriser
         agent = await agent_factory.build(session_id="sess-1", agent_type="memoriser")
-        assert isinstance(agent, MemoriserAgent)
+        assert isinstance(_unwrap(agent), MemoriserAgent)
 
 
 @pytest.mark.asyncio
@@ -133,16 +138,18 @@ async def test_team_factory_build(agent_factory):
         patch(
             "src.agents.factory.build_tools", new_callable=AsyncMock
         ) as mock_build_tools,
+        patch("src.agents.factory.build_knowledge_base") as mock_build_kb,
         patch("src.agents.factory.os.getenv", return_value="fake-api-key"),
     ):
         mock_build_tools.return_value = []
+        mock_build_kb.return_value = MagicMock()
 
         team = await team_factory.build(command_desc, session_id="sess-team")
 
         assert team.name == "Test Team"
         assert len(team.members) == 2
-        assert isinstance(team.members[0], GenieAgent)
-        assert isinstance(team.members[1], MailerAgent)
+        assert isinstance(_unwrap(team.members[0]), GenieAgent)
+        assert isinstance(_unwrap(team.members[1]), MailerAgent)
         assert team.session_id == "sess-team"
 
 

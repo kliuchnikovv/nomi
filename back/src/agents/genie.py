@@ -106,6 +106,8 @@ class GenieAgent(Agent):
         thinking: str = "off",
         knowledge: Optional[Knowledge] = None,
         instructions: str | None = None,
+        user_id: Optional[str] = None,
+        learning: bool = False,
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
         base_instructions = instructions if instructions else BASE_INSTRUCTIONS
@@ -130,6 +132,8 @@ class GenieAgent(Agent):
             name=agent_name,
             model=model,
             tools=tools,
+            user_id=user_id,
+            learning=learning,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
             update_knowledge=(knowledge is not None),  # Enable automatic fact storage

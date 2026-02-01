@@ -22,7 +22,9 @@ class RagAgent(Agent):
         model: Model,
         tools: Sequence[Toolkit] | None = None,
         debug_mode: bool = False,
-        knowledge: Optional[Knowledge] = None
+        knowledge: Optional[Knowledge] = None,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         # Use provided knowledge or build a new one
         if knowledge is None:
@@ -33,6 +35,8 @@ class RagAgent(Agent):
             name="Rag",
             model=model,
             tools=tools,
+            user_id=user_id,
+            learning=learning,
             knowledge=knowledge,
             search_knowledge=True,  # Enable agentic search
             update_knowledge=True,  # Enable automatic fact storage

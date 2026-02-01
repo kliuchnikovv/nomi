@@ -3,7 +3,7 @@ Email Analyzer Agent
 Analyzes emails to extract urgency, connections, time frames, and suggested actions.
 """
 import json
-from typing import List, Optional
+from typing import List, Optional, Any
 from agno.agent import Agent
 from agno.models.base import Model
 from pydantic import BaseModel, Field
@@ -119,7 +119,10 @@ class EmailAnalyzerAgent(Agent):
     def __init__(
         self,
         model: Model,
+        db: Optional[Any] = None,
         debug_mode: bool = False,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         from datetime import datetime
         current_date = datetime.now().strftime("%Y-%m-%d")
@@ -130,9 +133,12 @@ class EmailAnalyzerAgent(Agent):
         instructions = instructions.replace("{current_date}", current_date)
         
         super().__init__(
+            db=db,
             model=model,
             name="EmailAnalyzerAgent",
             instructions=instructions,
             debug_mode=debug_mode,
+            user_id=user_id,
+            learning=learning,
             description="Analyzes emails to extract urgency, connections, time frames, and suggested actions.",
         )

@@ -135,14 +135,17 @@ class RedisWorker:
                         len(facts) if facts else 0,
                     )
                     return
-                knowledge = self.agent_factory.get_or_create_knowledge(str(user_id))
+                knowledge = self.agent_factory.get_knowledge()
                 if not knowledge:
-                    logger.warning("[RedisWorker] store_facts: get_or_create_knowledge returned None for user=%s", user_id)
+                    logger.warning("[RedisWorker] store_facts: get_knowledge returned None for user=%s", user_id)
                     return
                 for fact in facts:
                     if isinstance(fact, str) and fact.strip():
                         try:
-                            knowledge.load_text(fact.strip())
+                            knowledge.insert(
+                                text_content=fact.strip(),
+                                metadata={"user_id": str(user_id)},
+                            )
                             logger.info("[RedisWorker] Stored client fact: %s", fact[:80])
                         except Exception as e:
                             logger.warning("[RedisWorker] Failed to store fact: %s", e)

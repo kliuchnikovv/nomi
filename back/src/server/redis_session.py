@@ -393,13 +393,13 @@ class RedisSession:
     async def _extract_and_store_facts(self, text: str) -> None:
         """
         Run memory extraction in background: extract facts from current message + recent
-        history and store in UserScopedKnowledge. Does not block the main chat response.
+        history and store in shared Knowledge with user_id in metadata. Does not block the main chat response.
         """
         user_id = self.user_id
         if not user_id or not (text or "").strip():
             return
         try:
-            knowledge = self.agent_factory.get_or_create_knowledge(user_id)
+            knowledge = self.agent_factory.get_knowledge()
             if not knowledge:
                 return
             model = self.agent_factory.build_model(
@@ -438,7 +438,10 @@ class RedisSession:
                         fact = fact.lstrip("-*•0123456789. ")
                     if fact:
                         try:
-                            knowledge.load_text(fact)
+                            knowledge.insert(
+                                text_content=fact,
+                                metadata={"user_id": user_id},
+                            )
                             logger.info("[RedisSession] Stored fact: %s", fact[:80])
                         except Exception as e:
                             logger.warning("[RedisSession] Failed to store fact %s: %s", fact[:50], e)
@@ -487,12 +490,15 @@ class RedisSession:
         incoming_facts = payload.get("extracted_facts")
         if incoming_facts and self.user_id:
             try:
-                knowledge = self.agent_factory.get_or_create_knowledge(str(self.user_id))
+                knowledge = self.agent_factory.get_knowledge()
                 if knowledge and isinstance(incoming_facts, list):
                     for fact in incoming_facts:
                         if isinstance(fact, str) and fact.strip():
                             try:
-                                knowledge.load_text(fact.strip())
+                                knowledge.insert(
+                                    text_content=fact.strip(),
+                                    metadata={"user_id": str(self.user_id)},
+                                )
                                 logger.info("[RedisSession] Stored client fact: %s", fact[:80])
                             except Exception as e:
                                 logger.warning("[RedisSession] Failed to store client fact: %s", e)

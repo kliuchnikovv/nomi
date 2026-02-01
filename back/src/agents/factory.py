@@ -2,8 +2,10 @@ import logging
 import os
 
 from typing import List, Optional
+
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
+from agno.knowledge import Knowledge
 from agno.models.base import Model
 from agno.vectordb.pgvector import PgVector
 
@@ -27,8 +29,8 @@ from src.teams.development.team import (
 
 # NOTE: AnalystOutput, ArchitectPlan, ReviewVerdict imports removed
 # Gemini 2.5 doesn't support output_schema with function calling
-from src.knowledge.factory import build_vector_db
-from src.knowledge.user_knowledge import UserScopedKnowledge
+from src.knowledge.factory import build_knowledge_base, build_vector_db
+from src.knowledge.user_knowledge import UserKnowledgeAdapter
 from src.tools.config import ToolConfigClient
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
@@ -37,7 +39,34 @@ from agno.tools import Toolkit
 
 logger = logging.getLogger(__name__)
 
-# ...
+
+class AgentRunWrapper:
+    """
+    Thin wrapper that injects knowledge_filters={"user_id": rag_user_id} into every
+    run/arun call so agentic search is scoped to the user. Call sites do not need
+    to pass knowledge_filters explicitly.
+    """
+
+    def __init__(self, agent: Agent, rag_user_id: str):
+        self._agent = agent
+        self._rag_user_id = rag_user_id
+
+    def arun(self, input, **kwargs):
+        filters = kwargs.get("knowledge_filters") or {}
+        if isinstance(filters, dict):
+            filters = {**filters, "user_id": self._rag_user_id}
+        kwargs["knowledge_filters"] = filters
+        return self._agent.arun(input, **kwargs)
+
+    def run(self, input, **kwargs):
+        filters = kwargs.get("knowledge_filters") or {}
+        if isinstance(filters, dict):
+            filters = {**filters, "user_id": self._rag_user_id}
+        kwargs["knowledge_filters"] = filters
+        return self._agent.run(input, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._agent, name)
 
 
 class AgentFactory:
@@ -53,9 +82,8 @@ class AgentFactory:
         self._model = model
         self._config_client = config_client
         self._debug_mode = debug_mode
-        self._vector_db: Optional[PgVector] = (
-            None  # Lazy initialization of DB connection
-        )
+        self._vector_db: Optional[PgVector] = None  # Legacy; prefer _knowledge
+        self._knowledge: Optional[Knowledge] = None  # Shared Agno Knowledge (lazy)
 
     @property
     def config_client(self) -> ToolConfigClient:
@@ -63,7 +91,7 @@ class AgentFactory:
         return self._config_client
 
     def _get_or_create_vector_db(self) -> Optional[PgVector]:
-        """Lazy initialization of shared Vector DB instance."""
+        """Lazy initialization of shared Vector DB instance (used when building Knowledge)."""
         if self._vector_db is None:
             try:
                 self._vector_db = build_vector_db()
@@ -74,12 +102,21 @@ class AgentFactory:
                 )
         return self._vector_db
 
-    def get_or_create_knowledge(self, user_id: str) -> Optional[UserScopedKnowledge]:
-        """Return UserScopedKnowledge for the given user_id (for memory extraction, store_facts, etc.)."""
-        vector_db = self._get_or_create_vector_db()
-        if not vector_db:
-            return None
-        return UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
+    def _get_or_create_knowledge(self) -> Optional[Knowledge]:
+        """Lazy initialization of shared Knowledge (vector_db + contents_db)."""
+        if self._knowledge is None:
+            try:
+                self._knowledge = build_knowledge_base()
+                logger.info("[Factory] Shared Knowledge initialized")
+            except Exception as e:
+                logger.error(
+                    "[Factory] Failed to initialize Knowledge: %s", e, exc_info=True
+                )
+        return self._knowledge
+
+    def get_knowledge(self) -> Optional[Knowledge]:
+        """Return shared Knowledge for insert/delete (callers pass user_id in metadata)."""
+        return self._get_or_create_knowledge()
 
     # ... (build_model omitted)
 
@@ -110,7 +147,11 @@ class AgentFactory:
         provider_norm = (provider or "").strip().lower() or None
 
         # Support Gemini and Gemma models
-        if provider_norm == "google" or model_name.startswith("gemini-") or model_name.startswith("gemma-"):
+        if (
+            provider_norm == "google"
+            or model_name.startswith("gemini-")
+            or model_name.startswith("gemma-")
+        ):
             api_key = os.getenv("GOOGLE_API_KEY")
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable not set")
@@ -223,7 +264,11 @@ class AgentFactory:
                     base_url = ep
             else:
                 base_url = "https://openrouter.ai/api/v1"  # fallback for legacy configs
-            logger.info("[Factory] Creating OpenRouter model: %s (base_url=%s)", model_name, base_url)
+            logger.info(
+                "[Factory] Creating OpenRouter model: %s (base_url=%s)",
+                model_name,
+                base_url,
+            )
             return OpenAIChat(
                 id=model_name,
                 api_key=api_key,
@@ -325,7 +370,9 @@ class AgentFactory:
                     params = dict(tool_spec.params)
                     # Inject command_desc auth_token and list_id for knowledge_search (list chat)
                     if tool_spec.name == "knowledge_search" and command_desc:
-                        if "auth_token" not in params and command_desc.get("auth_token"):
+                        if "auth_token" not in params and command_desc.get(
+                            "auth_token"
+                        ):
                             params["auth_token"] = command_desc["auth_token"]
                         if "list_id" not in params and command_desc.get("list_id"):
                             params["list_id"] = command_desc["list_id"]
@@ -385,28 +432,25 @@ class AgentFactory:
         )
 
         try:
-            # Build User-Scoped Knowledge Base
-            vector_db = self._get_or_create_vector_db()
-            knowledge = None
-            if vector_db:
-                # Create a lightweight Knowledge wrapper for this user
-                knowledge = UserScopedKnowledge(
-                    user_id=rag_user_id, vector_db=vector_db
-                )
-                logger.info(
-                    "[Factory] Created UserScopedKnowledge for rag_user_id=%s (min_similarity=%.2f)",
-                    rag_user_id,
-                    knowledge.min_similarity_threshold or 0.0,
-                )
+            # Shared Agno Knowledge; user isolation via knowledge_filters at run()
+            # and UserKnowledgeAdapter so update_knowledge stores with user_id
+            knowledge = self._get_or_create_knowledge()
+            if knowledge:
+                knowledge = UserKnowledgeAdapter(knowledge, rag_user_id)
             else:
-                logger.warning("[Factory] Vector DB not available, agent will not have memory")
+                logger.warning(
+                    "[Factory] Knowledge not available, agent will not have memory"
+                )
 
             if command_desc and command_desc.get("type"):
                 agent_type = command_desc["type"]
             # List chat: list_id takes precedence so we use ListAgent
             if list_id:
                 agent_type = "list"
-                logger.info("[Factory] List chat detected, building ListAgent for list_id=%s", list_id)
+                logger.info(
+                    "[Factory] List chat detected, building ListAgent for list_id=%s",
+                    list_id,
+                )
             if agent_type and agent_type.lower() == "list":
                 agent = ListAgent(
                     db=self._db,
@@ -414,6 +458,9 @@ class AgentFactory:
                     tools=tools,
                     debug_mode=self._debug_mode,
                     knowledge=knowledge,
+                    list_id=list_id,
+                    user_id=rag_user_id,
+                    learning=True,
                 )
                 logger.info("[Factory] Built ListAgent for list_id=%s", list_id)
             elif agent_type and agent_type.lower() == "mailer":
@@ -423,6 +470,8 @@ class AgentFactory:
                     tools=tools,
                     debug_mode=self._debug_mode,
                     knowledge=knowledge,
+                    user_id=rag_user_id,
+                    learning=True,
                 )
             elif agent_type and agent_type.lower() == "rag":
                 agent = RagAgent(
@@ -431,6 +480,8 @@ class AgentFactory:
                     tools=tools,
                     debug_mode=self._debug_mode,
                     knowledge=knowledge,
+                    user_id=rag_user_id,
+                    learning=True,
                 )
             elif agent_type and agent_type.lower() == "memoriser":
                 agent = MemoriserAgent(
@@ -439,23 +490,34 @@ class AgentFactory:
                     tools=tools,
                     debug_mode=self._debug_mode,
                     knowledge=knowledge,
+                    user_id=rag_user_id,
+                    learning=True,
                 )
             elif agent_type and agent_type.lower() == "briefing":
                 agent = BriefingAgent(
                     model=model,
+                    db=self._db,
                     knowledge=knowledge,
                     tools=tools,
                     debug_mode=self._debug_mode,
+                    user_id=rag_user_id,
+                    learning=True,
                 )
             elif agent_type and agent_type.lower() == "extraction":
                 agent = ExtractionAgent(
                     model=model,
+                    db=self._db,
                     debug_mode=self._debug_mode,
+                    user_id=rag_user_id,
+                    learning=True,
                 )
             elif agent_type and agent_type.lower() == "email_analyzer":
                 agent = EmailAnalyzerAgent(
                     model=model,
+                    db=self._db,
                     debug_mode=self._debug_mode,
+                    user_id=rag_user_id,
+                    learning=True,
                 )
             elif agent_type and agent_type.lower() == "analyst":
                 # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
@@ -471,6 +533,9 @@ class AgentFactory:
                     workflow_storage=None,
                     on_completion=None,
                     tool_call_limit=10,
+                    user_id=rag_user_id,
+                    learning=True,
+                    db=self._db,
                 )
             elif agent_type and agent_type.lower() == "architect":
                 # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
@@ -484,6 +549,9 @@ class AgentFactory:
                     workflow_storage=None,
                     on_completion=None,
                     tool_call_limit=10,
+                    user_id=rag_user_id,
+                    learning=True,
+                    db=self._db,
                 )
             elif agent_type and agent_type.lower() == "developer":
                 agent = WorkflowAgent(
@@ -496,6 +564,9 @@ class AgentFactory:
                     workflow_storage=None,
                     on_completion=None,
                     tool_call_limit=20,
+                    user_id=rag_user_id,
+                    learning=True,
+                    db=self._db,
                 )
             elif agent_type and agent_type.lower() == "worker":
                 agent = WorkflowAgent(
@@ -508,6 +579,9 @@ class AgentFactory:
                     workflow_storage=None,
                     on_completion=None,
                     tool_call_limit=10,
+                    user_id=rag_user_id,
+                    learning=True,
+                    db=self._db,
                 )
             elif agent_type and agent_type.lower() == "reviewer":
                 # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
@@ -520,6 +594,9 @@ class AgentFactory:
                     workflow_storage=None,
                     on_completion=None,
                     tool_call_limit=10,
+                    user_id=rag_user_id,
+                    learning=True,
+                    db=self._db,
                 )
             else:
                 # Default to Genie
@@ -596,6 +673,8 @@ class AgentFactory:
                     thinking=thinking,
                     knowledge=knowledge,
                     instructions=genie_instructions,  # Pass combined or None (GenieAgent defaults to BASE)
+                    user_id=rag_user_id,
+                    learning=True,
                 )
 
                 if not add_datetime:
@@ -608,7 +687,7 @@ class AgentFactory:
                 session_id,
                 agent.name,
             )
-            return agent
+            return AgentRunWrapper(agent, rag_user_id)
         except Exception as e:
             logger.error(
                 "[WS] Failed to create agent: session_id=%s model=%s agent_type=%s error=%s",

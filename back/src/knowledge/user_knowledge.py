@@ -1,3 +1,8 @@
+"""
+Thin adapter that injects user_id into insert/insert_many so Agno update_knowledge
+stores facts with user isolation. Search isolation is handled by knowledge_filters at run().
+"""
+
 import logging
 from functools import lru_cache
 from typing import Any, Dict, List
@@ -8,6 +13,37 @@ from agno.vectordb.pgvector import PgVector
 
 logger = logging.getLogger(__name__)
 
+
+class UserKnowledgeAdapter:
+    """
+    Wraps a shared Knowledge and injects user_id into metadata on insert/insert_many.
+    Used when passing knowledge to agents so that update_knowledge stores with user_id.
+    Search is scoped via knowledge_filters at agent.run() / arun(), not here.
+    """
+
+    def __init__(self, knowledge: Knowledge, user_id: str):
+        self._knowledge = knowledge
+        self._user_id = user_id
+
+    def insert(self, **kwargs) -> None:
+        meta = dict(kwargs.get("metadata") or {})
+        meta["user_id"] = self._user_id
+        kwargs["metadata"] = meta
+        return self._knowledge.insert(**kwargs)
+
+    def insert_many(self, items: list, **kwargs) -> None:
+        # Ensure each item's metadata includes user_id
+        for item in items:
+            if isinstance(item, dict):
+                item.setdefault("metadata", {})
+                item["metadata"]["user_id"] = self._user_id
+        return self._knowledge.insert_many(items, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._knowledge, name)
+
+
+# --- Legacy UserScopedKnowledge (used by test_rag_logging; optional for backward compat) ---
 # Minimum cosine similarity (0..1) to consider a document relevant. Below this, results are
 # filtered out so the agent does not receive unrelated docs (e.g. Genie README for "эффект Долины").
 # Higher value (0.6) reduces irrelevant facts in responses (e.g. no "you love chebureki" on "Hi!").
@@ -226,45 +262,47 @@ class UserScopedKnowledge(Knowledge):
                 doc.meta_data,
             )
 
-        if self.vector_db:
-            try:
-                # Use concrete signatures for Agno's PgVector
-                if upsert:
-                    # upsert(content_hash, documents, ...)
-                    if hasattr(self.vector_db, "upsert"):
-                        # We pass empty content_hash as UserScopedKnowledge manages general docs
-                        self.vector_db.upsert(content_hash="", documents=documents)
-                        logger.info(
-                            "[RAG Store] Successfully stored %d document(s) via upsert",
-                            len(documents),
-                        )
-                    else:
-                        logger.warning("[RAG Store] vector_db does not support upsert")
+        if not self.vector_db:
+            return
+            
+        try:
+            # Use concrete signatures for Agno's PgVector
+            if upsert:
+                # upsert(content_hash, documents, ...)
+                if hasattr(self.vector_db, "upsert"):
+                    # We pass empty content_hash as UserScopedKnowledge manages general docs
+                    self.vector_db.upsert(content_hash="", documents=documents)
+                    logger.info(
+                        "[RAG Store] Successfully stored %d document(s) via upsert",
+                        len(documents),
+                    )
                 else:
-                    # insert(content_hash, documents, ...)
-                    if hasattr(self.vector_db, "insert"):
-                        self.vector_db.insert(content_hash="", documents=documents)
-                        logger.info(
-                            "[RAG Store] Successfully stored %d document(s) via insert",
-                            len(documents),
-                        )
-                    elif hasattr(self.vector_db, "add_documents"):
-                        # Fallback for generic VectorDb
-                        self.vector_db.add_documents(documents)
-                        logger.info(
-                            "[RAG Store] Successfully stored %d document(s) via add_documents",
-                            len(documents),
-                        )
-                    else:
-                        logger.warning(
-                            "[RAG Store] Could not find method to add documents to vector_db"
-                        )
-            except Exception as e:
-                # Log detailed error to help debugging if it fails again
-                logger.error(
-                    f"[RAG Store] Failed to store documents: {e}", exc_info=True
-                )
-                raise e
+                    logger.warning("[RAG Store] vector_db does not support upsert")
+            else:
+                # insert(content_hash, documents, ...)
+                if hasattr(self.vector_db, "insert"):
+                    self.vector_db.insert(content_hash="", documents=documents)
+                    logger.info(
+                        "[RAG Store] Successfully stored %d document(s) via insert",
+                        len(documents),
+                    )
+                elif hasattr(self.vector_db, "add_documents"):
+                    # Fallback for generic VectorDb
+                    self.vector_db.add_documents(documents)
+                    logger.info(
+                        "[RAG Store] Successfully stored %d document(s) via add_documents",
+                        len(documents),
+                    )
+                else:
+                    logger.warning(
+                        "[RAG Store] Could not find method to add documents to vector_db"
+                    )
+        except Exception as e:
+            # Log detailed error to help debugging if it fails again
+            logger.error(
+                f"[RAG Store] Failed to store documents: {e}", exc_info=True
+            )
+            raise e
 
     def delete(self, filters: Dict[str, Any] | None = None) -> None:
         """
@@ -273,27 +311,29 @@ class UserScopedKnowledge(Knowledge):
         effective_filter = filters or {}
         effective_filter["user_id"] = self.user_id
 
-        if self.vector_db:
-            try:
-                # Use standard delete_by_metadata method
-                if hasattr(self.vector_db, "delete_by_metadata"):
-                    self.vector_db.delete_by_metadata(metadata=effective_filter)
-                    logger.info(
-                        "[RAG Delete] Deleted documents with filters: %s",
-                        effective_filter,
-                    )
-                elif hasattr(self.vector_db, "delete_documents"):
-                    self.vector_db.delete_documents(filters=effective_filter)
-                elif hasattr(self.vector_db, "delete"):
-                    # Fallback if specific method missing, but avoid runtime inspection
-                    logger.warning(
-                        "[RAG Delete] Falling back to generic delete(), hope it supports filters"
-                    )
-                    self.vector_db.delete(filters=effective_filter)
-                else:
-                    logger.warning(
-                        "Could not find method to delete documents from vector_db"
-                    )
-            except Exception as e:
-                logger.error(f"Failed to delete documents: {e}", exc_info=True)
-                raise e
+        if not self.vector_db:
+            return
+
+        try:
+            # Use standard delete_by_metadata method
+            if hasattr(self.vector_db, "delete_by_metadata"):
+                self.vector_db.delete_by_metadata(metadata=effective_filter)
+                logger.info(
+                    "[RAG Delete] Deleted documents with filters: %s",
+                    effective_filter,
+                )
+            elif hasattr(self.vector_db, "delete_documents"):
+                self.vector_db.delete_documents(filters=effective_filter)
+            elif hasattr(self.vector_db, "delete"):
+                # Fallback if specific method missing, but avoid runtime inspection
+                logger.warning(
+                    "[RAG Delete] Falling back to generic delete(), hope it supports filters"
+                )
+                self.vector_db.delete(filters=effective_filter)
+            else:
+                logger.warning(
+                    "Could not find method to delete documents from vector_db"
+                )
+        except Exception as e:
+            logger.error(f"Failed to delete documents: {e}", exc_info=True)
+            raise e

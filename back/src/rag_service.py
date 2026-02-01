@@ -3,14 +3,11 @@ import logging
 import os
 import httpx
 
-from agno.tools import Toolkit
+from agno.knowledge import Knowledge
 from agno.knowledge.document import Document
+from agno.tools import Toolkit
 
-# Adjusted import to be relative or absolute based on running from root/back
-# Since we are running from root, and PYTHONPATH includes '.',
-# back.src.knowledge.factory should work, but src... fails if src is not in python path directly
 from src.knowledge.factory import build_vector_db
-from src.knowledge.user_knowledge import UserScopedKnowledge
 from github import Github, GithubException
 
 logger = logging.getLogger(__name__)
@@ -18,22 +15,24 @@ logger = logging.getLogger(__name__)
 
 class ProjectKnowledgeManager:
     """
-    Manages user knowledge using a shared vector database
-    with metadata filtering for isolation and project scoping.
+    Manages user knowledge using a shared Knowledge instance.
+    User isolation via user_id in metadata/filters on every insert/search/delete.
     """
 
     def __init__(
         self,
         user_id: str,
+        knowledge: Optional[Knowledge] = None,
         db_url: Optional[str] = None,
         vector_db: Optional[Any] = None,
     ):
         self.user_id = user_id
-        # Use provided vector_db (singleton) or build new one (legacy/fallback)
-        self.vector_db = vector_db if vector_db else build_vector_db(db_url=db_url)
-        # Use UserScopedKnowledge to enforce user_id isolation automatically
-        self.knowledge = UserScopedKnowledge(user_id=user_id, vector_db=self.vector_db)
-        # base_knowledge removed to prevent accidental leakage; use self.knowledge with filters instead
+        if knowledge is not None:
+            self.knowledge = knowledge
+        else:
+            # Legacy: build from vector_db or db_url
+            vec = vector_db if vector_db else build_vector_db(db_url=db_url)
+            self.knowledge = Knowledge(vector_db=vec, max_results=5)
 
     def add_document(
         self,
@@ -57,7 +56,9 @@ class ProjectKnowledgeManager:
                 logger.info(
                     f"Removing stale documents for item {item_id} in list {list_id}"
                 )
-                self.knowledge.delete(filters={"list_id": list_id, "item_id": item_id})
+                self.knowledge.remove_vectors_by_metadata(
+                    metadata={"user_id": self.user_id, "list_id": list_id, "item_id": item_id}
+                )
 
             logger.info(f"Adding document for user {self.user_id} (list: {list_id})")
         elif project_id:
@@ -69,8 +70,8 @@ class ProjectKnowledgeManager:
             meta["project_id"] = "general"
             logger.info(f"Adding document for user {self.user_id} (general)")
 
-        # UserScopedKnowledge.load_text enforces user_id
-        self.knowledge.load_text(text=content, meta_data=meta)
+        meta["user_id"] = self.user_id
+        self.knowledge.insert(text_content=content, metadata=meta)
 
     def search(
         self,
@@ -103,7 +104,7 @@ class ProjectKnowledgeManager:
                 f"Searching general knowledge for user {self.user_id} with query: {query}"
             )
 
-        # Always use self.knowledge (UserScopedKnowledge) to enforce user_id
+        filters["user_id"] = self.user_id
         results = self.knowledge.search(
             query=query, max_results=max_results, filters=filters
         )
@@ -162,12 +163,18 @@ class ProjectKnowledgeManager:
             components_docs = self._extract_key_components(repo, repo_name, project_id)
             documents.extend(components_docs)
 
-            # 5. Batch upsert
+            # 5. Batch insert with user_id in metadata
             if documents:
                 logger.info(
                     f"Upserting {len(documents)} structured documents for {repo_name}"
                 )
-                self.knowledge.load_documents(documents)
+                for doc in documents:
+                    meta = dict(doc.meta_data or {})
+                    meta["user_id"] = self.user_id
+                    self.knowledge.insert(
+                        text_content=doc.content,
+                        metadata=meta,
+                    )
                 logger.info(f"Structured ingestion complete for {repo_name}")
             else:
                 logger.warning(f"No documents found to ingest for {repo_name}")
@@ -647,15 +654,18 @@ class ProjectKnowledgeManager:
         logger.info(
             f"Deleting knowledge for user {self.user_id} (project: {project_id})"
         )
-        # Ensure we filter by project_id. UserScopedKnowledge ensures user_id.
-        self.knowledge.delete(filters={"project_id": project_id})
+        self.knowledge.remove_vectors_by_metadata(
+            metadata={"user_id": self.user_id, "project_id": project_id}
+        )
 
     def delete_list_knowledge(self, list_id: str) -> None:
         """
         Delete all knowledge associated with a list.
         """
         logger.info(f"Deleting knowledge for user {self.user_id} (list: {list_id})")
-        self.knowledge.delete(filters={"list_id": list_id})
+        self.knowledge.remove_vectors_by_metadata(
+            metadata={"user_id": self.user_id, "list_id": list_id}
+        )
 
     def reindex_repository(
         self, repo_name: str, project_id: str, github_token: Optional[str] = None

@@ -19,8 +19,8 @@ from src.workflow.agent import PgWorkflowStorage
 from src.tools.task_manager import TaskManagementTool
 from src.rag_service import KnowledgeSearchTool
 from src.tools.git import GitTools
-from src.knowledge.factory import build_vector_db
-from src.knowledge.user_knowledge import UserScopedKnowledge
+from src.knowledge.factory import build_knowledge_base
+from src.knowledge.user_knowledge import UserKnowledgeAdapter
 
 # Import agents
 from src.teams.development.agents import (
@@ -101,16 +101,13 @@ class DevelopmentTeam(Workflow):
             else None
         )
 
-        # Build User-Scoped Knowledge Base for RAG
+        # Shared Knowledge + user_id adapter for RAG (search scoped via knowledge_filters at run)
         knowledge = None
         if user_id:
             try:
-                vector_db = build_vector_db(db_url=db_url)
-                if vector_db:
-                    knowledge = UserScopedKnowledge(
-                        user_id=user_id, vector_db=vector_db
-                    )
-                    logger.info("[DevelopmentTeam] Created UserScopedKnowledge for user_id=%s", user_id)
+                kb = build_knowledge_base(db_url=db_url)
+                knowledge = UserKnowledgeAdapter(kb, user_id)
+                logger.info("[DevelopmentTeam] Created Knowledge adapter for user_id=%s", user_id)
             except Exception as e:
                 logger.warning("[DevelopmentTeam] Failed to create knowledge base: %s", e)
 

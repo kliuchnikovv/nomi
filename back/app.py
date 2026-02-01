@@ -476,10 +476,10 @@ async def store_facts(request: StoreFactsRequest):
     """
     if not request.user_id or not request.extracted_facts:
         return {"status": "skipped", "reason": "missing user_id or facts"}
-    knowledge = container.agent_factory.get_or_create_knowledge(request.user_id)
+    knowledge = container.agent_factory.get_knowledge()
     if not knowledge:
         logging.warning(
-            "[store-facts] get_or_create_knowledge returned None for user=%s",
+            "[store-facts] get_knowledge returned None for user=%s",
             request.user_id,
         )
         return {"status": "error", "reason": "knowledge base unavailable"}
@@ -487,7 +487,10 @@ async def store_facts(request: StoreFactsRequest):
     for fact in request.extracted_facts:
         if isinstance(fact, str) and fact.strip():
             try:
-                knowledge.load_text(fact.strip())
+                knowledge.insert(
+                    text_content=fact.strip(),
+                    metadata={"user_id": request.user_id},
+                )
                 stored += 1
             except Exception as e:
                 logging.warning("[store-facts] Failed to store fact: %s", e)
@@ -590,9 +593,10 @@ async def analyze_project(request: ProjectAnalysisRequest):
             github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
             # Token is now optional - public repos work without it (with rate limits)
 
-            # Use global_vector_db to reuse connection pool
             manager = ProjectKnowledgeManager(
-                user_id=request.user_id or "system", vector_db=global_vector_db
+                user_id=request.user_id or "system",
+                knowledge=container.agent_factory.get_knowledge(),
+                vector_db=global_vector_db,
             )
             await asyncio.to_thread(
                 manager.ingest_repository,
@@ -638,7 +642,9 @@ async def delete_project_knowledge_endpoint(
         )
 
         manager = ProjectKnowledgeManager(
-            user_id=user_id or "system", vector_db=global_vector_db
+            user_id=user_id or "system",
+            knowledge=container.agent_factory.get_knowledge(),
+            vector_db=global_vector_db,
         )
         await asyncio.to_thread(manager.delete_project_knowledge, project_id)
 
@@ -690,7 +696,9 @@ async def reindex_project(project_id: str, request: ReindexProjectRequest):
             github_token = request.github_token or os.environ.get("GITHUB_TOKEN")
 
             manager = ProjectKnowledgeManager(
-                user_id=request.user_id or "system", vector_db=global_vector_db
+                user_id=request.user_id or "system",
+                knowledge=container.agent_factory.get_knowledge(),
+                vector_db=global_vector_db,
             )
             await asyncio.to_thread(
                 manager.reindex_repository, request.repository, project_id, github_token
@@ -740,7 +748,11 @@ async def index_list_item(list_id: str, request: IndexListItemRequest):
         parts.append(request.content)
         content = "\n".join(parts)
 
-        manager = ProjectKnowledgeManager(user_id=user_id, vector_db=global_vector_db)
+        manager = ProjectKnowledgeManager(
+            user_id=user_id,
+            knowledge=container.agent_factory.get_knowledge(),
+            vector_db=global_vector_db,
+        )
         await asyncio.to_thread(
             manager.add_document,
             content,
@@ -777,7 +789,9 @@ async def delete_list_knowledge_endpoint(
         )
 
         manager = ProjectKnowledgeManager(
-            user_id=user_id or "system", vector_db=global_vector_db
+            user_id=user_id or "system",
+            knowledge=container.agent_factory.get_knowledge(),
+            vector_db=global_vector_db,
         )
         await asyncio.to_thread(manager.delete_list_knowledge, list_id)
 

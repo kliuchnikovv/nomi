@@ -2,6 +2,7 @@
 List Agent — dedicated agent for managing user lists (facts, links, documents).
 Used when the user opens a list chat; has tools to add, search, update, and delete list items.
 """
+
 from typing import Sequence, Optional
 import logging
 
@@ -19,7 +20,9 @@ description = (
     "search within the list; update and delete items. The list has its own RAG space."
 )
 
-LIST_INSTRUCTIONS = f"""You are {name}, an assistant that helps the user manage **this list**.
+
+def get_list_instructions(list_id: Optional[str] = None) -> str:
+    instructions = f"""You are {name}, an assistant that helps the user manage **this list**.
 
 **Your role:**
 - Add items to the list: facts (short notes), links (URL + optional title/description), or documents (longer text).
@@ -35,7 +38,17 @@ LIST_INSTRUCTIONS = f"""You are {name}, an assistant that helps the user manage 
 - **delete_list_item** — remove an item by item_id.
 
 **Rules:**
-- You are in the context of **one list**. Prefer search_list_knowledge and add/update/delete for this list; you do not need to pass list_id when it's the current list.
+- You are in the context of **one list**."""
+
+    if list_id:
+        instructions += f"""
+- **Current List ID**: `{list_id}`
+- **ALWAYS** pass `list_id="{list_id}"` to all tools (`add_list_item`, `update_list_item`, `delete_list_item`, `search_list_knowledge`). Do NOT leave `list_id` empty."""
+    else:
+        instructions += """
+- Prefer search_list_knowledge and add/update/delete for this list; you do not need to pass list_id when it's the current list."""
+
+    instructions += """
 - **Adding items — act immediately, do not ask for type:**
   - If the user says "add X", "добавь X", "save X", "remember X" and only wrote text (no URL, no attached file) — add it right away as **fact**: use add_list_item(type="fact", content=<user's text>). Do NOT ask "fact, link or document?".
   - Use type **link** only when the user clearly provided a URL (e.g. pasted a link, said "add this link" with a URL).
@@ -45,6 +58,7 @@ LIST_INSTRUCTIONS = f"""You are {name}, an assistant that helps the user manage 
 - Be concise; confirm actions briefly (e.g. "Добавил." / "Added." / "Deleted." / show the found items).
 - If the user just chats without a clear list action, you can search the list to answer or suggest adding something.
 """
+    return instructions
 
 
 class ListAgent(Agent):
@@ -57,17 +71,22 @@ class ListAgent(Agent):
         tools: Sequence[Toolkit] | None = None,
         debug_mode: bool = False,
         knowledge: Optional[Knowledge] = None,
+        list_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         super().__init__(
             db=db,
             name=name,
             model=model,
             tools=tools or [],
+            user_id=user_id,
+            learning=learning,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),
             update_knowledge=(knowledge is not None),
             description=description,
-            instructions=LIST_INSTRUCTIONS,
+            instructions=get_list_instructions(list_id),
             add_datetime_to_context=True,
             debug_mode=debug_mode,
             read_tool_call_history=True,
@@ -76,4 +95,8 @@ class ListAgent(Agent):
             store_media=True,
             stream=True,
         )
-        logger.info("[ListAgent] List agent created with %d tools", len(tools) if tools else 0)
+        logger.info(
+            "[ListAgent] List agent created with %d tools (list_id=%s)",
+            len(tools) if tools else 0,
+            list_id,
+        )

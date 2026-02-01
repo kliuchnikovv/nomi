@@ -138,7 +138,7 @@ class TeamFactory:
             logger.info("[WS] DnDTeam using Fast Model: %s, Pro Model: %s", fast_model_id, pro_model_id)
             
             # Get Knowledge from agent_factory
-            knowledge = self.agent_factory._get_or_create_knowledge() if hasattr(self.agent_factory, '_get_or_create_knowledge') else None
+            knowledge = self.agent_factory.get_knowledge()
             
             team = DnDTeam(
                 fast_model=fast_model,

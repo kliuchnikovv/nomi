@@ -3,6 +3,7 @@ Knowledge Base Factory for Agno Agentic RAG.
 
 This module provides factory functions to create and configure:
 - PgVector vector database using existing Postgres connection
+- PostgresDb contents DB for knowledge content tracking (optional)
 - GeminiEmbedder for generating embeddings via Google Gemini API
 - Knowledge base for RAG functionality
 """
@@ -12,6 +13,7 @@ import os
 from typing import Optional
 
 from sqlalchemy import create_engine
+from agno.db.postgres import PostgresDb
 from agno.knowledge import Knowledge
 from agno.vectordb.pgvector import PgVector
 from agno.knowledge.embedder.google import GeminiEmbedder
@@ -20,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Default configuration
 DEFAULT_TABLE_NAME = "agent_knowledge"
+DEFAULT_CONTENTS_TABLE = "agent_knowledge_contents"
 DEFAULT_EMBEDDER_MODEL = "text-embedding-004"  # Google's latest embedding model
 DEFAULT_CHUNK_SIZE = 3000  # Good for code and documents
 DEFAULT_CHUNK_OVERLAP = 300  # 10% overlap for context continuity
@@ -103,24 +106,68 @@ def build_vector_db(
         raise
 
 
+def _normalize_db_url(db_url: Optional[str]) -> str:
+    """Get and normalize DB URL from env or argument."""
+    if db_url is None:
+        db_url = os.getenv("DB_DSN")
+        if not db_url:
+            raise ValueError(
+                "Database URL not provided and DB_DSN environment variable not set"
+            )
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    return db_url
+
+
+def build_contents_db(
+    db_url: Optional[str] = None,
+    knowledge_table: str = DEFAULT_CONTENTS_TABLE,
+) -> PostgresDb:
+    """
+    Build a PostgresDb instance for Knowledge contents tracking (Agno Contents DB).
+    Used with Knowledge for content visibility and management.
+    """
+    db_url = _normalize_db_url(db_url)
+    logger.info(
+        "[KnowledgeFactory] Building Contents DB (knowledge_table=%s)",
+        knowledge_table,
+    )
+    return PostgresDb(db_url=db_url, knowledge_table=knowledge_table)
+
+
 def build_knowledge_base(
     db_url: Optional[str] = None,
     table_name: str = DEFAULT_TABLE_NAME,
+    contents_table: str = DEFAULT_CONTENTS_TABLE,
     embedder_model: str = DEFAULT_EMBEDDER_MODEL,
+    *,
+    with_contents_db: bool = True,
 ) -> Knowledge:
     """
-    Build a default Knowledge instance with PgVector and GeminiEmbedder.
-    Note: This returns a global knowledge base without user isolation.
-    Use UserScopedKnowledge with build_vector_db for multi-user support.
+    Build a shared Knowledge instance with PgVector and optional Contents DB.
+    User isolation is achieved by passing knowledge_filters={"user_id": ...} at run()
+    and metadata={"user_id": ...} when calling insert/remove_vectors_by_metadata.
     """
     vector_db = build_vector_db(db_url, table_name, embedder_model)
+    contents_db: Optional[PostgresDb] = None
+    if with_contents_db:
+        try:
+            contents_db = build_contents_db(db_url, contents_table)
+        except Exception as e:
+            logger.warning(
+                "[KnowledgeFactory] Contents DB not available, using vector_db only: %s",
+                e,
+            )
 
-    # Create knowledge base
     knowledge = Knowledge(
         vector_db=vector_db,
-        max_results=5,  # Number of documents to return on search
+        contents_db=contents_db,
+        max_results=5,
     )
 
-    logger.info("[KnowledgeFactory] Knowledge created successfully")
+    logger.info(
+        "[KnowledgeFactory] Knowledge created (contents_db=%s)",
+        "yes" if contents_db else "no",
+    )
 
     return knowledge

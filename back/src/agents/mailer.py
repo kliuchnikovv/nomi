@@ -47,12 +47,16 @@ class MailerAgent(Agent):
         tools: Sequence[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
         knowledge: Optional[Knowledge] = None,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         super().__init__(
             db=db,
             name=name,
             model=model,
             tools=tools,
+            user_id=user_id,
+            learning=learning,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
             update_knowledge=(knowledge is not None),  # Enable automatic fact storage

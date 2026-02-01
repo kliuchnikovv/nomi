@@ -1,5 +1,5 @@
 import json
-from typing import Optional, List
+from typing import Optional, List, Any
 from agno.agent import Agent
 from agno.models.base import Model
 from agno.knowledge import Knowledge
@@ -119,18 +119,24 @@ class BriefingAgent(Agent):
     def __init__(
         self,
         model: Model,
+        db: Optional[Any] = None,  # Added for consistency
         tools: Optional[List[Toolkit]] = None,
         knowledge: Optional[Knowledge] = None,
         debug_mode: bool = False,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         # Inject schema into instructions
         instructions_with_schema = BRIEFING_INSTRUCTIONS.replace("{json_schema}", json.dumps(BriefingResponse.model_json_schema(), indent=2))
 
         super().__init__(
+            db=db,
             model=model,
             name="BriefingAgent",
             instructions=instructions_with_schema,
             tools=tools,
+            user_id=user_id,
+            learning=learning,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),
             update_knowledge=(knowledge is not None),  # Enable automatic fact storage

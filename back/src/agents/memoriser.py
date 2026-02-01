@@ -5,7 +5,6 @@ from agno.agent import Agent
 from agno.models.base import Model
 from agno.db.postgres import PostgresDb
 from agno.knowledge import Knowledge
-from agno.knowledge.document import Document
 from agno.tools import Toolkit, Function
 from src.knowledge.factory import build_knowledge_base
 
@@ -40,7 +39,9 @@ class MemoriserAgent(Agent):
         model: Model,
         tools: Sequence[Toolkit | Function] | None = None,
         debug_mode: bool = False,
-        knowledge: Optional[Knowledge] = None
+        knowledge: Optional[Knowledge] = None,
+        user_id: Optional[str] = None,
+        learning: bool = False,
     ):
         # Initialize knowledge base for storing memories
         if knowledge is None:
@@ -53,6 +54,8 @@ class MemoriserAgent(Agent):
             name="Memoriser",
             model=model,
             tools=tools,
+            user_id=user_id,
+            learning=learning,
             knowledge=knowledge,
             search_knowledge=(knowledge is not None),  # Enable agentic search if knowledge provided
             update_knowledge=(knowledge is not None),  # Enable automatic fact storage
@@ -70,23 +73,11 @@ class MemoriserAgent(Agent):
     async def store_fact(self, fact: str, metadata: dict = None) -> bool:
         """
         Store a fact in the knowledge base.
-        
-        Args:
-            fact: The fact to store (e.g., "User prefers no meetings before 11 AM")
-            metadata: Optional metadata to attach (e.g., source, timestamp)
-            
-        Returns:
-            True if stored successfully, False otherwise
+        Uses insert() so UserKnowledgeAdapter (if present) adds user_id to metadata.
         """
         try:
-            document = Document(
-                content=fact,
-                meta_data=metadata or {},
-            )
-            
-            # Load the document into the knowledge base
-            self.knowledge.load_documents([document])
-            
+            meta = dict(metadata or {})
+            self.knowledge.insert(text_content=fact, metadata=meta)
             logger.info("[MemoriserAgent] Stored fact: %s", fact[:100])
             return True
         except Exception as e:
