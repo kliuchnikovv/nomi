@@ -11,22 +11,22 @@ from agno.vectordb.pgvector import PgVector
 
 from src.agents.souper import SouperAgent
 from src.models.safe_gemini import SafeGemini
-from src.agents.genie import GenieAgent
-from src.agents.list_agent import ListAgent
+# from src.agents.genie import GenieAgent
+# from src.agents.list_agent import ListAgent
 # from src.agents.rag import RagAgent
 # from src.agents.memoriser import MemoriserAgent
 # from src.agents.mailer import MailerAgent
 # from src.agents.briefing import BriefingAgent
 # from src.agents.extractor import ExtractionAgent
 # from src.agents.email_analyzer import EmailAnalyzerAgent
-from src.workflow.agent import WorkflowAgent
-from src.teams.development.team import (
-    analyst_instructions,
-    architect_instructions,
-    developer_instructions,
-    reviewer_instructions,
-    worker_instructions,
-)
+# from src.workflow.agent import WorkflowAgent
+# from src.teams.development.team import (
+#     analyst_instructions,
+#     architect_instructions,
+#     developer_instructions,
+#     reviewer_instructions,
+#     worker_instructions,
+# )
 
 # NOTE: AnalystOutput, ArchitectPlan, ReviewVerdict imports removed
 # Gemini 2.5 doesn't support output_schema with function calling

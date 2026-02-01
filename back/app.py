@@ -11,12 +11,13 @@ from pydantic import BaseModel
 from agno.os import AgentOS
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.agents.genie import GenieAgent
+from src.agents.souper import SouperAgent
+# from src.agents.genie import GenieAgent
 from src.server import webhooks
 from src.tools.client_side import start_action_tracking, get_client_actions
-from src.teams.development.team import (
-    DevelopmentTeam,
-)  # Import for type hinting if needed, or dynamic loading
+# from src.teams.development.team import (
+#     DevelopmentTeam,
+# )  # Import for type hinting if needed, or dynamic loading
 
 from dotenv import load_dotenv
 from src.core.config import Config
@@ -105,20 +106,20 @@ container = Container(config=config)
 # Инициализация AgentOS для совместимости с существующим кодом
 agent_os = AgentOS(
     agents=[
-        GenieAgent(
+        SouperAgent(
             db=container.db,
             model=container.model,
             debug_mode=config.debug_mode,
         ),
     ],
-    workflows=[
-        DevelopmentTeam(
-            model=container.model,
-            db=container.db,
-            debug_mode=config.debug_mode,
-            github_token=os.getenv("GITHUB_TOKEN"),
-        )
-    ],
+    # workflows=[
+    #     DevelopmentTeam(
+    #         model=container.model,
+    #         db=container.db,
+    #         debug_mode=config.debug_mode,
+    #         github_token=os.getenv("GITHUB_TOKEN"),
+    #     )
+    # ],
 )
 global app
 app = agent_os.get_app()
