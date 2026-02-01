@@ -14,7 +14,8 @@ type Chat struct {
 	TeamID     *string    `json:"team_id,omitempty"` // null for agent mode
 	ProjectID  *uuid.UUID `json:"project_id,omitempty"`
 	TaskID     *uuid.UUID `json:"task_id,omitempty"`
-	Icon       string     `json:"icon,omitempty"` // Icon name provided by backend
+	ListID     *uuid.UUID `json:"list_id,omitempty"` // list chat: manage list items via agent
+	Icon       string     `json:"icon,omitempty"`   // Icon name provided by backend
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 	ArchivedAt *time.Time `json:"archived_at"`

@@ -29,6 +29,7 @@ type CreateChatRequest struct {
 	TeamID     *string    `json:"team_id,omitempty"`
 	ProjectID  *uuid.UUID `json:"project_id,omitempty"`
 	TaskID     *uuid.UUID `json:"task_id,omitempty"`
+	ListID     *uuid.UUID `json:"list_id,omitempty"`
 }
 
 // CreateChat создает новый чат с валидацией и бизнес-логикой
@@ -48,6 +49,7 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, req inte
 			TeamID:     v.TeamID,
 			ProjectID:  v.ProjectID,
 			TaskID:     v.TaskID,
+			ListID:     v.ListID,
 		}
 	default:
 		return nil, ErrInvalidRequest
@@ -72,6 +74,7 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, req inte
 		TeamID:    createReq.TeamID,
 		ProjectID: createReq.ProjectID,
 		TaskID:    createReq.TaskID,
+		ListID:    createReq.ListID,
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 	}

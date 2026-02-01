@@ -21,6 +21,7 @@ type Chat struct {
 	TeamID     *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
 	ProjectID  *uuid.UUID `gorm:"type:uuid;default:null;index"`
 	TaskID     *uuid.UUID `gorm:"type:uuid;default:null;index"`
+	ListID     *uuid.UUID `gorm:"type:uuid;default:null;index"` // list chat: manage list items via agent
 	CreatedAt  time.Time  `gorm:"not null"`
 	UpdatedAt  time.Time  `gorm:"not null;index;index:idx_chats_user_updated,priority:2,sort:desc"`
 	ArchivedAt *time.Time `gorm:"default:null"`

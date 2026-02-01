@@ -317,8 +317,10 @@ class RedisSession:
                     # So user_id is at top level, not inside "params"
                     for key in (
                         "user_id",
+                        "list_id",  # list chat: manage list items via agent
                         "access_token",
                         "token",
+                        "auth_token",
                         "creds",
                         "account_email",
                         "api_key",  # Jules API key from frontend

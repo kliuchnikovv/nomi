@@ -11,11 +11,12 @@ import { Plus, Trash, List } from 'iconoir-react-native';
 import { listsApi, List as ListType } from '../apiClient';
 import { useTheme } from '../context/ThemeContext';
 import { ThemePalette } from '../themes/types';
+import { useMain } from '../screens/main/context';
 import AddListModal from '../screens/lists/AddListModal';
-import ListDetailModal from '../screens/lists/ListDetailModal';
 
 interface ListListProps {
     visible?: boolean;
+    onClose?: () => void;
 }
 
 function ListCard({
@@ -88,13 +89,13 @@ function ListCard({
     );
 }
 
-export default function ListList({ visible = true }: ListListProps) {
+export default function ListList({ visible = true, onClose }: ListListProps) {
     const { theme, palette } = useTheme();
+    const { createNewChatForList } = useMain();
     const [lists, setLists] = useState<ListType[]>([]);
     const [loading, setLoading] = useState(false);
     const [listsLoaded, setListsLoaded] = useState(false);
     const [addModalVisible, setAddModalVisible] = useState(false);
-    const [detailList, setDetailList] = useState<ListType | null>(null);
 
     const fetchLists = async (silent = false) => {
         if (!silent) setLoading(true);
@@ -119,10 +120,14 @@ export default function ListList({ visible = true }: ListListProps) {
         try {
             await listsApi.delete(id);
             setLists((prev) => prev.filter((l) => l.id !== id));
-            if (detailList?.id === id) setDetailList(null);
         } catch (err) {
             console.error('Failed to delete list', err);
         }
+    };
+
+    const handleOpenListChat = async (list: ListType) => {
+        await createNewChatForList(list.id, list.name);
+        onClose?.();
     };
 
     const styles = StyleSheet.create({
@@ -183,7 +188,7 @@ export default function ListList({ visible = true }: ListListProps) {
                             <ListCard
                                 key={list.id}
                                 list={list}
-                                onPress={() => setDetailList(list)}
+                                onPress={() => handleOpenListChat(list)}
                                 onDelete={handleDelete}
                                 theme={theme}
                                 palette={palette}
@@ -199,12 +204,6 @@ export default function ListList({ visible = true }: ListListProps) {
                 onListCreated={(list) => {
                     setLists((prev) => [...prev, list]);
                 }}
-            />
-            <ListDetailModal
-                visible={detailList !== null}
-                list={detailList}
-                onClose={() => setDetailList(null)}
-                onItemsChanged={() => fetchLists(true)}
             />
         </View>
     );

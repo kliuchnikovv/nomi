@@ -310,16 +310,16 @@ def _build_jules(params: Dict[str, Any]) -> Toolkit:
 
 
 def _build_knowledge_search(params: Dict[str, Any]) -> Toolkit:
-    """Build KnowledgeSearchTool with user_id context."""
+    """Build KnowledgeSearchTool with user_id context; optional list_id for list chat."""
     user_id = params.get("user_id")
     if not user_id:
-        # Try to find user_id in creds or other params if structure varies,
-        # but typically it should be top-level or injected by caller
         logger.warning("[Knowledge] No user_id provided for KnowledgeSearchTool")
         raise ValueError("user_id is required for KnowledgeSearchTool")
 
-    logger.info("[Knowledge] Building KnowledgeSearchTool for user: %s", user_id)
-    return KnowledgeSearchTool(user_id=user_id)
+    auth_token = params.get("auth_token")
+    list_id = params.get("list_id")
+    logger.info("[Knowledge] Building KnowledgeSearchTool for user: %s list_id: %s", user_id, list_id)
+    return KnowledgeSearchTool(user_id=user_id, auth_token=auth_token, list_id=list_id)
 
 
 def _build_ui(_: Dict[str, Any]) -> Toolkit:

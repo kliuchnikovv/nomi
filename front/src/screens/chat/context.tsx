@@ -271,10 +271,10 @@ export function ChatProvider({
                     "title": title,
                     "model": selectedModelRef.current || 'gpt-5-nano',
                     "mode": chatMode,
-                    // Pass team_id for teams, OR for individual agents (agent_type)
                     "team_id": teamIdToSend,
                     "project_id": activeChat?.project_id,
                     "task_id": activeChat?.task_id,
+                    "list_id": activeChat?.list_id,
                 },
             );
             if (created?.id) {

@@ -582,10 +582,17 @@ class KnowledgeSearchTool(Toolkit):
     Tool for agents to search knowledge (project-specific or general).
     """
 
-    def __init__(self, user_id: str, auth_token: Optional[str] = None, manager: Optional[ProjectKnowledgeManager] = None):
+    def __init__(
+        self,
+        user_id: str,
+        auth_token: Optional[str] = None,
+        manager: Optional[ProjectKnowledgeManager] = None,
+        list_id: Optional[str] = None,
+    ):
         super().__init__(name="knowledge_search_tool")
         self.user_id = user_id
         self.auth_token = auth_token
+        self.list_id = list_id
 
         if manager is None:
             try:
@@ -602,6 +609,10 @@ class KnowledgeSearchTool(Toolkit):
         self.register(self.search_list_knowledge)
         self.register(self.list_projects)
         self.register(self.list_lists)
+        if list_id:
+            self.register(self.add_list_item)
+            self.register(self.update_list_item)
+            self.register(self.delete_list_item)
 
     def search_knowledge(self, query: str, project_id: Optional[str] = None) -> str:
         """
@@ -743,6 +754,125 @@ class KnowledgeSearchTool(Toolkit):
         except Exception as e:
             logger.error(f"Error listing lists: {e}")
             return f"Error listing lists: {str(e)}"
+
+    def add_list_item(
+        self,
+        type: str,
+        title: Optional[str] = None,
+        content: Optional[str] = None,
+        url: Optional[str] = None,
+        list_id: Optional[str] = None,
+    ) -> str:
+        """
+        Add an item to a list (fact, link, or document). Use when the user asks to save something to the list.
+        In list chat context, list_id can be omitted (uses current list).
+        """
+        lid = list_id or self.list_id
+        if not lid:
+            return "Error: list_id is required (or open a list chat)."
+        if type not in ("fact", "link", "document"):
+            return "Error: type must be fact, link, or document."
+        if type == "link" and not url:
+            return "Error: url is required for link type."
+        if not content and not url:
+            return "Error: content or url is required."
+        try:
+            api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+            if not api_url.endswith("/api"):
+                api_url = f"{api_url}/api"
+            headers = {"Content-Type": "application/json"}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+            body = {"type": type, "title": title or "", "content": content or "", "url": url or ""}
+            with httpx.Client(timeout=15.0) as client:
+                response = client.post(f"{api_url}/lists/{lid}/items", json=body, headers=headers)
+            if response.status_code == 401:
+                return "Error: Not authorized. Please ensure you are logged in."
+            if response.status_code not in (200, 201):
+                return f"Error adding item: HTTP {response.status_code} - {response.text}"
+            data = response.json()
+            item_id = data.get("id") or data.get("ID") or "saved"
+            return f"Added item to list (id: {item_id})."
+        except httpx.TimeoutException:
+            return "Error: Timeout while calling API."
+        except Exception as e:
+            logger.error(f"Error adding list item: {e}")
+            return f"Error: {e}"
+
+    def update_list_item(
+        self,
+        item_id: str,
+        title: Optional[str] = None,
+        content: Optional[str] = None,
+        url: Optional[str] = None,
+        type: Optional[str] = None,
+        list_id: Optional[str] = None,
+    ) -> str:
+        """
+        Update an existing list item. Use when the user asks to edit an item.
+        In list chat context, list_id can be omitted.
+        """
+        lid = list_id or self.list_id
+        if not lid:
+            return "Error: list_id is required (or open a list chat)."
+        if not item_id:
+            return "Error: item_id is required."
+        try:
+            api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+            if not api_url.endswith("/api"):
+                api_url = f"{api_url}/api"
+            headers = {"Content-Type": "application/json"}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+            body = {}
+            if title is not None:
+                body["title"] = title
+            if content is not None:
+                body["content"] = content
+            if url is not None:
+                body["url"] = url
+            if type is not None:
+                body["type"] = type
+            if not body:
+                return "No updates provided (title, content, url, or type)."
+            with httpx.Client(timeout=15.0) as client:
+                response = client.put(f"{api_url}/lists/{lid}/items/{item_id}", json=body, headers=headers)
+            if response.status_code == 401:
+                return "Error: Not authorized."
+            if response.status_code != 200:
+                return f"Error updating item: HTTP {response.status_code} - {response.text}"
+            return "Item updated."
+        except Exception as e:
+            logger.error(f"Error updating list item: {e}")
+            return f"Error: {e}"
+
+    def delete_list_item(self, item_id: str, list_id: Optional[str] = None) -> str:
+        """
+        Delete an item from a list. Use when the user asks to remove an item.
+        In list chat context, list_id can be omitted.
+        """
+        lid = list_id or self.list_id
+        if not lid:
+            return "Error: list_id is required (or open a list chat)."
+        if not item_id:
+            return "Error: item_id is required."
+        try:
+            api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+            if not api_url.endswith("/api"):
+                api_url = f"{api_url}/api"
+            headers = {}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+            with httpx.Client(timeout=15.0) as client:
+                response = client.delete(f"{api_url}/lists/{lid}/items/{item_id}", headers=headers)
+            if response.status_code == 401:
+                return "Error: Not authorized."
+            if response.status_code != 200:
+                return f"Error deleting item: HTTP {response.status_code} - {response.text}"
+            return "Item deleted."
+        except Exception as e:
+            logger.error(f"Error deleting list item: {e}")
+            return f"Error: {e}"
 
     def list_projects(self) -> str:
         """

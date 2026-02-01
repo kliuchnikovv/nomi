@@ -269,6 +269,29 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setActiveChatID(emptyChatID);
     }
 
+    async function createNewChatForList(listId: string, listName: string) {
+        const existing = chats.find(c => (c as any).list_id === listId);
+        if (existing) {
+            setActiveChatID(existing.id);
+            return;
+        }
+        try {
+            const newChat = await apiClient.post<Chat>(`${getApiUrl()}/chats`, {
+                model: 'gpt-5-nano',
+                mode: 'agent',
+                title: listName,
+                list_id: listId,
+            });
+            if (newChat && newChat.id) {
+                setActiveChatID(newChat.id);
+                await getChats({ preserveActiveChat: true });
+            }
+        } catch (e) {
+            console.error('Failed to create list chat:', e);
+            alertError(`Failed to open list: ${e}`);
+        }
+    }
+
     // Export pending mode for chat context to use
     const getPendingChatMode = () => pendingChatMode;
     const clearPendingChatMode = () => setPendingChatMode(null);
@@ -281,6 +304,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
         getChats,
         createNewChat,
         createNewChatWithMode,
+        createNewChatForList,
         renameChat,
         deleteChat,
         setActiveChatID,

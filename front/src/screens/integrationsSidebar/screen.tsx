@@ -356,7 +356,7 @@ function RightSidebarContent({
         <View style={styles.root}>
             <View style={{ paddingTop: insets.top - 25 }} />
             <ProjectList visible={visible} />
-            <ListList visible={visible} />
+            <ListList visible={visible} onClose={onClose} />
 
             <View style={[styles.sectionHeader, { marginTop: 12 }]}>
                 <Text style={styles.sectionTitle}>Inbox Chats</Text>

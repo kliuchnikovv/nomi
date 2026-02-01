@@ -435,13 +435,21 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				cmdMap["project_id"] = chatRecord.ProjectID.String()
 			}
 
+			if chatRecord.ListID != nil {
+				cmdMap["list_id"] = chatRecord.ListID.String()
+			}
+
 			payload.Command = cmdMap
 		}
 
 		// 5.1 Fetch and Bundle Tools
 		var tools []interface{}
 		tools = append(tools, map[string]interface{}{"name": "web_search", "enabled": true})
-		tools = append(tools, map[string]interface{}{"name": "knowledge_search", "enabled": true, "user_id": r.initiatorID.String()})
+		knowledgeEntry := map[string]interface{}{"name": "knowledge_search", "enabled": true, "user_id": r.initiatorID.String()}
+		if chatRecord != nil && chatRecord.ListID != nil {
+			knowledgeEntry["list_id"] = chatRecord.ListID.String()
+		}
+		tools = append(tools, knowledgeEntry)
 
 		if payload.Tools != nil {
 			if clientTools, ok := payload.Tools.([]interface{}); ok && len(clientTools) > 0 {

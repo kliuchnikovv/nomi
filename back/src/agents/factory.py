@@ -309,7 +309,14 @@ class AgentFactory:
             config = ToolsConfig()
             for tool_spec in tools_specs:
                 if tool_spec.enabled:
-                    config.add(tool_spec.name, **tool_spec.params)
+                    params = dict(tool_spec.params)
+                    # Inject command_desc auth_token and list_id for knowledge_search (list chat)
+                    if tool_spec.name == "knowledge_search" and command_desc:
+                        if "auth_token" not in params and command_desc.get("auth_token"):
+                            params["auth_token"] = command_desc["auth_token"]
+                        if "list_id" not in params and command_desc.get("list_id"):
+                            params["list_id"] = command_desc["list_id"]
+                    config.add(tool_spec.name, **params)
                     logger.debug("[WS] tool appended: enabled")
                 else:
                     logger.debug("[WS] tool not appended: not enabled")
