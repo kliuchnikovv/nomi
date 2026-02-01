@@ -193,7 +193,11 @@ class RedisSession:
             if self.command_desc and isinstance(self.command_desc, dict):
                 # Inject auth token if available in payload but not in command_desc
                 if "auth_token" not in self.command_desc:
-                    token = payload.get("token") or payload.get("access_token")
+                    token = (
+                        payload.get("auth_token")
+                        or payload.get("token")
+                        or payload.get("access_token")
+                    )
                     if token:
                         self.command_desc["auth_token"] = token
                         logger.info(

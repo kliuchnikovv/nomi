@@ -14,8 +14,10 @@ DEFAULT_MIN_SIMILARITY_THRESHOLD = 0.6
 
 
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
-    """Compute cosine similarity between two vectors. Result in [-1, 1]; we clamp to [0, 1] for thresholding."""
-    if not a or not b or len(a) != len(b):
+    """Compute cosine similarity between two vectors. Result in [-1, 1]; we clamp to [0, 1] for thresholding.
+    Accepts lists or numpy-like arrays; avoids 'truth value of array is ambiguous' by not using bool(arr).
+    """
+    if a is None or b is None or len(a) == 0 or len(b) == 0 or len(a) != len(b):
         return 0.0
     dot = sum(x * y for x, y in zip(a, b))
     norm_a = sum(x * x for x in a) ** 0.5
@@ -76,7 +78,7 @@ class UserScopedKnowledge(Knowledge):
             return raw
         
         query_embedding = embedder.get_embedding(query)
-        if not query_embedding:
+        if query_embedding is None or (hasattr(query_embedding, "__len__") and len(query_embedding) == 0):
             logger.warning("[RAG Search] Failed to get query embedding, returning raw results")
             return raw
 

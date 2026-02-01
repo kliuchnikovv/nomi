@@ -508,6 +508,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// Ensure user_id is present in finalMap
 		finalMap["user_id"] = r.initiatorID.String()
 		finalMap["streaming"] = r.hub.Streaming(payload.Model)
+		if payload.AuthToken != "" {
+			finalMap["auth_token"] = payload.AuthToken
+		}
 
 		if len(messages) > 0 {
 			historyData := make([]map[string]interface{}, 0, len(messages))

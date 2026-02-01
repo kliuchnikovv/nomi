@@ -479,7 +479,8 @@ export function ChatProvider({
                 selectedProviderRef.current,
                 tools, // Pass enabled integrations to backend
                 user.id, // user_id for backend routing
-                selectedEndpoint
+                selectedEndpoint,
+                token ?? undefined // auth_token for list/agent tools that call Go API
             );
 
             // Async local extraction (e.g. Apple FM): send facts when done; does not block chat

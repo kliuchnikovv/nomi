@@ -9,6 +9,7 @@ from agno.vectordb.pgvector import PgVector
 
 from src.models.safe_gemini import SafeGemini
 from src.agents.genie import GenieAgent
+from src.agents.list_agent import ListAgent
 from src.agents.rag import RagAgent
 from src.agents.memoriser import MemoriserAgent
 from src.agents.mailer import MailerAgent
@@ -273,12 +274,24 @@ class AgentFactory:
         # It's better to do 2 separate edits: 1 for signature, 1 for logic.
         pass
 
-        # Splitting into two calls for safety. First call: Update signature.
+        list_id = command_desc.get("list_id") if command_desc else None
 
         tools: List[Toolkit] = []
 
+        # List agent: only list tools (knowledge_search with list_id), no web_search
+        if agent_type and agent_type.lower() == "list" and user_id:
+            config = ToolsConfig()
+            params = {"user_id": user_id, "list_id": list_id}
+            if command_desc and command_desc.get("auth_token"):
+                params["auth_token"] = command_desc["auth_token"]
+            config.add("knowledge_search", **params)
+            try:
+                tools = await build_tools(config)
+                logger.info("[Factory] Built %d tools for ListAgent", len(tools))
+            except Exception as e:
+                logger.warning("[Factory] Failed to build list tools: %s", e)
         # If user_id provided but no tools_specs, fetch tools from config_client
-        if not tools_specs and user_id:
+        elif not tools_specs and user_id:
             try:
                 logger.debug("[Factory] Fetching tools for user_id=%s", user_id)
                 tools_config = await self._config_client.fetch_tools(user_id=user_id)
@@ -390,7 +403,20 @@ class AgentFactory:
 
             if command_desc and command_desc.get("type"):
                 agent_type = command_desc["type"]
-            if agent_type and agent_type.lower() == "mailer":
+            # List chat: list_id takes precedence so we use ListAgent
+            if list_id:
+                agent_type = "list"
+                logger.info("[Factory] List chat detected, building ListAgent for list_id=%s", list_id)
+            if agent_type and agent_type.lower() == "list":
+                agent = ListAgent(
+                    db=self._db,
+                    model=model,
+                    tools=tools,
+                    debug_mode=self._debug_mode,
+                    knowledge=knowledge,
+                )
+                logger.info("[Factory] Built ListAgent for list_id=%s", list_id)
+            elif agent_type and agent_type.lower() == "mailer":
                 agent = MailerAgent(
                     db=self._db,
                     model=model,

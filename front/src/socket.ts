@@ -478,7 +478,8 @@ export class ChatSocket {
         provider?: string,
         tools?: any[],
         userId?: string,
-        endpoint?: string
+        endpoint?: string,
+        authToken?: string
     ) {
         if (!chatId) {
             return;
@@ -505,6 +506,9 @@ export class ChatSocket {
         };
         if (endpoint !== undefined && endpoint !== '') {
             payload.endpoint = endpoint;
+        }
+        if (authToken) {
+            payload.auth_token = authToken; // For list/agent tools that call Go API (e.g. list items)
         }
         const msg = {
             id: 0,

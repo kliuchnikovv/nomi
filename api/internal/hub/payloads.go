@@ -124,6 +124,7 @@ type UserMessagePayload struct {
 	AgentType      string       `json:"agent_type,omitempty"`
 	Tools          interface{}  `json:"tools,omitempty"` // User-provided tools/integrations
 	UserID         uuid.UUID    `json:"user_id,omitempty"`
+	AuthToken      string       `json:"auth_token,omitempty"` // JWT for backend tools (e.g. list item API calls)
 	ExtractedFacts []string     `json:"extracted_facts,omitempty"` // Optional client-extracted facts (sync path)
 }
 
