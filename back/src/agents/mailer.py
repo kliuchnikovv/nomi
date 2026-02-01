@@ -31,7 +31,7 @@ Memory & Personalization:
 """
 expected_output = """
 {
-  "title": "{email_subject}",
+  "title": "string — the email subject line",
   "importance": {"level": "high|medium|low", "reason": "short reason"},
   "urgency": {"level": "urgent|soon|can_wait", "reason": "short reason"},
   "summary": "2-3 sentence summary focusing on intent and key asks/dates",

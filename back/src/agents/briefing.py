@@ -73,7 +73,7 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
       * If multiple source items (e.g., emails/events) refer to the exact same topic, thread, or are duplicates, COMBINE them into a single `BriefingItem`.
       * Do not output duplicate items.
 
-3.  **ENRICHMENT (RAG & WEB SEARCH)**:
+2.  **ENRICHMENT (RAG & WEB SEARCH)**:
     - For EVERY `CRITICAL` and `INFO` item, try to enrich with context:
     
     **Knowledge Base (RAG)**: If available, search for historical context:
@@ -88,7 +88,7 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
     
     - ADD enriched context to the `context` field. Be specific: "Last discussed 2 days ago - you promised to send specs by Friday" or "Breaking: [Technology] released version 2.0 yesterday"
 
-4.  **MEMORY STORAGE**:
+3.  **MEMORY STORAGE**:
    While processing briefing items, observe and remember:
    - User's meeting patterns (preferred times, duration, participants)
    - Email triage preferences (what they mark as important)
@@ -98,14 +98,14 @@ Do not include markdown code blocks (```json ... ```). Return ONLY the raw JSON.
    
    Store these observations automatically for future briefings to become more personalized.
 
-5.  **SYNTHESIS**:
+4.  **SYNTHESIS**:
     - Generate the final JSON response conforming to `BriefingResponse` schema.
     - The `headline` should be compelling and accurate:
       * If critical items exist: "3 urgent items need attention"
       * If tools were used successfully but no urgent items: "All clear - no urgent items today" or "Light day ahead"
       * If NO tools available (no Gmail/Calendar/GitHub): "Connect integrations for personalized briefings"
     - Ensure `context` field contains RAG and web search findings.
-    - Limit to 5-8 most important items (focus on quality over quantity).
+    - Remember: `items` array contains ONLY `CRITICAL` items. INFO items are summarized in the `summary` field.
 
 ### STYLE
 - Professional, concise, executive summary style.

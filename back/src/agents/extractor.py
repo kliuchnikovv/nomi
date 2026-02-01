@@ -58,9 +58,13 @@ class ExtractionAgent(Agent):
         model: Model,
         debug_mode: bool = False,
     ):
-        # Inject schema
+        from datetime import datetime
+        current_date = datetime.now().strftime("%Y-%m-%d")
+
+        # Inject schema and current date
         schema = json.dumps(ExtractionResponse.model_json_schema(), indent=2)
         instructions = EXTRACTION_INSTRUCTIONS.replace("{json_schema}", schema)
+        instructions = instructions.replace("{current_date}", current_date)
         
         super().__init__(
             model=model,

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 class SuggestedAction(BaseModel):
     """A suggested action for an email."""
     action_type: str = Field(..., description="Action type: 'reply', 'forward', 'schedule', 'delegate', 'archive', 'followup'")
-    label: str = Field(..., description="Human-readable action label in English")
+    label: str = Field(..., description="Human-readable action label in the user's language")
     params: dict = Field(default_factory=dict, description="Parameters for action execution")
 
 
@@ -83,14 +83,14 @@ Suggest 2-5 actions. Action types:
 }
 ```
 
-**Email**: "Can we meet next Monday regarding the budget?" (Assuming next Monday is 2023-10-23)
-**Analysis**:
+**Email**: "Can we meet next Monday regarding the budget?"
+**Analysis** (assuming today is {current_date}):
 ```
 {
   "urgency": "normal",
   "connections": ["Budget"],
   "time_frame": "Next Monday",
-  "target_date": "2023-10-23",
+  "target_date": "<next Monday's date in YYYY-MM-DD>",
   "suggested_actions": [
     {"action_type": "reply", "label": "Reply to schedule", "params": {"suggested_text": "Sure, what time works for you?"}}
   ]
