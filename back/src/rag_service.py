@@ -29,34 +29,57 @@ class ProjectKnowledgeManager:
         # Base knowledge for searching without user_id enforcement (for project-scoped search)
         self.base_knowledge = Knowledge(vector_db=self.vector_db)
 
-    def add_document(self, content: str, project_id: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> None:
+    def add_document(
+        self,
+        content: str,
+        project_id: Optional[str] = None,
+        list_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """
         Add a document to the knowledge base.
-        If project_id is provided, it's added to metadata.
-        If project_id is None, it's treated as general knowledge.
+        If project_id is provided, it's added to metadata (project scope).
+        If list_id is provided, it's added to metadata (list scope); list_id takes precedence over project_id for this doc.
+        If both are None, it's treated as general knowledge.
         """
         # Create a copy to avoid side effects on the passed dictionary
         meta = metadata.copy() if metadata else {}
 
-        if project_id:
+        if list_id:
+            meta["list_id"] = list_id
+            # Do not set project_id so list docs are only returned when searching by list_id
+            logger.info(f"Adding document for user {self.user_id} (list: {list_id})")
+        elif project_id:
             meta["project_id"] = project_id
+            logger.info(f"Adding document for user {self.user_id} (project: {project_id})")
         else:
             meta["project_id"] = "general"
+            logger.info(f"Adding document for user {self.user_id} (general)")
 
-        logger.info(f"Adding document for user {self.user_id} (project: {meta.get('project_id')})")
         # UserScopedKnowledge.load_text enforces user_id
         self.knowledge.load_text(text=content, meta_data=meta)
 
-    def search(self, query: str, project_id: Optional[str] = None, max_results: int = 5) -> List[Document]:
+    def search(
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        list_id: Optional[str] = None,
+        max_results: int = 5,
+    ) -> List[Document]:
         """
         Search for documents.
-        If project_id is provided (and not "*"), filters by that project using base knowledge. 
-        Note: Specific project search currently bypasses user_id isolation in base_knowledge, 
-        relying on the uniqueness of project IDs.
-        
+        If list_id is provided, filters by that list (user-scoped via knowledge).
+        If project_id is provided (and not "*"), filters by that project using base knowledge.
         If project_id is "*", searches across all projects for this user.
-        If project_id is None, searches general knowledge for this user.
+        If both are None, searches general knowledge for this user.
         """
+        if list_id:
+            filters = {"list_id": list_id}
+            logger.info(f"Searching knowledge for list {list_id} with query: {query}")
+            results = self.knowledge.search(query=query, max_results=max_results, filters=filters)
+            logger.info(f"Found {len(results)} results in list {list_id}")
+            return results
+
         filters = {}
         if project_id and project_id != "*":
              filters["project_id"] = project_id
@@ -533,6 +556,13 @@ class ProjectKnowledgeManager:
         # Ensure we filter by project_id. UserScopedKnowledge ensures user_id.
         self.knowledge.delete(filters={"project_id": project_id})
 
+    def delete_list_knowledge(self, list_id: str) -> None:
+        """
+        Delete all knowledge associated with a list.
+        """
+        logger.info(f"Deleting knowledge for user {self.user_id} (list: {list_id})")
+        self.knowledge.delete(filters={"list_id": list_id})
+
     def reindex_repository(self, repo_name: str, project_id: str, github_token: Optional[str] = None) -> None:
         """
         Re-index repository: delete existing knowledge and re-ingest.
@@ -564,11 +594,14 @@ class KnowledgeSearchTool(Toolkit):
                 logger.warning(f"Failed to initialize ProjectKnowledgeManager in tool: {e}")
                 self.manager = None
                 self.register(self.list_projects)
+                self.register(self.list_lists)
                 return
 
         self.manager = manager
         self.register(self.search_knowledge)
+        self.register(self.search_list_knowledge)
         self.register(self.list_projects)
+        self.register(self.list_lists)
 
     def search_knowledge(self, query: str, project_id: Optional[str] = None) -> str:
         """
@@ -626,6 +659,90 @@ class KnowledgeSearchTool(Toolkit):
         except Exception as e:
             logger.error(f"Error searching knowledge: {e}")
             return f"Error occurred while searching: {str(e)}"
+
+    def search_list_knowledge(self, list_id: str, query: str) -> str:
+        """
+        Search for information in a user list (facts, links, documents saved in that list).
+
+        Use this when the user asks about "list X", "my saved links in list Y", or "what's in my list Z".
+        Call list_lists() first to get list IDs and names if you don't know the list_id.
+
+        Args:
+            list_id (str): The ID of the list to search in (UUID from list_lists).
+            query (str): Natural language query (e.g. "articles about Python", "saved recipes").
+
+        Returns:
+            str: Formatted search results from that list's RAG space.
+        """
+        if not self.manager:
+            return "Error: ProjectKnowledgeManager is not initialized."
+
+        try:
+            results = self.manager.search(query=query, list_id=list_id)
+            if not results:
+                return f"No information found for query '{query}' in list {list_id}."
+
+            formatted_results = []
+            for doc in results:
+                content = getattr(doc, "content", str(doc))
+                formatted_results.append(f"---\n{content}\n---")
+
+            return "\n".join(formatted_results)
+        except Exception as e:
+            logger.error(f"Error searching list knowledge: {e}")
+            return f"Error occurred while searching list: {str(e)}"
+
+    def list_lists(self) -> str:
+        """
+        List all available lists for the current user.
+
+        Use this to discover list IDs and names when the user refers to "my list" or "saved links".
+        Then use search_list_knowledge(list_id="<id>", query="...") to search within a list.
+
+        Returns:
+            str: A formatted list of lists with their IDs and names.
+        """
+        try:
+            api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+            if not api_url.endswith("/api"):
+                api_url = f"{api_url}/api"
+            headers = {}
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(f"{api_url}/lists", headers=headers)
+
+                if response.status_code == 401:
+                    return "Error: Not authorized. Please ensure you are logged in."
+
+                if response.status_code != 200:
+                    logger.error(f"Failed to list lists: {response.status_code} - {response.text}")
+                    return f"Error fetching lists: HTTP {response.status_code}"
+
+                lists_data = response.json()
+                if not lists_data:
+                    return "No lists found. The user hasn't created any lists yet."
+
+                lines = ["# Available Lists\n"]
+                for lst in lists_data:
+                    list_id = lst.get("id") or lst.get("ID") or "unknown"
+                    name = lst.get("name") or lst.get("Name") or "Unnamed"
+                    description = lst.get("description") or lst.get("Description") or ""
+                    lines.append(f"## {name}")
+                    lines.append(f"- **List ID**: `{list_id}`")
+                    if description:
+                        lines.append(f"- **Description**: {description}")
+                    lines.append("")
+
+                return "\n".join(lines)
+
+        except httpx.TimeoutException:
+            logger.error("Timeout while fetching lists")
+            return "Error: Timeout while fetching lists. Please try again."
+        except Exception as e:
+            logger.error(f"Error listing lists: {e}")
+            return f"Error listing lists: {str(e)}"
 
     def list_projects(self) -> str:
         """

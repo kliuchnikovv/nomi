@@ -209,3 +209,36 @@ type Task struct {
 	CreatedAt time.Time      `gorm:"not null" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"not null" json:"updated_at"`
 }
+
+// List represents a user list (facts, links, documents with per-list RAG)
+type List struct {
+	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	UserID      uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
+	Name        string         `gorm:"type:text;not null" json:"name"`
+	Description string         `gorm:"type:text" json:"description"`
+	CreatedAt   time.Time      `gorm:"not null" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"not null" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// ListItemType is fact, link, or document
+type ListItemType string
+
+const (
+	ListItemTypeFact     ListItemType = "fact"
+	ListItemTypeLink     ListItemType = "link"
+	ListItemTypeDocument ListItemType = "document"
+)
+
+// ListItem represents an item in a list (indexed in RAG per list)
+type ListItem struct {
+	ID        uuid.UUID    `gorm:"type:uuid;primary_key;default:uuid_generate_v4()" json:"id"`
+	ListID    uuid.UUID    `gorm:"type:uuid;not null;index" json:"list_id"`
+	Type      ListItemType `gorm:"type:varchar(20);not null" json:"type"` // fact, link, document
+	Title     string       `gorm:"type:text" json:"title"`
+	Content   string       `gorm:"type:text;not null" json:"content"`
+	URL       string       `gorm:"type:text" json:"url"` // for link type
+	CreatedAt time.Time    `gorm:"not null" json:"created_at"`
+	UpdatedAt time.Time    `gorm:"not null" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+}

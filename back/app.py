@@ -679,6 +679,72 @@ async def reindex_project(project_id: str, request: ReindexProjectRequest):
     return {"status": "started", "project_id": project_id}
 
 
+# --- Lists RAG ---
+
+class IndexListItemRequest(BaseModel):
+    content: str
+    title: Optional[str] = None
+    url: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+@app.post("/api/lists/{list_id}/items/index")
+async def index_list_item(list_id: str, request: IndexListItemRequest):
+    """
+    Add one document to a list's RAG space (metadata: user_id, list_id).
+    Called by Go API after creating/updating a list item.
+    """
+    import asyncio
+
+    try:
+        from src.rag_service import ProjectKnowledgeManager
+
+        user_id = request.user_id or "system"
+        parts = []
+        if request.title:
+            parts.append(request.title)
+        if request.url:
+            parts.append(request.url)
+        parts.append(request.content)
+        content = "\n".join(parts)
+
+        manager = ProjectKnowledgeManager(user_id=user_id)
+        await asyncio.to_thread(manager.add_document, content, project_id=None, list_id=list_id)
+
+        return {"status": "indexed", "list_id": list_id}
+    except Exception as e:
+        logging.error(f"Failed to index list item: {e}", exc_info=True)
+        return {"error": str(e), "status": "failed"}
+
+
+class DeleteListKnowledgeRequest(BaseModel):
+    user_id: Optional[str] = None
+
+
+@app.delete("/api/lists/{list_id}/knowledge")
+async def delete_list_knowledge_endpoint(
+    list_id: str, request: Optional[DeleteListKnowledgeRequest] = None
+):
+    """
+    Delete all RAG knowledge for a list. Called by Go API when list is deleted.
+    """
+    import asyncio
+
+    try:
+        from src.rag_service import ProjectKnowledgeManager
+
+        user_id = request.user_id if request else None
+        logging.info(f"Received request to delete knowledge for list {list_id} (user: {user_id})")
+
+        manager = ProjectKnowledgeManager(user_id=user_id or "system")
+        await asyncio.to_thread(manager.delete_list_knowledge, list_id)
+
+        return {"status": "deleted", "list_id": list_id}
+    except Exception as e:
+        logging.error(f"Failed to delete list knowledge: {e}", exc_info=True)
+        return {"error": str(e), "status": "failed"}
+
+
 class EmbeddingRequest(BaseModel):
     text: Optional[str] = None  # Single text (backward compatible)
     texts: Optional[list[str]] = None  # Batch of texts

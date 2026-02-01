@@ -21,6 +21,7 @@ import { Sidebar } from '../../components/DrawerSidebar';
 import { ThemePalette } from '../../themes/types';
 import { CalendarSidebar } from '../chat/leftSidebar/CalendarSidebar';
 import { ProjectList } from '../../components/ProjectList';
+import ListList from '../../components/ListList';
 import Animated, { useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 
 
@@ -355,6 +356,7 @@ function RightSidebarContent({
         <View style={styles.root}>
             <View style={{ paddingTop: insets.top - 25 }} />
             <ProjectList visible={visible} />
+            <ListList visible={visible} />
 
             <View style={[styles.sectionHeader, { marginTop: 12 }]}>
                 <Text style={styles.sectionTitle}>Inbox Chats</Text>

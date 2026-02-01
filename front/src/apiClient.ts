@@ -307,3 +307,46 @@ export const projectTasksApi = {
     }>>(`${API_URL()}/active-tasks`),
 };
 
+// Lists (user lists with per-list RAG)
+export interface List {
+    id: string;
+    user_id: string;
+    name: string;
+    description?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export type ListItemType = 'fact' | 'link' | 'document';
+
+export interface ListItem {
+    id: string;
+    list_id: string;
+    type: ListItemType;
+    title?: string;
+    content: string;
+    url?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export const listsApi = {
+    list: () => apiClient.get<Array<List>>(`${API_URL()}/lists`),
+    get: (id: string) => apiClient.get<List>(`${API_URL()}/lists/${id}`),
+    create: (body: { name: string; description?: string }) =>
+        apiClient.post<List>(`${API_URL()}/lists`, body),
+    update: (id: string, body: { name?: string; description?: string }) =>
+        apiClient.put<List>(`${API_URL()}/lists/${id}`, body),
+    delete: (id: string) => apiClient.delete<void>(`${API_URL()}/lists/${id}`),
+    listItems: (listId: string) =>
+        apiClient.get<Array<ListItem>>(`${API_URL()}/lists/${listId}/items`),
+    getItem: (listId: string, itemId: string) =>
+        apiClient.get<ListItem>(`${API_URL()}/lists/${listId}/items/${itemId}`),
+    addItem: (listId: string, body: { type: ListItemType; title?: string; content?: string; url?: string }) =>
+        apiClient.post<ListItem>(`${API_URL()}/lists/${listId}/items`, body),
+    updateItem: (listId: string, itemId: string, body: { type?: ListItemType; title?: string; content?: string; url?: string }) =>
+        apiClient.put<ListItem>(`${API_URL()}/lists/${listId}/items/${itemId}`, body),
+    deleteItem: (listId: string, itemId: string) =>
+        apiClient.delete<void>(`${API_URL()}/lists/${listId}/items/${itemId}`),
+};
+
