@@ -10,8 +10,6 @@ from src.server.models import Frame, Op
 from src.server.redis_session import RedisSession
 from src.server.utils import make_error
 from src.agents.factory import AgentFactory
-from src.tools.jules import JulesTools
-from src.tools.task_manager import TaskManagementTool
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +23,6 @@ class RedisWorker:
         self.running = False
         self._tasks = set()
 
-        # Tools for async Jules monitoring
-        jules_api_key = os.getenv("JULES_API_KEY")
-        self.jules_tool = JulesTools(api_key=jules_api_key) if jules_api_key else None
-        self.task_tool = TaskManagementTool()
         # Task registry (instance variable)
         self.active_tasks: Dict[str, asyncio.Task] = {}
 

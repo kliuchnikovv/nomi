@@ -1,6 +1,8 @@
 import logging
+from datetime import datetime
 
 from typing import Sequence
+from zoneinfo import ZoneInfo
 
 from agno.db.postgres import PostgresDb
 from agno.agent import Agent
@@ -14,7 +16,6 @@ from agno.learn import (
     SessionContextConfig,
     UserProfileConfig,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +49,11 @@ class SouperAgent(Agent):
         tools: Sequence[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
         thinking: str = "off",
+        timezone: str = "UTC",
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
+        instructions = BASE_INSTRUCTIONS + f"\nCurrent time is: {datetime.now(ZoneInfo(timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
+
         super().__init__(
             db=db,
             name=name,
@@ -61,13 +65,13 @@ class SouperAgent(Agent):
             tools=tools,
 
             description="Souper is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
-            instructions=BASE_INSTRUCTIONS,
+            instructions=instructions,
 
-            add_history_to_context=True,  # Agno automatically adds session history to context
+            add_history_to_context=True,
             add_datetime_to_context=True,
 
             store_media=True,
-            store_tool_messages=True,  # Store tool call results
+            store_tool_messages=True,
 
             stream=True,
             stream_events=True,
@@ -81,6 +85,7 @@ class SouperAgent(Agent):
                 ),
             ),
 
+            markdown=True,
             telemetry=False,
             send_media_to_model=True,
         )

@@ -9,10 +9,10 @@ from typing import Optional, List, Any, Dict, AsyncIterator
 
 from agno.media import Image
 from src.agents.factory import AgentFactory
+from src.agents.souper import SouperAgent
 from src.server.models import Frame, Op, Kind
 from src.server.utils import make_meta, make_error, make_done, make_data
 from src.tools.models import ToolSpec
-from src.tools.client_side import start_action_tracking
 
 logger = logging.getLogger(__name__)
 
@@ -81,16 +81,27 @@ class RedisSession:
         # Target ID: User ID if known, else Session ID (fallback)
         target_id = self.user_id or self.session_id
         channel = f"chat:user:{target_id}"
+        payload_json = json.dumps(data)
 
         if self.redis_client:
             try:
-                await self.redis_client.publish(channel, json.dumps(data))
-                logger.info(
-                    "[RedisSession] PUBLISH %s -> %s (len=%d)",
-                    channel,
-                    frame.op,
-                    len(data),
-                )
+                await self.redis_client.publish(channel, payload_json)
+                # Log payload size in bytes (len=15 was misleading: number of frame keys).
+                # Use DEBUG for streaming MESSAGE to avoid hundreds of lines per response.
+                if frame.op == Op.MESSAGE:
+                    logger.debug(
+                        "[RedisSession] PUBLISH %s -> %s (bytes=%d)",
+                        channel,
+                        frame.op,
+                        len(payload_json),
+                    )
+                else:
+                    logger.info(
+                        "[RedisSession] PUBLISH %s -> %s (bytes=%d)",
+                        channel,
+                        frame.op,
+                        len(payload_json),
+                    )
             except Exception as e:
                 logger.error(
                     f"[RedisSession] Publish failed: {e}",
@@ -219,49 +230,19 @@ class RedisSession:
                 is_team_mode = True
                 logger.info("[RedisSession] Detected team mode from agent_type")
 
-            if is_team_mode and self.command_desc:
-                # Use TeamFactory for team chats
-                from src.teams.factory import TeamFactory
-
-                # Build model for the team
-                model = self.agent_factory.build_model(
-                    self.current_model_name or "gpt-5-nano",
-                    provider=provider,
-                    web_search=False,
-                    thinking=self.current_thinking,
-                    endpoint=endpoint,
-                )
-
-                team_factory = TeamFactory(
-                    agent_factory=self.agent_factory,
-                    db=self.agent_factory._db,
-                    model=model,
-                    debug_mode=self.agent_factory._debug_mode,
-                )
-
-                self.agent = await team_factory.build(
-                    command_desc=self.command_desc,
-                    session_id=self.session_id,
-                    tools_specs=self.tools_specs,
-                    user_id=rag_user_id,
-                )
-                logger.info(
-                    "[RedisSession] Built team successfully: type=%s", team_type
-                )
-            else:
-                # Using regular agent factory
-                self.agent = await self.agent_factory.build(
-                    session_id=self.session_id,
-                    tools_specs=self.tools_specs,  # Likely empty, factory will fetch
-                    model_name=self.current_model_name,
-                    agent_type=self.agent_type,
-                    command_desc=self.command_desc,
-                    web_search=False,  # Default
-                    thinking=self.current_thinking,
-                    user_id=rag_user_id,
-                    chat_id=self.chat_id,
-                    endpoint=endpoint,
-                )
+            # Using regular agent factory
+            self.agent = await self.agent_factory.build(
+                session_id=self.session_id,
+                tools_specs=self.tools_specs,  # Likely empty, factory will fetch
+                model_name=self.current_model_name,
+                agent_type=self.agent_type,
+                command_desc=self.command_desc,
+                web_search=False,  # Default
+                thinking=self.current_thinking,
+                user_id=rag_user_id,
+                chat_id=self.chat_id,
+                endpoint=endpoint,
+            )
         except Exception as e:
             logger.error(
                 f"[RedisSession] Failed to build agent: {e}",
@@ -406,9 +387,8 @@ class RedisSession:
                 self.current_model_name or "gemini-2.0-flash",
                 thinking="off",
             )
-            from src.agents.memoriser import MemoriserAgent
 
-            memoriser = MemoriserAgent(
+            memoriser = SouperAgent(
                 db=self.agent_factory._db,
                 model=model,
                 knowledge=knowledge,

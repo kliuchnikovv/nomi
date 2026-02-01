@@ -11,31 +11,10 @@ from agno.vectordb.pgvector import PgVector
 
 from src.agents.souper import SouperAgent
 from src.models.safe_gemini import SafeGemini
-# from src.agents.genie import GenieAgent
-# from src.agents.list_agent import ListAgent
-# from src.agents.rag import RagAgent
-# from src.agents.memoriser import MemoriserAgent
-# from src.agents.mailer import MailerAgent
-# from src.agents.briefing import BriefingAgent
-# from src.agents.extractor import ExtractionAgent
-# from src.agents.email_analyzer import EmailAnalyzerAgent
-# from src.workflow.agent import WorkflowAgent
-# from src.teams.development.team import (
-#     analyst_instructions,
-#     architect_instructions,
-#     developer_instructions,
-#     reviewer_instructions,
-#     worker_instructions,
-# )
 
-# NOTE: AnalystOutput, ArchitectPlan, ReviewVerdict imports removed
-# Gemini 2.5 doesn't support output_schema with function calling
-from src.knowledge.factory import build_knowledge_base, build_vector_db
-from src.knowledge.user_knowledge import UserKnowledgeAdapter
 from src.tools.config import ToolConfigClient
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
-from src.tools.scheduler import SchedulerTools
 from agno.tools import Toolkit
 
 logger = logging.getLogger(__name__)
@@ -90,34 +69,6 @@ class AgentFactory:
     def config_client(self) -> ToolConfigClient:
         """Доступ к ToolConfigClient для запроса инструментов."""
         return self._config_client
-
-    def _get_or_create_vector_db(self) -> Optional[PgVector]:
-        """Lazy initialization of shared Vector DB instance (used when building Knowledge)."""
-        if self._vector_db is None:
-            try:
-                self._vector_db = build_vector_db()
-                logger.info("[Factory] Vector DB initialized successfully")
-            except Exception as e:
-                logger.error(
-                    "[Factory] Failed to initialize Vector DB: %s", e, exc_info=True
-                )
-        return self._vector_db
-
-    def _get_or_create_knowledge(self) -> Optional[Knowledge]:
-        """Lazy initialization of shared Knowledge (vector_db + contents_db)."""
-        if self._knowledge is None:
-            try:
-                self._knowledge = build_knowledge_base()
-                logger.info("[Factory] Shared Knowledge initialized")
-            except Exception as e:
-                logger.error(
-                    "[Factory] Failed to initialize Knowledge: %s", e, exc_info=True
-                )
-        return self._knowledge
-
-    def get_knowledge(self) -> Optional[Knowledge]:
-        """Return shared Knowledge for insert/delete (callers pass user_id in metadata)."""
-        return self._get_or_create_knowledge()
 
     # ... (build_model omitted)
 
@@ -398,27 +349,6 @@ class AgentFactory:
         # We pass the actual Toolkit objects, not ToolSpec configs
         tools_for_scheduler = list(tools) if tools else []
 
-        # Always add SchedulerTools for Genie (except for Gemma)
-        if not agent_type or agent_type.lower() == "genie":
-            if model_name and model_name.startswith("gemma-"):
-                logger.info(
-                    "[WS] Skipping SchedulerTools for Gemma model %s (tools not supported)",
-                    model_name,
-                )
-            else:
-                # Pass user_id, chat_id, AND built tools to SchedulerTools
-                tools.append(
-                    SchedulerTools(
-                        user_id=user_id, chat_id=chat_id, tools_list=tools_for_scheduler
-                    )
-                )
-
-                # Add ClientUITools (Always enabled for Genie)
-                from src.tools.ui import ClientUITools
-
-                tools.append(ClientUITools())
-                logger.info("[WS] Added ClientUITools to GenieAgent")
-
         # Setup RAG User ID: use user_id if explicit, or session_id if anonymous
         rag_user_id = user_id or session_id
 
@@ -433,16 +363,6 @@ class AgentFactory:
         )
 
         try:
-            # Shared Agno Knowledge; user isolation via knowledge_filters at run()
-            # and UserKnowledgeAdapter so update_knowledge stores with user_id
-            knowledge = self._get_or_create_knowledge()
-            if knowledge:
-                knowledge = UserKnowledgeAdapter(knowledge, rag_user_id)
-            else:
-                logger.warning(
-                    "[Factory] Knowledge not available, agent will not have memory"
-                )
-
             if command_desc and command_desc.get("type"):
                 agent_type = command_desc["type"]
             # List chat: list_id takes precedence so we use ListAgent
@@ -687,10 +607,8 @@ class AgentFactory:
                 tools=tools,
                 debug_mode=self._debug_mode,
                 thinking=thinking,
-                knowledge=knowledge,
-                # instructions=genie_instructions,  # Pass combined or None (GenieAgent defaults to BASE)
                 user_id=rag_user_id,
-                learning=True,
+                timezone=timezone,
             )
 
             # _attach_tool_context removed - ChatHistoryTool is disabled
