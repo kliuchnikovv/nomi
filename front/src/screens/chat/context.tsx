@@ -21,7 +21,6 @@ import { useChatStore } from '../../store/chatStore';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import { v4 as uuidv4 } from 'uuid';
 import { generateChatTitle } from '../../services/chatTitleGenerator';
-import { extractUserFacts } from '../../services/userFactsExtraction';
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -184,7 +183,7 @@ export function ChatProvider({
         }
     }, [activeChatID, token]);
 
-    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0].id);
+    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0]?.id ?? null);
 
     const selectTeam = useCallback((teamId: string) => {
         setSelectedTeamId(teamId);
@@ -494,23 +493,6 @@ export function ChatProvider({
                 token ?? undefined, // auth_token for list/agent tools that call Go API
                 commandToSend
             );
-
-            // Async local extraction (e.g. Apple FM): send facts when done; does not block chat
-            if (role === 'user' && user?.id && text?.trim()) {
-                console.log('[ChatContext] Starting async user facts extraction from message');
-                extractUserFacts(text.trim())
-                    .then((facts) => {
-                        if (facts.length > 0) {
-                            console.log(`[ChatContext] Extracted ${facts.length} fact(s), sending to server`);
-                            socket.sendStoreFacts(chatIdToUse, user.id, facts);
-                        } else {
-                            console.log('[ChatContext] No facts extracted from message');
-                        }
-                    })
-                    .catch((error) => {
-                        console.error('[ChatContext] Fact extraction failed:', error);
-                    });
-            }
         },
         [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, renameChat, setLastFailedMessage, tools, availableModels],
     );
@@ -671,6 +653,7 @@ export function ChatProvider({
         if (chatMode !== 'team') return;
 
         const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId) || AVAILABLE_TEAMS[0];
+        if (!team) return;
         const baseCommand = team.command;
 
         const next = {

@@ -10,7 +10,6 @@ export interface MainContextType {
     getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
     createNewChatWithMode: (mode: 'agent' | 'team', teamId: string | null) => void;
-    createNewChatForList: (listId: string, listName: string) => Promise<void>;
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
     deleteChat: (chatId: string) => void;
     setActiveChatID: (id: string | null) => void;

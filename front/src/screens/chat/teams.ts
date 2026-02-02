@@ -44,14 +44,14 @@ export const AVAILABLE_TEAMS: TeamDetails[] = [
     //         ],
     //     }
     // },
-    {
-        id: 'dnd_team',
-        name: 'D&D',
-        description: 'Immersive 5e campaigns with a DM, Rules Lawyer, and Party management.',
-        command: {
-            type: 'dnd_team',
-            name: 'D&D Team',
-            model: 'gemini-2.5-pro',
-        }
-    }
+    // {
+    //     id: 'dnd_team',
+    //     name: 'D&D',
+    //     description: 'Immersive 5e campaigns with a DM, Rules Lawyer, and Party management.',
+    //     command: {
+    //         type: 'dnd_team',
+    //         name: 'D&D Team',
+    //         model: 'gemini-2.5-pro',
+    //     }
+    // }
 ];
