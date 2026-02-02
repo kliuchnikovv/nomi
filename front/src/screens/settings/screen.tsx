@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, Text, TextInput, View, ActivityIndicator } from 'react-native';
+import { Alert, Modal, Pressable, Text, View, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +9,6 @@ import { createStyles } from './styles.tsx';
 import ConnectorScreenDialog from './connectors/screen.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeName, themes } from '../../themes';
-import { getApiUrl, setApiUrl, initApiUrl } from '../../config';
 
 type Props = {
     visible: boolean;
@@ -27,21 +26,13 @@ export default function SettingsModal({ visible, onClose }: Props) {
 
     const [connectorsOpen, setConnectorsOpen] = useState(false);
     const [themeExpanded, setThemeExpanded] = useState(false);
-    const [devExpanded, setDevExpanded] = useState(false);
-    const [briefingExpanded, setBriefingExpanded] = useState(false);
     const [weatherExpanded, setWeatherExpanded] = useState(false);
-    const [apiUrl, setApiUrlState] = useState('');
-    const [briefingTime, setBriefingTime] = useState('09:00');
     const [weatherLat, setWeatherLat] = useState('55.75');
     const [weatherLon, setWeatherLon] = useState('37.62');
     const [locationLoading, setLocationLoading] = useState(false);
 
-    // Load current API URL and Briefing Time on mount
+    // Load weather location on mount
     useEffect(() => {
-        initApiUrl().then(url => setApiUrlState(url));
-        AsyncStorage.getItem('briefing_time').then(t => {
-            if (t) setBriefingTime(t);
-        });
         AsyncStorage.getItem('weather_location').then(loc => {
             if (loc) {
                 const { lat, lon } = JSON.parse(loc);
@@ -65,32 +56,6 @@ export default function SettingsModal({ visible, onClose }: Props) {
         onClose();
     };
 
-    const handleSaveApiUrl = async () => {
-        try {
-            await setApiUrl(apiUrl);
-            Alert.alert('Saved', 'API URL updated. Restart the app for full effect.');
-        } catch (e) {
-            Alert.alert('Error', 'Failed to save API URL');
-        }
-    };
-
-    const handleSaveBriefingTime = async () => {
-        try {
-            // Simple validation
-            const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-            if (!timeRegex.test(briefingTime)) {
-                Alert.alert('Invalid Time', 'Please use HH:MM format (e.g., 09:00)');
-                return;
-            }
-            await AsyncStorage.setItem('briefing_time', briefingTime);
-            Alert.alert('Saved', `Morning Briefing set to ${briefingTime}`);
-        } catch (e) {
-            Alert.alert('Error', 'Failed to save Briefing Time');
-        }
-    };
-
-
-
     const handleUseMyLocation = async () => {
         setLocationLoading(true);
         try {
@@ -110,11 +75,6 @@ export default function SettingsModal({ visible, onClose }: Props) {
             setLocationLoading(false);
         }
     };
-
-    const presetUrls = [
-        { label: 'Production', url: 'https://genie-api-production-7074.up.railway.app/api' },
-        { label: 'Local', url: 'http://localhost:8080/api' },
-    ];
 
     const themesList: { label: string; value: ThemeName }[] = Object.entries(themes).map(
         ([key, descriptor]) => ({ label: descriptor.name, value: key as ThemeName })
@@ -184,64 +144,6 @@ export default function SettingsModal({ visible, onClose }: Props) {
                                             )}
                                         </Pressable>
                                     ))}
-                                </View>
-                            )}
-                        </View>
-
-                        {/* Morning Briefing Section */}
-                        <View style={{ marginBottom: 16 }}>
-                            <Pressable
-                                onPress={() => setBriefingExpanded(!briefingExpanded)}
-                                style={styles.themeHeader}
-                            >
-                                <View>
-                                    <Text style={styles.label}>Daily Morning Briefing</Text>
-                                    <Text style={styles.themeCurrentValue}>
-                                        {briefingTime}
-                                    </Text>
-                                </View>
-                                <Text style={styles.chevron}>
-                                    {briefingExpanded ? '▼' : '▶'}
-                                </Text>
-                            </Pressable>
-                            {briefingExpanded && (
-                                <View style={{ marginTop: 12, gap: 8 }}>
-                                    <Text style={[styles.label, { marginBottom: 4 }]}>Briefing Time</Text>
-                                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                                        <TextInput
-                                            value={briefingTime}
-                                            onChangeText={setBriefingTime}
-                                            style={{
-                                                flex: 1,
-                                                borderWidth: 1,
-                                                borderColor: theme.border,
-                                                borderRadius: 8,
-                                                padding: 12,
-                                                color: theme.text,
-                                                backgroundColor: theme.background,
-                                                fontSize: 16,
-                                            }}
-                                            placeholder="HH:MM"
-                                            placeholderTextColor={theme.textSecondary}
-                                            keyboardType="numbers-and-punctuation"
-                                            maxLength={5}
-                                        />
-                                        <Pressable
-                                            onPress={handleSaveBriefingTime}
-                                            style={{
-                                                backgroundColor: theme.primary,
-                                                borderRadius: 8,
-                                                paddingHorizontal: 20,
-                                                justifyContent: 'center',
-                                                alignItems: 'center',
-                                            }}
-                                        >
-                                            <Text style={{ color: '#fff', fontWeight: '600' }}>Save</Text>
-                                        </Pressable>
-                                    </View>
-                                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>
-                                        Receive your daily digest at this time.
-                                    </Text>
                                 </View>
                             )}
                         </View>
@@ -317,75 +219,6 @@ export default function SettingsModal({ visible, onClose }: Props) {
                                     Integrations
                                 </Text>
                             </Pressable>
-                        </View>
-
-                        {/* Developer Section */}
-                        <View style={{ marginTop: 24 }}>
-                            <Pressable
-                                onPress={() => setDevExpanded(!devExpanded)}
-                                style={styles.themeHeader}
-                            >
-                                <View>
-                                    <Text style={styles.label}>Developer</Text>
-                                    <Text style={[styles.themeCurrentValue, { fontSize: 11 }]}>
-                                        {apiUrl.substring(0, 40)}...
-                                    </Text>
-                                </View>
-                                <Text style={styles.chevron}>
-                                    {devExpanded ? '▼' : '▶'}
-                                </Text>
-                            </Pressable>
-                            {devExpanded && (
-                                <View style={{ marginTop: 12, gap: 8 }}>
-                                    <Text style={[styles.label, { marginBottom: 4 }]}>API URL</Text>
-                                    <TextInput
-                                        value={apiUrl}
-                                        onChangeText={setApiUrlState}
-                                        style={{
-                                            borderWidth: 1,
-                                            borderColor: theme.border,
-                                            borderRadius: 8,
-                                            padding: 12,
-                                            color: theme.text,
-                                            backgroundColor: theme.background,
-                                            fontFamily: 'monospace',
-                                            fontSize: 12,
-                                        }}
-                                        autoCapitalize="none"
-                                        autoCorrect={false}
-                                        selectTextOnFocus
-                                    />
-                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                                        {presetUrls.map(p => (
-                                            <Pressable
-                                                key={p.label}
-                                                onPress={() => setApiUrlState(p.url)}
-                                                style={{
-                                                    paddingVertical: 6,
-                                                    paddingHorizontal: 12,
-                                                    backgroundColor: apiUrl === p.url ? theme.accent : theme.surface,
-                                                    borderRadius: 6,
-                                                }}
-                                            >
-                                                <Text style={{ color: theme.text, fontSize: 12 }}>{p.label}</Text>
-                                            </Pressable>
-                                        ))}
-                                    </View>
-                                    <Pressable
-                                        onPress={handleSaveApiUrl}
-                                        style={{
-                                            marginTop: 8,
-                                            paddingVertical: 10,
-                                            paddingHorizontal: 16,
-                                            backgroundColor: theme.accent,
-                                            borderRadius: 8,
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <Text style={{ color: '#fff', fontWeight: '600' }}>Save & Restart</Text>
-                                    </Pressable>
-                                </View>
-                            )}
                         </View>
 
                         <View style={{ height: 24 }} />

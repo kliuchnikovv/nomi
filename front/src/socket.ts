@@ -538,48 +538,6 @@ export class ChatSocket {
         }
     }
 
-    /**
-     * Send client-extracted facts to backend (async, after local extraction completes).
-     * Does not block chat; used for personalization in future sessions.
-     */
-    sendStoreFacts(chatId: string, userId: string, extractedFacts: string[]) {
-        if (!userId || !extractedFacts?.length) {
-            console.log('[Socket] sendStoreFacts: no userId or empty facts, skipping');
-            return;
-        }
-
-        console.log(`[Socket] Sending ${extractedFacts.length} extracted fact(s) to server for user ${userId}`);
-        extractedFacts.forEach((fact, idx) => {
-            console.log(`[Socket]   Fact ${idx + 1}: ${fact}`);
-        });
-
-        const msg = {
-            id: 0,
-            kind: 'data',
-            chat_id: chatId,
-            op: 'store_facts',
-            payload: {
-                user_id: userId,
-                extracted_facts: extractedFacts,
-            },
-        };
-        if (this.isReady()) {
-            try {
-                this.ws.send(JSON.stringify(msg));
-                this.touchActivity();
-                console.log('[Socket] ✓ Facts sent successfully via WebSocket');
-            } catch (err) {
-                // Non-critical: put in outbox so it gets sent when connection is restored
-                console.warn('[Socket] sendStoreFacts failed, queuing for retry', err);
-                this.outbox.push(msg);
-            }
-        } else {
-            // Queue for later — same as sendMessage; processOutbox will send when socket connects
-            this.outbox.push(msg);
-            console.log('[Socket] Facts queued (socket not ready), will send when connected');
-        }
-    }
-
     // Send a command or tools frame
     sendMeta(chatId: string, op: string, payload: any) {
         const frame = {
