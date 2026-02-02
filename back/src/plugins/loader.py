@@ -28,11 +28,11 @@ def _repo_root() -> Path:
 
 
 def _plugins_dir() -> Path:
-    """Return plugins directory path."""
+    """Return plugins directory path (api/plugins when running from repo)."""
     env = os.environ.get("PLUGINS_DIR")
     if env:
         return Path(env).resolve()
-    return _repo_root() / "plugins"
+    return _repo_root() / "api" / "plugins"
 
 
 def _load_manifests(plugins_dir: Path) -> List[Dict[str, Any]]:
@@ -65,8 +65,10 @@ def _register_server_builders(plugins_dir: Path, repo_root: Path) -> None:
     """Import plugins/<name>/server/tools and register build() in TOOL_BUILDERS."""
     import sys
 
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
+    # Parent of plugins_dir contains the "plugins" package (e.g. api/ or /app)
+    plugins_parent = plugins_dir.parent
+    if str(plugins_parent) not in sys.path:
+        sys.path.insert(0, str(plugins_parent))
 
     from src.tools.factory import register_tool
 

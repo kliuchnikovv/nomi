@@ -38,6 +38,23 @@ func NewOAuthFactory(cfg *config.Config, logger *zap.Logger) (*OAuthFactory, err
 		}
 	}
 
+	// Fallback: create OIDC providers from config when Registry is empty (e.g. plugins dir missing in Docker)
+	for key, prov := range cfg.OAuth2.Providers {
+		if prov.IssuerURL == "" {
+			continue
+		}
+		if _, exists := factory.oidcProviders[prov.IssuerURL]; exists {
+			continue
+		}
+		oidcProvider, err := oidc.NewProvider(context.Background(), prov.IssuerURL)
+		if err != nil {
+			logger.Warn("failed to create OIDC provider from config", zap.String("config_key", key), zap.String("issuer", prov.IssuerURL), zap.Error(err))
+			continue
+		}
+		factory.oidcProviders[prov.IssuerURL] = oidcProvider
+		logger.Info("initialized OIDC provider from config", zap.String("config_key", key), zap.String("issuer", prov.IssuerURL))
+	}
+
 	return factory, nil
 }
 

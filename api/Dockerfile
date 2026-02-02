@@ -36,6 +36,9 @@ COPY config.railway.yaml /app/config.railway.yaml
 # Copy models config
 COPY config/models.json /app/config/models.json
 
+# Copy plugins (manifests and server tool modules)
+COPY plugins /app/plugins
+
 # Expose port
 EXPOSE 8080
 

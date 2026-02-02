@@ -1,4 +1,6 @@
 # Python Agent Dockerfile
+# Build context: repository root (so api/plugins is available).
+# docker-compose: context: ., dockerfile: back/Dockerfile
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -10,11 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for caching
-COPY requirements.txt .
+COPY back/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY . .
+# Copy back source code
+COPY back/ .
+
+# Copy plugins from api/ (manifests and server tools)
+COPY api/plugins /app/plugins
+ENV PLUGINS_DIR=/app/plugins
 
 # Expose port
 EXPOSE 7777

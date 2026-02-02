@@ -45,13 +45,7 @@ func main() {
 		pluginsDir = os.Getenv("PLUGINS_DIR")
 	}
 	if pluginsDir == "" {
-		pluginsDir = "plugins"
-		if _, err := os.Stat(pluginsDir); err != nil {
-			if _, err2 := os.Stat("../plugins"); err2 == nil {
-				pluginsDir = "../plugins"
-			}
-			// else keep "plugins" and InitRegistry will log if dir missing
-		}
+		pluginsDir = "plugins" // api/plugins when run from api/ or /app in Docker
 	}
 
 	zapCfg := zap.NewProductionConfig()
@@ -81,6 +75,8 @@ func main() {
 	if err := integrations.InitRegistry(pluginsDir, logger); err != nil {
 		logger.Fatal("failed to init plugin registry", zap.Error(err))
 	}
+	// When no plugin manifests were loaded (e.g. Root Directory = api in Railway), fill registry from config
+	integrations.InitRegistryFromConfig(cfg, logger)
 
 	// Создаем DI Container
 	ctr, err := container.NewContainer(cfg, logger)
