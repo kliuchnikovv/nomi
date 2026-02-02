@@ -2,7 +2,6 @@ package integrations
 
 import (
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/providers"
 	"go.uber.org/zap"
@@ -77,103 +76,6 @@ func InitRegistry(pluginsDir string, logger *zap.Logger) error {
 	}
 	Registry = buildRegistryFromManifests(plugins.Manifests)
 	return nil
-}
-
-// InitRegistryFromConfig fills Registry with gmail, calendar, github when config has
-// oauth2.providers.google and oauth2.providers.github. Use when no plugin manifests were
-// loaded (e.g. plugins dir missing in Docker with Root Directory = api).
-func InitRegistryFromConfig(cfg *config.Config, logger *zap.Logger) {
-	if cfg == nil || len(Registry) > 0 {
-		return
-	}
-	_, hasGoogle := cfg.OAuth2.Providers["google"]
-	_, hasGitHub := cfg.OAuth2.Providers["github"]
-	if !hasGoogle && !hasGitHub {
-		return
-	}
-	for name, p := range buildRegistryFromConfig(cfg) {
-		Registry[name] = p
-	}
-	logger.Info("registry filled from config (no plugin manifests loaded)", zap.Int("providers", len(Registry)))
-}
-
-func buildRegistryFromConfig(cfg *config.Config) map[string]*ProviderDefinition {
-	out := make(map[string]*ProviderDefinition)
-	googleCfg, hasGoogle := cfg.OAuth2.Providers["google"]
-	githubCfg, hasGitHub := cfg.OAuth2.Providers["github"]
-	if hasGoogle {
-		gmailPerms := []string{"gmail:read", "gmail:write"}
-		out["gmail"] = &ProviderDefinition{
-			Name:                   "gmail",
-			DisplayName:            "Gmail",
-			Type:                   "oauth2",
-			StorageType:            StorageTypeClientOnly,
-			OAuthConfigKey:         "google",
-			DefaultPermissions:     gmailPerms,
-			SupportsBackgroundTasks: true,
-			Icon:                   "gmail",
-			OAuthConfig: &OAuthConfig{
-				Endpoint:  google.Endpoint,
-				IsOIDC:    googleCfg.IssuerURL != "",
-				IssuerURL: googleCfg.IssuerURL,
-				GetScopes: func(permissions []string) []string {
-					if len(permissions) == 0 {
-						permissions = gmailPerms
-					}
-					scopes := []string{oidc.ScopeOpenID, "email", "profile"}
-					for _, perm := range permissions {
-						scopes = append(scopes, providers.GetGoogleScope(perm)...)
-					}
-					return scopes
-				},
-			},
-		}
-		calPerms := []string{"calendar:read", "calendar:write"}
-		out["calendar"] = &ProviderDefinition{
-			Name:                   "calendar",
-			DisplayName:            "Calendar",
-			Type:                   "oauth2",
-			StorageType:            StorageTypeClientOnly,
-			OAuthConfigKey:         "google",
-			DefaultPermissions:     calPerms,
-			SupportsBackgroundTasks: true,
-			Icon:                   "calendar",
-			OAuthConfig: &OAuthConfig{
-				Endpoint:  google.Endpoint,
-				IsOIDC:    googleCfg.IssuerURL != "",
-				IssuerURL: googleCfg.IssuerURL,
-				GetScopes: func(permissions []string) []string {
-					if len(permissions) == 0 {
-						permissions = calPerms
-					}
-					scopes := []string{oidc.ScopeOpenID, "email", "profile"}
-					for _, perm := range permissions {
-						scopes = append(scopes, providers.GetGoogleScope(perm)...)
-					}
-					return scopes
-				},
-			},
-		}
-	}
-	if hasGitHub {
-		ghScopes := githubCfg.Scopes
-		if len(ghScopes) == 0 {
-			ghScopes = []string{"repo", "user", "read:org"}
-		}
-		out["github"] = &ProviderDefinition{
-			Name:           "github",
-			DisplayName:    "GitHub",
-			Type:           "oauth2",
-			StorageType:    StorageTypeServer,
-			OAuthConfigKey: "github",
-			Icon:           "github",
-			OAuthConfig: &OAuthConfig{
-				Endpoint: github.Endpoint,
-				Scopes:   ghScopes,
-			},
-		}
-	}
-	return out
 }
 
 func buildRegistryFromManifests(manifests []*plugins.Manifest) map[string]*ProviderDefinition {
