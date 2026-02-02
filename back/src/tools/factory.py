@@ -123,14 +123,14 @@ async def build(config: ToolsConfig) -> list[Toolkit]:
     for item in config:
         logger.debug("[Tools] Processing tool item: %s", item.name)
 
-         # Check via registry if this is server-side integration
-         # Client-side integrations should not be processed here
-         provider = get_provider(item.name.lower())
-         if provider and not should_include_in_tools(item.name.lower()):
-             logger.debug(
-                 f"[Tools] Skipping client-side integration: {item.name} (executes on device)"
-             )
-             continue
+        # Check via registry if this is server-side integration
+        # Client-side integrations should not be processed here
+        provider = get_provider(item.name.lower())
+        if provider and not should_include_in_tools(item.name.lower()):
+            logger.debug(
+                f"[Tools] Skipping client-side integration: {item.name} (executes on device)"
+            )
+            continue
 
         # Try exact match first
         builder = TOOL_BUILDERS.get(item.name)
