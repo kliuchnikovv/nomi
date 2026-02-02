@@ -45,7 +45,7 @@ func main() {
 		pluginsDir = os.Getenv("PLUGINS_DIR")
 	}
 	if pluginsDir == "" {
-		pluginsDir = "plugins" // api/plugins when run from api/ or /app in Docker
+		pluginsDir = "../plugins" // repo root plugins when run from api/; in Docker use PLUGINS_DIR or config
 	}
 
 	zapCfg := zap.NewProductionConfig()

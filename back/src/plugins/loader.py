@@ -28,11 +28,11 @@ def _repo_root() -> Path:
 
 
 def _plugins_dir() -> Path:
-    """Return plugins directory path (api/plugins when running from repo)."""
+    """Return plugins directory path (plugins at repo root)."""
     env = os.environ.get("PLUGINS_DIR")
     if env:
         return Path(env).resolve()
-    return _repo_root() / "api" / "plugins"
+    return _repo_root() / "plugins"
 
 
 def _load_manifests(plugins_dir: Path) -> List[Dict[str, Any]]:

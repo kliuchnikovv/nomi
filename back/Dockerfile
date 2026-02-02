@@ -1,6 +1,5 @@
 # Python Agent Dockerfile
-# Build context: repository root (so api/plugins is available).
-# docker-compose: context: ., dockerfile: back/Dockerfile
+# Build context: repo root (docker-compose context: ., Railway Root Directory: .)
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -15,15 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY back/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy back source code
+# Copy source code and plugins (repo root)
 COPY back/ .
+COPY plugins /app/plugins
 
-# Copy plugins from api/ (manifests and server tools)
-COPY api/plugins /app/plugins
 ENV PLUGINS_DIR=/app/plugins
 
 # Expose port
 EXPOSE 7777
 
-# Run with uvicorn on IPv4
+# Run with uvicorn on IPv4 (PORT from env on Railway)
 CMD uvicorn app:app --host 0.0.0.0 --port ${PORT:-7777}
