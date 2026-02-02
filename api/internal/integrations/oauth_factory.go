@@ -10,10 +10,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// OAuthFactory создает OAuth конфигурации из реестра провайдеров
+// OAuthFactory создает OAuth конфигурации из реестра провайдеров (загруженных из манифестов плагинов)
 type OAuthFactory struct {
-	cfg          *config.Config
-	logger       *zap.Logger
+	cfg           *config.Config
+	logger        *zap.Logger
 	oidcProviders map[string]*oidc.Provider
 }
 
@@ -25,10 +25,8 @@ func NewOAuthFactory(cfg *config.Config, logger *zap.Logger) (*OAuthFactory, err
 		oidcProviders: make(map[string]*oidc.Provider),
 	}
 
-	// Инициализируем OIDC провайдеры для провайдеров, которые их используют
 	for name, provider := range Registry {
 		if provider.OAuthConfig != nil && provider.OAuthConfig.IsOIDC && provider.OAuthConfig.IssuerURL != "" {
-			// Проверяем, не создали ли мы уже провайдер для этого issuer
 			if _, exists := factory.oidcProviders[provider.OAuthConfig.IssuerURL]; !exists {
 				oidcProvider, err := oidc.NewProvider(context.Background(), provider.OAuthConfig.IssuerURL)
 				if err != nil {
@@ -54,55 +52,30 @@ func (f *OAuthFactory) BuildOAuthConfig(providerName string, permissions []strin
 		return nil, fmt.Errorf("provider %s does not support OAuth", providerName)
 	}
 
-	// Получаем базовую конфигурацию OAuth из config
-	var baseCfg struct {
-		ClientID     string
-		ClientSecret string
-		RedirectURL  string
-		IssuerURL    string
-		Scopes       []string
+	if provider.OAuthConfigKey == "" {
+		return nil, fmt.Errorf("provider %s has no oauth_config_key", providerName)
 	}
 
-	switch providerName {
-	case "gmail", "calendar":
-		cfg, exists := f.cfg.OAuth2.Providers["google"]
-		if !exists {
-			return nil, fmt.Errorf("google provider config not found")
-		}
-		baseCfg.ClientID = cfg.ClientID
-		baseCfg.ClientSecret = cfg.ClientSecret
-		baseCfg.RedirectURL = cfg.RedirectURL
-		baseCfg.IssuerURL = cfg.IssuerURL
-		baseCfg.Scopes = cfg.Scopes
-	case "github":
-		cfg, exists := f.cfg.OAuth2.Providers["github"]
-		if !exists {
-			return nil, fmt.Errorf("github provider config not found")
-		}
-		baseCfg.ClientID = cfg.ClientID
-		baseCfg.ClientSecret = cfg.ClientSecret
-		baseCfg.RedirectURL = cfg.RedirectURL
-		baseCfg.IssuerURL = cfg.IssuerURL
-		baseCfg.Scopes = cfg.Scopes
-	default:
-		return nil, fmt.Errorf("unsupported provider for OAuth: %s", providerName)
+	cfg, exists := f.cfg.OAuth2.Providers[provider.OAuthConfigKey]
+	if !exists {
+		return nil, fmt.Errorf("oauth config key %s not found in config", provider.OAuthConfigKey)
 	}
 
-	// Генерируем redirect URL
 	redirectURL := fmt.Sprintf("%s/api/oauth/%s/callback", f.cfg.OAuth2.CallbackBase, providerName)
 
-	// Получаем scopes
 	var scopes []string
 	if provider.OAuthConfig.GetScopes != nil {
+		if len(permissions) == 0 {
+			permissions = provider.DefaultPermissions
+		}
 		scopes = provider.OAuthConfig.GetScopes(permissions)
 	} else {
 		scopes = provider.OAuthConfig.Scopes
 	}
 
-	// Создаем OAuth конфигурацию
 	oauthConfig := &oauth2.Config{
-		ClientID:     baseCfg.ClientID,
-		ClientSecret: baseCfg.ClientSecret,
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  redirectURL,
 		Scopes:       scopes,
 		Endpoint:     provider.OAuthConfig.Endpoint,
@@ -126,43 +99,23 @@ func (f *OAuthFactory) GetOIDCProvider(issuerURL string) (*oidc.Provider, error)
 	return provider, nil
 }
 
-// BuildOAuthConfigsForProvider создает OAuth конфигурации для всех провайдеров указанного типа
-// Например, для "google" создаст конфигурации для gmail и calendar
+// BuildOAuthConfigsForProvider создает OAuth конфигурации для всех провайдеров с указанным oauth_config_key
 func (f *OAuthFactory) BuildOAuthConfigsForProvider(baseProviderName string) (map[string]*oauth2.Config, error) {
 	configs := make(map[string]*oauth2.Config)
 
-	// Определяем, какие провайдеры относятся к базовому провайдеру
-	var providerNames []string
-	switch baseProviderName {
-	case "google":
-		providerNames = []string{"gmail", "calendar"}
-	case "github":
-		providerNames = []string{"github"}
-	default:
-		return nil, fmt.Errorf("unsupported base provider: %s", baseProviderName)
-	}
-
-	// Создаем конфигурации для каждого провайдера
-	for _, providerName := range providerNames {
-		var permissions []string
-		switch providerName {
-		case "gmail":
-			permissions = []string{"gmail:read", "gmail:write"}
-		case "calendar":
-			permissions = []string{"calendar:read", "calendar:write"}
-		case "github":
-			permissions = []string{} // GitHub использует фиксированные scopes
+	for name, provider := range Registry {
+		if provider.OAuthConfig == nil || provider.OAuthConfigKey != baseProviderName {
+			continue
 		}
-
-		config, err := f.BuildOAuthConfig(providerName, permissions)
+		config, err := f.BuildOAuthConfig(name, provider.DefaultPermissions)
 		if err != nil {
 			f.logger.Warn("failed to build OAuth config",
-				zap.String("provider", providerName),
+				zap.String("provider", name),
 				zap.Error(err),
 			)
 			continue
 		}
-		configs[providerName] = config
+		configs[name] = config
 	}
 
 	return configs, nil
@@ -176,20 +129,7 @@ func (f *OAuthFactory) BuildAllOAuthConfigs() (map[string]*oauth2.Config, error)
 		if provider.OAuthConfig == nil {
 			continue
 		}
-
-		var permissions []string
-		switch name {
-		case "gmail":
-			permissions = []string{"gmail:read", "gmail:write"}
-		case "calendar":
-			permissions = []string{"calendar:read", "calendar:write"}
-		case "github":
-			permissions = []string{}
-		default:
-			permissions = []string{}
-		}
-
-		config, err := f.BuildOAuthConfig(name, permissions)
+		config, err := f.BuildOAuthConfig(name, provider.DefaultPermissions)
 		if err != nil {
 			f.logger.Warn("failed to build OAuth config",
 				zap.String("provider", name),

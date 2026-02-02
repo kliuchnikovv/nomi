@@ -5,9 +5,6 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from agno.tools import Toolkit
-from agno.tools.gmail import GmailTools
-from agno.tools.googlecalendar import GoogleCalendarTools
-from agno.tools.github import GithubTools
 from src.tools.duckduckgo_custom import (
     DuckDuckGoTools as WebSearchTools,
 )  # Use our custom version

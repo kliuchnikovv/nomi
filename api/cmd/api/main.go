@@ -15,6 +15,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/container"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
+	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/server"
 	"go.uber.org/zap"
@@ -39,6 +40,20 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	pluginsDir := cfg.PluginsDir
+	if pluginsDir == "" {
+		pluginsDir = os.Getenv("PLUGINS_DIR")
+	}
+	if pluginsDir == "" {
+		pluginsDir = "plugins"
+		if _, err := os.Stat(pluginsDir); err != nil {
+			if _, err2 := os.Stat("../plugins"); err2 == nil {
+				pluginsDir = "../plugins"
+			}
+			// else keep "plugins" and InitRegistry will log if dir missing
+		}
+	}
+
 	zapCfg := zap.NewProductionConfig()
 	zapCfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	zapCfg.Encoding = "json"
@@ -61,6 +76,10 @@ func main() {
 		}
 	} else {
 		logger.Info("skipping swagger generation due to SKIP_SWAG=1")
+	}
+
+	if err := integrations.InitRegistry(pluginsDir, logger); err != nil {
+		logger.Fatal("failed to init plugin registry", zap.Error(err))
 	}
 
 	// Создаем DI Container

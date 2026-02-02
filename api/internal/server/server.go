@@ -115,6 +115,9 @@ func New(
 	// Takes ?session_id=... to resolve user context
 	r.GET("/api/tools", toolsHandler.ListTools)
 
+	// Plugins registry (manifest list for frontend/Python)
+	r.GET("/api/plugins", handlers.ListPlugins)
+
 	// File Upload API
 	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))
 	r.GET("/api/attachments/:id", wrapWithAuth(uploadHandler.GetAttachment, authMiddleware))

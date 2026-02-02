@@ -1,78 +1,26 @@
 /**
  * Реестр интеграций для Frontend.
- * 
- * Содержит UI метаданные и конфигурацию для всех доступных интеграций.
+ * Источник: plugins/registry.generated.ts (из манифестов плагинов).
  */
 
-export type StorageType = 'client' | 'server' | 'hybrid';
+import type { IntegrationMetadata } from '../../plugins/registry.generated';
+import { INTEGRATION_REGISTRY as REGISTRY } from '../../plugins/registry.generated';
 
-export interface IntegrationMetadata {
-    id: string;
-    name: string;
-    displayName: string;
-    description: string;
-    icon: string;
-    storageType: StorageType;
-    supportsBackgroundTasks: boolean;
-    systemEventListeners: string[];
-    authType: 'oauth2' | 'api_key' | 'none';
-    category?: string;
-}
-
-/**
- * Реестр всех доступных интеграций с их метаданными.
- */
-export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
-    gmail: {
-        id: 'gmail',
-        name: 'gmail',
-        displayName: 'Gmail',
-        description: 'Gmail интеграция для работы с почтой',
-        icon: 'gmail',
-        storageType: 'client',
-        supportsBackgroundTasks: true,
-        systemEventListeners: ['push_notifications', 'app_lifecycle'],
-        authType: 'oauth2',
-        category: 'email',
-    },
-    calendar: {
-        id: 'calendar',
-        name: 'calendar',
-        displayName: 'Google Calendar',
-        description: 'Google Calendar интеграция для работы с календарем',
-        icon: 'calendar',
-        storageType: 'client',
-        supportsBackgroundTasks: true,
-        systemEventListeners: ['push_notifications', 'app_lifecycle'],
-        authType: 'oauth2',
-        category: 'calendar',
-    },
-    github: {
-        id: 'github',
-        name: 'github',
-        displayName: 'GitHub',
-        description: 'GitHub интеграция для работы с репозиториями',
-        icon: 'github',
-        storageType: 'server',
-        supportsBackgroundTasks: false,
-        systemEventListeners: [],
-        authType: 'oauth2',
-        category: 'development',
-    },
-};
+export type { IntegrationMetadata, StorageType } from '../../plugins/registry.generated';
+export const INTEGRATION_REGISTRY = REGISTRY;
 
 /**
  * Получить метаданные интеграции по ID.
  */
 export function getIntegrationMetadata(id: string): IntegrationMetadata | undefined {
-    return INTEGRATION_REGISTRY[id.toLowerCase()];
+    return REGISTRY[id.toLowerCase()];
 }
 
 /**
  * Получить все клиентские интеграции (ClientOnly).
  */
-export function getClientOnlyIntegrations(): IntegrationMetadata[] {
-    return Object.values(INTEGRATION_REGISTRY).filter(
+export function getClientOnlyIntegrations() {
+    return Object.values(REGISTRY).filter(
         (integration) => integration.storageType === 'client'
     );
 }
@@ -80,8 +28,8 @@ export function getClientOnlyIntegrations(): IntegrationMetadata[] {
 /**
  * Получить все серверные интеграции.
  */
-export function getServerIntegrations(): IntegrationMetadata[] {
-    return Object.values(INTEGRATION_REGISTRY).filter(
+export function getServerIntegrations() {
+    return Object.values(REGISTRY).filter(
         (integration) => integration.storageType === 'server'
     );
 }
@@ -89,8 +37,8 @@ export function getServerIntegrations(): IntegrationMetadata[] {
 /**
  * Получить все интеграции, поддерживающие фоновые задачи.
  */
-export function getIntegrationsWithBackgroundTasks(): IntegrationMetadata[] {
-    return Object.values(INTEGRATION_REGISTRY).filter(
+export function getIntegrationsWithBackgroundTasks() {
+    return Object.values(REGISTRY).filter(
         (integration) => integration.supportsBackgroundTasks
     );
 }
@@ -122,15 +70,15 @@ export function supportsBackgroundTasks(integrationId: string): boolean {
 /**
  * Получить все доступные интеграции.
  */
-export function getAllIntegrations(): IntegrationMetadata[] {
-    return Object.values(INTEGRATION_REGISTRY);
+export function getAllIntegrations() {
+    return Object.values(REGISTRY);
 }
 
 /**
  * Получить интеграции по категории.
  */
-export function getIntegrationsByCategory(category: string): IntegrationMetadata[] {
-    return Object.values(INTEGRATION_REGISTRY).filter(
+export function getIntegrationsByCategory(category: string) {
+    return Object.values(REGISTRY).filter(
         (integration) => integration.category === category
     );
 }

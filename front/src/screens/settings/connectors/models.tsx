@@ -1,5 +1,6 @@
 import { ThemePalette } from '../../../themes/types';
 import { Chat } from '../../main/models.tsx';
+import { getAllIntegrations } from '../../../services/integrations/registry';
 
 function deepEqual(a: any, b: any): boolean {
     if (a === b) return true;
@@ -91,35 +92,26 @@ export type OAuthStatus = {
     scopes?: string[];
 };
 
-// TODO: replace with tool-configs
-export const CONNECTORS: Connector[] = [
-    {
-        id: 'gmail',
-        name: 'Gmail',
-        toolKey: 'gmail',
-        oauthProvider: 'gmail',
-        colorKey: 'red',
-        glyph: 'gmail',
-    },
-    // Temporarily disabled - pending migration to client-side storage:
-    // {
-    {
-        id: 'calendar',
-        name: 'Google Calendar',
-        toolKey: 'calendar',
-        oauthProvider: 'calendar',
-        colorKey: 'orange',
-        glyph: 'calendar',
-    },
-    {
-        id: 'github',
-        name: 'GitHub',
-        toolKey: 'github',
-        oauthProvider: 'github',
-        colorKey: 'magenta',
-        glyph: 'github',
-    },
-];
+const CONNECTOR_COLOR_MAP: Partial<Record<string, keyof ThemePalette>> = {
+    gmail: 'red',
+    calendar: 'orange',
+    github: 'magenta',
+    jules: 'purple',
+};
+
+function buildConnectors(): Connector[] {
+    const integrations = getAllIntegrations();
+    return integrations.map((m) => ({
+        id: m.id,
+        name: m.displayName,
+        toolKey: m.id,
+        oauthProvider: m.id,
+        colorKey: (CONNECTOR_COLOR_MAP[m.id] ?? 'blue') as keyof ThemePalette,
+        glyph: m.icon,
+    }));
+}
+
+export const CONNECTORS: Connector[] = buildConnectors();
 
 export interface ConnectorContextType {
     tools: Tool[];

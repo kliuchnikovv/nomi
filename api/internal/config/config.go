@@ -40,6 +40,8 @@ type Config struct {
 	GitHub struct {
 		WebhookSecret string `yaml:"webhook_secret"`
 	} `yaml:"github"`
+	// PluginsDir is the path to the plugins directory (default: env PLUGINS_DIR or "plugins")
+	PluginsDir string `yaml:"plugins_dir"`
 }
 
 func Load(path string) (*Config, error) {

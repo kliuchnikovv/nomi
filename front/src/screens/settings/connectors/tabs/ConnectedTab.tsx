@@ -79,13 +79,14 @@ export function ConnectedTab() {
                         }
 
                         const color = colorKey ? palette[colorKey] : palette.blue;
+                        const glyphStr: string = glyph ?? 'application';
 
                         return (
                             <View key={integration.id}>
                                 <Item
                                     name={integration.name}
                                     enabled={!!integration.connected}
-                                    glyph={glyph || 'application'}
+                                    glyph={glyphStr}
                                     color={color}
                                     configID={integration.id}
                                     statusText={getIntegrationStatus(integration)}

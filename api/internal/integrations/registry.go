@@ -2,7 +2,9 @@ package integrations
 
 import (
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/providers"
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
@@ -28,6 +30,10 @@ type ProviderDefinition struct {
 	// OAuth configuration
 	OAuthConfig *OAuthConfig
 
+	// OAuthConfigKey is the key in config.OAuth2.Providers (e.g. google, github)
+	OAuthConfigKey   string
+	DefaultPermissions []string // Default permissions from manifest (e.g. gmail:read, gmail:write)
+
 	// Flags
 	RequiresSync            bool     // Whether sync with server is required
 	SupportsBackgroundTasks bool     // Whether background tasks are supported (for ClientOnly)
@@ -47,73 +53,91 @@ type OAuthConfig struct {
 	GetScopes func(permissions []string) []string // Function to get scopes
 }
 
+// knownOAuthEndpoints maps oauth_config_key to oauth2.Endpoint for known providers
+var knownOAuthEndpoints = map[string]oauth2.Endpoint{
+	"google": google.Endpoint,
+	"github": github.Endpoint,
+}
+
 var (
-	// Registry contains all available providers
-	Registry = map[string]*ProviderDefinition{
-		"gmail": {
-			Name:        "gmail",
-			DisplayName: "Gmail",
-			Type:        "oauth2",
-			StorageType: StorageTypeClientOnly,
-			OAuthConfig: &OAuthConfig{
-				Endpoint:  google.Endpoint,
-				IsOIDC:    true,
-				IssuerURL: "https://accounts.google.com",
-				GetScopes: func(permissions []string) []string {
-					scopes := []string{oidc.ScopeOpenID, "email", "profile"}
-					for _, perm := range permissions {
-						scopes = append(scopes, providers.GetGoogleScope(perm)...)
-					}
-					return scopes
-				},
-			},
-			RequiresSync:            false,
-			SupportsBackgroundTasks: true,
-			SystemEventListeners:    []string{"push_notifications", "app_lifecycle"},
-			Description:             "Gmail integration for email management",
-			Icon:                    "gmail",
-		},
-		"calendar": {
-			Name:        "calendar",
-			DisplayName: "Google Calendar",
-			Type:        "oauth2",
-			StorageType: StorageTypeClientOnly,
-			OAuthConfig: &OAuthConfig{
-				Endpoint:  google.Endpoint,
-				IsOIDC:    true,
-				IssuerURL: "https://accounts.google.com",
-				GetScopes: func(permissions []string) []string {
-					scopes := []string{oidc.ScopeOpenID, "email", "profile"}
-					for _, perm := range permissions {
-						scopes = append(scopes, providers.GetGoogleScope(perm)...)
-					}
-					return scopes
-				},
-			},
-			RequiresSync:            false,
-			SupportsBackgroundTasks: true,
-			SystemEventListeners:    []string{"push_notifications", "app_lifecycle"},
-			Description:             "Google Calendar integration for calendar management",
-			Icon:                    "calendar",
-		},
-		"github": {
-			Name:        "github",
-			DisplayName: "GitHub",
-			Type:        "oauth2",
-			StorageType: StorageTypeServer,
-			OAuthConfig: &OAuthConfig{
-				Endpoint: github.Endpoint,
-				IsOIDC:   false,
-				Scopes:   []string{"repo", "user", "read:org"},
-			},
-			RequiresSync:            true,
-			SupportsBackgroundTasks: false,
-			SystemEventListeners:    []string{},
-			Description:             "GitHub integration for repository management",
-			Icon:                    "github",
-		},
-	}
+	// Registry contains all available providers (populated by InitRegistry from plugin manifests)
+	Registry = make(map[string]*ProviderDefinition)
 )
+
+// InitRegistry loads plugin manifests from pluginsDir and builds Registry.
+// Should be called once at startup (e.g. from main).
+func InitRegistry(pluginsDir string, logger *zap.Logger) error {
+	if pluginsDir == "" {
+		pluginsDir = "plugins"
+	}
+	_, err := plugins.Load(pluginsDir, logger)
+	if err != nil {
+		return err
+	}
+	Registry = buildRegistryFromManifests(plugins.Manifests)
+	return nil
+}
+
+func buildRegistryFromManifests(manifests []*plugins.Manifest) map[string]*ProviderDefinition {
+	out := make(map[string]*ProviderDefinition)
+	for _, m := range manifests {
+		if m.Name == "" {
+			continue
+		}
+		p := &ProviderDefinition{
+			Name:                   m.Name,
+			DisplayName:            m.DisplayName,
+			Description:            m.Description,
+			Type:                   m.Auth.Type,
+			RequiresSync:           m.Execution.Type == "server",
+			SupportsBackgroundTasks: m.BackgroundTasks && (m.Execution.Type == "client" || m.Execution.Type == "hybrid"),
+			SystemEventListeners:   m.SystemEvents,
+			Icon:                   m.UI.Icon,
+			OAuthConfigKey:         m.Auth.OAuthConfigKey,
+			DefaultPermissions:     m.Auth.Permissions,
+		}
+		switch m.Execution.Type {
+		case "client":
+			p.StorageType = StorageTypeClientOnly
+		case "server":
+			p.StorageType = StorageTypeServer
+		default:
+			p.StorageType = StorageTypeHybrid
+		}
+		if m.Auth.Type == "oauth2" && m.Auth.OAuthConfigKey != "" {
+			endpoint, ok := knownOAuthEndpoints[m.Auth.OAuthConfigKey]
+			if !ok {
+				continue
+			}
+			p.OAuthConfig = &OAuthConfig{
+				Endpoint:  endpoint,
+				IsOIDC:    m.Auth.OIDCIssuerURL != "",
+				IssuerURL: m.Auth.OIDCIssuerURL,
+			}
+			if m.Auth.OIDCIssuerURL != "" {
+				defaultPerms := append([]string(nil), p.DefaultPermissions...)
+				p.OAuthConfig.GetScopes = func(permissions []string) []string {
+					if len(permissions) == 0 {
+						permissions = defaultPerms
+					}
+					scopes := []string{oidc.ScopeOpenID, "email", "profile"}
+					for _, perm := range permissions {
+						scopes = append(scopes, providers.GetGoogleScope(perm)...)
+					}
+					return scopes
+				}
+			} else {
+				scopes := m.Auth.Scopes
+				if len(scopes) == 0 {
+					scopes = []string{"repo", "user", "read:org"}
+				}
+				p.OAuthConfig.Scopes = scopes
+			}
+		}
+		out[m.Name] = p
+	}
+	return out
+}
 
 // GetProvider returns provider definition by name
 func GetProvider(name string) (*ProviderDefinition, bool) {
@@ -123,24 +147,24 @@ func GetProvider(name string) (*ProviderDefinition, bool) {
 
 // GetClientOnlyProviders returns list of ClientOnly providers
 func GetClientOnlyProviders() []*ProviderDefinition {
-	var providers []*ProviderDefinition
+	var provs []*ProviderDefinition
 	for _, provider := range Registry {
 		if provider.StorageType == StorageTypeClientOnly {
-			providers = append(providers, provider)
+			provs = append(provs, provider)
 		}
 	}
-	return providers
+	return provs
 }
 
 // GetServerProviders returns list of Server providers
 func GetServerProviders() []*ProviderDefinition {
-	var providers []*ProviderDefinition
+	var provs []*ProviderDefinition
 	for _, provider := range Registry {
 		if provider.StorageType == StorageTypeServer {
-			providers = append(providers, provider)
+			provs = append(provs, provider)
 		}
 	}
-	return providers
+	return provs
 }
 
 // ShouldSync checks if sync is required for provider

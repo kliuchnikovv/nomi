@@ -20,7 +20,7 @@ export type StorageType = 'client' | 'server' | 'hybrid';
 
 export interface Integration {
     id: string;
-    provider: 'gmail' | 'calendar' | 'github';
+    provider: string;
     name: string;
     enabled: boolean;
     accountEmail?: string;
@@ -185,7 +185,7 @@ class IntegrationStorage {
 
         return rows.map(row => ({
             id: row.id,
-            provider: row.provider as Integration['provider'],
+            provider: row.provider,
             name: row.name,
             enabled: row.enabled === 1,
             accountEmail: row.account_email ?? undefined,
@@ -210,7 +210,7 @@ class IntegrationStorage {
 
         return {
             id: row.id,
-            provider: row.provider as Integration['provider'],
+            provider: row.provider,
             name: row.name,
             enabled: row.enabled === 1,
             accountEmail: row.account_email ?? undefined,
@@ -235,7 +235,7 @@ class IntegrationStorage {
 
         return {
             id: row.id,
-            provider: row.provider as Integration['provider'],
+            provider: row.provider,
             name: row.name,
             enabled: row.enabled === 1,
             accountEmail: row.account_email ?? undefined,

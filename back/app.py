@@ -115,6 +115,14 @@ async def lifespan(app: FastAPI):
     # Startup
     print("[Lifespan] Starting up...")
 
+    logging.warning("[Lifespan] Loading plugins...")
+    try:
+        from src.plugins.loader import load_plugins
+        load_plugins()
+        logging.warning("[Lifespan] Plugins loaded successfully")
+    except Exception as e:
+        logging.error("[Lifespan] Failed to load plugins: %s", e, exc_info=True)
+
     logging.warning("[Lifespan] Initializing Redis Worker...")
     try:
         # Используем redis_worker из container

@@ -1,0 +1,24 @@
+name: calendar
+display_name: Google Calendar
+description: Google Calendar integration for calendar management
+
+execution:
+  type: client
+
+auth:
+  type: oauth2
+  oauth_config_key: google
+  oidc_issuer_url: https://accounts.google.com
+  permissions:
+    - calendar:read
+    - calendar:write
+
+ui:
+  icon: calendar
+  description_short: Google Calendar интеграция для работы с календарем
+  category: calendar
+
+background_tasks: true
+system_events:
+  - push_notifications
+  - app_lifecycle

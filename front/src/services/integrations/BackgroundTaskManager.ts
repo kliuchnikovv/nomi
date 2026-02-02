@@ -9,13 +9,9 @@ import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import { AppState, AppStateStatus } from 'react-native';
 import { integrationStorage } from './IntegrationStorage';
-import { 
-    getIntegrationsWithBackgroundTasks, 
-    getIntegrationMetadata,
-    INTEGRATION_REGISTRY 
-} from './registry';
-import { gmailClient } from './clients/GmailClient';
-import { calendarClient } from './clients/CalendarClient';
+import { getIntegrationMetadata } from './registry';
+import { getBackgroundTask } from '../../plugins/clientRegistry';
+import { registerClientPlugins } from '../../plugins/registerClientPlugins';
 
 // Типы для фоновых задач
 export interface BackgroundTaskConfig {
@@ -57,37 +53,12 @@ function defineBackgroundTask(provider: string, taskFunction: () => Promise<void
 }
 
 /**
- * Функции для выполнения фоновых задач по провайдерам
+ * Получить функцию фоновой задачи для провайдера (из плагинов или fallback).
  */
-const backgroundTaskFunctions: Record<string, (integrationId: string) => Promise<void>> = {
-    gmail: async (integrationId: string) => {
-        console.log(`[BackgroundTaskManager] Syncing Gmail for integration ${integrationId}`);
-        const emails = await gmailClient.syncEmails(integrationId);
-        if (emails.length > 0) {
-            console.log(`[BackgroundTaskManager] Synced ${emails.length} new emails`);
-            
-            // Анализ новых писем (ограничиваем батч для фонового выполнения)
-            const unanalyzed = await integrationStorage.getUnanalyzedEmails(5);
-            if (unanalyzed.length > 0) {
-                console.log(`[BackgroundTaskManager] Found ${unanalyzed.length} unanalyzed emails`);
-                // Анализ будет выполнен при следующем открытии приложения
-            }
-        }
-    },
-    
-    calendar: async (integrationId: string) => {
-        console.log(`[BackgroundTaskManager] Syncing Calendar for integration ${integrationId}`);
-        // Синхронизация событий календаря
-        try {
-            const events = await calendarClient.syncEvents(integrationId);
-            if (events.length > 0) {
-                console.log(`[BackgroundTaskManager] Synced ${events.length} calendar events`);
-            }
-        } catch (error) {
-            console.error(`[BackgroundTaskManager] Calendar sync failed:`, error);
-        }
-    },
-};
+function getBackgroundTaskForProvider(provider: string): ((integrationId: string) => Promise<void>) | undefined {
+    registerClientPlugins();
+    return getBackgroundTask(provider);
+}
 
 /**
  * Регистрировать фоновую задачу для интеграции
@@ -103,16 +74,16 @@ export async function registerBackgroundTask(config: BackgroundTaskConfig): Prom
         return;
     }
     
-    // Определяем задачу, если еще не определена
-    if (!backgroundTaskFunctions[provider]) {
+    const taskFunction = getBackgroundTaskForProvider(provider);
+    if (!taskFunction) {
         console.warn(`[BackgroundTaskManager] No background task function for provider ${provider}`);
         return;
     }
-    
+
     // Определяем задачу в TaskManager
     if (!TaskManager.isTaskDefined(taskName)) {
         defineBackgroundTask(provider, async () => {
-            await backgroundTaskFunctions[provider](integrationId);
+            await taskFunction(integrationId);
         });
     }
     
@@ -314,10 +285,9 @@ export async function registerSystemEventListeners(integrationId: string, provid
     for (const eventType of metadata.systemEventListeners) {
         if (eventType === 'push_notifications') {
             // Регистрируем обработчик push-уведомлений
-            systemEventListener.registerListener('push_notifications', async (data) => {
+            systemEventListener.registerListener('push_notifications', async () => {
                 console.log(`[BackgroundTaskManager] Push notification received for ${provider}`);
-                // Запускаем синхронизацию при получении push-уведомления
-                const taskFunction = backgroundTaskFunctions[provider];
+                const taskFunction = getBackgroundTaskForProvider(provider);
                 if (taskFunction) {
                     await taskFunction(integrationId);
                 }

@@ -27,3 +27,4 @@ api/api
 .DS_Store
 .env
 .cursor
+__pycache__

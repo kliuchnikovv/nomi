@@ -1,0 +1,24 @@
+name: gmail
+display_name: Gmail
+description: Gmail integration for email management
+
+execution:
+  type: client
+
+auth:
+  type: oauth2
+  oauth_config_key: google
+  oidc_issuer_url: https://accounts.google.com
+  permissions:
+    - gmail:read
+    - gmail:write
+
+ui:
+  icon: gmail
+  description_short: Gmail интеграция для работы с почтой
+  category: email
+
+background_tasks: true
+system_events:
+  - push_notifications
+  - app_lifecycle
