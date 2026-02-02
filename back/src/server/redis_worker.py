@@ -84,15 +84,22 @@ class RedisWorker:
         if not channel or not data:
             return
 
+        # Normalize data: redis-py may return bytes or int (subscriber count)
+        if isinstance(data, bytes):
+            data = data.decode("utf-8", errors="replace")
+        elif isinstance(data, int):
+            # Skip subscriber count messages
+            return
+
         # Case 1: Chat Request (pattern match)
         # channel: chat:request:<chat_id>
         parts = channel.split(":")
         if len(parts) >= 3 and parts[0] == "chat" and parts[1] == "request":
             chat_id = parts[2]
             logger.info(
-                "[RedisWorker] RECEIVED %s (len=%d)",
+                "[RedisWorker] RECEIVED %s (data type=%s)",
                 Redis.CHANNEL_REQUEST.format(chat_id),
-                len(data) if data else 0,
+                type(data).__name__,
             )
             task = asyncio.create_task(self._process_request(chat_id, data))
             self._tasks.add(task)
