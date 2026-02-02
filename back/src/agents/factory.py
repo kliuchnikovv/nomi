@@ -1,8 +1,6 @@
 import logging
 import os
 
-from typing import List, Optional
-
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
 from agno.knowledge import Knowledge
@@ -62,12 +60,12 @@ class AgentFactory:
         self._model = model
         self._config_client = config_client
         self._debug_mode = debug_mode
-        self._vector_db: Optional[PgVector] = None  # Legacy; prefer _knowledge
-        self._knowledge: Optional[Knowledge] = None  # Shared Agno Knowledge (lazy)
+        self._vector_db: PgVector | None = None  # Legacy; prefer _knowledge
+        self._knowledge: Knowledge | None = None  # Shared Agno Knowledge (lazy)
 
     @property
     def config_client(self) -> ToolConfigClient:
-        """Доступ к ToolConfigClient для запроса инструментов."""
+        """Access to ToolConfigClient for requesting tools."""
         return self._config_client
 
     # ... (build_model omitted)
@@ -233,17 +231,17 @@ class AgentFactory:
     async def build(
         self,
         session_id: str,
-        tools_specs: Optional[List[ToolSpec]] = None,
-        model_name: Optional[str] = None,
-        agent_type: Optional[str] = None,
-        command_desc: Optional[dict] = None,
+        tools_specs: list[ToolSpec] | None = None,
+        model_name: str | None = None,
+        agent_type: str | None = None,
+        command_desc: dict | None = None,
         web_search: bool = False,
         thinking: str = "off",
-        user_id: Optional[str] = None,
-        chat_id: Optional[str] = None,
-        timezone: Optional[str] = None,
-        timezone_offset: Optional[str] = None,
-        endpoint: Optional[str] = None,
+        user_id: str | None = None,
+        chat_id: str | None = None,
+        timezone: str | None = None,
+        timezone_offset: str | None = None,
+        endpoint: str | None = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -273,7 +271,7 @@ class AgentFactory:
 
         list_id = command_desc.get("list_id") if command_desc else None
 
-        tools: List[Toolkit] = []
+        tools: list[Toolkit] = []
 
         # List agent: only list tools (knowledge_search with list_id), no web_search
         if agent_type and agent_type.lower() == "list" and user_id:
@@ -372,234 +370,6 @@ class AgentFactory:
                     "[Factory] List chat detected, building ListAgent for list_id=%s",
                     list_id,
                 )
-            # if agent_type and agent_type.lower() == "list":
-            #     agent = ListAgent(
-            #         db=self._db,
-            #         model=model,
-            #         tools=tools,
-            #         debug_mode=self._debug_mode,
-            #         knowledge=knowledge,
-            #         list_id=list_id,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #     )
-            #     logger.info("[Factory] Built ListAgent for list_id=%s", list_id)
-            # elif agent_type and agent_type.lower() == "mailer":
-            #     agent = MailerAgent(
-            #         db=self._db,
-            #         model=model,
-            #         tools=tools,
-            #         debug_mode=self._debug_mode,
-            #         knowledge=knowledge,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #     )
-            # elif agent_type and agent_type.lower() == "rag":
-            #     agent = RagAgent(
-            #         db=self._db,
-            #         model=model,
-            #         tools=tools,
-            #         debug_mode=self._debug_mode,
-            #         knowledge=knowledge,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #     )
-            # elif agent_type and agent_type.lower() == "memoriser":
-            #     agent = MemoriserAgent(
-            #         db=self._db,
-            #         model=model,
-            #         tools=tools,
-            #         debug_mode=self._debug_mode,
-            #         knowledge=knowledge,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #     )
-            # elif agent_type and agent_type.lower() == "briefing":
-            #     agent = BriefingAgent(
-            #         model=model,
-            #         db=self._db,
-            #         knowledge=knowledge,
-            #         tools=tools,
-            #         debug_mode=self._debug_mode,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #     )
-            # elif agent_type and agent_type.lower() == "extraction":
-            #     agent = ExtractionAgent(
-            #         model=model,
-            #         db=self._db,
-            #         debug_mode=self._debug_mode,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #     )
-            # elif agent_type and agent_type.lower() == "email_analyzer":
-            #     agent = EmailAnalyzerAgent(
-            #         model=model,
-            #         db=self._db,
-            #         debug_mode=self._debug_mode,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #     )
-            # elif agent_type and agent_type.lower() == "analyst":
-            #     # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
-            #     agent = WorkflowAgent(
-            #         name="Analyst",
-            #         model=model,
-            #         instructions=analyst_instructions.format(
-            #             project_id="unknown", task_id="unknown"
-            #         ),
-            #         markdown=True,
-            #         debug_mode=self._debug_mode,
-            #         tools=tools,
-            #         workflow_storage=None,
-            #         on_completion=None,
-            #         tool_call_limit=10,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #         db=self._db,
-            #     )
-            # elif agent_type and agent_type.lower() == "architect":
-            #     # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
-            #     agent = WorkflowAgent(
-            #         name="Architect",
-            #         model=model,
-            #         tools=tools,
-            #         instructions=architect_instructions,
-            #         markdown=True,
-            #         debug_mode=self._debug_mode,
-            #         workflow_storage=None,
-            #         on_completion=None,
-            #         tool_call_limit=10,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #         db=self._db,
-            #     )
-            # elif agent_type and agent_type.lower() == "developer":
-            #     agent = WorkflowAgent(
-            #         name="Developer",
-            #         model=model,
-            #         tools=tools,
-            #         instructions=developer_instructions,
-            #         markdown=True,
-            #         debug_mode=self._debug_mode,
-            #         workflow_storage=None,
-            #         on_completion=None,
-            #         tool_call_limit=20,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #         db=self._db,
-            #     )
-            # elif agent_type and agent_type.lower() == "worker":
-            #     agent = WorkflowAgent(
-            #         name="Worker",
-            #         model=model,
-            #         tools=tools,
-            #         instructions=worker_instructions,
-            #         markdown=True,
-            #         debug_mode=self._debug_mode,
-            #         workflow_storage=None,
-            #         on_completion=None,
-            #         tool_call_limit=10,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #         db=self._db,
-            #     )
-            # elif agent_type and agent_type.lower() == "reviewer":
-            #     # NOTE: output_schema removed - Gemini 2.5 doesn't support function calling with response_mime_type: application/json
-            #     agent = WorkflowAgent(
-            #         name="Reviewer",
-            #         model=model,
-            #         instructions=reviewer_instructions,
-            #         markdown=True,
-            #         debug_mode=self._debug_mode,
-            #         workflow_storage=None,
-            #         on_completion=None,
-            #         tool_call_limit=10,
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #         db=self._db,
-            #     )
-            # else:
-            #     # Default to Genie
-            #     # Default to Genie
-            #
-            #     # Default to Genie
-            #
-            #     # Add Timezone Context
-            #     genie_instructions = None
-            #     add_datetime = True
-            #
-            #     # Determine timezone to use
-            #     if timezone:
-            #         try:
-            #             from zoneinfo import ZoneInfo
-            #             from datetime import datetime
-            #
-            #             # Use ZoneInfo from standard library
-            #             tz = ZoneInfo(timezone)
-            #             local_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
-            #
-            #             from src.agents.genie import BASE_INSTRUCTIONS
-            #
-            #             genie_instructions = (
-            #                 f"Current User Time: {local_time} ({timezone}).\nUse this time for all relative time calculations (e.g. 'in one hour').\n\n"
-            #                 + BASE_INSTRUCTIONS
-            #             )
-            #             add_datetime = False  # Disable default UTC datetime
-            #             logger.info(
-            #                 f"[Factory] Injected local time: {local_time} for timezone: {timezone}"
-            #             )
-            #         except Exception as e:
-            #             logger.warning("Failed to parse timezone %s: %s", timezone, e)
-            #     elif timezone_offset:
-            #         try:
-            #             from datetime import (
-            #                 datetime,
-            #                 timedelta,
-            #                 timezone as dt_timezone,
-            #             )
-            #
-            #             # timezone_offset is in minutes from UTC (e.g. -120 for GMT+2 in JS getTimezoneOffset() returns positive for West, negative for East?
-            #             # Wait, JS new Date().getTimezoneOffset() returns positive minutes for zones West of UTC, negative for East.
-            #             # e.g. UTC+2 returns -120.
-            #             # Python timezone(timedelta(minutes=...)) expects offset from UTC.
-            #             # So we need to negate JS offset.
-            #             offset_mins = int(timezone_offset)
-            #             # Invert sign because JS returns (UTC - Local) in minutes, Python wants (Local - UTC)
-            #             tz_offset = timedelta(minutes=-offset_mins)
-            #             tz = dt_timezone(tz_offset)
-            #
-            #             local_time = datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S %z")
-            #
-            #             from src.agents.genie import BASE_INSTRUCTIONS
-            #
-            #             genie_instructions = (
-            #                 f"Current User Time: {local_time} (UTC offset {tz_offset}).\nUse this time for all relative time calculations (e.g. 'in one hour').\n\n"
-            #                 + BASE_INSTRUCTIONS
-            #             )
-            #             add_datetime = False
-            #             logger.info(
-            #                 f"[Factory] Injected local time: {local_time} for offset: {offset_mins}"
-            #             )
-            #         except Exception as e:
-            #             logger.warning(
-            #                 "Failed to use timezone_offset %s: %s", timezone_offset, e
-            #             )
-            #
-            #     agent = GenieAgent(
-            #         db=self._db,
-            #         model=model,
-            #         tools=tools,
-            #         debug_mode=self._debug_mode,
-            #         thinking=thinking,
-            #         knowledge=knowledge,
-            #         instructions=genie_instructions,  # Pass combined or None (GenieAgent defaults to BASE)
-            #         user_id=rag_user_id,
-            #         learning=True,
-            #     )
-            #
-            #     if not add_datetime:
-            #         agent.add_datetime_to_context = False
 
             agent = SouperAgent(
                 db=self._db,

@@ -59,18 +59,6 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         authType: 'oauth2',
         category: 'development',
     },
-    jules: {
-        id: 'jules',
-        name: 'jules',
-        displayName: 'Jules',
-        description: 'Jules API интеграция для автоматизации задач',
-        icon: 'jules',
-        storageType: 'server',
-        supportsBackgroundTasks: false,
-        systemEventListeners: [],
-        authType: 'api_key',
-        category: 'automation',
-    },
 };
 
 /**

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { Menu, Mail, MagicWand, Code, Airplane, Cube, Plus, Group } from 'iconoir-react-native';
+import { Menu, Mail, MagicWand, Code, Airplane, Cube, Group } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from '../styles';
 import { useTheme } from '../../../context/ThemeContext';
@@ -12,7 +12,6 @@ interface ChatHeaderProps {
     subtitle: string;
     onMenuPress?: () => void;
     onInboxPress?: () => void;
-    onNewTaskPress?: () => void;
     showMenu?: boolean;
     showInbox?: boolean;
     isInboxMode?: boolean;
@@ -27,7 +26,6 @@ export function ChatHeader({
     subtitle,
     onMenuPress,
     onInboxPress,
-    onNewTaskPress,
     showMenu = true,
     showInbox = true,
     isInboxMode = false,
@@ -46,7 +44,6 @@ export function ChatHeader({
         if (isInboxMode) return palette.orange;
         if (chatMode === 'agent') return theme.success; // Robot icon usually green
         if (chatMode === 'team') {
-            if (teamId === 'development_team') return theme.warning;
             if (teamId === 'dnd_team') return theme.accent;
             return theme.info;
         }
@@ -142,16 +139,6 @@ export function ChatHeader({
                     )}
                 </View>
             </View>
-            {onNewTaskPress && (
-                <TouchableOpacity style={styles.menuButton} onPress={onNewTaskPress}>
-                    <Plus
-                        width={22}
-                        height={22}
-                        color={theme.textPrimary}
-                        strokeWidth={2}
-                    />
-                </TouchableOpacity>
-            )}
             {showInbox && onInboxPress && (
                 <TouchableOpacity style={styles.menuButton} onPress={onInboxPress}>
                     <Mail

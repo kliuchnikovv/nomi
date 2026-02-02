@@ -1,10 +1,10 @@
 """
 SafeGemini wrapper that filters empty parts from history.
 
-This is a workaround for the Gemini API bug where empty parts in history
+This is a workaround for Gemini API bug where empty parts in history
 cause 400 INVALID_ARGUMENT errors. When Gemini returns a response with
 empty text, it gets stored in history as {"parts": [], "role": "model"},
-which the Gemini API rejects on subsequent requests.
+which Gemini API rejects on subsequent requests.
 
 See:
 - https://github.com/agno-agi/agno/issues/2649
@@ -13,7 +13,6 @@ See:
 """
 
 import logging
-from typing import List, Iterator, AsyncIterator
 
 from agno.models.google import Gemini
 from agno.models.message import Message
@@ -33,7 +32,7 @@ logger = logging.getLogger(__name__)
 class SafeGemini(Gemini):
     """
     A Gemini model wrapper that filters out empty parts from messages
-    before sending them to the API, preventing 400 INVALID_ARGUMENT errors.
+    before sending them to API, preventing 400 INVALID_ARGUMENT errors.
 
     Also supports native Gemini 2.5 thinking/reasoning via thinking_budget
     and include_thoughts parameters (compatible with function calling).
@@ -62,14 +61,14 @@ class SafeGemini(Gemini):
             **kwargs,
         )
 
-    def _filter_empty_parts(self, messages: List[Message]) -> List[Message]:
+    def _filter_empty_parts(self, messages: list[Message]) -> list[Message]:
         """
         Filter out messages with empty parts or empty content.
         """
         filtered_messages = []
 
         for msg in messages:
-            # DEBUG: Log tool messages to find the application/json issue
+            # DEBUG: Log tool messages to find application/json issue
             if msg.role == "tool":
                 logger.info(
                     f"[SafeGemini DEBUG] Tool Message: content_type={type(msg.content)} content={msg.content}"
@@ -140,7 +139,7 @@ class SafeGemini(Gemini):
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
-    def invoke(self, messages: List[Message], *args, **kwargs) -> ModelResponse:
+    def invoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
         """Override invoke to filter empty parts before calling parent."""
         filtered = self._filter_empty_parts(messages)
         logger.debug(
@@ -162,7 +161,7 @@ class SafeGemini(Gemini):
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
-    async def ainvoke(self, messages: List[Message], *args, **kwargs) -> ModelResponse:
+    async def ainvoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
         """Override ainvoke to filter empty parts before calling parent."""
         filtered = self._filter_empty_parts(messages)
         logger.debug(
@@ -184,9 +183,7 @@ class SafeGemini(Gemini):
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
-    def invoke_stream(
-        self, messages: List[Message], *args, **kwargs
-    ) -> Iterator[ModelResponse]:
+    def invoke_stream(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
         """Override invoke_stream to filter empty parts before calling parent."""
         filtered = self._filter_empty_parts(messages)
         logger.debug(
@@ -210,9 +207,7 @@ class SafeGemini(Gemini):
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
-    async def ainvoke_stream(
-        self, messages: List[Message], *args, **kwargs
-    ) -> AsyncIterator[ModelResponse]:
+    async def ainvoke_stream(self, messages: list[Message], *args, **kwargs):
         """Override ainvoke_stream to filter empty parts before calling parent."""
         filtered = self._filter_empty_parts(messages)
         logger.debug(

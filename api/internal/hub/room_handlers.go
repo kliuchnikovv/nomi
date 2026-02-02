@@ -427,18 +427,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				cmdMap = make(chat.Command)
 			}
 
-			if chatRecord.TaskID != nil {
-				cmdMap["task_id"] = chatRecord.TaskID.String()
-			}
-
-			if chatRecord.ProjectID != nil {
-				cmdMap["project_id"] = chatRecord.ProjectID.String()
-			}
-
-			if chatRecord.ListID != nil {
-				cmdMap["list_id"] = chatRecord.ListID.String()
-			}
-
 			payload.Command = cmdMap
 		}
 
@@ -446,9 +434,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		var tools []interface{}
 		tools = append(tools, map[string]interface{}{"name": "web_search", "enabled": true})
 		knowledgeEntry := map[string]interface{}{"name": "knowledge_search", "enabled": true, "user_id": r.initiatorID.String()}
-		if chatRecord != nil && chatRecord.ListID != nil {
-			knowledgeEntry["list_id"] = chatRecord.ListID.String()
-		}
 		tools = append(tools, knowledgeEntry)
 
 		if payload.Tools != nil {

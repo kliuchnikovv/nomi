@@ -71,8 +71,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const { width: windowWidth } = useWindowDimensions();
     const {
         chats, chatsLoading, activeChatID, activeChat, setActiveChatID,
-        getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat,
-        setNewTaskModalVisible
+        getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat
     } = useMain();
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -465,7 +464,6 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         subtitle={headerSubtitle}
                         onMenuPress={handleOpenMenu}
                         onInboxPress={handleOpenInbox}
-                        onNewTaskPress={() => setNewTaskModalVisible(true)}
                         showMenu={!isWide}
                         showInbox={!isWide}
                         isInboxMode={isPluginThread}

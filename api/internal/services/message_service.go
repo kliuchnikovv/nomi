@@ -6,22 +6,22 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
-	"github.com/kliuchnikovv/genie-api/internal/domain"
+	"github.com/kliuchnikovv/genie-api/internal/storage/repositories"
 )
 
-// MessageService содержит бизнес-логику для работы с сообщениями
+// MessageService contains business logic for working with messages
 type MessageService struct {
-	repo domain.MessageRepository
+	repo repositories.MessageRepository
 }
 
-// NewMessageService создает новый экземпляр MessageService
-func NewMessageService(repo domain.MessageRepository) *MessageService {
+// NewMessageService creates a new instance of MessageService
+func NewMessageService(repo repositories.MessageRepository) *MessageService {
 	return &MessageService{
 		repo: repo,
 	}
 }
 
-// CreateMessageRequest представляет запрос на создание сообщения
+// CreateMessageRequest represents a request to create a message
 type CreateMessageRequest struct {
 	Text          string      `json:"text"`
 	Role          chat.Role   `json:"role"`
@@ -30,12 +30,12 @@ type CreateMessageRequest struct {
 	WebSearch     bool        `json:"web_search,omitempty"`
 }
 
-// CreateMessage создает новое сообщение
-// Принимает chat.Message для обратной совместимости с handlers
+// CreateMessage creates a new message
+// Accepts chat.Message for backward compatibility with handlers
 func (s *MessageService) CreateMessage(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, req interface{}) (*chat.Message, error) {
 	var createReq *CreateMessageRequest
-	
-	// Поддержка обоих форматов: CreateMessageRequest и chat.Message
+
+	// Support both formats: CreateMessageRequest and chat.Message
 	switch v := req.(type) {
 	case *CreateMessageRequest:
 		createReq = v
@@ -65,13 +65,13 @@ func (s *MessageService) CreateMessage(ctx context.Context, userID uuid.UUID, ch
 	return s.repo.Create(ctx, userID, message)
 }
 
-// GetMessagesRequest представляет запрос на получение сообщений
+// GetMessagesRequest represents a request to get messages
 type GetMessagesRequest struct {
 	IfModifiedSince *time.Time `json:"-"`
 	Limit           *int       `json:"-"`
 }
 
-// GetMessages получает список сообщений с поддержкой условного GET
+// GetMessages retrieves a list of messages with conditional GET support
 func (s *MessageService) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, req *GetMessagesRequest) ([]*chat.Message, error) {
 	if req.IfModifiedSince != nil {
 		return s.repo.GetMessagesAfter(ctx, userID, chatID, *req.IfModifiedSince)
@@ -84,7 +84,7 @@ func (s *MessageService) GetMessages(ctx context.Context, userID uuid.UUID, chat
 	return s.repo.GetMessages(ctx, userID, chatID)
 }
 
-// UpsertMessage обновляет или создает сообщение (используется для потоковой записи)
+// UpsertMessage updates or creates a message (used for streaming)
 func (s *MessageService) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.Message) error {
 	return s.repo.Upsert(ctx, userID, m)
 }

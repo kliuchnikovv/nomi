@@ -1,16 +1,15 @@
 import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, View, StyleSheet } from 'react-native';
-import { Menu, Mail, Plus } from 'iconoir-react-native';
+import { Menu, Mail } from 'iconoir-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
 
 interface DashboardHeaderProps {
     onMenuPress?: () => void;
     onInboxPress?: () => void;
-    onNewTaskPress?: () => void;
 }
 
-export function DashboardHeader({ onMenuPress, onInboxPress, onNewTaskPress }: DashboardHeaderProps) {
+export function DashboardHeader({ onMenuPress, onInboxPress }: DashboardHeaderProps) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
 
@@ -45,18 +44,6 @@ export function DashboardHeader({ onMenuPress, onInboxPress, onNewTaskPress }: D
             <View style={styles.titleContainer}>
                 <Text style={[styles.title, { color: theme.text }]}>Dashboard</Text>
             </View>
-
-            {onNewTaskPress && (
-                <TouchableOpacity
-                    style={styles.button}
-                    onPress={() => {
-                        console.log('New Task button pressed!');
-                        onNewTaskPress();
-                    }}
-                >
-                    <Plus width={24} height={24} color={theme.textPrimary} strokeWidth={2} />
-                </TouchableOpacity>
-            )}
 
             {onInboxPress && (
                 <TouchableOpacity

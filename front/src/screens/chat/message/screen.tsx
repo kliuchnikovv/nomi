@@ -222,12 +222,7 @@ export default function MessageScreen(props: Props) {
                     </View>
                 </View>
             )}
-            {props.message.metadata?.type === 'approval_request' && props.message.metadata.task_id && (
-                <ApprovalCard
-                    taskId={props.message.metadata.task_id}
-                    nextStatus={props.message.metadata.next_status || 'PLANNING'}
-                />
-            )}
+
         </View>
     );
 }

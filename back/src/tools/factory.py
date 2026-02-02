@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable
 
 from agno.tools import Toolkit
 from agno.tools.gmail import GmailTools
@@ -21,18 +21,18 @@ DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 logger = logging.getLogger(__name__)
 
-ToolBuilder = Callable[[Dict[str, Any]], Toolkit]
+ToolBuilder = Callable[[dict[str, Any]], Toolkit]
 
 
 @dataclass
 class ToolItem:
     name: str
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ToolsConfig:
-    entries: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    entries: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def add(self, name: str, **params: Any) -> None:
         """Register or update a tool configuration."""
@@ -47,12 +47,12 @@ class ToolsConfig:
 
 def _instantiate_tool(
     cls: type[Toolkit],
-    kwargs_list: List[Dict[str, Any]] | Dict[str, Any],
+    kwargs_list: list[dict[str, Any]] | dict[str, Any],
     tool_name: str,
 ) -> Toolkit:
     """
-    Пытается создать тул с вариациями kwargs; если все варианты отклонены,
-    возвращает инстанс по умолчанию.
+    Attempts to create a tool with variations of kwargs; if all variants are rejected,
+    returns default instance.
     """
     attempts = kwargs_list if isinstance(kwargs_list, list) else [kwargs_list]
     for attempt in attempts:
@@ -64,7 +64,7 @@ def _instantiate_tool(
     return cls()
 
 
-def _make_credentials(params: Dict[str, Any]) -> Credentials | None:
+def _make_credentials(params: dict[str, Any]) -> Credentials | None:
     # Support nested creds dict
     creds_data = (
         params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
@@ -91,7 +91,8 @@ def _make_credentials(params: Dict[str, Any]) -> Credentials | None:
         logger.warning("Failed to build credentials, will continue without: %s", exc)
         return None
 
-def _build_web_search(_: Dict[str, Any]) -> Toolkit:
+
+def _build_web_search(_: dict[str, Any]) -> Toolkit:
     """Build web search tool (DuckDuckGo)."""
     logger.info("[WebSearch] Building web search tools")
     tool = WebSearchTools()
@@ -101,7 +102,8 @@ Use this to search for current information, news, and facts from the internet.
 Always cite sources when providing information from search results."""
     return tool
 
-TOOL_BUILDERS: Dict[str, ToolBuilder] = {
+
+TOOL_BUILDERS: dict[str, ToolBuilder] = {
     "web_search": _build_web_search,
 }
 
@@ -111,8 +113,8 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
     TOOL_BUILDERS[name] = builder
 
 
-async def build(config: ToolsConfig) -> List[Toolkit]:
-    tools: List[Toolkit] = []
+async def build(config: ToolsConfig) -> list[Toolkit]:
+    tools: list[Toolkit] = []
     logger.debug(
         "[Tools] Building tools from config with %d entries", len(config.entries)
     )
@@ -121,14 +123,14 @@ async def build(config: ToolsConfig) -> List[Toolkit]:
     for item in config:
         logger.debug("[Tools] Processing tool item: %s", item.name)
 
-        # Проверяем через реестр, является ли это серверной интеграцией
-        # Клиентские интеграции не должны обрабатываться здесь
-        provider = get_provider(item.name.lower())
-        if provider and not should_include_in_tools(item.name.lower()):
-            logger.debug(
-                f"[Tools] Skipping client-side integration: {item.name} (executes on device)"
-            )
-            continue
+         # Check via registry if this is server-side integration
+         # Client-side integrations should not be processed here
+         provider = get_provider(item.name.lower())
+         if provider and not should_include_in_tools(item.name.lower()):
+             logger.debug(
+                 f"[Tools] Skipping client-side integration: {item.name} (executes on device)"
+             )
+             continue
 
         # Try exact match first
         builder = TOOL_BUILDERS.get(item.name)

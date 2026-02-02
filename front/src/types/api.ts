@@ -50,8 +50,6 @@ export interface Chat {
     updated_at: number;
     archived_at: number | null;
     deleted_at: number | null;
-    project_id?: string | null;
-    task_id?: string | null;
     messages: Message[];
     icon?: string;
 }

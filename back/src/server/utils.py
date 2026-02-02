@@ -6,40 +6,43 @@ from src.server.models import Op, Frame, Kind, ErrorInfo
 def now() -> datetime:
     return datetime.now(timezone.utc)
 
-def make_data(id: int, op: Op, chat_id: str|None, payload: dict, **kw) -> Frame:
+
+def make_data(id: int, op: Op, chat_id: str | None, payload: dict, **kw) -> Frame:
     return Frame(
-        id=id,
-        ts=now(),
-        kind=Kind.DATA,
-        op=op,
-        chat_id=chat_id,
-        payload=payload,
-        **kw
+        id=id, ts=now(), kind=Kind.DATA, op=op, chat_id=chat_id, payload=payload, **kw
     )
+
 
 def make_meta(id: int, op: Op, chat_id: str, payload: dict, **kw) -> Frame:
     return Frame(
-        id=id,
-        ts=now(),
-        kind=Kind.META,
-        op=op,
-        chat_id=chat_id,
-        payload=payload,
-        **kw
+        id=id, ts=now(), kind=Kind.META, op=op, chat_id=chat_id, payload=payload, **kw
     )
 
-def make_error(id: int, code: str, chat_id: str|None, message: str, http: int|None=None, ws_close: int|None=None, details: dict|None=None, **kw) -> Frame:
+
+def make_error(
+    id: int,
+    code: str,
+    chat_id: str | None,
+    message: str,
+    http: int | None = None,
+    ws_close: int | None = None,
+    details: dict | None = None,
+    **kw,
+) -> Frame:
     return Frame(
         id=id,
         ts=now(),
         kind=Kind.ERROR,
         op=Op.ERROR,
         chat_id=chat_id,
-        error=ErrorInfo(code=code, http=http, ws_close=ws_close, message=message, details=details),
-        **kw
+        error=ErrorInfo(
+            code=code, http=http, ws_close=ws_close, message=message, details=details
+        ),
+        **kw,
     )
 
-def make_done(id: int, chat_id: str|None, payload: dict | None = None, **kw) -> Frame:
+
+def make_done(id: int, chat_id: str | None, payload: dict | None = None, **kw) -> Frame:
     return Frame(
         id=id,
         ts=now(),
@@ -47,5 +50,5 @@ def make_done(id: int, chat_id: str|None, payload: dict | None = None, **kw) -> 
         op=Op.DONE,
         chat_id=chat_id,
         payload=payload,
-        **kw
+        **kw,
     )

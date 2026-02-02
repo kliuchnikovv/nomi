@@ -2,8 +2,8 @@
 Dependency Injection Container for Python backend.
 Manages initialization and lifecycle of dependencies.
 """
+
 import logging
-from typing import Optional
 
 from agno.db.postgres import PostgresDb
 from agno.models.base import Model
@@ -26,17 +26,17 @@ class Container:
         self.config = config
 
         # Core dependencies
-        self._db: Optional[PostgresDb] = None
-        self._model: Optional[Model] = None
-        self._embedder: Optional[GeminiEmbedder] = None
-        self._config_client: Optional[ToolConfigClient] = None
+        self._db: PostgresDb | None = None
+        self._model: Model | None = None
+        self._embedder: GeminiEmbedder | None = None
+        self._config_client: ToolConfigClient | None = None
 
         # Lazy-initialized dependencies
-        self._agent_factory: Optional[AgentFactory] = None
+        self._agent_factory: AgentFactory | None = None
         self._redis_worker = None
 
     @property
-    def db(self) -> Optional[PostgresDb]:
+    def db(self) -> PostgresDb | None:
         """Get PostgresDb instance (lazy initialization)."""
         if self._db is None:
             self._db = self.config.get_db()

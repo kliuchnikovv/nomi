@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime
 
-from typing import Sequence
 from zoneinfo import ZoneInfo
 
 from agno.db.postgres import PostgresDb
@@ -19,7 +18,7 @@ from agno.learn import (
 
 logger = logging.getLogger(__name__)
 
-name = 'Souper'
+name = "Souper"
 
 BASE_INSTRUCTIONS = f"""
 You are {name}, a personal AI assistant designed to help users with their daily tasks.
@@ -46,13 +45,16 @@ class SouperAgent(Agent):
         db: PostgresDb,
         model: Model,
         user_id: str = "",
-        tools: Sequence[Toolkit | Function | dict] | None = None,
+        tools: list[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
         thinking: str = "off",
         timezone: str = "UTC",
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
-        instructions = BASE_INSTRUCTIONS + f"\nCurrent time is: {datetime.now(ZoneInfo(timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
+        instructions = (
+            BASE_INSTRUCTIONS
+            + f"\nCurrent time is: {datetime.now(ZoneInfo(timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
+        )
 
         super().__init__(
             db=db,
@@ -60,22 +62,16 @@ class SouperAgent(Agent):
             user_id=user_id,
             debug_mode=debug_mode,
             reasoning=(thinking != "off"),
-
             model=model,
             tools=tools,
-
             description="Souper is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
             instructions=instructions,
-
             add_history_to_context=True,
             add_datetime_to_context=True,
-
             store_media=True,
             store_tool_messages=True,
-
             stream=True,
             stream_events=True,
-
             learning=LearningMachine(
                 user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
                 session_context=SessionContextConfig(enable_planning=True),
@@ -84,9 +80,7 @@ class SouperAgent(Agent):
                     namespace=f"user:{user_id}:personal",
                 ),
             ),
-
             markdown=True,
             telemetry=False,
             send_media_to_model=True,
         )
-

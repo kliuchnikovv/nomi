@@ -8,7 +8,7 @@ import {
     View,
     ScrollView,
 } from 'react-native';
-import { NavArrowDown, NavArrowRight, Mail, Calendar, Sparks, Plus, Trash, Github, Play, Check, XmarkCircle, Folder } from 'iconoir-react-native';
+import { NavArrowDown, NavArrowRight, Mail, Calendar, Plus, Trash, Github, Play, Check, XmarkCircle } from 'iconoir-react-native';
 import { SharedValue } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +20,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { Sidebar } from '../../components/DrawerSidebar';
 import { ThemePalette } from '../../themes/types';
 import { CalendarSidebar } from '../chat/leftSidebar/CalendarSidebar';
-import { ProjectList } from '../../components/ProjectList';
 import ListList from '../../components/ListList';
 import Animated, { useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 
@@ -40,7 +39,6 @@ const pluginIconMap: Record<string, { IconComponent: any; colorKey: keyof ThemeP
     gmail: { IconComponent: Mail, colorKey: 'red' },
     imap: { IconComponent: Mail, colorKey: 'cyan' },
     calendar: { IconComponent: Calendar, colorKey: 'orange' },
-    jules: { IconComponent: Sparks, colorKey: 'orange' },
 };
 
 const getPluginIcon = (provider: string, palette: ThemePalette) => {
@@ -355,7 +353,6 @@ function RightSidebarContent({
     return (
         <View style={styles.root}>
             <View style={{ paddingTop: insets.top - 25 }} />
-            <ProjectList visible={visible} />
             <ListList visible={visible} onClose={onClose} />
 
             <View style={[styles.sectionHeader, { marginTop: 12 }]}>

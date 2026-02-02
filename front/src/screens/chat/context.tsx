@@ -259,7 +259,7 @@ export function ChatProvider({
                 // Check if the selectedTeamId is actually an agent
                 const teamDef = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
                 if (teamDef && !teamDef.isAgent) {
-                    // If it's a TEAM (like development_team) but we are in AGENT mode, sanitize it.
+                    // If it's a TEAM but we are in AGENT mode, sanitize it.
                     // Agents shouldn't have a team_id unless they are specific agent-types.
                     teamIdToSend = null;
                 }
@@ -272,8 +272,6 @@ export function ChatProvider({
                     "model": selectedModelRef.current || 'gpt-5-nano',
                     "mode": chatMode,
                     "team_id": teamIdToSend,
-                    "project_id": activeChat?.project_id,
-                    "task_id": activeChat?.task_id,
                     "list_id": activeChat?.list_id,
                 },
             );
@@ -470,12 +468,10 @@ export function ChatProvider({
             // Prepare command (context) to send
             let commandToSend = teamCommand;
             if (!commandToSend && activeChat) {
-                // If not in team mode, but we have context (list, project, task), pass it
-                if (activeChat.list_id || activeChat.project_id || activeChat.task_id) {
+                // If not in team mode, but we have list context, pass it
+                if (activeChat.list_id) {
                     commandToSend = {
                         list_id: activeChat.list_id,
-                        project_id: activeChat.project_id,
-                        task_id: activeChat.task_id,
                         auth_token: token
                     };
                 }
@@ -681,8 +677,6 @@ export function ChatProvider({
             ...baseCommand,
             model: selectedModel || baseCommand.model,
             auth_token: token,
-            project_id: activeChat?.project_id,
-            task_id: activeChat?.task_id,
         };
 
         setTeamCommand((prev: any) => {

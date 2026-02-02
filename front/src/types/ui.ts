@@ -48,7 +48,6 @@ export interface ActiveTask {
     due_date?: string;
     priority: 'low' | 'medium' | 'high' | 'urgent';
     status: 'pending' | 'in_progress' | 'completed';
-    project_id?: string;
 }
 
 // Inbox types

@@ -8,47 +8,47 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// StorageType определяет тип хранения данных интеграции
+// StorageType defines the storage type for integration data
 type StorageType string
 
 const (
-	StorageTypeClientOnly StorageType = "client"  // Данные только в SQLite на устройстве
-	StorageTypeServer     StorageType = "server"  // Данные на сервере в PostgreSQL
-	StorageTypeHybrid     StorageType = "hybrid"   // Гибридное хранение
+	StorageTypeClientOnly StorageType = "client" // Data only in SQLite on device
+	StorageTypeServer     StorageType = "server" // Data on server in PostgreSQL
+	StorageTypeHybrid     StorageType = "hybrid" // Hybrid storage
 )
 
-// ProviderDefinition содержит метаданные провайдера интеграции
+// ProviderDefinition contains integration provider metadata
 type ProviderDefinition struct {
-	// Базовые метаданные
-	Name        string   // Имя провайдера (gmail, calendar, github, jules)
-	DisplayName string   // Отображаемое имя
-	Type        string   // Тип интеграции (oauth2, api_key, etc.)
-	StorageType StorageType // Тип хранения данных
+	// Basic metadata
+	Name        string      // Provider name (gmail, calendar, github)
+	DisplayName string      // Display name
+	Type        string      // Integration type (oauth2, api_key, etc.)
+	StorageType StorageType // Data storage type
 
-	// OAuth конфигурация
+	// OAuth configuration
 	OAuthConfig *OAuthConfig
 
-	// Флаги
-	RequiresSync            bool     // Требуется ли синхронизация с сервером
-	SupportsBackgroundTasks bool     // Поддерживает ли фоновые процессы (для ClientOnly)
-	SystemEventListeners    []string // Список системных событий, которые слушает интеграция
+	// Flags
+	RequiresSync            bool     // Whether sync with server is required
+	SupportsBackgroundTasks bool     // Whether background tasks are supported (for ClientOnly)
+	SystemEventListeners    []string // List of system events the integration listens to
 
-	// Дополнительные метаданные
+	// Additional metadata
 	Description string
-	Icon        string // Имя иконки для UI
+	Icon        string // Icon name for UI
 }
 
-// OAuthConfig содержит конфигурацию OAuth для провайдера
+// OAuthConfig contains OAuth configuration for provider
 type OAuthConfig struct {
-	Endpoint    oauth2.Endpoint // OAuth endpoints
-	Scopes      []string        // Требуемые scopes
-	IsOIDC      bool            // Использует ли OIDC
-	IssuerURL   string          // URL issuer для OIDC (если применимо)
-	GetScopes   func(permissions []string) []string // Функция для получения scopes
+	Endpoint  oauth2.Endpoint                     // OAuth endpoints
+	Scopes    []string                            // Required scopes
+	IsOIDC    bool                                // Whether it uses OIDC
+	IssuerURL string                              // Issuer URL for OIDC (if applicable)
+	GetScopes func(permissions []string) []string // Function to get scopes
 }
 
 var (
-	// Registry содержит реестр всех доступных провайдеров
+	// Registry contains all available providers
 	Registry = map[string]*ProviderDefinition{
 		"gmail": {
 			Name:        "gmail",
@@ -56,8 +56,8 @@ var (
 			Type:        "oauth2",
 			StorageType: StorageTypeClientOnly,
 			OAuthConfig: &OAuthConfig{
-				Endpoint: google.Endpoint,
-				IsOIDC:   true,
+				Endpoint:  google.Endpoint,
+				IsOIDC:    true,
 				IssuerURL: "https://accounts.google.com",
 				GetScopes: func(permissions []string) []string {
 					scopes := []string{oidc.ScopeOpenID, "email", "profile"}
@@ -70,7 +70,7 @@ var (
 			RequiresSync:            false,
 			SupportsBackgroundTasks: true,
 			SystemEventListeners:    []string{"push_notifications", "app_lifecycle"},
-			Description:             "Gmail интеграция для работы с почтой",
+			Description:             "Gmail integration for email management",
 			Icon:                    "gmail",
 		},
 		"calendar": {
@@ -79,8 +79,8 @@ var (
 			Type:        "oauth2",
 			StorageType: StorageTypeClientOnly,
 			OAuthConfig: &OAuthConfig{
-				Endpoint: google.Endpoint,
-				IsOIDC:   true,
+				Endpoint:  google.Endpoint,
+				IsOIDC:    true,
 				IssuerURL: "https://accounts.google.com",
 				GetScopes: func(permissions []string) []string {
 					scopes := []string{oidc.ScopeOpenID, "email", "profile"}
@@ -93,7 +93,7 @@ var (
 			RequiresSync:            false,
 			SupportsBackgroundTasks: true,
 			SystemEventListeners:    []string{"push_notifications", "app_lifecycle"},
-			Description:             "Google Calendar интеграция для работы с календарем",
+			Description:             "Google Calendar integration for calendar management",
 			Icon:                    "calendar",
 		},
 		"github": {
@@ -109,31 +109,19 @@ var (
 			RequiresSync:            true,
 			SupportsBackgroundTasks: false,
 			SystemEventListeners:    []string{},
-			Description:             "GitHub интеграция для работы с репозиториями",
+			Description:             "GitHub integration for repository management",
 			Icon:                    "github",
-		},
-		"jules": {
-			Name:        "jules",
-			DisplayName: "Jules",
-			Type:        "api_key",
-			StorageType: StorageTypeServer,
-			OAuthConfig: nil, // Jules использует API ключ, не OAuth
-			RequiresSync:            true,
-			SupportsBackgroundTasks: false,
-			SystemEventListeners:    []string{},
-			Description:             "Jules API интеграция для автоматизации задач",
-			Icon:                    "jules",
 		},
 	}
 )
 
-// GetProvider возвращает определение провайдера по имени
+// GetProvider returns provider definition by name
 func GetProvider(name string) (*ProviderDefinition, bool) {
 	provider, ok := Registry[name]
 	return provider, ok
 }
 
-// GetClientOnlyProviders возвращает список провайдеров с типом ClientOnly
+// GetClientOnlyProviders returns list of ClientOnly providers
 func GetClientOnlyProviders() []*ProviderDefinition {
 	var providers []*ProviderDefinition
 	for _, provider := range Registry {
@@ -144,7 +132,7 @@ func GetClientOnlyProviders() []*ProviderDefinition {
 	return providers
 }
 
-// GetServerProviders возвращает список провайдеров с типом Server
+// GetServerProviders returns list of Server providers
 func GetServerProviders() []*ProviderDefinition {
 	var providers []*ProviderDefinition
 	for _, provider := range Registry {
@@ -155,7 +143,7 @@ func GetServerProviders() []*ProviderDefinition {
 	return providers
 }
 
-// ShouldSync проверяет, требуется ли синхронизация для провайдера
+// ShouldSync checks if sync is required for provider
 func ShouldSync(providerName string) bool {
 	provider, ok := GetProvider(providerName)
 	if !ok {
@@ -164,7 +152,7 @@ func ShouldSync(providerName string) bool {
 	return provider.RequiresSync && provider.StorageType != StorageTypeClientOnly
 }
 
-// SupportsBackgroundTasks проверяет, поддерживает ли провайдер фоновые задачи
+// SupportsBackgroundTasks checks if provider supports background tasks
 func SupportsBackgroundTasks(providerName string) bool {
 	provider, ok := GetProvider(providerName)
 	if !ok {

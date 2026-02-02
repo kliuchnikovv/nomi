@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
-
 from pydantic import BaseModel, Field
 
 
@@ -12,12 +10,12 @@ class ToolSpec(BaseModel):
 
     name: str
     enabled: bool = True
-    params: Dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolsResponse(BaseModel):
     """
-    Expected payload structure returned by the /api/tools endpoint.
+    Expected payload structure returned by /api/tools endpoint.
     """
 
-    tools: List[ToolSpec] = Field(default_factory=list)
+    tools: list[ToolSpec] = Field(default_factory=list)

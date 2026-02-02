@@ -2,8 +2,8 @@
 Configuration management for Python backend.
 Loads configuration from environment variables.
 """
+
 import os
-from typing import Optional
 
 from agno.db.postgres import PostgresDb
 from agno.models.google import Gemini
@@ -19,14 +19,16 @@ class Config:
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
         self.db_dsn = os.getenv("DB_DSN")
         self.go_api_url = os.getenv("GO_API_URL", "http://localhost:8080")
-        self.session_secret = os.getenv("SESSION_SECRET", "dev-session-secret-change-me")
+        self.session_secret = os.getenv(
+            "SESSION_SECRET", "dev-session-secret-change-me"
+        )
 
     @classmethod
     def from_env(cls) -> "Config":
         """Create Config instance from environment variables."""
         return cls()
 
-    def get_db(self) -> Optional[PostgresDb]:
+    def get_db(self) -> PostgresDb | None:
         """Get PostgresDb instance if DB_DSN is configured."""
         if not self.db_dsn:
             return None

@@ -1,34 +1,37 @@
 """
-Реестр интеграций для Python backend.
+Integration registry for Python backend.
 
-Определяет маппинг провайдеров на builders и метаданные о типах инструментов.
+Defines provider mappings to builders and metadata about tool types.
 """
-from typing import Dict, Callable, Optional, TYPE_CHECKING, Any
+
 from enum import Enum
 from agno.tools import Toolkit
+
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from src.tools.factory import ToolBuilder
 else:
-    # Для runtime используем Callable как алиас
-    ToolBuilder = Callable[[Dict[str, Any]], Toolkit]
+    ToolBuilder = Callable[[dict[str, Any]], Toolkit]
 
 
 class StorageType(str, Enum):
-    """Тип хранения данных интеграции."""
-    CLIENT_ONLY = "client"  # Данные только на клиенте (SQLite)
-    SERVER = "server"  # Данные на сервере (PostgreSQL)
-    HYBRID = "hybrid"  # Гибридное хранение
+    """Storage type for integration data."""
+
+    CLIENT_ONLY = "client"  # Data stored only on client (SQLite)
+    SERVER = "server"  # Data stored on server (PostgreSQL)
+    HYBRID = "hybrid"  # Hybrid storage
 
 
 class ToolType(str, Enum):
-    """Тип инструмента."""
-    SERVER_SIDE = "server"  # Выполняется на сервере (Python)
-    CLIENT_SIDE = "client"  # Выполняется на клиенте (React Native)
+    """Tool execution type."""
+
+    SERVER_SIDE = "server"  # Executes on server (Python)
+    CLIENT_SIDE = "client"  # Executes on client (React Native)
 
 
 class ProviderDefinition:
-    """Определение провайдера интеграции."""
+    """Integration provider definition."""
 
     def __init__(
         self,
@@ -36,7 +39,7 @@ class ProviderDefinition:
         display_name: str,
         storage_type: StorageType,
         tool_type: ToolType,
-        builder: Optional[ToolBuilder] = None,
+        builder: ToolBuilder | None = None,
         description: str = "",
     ):
         self.name = name
@@ -47,46 +50,46 @@ class ProviderDefinition:
         self.description = description
 
 
-# Реестр провайдеров
-REGISTRY: Dict[str, ProviderDefinition] = {
+# Provider registry
+REGISTRY: dict[str, ProviderDefinition] = {
     "gmail": ProviderDefinition(
         name="gmail",
         display_name="Gmail",
         storage_type=StorageType.CLIENT_ONLY,
         tool_type=ToolType.CLIENT_SIDE,
-        description="Gmail интеграция - выполняется на клиенте",
+        description="Gmail integration - executes on client",
     ),
     "calendar": ProviderDefinition(
         name="calendar",
         display_name="Google Calendar",
         storage_type=StorageType.CLIENT_ONLY,
         tool_type=ToolType.CLIENT_SIDE,
-        description="Google Calendar интеграция - выполняется на клиенте",
+        description="Google Calendar integration - executes on client",
     ),
     "github": ProviderDefinition(
         name="github",
         display_name="GitHub",
         storage_type=StorageType.SERVER,
         tool_type=ToolType.SERVER_SIDE,
-        description="GitHub интеграция - выполняется на сервере",
+        description="GitHub integration - executes on server",
     ),
     "jules": ProviderDefinition(
         name="jules",
         display_name="Jules",
         storage_type=StorageType.SERVER,
         tool_type=ToolType.SERVER_SIDE,
-        description="Jules API интеграция - выполняется на сервере",
+        description="Jules API integration - executes on server",
     ),
 }
 
 
-def get_provider(name: str) -> Optional[ProviderDefinition]:
-    """Получить определение провайдера по имени."""
+def get_provider(name: str) -> ProviderDefinition | None:
+    """Get provider definition by name."""
     return REGISTRY.get(name.lower())
 
 
-def get_server_side_providers() -> Dict[str, ProviderDefinition]:
-    """Получить все серверные провайдеры."""
+def get_server_side_providers() -> dict[str, ProviderDefinition]:
+    """Get all server-side providers."""
     return {
         name: provider
         for name, provider in REGISTRY.items()
@@ -94,8 +97,8 @@ def get_server_side_providers() -> Dict[str, ProviderDefinition]:
     }
 
 
-def get_client_side_providers() -> Dict[str, ProviderDefinition]:
-    """Получить все клиентские провайдеры."""
+def get_client_side_providers() -> dict[str, ProviderDefinition]:
+    """Get all client-side providers."""
     return {
         name: provider
         for name, provider in REGISTRY.items()
@@ -104,7 +107,7 @@ def get_client_side_providers() -> Dict[str, ProviderDefinition]:
 
 
 def is_server_side(provider_name: str) -> bool:
-    """Проверить, является ли провайдер серверным."""
+    """Check if provider is server-side."""
     provider = get_provider(provider_name)
     if not provider:
         return False
@@ -112,7 +115,7 @@ def is_server_side(provider_name: str) -> bool:
 
 
 def is_client_side(provider_name: str) -> bool:
-    """Проверить, является ли провайдер клиентским."""
+    """Check if provider is client-side."""
     provider = get_provider(provider_name)
     if not provider:
         return False
@@ -121,9 +124,9 @@ def is_client_side(provider_name: str) -> bool:
 
 def should_include_in_tools(provider_name: str) -> bool:
     """
-    Проверить, нужно ли включать провайдер в список tools для Python backend.
-    
-    Только серверные провайдеры должны быть включены в список tools,
-    так как клиентские выполняются локально на устройстве.
+    Check if provider should be included in tools list for Python backend.
+
+    Only server-side providers should be included in tools list,
+    as client-side integrations execute locally on the device.
     """
     return is_server_side(provider_name)

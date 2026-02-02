@@ -32,13 +32,6 @@ func New(cfg *config.Config) (*Storage, error) {
 		return nil, err
 	}
 
-	// Migration: Rename specs to artifacts in project_tasks if it exists
-	if gdb.Migrator().HasColumn(&ProjectTask{}, "specs") {
-		if err := gdb.Migrator().RenameColumn(&ProjectTask{}, "specs", "artifacts"); err != nil {
-			return nil, err
-		}
-	}
-
 	// Auto-migrate models to keep schema in sync with GORM models.
 	if err := gdb.AutoMigrate(
 		&OAuthToken{},
@@ -48,15 +41,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Chat{},
 		&Message{},
 		&RefreshToken{},
-		&Inbox{},
-		&PluginChat{},
 		&Attachment{},
-		&Task{},
-		&TeamKVStore{},
-		&Project{},
-		&ProjectTask{},
-		&List{},
-		&ListItem{},
 	); err != nil {
 		return nil, err
 	}

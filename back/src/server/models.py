@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, Optional, Literal
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -30,16 +30,16 @@ class Op(str, Enum):
 
 class StreamInfo(BaseModel):
     id: str
-    ix: int = Field(ge=0)  # порядковый номер чанка
-    eof: bool = False  # последний ли чанк
+    ix: int = Field(ge=0)  # chunk index number
+    eof: bool = False  # last chunk flag
 
 
 class ErrorInfo(BaseModel):
-    code: str  # машинно-читабельный код
-    http: Optional[int] = None  # сопоставление с HTTP
-    ws_close: Optional[int] = None  # сопоставление с WS close code
+    code: str  # machine-readable code
+    http: int | None = None  # HTTP mapping
+    ws_close: int | None = None  # WebSocket close code mapping
     message: str
-    details: Optional[Dict[str, Any]] = None
+    details: dict[str, Any] | None = None
 
 
 class Frame(BaseModel):
@@ -48,26 +48,26 @@ class Frame(BaseModel):
     ts: datetime
     kind: Kind
     op: Op
-    chat_id: Optional[str] = None
-    trace_id: Optional[str] = None
-    message_id: Optional[str] = None
-    channel: Optional[str] = None
-    corr_id: Optional[str] = None
-    seq: Optional[int] = Field(default=None, ge=0)
-    stream: Optional[StreamInfo] = None
-    headers: Dict[str, Any] = {}
-    payload: Optional[Dict[str, Any]] = None
-    error: Optional[ErrorInfo] = None
+    chat_id: str | None = None
+    trace_id: str | None = None
+    message_id: str | None = None
+    channel: str | None = None
+    corr_id: str | None = None
+    seq: int | None = Field(default=None, ge=0)
+    stream: StreamInfo | None = None
+    headers: dict[str, Any] = {}
+    payload: dict[str, Any] | None = None
+    error: ErrorInfo | None = None
 
-    # Небольшая инвариантная валидация
+    # Invariant validation
     def validate_invariants(self) -> None:
         if self.kind == Kind.ERROR:
             assert self.error is not None, "error must be set for kind=error"
         else:
             assert self.payload is not None, "payload must be set for non-error"
 
-    # Унифицированная сериализация для отправки через WS
-    def marshal(self) -> Dict[str, Any]:
+    # Unified serialization for sending over WS
+    def marshal(self) -> dict[str, Any]:
         # pydantic v2
         if hasattr(self, "model_dump"):
             try:

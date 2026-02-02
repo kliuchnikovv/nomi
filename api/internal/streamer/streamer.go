@@ -236,31 +236,20 @@ func (streamer *Streamer) Stream(client *Socket) {
 
 			// Handle Token/Message
 			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
-				if streamer.source == "inbox" {
-					_ = streamer.storage.UpsertInboxMessage(ctx, streamer.userID, &storage.InboxMessage{
-						ID:            frame.Payload.MessageID,
-						IntegrationID: frame.ChatID,
-						Role:          "assistant",
-						Content:       frame.Payload.Message,
-						Source:        streamer.source,
-						Status:        "read",
-					})
-				} else {
-					if currentMessageMetadata.MessageID == uuid.Nil {
-						currentMessageMetadata.MessageID = frame.Payload.MessageID
-					}
-					_ = streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
-						ID:        frame.Payload.MessageID,
-						ChatID:    frame.ChatID,
-						Sender:    storage.ZeroUUID,
-						Role:      chat.RoleAssistant,
-						Text:      frame.Payload.Message,
-						Model:     currentMessageMetadata.Model,
-						AgentID:   stringPtr(frame.Payload.AgentName),
-						ToolCalls: currentMessageMetadata.ToolCalls,
-						CreatedAt: time.Now().UTC(),
-					})
+				if currentMessageMetadata.MessageID == uuid.Nil {
+					currentMessageMetadata.MessageID = frame.Payload.MessageID
 				}
+				_ = streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
+					ID:        frame.Payload.MessageID,
+					ChatID:    frame.ChatID,
+					Sender:    storage.ZeroUUID,
+					Role:      chat.RoleAssistant,
+					Text:      frame.Payload.Message,
+					Model:     currentMessageMetadata.Model,
+					AgentID:   stringPtr(frame.Payload.AgentName),
+					ToolCalls: currentMessageMetadata.ToolCalls,
+					CreatedAt: time.Now().UTC(),
+				})
 			}
 
 			// Reset metadata
@@ -284,31 +273,20 @@ func (streamer *Streamer) Stream(client *Socket) {
 
 			// Upsert User Message
 			if frame.Operation == MessageOperation && frame.Payload.MessageID == storage.ZeroUUID {
-				if streamer.source == "inbox" {
-					_ = streamer.storage.UpsertInboxMessage(ctx, streamer.userID, &storage.InboxMessage{
-						ID:            uuid.New(),
-						IntegrationID: frame.ChatID,
-						Role:          "user",
-						Content:       frame.Payload.Message,
-						Source:        streamer.source,
-						Status:        "read",
-					})
-				} else {
-					now := time.Now().UTC()
-					msgID := uuid.New()
-					_ = streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
-						ID:        msgID,
-						ChatID:    frame.ChatID,
-						Sender:    streamer.userID,
-						Role:      chat.RoleUser,
-						Text:      frame.Payload.Message,
-						Model:     frame.Payload.Model,
-						CreatedAt: now,
-					})
-					// Пользовательское сообщение через WebSocket также считаем
-					// содержательной активностью чата.
-					_ = streamer.storage.TouchChatActivity(ctx, frame.ChatID, now)
-				}
+				now := time.Now().UTC()
+				msgID := uuid.New()
+				_ = streamer.storage.UpsertMessage(ctx, streamer.userID, &chat.Message{
+					ID:        msgID,
+					ChatID:    frame.ChatID,
+					Sender:    streamer.userID,
+					Role:      chat.RoleUser,
+					Text:      frame.Payload.Message,
+					Model:     frame.Payload.Model,
+					CreatedAt: now,
+				})
+				// Пользовательское сообщение через WebSocket также считаем
+				// содержательной активностью чата.
+				_ = streamer.storage.TouchChatActivity(ctx, frame.ChatID, now)
 			}
 
 			// Enrich with Attachments

@@ -20,7 +20,7 @@ export type StorageType = 'client' | 'server' | 'hybrid';
 
 export interface Integration {
     id: string;
-    provider: 'gmail' | 'calendar' | 'github' | 'jules';
+    provider: 'gmail' | 'calendar' | 'github';
     name: string;
     enabled: boolean;
     accountEmail?: string;

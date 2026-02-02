@@ -1,5 +1,3 @@
-from typing import Optional, Any
-
 from agno.tools import Toolkit
 from agno.utils.log import logger
 
@@ -12,14 +10,15 @@ except ImportError:
         logger.error("`duckduckgo-search` not installed")
         raise ImportError("`duckduckgo-search` not installed")
 
+
 class DuckDuckGoTools(Toolkit):
     def __init__(
         self,
         news: bool = False,
-        fixed_max_results: Optional[int] = None,
-        headers: Optional[Any] = None,
-        proxy: Optional[str] = None,
-        timeout: Optional[int] = None,
+        fixed_max_results: int | None = None,
+        headers: Any = None,
+        proxy: str | None = None,
+        timeout: int | None = None,
     ):
         super().__init__(name="web_search")
 
@@ -42,7 +41,7 @@ class DuckDuckGoTools(Toolkit):
             max_results (int): The maximum number of results to return.
 
         Returns:
-            str: The result of the search.
+            str: The result of search.
         """
         if self.fixed_max_results:
             max_results = self.fixed_max_results
@@ -57,7 +56,7 @@ class DuckDuckGoTools(Toolkit):
             max_results (int): The maximum number of results to return.
 
         Returns:
-            str: The result of the search.
+            str: The result of search.
         """
         if self.fixed_max_results:
             max_results = self.fixed_max_results

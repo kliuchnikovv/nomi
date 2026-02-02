@@ -30,17 +30,12 @@ export function ConnectedTab() {
         () => integrations.filter(p => p.provider === 'github'),
         [integrations],
     );
-    const julesIntegrations = useMemo(
-        () => integrations.filter(p => p.provider === 'jules'),
-        [integrations],
-    );
     const otherIntegrations = useMemo(
         () => integrations.filter(p =>
             p.provider !== 'gmail' &&
             p.provider !== 'imap' &&
             p.provider !== 'calendar' &&
-            p.provider !== 'github' &&
-            p.provider !== 'jules'
+            p.provider !== 'github'
         ),
         [integrations],
     );
@@ -80,7 +75,6 @@ export function ConnectedTab() {
                             if (providerKey === 'gmail') glyph = 'gmail';
                             else if (providerKey === 'calendar') glyph = 'calendar';
                             else if (providerKey === 'github') glyph = 'github';
-                            else if (providerKey === 'jules') glyph = 'jules';
                             else glyph = 'application';
                         }
 
@@ -111,7 +105,6 @@ export function ConnectedTab() {
     const isEmpty = gmailIntegrations.length === 0 &&
         calendarIntegrations.length === 0 &&
         githubIntegrations.length === 0 &&
-        julesIntegrations.length === 0 &&
         enabledTools.length === 0;
 
     return (
@@ -122,7 +115,6 @@ export function ConnectedTab() {
             {renderSection('Gmail accounts', gmailIntegrations, 'gmail')}
             {renderSection('Google Calendar', calendarIntegrations, 'calendar')}
             {renderSection('GitHub', githubIntegrations, 'github')}
-            {renderSection('Jules', julesIntegrations, 'jules')}
             {renderSection('Enabled Tools', enabledTools)}
 
             {isEmpty && (
@@ -171,8 +163,7 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
                 {glyph === 'gmail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph === 'calendar' && <Calendar width={20} height={20} color="#fff" strokeWidth={2} />}
                 {glyph === 'github' && <Github width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph === 'jules' && <Sparks width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph !== 'mail' && glyph !== 'gmail' && glyph !== 'calendar' && glyph !== 'github' && glyph !== 'jules' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
+                {glyph !== 'mail' && glyph !== 'gmail' && glyph !== 'calendar' && glyph !== 'github' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
             </View>
             <View style={styles.titleBlock}>
                 <Text style={styles.rowTitle} numberOfLines={1}>

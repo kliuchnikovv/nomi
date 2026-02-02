@@ -9,19 +9,19 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
-	"github.com/kliuchnikovv/genie-api/internal/domain"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/kliuchnikovv/genie-api/internal/storage/repositories"
 )
 
-// AuthService содержит бизнес-логику для аутентификации
+// AuthService contains authentication business logic
 type AuthService struct {
-	userRepo     domain.UserRepository
+	userRepo     repositories.UserRepository
 	tokenManager *auth.TokenManager
-	storage      *storage.Storage // Для refresh tokens, пока нет интерфейса
+	storage      *storage.Storage
 }
 
-// NewAuthService создает новый экземпляр AuthService
-func NewAuthService(userRepo domain.UserRepository, tokenManager *auth.TokenManager, storage *storage.Storage) *AuthService {
+// NewAuthService creates a new instance of AuthService
+func NewAuthService(userRepo repositories.UserRepository, tokenManager *auth.TokenManager, storage *storage.Storage) *AuthService {
 	return &AuthService{
 		userRepo:     userRepo,
 		tokenManager: tokenManager,

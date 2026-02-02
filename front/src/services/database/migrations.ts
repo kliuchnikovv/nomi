@@ -24,7 +24,7 @@
  * 
  * integrations:
  *   - id: TEXT PRIMARY KEY (UUID)
- *   - provider: TEXT (gmail, calendar, github, jules)
+ *   - provider: TEXT (gmail, calendar, github)
  *   - name: TEXT (display name)
  *   - enabled: INTEGER (0/1)
  *   - account_email: TEXT

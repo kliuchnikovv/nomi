@@ -3,7 +3,6 @@ package container
 import (
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
-	"github.com/kliuchnikovv/genie-api/internal/domain"
 	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/services"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -11,15 +10,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// Container содержит все зависимости приложения
+// Container contains all application dependencies
 type Container struct {
 	// Storage
 	Storage *storage.Storage
 
-	// Repositories
-	ChatRepo    domain.ChatRepository
-	MessageRepo domain.MessageRepository
-	UserRepo    domain.UserRepository
+	// Repositories (implemented as concrete types, not interfaces)
+	chatRepo    repositories.ChatRepository
+	messageRepo repositories.MessageRepository
+	userRepo    repositories.UserRepository
 
 	// Services
 	ChatService    *services.ChatService
@@ -27,41 +26,41 @@ type Container struct {
 	AuthService    *services.AuthService
 
 	// Infrastructure
-	Hub         *hub.Hub
-	Logger      *zap.Logger
+	Hub          *hub.Hub
+	Logger       *zap.Logger
 	TokenManager *auth.TokenManager
 }
 
-// NewContainer создает новый контейнер с инициализированными зависимостями
+// NewContainer creates a new container with initialized dependencies
 func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
-	// Инициализация storage
+	// Initialize storage
 	store, err := storage.New(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// Инициализация репозиториев
+	// Initialize repositories
 	chatRepo := repositories.NewChatRepository(store)
 	messageRepo := repositories.NewMessageRepository(store)
 	userRepo := repositories.NewUserRepository(store)
 
-	// Инициализация token manager
+	// Initialize token manager
 	tokenManager := auth.NewTokenManager(cfg.Token.JWTSecret)
 
-	// Инициализация сервисов
+	// Initialize services
 	chatService := services.NewChatService(chatRepo)
 	messageService := services.NewMessageService(messageRepo)
 	authService := services.NewAuthService(userRepo, tokenManager, store)
 
-	// Инициализация Hub
+	// Initialize Hub
 	hubInstance := hub.NewHub(store, logger, cfg.LLM.BaseURL)
 	go hubInstance.Run()
 
 	return &Container{
 		Storage:        store,
-		ChatRepo:       chatRepo,
-		MessageRepo:    messageRepo,
-		UserRepo:       userRepo,
+		chatRepo:       chatRepo,
+		messageRepo:    messageRepo,
+		userRepo:       userRepo,
 		ChatService:    chatService,
 		MessageService: messageService,
 		AuthService:    authService,

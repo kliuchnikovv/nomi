@@ -154,9 +154,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 const params: any = { account_email: p.accountEmail };
 
                 if (creds) {
-                    if (p.provider === 'jules') {
-                        params.api_key = creds.accessToken;
-                    } else if (p.provider === 'github') {
+                    if (p.provider === 'github') {
                         params.access_token = creds.accessToken;
                     }
                 }
