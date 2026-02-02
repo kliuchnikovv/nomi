@@ -48,12 +48,14 @@ class SouperAgent(Agent):
         tools: list[Toolkit | Function | dict] | None = None,
         debug_mode: bool = False,
         thinking: str = "off",
-        timezone: str = "UTC",
+        timezone: str | None = "UTC",
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
+        # Handle None timezone by defaulting to UTC
+        effective_timezone = timezone or "UTC"
         instructions = (
             BASE_INSTRUCTIONS
-            + f"\nCurrent time is: {datetime.now(ZoneInfo(timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
+            + f"\nCurrent time is: {datetime.now(ZoneInfo(effective_timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
         )
 
         super().__init__(

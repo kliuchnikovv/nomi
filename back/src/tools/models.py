@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -19,3 +21,8 @@ class ToolsResponse(BaseModel):
     """
 
     tools: list[ToolSpec] = Field(default_factory=list)
+
+
+# Rebuild models to resolve forward references
+ToolSpec.model_rebuild()
+ToolsResponse.model_rebuild()
