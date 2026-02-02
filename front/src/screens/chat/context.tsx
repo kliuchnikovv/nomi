@@ -519,18 +519,28 @@ export function ChatProvider({
 
     const handleClientAction = useCallback(async (payload: any) => {
         console.log('[ChatContext] Handling client action:', payload);
-        const { tool, method, params } = payload;
+        const { call_id: callId, tool, method, params } = payload;
 
         try {
             const { clientToolExecutor } = await import('../../services/tools/ClientToolExecutor');
-            const result = await clientToolExecutor.execute({ tool, method, params });
+            const result = await clientToolExecutor.execute({ tool, method, params: params || {} });
 
-            console.log('[ChatContext] Action executed, sending result:', result);
-            await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`, [], false, undefined, 'system');
-
-        } catch (error) {
-            console.error('[ChatContext] Action failed:', error);
-            await sendMessage(`[System] Tool ${tool}.${method} Failed: ${error}`, [], false, undefined, 'system');
+            if (callId) {
+                const { sendClientToolResult } = await import('../../apiClient');
+                await sendClientToolResult(callId, result);
+                console.log('[ChatContext] Round-trip: sent client tool result for call_id=', callId);
+            } else {
+                console.log('[ChatContext] Action executed, sending result as system message');
+                await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`, [], false, undefined, 'system');
+            }
+        } catch (error: any) {
+            const errMsg = error?.message ?? String(error);
+            if (callId) {
+                const { sendClientToolResult } = await import('../../apiClient');
+                await sendClientToolResult(callId, `Error: ${errMsg}`);
+            } else {
+                await sendMessage(`[System] Tool ${tool}.${method} Failed: ${errMsg}`, [], false, undefined, 'system');
+            }
         }
     }, [sendMessage]);
 

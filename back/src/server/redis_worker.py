@@ -27,6 +27,9 @@ class RedisWorker:
         # Task registry (instance variable)
         self.active_tasks: dict[str, asyncio.Task] = {}
 
+        # Pending client tool results: call_id -> Future[str]
+        self.pending_client_tool_results: dict[str, asyncio.Future] = {}
+
     async def start(self):
         """Start the Redis worker."""
         # Mask password in logs
@@ -41,17 +44,20 @@ class RedisWorker:
             self.redis = redis.from_url(self.redis_url, decode_responses=True)
             self.pubsub = self.redis.pubsub()
 
-            # Subscribe to chat requests, store_facts (client-extracted facts), and jules monitoring
+            # Subscribe to chat requests, store_facts (client-extracted facts), jules monitoring, client_tool_result
             await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
             await self.pubsub.subscribe(
-                Redis.CHANNEL_JULES_MONITOR, Redis.CHANNEL_STORE_FACTS
+                Redis.CHANNEL_JULES_MONITOR,
+                Redis.CHANNEL_STORE_FACTS,
+                Redis.CHANNEL_CLIENT_TOOL_RESULT,
             )
 
             logger.warning(
-                "[RedisWorker] Successfully subscribed to %s, %s, %s",
+                "[RedisWorker] Successfully subscribed to %s, %s, %s, %s",
                 Redis.CHANNEL_REQUEST.format("*"),
                 Redis.CHANNEL_JULES_MONITOR,
                 Redis.CHANNEL_STORE_FACTS,
+                Redis.CHANNEL_CLIENT_TOOL_RESULT,
             )
             asyncio.create_task(self._process_messages())
 
@@ -89,6 +95,22 @@ class RedisWorker:
             data = data.decode("utf-8", errors="replace")
         elif isinstance(data, int):
             # Skip subscriber count messages
+            return
+
+        # Case: client_tool_result (call_id -> result for proxy tools)
+        if channel == Redis.CHANNEL_CLIENT_TOOL_RESULT:
+            try:
+                payload = json.loads(data) if isinstance(data, str) else data
+                call_id = payload.get("call_id")
+                result = payload.get("result", "")
+                if call_id and call_id in self.pending_client_tool_results:
+                    future = self.pending_client_tool_results.pop(call_id)
+                    if not future.done():
+                        future.set_result(result)
+            except Exception as e:
+                logger.warning(
+                    "[RedisWorker] Failed to handle client_tool_result: %s", e
+                )
             return
 
         # Case 1: Chat Request (pattern match)
@@ -158,6 +180,7 @@ class RedisWorker:
                 session_id=chat_id,
                 user_id=user_id,
                 chat_id=chat_id,
+                redis_worker=self,
             )
 
             # Create new task

@@ -104,12 +104,9 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		},
 	})
 
-	// Add Integrations
-	// Фильтруем: только серверные интеграции передаются в Python backend
-	// Клиентские интеграции (ClientOnly) выполняются локально на устройстве
+	// Add Integrations (server and client-only: backend uses client-only to add proxy tools from manifests)
 	for _, integration := range userIntegrations {
-		// Проверяем тип интеграции через реестр
-		provider, ok := integrations.GetProvider(integration.Provider)
+		_, ok := integrations.GetProvider(integration.Provider)
 		if !ok {
 			h.logger.Warn("provider not found in registry, skipping",
 				zap.String("provider", integration.Provider),
@@ -117,22 +114,11 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 			continue
 		}
 
-		// Пропускаем клиентские интеграции - они выполняются локально
-		if provider.StorageType == integrations.StorageTypeClientOnly {
-			h.logger.Debug("skipping client-only integration",
-				zap.String("provider", integration.Provider),
-			)
-			continue
-		}
-
 		var params map[string]interface{}
 		if integration.Params != "" {
-			// Try to unmarshal params if it's a JSON string
 			_ = json.Unmarshal([]byte(integration.Params), &params)
 		}
 
-		// Use integration.Provider as the tool name (e.g., 'gmail', 'github')
-		// This must match the keys expected by Python's ToolConfig
 		toolName := integration.Provider
 		if toolName == "" {
 			toolName = integration.Name

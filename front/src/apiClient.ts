@@ -95,6 +95,11 @@ async function startOAuthLogin(provider: string): Promise<string> {
     throw new Error('No auth_url returned from OAuth login');
 }
 
+/** Send client tool execution result for round-trip proxy (model -> device -> result). */
+export async function sendClientToolResult(callId: string, result: string): Promise<void> {
+    await apiClient.post<{ ok?: boolean }>(`${API_URL()}/api/chat/client-tool-result`, { call_id: callId, result });
+}
+
 export const apiClient = {
     get: <T>(endpoint: string, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'GET' }),
     post: <T>(endpoint: string, body: any, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'POST', body: JSON.stringify(body) }),

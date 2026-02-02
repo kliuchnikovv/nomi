@@ -9,6 +9,7 @@ class Redis:
     CHANNEL_STOP = "chat:stop:{}"
     CHANNEL_STORE_FACTS = "chat:store_facts"
     CHANNEL_JULES_MONITOR = "jules:monitor"
+    CHANNEL_CLIENT_TOOL_RESULT = "chat:client_tool_result"
 
 
 class Polling:

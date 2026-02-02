@@ -18,6 +18,74 @@ ui:
   description_short: Gmail интеграция для работы с почтой
   category: email
 
+# Tool methods for the model (manifest = tool schema)
+methods:
+  - name: get_recent_emails
+    description: Get recent emails from the user's Gmail inbox
+    params:
+      - name: limit
+        type: integer
+        required: false
+        default: 5
+        description: Maximum number of emails to return
+  - name: search_emails
+    description: Search user's Gmail inbox by query (same syntax as Gmail search box)
+    params:
+      - name: query
+        type: string
+        required: true
+        description: Search query
+      - name: max_results
+        type: integer
+        required: false
+        default: 5
+        description: Maximum number of results
+  - name: get_email
+    description: Get full email content by message ID
+    params:
+      - name: message_id
+        type: string
+        required: true
+        description: Gmail message ID
+  - name: send_email
+    description: Send an email from the user's Gmail account
+    params:
+      - name: to
+        type: string
+        required: true
+        description: Recipient email address
+      - name: subject
+        type: string
+        required: true
+        description: Email subject
+      - name: body
+        type: string
+        required: true
+        description: Email body
+  - name: reply_email
+    description: Reply to an existing email
+    params:
+      - name: message_id
+        type: string
+        required: true
+        description: Gmail message ID to reply to
+      - name: body
+        type: string
+        required: true
+        description: Reply body
+  - name: create_draft
+    description: Create a draft email
+    params:
+      - name: to
+        type: string
+        required: true
+      - name: subject
+        type: string
+        required: true
+      - name: body
+        type: string
+        required: true
+
 background_tasks: true
 system_events:
   - push_notifications

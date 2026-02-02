@@ -103,6 +103,8 @@ func New(
 
 	// Chat streaming API (WebSocket only)
 	r.GET("/api/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
+	// Client tool result (round-trip proxy: device executes tool and sends result back)
+	r.POST("/api/chat/client-tool-result", wrapWithAuth(streamHandler.ClientToolResult, authMiddleware))
 
 	// Message API (protected)
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))

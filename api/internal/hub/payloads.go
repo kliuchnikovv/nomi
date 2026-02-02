@@ -87,10 +87,11 @@ type ChatUpdatePayload struct {
 	Message string      `json:"message"` // Used for title
 }
 
-// ClientActionPayload carries requests for client-side tool execution
+// ClientActionPayload carries requests for client-side tool execution (round-trip proxy)
 type ClientActionPayload struct {
 	Type        PayloadType            `json:"type"`
 	TraceID     string                 `json:"trace_id,omitempty"`
+	CallID      string                 `json:"call_id,omitempty"` // round-trip: frontend sends result back with this ID
 	Method      string                 `json:"method"`
 	Params      map[string]interface{} `json:"params"`
 	Description string                 `json:"description,omitempty"`

@@ -81,6 +81,8 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub 
 	return h
 }
 
+const channelClientToolResult = "chat:client_tool_result"
+
 func (h *Hub) Run() {
 	// Periodic cleanup or metrics?
 	for room := range h.unregister {
@@ -91,6 +93,16 @@ func (h *Hub) Run() {
 		}
 		h.mu.Unlock()
 	}
+}
+
+// PublishClientToolResult publishes a client tool result to Redis so the Python worker can complete the round-trip.
+func (h *Hub) PublishClientToolResult(ctx context.Context, callID, result string) error {
+	payload := map[string]string{"call_id": callID, "result": result}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return h.redis.Publish(ctx, channelClientToolResult, payloadBytes).Err()
 }
 
 func (h *Hub) subscribeRedis() {

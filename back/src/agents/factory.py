@@ -1,5 +1,7 @@
 import logging
 import os
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from agno.agent import Agent
 from agno.db.postgres import PostgresDb
@@ -242,6 +244,9 @@ class AgentFactory:
         timezone: str | None = None,
         timezone_offset: str | None = None,
         endpoint: str | None = None,
+        client_tool_runner: Callable[
+            [str, str, dict], Awaitable[str]
+        ] | None = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -271,7 +276,8 @@ class AgentFactory:
 
         list_id = command_desc.get("list_id") if command_desc else None
 
-        tools: list[Toolkit] = []
+        tools: list[Toolkit | Any] = []
+        config_used: ToolsConfig | None = None
 
         # List agent: only list tools (knowledge_search with list_id), no web_search
         if agent_type and agent_type.lower() == "list" and user_id:
@@ -280,6 +286,7 @@ class AgentFactory:
             if command_desc and command_desc.get("auth_token"):
                 params["auth_token"] = command_desc["auth_token"]
             config.add("knowledge_search", **params)
+            config_used = config
             try:
                 tools = await build_tools(config)
                 logger.info("[Factory] Built %d tools for ListAgent", len(tools))
@@ -290,6 +297,7 @@ class AgentFactory:
             try:
                 logger.debug("[Factory] Fetching tools for user_id=%s", user_id)
                 tools_config = await self._config_client.fetch_tools(user_id=user_id)
+                config_used = tools_config
                 logger.info(
                     "[Factory] Fetched %d tools for user %s",
                     len(tools_config.entries),
@@ -341,7 +349,34 @@ class AgentFactory:
                 config.add("web_search")
                 logger.info("[WS] Added web search tool (always enabled)")
 
+            config_used = config
             tools = await build_tools(config)
+
+        # Add client proxy tools from plugin manifests (round-trip: model -> device -> result)
+        if client_tool_runner and config_used and config_used.entries:
+            try:
+                from src.plugins.loader import load_plugins, get_manifest
+                from src.plugins.tool_gen import build_client_proxy_tools
+
+                load_plugins()
+                client_manifests = []
+                for name in config_used.entries:
+                    manifest = get_manifest(name)
+                    if manifest and (manifest.get("execution") or {}).get("type") == "client":
+                        client_manifests.append(manifest)
+                if client_manifests:
+                    proxy_tools = build_client_proxy_tools(
+                        client_manifests, client_tool_runner
+                    )
+                    tools = list(tools) + proxy_tools
+                    logger.info(
+                        "[Factory] Added %d client proxy tools from manifests",
+                        len(proxy_tools),
+                    )
+            except Exception as e:
+                logger.warning(
+                    "[Factory] Failed to add client proxy tools: %s", e
+                )
 
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs

@@ -30,11 +30,13 @@ class RedisSession:
         session_id: str,
         user_id: str | None = None,
         chat_id: str | None = None,
+        redis_worker: Any = None,
     ):
         self.agent_factory = agent_factory
         self.session_id = session_id
         self.user_id = user_id
         self.chat_id = chat_id or session_id
+        self.redis_worker = redis_worker
 
         self.redis_client = None
         self.agent: Any | None = None
@@ -143,6 +145,39 @@ class RedisSession:
         self.next_id = frame.id + 1
         return self.next_id
 
+    async def _send_client_action_and_wait(
+        self, plugin: str, method: str, params: dict[str, Any]
+    ) -> str:
+        """Send client_action to the device and wait for tool result (round-trip for proxy tools)."""
+        if not self.redis_worker:
+            return "Client tool runner not available (no redis_worker)."
+        call_id = str(uuid.uuid4())
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        self.redis_worker.pending_client_tool_results[call_id] = future
+        try:
+            payload_data = {
+                "type": "client_action",
+                "call_id": call_id,
+                "tool": plugin,
+                "method": method,
+                "params": params,
+            }
+            await self._send_frame(
+                make_data(self.next_id, Op.MESSAGE, self.chat_id, payload_data)
+            )
+            return await asyncio.wait_for(future, timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[RedisSession] Client tool call timed out: %s.%s (call_id=%s)",
+                plugin,
+                method,
+                call_id,
+            )
+            return "Client tool execution timed out (device may be offline)."
+        finally:
+            self.redis_worker.pending_client_tool_results.pop(call_id, None)
+
     async def handle_frame(self, frame: Frame):
         """Process an incoming frame."""
         try:
@@ -235,6 +270,9 @@ class RedisSession:
                 logger.info("[RedisSession] Detected team mode from agent_type")
 
             # Using regular agent factory
+            client_tool_runner = (
+                self._send_client_action_and_wait if self.redis_worker else None
+            )
             self.agent = await self.agent_factory.build(
                 session_id=self.session_id,
                 tools_specs=self.tools_specs,  # Likely empty, factory will fetch
@@ -246,6 +284,7 @@ class RedisSession:
                 user_id=rag_user_id,
                 chat_id=self.chat_id,
                 endpoint=endpoint,
+                client_tool_runner=client_tool_runner,
             )
         except Exception as e:
             logger.error(
