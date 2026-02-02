@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -45,7 +46,17 @@ func main() {
 		pluginsDir = os.Getenv("PLUGINS_DIR")
 	}
 	if pluginsDir == "" {
-		pluginsDir = "../plugins" // repo root plugins when run from api/; in Docker use PLUGINS_DIR or config
+		pluginsDir = "../plugins" // repo root when run from api/
+	}
+	// In Docker/Railway binary runs from /app; default "../plugins" resolves to /plugins (missing).
+	// Prefer /app/plugins when the resolved path does not exist.
+	if absDir, err := filepath.Abs(pluginsDir); err == nil {
+		if _, err := os.Stat(absDir); os.IsNotExist(err) {
+			const containerPlugins = "/app/plugins"
+			if _, err := os.Stat(containerPlugins); err == nil {
+				pluginsDir = containerPlugins
+			}
+		}
 	}
 
 	zapCfg := zap.NewProductionConfig()
