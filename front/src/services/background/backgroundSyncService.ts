@@ -97,6 +97,7 @@ export async function unregisterBackgroundSync() {
         await BackgroundFetch.unregisterTaskAsync(BACKGROUND_EMAIL_SYNC_TASK);
         console.log('[BackgroundSync] Task unregistered');
     } catch (err) {
-        console.error('[BackgroundSync] Failed to unregister task:', err);
+        // Не пробрасываем: нативный EXTaskService может бросить при unregister и вызвать SIGABRT.
+        console.warn('[BackgroundSync] Failed to unregister task (ignored):', err);
     }
 }

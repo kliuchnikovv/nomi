@@ -62,9 +62,6 @@ class SafeGemini(Gemini):
         )
 
     def _filter_empty_parts(self, messages: list[Message]) -> list[Message]:
-        """
-        Filter out messages with empty parts or empty content.
-        """
         filtered_messages = []
 
         for msg in messages:

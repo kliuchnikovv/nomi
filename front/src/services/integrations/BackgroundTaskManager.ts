@@ -111,24 +111,33 @@ export async function registerBackgroundTask(config: BackgroundTaskConfig): Prom
 }
 
 /**
- * Отменить регистрацию фоновой задачи
+ * Отменить регистрацию фоновой задачи.
+ * Вызываем нативный unregister только для задач, зарегистрированных в этой сессии (в activeTasks),
+ * чтобы избежать краша в EXTaskService при unregister неизвестной задачи.
  */
 export async function unregisterBackgroundTask(provider: string): Promise<void> {
     const taskName = getTaskName(provider);
-    
+
+    if (!activeTasks.has(provider)) {
+        // Не регистрировали в этой сессии — не вызываем нативный unregister (избегаем краша)
+        return;
+    }
+
     try {
         const isRegistered = await TaskManager.isTaskRegisteredAsync(taskName);
         if (!isRegistered) {
-            console.log(`[BackgroundTaskManager] Task ${taskName} not registered`);
+            activeTasks.delete(provider);
             return;
         }
-        
+
         await BackgroundFetch.unregisterTaskAsync(taskName);
-        activeTasks.delete(provider);
         console.log(`[BackgroundTaskManager] Unregistered background task for ${provider}`);
     } catch (error) {
-        console.error(`[BackgroundTaskManager] Failed to unregister task for ${provider}:`, error);
-        throw error;
+        // Не пробрасываем: нативный EXTaskService может бросить исключение при unregister,
+        // что приводит к SIGABRT. Логируем и продолжаем.
+        console.warn(`[BackgroundTaskManager] Failed to unregister task for ${provider}:`, error);
+    } finally {
+        activeTasks.delete(provider);
     }
 }
 
