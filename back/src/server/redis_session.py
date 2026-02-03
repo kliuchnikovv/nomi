@@ -79,7 +79,6 @@ class RedisSession:
         await self._send_frame(frame)
 
     async def _send_frame(self, frame: Frame) -> int:
-        """Publish frame to Redis chat:user:<user_id>."""
         data = frame.marshal()
         # Target ID: User ID if known, else Session ID (fallback)
         target_id = self.user_id or self.session_id
