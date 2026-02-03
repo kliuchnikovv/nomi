@@ -15,10 +15,13 @@ export const gmailPlugin: ClientPluginHandler = {
 
         const { integrationStorage } = await import('../../services/integrations/IntegrationStorage');
         const integrations = await integrationStorage.getIntegrations();
-        const gmailInteg = integrations.find(i => i.provider === 'gmail' && i.enabled);
+        
+        // Find enabled gmail integration (case-insensitive provider check)
+        const gmailInteg = integrations.find(i => i.provider.toLowerCase() === 'gmail' && i.enabled);
 
         if (!gmailInteg) {
-            throw new Error('No active Gmail integration found on device');
+            const available = integrations.map(i => `${i.provider}:${i.enabled}`).join(', ');
+            throw new Error(`No active Gmail integration found on device. Available integrations: ${available}`);
         }
 
         const integrationId = gmailInteg.id;
