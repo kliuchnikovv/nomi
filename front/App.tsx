@@ -27,8 +27,12 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
 import { initDatabase } from './src/services/database/database';
-// BackgroundTaskManager инициализируется через ConnectorsProvider
+// BackgroundTaskManager: define all tasks at module level (required for React Native)
+import { defineAllBackgroundTasks } from './src/services/integrations/BackgroundTaskManager';
 import { socket } from './src/socket';
+
+// CRITICAL: Define all background tasks at module level (required for React Native/Expo)
+defineAllBackgroundTasks();
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -53,11 +57,9 @@ function App() {
                 console.log('[App] Database initialized');
                 console.log('[App] Local RAG logging enabled. You will see [Local RAG Search] and [Client Tool Executor] when the agent runs a local search (e.g. "search my emails" or "find in my notes").');
 
-                setInitStatus('Registering Background Tasks...');
-                // Don't let background tasks block app load
-                // BackgroundTaskManager будет инициализирован через ConnectorsProvider
-                // после загрузки интеграций из базы данных
-                console.log('[App] Background tasks will be initialized by ConnectorsProvider');
+                // Background tasks are already defined at module level
+                // ConnectorsProvider will register them for enabled integrations
+                console.log('[App] Background tasks will be registered by ConnectorsProvider for enabled integrations');
 
             } catch (e) {
                 console.error("Failed to initialize app:", e);

@@ -35,29 +35,71 @@ function getTaskName(provider: string): string {
 }
 
 /**
- * Определить фоновую задачу для провайдера
- */
-function defineBackgroundTask(provider: string, taskFunction: () => Promise<void>) {
-    const taskName = getTaskName(provider);
-    
-    TaskManager.defineTask(taskName, async () => {
-        try {
-            console.log(`[BackgroundTaskManager] Executing background task for ${provider}`);
-            await taskFunction();
-            return BackgroundFetch.BackgroundFetchResult.NewData;
-        } catch (error) {
-            console.error(`[BackgroundTaskManager] Background task failed for ${provider}:`, error);
-            return BackgroundFetch.BackgroundFetchResult.Failed;
-        }
-    });
-}
-
-/**
  * Получить функцию фоновой задачи для провайдера (из плагинов или fallback).
  */
 function getBackgroundTaskForProvider(provider: string): ((integrationId: string) => Promise<void>) | undefined {
     registerClientPlugins();
     return getBackgroundTask(provider);
+}
+
+/**
+ * Define all background tasks at module level.
+ * CRITICAL: In React Native/Expo, TaskManager.defineTask MUST be called at the top level,
+ * not dynamically during runtime. This function should be called once when the app starts.
+ */
+export function defineAllBackgroundTasks(): void {
+    console.log('[BackgroundTaskManager] Defining all background tasks at module level...');
+    
+    // Register client plugins first to ensure handlers are available
+    registerClientPlugins();
+    
+    // Define tasks for all possible providers that support background tasks
+    const providers = ['gmail', 'calendar']; // Add more as needed
+    
+    for (const provider of providers) {
+        const taskName = getTaskName(provider);
+        
+        // Check if already defined to avoid duplicate definitions
+        if (TaskManager.isTaskDefined(taskName)) {
+            console.log(`[BackgroundTaskManager] Task ${taskName} already defined, skipping...`);
+            continue;
+        }
+        
+        // Define the task at module level
+        TaskManager.defineTask(taskName, async ({ data, error }: any) => {
+            if (error) {
+                console.error(`[BackgroundTaskManager] Background task error for ${provider}:`, error);
+                return BackgroundFetch.BackgroundFetchResult.Failed;
+            }
+            
+            try {
+                console.log(`[BackgroundTaskManager] Executing background task for ${provider}`);
+                
+                // Get the integration ID from active tasks
+                const config = activeTasks.get(provider);
+                if (!config) {
+                    console.warn(`[BackgroundTaskManager] No active config for ${provider}, skipping...`);
+                    return BackgroundFetch.BackgroundFetchResult.NoData;
+                }
+                
+                const taskFunction = getBackgroundTaskForProvider(provider);
+                if (!taskFunction) {
+                    console.warn(`[BackgroundTaskManager] No background task function for ${provider}`);
+                    return BackgroundFetch.BackgroundFetchResult.NoData;
+                }
+                
+                await taskFunction(config.integrationId);
+                return BackgroundFetch.BackgroundFetchResult.NewData;
+            } catch (error) {
+                console.error(`[BackgroundTaskManager] Background task failed for ${provider}:`, error);
+                return BackgroundFetch.BackgroundFetchResult.Failed;
+            }
+        });
+        
+        console.log(`[BackgroundTaskManager] Defined background task: ${taskName}`);
+    }
+    
+    console.log('[BackgroundTaskManager] All background tasks defined');
 }
 
 /**
@@ -80,11 +122,10 @@ export async function registerBackgroundTask(config: BackgroundTaskConfig): Prom
         return;
     }
 
-    // Определяем задачу в TaskManager
+    // Verify the task is defined (should be defined at module level via defineAllBackgroundTasks)
     if (!TaskManager.isTaskDefined(taskName)) {
-        defineBackgroundTask(provider, async () => {
-            await taskFunction(integrationId);
-        });
+        console.error(`[BackgroundTaskManager] Task ${taskName} is not defined! Call defineAllBackgroundTasks() at app startup.`);
+        return;
     }
     
     // Регистрируем задачу в BackgroundFetch
@@ -96,13 +137,15 @@ export async function registerBackgroundTask(config: BackgroundTaskConfig): Prom
             return;
         }
         
+        // Store config before registering (the background task will read from activeTasks)
+        activeTasks.set(provider, config);
+        
         await BackgroundFetch.registerTaskAsync(taskName, {
             minimumInterval: interval,
             stopOnTerminate: false, // Продолжать после закрытия приложения (iOS частично поддерживает)
             startOnBoot: true,      // Android: запускать при загрузке системы
         });
         
-        activeTasks.set(provider, config);
         console.log(`[BackgroundTaskManager] Registered background task for ${provider} (interval: ${interval}s)`);
     } catch (error) {
         console.error(`[BackgroundTaskManager] Failed to register task for ${provider}:`, error);
