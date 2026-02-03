@@ -1,7 +1,5 @@
 import os
 import logging
-import uuid
-import inspect
 from contextlib import asynccontextmanager
 from typing import Optional, Any
 
@@ -118,6 +116,7 @@ async def lifespan(app: FastAPI):
     logging.warning("[Lifespan] Loading plugins...")
     try:
         from src.plugins.loader import load_plugins
+
         load_plugins()
         logging.warning("[Lifespan] Plugins loaded successfully")
     except Exception as e:
@@ -154,6 +153,7 @@ async def health_check():
     from datetime import datetime
 
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
 
 # Sessions for OAuth state (required for request.session)
 app.add_middleware(SessionMiddleware, secret_key=config.session_secret)
