@@ -59,7 +59,7 @@ def build_client_proxy_tools(
 
             def _make_proxy(plugin: str, method: str, runner: Any):
                 async def _proxy(**kwargs: Any) -> str:
-                    logger.info(
+                    logger.error(
                         "[ClientProxyTool] Calling %s.%s with params: %s",
                         plugin,
                         method,
@@ -67,7 +67,13 @@ def build_client_proxy_tools(
                     )
                     try:
                         result = await runner(plugin, method, kwargs)
-                        logger.info(
+                        if result is None:
+                            logger.error(
+                                "[ClientProxyTool] %s.%s returned None!", plugin, method
+                            )
+                            return "Error: Tool execution returned None"
+
+                        logger.error(
                             "[ClientProxyTool] %s.%s returned: %s",
                             plugin,
                             method,
@@ -82,7 +88,7 @@ def build_client_proxy_tools(
                             e,
                             exc_info=True,
                         )
-                        raise
+                        return f"Error executing tool: {str(e)}"
 
                 return _proxy
 

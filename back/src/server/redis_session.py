@@ -97,6 +97,7 @@ class RedisSession:
                         channel,
                         frame.op,
                         len(payload_json),
+                        payload_json,
                     )
                 else:
                     logger.info(
@@ -104,6 +105,7 @@ class RedisSession:
                         channel,
                         frame.op,
                         len(payload_json),
+                        payload_json,
                     )
             except Exception as e:
                 logger.error(
@@ -149,7 +151,8 @@ class RedisSession:
         self, plugin: str, method: str, params: dict[str, Any]
     ) -> str:
         """Send client_action to the device and wait for tool result (round-trip for proxy tools)."""
-        logger.info(
+        # Use ERROR level for debugging to ensure visibility in dropped logs
+        logger.error(
             "[RedisSession] _send_client_action_and_wait called: plugin=%s method=%s params=%s redis_worker=%s",
             plugin,
             method,
@@ -164,7 +167,7 @@ class RedisSession:
         loop = asyncio.get_event_loop()
         future = loop.create_future()
         self.redis_worker.pending_client_tool_results[call_id] = future
-        logger.info(
+        logger.error(
             "[RedisSession] Registered pending result for call_id=%s, sending frame...",
             call_id,
         )
@@ -179,19 +182,24 @@ class RedisSession:
             await self._send_frame(
                 make_data(self.next_id, Op.MESSAGE, self.chat_id, payload_data)
             )
-            logger.info(
+            logger.error(
                 "[RedisSession] Frame sent for call_id=%s, waiting for result (timeout=30s)...",
                 call_id,
             )
             result = await asyncio.wait_for(future, timeout=30.0)
-            logger.info(
+
+            if result is None:
+                logger.error("[RedisSession] Result is None for call_id=%s", call_id)
+                return "Error: Client returned no result (None)."
+
+            logger.error(
                 "[RedisSession] Got result for call_id=%s: %s",
                 call_id,
-                result[:100] if result else result,
+                result[:100] if result else "None",
             )
-            return result
+            return str(result)
         except asyncio.TimeoutError:
-            logger.warning(
+            logger.error(
                 "[RedisSession] Client tool call timed out: %s.%s (call_id=%s)",
                 plugin,
                 method,
@@ -207,7 +215,7 @@ class RedisSession:
                 e,
                 exc_info=True,
             )
-            raise
+            return f"Error executing client tool: {str(e)}"
         finally:
             self.redis_worker.pending_client_tool_results.pop(call_id, None)
 
