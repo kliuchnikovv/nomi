@@ -19,11 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class RedisSession:
-    """
-    Handles a single request/response cycle or a session context via Redis.
-    Provides headless execution for communication with Go Hub.
-    """
-
     def __init__(
         self,
         agent_factory: AgentFactory,
