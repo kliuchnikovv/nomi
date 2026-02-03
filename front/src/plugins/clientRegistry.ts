@@ -16,7 +16,23 @@ export function registerClientPlugin(name: string, handler: ClientPluginHandler)
 }
 
 export function getClientPluginHandler(name: string): ClientPluginHandler | undefined {
-    return handlers.get(name.toLowerCase());
+    const nameLower = name.toLowerCase();
+    
+    // Try exact match first
+    if (handlers.has(nameLower)) {
+        return handlers.get(nameLower);
+    }
+    
+    // Try prefix match (e.g. "gmail (bob@example.com)" -> "gmail")
+    // Sort by length desc to match longest prefix first
+    const keys = Array.from(handlers.keys()).sort((a, b) => b.length - a.length);
+    for (const key of keys) {
+        if (nameLower.startsWith(key)) {
+            return handlers.get(key);
+        }
+    }
+    
+    return undefined;
 }
 
 export function getBackgroundTask(provider: string): ((integrationId: string) => Promise<void>) | undefined {
