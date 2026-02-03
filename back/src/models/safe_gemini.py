@@ -123,6 +123,28 @@ class SafeGemini(Gemini):
 
             filtered_messages.append(msg)
 
+        # Ensure we never return an empty list - API requires at least one message
+        if not filtered_messages and messages:
+            # If all messages were filtered, keep messages with roles that should never be empty
+            # (user, system) - even if they have minimal content
+            for msg in messages:
+                if msg.role in ("user", "system") and msg.content is not None:
+                    filtered_messages.append(msg)
+                    logger.debug(
+                        "[SafeGemini] Kept %s message to prevent empty list", msg.role
+                    )
+                    break
+
+            # If still empty, keep the first non-tool message
+            if not filtered_messages:
+                for msg in messages:
+                    if msg.role != "tool":
+                        filtered_messages.append(msg)
+                        logger.debug(
+                            "[SafeGemini] Kept first non-tool message to prevent empty list"
+                        )
+                        break
+
         return filtered_messages
 
     @retry(
