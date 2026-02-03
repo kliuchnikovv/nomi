@@ -112,8 +112,20 @@ def get_manifests() -> List[Dict[str, Any]]:
 
 
 def get_manifest(name: str) -> Optional[Dict[str, Any]]:
-    """Return manifest for plugin name or None."""
-    return _manifests_by_name.get(name.lower())
+    """Return manifest for plugin name or None. Supports prefix matching."""
+    name_lower = name.lower()
+
+    # Exact match first
+    if name_lower in _manifests_by_name:
+        return _manifests_by_name[name_lower]
+
+    # Prefix match (longest candidate first)
+    # This handles cases like "Gmail (user@example.com)" matching "gmail"
+    for key in sorted(_manifests_by_name.keys(), key=len, reverse=True):
+        if name_lower.startswith(key):
+            return _manifests_by_name[key]
+
+    return None
 
 
 def is_server_side_plugin(name: str) -> bool:
