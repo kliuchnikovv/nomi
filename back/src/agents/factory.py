@@ -244,9 +244,7 @@ class AgentFactory:
         timezone: str | None = None,
         timezone_offset: str | None = None,
         endpoint: str | None = None,
-        client_tool_runner: Callable[
-            [str, str, dict], Awaitable[str]
-        ] | None = None,
+        client_tool_runner: Callable[[str, str, dict], Awaitable[str]] | None = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -362,7 +360,10 @@ class AgentFactory:
                 client_manifests = []
                 for name in config_used.entries:
                     manifest = get_manifest(name)
-                    if manifest and (manifest.get("execution") or {}).get("type") == "client":
+                    if (
+                        manifest
+                        and (manifest.get("execution") or {}).get("type") == "client"
+                    ):
                         client_manifests.append(manifest)
                 if client_manifests:
                     proxy_tools = build_client_proxy_tools(
@@ -374,13 +375,10 @@ class AgentFactory:
                         len(proxy_tools),
                     )
             except Exception as e:
-                logger.warning(
-                    "[Factory] Failed to add client proxy tools: %s", e
-                )
+                logger.warning("[Factory] Failed to add client proxy tools: %s", e)
 
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs
-        tools_for_scheduler = list(tools) if tools else []
 
         # Setup RAG User ID: use user_id if explicit, or session_id if anonymous
         rag_user_id = user_id or session_id

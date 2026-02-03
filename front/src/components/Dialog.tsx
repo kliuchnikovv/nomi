@@ -55,7 +55,7 @@ export default function Dialog({
           style={{ width: '100%' }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <View style={styles.dialog} accessibilityRole="dialog">
+          <View style={styles.dialog} accessibilityRole="alert">
             {typeof title === 'string' ? (
               <Text style={styles.title}>{title}</Text>
             ) : (

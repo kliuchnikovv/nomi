@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity, RefreshControl } from 'react-native';
 import { getApiUrl, API_URL } from '../../config';
-import { GiftedChat, IMessage } from 'react-native-gifted-chat';
+import GiftedChat, { IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
@@ -489,7 +489,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                     showHeader={false}
                                 />
                             </View>
-                            {renderInputToolbar()}
+                            {renderInputToolbar({})}
                         </KeyboardAvoidingView>
                     ) : (
                         <KeyboardAvoidingView

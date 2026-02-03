@@ -233,7 +233,7 @@ When enabled, Agno automatically:
 
 **Example:**
 ```python
-agent = GenieAgent(
+agent = SouperAgent(
     knowledge=UserScopedKnowledge(user_id=user_id, vector_db=vector_db),
     search_knowledge=True,  # Automatic search enabled
     # ...
@@ -249,7 +249,7 @@ When enabled, Agno automatically:
 
 **Example:**
 ```python
-agent = GenieAgent(
+agent = SouperAgent(
     knowledge=UserScopedKnowledge(user_id=user_id, vector_db=vector_db),
     update_knowledge=True,  # Automatic fact storage enabled
     # ...
@@ -258,7 +258,7 @@ agent = GenieAgent(
 
 **Agent Integration:**
 All agents in Genie support built-in RAG:
-- ✅ `GenieAgent` — Full RAG support (search + update)
+- ✅ `SouperAgent` — Full RAG support (search + update)
 - ✅ `RagAgent` — Full RAG support
 - ✅ `BriefingAgent` — Full RAG support
 - ✅ `MailerAgent` — Full RAG support
@@ -319,7 +319,7 @@ knowledge_tool = KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
                           ▼
 ┌─────────────────────────────────────────────────────────┐
 │              All Agno Agents                            │
-│  - GenieAgent, BriefingAgent, MailerAgent, etc.        │
+│  - SouperAgent, BriefingAgent, MailerAgent, etc.        │
 │  - DevelopmentTeam agents                               │
 │  - D&D Team agents                                      │
 └─────────────────────────────────────────────────────────┘
@@ -425,7 +425,7 @@ cd api && go build ./...
 - **Framework**: Agno (AI agent orchestration), FastAPI
 - **Architecture**: Teams of agents with tools
 - **Entry point**: `back/app.py`
-- **Main agent**: `back/src/agents/genie.py`
+- **Main agent**: `back/src/agents/souper.py`
 
 ### Agent Memory (RAG Integration)
 
@@ -443,7 +443,7 @@ vector_db = build_vector_db(db_url=db_url)
 knowledge = UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
 
 # Create agent with memory
-agent = GenieAgent(
+agent = SouperAgent(
     model=model,
     knowledge=knowledge,
     search_knowledge=True,   # Automatic search in knowledge base
@@ -685,7 +685,7 @@ vector_db = build_vector_db(db_url=db_url)
 knowledge = UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
 
 # Create agent with memory enabled
-agent = GenieAgent(
+agent = SouperAgent(
     model=model,
     knowledge=knowledge,
     search_knowledge=True,   # Automatic search enabled
@@ -707,7 +707,7 @@ if vector_db:
     knowledge = UserScopedKnowledge(user_id=rag_user_id, vector_db=vector_db)
 
 # Pass to all agents
-agent = GenieAgent(
+agent = SouperAgent(
     model=model,
     knowledge=knowledge,  # Automatically provided
     # ...

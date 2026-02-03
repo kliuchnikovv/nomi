@@ -76,7 +76,7 @@ class SouperAgent(Agent):
             stream_events=True,
             learning=LearningMachine(
                 user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
-                session_context=SessionContextConfig(enable_planning=True),
+                session_context=SessionContextConfig(enable_planning=False),
                 entity_memory=EntityMemoryConfig(
                     mode=LearningMode.ALWAYS,
                     namespace=f"user:{user_id}:personal",

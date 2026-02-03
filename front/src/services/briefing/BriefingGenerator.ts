@@ -323,14 +323,15 @@ class BriefingGenerator {
         if (isOverdue) titlePrefix = '[Overdue] ';
         titlePrefix += '🔴 URGENT: ';
 
-        const item = await integrationStorage.addBriefingItem(briefing.id, {
-            sourceType: 'email',
-            sourceId: emailId,
-            title: `${titlePrefix}${email.subject || 'No subject'}`,
-            description: email.snippet,
-            priority: 'asap',
-            displayOrder: 0, // Put at top
-        });
+            const item = await integrationStorage.addBriefingItem(briefing.id, {
+                sourceType: 'email',
+                sourceId: emailId,
+                title: `${titlePrefix}${email.subject || 'No subject'}`,
+                description: email.snippet,
+                priority: 'asap',
+                displayOrder: 0, // Put at top
+                isCompleted: false,
+            });
 
         // Add actions if available
         if (emailAnalysis?.suggested_actions) {

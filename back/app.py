@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from typing import Optional, Any
 
 from fastapi import FastAPI
-from pydantic import BaseModel
 
 from agno.os import AgentOS
 from starlette.middleware.sessions import SessionMiddleware

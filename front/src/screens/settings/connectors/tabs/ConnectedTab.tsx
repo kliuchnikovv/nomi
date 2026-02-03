@@ -78,7 +78,7 @@ export function ConnectedTab() {
                             else glyph = 'application';
                         }
 
-                        const color = colorKey ? palette[colorKey] : palette.blue;
+                        const color = (colorKey ? palette[colorKey] : palette.blue) || '#3b82f6';
                         const glyphStr: string = glyph ?? 'application';
 
                         return (

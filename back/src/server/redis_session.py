@@ -201,7 +201,6 @@ class RedisSession:
         """Build the agent based on payload parameters."""
         # Extract params from payload or defaults
         self.current_model_name = payload.get("model")
-        provider = payload.get("provider")
         endpoint = payload.get("endpoint")
         self.streaming = bool(payload.get("streaming", False))
 
@@ -237,7 +236,6 @@ class RedisSession:
         try:
             # Check if this is a Team mode request
             # agent_type could be "team" (generic) and command_desc provides specific type
-            is_team_mode = False
             team_type = None
 
             if self.command_desc and isinstance(self.command_desc, dict):
@@ -263,10 +261,8 @@ class RedisSession:
                     "genie",
                 ]
                 if team_type in known_teams:
-                    is_team_mode = True
                     logger.info("[RedisSession] Detected team mode: type=%s", team_type)
             elif self.agent_type and self.agent_type.lower() == "team":
-                is_team_mode = True
                 logger.info("[RedisSession] Detected team mode from agent_type")
 
             # Using regular agent factory

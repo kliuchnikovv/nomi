@@ -343,6 +343,17 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             padding: 12,
             backgroundColor: theme.codeBg || '#1a1b26',
         },
+        agentLabel: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 4,
+            marginLeft: 4,
+        },
+        agentLabelText: {
+            fontSize: 11,
+            fontWeight: '600',
+            color: theme.textSecondary,
+        },
     });
 };
 
