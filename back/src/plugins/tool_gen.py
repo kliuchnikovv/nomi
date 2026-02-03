@@ -51,12 +51,39 @@ def build_client_proxy_tools(
             if not method_name:
                 continue
             tool_name = f"{name}_{method_name}"
-            description = m.get("description") or f"Call {name}.{method_name} on the user's device"
+            description = (
+                m.get("description")
+                or f"Call {name}.{method_name} on the user's device"
+            )
             params_schema = _build_parameters_schema(m.get("params") or [])
 
             def _make_proxy(plugin: str, method: str, runner: Any):
                 async def _proxy(**kwargs: Any) -> str:
-                    return await runner(plugin, method, kwargs)
+                    logger.info(
+                        "[ClientProxyTool] Calling %s.%s with params: %s",
+                        plugin,
+                        method,
+                        kwargs,
+                    )
+                    try:
+                        result = await runner(plugin, method, kwargs)
+                        logger.info(
+                            "[ClientProxyTool] %s.%s returned: %s",
+                            plugin,
+                            method,
+                            result[:100] if result else result,
+                        )
+                        return result
+                    except Exception as e:
+                        logger.error(
+                            "[ClientProxyTool] %s.%s failed: %s",
+                            plugin,
+                            method,
+                            e,
+                            exc_info=True,
+                        )
+                        raise
+
                 return _proxy
 
             fn = _make_proxy(name, method_name, client_runner)
@@ -65,7 +92,9 @@ def build_client_proxy_tools(
                     name=tool_name,
                     description=description,
                     function=fn,
-                    parameters=params_schema if params_schema.get("properties") else None,
+                    parameters=params_schema
+                    if params_schema.get("properties")
+                    else None,
                 )
                 tools.append(tool)
                 logger.debug("Added client proxy tool: %s", tool_name)

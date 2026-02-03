@@ -149,12 +149,25 @@ class RedisSession:
         self, plugin: str, method: str, params: dict[str, Any]
     ) -> str:
         """Send client_action to the device and wait for tool result (round-trip for proxy tools)."""
+        logger.info(
+            "[RedisSession] _send_client_action_and_wait called: plugin=%s method=%s params=%s redis_worker=%s",
+            plugin,
+            method,
+            params,
+            "present" if self.redis_worker else "NONE",
+        )
         if not self.redis_worker:
-            return "Client tool runner not available (no redis_worker)."
+            error_msg = "Client tool runner not available (no redis_worker)."
+            logger.error("[RedisSession] %s", error_msg)
+            return error_msg
         call_id = str(uuid.uuid4())
         loop = asyncio.get_event_loop()
         future = loop.create_future()
         self.redis_worker.pending_client_tool_results[call_id] = future
+        logger.info(
+            "[RedisSession] Registered pending result for call_id=%s, sending frame...",
+            call_id,
+        )
         try:
             payload_data = {
                 "type": "client_action",
@@ -166,7 +179,17 @@ class RedisSession:
             await self._send_frame(
                 make_data(self.next_id, Op.MESSAGE, self.chat_id, payload_data)
             )
-            return await asyncio.wait_for(future, timeout=30.0)
+            logger.info(
+                "[RedisSession] Frame sent for call_id=%s, waiting for result (timeout=30s)...",
+                call_id,
+            )
+            result = await asyncio.wait_for(future, timeout=30.0)
+            logger.info(
+                "[RedisSession] Got result for call_id=%s: %s",
+                call_id,
+                result[:100] if result else result,
+            )
+            return result
         except asyncio.TimeoutError:
             logger.warning(
                 "[RedisSession] Client tool call timed out: %s.%s (call_id=%s)",
@@ -175,6 +198,16 @@ class RedisSession:
                 call_id,
             )
             return "Client tool execution timed out (device may be offline)."
+        except Exception as e:
+            logger.error(
+                "[RedisSession] Error in _send_client_action_and_wait: %s.%s (call_id=%s) error=%s",
+                plugin,
+                method,
+                call_id,
+                e,
+                exc_info=True,
+            )
+            raise
         finally:
             self.redis_worker.pending_client_tool_results.pop(call_id, None)
 
