@@ -42,6 +42,19 @@ class ErrorInfo(BaseModel):
     details: dict[str, Any] | None = None
 
 
+class ClientToolResult(BaseModel):
+    """Structured result from client tool execution."""
+
+    status: Literal["success", "error", "timeout"]
+    result: str | None = None
+    error_code: str | None = (
+        None  # "timeout", "device_offline", "execution_error", "no_integration"
+    )
+    error_details: dict[str, Any] | None = None
+    latency_ms: int | None = None
+    call_id: str | None = None
+
+
 class Frame(BaseModel):
     v: Literal["1"] = "1"
     id: int

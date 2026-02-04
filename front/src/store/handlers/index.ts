@@ -25,10 +25,22 @@ export const dispatchPayload = (
 ): Message[] => {
     // Special case for text: if type is missing but message/delta exists, treat as text
     const type = payload.type || ((payload.message || payload.delta) ? 'text' : null);
-    
+    console.log('[dispatchPayload 🎬]', {
+        type,
+        hasHandler: !!(type && handlers[type]),
+        payload_keys: Object.keys(payload),
+        messageIdx
+    });
+
     if (type && handlers[type]) {
-        return handlers[type](payload, prevMessages, messageIdx);
+        const result = handlers[type](payload, prevMessages, messageIdx);
+        console.log('[dispatchPayload ✅ Handler executed]', {
+            type,
+            changed: result !== prevMessages
+        });
+        return result;
     }
+    console.log('[dispatchPayload ⚠️  No handler] Type:', type);
     
     return prevMessages;
 };

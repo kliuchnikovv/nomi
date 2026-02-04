@@ -147,8 +147,9 @@ func (h *StreamHandler) enrichCommandWithIntegrations(userID uuid.UUID, command 
 
 // ClientToolResultRequest is the body for POST /api/chat/client-tool-result (round-trip proxy tools).
 type ClientToolResultRequest struct {
-	CallID string `json:"call_id" binding:"required"`
-	Result string `json:"result"`
+	SessionID string `json:"session_id" binding:"required"`
+	CallID    string `json:"call_id" binding:"required"`
+	Result    string `json:"result"`
 }
 
 // ClientToolResult receives client tool execution result and publishes to Redis for Python worker.
@@ -161,12 +162,16 @@ func (h *StreamHandler) ClientToolResult(c *gin.Context) {
 
 	var req ClientToolResultRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body: call_id required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body: session_id and call_id required"})
 		return
 	}
 
-	if err := h.hub.PublishClientToolResult(ctx, req.CallID, req.Result); err != nil {
-		h.logger.Error("failed to publish client tool result", zap.String("call_id", req.CallID), zap.Error(err))
+	if err := h.hub.PublishClientToolResult(ctx, req.SessionID, req.CallID, req.Result); err != nil {
+		h.logger.Error("failed to publish client tool result",
+			zap.String("session_id", req.SessionID),
+			zap.String("call_id", req.CallID),
+			zap.Error(err),
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to deliver result"})
 		return
 	}

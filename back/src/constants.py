@@ -9,7 +9,9 @@ class Redis:
     CHANNEL_STOP = "chat:stop:{}"
     CHANNEL_STORE_FACTS = "chat:store_facts"
     CHANNEL_JULES_MONITOR = "jules:monitor"
-    CHANNEL_CLIENT_TOOL_RESULT = "chat:client_tool_result"
+    # Per-session channel for client tool results (prevents cross-session delivery)
+    # Format: chat:client_tool_result:{session_id}
+    CHANNEL_CLIENT_TOOL_RESULT = "chat:client_tool_result:{}"
 
 
 class Polling:

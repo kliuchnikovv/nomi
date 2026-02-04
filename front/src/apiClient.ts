@@ -96,8 +96,12 @@ async function startOAuthLogin(provider: string): Promise<string> {
 }
 
 /** Send client tool execution result for round-trip proxy (model -> device -> result). */
-export async function sendClientToolResult(callId: string, result: string): Promise<void> {
-    await apiClient.post<{ ok?: boolean }>(`${API_URL()}/api/chat/client-tool-result`, { call_id: callId, result });
+export async function sendClientToolResult(sessionId: string, callId: string, result: string): Promise<void> {
+    await apiClient.post<{ ok?: boolean }>(`${API_URL()}/api/chat/client-tool-result`, { 
+        session_id: sessionId, 
+        call_id: callId, 
+        result 
+    });
 }
 
 export const apiClient = {

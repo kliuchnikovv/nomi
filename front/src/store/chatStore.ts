@@ -34,14 +34,34 @@ export const useChatStore = create<ChatStore>()(
             },
 
             addMessage: (chatId, payload) => {
+                console.log('[ChatStore 📥 addMessage]', {
+                    chatId,
+                    payload_type: payload?.type,
+                    payload_message_id: payload?.message_id,
+                    payload_agent_name: payload?.agent_name,
+                    payload_role: payload?.role,
+                    payload_message_preview: payload?.message?.substring(0, 50)
+                });
                 set((state) => {
                     const currentMessages = state.chats[chatId] || [];
+                    console.log('[ChatStore 📋 Before]', {
+                        chatId,
+                        messageCount: currentMessages.length,
+                        messageIds: currentMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`)
+                    });
                     const newMessages = onReceivedMessage(payload, currentMessages, chatId);
 
                     if (newMessages === currentMessages) {
+                        console.log('[ChatStore ⏭️  Skip] No changes, returning previous state');
                         return state;
                     }
 
+                    console.log('[ChatStore 📋 After]', {
+                        chatId,
+                        messageCount: newMessages.length,
+                        messageIds: newMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`),
+                        added: newMessages.length - currentMessages.length
+                    });
                     return {
                         chats: {
                             ...state.chats,
@@ -60,10 +80,18 @@ export const useChatStore = create<ChatStore>()(
 
 // Pure function extracted from ChatContext to handle message accumulation
 function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: string): Message[] {
+    console.log('[onReceivedMessage 🔄 Start]', {
+        payload_type: payload?.type,
+        payload_message_id: payload?.message_id,
+        payload_agent_name: payload?.agent_name,
+        payload_role: payload?.role,
+        prevMessagesCount: prevMessages.length
+    });
     let newMessages: Message[] = [...prevMessages];
 
     const messageID = payload.message_id;
     if (!messageID) {
+        console.log('[onReceivedMessage ⚠️  No message_id] Skipping');
         return newMessages;
     }
 
@@ -72,6 +100,7 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
 
     // For user messages: if already exists with same text, skip (optimistic duplicate)
     if (existingMessage && existingMessage.role === 'user') {
+        console.log('[onReceivedMessage ⏭️  Duplicate user message] Skipping:', messageID);
         return prevMessages; // Return unchanged
     }
 
@@ -88,6 +117,13 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         // Use role from payload if available (for multi-device sync)
         const role = payload.role || 'assistant';
         const sender = payload.sender || (role === 'user' ? 'user' : 'assistant');
+        console.log('[onReceivedMessage ➕ New Message]', {
+            messageID,
+            role,
+            sender,
+            agent_id: payload.agent_name,
+            index: messageIdx
+        });
         newMessages[messageIdx] = {
             id: messageID,
             chat_id: activeChatID,
@@ -101,8 +137,15 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         };
         // For user messages from other devices, we're done - don't accumulate
         if (role === 'user') {
+            console.log('[onReceivedMessage ✅ User message complete]');
             return newMessages;
         }
+    } else {
+        console.log('[onReceivedMessage 🔄 Updating existing message]', {
+            messageID,
+            index: messageIdx,
+            agent_id: payload.agent_name
+        });
     }
 
     // For ANY user message (new or existing), don't do text accumulation
@@ -112,6 +155,7 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         // User messages don't stream - they're complete
         // Just update text if needed and return
         if (payload.message && newMessages[messageIdx]) {
+            console.log('[onReceivedMessage 📝 User message text update]');
             newMessages[messageIdx] = {
                 ...newMessages[messageIdx],
                 text: payload.message, // Replace, don't append
@@ -119,7 +163,11 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         }
         return newMessages;
     }
-
+    console.log('[onReceivedMessage 🚀 Dispatching to handler]', {
+        payload_type: payload.type,
+        messageIdx
+    });
+    
     // Dispatch to handler for assistant messages
     return dispatchPayload(payload, newMessages, messageIdx);
 }

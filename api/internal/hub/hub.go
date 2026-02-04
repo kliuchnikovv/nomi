@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"sync"
@@ -81,7 +82,7 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub 
 	return h
 }
 
-const channelClientToolResult = "chat:client_tool_result"
+const channelClientToolResultPattern = "chat:client_tool_result:%s"
 
 func (h *Hub) Run() {
 	// Periodic cleanup or metrics?
@@ -95,14 +96,22 @@ func (h *Hub) Run() {
 	}
 }
 
-// PublishClientToolResult publishes a client tool result to Redis so the Python worker can complete the round-trip.
-func (h *Hub) PublishClientToolResult(ctx context.Context, callID, result string) error {
+// PublishClientToolResult publishes a client tool result to Redis on a per-session channel
+// so the Python worker can complete the round-trip.
+func (h *Hub) PublishClientToolResult(ctx context.Context, sessionID, callID, result string) error {
 	payload := map[string]string{"call_id": callID, "result": result}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	return h.redis.Publish(ctx, channelClientToolResult, payloadBytes).Err()
+	// Publish to per-session channel
+	channel := fmt.Sprintf(channelClientToolResultPattern, sessionID)
+	h.logger.Info("Publishing client tool result",
+		zap.String("channel", channel),
+		zap.String("call_id", callID),
+		zap.Int("result_len", len(result)),
+	)
+	return h.redis.Publish(ctx, channel, payloadBytes).Err()
 }
 
 func (h *Hub) subscribeRedis() {

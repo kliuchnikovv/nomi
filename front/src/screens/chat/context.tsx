@@ -527,7 +527,7 @@ export function ChatProvider({
 
             if (callId) {
                 const { sendClientToolResult } = await import('../../apiClient');
-                await sendClientToolResult(callId, result);
+                await sendClientToolResult(activeChatID, callId, result);
                 console.log('[ChatContext] Round-trip: sent client tool result for call_id=', callId);
             } else {
                 console.log('[ChatContext] Action executed, sending result as system message');
@@ -537,12 +537,12 @@ export function ChatProvider({
             const errMsg = error?.message ?? String(error);
             if (callId) {
                 const { sendClientToolResult } = await import('../../apiClient');
-                await sendClientToolResult(callId, `Error: ${errMsg}`);
+                await sendClientToolResult(activeChatID, callId, `Error: ${errMsg}`);
             } else {
                 await sendMessage(`[System] Tool ${tool}.${method} Failed: ${errMsg}`, [], false, undefined, 'system');
             }
         }
-    }, [sendMessage]);
+    }, [sendMessage, activeChatID]);
 
     // Fetch messages when activeChatID changes
     useEffect(() => {

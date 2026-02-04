@@ -44,20 +44,52 @@ class RedisWorker:
             self.redis = redis.from_url(self.redis_url, decode_responses=True)
             self.pubsub = self.redis.pubsub()
 
-            # Subscribe to chat requests, store_facts (client-extracted facts), jules monitoring, client_tool_result
+            # Subscribe to chat requests, store_facts, jules monitoring
+            # NOTE: We do NOT subscribe to a global client_tool_result channel anymore.
+            # Instead, each session subscribes to its own per-session channel.
             await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
             await self.pubsub.subscribe(
                 Redis.CHANNEL_JULES_MONITOR,
                 Redis.CHANNEL_STORE_FACTS,
-                Redis.CHANNEL_CLIENT_TOOL_RESULT,
             )
 
+            # Wait for subscription confirmation to avoid race condition
+            # where messages arrive before subscription is ready
+            subscription_ready = False
+            timeout = 5.0  # seconds
+            start_time = asyncio.get_event_loop().time()
+
+            async for message in self.pubsub.listen():
+                # Check for subscription confirmation messages
+                if message["type"] in ("psubscribe", "subscribe"):
+                    logger.info(
+                        "[RedisWorker] Subscription confirmed: %s",
+                        message.get("channel") or message.get("pattern"),
+                    )
+                    # Break after all expected subscriptions are confirmed
+                    # We expect: 1 psubscribe (request pattern) + 2 subscribe (jules, facts)
+                    if message["data"] >= 3:  # subscription count
+                        subscription_ready = True
+                        break
+
+                # Timeout protection
+                if asyncio.get_event_loop().time() - start_time > timeout:
+                    logger.warning(
+                        "[RedisWorker] Subscription confirmation timeout, proceeding anyway"
+                    )
+                    subscription_ready = True
+                    break
+
+            if not subscription_ready:
+                logger.warning(
+                    "[RedisWorker] Subscriptions may not be fully ready, but proceeding"
+                )
+
             logger.warning(
-                "[RedisWorker] Successfully subscribed to %s, %s, %s, %s",
+                "[RedisWorker] Successfully subscribed to %s, %s, %s",
                 Redis.CHANNEL_REQUEST.format("*"),
                 Redis.CHANNEL_JULES_MONITOR,
                 Redis.CHANNEL_STORE_FACTS,
-                Redis.CHANNEL_CLIENT_TOOL_RESULT,
             )
             asyncio.create_task(self._process_messages())
 
@@ -97,23 +129,9 @@ class RedisWorker:
             # Skip subscriber count messages
             return
 
-        # Case: client_tool_result (call_id -> result for proxy tools)
-        if channel == Redis.CHANNEL_CLIENT_TOOL_RESULT:
-            try:
-                payload = json.loads(data) if isinstance(data, str) else data
-                call_id = payload.get("call_id")
-                result = payload.get("result", "")
-                if call_id and call_id in self.pending_client_tool_results:
-                    future = self.pending_client_tool_results.pop(call_id)
-                    if not future.done():
-                        future.set_result(result)
-            except Exception as e:
-                logger.warning(
-                    "[RedisWorker] Failed to handle client_tool_result: %s", e
-                )
-            return
+        # NOTE: Global client_tool_result handling removed - now per-session in RedisSession
 
-        # Case 1: Chat Request (pattern match)
+        # Case: Chat Request (pattern match)
         # channel: chat:request:<chat_id>
         parts = channel.split(":")
         if len(parts) >= 3 and parts[0] == "chat" and parts[1] == "request":

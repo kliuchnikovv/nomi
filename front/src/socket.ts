@@ -268,6 +268,8 @@ export class ChatSocket {
             ws.onmessage = async (e: any) => {
                 this.touchActivity();
                 const raw = typeof e.data === 'string' ? e.data : '';
+                // Log raw WebSocket message
+                console.log('[WS ⬇️ Received] Raw data:', raw.substring(0, 500) + (raw.length > 500 ? `... (${raw.length} chars total)` : ''));
                 // NDJSON handling: split by newline
                 const lines = raw.split('\n');
 
@@ -282,10 +284,26 @@ export class ChatSocket {
                         const frame = rawJson as Frame;
                         const op = frame.op;
 
+                        // Log parsed frame with details
+                        console.log('[WS 📦 Frame]', {
+                            op: frame.op,
+                            kind: frame.kind,
+                            chat_id: frame.chat_id,
+                            payload_type: frame.payload?.type,
+                            payload_message: frame.payload?.message?.substring(0, 100),
+                            payload_keys: frame.payload ? Object.keys(frame.payload) : [],
+                            full_payload: frame.payload
+                        });
                         // Handle global routing
                         if (op === 'message' || op === 'tools' || op === 'model' || op === 'done' || op === 'signal') {
                             const chatId = frame.chat_id;
                             if (chatId) {
+                                console.log('[WS 🎯 Routing]', {
+                                    op,
+                                    kind: frame.kind,
+                                    chatId,
+                                    willUpdateStore: op === 'message' && frame.kind === 'data'
+                                });
                                 // 1. Update Global Store
                                 // NOTE: backend can forward the same chat stream into both:
                                 // - chat room websocket (channel=chat&chat_id=...)
@@ -297,8 +315,16 @@ export class ChatSocket {
                                 //
                                 // To avoid duplication/noise, we only write DATA messages to the store.
                                 if (op === 'message' && frame.kind === 'data') {
+                                    console.log('[WS 💾 Store Update] Adding message to chatStore:', {
+                                        chatId,
+                                        payload_type: frame.payload?.type,
+                                        payload_message_id: frame.payload?.message_id,
+                                        payload_agent_name: frame.payload?.agent_name,
+                                        payload_role: frame.payload?.role
+                                    });
                                     useChatStore.getState().addMessage(chatId, frame.payload);
                                 } else if (op === 'message') {
+                                    console.log('[WS ⏭️  Skip Store] Message not added (kind != data):', frame.kind);
                                 }
 
                                 // 2. Notify Listeners (legacy handlers for specific effects)

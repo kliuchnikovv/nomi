@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import uuid
+import time
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Any
@@ -11,6 +12,7 @@ import redis.asyncio as redis
 from agno.media import Image
 from src.agents.factory import AgentFactory
 from src.agents.souper import SouperAgent
+from src.constants import Redis as RedisConstants
 from src.server.models import Frame, Op, Kind
 from src.server.utils import make_meta, make_error, make_done, make_data
 from src.tools.models import ToolSpec
@@ -52,6 +54,121 @@ class RedisSession:
 
         # History storage
         self.chat_history: list[dict[str, str]] = []
+
+        # Per-session client tool result handling
+        self.pubsub: Any | None = None
+        self.pending_client_tool_results: dict[str, asyncio.Future] = {}
+        self._result_listener_task: asyncio.Task | None = None
+
+    async def _start_result_listener(self):
+        """Start listening for client tool results on per-session channel."""
+        if self.pubsub is not None:
+            return  # Already started
+
+        try:
+            # Create a new pubsub for this session
+            self.pubsub = self.redis_client.pubsub()
+
+            # Subscribe to per-session channel
+            channel = RedisConstants.CHANNEL_CLIENT_TOOL_RESULT.format(self.session_id)
+            await self.pubsub.subscribe(channel)
+
+            logger.info(
+                "[RedisSession] Subscribed to client tool result channel: %s", channel
+            )
+
+            # Wait for subscription confirmation to avoid race condition
+            timeout = 2.0
+            start_time = asyncio.get_event_loop().time()
+            subscription_ready = False
+
+            async for message in self.pubsub.listen():
+                if message["type"] == "subscribe":
+                    logger.info("[RedisSession] Subscription confirmed for %s", channel)
+                    subscription_ready = True
+                    break
+
+                if asyncio.get_event_loop().time() - start_time > timeout:
+                    logger.warning(
+                        "[RedisSession] Subscription timeout, proceeding anyway"
+                    )
+                    subscription_ready = True
+                    break
+
+            if subscription_ready:
+                # Start background listener task
+                self._result_listener_task = asyncio.create_task(
+                    self._listen_for_results()
+                )
+                logger.info(
+                    "[RedisSession] Result listener started for session %s",
+                    self.session_id,
+                )
+            else:
+                logger.warning(
+                    "[RedisSession] Failed to confirm subscription for %s", channel
+                )
+
+        except Exception as e:
+            logger.error(
+                "[RedisSession] Failed to start result listener: %s", e, exc_info=True
+            )
+
+    async def _listen_for_results(self):
+        """Background task to listen for client tool results."""
+        if not self.pubsub:
+            return
+
+        try:
+            async for message in self.pubsub.listen():
+                if message["type"] != "message":
+                    continue
+
+                try:
+                    data = message.get("data")
+                    if isinstance(data, bytes):
+                        data = data.decode("utf-8")
+
+                    payload = json.loads(data) if isinstance(data, str) else data
+                    call_id = payload.get("call_id")
+                    result = payload.get("result", "")
+
+                    if call_id and call_id in self.pending_client_tool_results:
+                        future = self.pending_client_tool_results.pop(call_id)
+                        if not future.done():
+                            future.set_result(result)
+                            logger.info(
+                                "[RedisSession] Resolved client tool result for call_id=%s",
+                                call_id,
+                            )
+                except Exception as e:
+                    logger.warning(
+                        "[RedisSession] Failed to process client tool result: %s", e
+                    )
+
+        except asyncio.CancelledError:
+            logger.info("[RedisSession] Result listener cancelled")
+            raise
+        except Exception as e:
+            logger.error("[RedisSession] Result listener error: %s", e, exc_info=True)
+
+    async def _cleanup_result_listener(self):
+        """Clean up the result listener and pubsub connection."""
+        if self._result_listener_task:
+            self._result_listener_task.cancel()
+            try:
+                await self._result_listener_task
+            except asyncio.CancelledError:
+                pass
+            self._result_listener_task = None
+
+        if self.pubsub:
+            try:
+                await self.pubsub.unsubscribe()
+                await self.pubsub.close()
+            except Exception as e:
+                logger.warning("[RedisSession] Failed to close pubsub: %s", e)
+            self.pubsub = None
 
     async def _broadcast_system_status(self):
         count = len(self.active_agents)
@@ -144,28 +261,43 @@ class RedisSession:
     async def _send_client_action_and_wait(
         self, plugin: str, method: str, params: dict[str, Any]
     ) -> str:
-        """Send client_action to the device and wait for tool result (round-trip for proxy tools)."""
-        # Use ERROR level for debugging to ensure visibility in dropped logs
-        logger.error(
-            "[RedisSession] _send_client_action_and_wait called: plugin=%s method=%s params=%s redis_worker=%s",
+        """Send client_action to the device and wait for tool result with exponential backoff retry."""
+        start_time = time.time()
+
+        logger.info(
+            "[ClientTool] Sending: plugin=%s method=%s params=%s",
             plugin,
             method,
             params,
-            "present" if self.redis_worker else "NONE",
         )
-        if not self.redis_worker:
-            error_msg = "Client tool runner not available (no redis_worker)."
-            logger.error("[RedisSession] %s", error_msg)
-            return error_msg
+
+        # Ensure result listener is started
+        if not self.pubsub:
+            await self._start_result_listener()
+
         call_id = str(uuid.uuid4())
         loop = asyncio.get_event_loop()
         future = loop.create_future()
-        self.redis_worker.pending_client_tool_results[call_id] = future
-        logger.error(
-            "[RedisSession] Registered pending result for call_id=%s, sending frame...",
-            call_id,
-        )
+        self.pending_client_tool_results[call_id] = future
+
+        logger.info("[ClientTool] Registered call_id=%s", call_id)
+
         try:
+            # Store idempotency key in Redis (expires in 60s)
+            idempotency_key = f"client_action:{call_id}"
+            idempotency_data = {
+                "plugin": plugin,
+                "method": method,
+                "params": params,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "session_id": self.session_id,
+            }
+            if self.redis_client:
+                await self.redis_client.setex(
+                    idempotency_key, 60, json.dumps(idempotency_data)
+                )
+
+            # Send client_action frame
             payload_data = {
                 "type": "client_action",
                 "call_id": call_id,
@@ -176,33 +308,75 @@ class RedisSession:
             await self._send_frame(
                 make_data(self.next_id, Op.MESSAGE, self.chat_id, payload_data)
             )
-            logger.error(
-                "[RedisSession] Frame sent for call_id=%s, waiting for result (timeout=30s)...",
-                call_id,
-            )
-            result = await asyncio.wait_for(future, timeout=30.0)
 
-            if result is None:
-                logger.error("[RedisSession] Result is None for call_id=%s", call_id)
-                return "Error: Client returned no result (None)."
+            logger.info("[ClientTool] Sent client_action for call_id=%s", call_id)
 
-            logger.error(
-                "[RedisSession] Got result for call_id=%s: %s",
-                call_id,
-                result[:100] if result else "None",
-            )
-            return str(result)
-        except asyncio.TimeoutError:
-            logger.error(
-                "[RedisSession] Client tool call timed out: %s.%s (call_id=%s)",
-                plugin,
-                method,
-                call_id,
-            )
-            return "Client tool execution timed out (device may be offline)."
+            # Exponential backoff retry
+            MAX_RETRIES = 3
+            BASE_TIMEOUT = 30.0  # seconds
+
+            for attempt in range(MAX_RETRIES):
+                timeout = BASE_TIMEOUT * (1.5**attempt)  # 30s, 45s, 67.5s
+                try:
+                    logger.info(
+                        "[ClientTool] Waiting for result (attempt %d/%d, timeout=%.1fs, call_id=%s)",
+                        attempt + 1,
+                        MAX_RETRIES,
+                        timeout,
+                        call_id,
+                    )
+                    result = await asyncio.wait_for(future, timeout=timeout)
+
+                    if result is None:
+                        logger.warning(
+                            "[ClientTool] Result is None for call_id=%s", call_id
+                        )
+                        return "Error: Client returned no result (None)."
+
+                    # Calculate latency
+                    latency_ms = int((time.time() - start_time) * 1000)
+
+                    logger.info(
+                        "[ClientTool] Result received: call_id=%s latency=%dms",
+                        call_id,
+                        latency_ms,
+                    )
+
+                    # Delete idempotency key on success
+                    if self.redis_client:
+                        await self.redis_client.delete(idempotency_key)
+
+                    return str(result)
+
+                except asyncio.TimeoutError:
+                    if attempt < MAX_RETRIES - 1:
+                        logger.warning(
+                            "[ClientTool] Timeout attempt %d/%d for %s.%s (call_id=%s), retrying...",
+                            attempt + 1,
+                            MAX_RETRIES,
+                            plugin,
+                            method,
+                            call_id,
+                        )
+                        continue
+                    else:
+                        total_time = time.time() - start_time
+                        logger.error(
+                            "[ClientTool] Timeout: call_id=%s after %.1fs (%d attempts)",
+                            call_id,
+                            total_time,
+                            MAX_RETRIES,
+                        )
+                        return (
+                            "Client tool execution timed out (device may be offline)."
+                        )
+
+            # Fallback if we somehow exit the loop without returning
+            return "Client tool execution failed (unexpected loop exit)."
+
         except Exception as e:
             logger.error(
-                "[RedisSession] Error in _send_client_action_and_wait: %s.%s (call_id=%s) error=%s",
+                "[ClientTool] Error: plugin=%s method=%s call_id=%s error=%s",
                 plugin,
                 method,
                 call_id,
@@ -211,7 +385,7 @@ class RedisSession:
             )
             return f"Error executing client tool: {str(e)}"
         finally:
-            self.redis_worker.pending_client_tool_results.pop(call_id, None)
+            self.pending_client_tool_results.pop(call_id, None)
 
     async def handle_frame(self, frame: Frame):
         """Process an incoming frame."""
@@ -229,6 +403,8 @@ class RedisSession:
             logger.info("[RedisSession] Task cancelled, cleaning up")
             raise  # Re-raise to let RedisWorker handle it
         finally:
+            # Clean up resources
+            await self._cleanup_result_listener()
             if self.redis_client:
                 await self.redis_client.close()
 
