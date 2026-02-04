@@ -275,6 +275,8 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
             const data = await response.json();
 
+            console.log(`[ConnectorsProvider] Token exchange successful for ${provider}, saving credentials locally`);
+
             // Получаем метаданные из реестра
             const metadata = getIntegrationMetadata(data.provider);
             const displayName = metadata?.displayName || data.provider.charAt(0).toUpperCase() + data.provider.slice(1);

@@ -185,6 +185,7 @@ func (h *StreamHandler) enrichCommandWithIntegrations(userID uuid.UUID, command 
 			// Extract OAuth tokens from PostgreSQL
 			if accessToken, ok := params["access_token"].(string); ok && accessToken != "" {
 				cmdData[provider+"_access_token"] = accessToken
+				h.logger.Info("found access_token in PostgreSQL, enriching command", zap.String("provider", provider))
 				refreshToken := ""
 				if rt, ok := params["refresh_token"].(string); ok && rt != "" {
 					refreshToken = rt

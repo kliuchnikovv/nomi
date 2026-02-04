@@ -578,6 +578,13 @@ class RedisSession:
         try:
             params = self._extract_tool_params(tool_dict)
 
+            logger.info(
+                "[RedisSession] Parsed tool item: name=%s, has_creds=%s, has_token=%s",
+                tool_dict.get("name"),
+                "creds" in params or "creds" in tool_dict,
+                "access_token" in params or "token" in params,
+            )
+
             tool_spec = ToolSpec(
                 name=tool_dict.get("name", ""),
                 enabled=tool_dict.get("enabled", True),
@@ -739,6 +746,7 @@ class RedisSession:
 
         # 2. Check and update tools/commands
         if payload.get("tools") or payload.get("command") or payload.get("team"):
+            logger.info("[RedisSession] Found tools/command in payload, parsing")
             self._parse_tools(payload)
             # If tools updated, we might need to assume agent needs rebuild (which happens below anyway)
 

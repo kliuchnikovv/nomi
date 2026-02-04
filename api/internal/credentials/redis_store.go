@@ -46,6 +46,8 @@ func (s *RedisStore) Save(ctx context.Context, userID uuid.UUID, provider string
 		return fmt.Errorf("failed to save credentials to redis: %w", err)
 	}
 
+	fmt.Printf("[Credentials] Successfully saved %s credentials to Redis for user %s (TTL: %v)\n", provider, userID, ttl)
+
 	return nil
 }
 
