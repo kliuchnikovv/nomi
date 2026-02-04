@@ -169,13 +169,12 @@ class ToolConfigClient:
                     try:
                         if isinstance(item, dict):
                             params = _parse_params(item.get("params"))
-                             tool = ToolSpec(
-                                 name=item.get("name", ""),
-                                 provider=item.get("provider"),
-                                 enabled=item.get("enabled", True),
-                                 params=params,
-                             )
-
+                            tool = ToolSpec(
+                                name=item.get("name", ""),
+                                provider=item.get("provider"),
+                                enabled=item.get("enabled", True),
+                                params=params,
+                            )
                         else:
                             tool = ToolSpec(name=str(item))
                         tools.append(tool)

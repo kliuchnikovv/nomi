@@ -97,7 +97,7 @@ def build_client_proxy_tools(
                 tool = Function(
                     name=tool_name,
                     description=description,
-                    function=fn,
+                    entrypoint=fn,
                     parameters=params_schema
                     if params_schema.get("properties")
                     else None,
