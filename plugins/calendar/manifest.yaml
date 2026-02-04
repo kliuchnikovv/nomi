@@ -4,9 +4,10 @@ description: Google Calendar integration for calendar management
 version: 1.0.0
 
 execution:
-  type: client
+  type: hybrid
   entry_points:
     client: ./client/executor.ts
+    server: ./server/tools.py
 
 auth:
   type: oauth2
@@ -47,6 +48,12 @@ methods:
           type: string
           description: ISO format end time
       required: [summary, start_time, end_time]
+  - name: list_calendars
+    description: List user's calendars
+    parameters:
+      type: object
+      properties: {}
+      required: []
 
 background_tasks:
   enabled: true
@@ -55,5 +62,5 @@ background_tasks:
     - app_lifecycle
 
 storage:
-  type: client_only
+  type: hybrid
   encrypted: true

@@ -89,7 +89,7 @@ func buildRegistryFromManifests(manifests []*plugins.Manifest) map[string]*Provi
 			DisplayName:             m.DisplayName,
 			Description:             m.Description,
 			Type:                    m.Auth.Type,
-			RequiresSync:            m.Execution.Type == "server",
+			RequiresSync:            m.Execution.Type == "server" || m.Execution.Type == "hybrid",
 			SupportsBackgroundTasks: m.BackgroundTasks.Enabled && (m.Execution.Type == "client" || m.Execution.Type == "hybrid"),
 			SystemEventListeners:    m.BackgroundTasks.SystemEvents,
 			Icon:                    m.UI.Icon,

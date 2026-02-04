@@ -30,16 +30,7 @@ export function getClientOnlyIntegrations() {
  */
 export function getServerIntegrations() {
     return Object.values(REGISTRY).filter(
-        (integration) => integration.storageType === 'server'
-    );
-}
-
-/**
- * Получить все интеграции, поддерживающие фоновые задачи.
- */
-export function getIntegrationsWithBackgroundTasks() {
-    return Object.values(REGISTRY).filter(
-        (integration) => integration.supportsBackgroundTasks
+        (integration) => integration.storageType === 'server' || integration.storageType === 'hybrid'
     );
 }
 
@@ -49,6 +40,15 @@ export function getIntegrationsWithBackgroundTasks() {
 export function isClientOnly(integrationId: string): boolean {
     const metadata = getIntegrationMetadata(integrationId);
     return metadata?.storageType === 'client' || false;
+}
+
+/**
+ * Получить все интеграции, поддерживающие фоновые задачи.
+ */
+export function getIntegrationsWithBackgroundTasks() {
+    return Object.values(REGISTRY).filter(
+        (integration) => integration.supportsBackgroundTasks
+    );
 }
 
 /**

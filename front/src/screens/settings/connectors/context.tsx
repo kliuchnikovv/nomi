@@ -153,10 +153,12 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 const creds = await integrationStorage.getCredentials(p.id);
                 const params: any = { account_email: p.accountEmail };
 
+                // Always include access token if available locally (client-side safety check)
                 if (creds) {
-                    if (p.provider === 'github') {
-                        params.access_token = creds.accessToken;
-                    }
+                    params.access_token = creds.accessToken;
+                    // Also include refresh token and expiry if available
+                    if (creds.refreshToken) params.refresh_token = creds.refreshToken;
+                    if (creds.tokenExpiry) params.token_expiry = Math.floor(creds.tokenExpiry.getTime() / 1000);
                 }
 
                 // Добавляем метаданные из реестра
@@ -174,7 +176,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 toolsList.push({
                     id: p.id,
                     name: p.name,
-                    provider: p.provider,
+                    provider: p.provider, // Ensure provider is always present
                     enabled: p.enabled,
                     params: params,
                 });
