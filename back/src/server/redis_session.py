@@ -208,7 +208,6 @@ class RedisSession:
                         channel,
                         frame.op,
                         len(payload_json),
-                        payload_json,
                     )
                 else:
                     logger.info(
@@ -216,7 +215,6 @@ class RedisSession:
                         channel,
                         frame.op,
                         len(payload_json),
-                        payload_json,
                     )
             except Exception as e:
                 logger.error(
