@@ -4,7 +4,6 @@
  * This file re-exports all types from organized sub-modules
  * to provide a single entry point for type imports.
  */
-
 // API types (core data models)
 export type {
     Message,
@@ -19,7 +18,6 @@ export type {
     MemberResponsePart,
     ContentPart,
 } from './api';
-
 // Chat types (chat-specific interfaces)
 export type {
     DetailLevel,
@@ -29,7 +27,6 @@ export type {
     TeamDetails,
     ChatProviderProps,
 } from './chat';
-
 // Integration types (models, connectors, clients)
 export type {
     Model,
@@ -57,13 +54,11 @@ export type {
     BriefingItem,
     SuggestedAction,
 } from './integrations';
-
 // Authentication types
 export type {
     User,
     AuthContextType,
 } from './auth';
-
 // UI component types
 export type {
     SidebarProps,
@@ -90,12 +85,10 @@ export type {
     SidebarChatsResponse,
     SidebarChatMessagesResponse,
 } from './ui';
-
 // Navigation types
 export type {
     RootDrawerParamList,
 } from './navigation';
-
 // Legacy re-exports for backward compatibility
 // TODO: Gradually migrate imports to use the new organized structure
 export type { Message as LegacyMessage, Chat as LegacyChat } from './api';

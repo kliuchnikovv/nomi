@@ -31,7 +31,7 @@ type ProviderDefinition struct {
 	OAuthConfig *OAuthConfig
 
 	// OAuthConfigKey is the key in config.OAuth2.Providers (e.g. google, github)
-	OAuthConfigKey   string
+	OAuthConfigKey     string
 	DefaultPermissions []string // Default permissions from manifest (e.g. gmail:read, gmail:write)
 
 	// Flags
@@ -85,16 +85,16 @@ func buildRegistryFromManifests(manifests []*plugins.Manifest) map[string]*Provi
 			continue
 		}
 		p := &ProviderDefinition{
-			Name:                   m.Name,
-			DisplayName:            m.DisplayName,
-			Description:            m.Description,
-			Type:                   m.Auth.Type,
-			RequiresSync:           m.Execution.Type == "server",
-			SupportsBackgroundTasks: m.BackgroundTasks && (m.Execution.Type == "client" || m.Execution.Type == "hybrid"),
-			SystemEventListeners:   m.SystemEvents,
-			Icon:                   m.UI.Icon,
-			OAuthConfigKey:         m.Auth.OAuthConfigKey,
-			DefaultPermissions:     m.Auth.Permissions,
+			Name:                    m.Name,
+			DisplayName:             m.DisplayName,
+			Description:             m.Description,
+			Type:                    m.Auth.Type,
+			RequiresSync:            m.Execution.Type == "server",
+			SupportsBackgroundTasks: m.BackgroundTasks.Enabled && (m.Execution.Type == "client" || m.Execution.Type == "hybrid"),
+			SystemEventListeners:    m.BackgroundTasks.SystemEvents,
+			Icon:                    m.UI.Icon,
+			OAuthConfigKey:          m.Auth.OAuthConfigKey,
+			DefaultPermissions:      m.Auth.Permissions,
 		}
 		switch m.Execution.Type {
 		case "client":

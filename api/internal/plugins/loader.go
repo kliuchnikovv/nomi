@@ -35,8 +35,10 @@ type Manifest struct {
 		Category         string `yaml:"category" json:"category"`
 	} `yaml:"ui" json:"ui"`
 
-	BackgroundTasks bool     `yaml:"background_tasks" json:"background_tasks"`
-	SystemEvents    []string `yaml:"system_events" json:"system_events"`
+	BackgroundTasks struct {
+		Enabled      bool     `yaml:"enabled" json:"enabled"`
+		SystemEvents []string `yaml:"system_events" json:"system_events"`
+	} `yaml:"background_tasks" json:"background_tasks"`
 }
 
 // Manifests holds loaded plugin manifests (set by Load).
