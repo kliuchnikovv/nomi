@@ -66,7 +66,7 @@ export function defineAllBackgroundTasks(): void {
         }
         
         // Define the task at module level
-        TaskManager.defineTask(taskName, async ({ data, error }: any) => {
+        TaskManager.defineTask(taskName, async ({ data: _data, error }: any) => {
             if (error) {
                 console.error(`[BackgroundTaskManager] Background task error for ${provider}:`, error);
                 return BackgroundFetch.BackgroundFetchResult.Failed;
@@ -90,8 +90,8 @@ export function defineAllBackgroundTasks(): void {
                 
                 await taskFunction(config.integrationId);
                 return BackgroundFetch.BackgroundFetchResult.NewData;
-            } catch (error) {
-                console.error(`[BackgroundTaskManager] Background task failed for ${provider}:`, error);
+            } catch (err) {
+                console.error(`[BackgroundTaskManager] Background task failed for ${provider}:`, err);
                 return BackgroundFetch.BackgroundFetchResult.Failed;
             }
         });
@@ -106,7 +106,7 @@ export function defineAllBackgroundTasks(): void {
  * Регистрировать фоновую задачу для интеграции
  */
 export async function registerBackgroundTask(config: BackgroundTaskConfig): Promise<void> {
-    const { provider, integrationId, interval = 15 * 60 } = config; // По умолчанию 15 минут
+    const { provider, interval = 15 * 60 } = config; // По умолчанию 15 минут
     const taskName = getTaskName(provider);
     
     // Проверяем метаданные интеграции
@@ -163,24 +163,74 @@ export async function unregisterBackgroundTask(provider: string): Promise<void> 
 
     if (!activeTasks.has(provider)) {
         // Не регистрировали в этой сессии — не вызываем нативный unregister (избегаем краша)
+        console.log(`[BackgroundTaskManager] Task ${taskName} not in activeTasks, skipping unregister`);
         return;
     }
 
     try {
+        // Проверяем, зарегистрирована ли задача в TaskManager
         const isRegistered = await TaskManager.isTaskRegisteredAsync(taskName);
         if (!isRegistered) {
+            console.log(`[BackgroundTaskManager] Task ${taskName} not registered, skipping unregister`);
             activeTasks.delete(provider);
             return;
         }
 
-        await BackgroundFetch.unregisterTaskAsync(taskName);
-        console.log(`[BackgroundTaskManager] Unregistered background task for ${provider}`);
-    } catch (error) {
-        // Не пробрасываем: нативный EXTaskService может бросить исключение при unregister,
-        // что приводит к SIGABRT. Логируем и продолжаем.
-        console.warn(`[BackgroundTaskManager] Failed to unregister task for ${provider}:`, error);
+        // CRITICAL: Wrap in try-catch because expo-background-fetch can throw NSException
+        // if the task wasn't registered in this app session, even if isTaskRegisteredAsync returns true
+        try {
+            await BackgroundFetch.unregisterTaskAsync(taskName);
+            console.log(`[BackgroundTaskManager] Unregistered background task for ${provider}`);
+        } catch (unregisterError: any) {
+            // If unregister fails, log and continue. This can happen if:
+            // 1. Task was registered in previous app session but not in this one
+            // 2. Native EXTaskService throws NSException "Unrecognized task"
+            console.warn(`[BackgroundTaskManager] Failed to unregister task ${taskName}:`, unregisterError?.message || unregisterError);
+            
+            // Even if unregister failed, we still want to clear it from activeTasks
+            // to avoid repeated failed unregister attempts
+        }
+    } catch (error: any) {
+        // Catch any other errors (e.g., isTaskRegisteredAsync failure)
+        console.warn(`[BackgroundTaskManager] Error during unregister process for ${provider}:`, error?.message || error);
     } finally {
+        // Always remove from activeTasks to ensure cleanup
         activeTasks.delete(provider);
+    }
+}
+
+/**
+ * Очистить все зарегистрированные задачи при запуске приложения.
+ * Это помогает избежать проблем с "зомби" задачами из предыдущих сессий.
+ */
+async function cleanupOrphanedTasks(): Promise<void> {
+    console.log('[BackgroundTaskManager] Cleaning up orphaned tasks...');
+    
+    try {
+        // Получаем все зарегистрированные задачи из TaskManager
+        const allTasks = await TaskManager.getRegisteredTasksAsync();
+        console.log(`[BackgroundTaskManager] Found ${allTasks.length} registered tasks`);
+        
+        // Фильтруем только наши задачи (начинаются с TASK_NAME_PREFIX)
+        const ourTasks = allTasks.filter(task => task.taskName.startsWith(TASK_NAME_PREFIX));
+        console.log(`[BackgroundTaskManager] Found ${ourTasks.length} tasks with our prefix`);
+        
+        // Пытаемся очистить каждую задачу
+        for (const task of ourTasks) {
+            try {
+                console.log(`[BackgroundTaskManager] Attempting to unregister orphaned task: ${task.taskName}`);
+                await BackgroundFetch.unregisterTaskAsync(task.taskName);
+                console.log(`[BackgroundTaskManager] Successfully unregistered orphaned task: ${task.taskName}`);
+            } catch (error: any) {
+                // Ignore errors - task might be already unregistered or in inconsistent state
+                console.warn(`[BackgroundTaskManager] Could not unregister orphaned task ${task.taskName}:`, error?.message || error);
+            }
+        }
+        
+        console.log('[BackgroundTaskManager] Orphaned tasks cleanup complete');
+    } catch (error) {
+        // If we can't get registered tasks, just continue - not critical
+        console.warn('[BackgroundTaskManager] Failed to cleanup orphaned tasks:', error);
     }
 }
 
@@ -191,6 +241,9 @@ export async function initializeBackgroundTasks(): Promise<void> {
     console.log('[BackgroundTaskManager] Initializing background tasks...');
     
     try {
+        // Сначала очищаем старые задачи из предыдущих сессий
+        await cleanupOrphanedTasks();
+        
         const integrations = await integrationStorage.getIntegrations();
         const integrationsWithBackgroundTasks = integrations.filter(
             integration => {

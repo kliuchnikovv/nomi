@@ -1,32 +1,38 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/kliuchnikovv/genie-api/internal/credentials"
 	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
 type StreamHandler struct {
-	hub    *hub.Hub
-	logger *zap.Logger
-	store  *storage.Storage
+	hub       *hub.Hub
+	logger    *zap.Logger
+	store     *storage.Storage
+	credStore credentials.Store
 }
 
 func NewStreamHandler(
 	logger *zap.Logger,
 	hub *hub.Hub,
 	store *storage.Storage,
+	credStore credentials.Store,
 ) *StreamHandler {
 	return &StreamHandler{
-		hub:    hub,
-		logger: logger.With(zap.String("handler", "stream")),
-		store:  store,
+		hub:       hub,
+		logger:    logger.With(zap.String("handler", "stream")),
+		store:     store,
+		credStore: credStore,
 	}
 }
 
@@ -107,7 +113,10 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 }
 
 // enrichCommandWithIntegrations adds user's integration credentials to the command
+// It checks both PostgreSQL (OAuth) and Redis (API keys) for credentials
 func (h *StreamHandler) enrichCommandWithIntegrations(userID uuid.UUID, command string) string {
+	ctx := context.Background()
+
 	// Parse existing command
 	var cmdData map[string]interface{}
 	if err := json.Unmarshal([]byte(command), &cmdData); err != nil {
@@ -121,15 +130,104 @@ func (h *StreamHandler) enrichCommandWithIntegrations(userID uuid.UUID, command 
 		return command
 	}
 
-	// Get Jules integration for user
-	var julesIntegration storage.Integration
-	if err := h.store.DB.Where("user_id = ? AND provider = ? AND enabled = ?", userID, "jules", true).First(&julesIntegration).Error; err == nil {
-		// Parse params to get api_key
-		var params map[string]string
-		if err := json.Unmarshal([]byte(julesIntegration.Params), &params); err == nil {
-			if apiKey, ok := params["api_key"]; ok && apiKey != "" {
-				cmdData["jules_api_key"] = apiKey
-				h.logger.Info("added Jules API key to command for development_team",
+	// First check Redis for API key (new approach)
+	credData, err := h.credStore.Get(ctx, userID, "jules", credentials.DefaultTTL)
+	if err == nil && credData.Type == credentials.CredentialTypeAPIKey && credData.APIKey != "" {
+		cmdData["jules_api_key"] = credData.APIKey
+		h.logger.Info("added Jules API key from Redis to command",
+			zap.String("user_id", userID.String()))
+	} else {
+		// Fallback: Get Jules integration from PostgreSQL (legacy approach)
+		var julesIntegration storage.Integration
+		if err := h.store.DB.Where("user_id = ? AND provider = ? AND enabled = ?", userID, "jules", true).First(&julesIntegration).Error; err == nil {
+			// Parse params to get api_key
+			var params map[string]string
+			if err := json.Unmarshal([]byte(julesIntegration.Params), &params); err == nil {
+				if apiKey, ok := params["api_key"]; ok && apiKey != "" {
+					cmdData["jules_api_key"] = apiKey
+					h.logger.Info("added Jules API key from DB to command (legacy)",
+						zap.String("user_id", userID.String()))
+				}
+			}
+		}
+	}
+
+	// Check all enabled integrations from PostgreSQL
+	// This handles OAuth tokens that remain in PostgreSQL (per plan)
+	var integrations []storage.Integration
+	if err := h.store.DB.Where("user_id = ? AND enabled = ?", userID, true).Find(&integrations).Error; err == nil {
+		for _, integration := range integrations {
+			provider := integration.Provider
+			if provider == "jules" {
+				continue // Already handled above
+			}
+
+			// Check if we already have credentials in Redis for this provider
+			hasRedisCreds := false
+			providers, _ := h.credStore.ListProviders(ctx, userID)
+			for _, p := range providers {
+				if p == provider {
+					hasRedisCreds = true
+					break
+				}
+			}
+
+			if hasRedisCreds {
+				continue // Redis credentials will be added in the loop below
+			}
+
+			// Parse params from PostgreSQL
+			var params map[string]interface{}
+			if err := json.Unmarshal([]byte(integration.Params), &params); err != nil {
+				continue
+			}
+
+			// Extract OAuth tokens from PostgreSQL
+			if accessToken, ok := params["access_token"].(string); ok && accessToken != "" {
+				cmdData[provider+"_access_token"] = accessToken
+				refreshToken := ""
+				if rt, ok := params["refresh_token"].(string); ok && rt != "" {
+					refreshToken = rt
+					cmdData[provider+"_refresh_token"] = refreshToken
+				}
+				// Also save to Redis for future use with TTL
+				if redisStore, ok := h.credStore.(*credentials.RedisStore); ok {
+					if tokenExpiry, ok := params["token_expiry"].(float64); ok {
+						expiresAt := time.Unix(int64(tokenExpiry), 0)
+						_ = redisStore.SaveOAuth(ctx, userID, provider, accessToken, refreshToken, &expiresAt, credentials.DefaultTTL)
+					} else {
+						_ = redisStore.SaveOAuth(ctx, userID, provider, accessToken, refreshToken, nil, credentials.DefaultTTL)
+					}
+				}
+				h.logger.Info("added OAuth tokens from PostgreSQL to command",
+					zap.String("provider", provider),
+					zap.String("user_id", userID.String()))
+			}
+		}
+	}
+
+	// Check other server-side integrations in Redis
+	providers, err := h.credStore.ListProviders(ctx, userID)
+	if err == nil {
+		for _, provider := range providers {
+			credData, err := h.credStore.Get(ctx, userID, provider, credentials.DefaultTTL)
+			if err != nil {
+				continue
+			}
+
+			// Add credentials to command based on type
+			if credData.Type == credentials.CredentialTypeAPIKey && credData.APIKey != "" {
+				cmdData[provider+"_api_key"] = credData.APIKey
+				h.logger.Info("added API key to command",
+					zap.String("provider", provider),
+					zap.String("user_id", userID.String()))
+			} else if credData.Type == credentials.CredentialTypeOAuth {
+				cmdData[provider+"_access_token"] = credData.AccessToken
+				if credData.RefreshToken != "" {
+					cmdData[provider+"_refresh_token"] = credData.RefreshToken
+				}
+				h.logger.Info("added OAuth tokens to command",
+					zap.String("provider", provider),
 					zap.String("user_id", userID.String()))
 			}
 		}

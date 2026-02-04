@@ -399,6 +399,15 @@ class RedisSession:
                 logger.warning("[RedisSession] Unsupported op: %s", frame.op)
         except asyncio.CancelledError:
             logger.info("[RedisSession] Task cancelled, cleaning up")
+            # Proactively repair dangling tool calls to prevent corrupted history on next run
+            if self.agent:
+                try:
+                    await self._repair_dangling_tool_calls(self.agent)
+                except Exception as e:
+                    logger.error(
+                        "[RedisSession] Failed to repair dangling tools during cancellation: %s",
+                        e,
+                    )
             raise  # Re-raise to let RedisWorker handle it
         finally:
             # Clean up resources
@@ -1085,6 +1094,36 @@ Continue the conversation."""
                         result = await run_fn(fn)
                         break
         except Exception as e:
+            # Check for dangling tool call error from OpenAI (Error 400)
+            # Message: 'No tool output found for function call call_...'
+            if "No tool output found" in str(e) and "call_" in str(e):
+                logger.warning(
+                    "[RedisSession] Detected dangling tool call error. Attempting repair..."
+                )
+                try:
+                    repaired = await self._repair_dangling_tool_calls(agent)
+                    if repaired:
+                        logger.info(
+                            "[RedisSession] History repaired. Retrying agent invocation..."
+                        )
+                        # Retry invocation
+                        if hasattr(agent, "arun"):
+                            result = await run_fn(agent.arun)
+                        elif hasattr(agent, "run"):
+                            result = await run_fn(agent.run)
+                        else:
+                            for m in ("generate", "respond", "chat"):
+                                fn = getattr(agent, m, None)
+                                if fn:
+                                    result = await run_fn(fn)
+                                    break
+                        # If retry succeeded, return result
+                        if result:
+                            return result
+                except Exception as repair_err:
+                    logger.error("[RedisSession] Repair/Retry failed: %s", repair_err)
+                    # Fall through to original error handling
+
             logger.error(
                 "[RedisSession] Agent invocation failed: %s",
                 e,
@@ -1137,6 +1176,86 @@ Continue the conversation."""
                 logger.error("[RedisSession] Failed to send error frame: %s", send_err)
 
         return result
+
+    async def _repair_dangling_tool_calls(self, agent: Any) -> bool:
+        """Repairs dangling tool calls in agent history."""
+        # Unwrap if needed
+        real_agent = agent
+        if hasattr(agent, "_agent"):
+            real_agent = agent._agent
+
+        # Load history to ensure we have the latest (including the bad state)
+        if hasattr(real_agent, "read_chat_history"):
+            try:
+                if asyncio.iscoroutinefunction(real_agent.read_chat_history):
+                    await real_agent.read_chat_history()
+                else:
+                    real_agent.read_chat_history()
+            except Exception as e:
+                logger.warning("[RedisSession] Failed to read chat history: %s", e)
+
+        if not hasattr(real_agent, "memory") or not real_agent.memory:
+            return False
+
+        messages = real_agent.memory.messages
+        if not messages:
+            return False
+
+        from agno.models.message import Message
+
+        repaired = False
+        # Iterate backwards to find assistant messages with tool calls
+        for i in range(len(messages) - 1, -1, -1):
+            msg = messages[i]
+            if msg.role == "assistant" and msg.tool_calls:
+                tool_calls = msg.tool_calls
+                covered_ids = set()
+
+                # Look ahead for tool outputs
+                for j in range(i + 1, len(messages)):
+                    next_msg = messages[j]
+                    if next_msg.role == "tool" and next_msg.tool_call_id:
+                        covered_ids.add(next_msg.tool_call_id)
+
+                # Find missing
+                missing_ids = []
+                for tc in tool_calls:
+                    tc_id = None
+                    if isinstance(tc, dict):
+                        tc_id = tc.get("id")
+                    elif hasattr(tc, "id"):
+                        tc_id = tc.id
+                    elif hasattr(tc, "tool_call_id"):
+                        tc_id = tc.tool_call_id
+
+                    if tc_id and tc_id not in covered_ids:
+                        missing_ids.append(tc_id)
+
+                if missing_ids:
+                    logger.info(
+                        "[RedisSession] Found missing outputs for: %s", missing_ids
+                    )
+                    for missing_id in missing_ids:
+                        dummy_msg = Message(
+                            role="tool",
+                            tool_call_id=missing_id,
+                            content="Tool execution interrupted. Please retry.",
+                        )
+                        real_agent.memory.add_message(dummy_msg)
+                    repaired = True
+
+        if repaired:
+            # Save to storage so retry works (as it might reload)
+            try:
+                if hasattr(real_agent, "asave_session"):
+                    await real_agent.asave_session()
+                elif hasattr(real_agent, "save_session"):
+                    real_agent.save_session()
+                logger.info("[RedisSession] Saved repaired history to storage")
+            except Exception as e:
+                logger.error("[RedisSession] Failed to save repaired history: %s", e)
+
+        return repaired
 
     async def _iterate_agent_stream(self, result: Any) -> AsyncIterator[dict]:
         """Iterate over agent result stream and yield formatted events."""

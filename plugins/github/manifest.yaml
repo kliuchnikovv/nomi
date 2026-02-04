@@ -1,0 +1,148 @@
+name: github
+display_name: GitHub
+description: GitHub integration for repository management, issues, and pull requests
+version: 1.0.0
+
+execution:
+  type: server
+  entry_points:
+    server: ./server/tools.py
+
+auth:
+  type: oauth2
+  oauth_config_key: github
+  scopes:
+    - repo
+    - user
+    - read:org
+    - issues
+    - pull_requests:read
+
+ui:
+  icon: github
+  description_short: GitHub интеграция для работы с репозиториями
+  category: development
+
+methods:
+  - name: list_repos
+    description: List user's GitHub repositories
+    parameters:
+      type: object
+      properties:
+        limit:
+          type: integer
+          default: 30
+          description: Maximum number of repositories to return
+      required: []
+  - name: get_repo
+    description: Get details of a specific repository
+    parameters:
+      type: object
+      properties:
+        owner:
+          type: string
+          description: Repository owner (user or organization)
+        repo:
+          type: string
+          description: Repository name
+      required: [owner, repo]
+  - name: list_issues
+    description: List issues in a repository
+    parameters:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        state:
+          type: string
+          enum: [open, closed, all]
+          default: open
+        limit:
+          type: integer
+          default: 10
+      required: [owner, repo]
+  - name: create_issue
+    description: Create a new issue in a repository
+    parameters:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        labels:
+          type: array
+          items:
+            type: string
+      required: [owner, repo, title]
+  - name: list_pull_requests
+    description: List pull requests in a repository
+    parameters:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        state:
+          type: string
+          enum: [open, closed, all]
+          default: open
+        limit:
+          type: integer
+          default: 10
+      required: [owner, repo]
+  - name: get_file_content
+    description: Get content of a file in a repository
+    parameters:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        path:
+          type: string
+          description: File path within the repository
+        ref:
+          type: string
+          description: Git reference (branch, tag, commit SHA)
+          default: main
+      required: [owner, repo, path]
+  - name: create_or_update_file
+    description: Create or update a file in a repository
+    parameters:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        path:
+          type: string
+        content:
+          type: string
+          description: File content (will be base64 encoded)
+        message:
+          type: string
+          description: Commit message
+        branch:
+          type: string
+          default: main
+        sha:
+          type: string
+          description: SHA of the file being replaced (required for updates)
+      required: [owner, repo, path, content, message]
+
+background_tasks:
+  enabled: false
+
+storage:
+  type: server_only
+  encrypted: true

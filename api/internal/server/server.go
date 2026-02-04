@@ -42,13 +42,14 @@ func New(
 
 	// Initialize handlers
 	var (
-		chatHandler    = handlers.NewChatHandler(ctr.ChatService)
-		messageHandler = handlers.NewMessageHandler(ctr.MessageService)
-		authMiddleware = auth.NewAuthMiddleware(ctr.TokenManager, ctr.Storage)
-		authHandler    = handlers.NewAuthHandler(ctr.AuthService)
-		streamHandler  = handlers.NewStreamHandler(logger, hubInstance, ctr.Storage)
-		modelsHandler  = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
-		uploadHandler  = handlers.NewUploadHandler(ctr.Storage)
+		chatHandler        = handlers.NewChatHandler(ctr.ChatService)
+		messageHandler     = handlers.NewMessageHandler(ctr.MessageService)
+		authMiddleware     = auth.NewAuthMiddleware(ctr.TokenManager, ctr.Storage)
+		authHandler        = handlers.NewAuthHandler(ctr.AuthService)
+		streamHandler      = handlers.NewStreamHandler(logger, hubInstance, ctr.Storage, ctr.CredentialsStore)
+		modelsHandler      = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
+		uploadHandler      = handlers.NewUploadHandler(ctr.Storage)
+		credentialsHandler = handlers.NewCredentialsHandler(logger, ctr.CredentialsStore)
 
 		mobileOAuthHandler = func() *handlers.MobileOAuthHandler {
 			h, err := handlers.NewMobileOAuthHandler(logger, cfg, ctr.Storage)
@@ -132,6 +133,13 @@ func New(
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(mobileOAuthHandler.Login, authMiddleware))
 	r.POST("/api/oauth/:provider/callback-mobile", wrapWithAuth(mobileOAuthHandler.CallbackMobile, authMiddleware))
 	r.POST("/api/oauth/refresh", mobileOAuthHandler.RefreshToken) // No auth needed, uses refresh_token
+
+	// Credentials API - for API keys and custom credentials (stored in Redis)
+	r.POST("/api/credentials", wrapWithAuth(credentialsHandler.Save, authMiddleware))
+	r.GET("/api/credentials", wrapWithAuth(credentialsHandler.List, authMiddleware))
+	r.GET("/api/credentials/:provider/check", wrapWithAuth(credentialsHandler.Check, authMiddleware))
+	r.DELETE("/api/credentials/:provider", wrapWithAuth(credentialsHandler.Delete, authMiddleware))
+	r.POST("/api/credentials/request", wrapWithAuth(credentialsHandler.Request, authMiddleware))
 
 	// Proxy for Embeddings - forwards to Python backend
 	r.POST("/api/embeddings", handlers.ProxyEmbeddings(cfg, logger))

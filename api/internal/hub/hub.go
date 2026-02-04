@@ -241,3 +241,8 @@ func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, roomID uuid.UUID, 
 	go client.writePump()
 	go client.readPump()
 }
+
+// Redis returns the Redis client for use by other components
+func (h *Hub) Redis() *redis.Client {
+	return h.redis
+}

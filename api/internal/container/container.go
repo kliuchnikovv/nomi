@@ -3,6 +3,7 @@ package container
 import (
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/credentials"
 	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/services"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -29,6 +30,9 @@ type Container struct {
 	Hub          *hub.Hub
 	Logger       *zap.Logger
 	TokenManager *auth.TokenManager
+
+	// Credentials store (Redis-backed)
+	CredentialsStore credentials.Store
 }
 
 // NewContainer creates a new container with initialized dependencies
@@ -56,16 +60,20 @@ func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
 	hubInstance := hub.NewHub(store, logger, cfg.LLM.BaseURL)
 	go hubInstance.Run()
 
+	// Initialize credentials store with Redis from Hub
+	credStore := credentials.NewRedisStore(hubInstance.Redis())
+
 	return &Container{
-		Storage:        store,
-		chatRepo:       chatRepo,
-		messageRepo:    messageRepo,
-		userRepo:       userRepo,
-		ChatService:    chatService,
-		MessageService: messageService,
-		AuthService:    authService,
-		Hub:            hubInstance,
-		Logger:         logger,
-		TokenManager:   tokenManager,
+		Storage:          store,
+		chatRepo:         chatRepo,
+		messageRepo:      messageRepo,
+		userRepo:         userRepo,
+		ChatService:      chatService,
+		MessageService:   messageService,
+		AuthService:      authService,
+		Hub:              hubInstance,
+		Logger:           logger,
+		TokenManager:     tokenManager,
+		CredentialsStore: credStore,
 	}, nil
 }

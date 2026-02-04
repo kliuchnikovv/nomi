@@ -264,3 +264,23 @@ export const weatherApi = {
     },
 };
 
+export const credentialsApi = {
+    save: (provider: string, type: 'api_key' | 'custom', apiKey?: string, extra?: Record<string, any>) =>
+        apiClient.post<{ ok: boolean }>(`${API_URL()}/api/credentials`, {
+            provider,
+            type,
+            api_key: apiKey,
+            extra,
+        }),
+    list: () =>
+        apiClient.get<{ providers: string[] }>(`${API_URL()}/api/credentials`),
+    check: (provider: string) =>
+        apiClient.get<{ exists: boolean }>(`${API_URL()}/api/credentials/${provider}/check`),
+    delete: (provider: string) =>
+        apiClient.delete<{ ok: boolean }>(`${API_URL()}/api/credentials/${provider}`),
+    request: (providers: string[]) =>
+        apiClient.post<{ ok: boolean; missing?: string[]; requires_input?: boolean }>(
+            `${API_URL()}/api/credentials/request`,
+            { providers }
+        ),
+};

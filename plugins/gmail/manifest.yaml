@@ -1,9 +1,13 @@
 name: gmail
 display_name: Gmail
 description: Gmail integration for email management
+version: 1.0.0
 
 execution:
-  type: client
+  type: hybrid
+  entry_points:
+    client: ./client/executor.ts
+    server: ./server/tools.py
 
 auth:
   type: oauth2
@@ -18,75 +22,85 @@ ui:
   description_short: Gmail интеграция для работы с почтой
   category: email
 
-# Tool methods for the model (manifest = tool schema)
 methods:
   - name: get_recent_emails
     description: Get recent emails from the user's Gmail inbox
-    params:
-      - name: limit
-        type: integer
-        required: false
-        default: 5
-        description: Maximum number of emails to return
+    parameters:
+      type: object
+      properties:
+        limit:
+          type: integer
+          default: 5
+          description: Maximum number of emails to return
+      required: []
   - name: search_emails
     description: Search user's Gmail inbox by query (same syntax as Gmail search box)
-    params:
-      - name: query
-        type: string
-        required: true
-        description: Search query
-      - name: max_results
-        type: integer
-        required: false
-        default: 5
-        description: Maximum number of results
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query
+        max_results:
+          type: integer
+          default: 5
+          description: Maximum number of results
+      required: [query]
   - name: get_email
     description: Get full email content by message ID
-    params:
-      - name: message_id
-        type: string
-        required: true
-        description: Gmail message ID
+    parameters:
+      type: object
+      properties:
+        message_id:
+          type: string
+          description: Gmail message ID
+      required: [message_id]
   - name: send_email
     description: Send an email from the user's Gmail account
-    params:
-      - name: to
-        type: string
-        required: true
-        description: Recipient email address
-      - name: subject
-        type: string
-        required: true
-        description: Email subject
-      - name: body
-        type: string
-        required: true
-        description: Email body
+    parameters:
+      type: object
+      properties:
+        to:
+          type: string
+          description: Recipient email address
+        subject:
+          type: string
+          description: Email subject
+        body:
+          type: string
+          description: Email body
+      required: [to, subject, body]
   - name: reply_email
     description: Reply to an existing email
-    params:
-      - name: message_id
-        type: string
-        required: true
-        description: Gmail message ID to reply to
-      - name: body
-        type: string
-        required: true
-        description: Reply body
+    parameters:
+      type: object
+      properties:
+        message_id:
+          type: string
+          description: Gmail message ID to reply to
+        body:
+          type: string
+          description: Reply body
+      required: [message_id, body]
   - name: create_draft
     description: Create a draft email
-    params:
-      - name: to
-        type: string
-        required: true
-      - name: subject
-        type: string
-        required: true
-      - name: body
-        type: string
-        required: true
+    parameters:
+      type: object
+      properties:
+        to:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+      required: [to, subject, body]
 
-background_tasks: true
-system_events:
-  - push_notifications
-  - app_lifecycle
+background_tasks:
+  enabled: true
+  system_events:
+    - push_notifications
+    - app_lifecycle
+
+storage:
+  type: client_only
+  encrypted: true

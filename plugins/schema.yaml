@@ -1,0 +1,154 @@
+$schema: "http://json-schema.org/draft-07/schema#"
+type: object
+required:
+  - name
+  - display_name
+  - description
+  - version
+  - execution
+  - auth
+  - ui
+  - methods
+  - storage
+
+properties:
+  name:
+    type: string
+    pattern: "^[a-z0-9_]+$"
+    description: Unique internal identifier for the plugin
+  
+  display_name:
+    type: string
+    description: Human-readable name
+  
+  description:
+    type: string
+    description: Full description of the plugin
+    
+  version:
+    type: string
+    pattern: "^\\d+\\.\\d+\\.\\d+$"
+    description: Semantic version
+    
+  execution:
+    type: object
+    required:
+      - type
+      - entry_points
+    properties:
+      type:
+        type: string
+        enum: [client, server, hybrid]
+      entry_points:
+        type: object
+        properties:
+          client:
+            type: string
+            description: Path relative to plugin root, e.g., "./client/executor.ts"
+          server:
+            type: string
+            description: Path relative to plugin root, e.g., "./server/tools.py"
+            
+  auth:
+    type: object
+    required:
+      - type
+    properties:
+      type:
+        type: string
+        enum: [oauth2, api_key, none]
+      oauth_config_key:
+        type: string
+      oidc_issuer_url:
+        type: string
+        format: uri
+      permissions:
+        type: array
+        items:
+          type: string
+          
+  ui:
+    type: object
+    required:
+      - icon
+      - category
+      - description_short
+    properties:
+      icon:
+        type: string
+      category:
+        type: string
+      description_short:
+        type: string
+      settings_ui:
+        type: object
+        properties:
+          type:
+            type: string
+            enum: [auto, custom]
+          custom_component:
+            type: string
+            
+  methods:
+    type: array
+    items:
+      type: object
+      required:
+        - name
+        - description
+        - parameters
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        parameters:
+          type: object
+          properties:
+            type:
+              const: object
+            properties:
+              type: object
+            required:
+              type: array
+              items:
+                type: string
+        returns:
+          type: object
+          
+  background_tasks:
+    type: object
+    properties:
+      enabled:
+        type: boolean
+      tasks:
+        type: array
+        items:
+          type: object
+          required:
+            - name
+            - interval
+            - description
+          properties:
+            name:
+              type: string
+            interval:
+              type: integer
+              description: Interval in seconds
+            description:
+              type: string
+      system_events:
+        type: array
+        items:
+          type: string
+          
+  storage:
+    type: object
+    required:
+      - type
+    properties:
+      type:
+        type: string
+        enum: [client_only, server_only, hybrid]
+      encrypted:
+        type: boolean

@@ -1,9 +1,12 @@
 name: calendar
 display_name: Google Calendar
 description: Google Calendar integration for calendar management
+version: 1.0.0
 
 execution:
   type: client
+  entry_points:
+    client: ./client/executor.ts
 
 auth:
   type: oauth2
@@ -18,7 +21,39 @@ ui:
   description_short: Google Calendar интеграция для работы с календарем
   category: calendar
 
-background_tasks: true
-system_events:
-  - push_notifications
-  - app_lifecycle
+methods:
+  - name: get_upcoming_events
+    description: Get upcoming events from the user's primary calendar
+    parameters:
+      type: object
+      properties:
+        max_results:
+          type: integer
+          default: 10
+          description: Maximum number of events to return
+      required: []
+  - name: create_event
+    description: Create a new calendar event
+    parameters:
+      type: object
+      properties:
+        summary:
+          type: string
+          description: Event title
+        start_time:
+          type: string
+          description: ISO format start time
+        end_time:
+          type: string
+          description: ISO format end time
+      required: [summary, start_time, end_time]
+
+background_tasks:
+  enabled: true
+  system_events:
+    - push_notifications
+    - app_lifecycle
+
+storage:
+  type: client_only
+  encrypted: true
