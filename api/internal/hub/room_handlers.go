@@ -436,35 +436,71 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		knowledgeEntry := map[string]interface{}{"name": "knowledge_search", "enabled": true, "user_id": r.initiatorID.String()}
 		tools = append(tools, knowledgeEntry)
 
+		// Always fetch latest integrations from DB to get server-side tokens
+		var integrations []storage.Integration
+		if err := r.store.DB.Where("user_id = ? AND enabled = ?", r.initiatorID, true).Find(&integrations).Error; err != nil {
+			r.logger.Warn("failed to fetch integrations for bundling", zap.Error(err))
+		}
+
+		// Map of provider name -> params for enrichment
+		dbIntegrations := make(map[string]map[string]interface{})
+		for _, integ := range integrations {
+			var paramsMap map[string]interface{}
+			if err := json.Unmarshal([]byte(integ.Params), &paramsMap); err == nil {
+				dbIntegrations[integ.Provider] = paramsMap
+			}
+		}
+
 		if payload.Tools != nil {
 			if clientTools, ok := payload.Tools.([]interface{}); ok && len(clientTools) > 0 {
-				r.logger.Info("using client-sent integrations", zap.Int("count", len(clientTools)))
+				r.logger.Info("enriching client-sent integrations with DB tokens", zap.Int("count", len(clientTools)))
 				for _, ct := range clientTools {
 					if ctMap, ok := ct.(map[string]interface{}); ok {
-						if name, ok := ctMap["name"].(string); ok {
-							if name == "web_search" || name == "knowledge_search" {
-								continue
-							}
+						name, _ := ctMap["name"].(string)
+						provider, _ := ctMap["provider"].(string)
+						if name == "web_search" || name == "knowledge_search" {
+							continue
 						}
+
+						// Try to find matching integration in DB to get tokens
+						// Use provider field if available, otherwise try to extract provider from name
+						providerToMatch := provider
+						if providerToMatch == "" {
+							providerToMatch = name // Fallback to name
+						}
+
+						if dbParams, exists := dbIntegrations[providerToMatch]; exists {
+							// Merge DB params into client tool params
+							clientParams, _ := ctMap["params"].(map[string]interface{})
+							if clientParams == nil {
+								clientParams = make(map[string]interface{})
+							}
+							for k, v := range dbParams {
+								clientParams[k] = v
+							}
+							ctMap["params"] = clientParams
+							r.logger.Info("enriched tool with DB params", zap.String("tool", name), zap.String("provider", providerToMatch))
+						}
+
 						tools = append(tools, ct)
 					}
 				}
 			}
 		} else {
-			var integrations []storage.Integration
-			if err := r.store.DB.Where("user_id = ? AND enabled = ?", r.initiatorID, true).Find(&integrations).Error; err != nil {
-				r.logger.Warn("failed to fetch integrations for bundling", zap.Error(err))
-			} else {
-				r.logger.Info("fetched integrations from DB", zap.Int("count", len(integrations)), zap.String("user_id", r.initiatorID.String()))
-				for _, integ := range integrations {
-					var paramsMap map[string]interface{}
-					if err := json.Unmarshal([]byte(integ.Params), &paramsMap); err != nil {
-						paramsMap = make(map[string]interface{})
-					}
-					paramsMap["name"] = integ.Provider
-					paramsMap["enabled"] = true
-					tools = append(tools, paramsMap)
+			r.logger.Info("using integrations from DB", zap.Int("count", len(integrations)))
+			for _, integ := range integrations {
+				params := dbIntegrations[integ.Provider]
+				if params == nil {
+					params = make(map[string]interface{})
 				}
+				// Ensure provider name is set for manifest matching in Python
+				toolItem := map[string]interface{}{
+					"name":     integ.Provider,
+					"provider": integ.Provider,
+					"enabled":  true,
+					"params":   params,
+				}
+				tools = append(tools, toolItem)
 			}
 		}
 
