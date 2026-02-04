@@ -29,7 +29,9 @@ class ToolConfigClient:
         self._timeout = timeout
         self._client = client or httpx.AsyncClient(timeout=timeout)
 
-    async def fetch_tools(self, session_id: str | None = None, user_id: str | None = None) -> ToolsConfig:
+    async def fetch_tools(
+        self, session_id: str | None = None, user_id: str | None = None
+    ) -> ToolsConfig:
         config = ToolsConfig()
         if not session_id and not user_id:
             return config
@@ -60,7 +62,7 @@ class ToolConfigClient:
             for tool in parsed.tools:
                 if not tool.enabled:
                     continue
-                config.add(tool.name, **tool.params)
+                config.add(tool.name, provider=tool.provider, **tool.params)
             return config
 
         # Handle direct array response from /api/tools
@@ -71,8 +73,9 @@ class ToolConfigClient:
                 name = entry.get("name") or entry.get("tool")
                 if not name:
                     continue
+                provider = entry.get("provider")
                 params = entry.get("params") or entry.get("options") or {}
-                config.add(name, **params)
+                config.add(name, provider=provider, **params)
             return config
 
         # Handle object with "tools" field
@@ -82,7 +85,11 @@ class ToolConfigClient:
                 config.add(name, **(params or {}))
             return config
 
-        if isinstance(raw_tools, Sequence) and raw_tools and not isinstance(raw_tools[0], dict):
+        if (
+            isinstance(raw_tools, Sequence)
+            and raw_tools
+            and not isinstance(raw_tools[0], dict)
+        ):
             for name in raw_tools:
                 config.add(str(name))
             return config
@@ -112,7 +119,7 @@ class ToolConfigClient:
         Возвращает список ToolSpec объектов.
         """
         tools: list[ToolSpec] = []
-        
+
         try:
             # Пока без авторизации - делаем запрос без токена
             # TODO: добавить авторизацию когда будет нужно
@@ -146,6 +153,7 @@ class ToolConfigClient:
                     params = _parse_params(item.get("params"))
                     tool = ToolSpec(
                         name=item.get("name", ""),
+                        provider=item.get("provider"),
                         enabled=item.get("enabled", True),
                         params=params,
                     )
@@ -161,11 +169,13 @@ class ToolConfigClient:
                     try:
                         if isinstance(item, dict):
                             params = _parse_params(item.get("params"))
-                            tool = ToolSpec(
-                                name=item.get("name", ""),
-                                enabled=item.get("enabled", True),
-                                params=params,
-                            )
+                             tool = ToolSpec(
+                                 name=item.get("name", ""),
+                                 provider=item.get("provider"),
+                                 enabled=item.get("enabled", True),
+                                 params=params,
+                             )
+
                         else:
                             tool = ToolSpec(name=str(item))
                         tools.append(tool)

@@ -23,22 +23,31 @@ ToolBuilder = Callable[[dict[str, Any]], Toolkit]
 @dataclass
 class ToolItem:
     name: str
+    provider: str | None = None
     params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ToolsConfig:
-    entries: dict[str, dict[str, Any]] = field(default_factory=dict)
+    entries: dict[str, ToolItem] = field(default_factory=dict)
 
-    def add(self, name: str, **params: Any) -> None:
+    def add(self, name: str, provider: str | None = None, **params: Any) -> None:
         """Register or update a tool configuration."""
-        existing = self.entries.get(name, {})
-        existing.update({k: v for k, v in params.items() if v is not None})
-        self.entries[name] = existing
+        existing = self.entries.get(name)
+        if existing:
+            existing.params.update({k: v for k, v in params.items() if v is not None})
+            if provider:
+                existing.provider = provider
+        else:
+            self.entries[name] = ToolItem(
+                name=name,
+                provider=provider,
+                params={k: v for k, v in params.items() if v is not None},
+            )
 
     def __iter__(self) -> Iterator[ToolItem]:
-        for name, params in self.entries.items():
-            yield ToolItem(name=name, params=params)
+        for item in self.entries.values():
+            yield item
 
 
 def _instantiate_tool(
@@ -128,17 +137,40 @@ async def build(config: ToolsConfig) -> list[Toolkit]:
             )
             continue
 
-        # Try exact match first
-        builder = TOOL_BUILDERS.get(item.name)
+        # Try matching via provider name if available (most reliable)
+        builder = None
+        if item.provider:
+            builder = TOOL_BUILDERS.get(item.provider.lower())
+            if builder:
+                logger.debug(
+                    f"[Tools] Matched '{item.name}' to builder via provider '{item.provider}'"
+                )
 
-        # If no exact match, try prefix match (e.g., "Gmail (email)" matches "Gmail")
+        # Try matching via manifest search (checks internal name and display name)
+        if not builder:
+            try:
+                from src.plugins.loader import get_manifest
+
+                manifest = get_manifest(item.name)
+                if manifest:
+                    manifest_name = manifest.get("name")
+                    if isinstance(manifest_name, str):
+                        builder = TOOL_BUILDERS.get(manifest_name)
+                        if builder:
+                            logger.debug(
+                                f"[Tools] Matched '{item.name}' to builder via manifest search: {manifest_name}"
+                            )
+            except Exception:
+                pass
+
+        # If no match, try prefix match (e.g., "Gmail (email)" matches "Gmail")
         if not builder:
             item_name_lower = item.name.lower()
             for registered_name, registered_builder in TOOL_BUILDERS.items():
                 if item_name_lower.startswith(registered_name.lower()):
                     builder = registered_builder
                     logger.debug(
-                        f"[Tools] Matched '{item.name}' to builder '{registered_name}' (case-insensitive)"
+                        f"[Tools] Matched '{item.name}' to builder '{registered_name}' (prefix match)"
                     )
                     break
 

@@ -112,14 +112,22 @@ def get_manifests() -> List[Dict[str, Any]]:
 
 
 def get_manifest(name: str) -> Optional[Dict[str, Any]]:
-    """Return manifest for plugin name or None. Supports prefix matching."""
+    """Return manifest for plugin name or None. Supports prefix and display name matching."""
     name_lower = name.lower()
 
-    # Exact match first
+    # 1. Exact match first
     if name_lower in _manifests_by_name:
         return _manifests_by_name[name_lower]
 
-    # Prefix match (longest candidate first)
+    # 2. Check display names (exact or prefix)
+    for m in _manifests:
+        display_name = m.get("display_name", "").lower()
+        if display_name and (
+            name_lower == display_name or name_lower.startswith(display_name)
+        ):
+            return m
+
+    # 3. Prefix match on internal name (longest candidate first)
     # This handles cases like "Gmail (user@example.com)" matching "gmail"
     for key in sorted(_manifests_by_name.keys(), key=len, reverse=True):
         if name_lower.startswith(key):

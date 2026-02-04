@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
+	intgr "github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
@@ -463,10 +465,29 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 						}
 
 						// Try to find matching integration in DB to get tokens
-						// Use provider field if available, otherwise try to extract provider from name
 						providerToMatch := provider
 						if providerToMatch == "" {
-							providerToMatch = name // Fallback to name
+							// Try to extract provider from name or match display name
+							nameLower := strings.ToLower(name)
+							// Match against known provider IDs in DB
+							for pName := range dbIntegrations {
+								if strings.Contains(nameLower, strings.ToLower(pName)) {
+									providerToMatch = pName
+									break
+								}
+							}
+							// Match against display names in registry
+							if providerToMatch == "" {
+								for _, def := range intgr.Registry {
+									if def.DisplayName != "" && strings.Contains(nameLower, strings.ToLower(def.DisplayName)) {
+										providerToMatch = def.Name
+										break
+									}
+								}
+							}
+							if providerToMatch == "" {
+								providerToMatch = name // Final fallback
+							}
 						}
 
 						if dbParams, exists := dbIntegrations[providerToMatch]; exists {

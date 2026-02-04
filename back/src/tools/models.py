@@ -11,6 +11,7 @@ class ToolSpec(BaseModel):
     """
 
     name: str
+    provider: str | None = None
     enabled: bool = True
     params: dict[str, Any] = Field(default_factory=dict)
 

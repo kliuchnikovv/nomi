@@ -332,7 +332,7 @@ class AgentFactory:
                             params["auth_token"] = command_desc["auth_token"]
                         if "list_id" not in params and command_desc.get("list_id"):
                             params["list_id"] = command_desc["list_id"]
-                    config.add(tool_spec.name, **params)
+                    config.add(tool_spec.name, provider=tool_spec.provider, **params)
                     logger.debug("[WS] tool appended: enabled")
                 else:
                     logger.debug("[WS] tool not appended: not enabled")

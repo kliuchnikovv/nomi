@@ -587,6 +587,7 @@ class RedisSession:
 
             tool_spec = ToolSpec(
                 name=tool_dict.get("name", ""),
+                provider=tool_dict.get("provider"),
                 enabled=tool_dict.get("enabled", True),
                 params=params if isinstance(params, dict) else {},
             )
