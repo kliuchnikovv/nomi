@@ -56,7 +56,7 @@ class GitHubTools(Toolkit):
 
                 return await response.json()
 
-    def list_repos(self, limit: int = 30) -> List[Dict[str, Any]]:
+    async def list_repos(self, limit: int = 30) -> List[Dict[str, Any]]:
         """List user's GitHub repositories.
 
         Args:
@@ -65,17 +65,13 @@ class GitHubTools(Toolkit):
         Returns:
             List of repository objects with name, full_name, description, etc.
         """
+        params = f"?per_page={limit}&sort=updated"
+        result = await self._make_request("GET", f"/user/repos{params}")
+        if isinstance(result, list):
+            return result
+        return []
 
-        async def _fetch():
-            params = f"?per_page={limit}&sort=updated"
-            result = await self._make_request("GET", f"/user/repos{params}")
-            if isinstance(result, list):
-                return result
-            return []
-
-        return asyncio.run(_fetch())
-
-    def get_repo(self, owner: str, repo: str) -> Dict[str, Any]:
+    async def get_repo(self, owner: str, repo: str) -> Dict[str, Any]:
         """Get details of a specific repository.
 
         Args:
@@ -85,16 +81,12 @@ class GitHubTools(Toolkit):
         Returns:
             Repository details including description, stars, forks, etc.
         """
+        result = await self._make_request("GET", f"/repos/{owner}/{repo}")
+        if isinstance(result, dict):
+            return result
+        return {}
 
-        async def _fetch():
-            result = await self._make_request("GET", f"/repos/{owner}/{repo}")
-            if isinstance(result, dict):
-                return result
-            return {}
-
-        return asyncio.run(_fetch())
-
-    def list_issues(
+    async def list_issues(
         self, owner: str, repo: str, state: str = "open", limit: int = 10
     ) -> List[Dict[str, Any]]:
         """List issues in a repository.
@@ -108,19 +100,15 @@ class GitHubTools(Toolkit):
         Returns:
             List of issue objects
         """
+        params = f"?state={state}&per_page={limit}"
+        result = await self._make_request(
+            "GET", f"/repos/{owner}/{repo}/issues{params}"
+        )
+        if isinstance(result, list):
+            return result
+        return []
 
-        async def _fetch():
-            params = f"?state={state}&per_page={limit}"
-            result = await self._make_request(
-                "GET", f"/repos/{owner}/{repo}/issues{params}"
-            )
-            if isinstance(result, list):
-                return result
-            return []
-
-        return asyncio.run(_fetch())
-
-    def create_issue(
+    async def create_issue(
         self,
         owner: str,
         repo: str,
@@ -140,23 +128,17 @@ class GitHubTools(Toolkit):
         Returns:
             Created issue object
         """
+        data: Dict[str, Any] = {"title": title}
+        if body:
+            data["body"] = body
+        if labels:
+            data["labels"] = labels
+        result = await self._make_request("POST", f"/repos/{owner}/{repo}/issues", data)
+        if isinstance(result, dict):
+            return result
+        return {}
 
-        async def _create():
-            data: Dict[str, Any] = {"title": title}
-            if body:
-                data["body"] = body
-            if labels:
-                data["labels"] = labels
-            result = await self._make_request(
-                "POST", f"/repos/{owner}/{repo}/issues", data
-            )
-            if isinstance(result, dict):
-                return result
-            return {}
-
-        return asyncio.run(_create())
-
-    def list_pull_requests(
+    async def list_pull_requests(
         self, owner: str, repo: str, state: str = "open", limit: int = 10
     ) -> List[Dict[str, Any]]:
         """List pull requests in a repository.
@@ -170,19 +152,13 @@ class GitHubTools(Toolkit):
         Returns:
             List of pull request objects
         """
+        params = f"?state={state}&per_page={limit}"
+        result = await self._make_request("GET", f"/repos/{owner}/{repo}/pulls{params}")
+        if isinstance(result, list):
+            return result
+        return []
 
-        async def _fetch():
-            params = f"?state={state}&per_page={limit}"
-            result = await self._make_request(
-                "GET", f"/repos/{owner}/{repo}/pulls{params}"
-            )
-            if isinstance(result, list):
-                return result
-            return []
-
-        return asyncio.run(_fetch())
-
-    def get_file_content(
+    async def get_file_content(
         self, owner: str, repo: str, path: str, ref: str = "main"
     ) -> Dict[str, Any]:
         """Get content of a file in a repository.
@@ -196,29 +172,25 @@ class GitHubTools(Toolkit):
         Returns:
             File content and metadata
         """
+        params = f"?ref={ref}"
+        result = await self._make_request(
+            "GET", f"/repos/{owner}/{repo}/contents/{path}{params}"
+        )
 
-        async def _fetch():
-            params = f"?ref={ref}"
-            result = await self._make_request(
-                "GET", f"/repos/{owner}/{repo}/contents/{path}{params}"
-            )
+        if not isinstance(result, dict):
+            return {}
 
-            if not isinstance(result, dict):
-                return {}
+        # Decode base64 content if present
+        if result.get("content"):
+            try:
+                content = base64.b64decode(result["content"]).decode("utf-8")
+                result["decoded_content"] = content
+            except Exception as e:
+                logger.warning(f"Failed to decode file content: {e}")
 
-            # Decode base64 content if present
-            if result.get("content"):
-                try:
-                    content = base64.b64decode(result["content"]).decode("utf-8")
-                    result["decoded_content"] = content
-                except Exception as e:
-                    logger.warning(f"Failed to decode file content: {e}")
+        return result
 
-            return result
-
-        return asyncio.run(_fetch())
-
-    def create_or_update_file(
+    async def create_or_update_file(
         self,
         owner: str,
         repo: str,
@@ -242,29 +214,25 @@ class GitHubTools(Toolkit):
         Returns:
             Commit information
         """
+        # Encode content to base64
+        content_bytes = content.encode("utf-8")
+        encoded_content = base64.b64encode(content_bytes).decode("utf-8")
 
-        async def _create_or_update():
-            # Encode content to base64
-            content_bytes = content.encode("utf-8")
-            encoded_content = base64.b64encode(content_bytes).decode("utf-8")
+        data: Dict[str, Any] = {
+            "message": message,
+            "content": encoded_content,
+            "branch": branch,
+        }
 
-            data: Dict[str, Any] = {
-                "message": message,
-                "content": encoded_content,
-                "branch": branch,
-            }
+        if sha:
+            data["sha"] = sha
 
-            if sha:
-                data["sha"] = sha
-
-            result = await self._make_request(
-                "PUT", f"/repos/{owner}/{repo}/contents/{path}", data
-            )
-            if isinstance(result, dict):
-                return result
-            return {}
-
-        return asyncio.run(_create_or_update())
+        result = await self._make_request(
+            "PUT", f"/repos/{owner}/{repo}/contents/{path}", data
+        )
+        if isinstance(result, dict):
+            return result
+        return {}
 
 
 def build(params: Dict[str, Any]) -> Toolkit:

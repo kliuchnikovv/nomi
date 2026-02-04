@@ -57,7 +57,9 @@ class GmailTools(Toolkit):
 
                 return await response.json()
 
-    def search_emails(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+    async def search_emails(
+        self, query: str, max_results: int = 10
+    ) -> List[Dict[str, Any]]:
         """Search emails in Gmail.
 
         Args:
@@ -67,33 +69,29 @@ class GmailTools(Toolkit):
         Returns:
             List of email objects with id, threadId, labels
         """
+        # First get message list
+        params = f"?q={query}&maxResults={max_results}"
+        result = await self._make_request("GET", f"users/me/messages{params}")
 
-        async def _search():
-            # First get message list
-            params = f"?q={query}&maxResults={max_results}"
-            result = await self._make_request("GET", f"users/me/messages{params}")
+        if not isinstance(result, dict) or "messages" not in result:
+            return []
 
-            if not isinstance(result, dict) or "messages" not in result:
-                return []
+        # Get full message details for each
+        messages = result.get("messages", [])
+        full_messages = []
 
-            # Get full message details for each
-            messages = result.get("messages", [])
-            full_messages = []
+        for msg in messages[:max_results]:
+            msg_id = msg.get("id")
+            if msg_id:
+                full_msg = await self._make_request(
+                    "GET", f"users/me/messages/{msg_id}"
+                )
+                if isinstance(full_msg, dict):
+                    full_messages.append(full_msg)
 
-            for msg in messages[:max_results]:
-                msg_id = msg.get("id")
-                if msg_id:
-                    full_msg = await self._make_request(
-                        "GET", f"users/me/messages/{msg_id}"
-                    )
-                    if isinstance(full_msg, dict):
-                        full_messages.append(full_msg)
+        return full_messages
 
-            return full_messages
-
-        return asyncio.run(_search())
-
-    def get_email(self, message_id: str) -> Dict[str, Any]:
+    async def get_email(self, message_id: str) -> Dict[str, Any]:
         """Get full email content by message ID.
 
         Args:
@@ -102,14 +100,10 @@ class GmailTools(Toolkit):
         Returns:
             Full email object with headers, body, attachments
         """
+        result = await self._make_request("GET", f"users/me/messages/{message_id}")
+        return result if isinstance(result, dict) else {}
 
-        async def _get():
-            result = await self._make_request("GET", f"users/me/messages/{message_id}")
-            return result if isinstance(result, dict) else {}
-
-        return asyncio.run(_get())
-
-    def send_email(
+    async def send_email(
         self,
         to: str,
         subject: str,
@@ -131,35 +125,31 @@ class GmailTools(Toolkit):
         Returns:
             Sent message details
         """
+        # Build email content
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
 
-        async def _send():
-            # Build email content
-            from email.mime.multipart import MIMEMultipart
-            from email.mime.text import MIMEText
+        msg = MIMEMultipart()
+        msg["to"] = to
+        msg["subject"] = subject
 
-            msg = MIMEMultipart()
-            msg["to"] = to
-            msg["subject"] = subject
+        if cc:
+            msg["cc"] = cc
+        if bcc:
+            msg["bcc"] = bcc
 
-            if cc:
-                msg["cc"] = cc
-            if bcc:
-                msg["bcc"] = bcc
+        # Add body
+        content_type = "html" if html else "plain"
+        msg.attach(MIMEText(body, content_type))
 
-            # Add body
-            content_type = "html" if html else "plain"
-            msg.attach(MIMEText(body, content_type))
+        # Encode to base64 URL-safe
+        raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
 
-            # Encode to base64 URL-safe
-            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+        # Send via API
+        data = {"raw": raw_message}
+        result = await self._make_request("POST", "users/me/messages/send", data)
 
-            # Send via API
-            data = {"raw": raw_message}
-            result = await self._make_request("POST", "users/me/messages/send", data)
-
-            return result if isinstance(result, dict) else {}
-
-        return asyncio.run(_send())
+        return result if isinstance(result, dict) else {}
 
 
 def build(params: Dict[str, Any]) -> Toolkit:
