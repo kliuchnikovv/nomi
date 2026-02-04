@@ -8,6 +8,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
+	"strings"
 )
 
 // OAuthFactory создает OAuth конфигурации из реестра провайдеров (загруженных из манифестов плагинов)
@@ -78,7 +79,8 @@ func (f *OAuthFactory) BuildOAuthConfig(providerName string, permissions []strin
 		return nil, fmt.Errorf("oauth config key %s not found in config", provider.OAuthConfigKey)
 	}
 
-	redirectURL := fmt.Sprintf("%s/api/oauth/%s/callback", f.cfg.OAuth2.CallbackBase, providerName)
+	callbackBase := strings.TrimSuffix(f.cfg.OAuth2.CallbackBase, "/")
+	redirectURL := fmt.Sprintf("%s/api/oauth/%s/callback", callbackBase, providerName)
 
 	var scopes []string
 	if provider.OAuthConfig.GetScopes != nil {

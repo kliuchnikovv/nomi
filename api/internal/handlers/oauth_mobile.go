@@ -10,11 +10,13 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
+	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
+	"net/url"
 )
 
 // MobileOAuthHandler handles OAuth flows for mobile clients.
@@ -68,8 +70,8 @@ func NewMobileOAuthHandler(
 
 	return &MobileOAuthHandler{
 		cfg:          cfg,
-		storage:     db,
-		logger:      logger,
+		storage:      db,
+		logger:       logger,
 		oauthFactory: oauthFactory,
 		oidcProvider: oidcProvider,
 	}, nil
@@ -115,7 +117,9 @@ func (h *MobileOAuthHandler) Callback(c *gin.Context) {
 
 	// Redirect to the mobile app with the code
 	// The app will then call /callback-mobile to exchange the code for tokens
-	redirectURL := fmt.Sprintf("genie://oauth/callback?provider=%s&code=%s", providerName, code)
+	redirectURL := fmt.Sprintf("genie://oauth/callback?provider=%s&code=%s",
+		url.QueryEscape(providerName),
+		url.QueryEscape(code))
 	c.Redirect(http.StatusFound, redirectURL)
 }
 
@@ -215,7 +219,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	token, err := oauthConfig.Exchange(ctx, req.Code)
 	if err != nil {
 		h.logger.Error("token exchange failed", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token exchange failed"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("token exchange failed: %v", err)})
 		return
 	}
 
@@ -439,7 +443,7 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 
 // userFromCtx is duplicated from oauth.go - consider refactoring
 func userFromCtxMobile(ctx context.Context) (*storage.User, error) {
-	user, ok := ctx.Value("user").(*storage.User)
+	user, ok := auth.GetUserFromContext(ctx)
 	if !ok || user == nil {
 		return nil, errors.New("user not found in context")
 	}
