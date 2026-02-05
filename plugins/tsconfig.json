@@ -1,0 +1,18 @@
+{
+  "extends": "../front/tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "noEmit": true,
+    "baseUrl": "../front",
+    "paths": {
+      "@genie/front/*": ["src/*"],
+      "react": ["node_modules/react"],
+      "react-native": ["node_modules/react-native"],
+      "react-native-safe-area-context": ["node_modules/react-native-safe-area-context"],
+      "iconoir-react-native": ["node_modules/iconoir-react-native"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "**/*.d.ts"]
+}

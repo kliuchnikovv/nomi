@@ -20,93 +20,44 @@ import { useTheme } from '../../context/ThemeContext';
 import { Sidebar } from '../../components/DrawerSidebar';
 import { ThemePalette } from '../../themes/types';
 import { CalendarSidebar } from '../chat/leftSidebar/CalendarSidebar';
-import Animated, { useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import { getClientPlugin } from '../../plugins/clientRegistry';
+import { useMain } from '../main/context';
 
-
-export interface RightSidebarProps {
-    variant: 'inline' | 'overlay';
-    width: number;
-    visible?: boolean;
-    onChatSelect?: (chat: PluginChat) => void;
-    onClose?: () => void;
-    translateX?: SharedValue<number>;
-    dragGesture?: ReturnType<typeof Gesture.Pan>;
-}
-
-const pluginIconMap: Record<string, { IconComponent: any; colorKey: keyof ThemePalette }> = {
-    inbox: { IconComponent: Mail, colorKey: 'blue' },
-    gmail: { IconComponent: Mail, colorKey: 'red' },
-    imap: { IconComponent: Mail, colorKey: 'cyan' },
-    calendar: { IconComponent: Calendar, colorKey: 'orange' },
-};
-
-const getPluginIcon = (provider: string, palette: ThemePalette) => {
-    const meta = pluginIconMap[provider] || {
-        IconComponent: Mail,
-        colorKey: 'commentGrey' as keyof ThemePalette,
-    };
-    return {
-        IconComponent: meta.IconComponent,
-        color: palette[meta.colorKey] as string,
-    };
-};
-
-const formatTimestamp = (timestamp?: number) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 60) {
-        return `${diffMins}m ago`;
-    } else if (diffHours < 24) {
-        return `${diffHours}h ago`;
-    } else if (diffDays < 7) {
-        return `${diffDays}d ago`;
-    }
-    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-};
+// ... existing code ...
 
 function PluginSection({
     plugin,
-    expandedPlugins,
-    onTogglePlugin,
-    expandedChats,
-    onToggleChat,
-    onThreadSelect,
-    onLoadMore,
-    hasMore,
-    isLoadingMore,
-    styles,
-    palette,
+    // ...
 }: {
-    plugin: Plugin;
-    expandedPlugins: Set<string>;
-    onTogglePlugin: (pluginId: string) => void;
-    expandedChats: Set<string>;
-    onToggleChat: (chatId: string) => void;
-    onThreadSelect: (chat: PluginChat, thread: any) => void;
-    onLoadMore: () => void;
-    hasMore: boolean;
-    isLoadingMore: boolean;
-    styles: RightSidebarStyles;
-    palette: ThemePalette;
+    // ...
 }) {
     const { theme } = useTheme();
+    const { activePluginView, setActivePluginView } = useMain();
     const isExpanded = expandedPlugins.has(plugin.id);
-    const iconMeta = getPluginIcon(plugin.provider, palette);
-    const IconComponent = iconMeta.IconComponent;
-    const totalUnread = plugin.chats.reduce((sum, chat) => sum + chat.unreadCount, 0);
+    // ...
 
+    // Check if plugin has a custom Sidebar component
+    const clientPlugin = getClientPlugin(plugin.provider);
+    const SidebarComponent = clientPlugin?.SidebarComponent;
+
+    if (SidebarComponent) {
+        return (
+            <SidebarComponent
+                integrationId={plugin.id}
+                onSelect={() => setActivePluginView(plugin.provider)}
+                isSelected={activePluginView === plugin.provider}
+            />
+        );
+    }
+
+    // Default rendering
     return (
         <View style={styles.pluginSection}>
             <Pressable
                 style={styles.pluginHeader}
                 onPress={() => onTogglePlugin(plugin.id)}
             >
+
                 <View style={styles.pluginHeaderRow}>
                     <View style={styles.pluginHeaderLeft}>
                         <IconComponent

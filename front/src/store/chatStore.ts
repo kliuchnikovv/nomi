@@ -95,6 +95,19 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         return newMessages;
     }
 
+    // Aggressive deduplication: filter out any existing duplicate messages with same ID
+    // Keep only the first occurrence if duplicates exist
+    const uniqueMap = new Map();
+    newMessages = newMessages.filter(item => {
+        const key = item.id;
+        if (uniqueMap.has(key)) {
+            console.log('[onReceivedMessage 🧹 Removed duplicate in state]', key);
+            return false;
+        }
+        uniqueMap.set(key, true);
+        return true;
+    });
+
     // Check if message already exists (deduplication for optimistic updates)
     const existingMessage = newMessages.find(m => m.id === messageID);
 
@@ -106,8 +119,11 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
 
     let messageIdx = newMessages.findIndex((item) => {
         // Multi-agent support: message is identified by message_id AND agent_id
-        if (payload.agent_name && item.agent_id && item.agent_id !== payload.agent_name) {
-            return false;
+        // Normalize to lowercase to handle casing inconsistencies (e.g. "Souper" vs "souper")
+        if (payload.agent_name && item.agent_id) {
+            if (item.agent_id.toLowerCase() !== payload.agent_name.toLowerCase()) {
+                return false;
+            }
         }
         return item.id === payload.message_id;
     });

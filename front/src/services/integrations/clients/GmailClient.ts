@@ -31,10 +31,82 @@ export interface GmailListResponse {
     resultSizeEstimate?: number;
 }
 
+import { AppleIntelligence } from '../../ai/AppleIntelligence';
+
+// ... existing imports ...
+
 class GmailClient {
     /**
-     * Fetch recent emails from Gmail API and cache them
+     * Called when the system wakes up the app in the background
      */
+    async onWake(integrationId: string): Promise<void> {
+        console.log(`[GmailClient] onWake triggered for ${integrationId}`);
+        
+        // 1. Determine time window
+        // In a real scenario, we would store the last sync timestamp in integration credentials or separate meta table.
+        // For now, let's assume if we have cached emails, we sync from the latest one, otherwise 6 hours.
+        const lastSync = await this.getLastSyncTimestamp(integrationId);
+        const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
+        const since = lastSync ? Math.max(lastSync, sixHoursAgo) : sixHoursAgo; // Safety clamp
+
+        // 2. Sync emails
+        // syncEmails currently fetches 'recent' 20. Ideally it should support 'since' parameter.
+        // For this MVP, we'll just fetch the latest 20 and filter.
+        const emails = await this.syncEmails(integrationId, 20); // TODO: Add support for 'after:' query in syncEmails
+
+        // Filter for new emails since 'since'
+        const newEmails = emails.filter(e => e.date && e.date.getTime() > since);
+
+        if (newEmails.length === 0) {
+            console.log('[GmailClient] No new emails to analyze');
+            return;
+        }
+
+        console.log(`[GmailClient] Analyzing ${newEmails.length} new emails with Apple FM...`);
+
+        // 3. Analyze with Apple Foundation Models
+        if (AppleIntelligence.isAvailable()) {
+            for (const email of newEmails) {
+                try {
+                    // Skip if already analyzed (check DB)
+                     // const isAnalyzed = await integrationStorage.isEmailAnalyzed(email.id);
+                     // if (isAnalyzed) continue;
+
+                    const prompt = `Analyze this email and extract key information.
+From: ${email.fromName} <${email.fromEmail}>
+Subject: ${email.subject}
+Body: ${email.snippet} ${email.bodyText?.slice(0, 500) || ''}
+
+Provide a JSON summary with:
+- summary: 1 sentence summary
+- urgency: high/medium/low
+- action_needed: boolean
+`;
+                    const analysis = await AppleIntelligence.generate(prompt);
+                    
+                    // 4. Save analysis
+                    // We need a method to save analysis results. 
+                    // Assuming we have 'analyzed_emails' table.
+                    // For now, just logging as proof of concept until storage method is exposed.
+                    console.log(`[GmailClient] Analysis for ${email.id}:`, analysis);
+                    
+                    // await integrationStorage.saveEmailAnalysis(email.id, analysis);
+                } catch (e) {
+                    console.error(`[GmailClient] Failed to analyze email ${email.id}:`, e);
+                }
+            }
+        } else {
+             console.log('[GmailClient] Apple Intelligence not available, skipping analysis');
+        }
+    }
+
+    private async getLastSyncTimestamp(integrationId: string): Promise<number | null> {
+        // Placeholder: read from storage
+        return null;
+    }
+
+    // ... existing methods ...
+
     async syncEmails(integrationId: string, maxResults: number = 20): Promise<Email[]> {
         const accessToken = await tokenRefreshService.getValidToken(integrationId);
 

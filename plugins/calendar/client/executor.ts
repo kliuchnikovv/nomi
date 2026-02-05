@@ -2,9 +2,9 @@
  * Calendar client plugin: executes Google Calendar tool actions.
  */
 
-import type { ClientPluginHandler } from '../clientRegistry';
-import { calendarClient } from '../../services/integrations/clients/CalendarClient';
-import { getIntegrationMetadata, isClientOnly } from '../../services/integrations/registry';
+import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
+import { calendarClient } from '@genie/front/services/integrations/clients/CalendarClient';
+import { getIntegrationMetadata, isClientOnly } from '@genie/front/services/integrations/registry';
 
 export const calendarPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {
@@ -13,7 +13,7 @@ export const calendarPlugin: ClientPluginHandler = {
             throw new Error('Calendar is not configured as a client-side integration');
         }
 
-        const { integrationStorage } = await import('../../services/integrations/IntegrationStorage');
+        const { integrationStorage } = await import('@genie/front/services/integrations/IntegrationStorage');
         const integrations = await integrationStorage.getIntegrations();
         const calInteg = integrations.find(i => i.provider === 'calendar' && i.enabled);
 

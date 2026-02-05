@@ -2,9 +2,9 @@
  * Gmail client plugin: executes Gmail tool actions.
  */
 
-import type { ClientPluginHandler } from '../clientRegistry';
-import { gmailClient } from '../../services/integrations/clients/GmailClient';
-import { getIntegrationMetadata, isClientOnly } from '../../services/integrations/registry';
+import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
+import { gmailClient } from '@genie/front/services/integrations/clients/GmailClient';
+import { getIntegrationMetadata, isClientOnly } from '@genie/front/services/integrations/registry';
 
 export const gmailPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {
@@ -13,7 +13,7 @@ export const gmailPlugin: ClientPluginHandler = {
             throw new Error('Gmail is not configured as a client-side integration');
         }
 
-        const { integrationStorage } = await import('../../services/integrations/IntegrationStorage');
+        const { integrationStorage } = await import('@genie/front/services/integrations/IntegrationStorage');
         const integrations = await integrationStorage.getIntegrations();
         
         // Find enabled gmail integration (case-insensitive provider check)
@@ -42,7 +42,7 @@ export const gmailPlugin: ClientPluginHandler = {
                 })));
 
             case 'search_emails':
-                const { vectorStore } = await import('../../services/database/VectorStore');
+                const { vectorStore } = await import('@genie/front/services/database/VectorStore');
                 const searchResults = await vectorStore.search(params.query, params.max_results || 5, 'email');
                 if (searchResults.length === 0) {
                     return "No relevant emails found in local cache.";

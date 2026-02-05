@@ -87,6 +87,14 @@
     "require-from-string": "^2.0.2",
     "typescript": "^5.8.3"
   },
+  "dependenciesMeta": {
+    "@genie/plugin-gmail": {
+      "injected": true
+    },
+    "@genie/plugin-calendar": {
+      "injected": true
+    }
+  },
   "engines": {
     "node": ">=20"
   }

@@ -59,7 +59,17 @@ export const handleTextPayload: MessageHandler = (payload, prevMessages, message
     }
 
     const existingParts = msg.content_parts || [];
-    const updatedParts = [...existingParts, { type: 'text' as const, text: effectiveDelta }];
+    const updatedParts = [...existingParts];
+    const lastPart = updatedParts.length > 0 ? updatedParts[updatedParts.length - 1] : null;
+
+    if (lastPart && lastPart.type === 'text') {
+        updatedParts[updatedParts.length - 1] = {
+            ...lastPart,
+            text: lastPart.text + effectiveDelta
+        };
+    } else {
+        updatedParts.push({ type: 'text' as const, text: effectiveDelta });
+    }
 
     console.log('[handleTextPayload ✅ Updating message]', {
         message_id: msg.id,

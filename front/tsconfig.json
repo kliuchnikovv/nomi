@@ -4,9 +4,14 @@
     "baseUrl": ".",
     "paths": {
       "react-native-gifted-chat": ["src/types/gifted-chat-shim.d.ts"],
-      "react-native-gifted-chat/*": ["src/types/gifted-chat-shim.d.ts"]
+      "react-native-gifted-chat/*": ["src/types/gifted-chat-shim.d.ts"],
+      "@genie/front/*": ["src/*"],
+      "@genie/plugin-gmail": ["../plugins/gmail/client/executor.ts"],
+      "@genie/plugin-gmail/*": ["../plugins/gmail/client/*"],
+      "@genie/plugin-calendar": ["../plugins/calendar/client/executor.ts"],
+      "@genie/plugin-calendar/*": ["../plugins/calendar/client/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/node_modules", "**/Pods"]
+  "exclude": ["**/node_modules", "**/Pods", "../plugins"]
 }

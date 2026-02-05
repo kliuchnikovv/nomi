@@ -2,7 +2,7 @@
  * Calendar client plugin: background sync task (events).
  */
 
-import { calendarClient } from '../../services/integrations/clients/CalendarClient';
+import { calendarClient } from '@genie/front/services/integrations/clients/CalendarClient';
 
 export async function backgroundTask(integrationId: string): Promise<void> {
     console.log(`[Calendar plugin] Syncing events for integration ${integrationId}`);

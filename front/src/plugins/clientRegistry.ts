@@ -3,10 +3,16 @@
  * Plugins register via registerClientPlugin; ClientToolExecutor uses getHandler to dispatch.
  */
 
+import React from 'react';
+
 export interface ClientPluginHandler {
     execute(method: string, params: Record<string, any>): Promise<string>;
     /** Optional: sync/background task for this integration (e.g. sync emails, events). */
     backgroundTask?: (integrationId: string) => Promise<void>;
+    /** Optional: Full-screen component to show when plugin is selected. */
+    MainComponent?: React.ComponentType<any>;
+    /** Optional: Sidebar item component for this plugin. */
+    SidebarComponent?: React.ComponentType<any>;
 }
 
 const handlers = new Map<string, ClientPluginHandler>();
@@ -33,6 +39,10 @@ export function getClientPluginHandler(name: string): ClientPluginHandler | unde
     }
     
     return undefined;
+}
+
+export function getClientPlugin(name: string): ClientPluginHandler | undefined {
+    return handlers.get(name.toLowerCase());
 }
 
 export function getBackgroundTask(provider: string): ((integrationId: string) => Promise<void>) | undefined {
