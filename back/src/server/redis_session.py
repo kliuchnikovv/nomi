@@ -852,6 +852,11 @@ class RedisSession:
                     break
 
                 evt_type = event.get("type")
+                logger.info(
+                    "[RedisSession] Event type: %s, source=%s",
+                    evt_type,
+                    self._source,
+                )
 
                 if evt_type == "content_done":
                     # Content generation is complete — send DONE immediately
