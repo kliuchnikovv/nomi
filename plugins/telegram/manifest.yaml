@@ -1,0 +1,77 @@
+name: telegram
+display_name: Telegram Bot
+description: Telegram bot integration for messaging
+version: 1.0.0
+
+execution:
+  type: hybrid
+  entry_points:
+    server: ./server/tools.py
+
+auth:
+  type: api_key
+
+ui:
+  icon: telegram
+  description_short: Telegram бот для общения
+  category: messaging
+  color: '#0088cc'
+
+methods:
+  - name: send_message
+    description: Send text message to Telegram chat
+    parameters:
+      type: object
+      properties:
+        chat_id:
+          type: integer
+          description: Telegram chat ID
+        text:
+          type: string
+          description: Message text
+        parse_mode:
+          type: string
+          enum: [HTML, Markdown]
+          default: HTML
+      required: [chat_id, text]
+  - name: send_photo
+    description: Send photo to Telegram chat
+    parameters:
+      type: object
+      properties:
+        chat_id:
+          type: integer
+        photo_url:
+          type: string
+          description: URL of the photo to send
+        caption:
+          type: string
+      required: [chat_id, photo_url]
+  - name: send_buttons
+    description: Send message with inline keyboard buttons
+    parameters:
+      type: object
+      properties:
+        chat_id:
+          type: integer
+        text:
+          type: string
+        buttons:
+          type: array
+          items:
+            type: object
+            properties:
+              text:
+                type: string
+              callback_data:
+                type: string
+              url:
+                type: string
+      required: [chat_id, text, buttons]
+
+background_tasks:
+  enabled: false
+
+storage:
+  type: hybrid
+  encrypted: true

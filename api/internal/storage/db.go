@@ -42,6 +42,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Message{},
 		&RefreshToken{},
 		&Attachment{},
+		&TelegramUser{},
 	); err != nil {
 		return nil, err
 	}

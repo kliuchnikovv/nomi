@@ -11,7 +11,9 @@
       "@genie/plugin-calendar": ["../plugins/calendar/client/executor.ts"],
       "@genie/plugin-calendar/*": ["../plugins/calendar/client/*"],
       "@genie/plugin-github": ["../plugins/github/client/executor.ts"],
-      "@genie/plugin-github/*": ["../plugins/github/client/*"]
+      "@genie/plugin-github/*": ["../plugins/github/client/*"],
+      "@genie/plugin-telegram": ["../plugins/telegram/client/executor.ts"],
+      "@genie/plugin-telegram/*": ["../plugins/telegram/client/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

@@ -40,6 +40,10 @@ type Config struct {
 	GitHub struct {
 		WebhookSecret string `yaml:"webhook_secret"`
 	} `yaml:"github"`
+	Telegram struct {
+		BotToken      string `yaml:"bot_token"`
+		WebhookSecret string `yaml:"webhook_secret"`
+	} `yaml:"telegram"`
 	// PluginsDir is the path to the plugins directory (default: env PLUGINS_DIR or "plugins")
 	PluginsDir string `yaml:"plugins_dir"`
 }

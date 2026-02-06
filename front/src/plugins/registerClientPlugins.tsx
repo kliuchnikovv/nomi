@@ -15,6 +15,10 @@ import { GmailMainScreen } from '@genie/plugin-gmail/components/GmailMainScreen'
 import { GmailSidebar } from '@genie/plugin-gmail/components/GmailSidebar';
 import { GithubMainScreen } from '@genie/plugin-github/components/GithubMainScreen';
 import { GithubSidebarItem } from '@genie/plugin-github/components/GithubSidebarItem';
+import { telegramPlugin } from '@genie/plugin-telegram';
+import { backgroundTask as telegramBackgroundTask } from '@genie/plugin-telegram/background';
+import { TelegramMainScreen } from '@genie/plugin-telegram/components/TelegramMainScreen';
+import { TelegramSidebarItem } from '@genie/plugin-telegram/components/TelegramSidebarItem';
 import { PollComponent, ButtonsComponent } from '../screens/chat/message/UIComponents';
 import { BriefingCard } from '../screens/chat/components/BriefingCard';
 
@@ -62,6 +66,12 @@ export function registerClientPlugins(): void {
         backgroundTask: githubBackgroundTask,
         MainComponent: GithubMainScreen,
         SidebarComponent: GithubSidebarItem,
+    });
+    registerClientPlugin('telegram', {
+        ...telegramPlugin,
+        backgroundTask: telegramBackgroundTask,
+        MainComponent: TelegramMainScreen,
+        SidebarComponent: TelegramSidebarItem,
     });
 
     registered = true;

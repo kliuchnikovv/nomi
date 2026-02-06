@@ -65,6 +65,18 @@ type Integration struct {
 	UpdatedAt time.Time `gorm:"not null"`
 }
 
+// TelegramUser maps a Telegram chat to a Genie user and chat.
+type TelegramUser struct {
+	ID             uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	UserID         uuid.UUID `gorm:"type:uuid;not null;index"`     // Genie user ID
+	TelegramChatID int64     `gorm:"not null;uniqueIndex"`         // Telegram chat ID
+	TelegramUserID int64     `gorm:"not null"`                     // Telegram user ID
+	Username       string    `gorm:"type:text"`                    // Telegram @username
+	FirstName      string    `gorm:"type:text"`                    // Telegram first name
+	ChatID         uuid.UUID `gorm:"type:uuid;index"`              // Linked Genie Chat ID
+	LinkedAt       time.Time `gorm:"autoCreateTime"`
+}
+
 // CreateAttachment creates a new attachment record
 func (s *Storage) CreateAttachment(ctx context.Context, attachment *Attachment) error {
 	return s.DB.WithContext(ctx).Create(attachment).Error

@@ -15,6 +15,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/container"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
+	"github.com/kliuchnikovv/genie-api/internal/telegram"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
@@ -61,6 +62,25 @@ func New(
 		webhooksHandler     = handlers.NewWebhooksHandler(ctr.Storage, logger, cfg)
 		toolsHandler        = handlers.NewToolsHandler(ctr.Storage, logger)
 		integrationsHandler = handlers.NewIntegrationsHandler(ctr.Storage, logger)
+
+		// Telegram integration (only initialized if bot token is configured)
+		telegramHandler = func() *handlers.TelegramHandler {
+			botToken := cfg.Telegram.BotToken
+			if botToken == "" {
+				botToken = os.Getenv("TELEGRAM_BOT_TOKEN")
+			}
+			if botToken == "" {
+				logger.Info("TELEGRAM_BOT_TOKEN not set, telegram integration disabled")
+				return nil
+			}
+			tgService := telegram.NewService(ctr.Storage.DB, hubInstance.Redis(), logger, botToken)
+			tgDelivery := telegram.NewDeliveryService(tgService, hubInstance.Redis(), logger)
+			// Load existing chat mappings from DB
+			if err := tgDelivery.LoadTelegramChats(context.Background()); err != nil {
+				logger.Warn("failed to load telegram chat mappings", zap.Error(err))
+			}
+			return handlers.NewTelegramHandler(tgService, tgDelivery, hubInstance, logger)
+		}()
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -127,6 +147,10 @@ func New(
 
 	// Webhooks
 	r.POST("/api/webhooks/github", webhooksHandler.HandleGitHubWebhook)
+	if telegramHandler != nil {
+		r.POST("/api/webhooks/telegram", telegramHandler.HandleWebhook)
+		r.POST("/api/telegram/link-token", wrapWithAuth(telegramHandler.GenerateLinkToken, authMiddleware))
+	}
 
 	// Mobile OAuth API (tokens returned to client, not stored on backend)
 	r.GET("/api/oauth/:provider/callback", mobileOAuthHandler.Callback) // Web callback from Google, redirects to app
