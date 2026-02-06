@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/plugins/telegram", tags=["telegram"])
 
 
+# ─── Startup: auto-register webhook with Telegram ────
+
+@router.on_event("startup")
+async def _register_telegram_webhook() -> None:
+    """Auto-register webhook URL with Telegram on startup."""
+    service = get_service()
+    if not service.enabled:
+        logger.info("Telegram bot token not set, skipping webhook registration")
+        return
+    await service.register_webhook()
+
+
 # ─── Webhook (public, no auth) ───────────────────────
 
 @router.post("/webhook")

@@ -59,6 +59,31 @@ class TelegramService:
                     raise Exception(f"Telegram API error: {resp.status} - {error_desc}")
                 return result.get("result", {})
 
+    # ─── Webhook Registration ─────────────────────────────
+
+    async def register_webhook(self) -> bool:
+        """Register the webhook URL with Telegram Bot API.
+        Uses WEBHOOK_BASE_URL env var (e.g. https://api.example.com).
+        Returns True if successful.
+        """
+        base_url = os.getenv("WEBHOOK_BASE_URL", "")
+        if not base_url:
+            logger.warning("WEBHOOK_BASE_URL not set, skipping Telegram webhook registration")
+            return False
+
+        webhook_url = f"{base_url}/api/webhooks/telegram"
+        try:
+            await self._call_api("setWebhook", {"url": webhook_url})
+            logger.info("Telegram webhook registered: %s", webhook_url)
+            return True
+        except Exception as e:
+            logger.error("Failed to register Telegram webhook: %s", e)
+            return False
+
+    async def get_webhook_info(self) -> Dict[str, Any]:
+        """Get current webhook info from Telegram."""
+        return await self._call_api("getWebhookInfo", {})
+
     # ─── Link Code Generation ────────────────────────────
 
     async def generate_link_code(
