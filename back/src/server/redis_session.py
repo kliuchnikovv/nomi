@@ -866,12 +866,26 @@ class RedisSession:
                     )
                     if self._source == "telegram" and self._telegram_chat_id:
                         full_text = "".join(telegram_text_buffer)
-                        logger.info(
-                            "[RedisSession] Delivering to Telegram: chat_id=%s, text_len=%d",
-                            self._telegram_chat_id,
-                            len(full_text),
-                        )
-                        await self._deliver_to_telegram(full_text)
+                        # Fallback to completed_content if buffer is empty
+                        if not full_text and completed_content:
+                            full_text = str(completed_content)
+                            logger.info(
+                                "[RedisSession] Using completed_content fallback: text_len=%d",
+                                len(full_text),
+                            )
+                        if full_text:
+                            logger.info(
+                                "[RedisSession] Delivering to Telegram: chat_id=%s, text_len=%d",
+                                self._telegram_chat_id,
+                                len(full_text),
+                            )
+                            await self._deliver_to_telegram(full_text)
+                        else:
+                            logger.warning(
+                                "[RedisSession] No text to deliver to Telegram: buffer_len=%d, completed_content=%s",
+                                len(telegram_text_buffer),
+                                "yes" if completed_content else "no",
+                            )
 
                     # Drain the remaining stream in background so learning/memory
                     # tasks can finish without blocking the client.
@@ -901,6 +915,16 @@ class RedisSession:
                     if chunk:
                         if self._source == "telegram":
                             telegram_text_buffer.append(chunk)
+                            logger.debug(
+                                "[RedisSession] Added to Telegram buffer: chunk_len=%d, buffer_len=%d",
+                                len(chunk),
+                                len(telegram_text_buffer),
+                            )
+                        else:
+                            logger.debug(
+                                "[RedisSession] Skipping Telegram buffer: source=%s",
+                                self._source,
+                            )
                         payload_data = {
                             "ix": idx,
                             "eof": False,
@@ -1037,12 +1061,26 @@ class RedisSession:
                 )
                 if self._source == "telegram" and self._telegram_chat_id:
                     full_text = "".join(telegram_text_buffer)
-                    logger.info(
-                        "[RedisSession] Fallback delivering to Telegram: chat_id=%s, text_len=%d",
-                        self._telegram_chat_id,
-                        len(full_text),
-                    )
-                    await self._deliver_to_telegram(full_text)
+                    # Fallback to completed_content if buffer is empty
+                    if not full_text and completed_content:
+                        full_text = str(completed_content)
+                        logger.info(
+                            "[RedisSession] Fallback using completed_content: text_len=%d",
+                            len(full_text),
+                        )
+                    if full_text:
+                        logger.info(
+                            "[RedisSession] Fallback delivering to Telegram: chat_id=%s, text_len=%d",
+                            self._telegram_chat_id,
+                            len(full_text),
+                        )
+                        await self._deliver_to_telegram(full_text)
+                    else:
+                        logger.warning(
+                            "[RedisSession] Fallback no text to deliver: buffer_len=%d, completed_content=%s",
+                            len(telegram_text_buffer),
+                            "yes" if completed_content else "no",
+                        )
 
         except asyncio.CancelledError:
             logger.info("[RedisSession] Streaming cancelled by user")
