@@ -963,6 +963,14 @@ class RedisSession:
                 elif evt_type == "member_response":
                     chunk = event.get("content", "")
                     if chunk:
+                        # Add to Telegram buffer if this is a Telegram message
+                        if self._source == "telegram":
+                            telegram_text_buffer.append(chunk)
+                            logger.info(
+                                "[RedisSession] Added member_response to Telegram buffer: chunk_len=%d, buffer_len=%d",
+                                len(chunk),
+                                len(telegram_text_buffer),
+                            )
                         # Send as a regular message part, but you might want to mark it
                         # so the frontend knows who sent it.
                         payload_data = {
