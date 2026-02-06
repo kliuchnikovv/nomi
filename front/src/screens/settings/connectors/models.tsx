@@ -96,6 +96,7 @@ const CONNECTOR_COLOR_MAP: Partial<Record<string, keyof ThemePalette>> = {
     gmail: 'red',
     calendar: 'orange',
     github: 'magenta',
+    telegram: 'blue',
     jules: 'purple',
 };
 
@@ -121,4 +122,5 @@ export interface ConnectorContextType {
     toggleTool: (configID: string, enabled: boolean) => Promise<void>;
     startOAuth: (provider: string) => Promise<void>;
     deleteIntegration: (id: string) => Promise<void>;
+    connectTelegram: (code: string) => Promise<void>;
 }

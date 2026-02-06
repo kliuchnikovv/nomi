@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -90,7 +91,87 @@ func ProxyGitHub(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 	}
 }
 
-// NewProxyHandlers creates handlers for proxy endpoints
-func NewProxyHandlers(cfg *config.Config, logger *zap.Logger) {
-	// Handlers are registered in server.go
+// ProxyPlugin forwards a request to a Python plugin endpoint (public, no auth injection).
+// Used for webhooks that come from external services (e.g. Telegram).
+func ProxyPlugin(cfg *config.Config, logger *zap.Logger, backendPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		targetURL := cfg.LLM.BaseURL
+		if targetURL == "" {
+			targetURL = "http://127.0.0.1:7777"
+		}
+
+		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+backendPath, c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create proxy request"})
+			return
+		}
+
+		for name, values := range c.Request.Header {
+			for _, value := range values {
+				proxyReq.Header.Add(name, value)
+			}
+		}
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(proxyReq)
+		if err != nil {
+			logger.Error("Failed to proxy plugin request", zap.Error(err), zap.String("path", backendPath))
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to contact plugin service"})
+			return
+		}
+		defer resp.Body.Close()
+
+		for name, values := range resp.Header {
+			for _, value := range values {
+				c.Writer.Header().Add(name, value)
+			}
+		}
+		c.Status(resp.StatusCode)
+		_, _ = io.Copy(c.Writer, resp.Body)
+	}
+}
+
+// ProxyPluginHandler forwards an authenticated request to a Python plugin endpoint.
+// Injects the user ID from auth middleware into the X-User-ID header for the plugin.
+func ProxyPluginHandler(cfg *config.Config, logger *zap.Logger, backendPath string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		targetURL := cfg.LLM.BaseURL
+		if targetURL == "" {
+			targetURL = "http://127.0.0.1:7777"
+		}
+
+		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+backendPath, c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create proxy request"})
+			return
+		}
+
+		for name, values := range c.Request.Header {
+			for _, value := range values {
+				proxyReq.Header.Add(name, value)
+			}
+		}
+
+		// Inject authenticated user ID so the Python plugin can identify the user
+		if userID, exists := c.Get("userID"); exists {
+			proxyReq.Header.Set("X-User-ID", fmt.Sprintf("%v", userID))
+		}
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(proxyReq)
+		if err != nil {
+			logger.Error("Failed to proxy plugin request", zap.Error(err), zap.String("path", backendPath))
+			c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to contact plugin service"})
+			return
+		}
+		defer resp.Body.Close()
+
+		for name, values := range resp.Header {
+			for _, value := range values {
+				c.Writer.Header().Add(name, value)
+			}
+		}
+		c.Status(resp.StatusCode)
+		_, _ = io.Copy(c.Writer, resp.Body)
+	}
 }

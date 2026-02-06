@@ -154,6 +154,17 @@ async def health_check():
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
 
+# ─── Plugin Routes ────────────────────────────────────
+# Register FastAPI routers from plugins that expose them.
+try:
+    from plugins.telegram.server.routes import router as telegram_router
+
+    app.include_router(telegram_router)
+    logging.info("[App] Telegram plugin routes registered")
+except Exception as e:
+    logging.warning("[App] Failed to register Telegram plugin routes: %s", e)
+
+
 # Sessions for OAuth state (required for request.session)
 app.add_middleware(SessionMiddleware, secret_key=config.session_secret)
 

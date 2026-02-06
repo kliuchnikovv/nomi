@@ -457,6 +457,58 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         }
     }, [getIntegrations, configs]);
 
+    const connectTelegram = React.useCallback(async (code: string) => {
+        try {
+            const apiUrl = getApiUrl();
+            const token = authStore.getToken();
+            if (!token) {
+                throw new Error('Not authenticated');
+            }
+
+            const response = await fetch(`${apiUrl}/telegram/link`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ code }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error || 'Failed to link Telegram');
+            }
+
+            const data = await response.json();
+            console.log(`[ConnectorsProvider] Telegram linked: ${data.display_name}`);
+
+            // Save as a local integration so it shows in sidebar
+            const metadata = getIntegrationMetadata('telegram');
+            const displayName = data.display_name || 'Telegram';
+
+            await integrationStorage.createIntegration({
+                provider: 'telegram' as any,
+                name: `Telegram (${displayName})`,
+                enabled: true,
+                accountEmail: displayName,
+                storageType: metadata?.storageType,
+                supportsBackgroundTasks: metadata?.supportsBackgroundTasks,
+                systemEventListeners: metadata?.systemEventListeners,
+            }, {
+                accessToken: code,
+                refreshToken: '',
+                tokenExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            });
+
+            setAuthStatus(`Connected Telegram (${displayName})`);
+            await getIntegrations();
+        } catch (e) {
+            console.error('[ConnectorsProvider] Telegram link failed:', e);
+            setAuthStatus(e instanceof Error ? e.message : 'Failed to connect Telegram');
+            throw e;
+        }
+    }, [getIntegrations]);
+
     const value: ConnectorContextType = {
         tools,
         integrations: configs,
@@ -465,6 +517,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         toggleTool,
         startOAuth,
         deleteIntegration,
+        connectTelegram,
     };
 
     return (

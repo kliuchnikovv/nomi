@@ -1,0 +1,356 @@
+"""
+Telegram plugin service — handles webhook processing, account linking,
+and message delivery. All Telegram business logic lives here, not in the Go API.
+"""
+
+import json
+import logging
+import os
+import secrets
+from typing import Any, Dict, Optional
+
+import aiohttp
+import redis.asyncio as redis
+
+logger = logging.getLogger(__name__)
+
+TELEGRAM_API_BASE = "https://api.telegram.org"
+LINK_CODE_TTL = 600  # 10 minutes
+LINK_CODE_PREFIX = "telegram:code:"
+
+
+class TelegramService:
+    """Core Telegram service for the plugin."""
+
+    def __init__(self):
+        self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+        self.base_url = f"{TELEGRAM_API_BASE}/bot{self.bot_token}" if self.bot_token else ""
+        self._redis: Optional[redis.Redis] = None
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.bot_token)
+
+    async def _get_redis(self) -> redis.Redis:
+        if self._redis is None:
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+            self._redis = redis.from_url(redis_url, decode_responses=True)
+        return self._redis
+
+    # ─── Telegram Bot API ────────────────────────────────
+
+    async def send_message(self, chat_id: int, text: str, parse_mode: str = "HTML") -> Dict[str, Any]:
+        """Send a text message to a Telegram chat."""
+        return await self._call_api("sendMessage", {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": parse_mode,
+        })
+
+    async def _call_api(self, method: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Make a request to Telegram Bot API."""
+        url = f"{self.base_url}/{method}"
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                result = await resp.json()
+                if not result.get("ok"):
+                    error_desc = result.get("description", "Unknown error")
+                    logger.error("Telegram API error: %s - %s", resp.status, error_desc)
+                    raise Exception(f"Telegram API error: {resp.status} - {error_desc}")
+                return result.get("result", {})
+
+    # ─── Link Code Generation ────────────────────────────
+
+    async def generate_link_code(
+        self,
+        telegram_chat_id: int,
+        telegram_user_id: int,
+        username: str,
+        first_name: str,
+    ) -> str:
+        """Generate a 6-digit code for the Telegram user to enter in the app.
+        Stores Telegram user info in Redis keyed by the code.
+        """
+        code = f"{secrets.randbelow(1000000):06d}"
+        info = json.dumps({
+            "telegram_chat_id": telegram_chat_id,
+            "telegram_user_id": telegram_user_id,
+            "username": username,
+            "first_name": first_name,
+        })
+
+        r = await self._get_redis()
+        key = LINK_CODE_PREFIX + code
+        await r.set(key, info, ex=LINK_CODE_TTL)
+        logger.info("Generated link code for telegram_chat_id=%d", telegram_chat_id)
+        return code
+
+    async def validate_link_code(self, code: str) -> Optional[Dict[str, Any]]:
+        """Validate a 6-digit code entered by the user in the app.
+        Returns Telegram user info dict or None if invalid/expired.
+        Deletes the code after single use.
+        """
+        if len(code) != 6 or not code.isdigit():
+            return None
+
+        r = await self._get_redis()
+        key = LINK_CODE_PREFIX + code
+        info_str = await r.get(key)
+        if not info_str:
+            return None
+
+        # Delete after single use
+        await r.delete(key)
+        return json.loads(info_str)
+
+    # ─── Account Linking (DB) ────────────────────────────
+
+    async def link_user(
+        self,
+        user_id: str,
+        telegram_chat_id: int,
+        telegram_user_id: int,
+        username: str,
+        first_name: str,
+    ) -> Dict[str, Any]:
+        """Link a Telegram account to a Genie user.
+        Creates a record in telegram_users table and a Genie chat.
+        Uses asyncpg for direct DB access.
+        """
+        import asyncpg
+        import uuid
+
+        db_dsn = os.getenv("DB_DSN", "")
+        if db_dsn.startswith("postgres://"):
+            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
+
+        conn = await asyncpg.connect(db_dsn)
+        try:
+            # Check if already linked
+            existing = await conn.fetchrow(
+                "SELECT id, chat_id, username, first_name FROM telegram_users WHERE telegram_chat_id = $1",
+                telegram_chat_id,
+            )
+            if existing:
+                # Update info
+                await conn.execute(
+                    "UPDATE telegram_users SET username = $1, first_name = $2 WHERE telegram_chat_id = $3",
+                    username, first_name, telegram_chat_id,
+                )
+                return {
+                    "id": str(existing["id"]),
+                    "chat_id": str(existing["chat_id"]),
+                    "username": username,
+                    "first_name": first_name,
+                }
+
+            # Create a Genie chat for this Telegram conversation
+            chat_id = uuid.uuid4()
+            title = f"Telegram: @{username}" if username else f"Telegram: {first_name}"
+            await conn.execute(
+                """INSERT INTO chats (id, user_id, model, title, mode, created_at, updated_at)
+                   VALUES ($1, $2::uuid, 'default', $3, 'agent', NOW(), NOW())""",
+                chat_id, user_id, title,
+            )
+
+            # Create the telegram_users mapping
+            tg_user_id = uuid.uuid4()
+            await conn.execute(
+                """INSERT INTO telegram_users (id, user_id, telegram_chat_id, telegram_user_id, username, first_name, chat_id, linked_at)
+                   VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, NOW())""",
+                tg_user_id, user_id, telegram_chat_id, telegram_user_id, username, first_name, chat_id,
+            )
+
+            logger.info("Linked telegram user: user_id=%s, telegram_chat_id=%d, chat_id=%s",
+                         user_id, telegram_chat_id, chat_id)
+
+            return {
+                "id": str(tg_user_id),
+                "chat_id": str(chat_id),
+                "username": username,
+                "first_name": first_name,
+            }
+        finally:
+            await conn.close()
+
+    async def get_link_status(self, user_id: str) -> Dict[str, Any]:
+        """Check if a Genie user has a linked Telegram account."""
+        import asyncpg
+
+        db_dsn = os.getenv("DB_DSN", "")
+        if db_dsn.startswith("postgres://"):
+            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
+
+        conn = await asyncpg.connect(db_dsn)
+        try:
+            row = await conn.fetchrow(
+                "SELECT username, first_name FROM telegram_users WHERE user_id = $1::uuid",
+                user_id,
+            )
+            if not row:
+                return {"linked": False}
+
+            display_name = f"@{row['username']}" if row["username"] else row["first_name"]
+            return {
+                "linked": True,
+                "username": row["username"] or "",
+                "first_name": row["first_name"] or "",
+                "display_name": display_name,
+            }
+        finally:
+            await conn.close()
+
+    # ─── Webhook Processing ──────────────────────────────
+
+    async def handle_webhook(self, update: Dict[str, Any]) -> None:
+        """Process an incoming Telegram webhook update."""
+        # Handle callback queries (inline button presses)
+        if "callback_query" in update and update["callback_query"]:
+            await self._handle_callback_query(update["callback_query"])
+            return
+
+        message = update.get("message")
+        if not message:
+            return
+
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "")
+
+        # Handle /start command
+        if text.startswith("/start"):
+            await self._handle_start(chat_id, message)
+            return
+
+        # Regular message — forward to AI via Redis
+        await self._handle_regular_message(chat_id, message)
+
+    async def _handle_start(self, chat_id: int, message: Dict[str, Any]) -> None:
+        """Handle /start command — generate a link code."""
+        # Check if already linked
+        import asyncpg
+        db_dsn = os.getenv("DB_DSN", "")
+        if db_dsn.startswith("postgres://"):
+            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
+
+        conn = await asyncpg.connect(db_dsn)
+        try:
+            existing = await conn.fetchrow(
+                "SELECT id FROM telegram_users WHERE telegram_chat_id = $1", chat_id
+            )
+        finally:
+            await conn.close()
+
+        if existing:
+            await self.send_message(
+                chat_id,
+                "Your account is already linked! 🎉\n\nYou can send messages here and I'll respond with AI-powered answers.",
+            )
+            return
+
+        # Extract user info
+        from_user = message.get("from", {})
+        username = from_user.get("username", "")
+        first_name = from_user.get("first_name", "")
+        user_id = from_user.get("id", 0)
+
+        # Generate a 6-digit code
+        code = await self.generate_link_code(chat_id, user_id, username, first_name)
+
+        await self.send_message(
+            chat_id,
+            f"Welcome to Genie Bot! 🧞\n\nYour linking code:\n\n<b>{code}</b>\n\n"
+            f"Enter this code in the Genie app:\nSettings → Integrations → Telegram\n\n"
+            f"The code expires in 10 minutes.",
+        )
+
+    async def _handle_regular_message(self, chat_id: int, message: Dict[str, Any]) -> None:
+        """Forward a regular Telegram message to the AI via Redis pub/sub."""
+        import asyncpg
+        import uuid
+
+        db_dsn = os.getenv("DB_DSN", "")
+        if db_dsn.startswith("postgres://"):
+            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
+
+        conn = await asyncpg.connect(db_dsn)
+        try:
+            row = await conn.fetchrow(
+                "SELECT user_id, chat_id FROM telegram_users WHERE telegram_chat_id = $1", chat_id
+            )
+        finally:
+            await conn.close()
+
+        if not row:
+            await self.send_message(
+                chat_id,
+                "Your account is not linked. Send /start to get a link code.",
+            )
+            return
+
+        genie_user_id = str(row["user_id"])
+        genie_chat_id = str(row["chat_id"])
+        text = message.get("text", "")
+        if not text:
+            photos = message.get("photo")
+            if photos:
+                text = "[Photo received]"
+            else:
+                return
+
+        # Publish message to Redis for the AI agent to pick up
+        r = await self._get_redis()
+        message_id = str(uuid.uuid4())
+        frame = {
+            "id": 0,
+            "chat_id": genie_chat_id,
+            "kind": "token",
+            "op": "message",
+            "timestamp": "",
+            "payload": json.dumps({
+                "message_id": message_id,
+                "message": text,
+                "role": "user",
+                "model": "default",
+                "trace_id": str(uuid.uuid4()),
+                "source": "telegram",
+                "telegram_chat_id": chat_id,
+            }),
+        }
+        channel = f"chat:request:{genie_chat_id}"
+        await r.publish(channel, json.dumps(frame))
+        logger.info("Published telegram message to %s (user=%s)", channel, genie_user_id)
+
+    async def _handle_callback_query(self, query: Dict[str, Any]) -> None:
+        """Handle inline button press as a regular message."""
+        message = query.get("message")
+        if not message:
+            return
+
+        chat_id = message["chat"]["id"]
+        data = query.get("data", "")
+
+        # Forward as a regular message
+        fake_message = {
+            "from": query.get("from", {}),
+            "chat": {"id": chat_id},
+            "text": data,
+        }
+        await self._handle_regular_message(chat_id, fake_message)
+
+    async def close(self) -> None:
+        """Close resources."""
+        if self._redis:
+            await self._redis.close()
+
+
+# ─── Singleton ────────────────────────────────────────
+
+_service: Optional[TelegramService] = None
+
+
+def get_service() -> TelegramService:
+    """Get the singleton TelegramService instance."""
+    global _service
+    if _service is None:
+        _service = TelegramService()
+    return _service

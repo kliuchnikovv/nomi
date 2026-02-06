@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { PluginMainScreenProps } from '@genie/front/plugins/types';
-import { apiClient } from '@genie/front/apiClient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { XmarkCircle } from 'iconoir-react-native';
 import { getApiUrl } from '@genie/front/config';
+import { authStore } from '@genie/front/apiClient';
 
 interface TelegramMessage {
     id: string;
@@ -12,105 +14,112 @@ interface TelegramMessage {
     created_at: number;
 }
 
+interface TelegramStatus {
+    linked: boolean;
+    username?: string;
+    first_name?: string;
+    display_name?: string;
+}
+
 export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<TelegramMessage[]>([]);
     const [loading, setLoading] = useState(true);
-    const [linkToken, setLinkToken] = useState<string | null>(null);
+    const [status, setStatus] = useState<TelegramStatus | null>(null);
 
-    const loadMessages = async () => {
-        if (!integrationId) return;
+    const loadStatus = async () => {
         try {
-            setLoading(true);
-            // Messages are stored as regular Genie chat messages
-            // The integrationId can be used to find the associated chat
-            // For now, show a placeholder
+            const apiUrl = getApiUrl();
+            const token = authStore.getToken();
+            if (!token) return;
+
+            const response = await fetch(`${apiUrl}/telegram/status`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setStatus(data);
+            }
         } catch (error) {
-            console.error('Failed to load Telegram messages:', error);
+            console.error('Failed to load Telegram status:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const generateLinkToken = async () => {
-        try {
-            const response = await apiClient.post<{ token: string; bot_link: string }>(
-                `${getApiUrl()}/telegram/link-token`,
-                {}
-            );
-            if (response) {
-                setLinkToken(response.token);
-            }
-        } catch (error) {
-            console.error('Failed to generate link token:', error);
-        }
-    };
-
     useEffect(() => {
-        loadMessages();
+        loadStatus();
     }, [integrationId]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            <View style={styles.header}>
-                <View style={styles.headerLeft}>
-                    <Text style={styles.headerIcon}>✈️</Text>
-                    <Text style={[styles.title, { color: theme.text }]}>Telegram Bot</Text>
+            {/* Header */}
+            <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
+                <View style={styles.headerRow}>
+                    <View style={styles.headerLeft}>
+                        <Text style={styles.headerIcon}>✈️</Text>
+                        <Text style={[styles.title, { color: theme.text }]}>Telegram</Text>
+                    </View>
+                    {onClose && (
+                        <Pressable onPress={onClose} hitSlop={12}>
+                            <XmarkCircle width={24} height={24} color={theme.textSecondary} />
+                        </Pressable>
+                    )}
                 </View>
-                {onClose && (
-                    <Pressable onPress={onClose} style={styles.closeButton}>
-                        <Text style={[styles.closeText, { color: theme.textSecondary }]}>✕</Text>
-                    </Pressable>
-                )}
             </View>
 
             <View style={styles.content}>
                 {loading ? (
-                    <ActivityIndicator size="large" color={theme.accent} />
-                ) : messages.length > 0 ? (
-                    <FlatList
-                        data={messages}
-                        keyExtractor={(item) => item.id}
-                        renderItem={({ item }) => (
-                            <View style={[
-                                styles.messageItem,
-                                item.role === 'user' ? styles.userMessage : styles.assistantMessage,
-                            ]}>
-                                <Text style={[styles.messageRole, { color: theme.textSecondary }]}>
-                                    {item.role === 'user' ? 'You (Telegram)' : 'Genie'}
-                                </Text>
-                                <Text style={[styles.messageText, { color: theme.text }]}>
-                                    {item.text}
-                                </Text>
-                            </View>
+                    <View style={styles.center}>
+                        <ActivityIndicator size="large" color={theme.accent} />
+                    </View>
+                ) : status?.linked ? (
+                    <View style={styles.linkedState}>
+                        <View style={[styles.statusBadge, { backgroundColor: '#e8f5e9' }]}>
+                            <Text style={styles.statusIcon}>✅</Text>
+                            <Text style={[styles.statusText, { color: '#2e7d32' }]}>
+                                Connected as {status.display_name}
+                            </Text>
+                        </View>
+
+                        <Text style={[styles.infoText, { color: theme.textSecondary }]}>
+                            Messages sent to @genie_bot in Telegram will be processed by your AI assistant.
+                        </Text>
+
+                        {messages.length > 0 ? (
+                            <FlatList
+                                data={messages}
+                                keyExtractor={(item) => item.id}
+                                style={styles.messageList}
+                                renderItem={({ item }) => (
+                                    <View style={[
+                                        styles.messageItem,
+                                        item.role === 'user' ? styles.userMessage : styles.assistantMessage,
+                                    ]}>
+                                        <Text style={[styles.messageRole, { color: theme.textSecondary }]}>
+                                            {item.role === 'user' ? 'You (Telegram)' : 'Genie'}
+                                        </Text>
+                                        <Text style={[styles.messageText, { color: theme.text }]}>
+                                            {item.text}
+                                        </Text>
+                                    </View>
+                                )}
+                            />
+                        ) : (
+                            <Text style={[styles.emptyMessages, { color: theme.textSecondary }]}>
+                                No messages yet. Start chatting with @genie_bot in Telegram!
+                            </Text>
                         )}
-                    />
+                    </View>
                 ) : (
-                    <View style={styles.emptyState}>
+                    <View style={styles.unlinkedState}>
                         <Text style={[styles.emptyTitle, { color: theme.text }]}>
-                            Telegram Bot Integration
+                            Telegram Not Connected
                         </Text>
                         <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>
-                            Link your Telegram account to chat with Genie via Telegram.
+                            Connect your Telegram account through Settings → Integrations → Telegram.
                         </Text>
-
-                        <Pressable
-                            style={[styles.linkButton, { backgroundColor: '#0088cc' }]}
-                            onPress={generateLinkToken}
-                        >
-                            <Text style={styles.linkButtonText}>Generate Link Token</Text>
-                        </Pressable>
-
-                        {linkToken && (
-                            <View style={styles.tokenContainer}>
-                                <Text style={[styles.tokenLabel, { color: theme.textSecondary }]}>
-                                    Send this to @genie_bot:
-                                </Text>
-                                <Text style={[styles.tokenText, { color: theme.text }]} selectable>
-                                    /start {linkToken}
-                                </Text>
-                            </View>
-                        )}
                     </View>
                 )}
             </View>
@@ -123,35 +132,62 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
+        paddingHorizontal: 20,
+        paddingBottom: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
     },
     headerLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 10,
     },
     headerIcon: {
         fontSize: 22,
     },
     title: {
         fontSize: 18,
-        fontWeight: '600',
-    },
-    closeButton: {
-        padding: 8,
-    },
-    closeText: {
-        fontSize: 18,
-        fontWeight: '600',
+        fontWeight: '700',
     },
     content: {
         flex: 1,
         padding: 16,
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    linkedState: {
+        flex: 1,
+    },
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
+        marginBottom: 16,
+    },
+    statusIcon: {
+        fontSize: 16,
+    },
+    statusText: {
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    infoText: {
+        fontSize: 14,
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    messageList: {
+        flex: 1,
     },
     messageItem: {
         padding: 12,
@@ -177,7 +213,12 @@ const styles = StyleSheet.create({
         fontSize: 15,
         lineHeight: 20,
     },
-    emptyState: {
+    emptyMessages: {
+        fontSize: 14,
+        textAlign: 'center',
+        marginTop: 24,
+    },
+    unlinkedState: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
@@ -191,34 +232,6 @@ const styles = StyleSheet.create({
     emptySubtext: {
         fontSize: 14,
         textAlign: 'center',
-        marginBottom: 24,
         lineHeight: 20,
-    },
-    linkButton: {
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 8,
-        marginBottom: 16,
-    },
-    linkButtonText: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    tokenContainer: {
-        alignItems: 'center',
-        padding: 16,
-        backgroundColor: '#f5f5f5',
-        borderRadius: 12,
-        width: '100%',
-    },
-    tokenLabel: {
-        fontSize: 13,
-        marginBottom: 8,
-    },
-    tokenText: {
-        fontSize: 16,
-        fontWeight: '600',
-        fontFamily: 'monospace',
     },
 });
