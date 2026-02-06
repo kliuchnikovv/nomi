@@ -62,7 +62,7 @@ function PluginSection({
     onClose?: () => void;
 }) {
     const { theme } = useTheme();
-    const { activePluginView, setActivePluginView } = useMain();
+    const { activePluginView, setActivePluginView, setActivePluginIntegrationId } = useMain();
     const isExpanded = expandedPlugins.has(plugin.id);
 
     // Get metadata from registry
@@ -78,7 +78,10 @@ function PluginSection({
         return (
             <SidebarComponent
                 integrationId={plugin.id}
-                onSelect={() => setActivePluginView(plugin.provider)}
+                onSelect={() => {
+                    setActivePluginView(plugin.provider);
+                    setActivePluginIntegrationId(plugin.id);
+                }}
                 isSelected={activePluginView === plugin.provider}
                 onClose={onClose}
             />
@@ -270,7 +273,7 @@ function RightSidebarContent({
 }) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
-    const { activePluginView, setActivePluginView } = useMain();
+    const { activePluginView, setActivePluginView, setActivePluginIntegrationId } = useMain();
     const { plugins, loading, refreshing, error, refresh, loadMoreForPlugin, hasMoreForPlugin, loadingMorePlugins } = usePluginChats();
     const { startPluginThread } = useChat();
     const [expandedPlugins, setExpandedPlugins] = useState<Set<string>>(new Set());
@@ -378,7 +381,10 @@ function RightSidebarContent({
                             return (
                                 <SidebarComponent
                                     integrationId={plugin.id}
-                                    onSelect={() => setActivePluginView(plugin.provider)}
+                                    onSelect={() => {
+                                        setActivePluginView(plugin.provider);
+                                        setActivePluginIntegrationId(plugin.id);
+                                    }}
                                     isSelected={activePluginView === plugin.provider}
                                     onClose={onClose}
                                 />

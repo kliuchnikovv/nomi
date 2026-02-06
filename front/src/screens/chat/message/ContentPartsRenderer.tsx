@@ -8,7 +8,7 @@ import { createMarkdownStyles } from './dynamicStyles';
 import { createMarkdownRules } from './markdownRules';
 import { SingleToolCall, ReasoningBlock, CollapsibleSteps } from './ToolCalls';
 import { DocumentBlock } from './DocumentBlock';
-import { PollComponent, ButtonsComponent } from './UIComponents';
+import { getChatElementComponent } from '../../../plugins/chatElementRegistry';
 
 // Create markdown rules once outside component (they don't depend on props)
 const markdownRules = createMarkdownRules(() => {});
@@ -150,31 +150,18 @@ const ToolCallsGroup = memo(function ToolCallsGroup({ parts }: { parts: ContentP
         <CollapsibleSteps>
             {parts.map((part, index) => {
                 if (part.type === 'tool_call') {
-                    // Custom UI Renderers
-                    if (part.tool_call.name === 'ui_client_show_poll') {
+                    // Check chat element registry for custom UI
+                    const CustomElement = getChatElementComponent(part.tool_call.name);
+                    if (CustomElement) {
                         const args =
                             typeof part.tool_call.arguments === 'string'
                                 ? JSON.parse(part.tool_call.arguments)
                                 : part.tool_call.arguments;
                         return (
-                            <PollComponent
-                                key={`poll-${index}`}
-                                question={args.question}
-                                options={args.options}
-                                allowMultiple={args.allow_multiple}
-                            />
-                        );
-                    }
-                    if (part.tool_call.name === 'ui_client_show_buttons') {
-                        const args =
-                            typeof part.tool_call.arguments === 'string'
-                                ? JSON.parse(part.tool_call.arguments)
-                                : part.tool_call.arguments;
-                        return (
-                            <ButtonsComponent
-                                key={`btns-${index}`}
-                                text={args.text}
-                                buttons={args.buttons}
+                            <CustomElement
+                                key={`custom-${index}`}
+                                args={args}
+                                toolCall={part.tool_call}
                             />
                         );
                     }

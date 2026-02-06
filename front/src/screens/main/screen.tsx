@@ -11,7 +11,7 @@ import { ConnectorsProvider } from '../settings/connectors/context';
 import { getClientPlugin } from '../../plugins/clientRegistry';
 
 function MainScreenContent() {
-    const { activeChatID, setActiveChatID, activePluginView } = useMain();
+    const { activeChatID, setActiveChatID, activePluginView, setActivePluginView, activePluginIntegrationId } = useMain();
     const [settingsOpen, setSettingsOpen] = useState(false);
 
     // Check if we need to render a plugin view
@@ -28,7 +28,10 @@ function MainScreenContent() {
             <View style={styles.root}>
                 {PluginComponent ? (
                     <View style={styles.content}>
-                        <PluginComponent />
+                        <PluginComponent
+                            integrationId={activePluginIntegrationId ?? undefined}
+                            onClose={() => setActivePluginView(null)}
+                        />
                     </View>
                 ) : (
                     <ChatProvider

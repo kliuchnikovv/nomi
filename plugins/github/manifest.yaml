@@ -4,7 +4,7 @@ description: GitHub integration for repository management, issues, and pull requ
 version: 1.0.0
 
 execution:
-  type: server
+  type: hybrid
   entry_points:
     server: ./server/tools.py
 
@@ -144,5 +144,5 @@ background_tasks:
   enabled: false
 
 storage:
-  type: server_only
+  type: hybrid
   encrypted: true

@@ -3,10 +3,7 @@ import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
 import { Github, RefreshCw, ExternalLink } from 'iconoir-react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { ThemePalette } from '@genie/front/themes/types';
-
-interface GithubMainScreenProps {
-    integrationId: string;
-}
+import { PluginMainScreenProps } from '@genie/front/plugins/types';
 
 interface Repo {
     id: number;
@@ -19,7 +16,7 @@ interface Repo {
     updated_at: string;
 }
 
-export function GithubMainScreen({ integrationId }: GithubMainScreenProps) {
+export function GithubMainScreen({ integrationId }: PluginMainScreenProps) {
     const { theme, palette } = useTheme();
     const [repos, setRepos] = useState<Repo[]>([]);
     const [loading, setLoading] = useState(true);

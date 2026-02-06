@@ -3,22 +3,18 @@ import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, Pr
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { gmailClient } from '@genie/front/services/integrations/clients/GmailClient';
 import { Email } from '@genie/front/services/integrations/IntegrationStorage';
+import { PluginMainScreenProps } from '@genie/front/plugins/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XmarkCircle } from 'iconoir-react-native';
 
-export interface GmailMainScreenProps {
-    onClose?: () => void;
-}
-
-export function GmailMainScreen({ onClose }: GmailMainScreenProps) {
+export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const [emails, setEmails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
-    // TODO: Get real integration ID from context/props
-    const integrationId = 'gmail'; 
+    const integrationId = integrationIdProp ?? 'gmail'; 
 
     const loadEmails = async () => {
         try {

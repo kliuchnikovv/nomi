@@ -32,6 +32,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     const [activeChatID, setActiveChatID] = useState<string | null>(null);
     const [sidebarFilter, setSidebarFilter] = useState<string>('all');
     const [activePluginView, setActivePluginView] = useState<string | null>(null);
+    const [activePluginIntegrationId, setActivePluginIntegrationId] = useState<string | null>(null);
 
     const { isAuthenticated } = useAuth();
 
@@ -289,6 +290,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         clearPendingChatMode,
         activePluginView,
         setActivePluginView,
+        activePluginIntegrationId,
+        setActivePluginIntegrationId,
     };
 
     return (

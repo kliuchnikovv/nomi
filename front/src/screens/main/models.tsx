@@ -19,6 +19,8 @@ export interface MainContextType {
     clearPendingChatMode?: () => void;
     activePluginView: string | null;
     setActivePluginView: (view: string | null) => void;
+    activePluginIntegrationId: string | null;
+    setActivePluginIntegrationId: (id: string | null) => void;
 }
 
 export type Chat = {

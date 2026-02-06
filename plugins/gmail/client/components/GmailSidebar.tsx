@@ -4,15 +4,9 @@ import { Mail } from 'iconoir-react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { gmailClient } from '@genie/front/services/integrations/clients/GmailClient';
 import { Email } from '@genie/front/services/integrations/IntegrationStorage';
+import { PluginSidebarProps } from '@genie/front/plugins/types';
 
-interface GmailSidebarProps {
-    integrationId: string;
-    onSelect: () => void;
-    isSelected: boolean;
-    onClose?: () => void;
-}
-
-export function GmailSidebar({ integrationId, onSelect, isSelected }: GmailSidebarProps) {
+export function GmailSidebar({ integrationId, onSelect, isSelected }: PluginSidebarProps) {
     const { theme, palette } = useTheme();
     const [emails, setEmails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(true);

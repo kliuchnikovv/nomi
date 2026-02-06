@@ -3,32 +3,40 @@
  * Plugins register via registerClientPlugin; ClientToolExecutor uses getHandler to dispatch.
  */
 
-import React from 'react';
+import { ClientPluginHandler } from './types';
+import { registerChatElement } from './chatElementRegistry';
+import { registerWidget } from './widgetRegistry';
 
-export interface ClientPluginHandler {
-    execute(method: string, params: Record<string, any>): Promise<string>;
-    /** Optional: sync/background task for this integration (e.g. sync emails, events). */
-    backgroundTask?: (integrationId: string) => Promise<void>;
-    /** Optional: Full-screen component to show when plugin is selected. */
-    MainComponent?: React.ComponentType<any>;
-    /** Optional: Sidebar item component for this plugin. */
-    SidebarComponent?: React.ComponentType<any>;
-}
+export type { ClientPluginHandler } from './types';
 
 const handlers = new Map<string, ClientPluginHandler>();
 
 export function registerClientPlugin(name: string, handler: ClientPluginHandler): void {
     handlers.set(name.toLowerCase(), handler);
+
+    // Auto-register chat elements provided by this plugin
+    if (handler.chatElements) {
+        for (const el of handler.chatElements) {
+            registerChatElement(el);
+        }
+    }
+
+    // Auto-register widgets provided by this plugin
+    if (handler.widgets) {
+        for (const w of handler.widgets) {
+            registerWidget(w);
+        }
+    }
 }
 
 export function getClientPluginHandler(name: string): ClientPluginHandler | undefined {
     const nameLower = name.toLowerCase();
-    
+
     // Try exact match first
     if (handlers.has(nameLower)) {
         return handlers.get(nameLower);
     }
-    
+
     // Try prefix match (e.g. "gmail (bob@example.com)" -> "gmail")
     // Sort by length desc to match longest prefix first
     const keys = Array.from(handlers.keys()).sort((a, b) => b.length - a.length);
@@ -37,7 +45,7 @@ export function getClientPluginHandler(name: string): ClientPluginHandler | unde
             return handlers.get(key);
         }
     }
-    
+
     return undefined;
 }
 

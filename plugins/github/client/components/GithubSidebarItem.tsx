@@ -3,14 +3,9 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Github } from 'iconoir-react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { ThemePalette } from '@genie/front/themes/types';
+import { PluginSidebarProps } from '@genie/front/plugins/types';
 
-interface GithubSidebarItemProps {
-    integrationId: string;
-    onSelect: () => void;
-    isSelected: boolean;
-}
-
-export function GithubSidebarItem({ integrationId, onSelect, isSelected }: GithubSidebarItemProps) {
+export function GithubSidebarItem({ integrationId, onSelect, isSelected }: PluginSidebarProps) {
     const { theme, palette } = useTheme();
     const [unreadCount, setUnreadCount] = useState(0);
 
