@@ -921,16 +921,22 @@ class RedisSession:
                 elif evt_type == "text":
                     chunk = event.get("content", "")
                     agent_name = event.get("agent_name")
+                    logger.info(
+                        "[RedisSession] TEXT event: chunk_len=%d, source=%s, chat_id=%s",
+                        len(chunk) if chunk else 0,
+                        self._source,
+                        self._telegram_chat_id,
+                    )
                     if chunk:
                         if self._source == "telegram":
                             telegram_text_buffer.append(chunk)
-                            logger.debug(
+                            logger.info(
                                 "[RedisSession] Added to Telegram buffer: chunk_len=%d, buffer_len=%d",
                                 len(chunk),
                                 len(telegram_text_buffer),
                             )
                         else:
-                            logger.debug(
+                            logger.info(
                                 "[RedisSession] Skipping Telegram buffer: source=%s",
                                 self._source,
                             )
