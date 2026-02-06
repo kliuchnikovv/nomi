@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import secrets
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import aiohttp
@@ -328,18 +329,19 @@ class TelegramService:
         frame = {
             "id": 0,
             "chat_id": genie_chat_id,
-            "kind": "token",
+            "kind": "data",
             "op": "message",
-            "timestamp": "",
-            "payload": json.dumps({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "payload": {
                 "message_id": message_id,
                 "message": text,
                 "role": "user",
                 "model": "default",
                 "trace_id": str(uuid.uuid4()),
+                "user_id": genie_user_id,
                 "source": "telegram",
                 "telegram_chat_id": chat_id,
-            }),
+            },
         }
         channel = f"chat:request:{genie_chat_id}"
         await r.publish(channel, json.dumps(frame))
