@@ -65,16 +65,16 @@ type Integration struct {
 	UpdatedAt time.Time `gorm:"not null"`
 }
 
-// TelegramUser maps a Telegram chat to a Genie user and chat.
-type TelegramUser struct {
-	ID             uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	UserID         uuid.UUID `gorm:"type:uuid;not null;index"`     // Genie user ID
-	TelegramChatID int64     `gorm:"not null;uniqueIndex"`         // Telegram chat ID
-	TelegramUserID int64     `gorm:"not null"`                     // Telegram user ID
-	Username       string    `gorm:"type:text"`                    // Telegram @username
-	FirstName      string    `gorm:"type:text"`                    // Telegram first name
-	ChatID         uuid.UUID `gorm:"type:uuid;index"`              // Linked Genie Chat ID
-	LinkedAt       time.Time `gorm:"autoCreateTime"`
+// PluginData is a generic key-value store for plugin-specific data.
+// Each plugin can store multiple records per user (e.g. linked accounts, settings).
+type PluginData struct {
+	ID         uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	UserID     uuid.UUID      `gorm:"type:uuid;not null;index:idx_pd_user_plugin,priority:1"`
+	PluginName string         `gorm:"type:varchar(50);not null;index:idx_pd_user_plugin,priority:2;index:idx_pd_type,priority:2"`
+	RecordType string         `gorm:"type:varchar(50);not null;index:idx_pd_type,priority:3"`
+	Data       datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'"`
+	CreatedAt  time.Time      `gorm:"not null"`
+	UpdatedAt  time.Time      `gorm:"not null"`
 }
 
 // CreateAttachment creates a new attachment record
@@ -97,4 +97,42 @@ func (s *Storage) GetAttachmentsByIDs(ctx context.Context, ids []uuid.UUID) ([]A
 		return nil, err
 	}
 	return attachments, nil
+}
+
+// ── PluginData CRUD ─────────────────────────────────────
+
+func (s *Storage) CreatePluginData(ctx context.Context, pd *PluginData) error {
+	return s.DB.WithContext(ctx).Create(pd).Error
+}
+
+func (s *Storage) GetPluginData(ctx context.Context, userID uuid.UUID, pluginName, recordType string) ([]PluginData, error) {
+	var results []PluginData
+	err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND plugin_name = ? AND record_type = ?", userID, pluginName, recordType).
+		Find(&results).Error
+	return results, err
+}
+
+// GetPluginDataByField finds a single record by a JSONB field value.
+// Example: GetPluginDataByField(ctx, "telegram", "linked_account", "telegram_chat_id", "123456")
+func (s *Storage) GetPluginDataByField(ctx context.Context, pluginName, recordType, jsonField, value string) (*PluginData, error) {
+	var pd PluginData
+	err := s.DB.WithContext(ctx).
+		Where("plugin_name = ? AND record_type = ? AND data->>? = ?", pluginName, recordType, jsonField, value).
+		First(&pd).Error
+	if err != nil {
+		return nil, err
+	}
+	return &pd, nil
+}
+
+func (s *Storage) UpdatePluginData(ctx context.Context, id uuid.UUID, data datatypes.JSON) error {
+	return s.DB.WithContext(ctx).
+		Model(&PluginData{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{"data": data, "updated_at": time.Now()}).Error
+}
+
+func (s *Storage) DeletePluginData(ctx context.Context, id uuid.UUID) error {
+	return s.DB.WithContext(ctx).Where("id = ?", id).Delete(&PluginData{}).Error
 }

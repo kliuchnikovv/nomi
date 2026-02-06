@@ -55,9 +55,9 @@ class RedisSession:
         # History storage
         self.chat_history: list[dict[str, str]] = []
 
-        # Telegram delivery context (set from payload in handle_user_message)
-        self._source: str | None = None
-        self._telegram_chat_id: str | int | None = None
+        # Plugin delivery context (set from payload in handle_user_message)
+        self._delivery_source: str | None = None
+        self._delivery_context: dict[str, Any] = {}
 
         # Per-session client tool result handling
         self.pubsub: Any | None = None
@@ -259,25 +259,6 @@ class RedisSession:
 
         self.next_id = frame.id + 1
         return self.next_id
-
-    async def _deliver_to_telegram(self, text: str) -> None:
-        """Send completed AI response to Telegram chat."""
-        if not text or not self._telegram_chat_id:
-            return
-        try:
-            from plugins.telegram.server.service import get_service
-
-            service = get_service()
-            if service.enabled:
-                await service.send_message(
-                    int(self._telegram_chat_id), text, parse_mode="HTML"
-                )
-                logger.info(
-                    "[RedisSession] Delivered response to Telegram chat_id=%s",
-                    self._telegram_chat_id,
-                )
-        except Exception as e:
-            logger.error("[RedisSession] Failed to deliver to Telegram: %s", e)
 
     async def _send_client_action_and_wait(
         self, plugin: str, method: str, params: dict[str, Any]
@@ -754,9 +735,9 @@ class RedisSession:
 
         # --- NEW LOGIC: Init from Payload ---
 
-        # Reset Telegram context at the start of each request
-        self._source = None
-        self._telegram_chat_id = None
+        # Reset delivery context at the start of each request
+        self._delivery_source = None
+        self._delivery_context = {}
 
         # 0. Extract user_id first (critical for RAG)
         incoming_user_id = payload.get("user_id")
@@ -764,14 +745,18 @@ class RedisSession:
             self.user_id = str(incoming_user_id)
             logger.info("[RedisSession] Updated user_id from payload: %s", self.user_id)
 
-        # 0b. Extract Telegram delivery context
-        self._source = payload.get("source")
-        self._telegram_chat_id = payload.get("telegram_chat_id")
-        logger.info(
-            "[RedisSession] Extracted source=%s, telegram_chat_id=%s from payload",
-            self._source,
-            self._telegram_chat_id,
-        )
+        # 0b. Extract plugin delivery context from payload
+        self._delivery_source = payload.get("source")
+        if self._delivery_source:
+            # Collect all plugin-specific context keys from payload
+            standard_keys = {"message", "role", "user_id", "source", "message_id", "trace_id",
+                             "history", "tools", "command", "team", "attachments", "extracted_facts"}
+            self._delivery_context = {k: v for k, v in payload.items() if k not in standard_keys}
+            logger.info(
+                "[RedisSession] Delivery source=%s, context_keys=%s",
+                self._delivery_source,
+                list(self._delivery_context.keys()),
+            )
 
         # 1. Check and update chat history
         incoming_history = payload.get("history")
@@ -843,7 +828,17 @@ class RedisSession:
         self._last_run_completed_content = None
         idx = 0
         done_sent = False
-        telegram_text_buffer: list[str] = []
+
+        # Resolve delivery handler for external channels (e.g. Telegram)
+        from src.server.delivery import DeliveryRegistry
+
+        delivery_handler = (
+            DeliveryRegistry.get(self._delivery_source)
+            if self._delivery_source
+            else None
+        )
+        delivery_text_buffer: list[str] = []
+
         try:
             # Stream agent events for real-time response
             stream_iter = self._stream_agent_events(text, payload.get("attachments"))
@@ -852,11 +847,6 @@ class RedisSession:
                     break
 
                 evt_type = event.get("type")
-                logger.info(
-                    "[RedisSession] Event type: %s, source=%s",
-                    evt_type,
-                    self._source,
-                )
 
                 if evt_type == "content_done":
                     # Content generation is complete — send DONE immediately
@@ -871,34 +861,15 @@ class RedisSession:
                         make_done(self.next_id, msg_chat_id, done_payload)
                     )
                     done_sent = True
-                    # Deliver to Telegram if this is a Telegram message
-                    logger.info(
-                        "[RedisSession] Checking Telegram delivery: source=%s, chat_id=%s, buffer_len=%d",
-                        self._source,
-                        self._telegram_chat_id,
-                        len(telegram_text_buffer),
-                    )
-                    if self._source == "telegram" and self._telegram_chat_id:
-                        full_text = "".join(telegram_text_buffer)
-                        # Fallback to completed_content if buffer is empty
+
+                    # Deliver to external channel via plugin delivery handler
+                    if delivery_handler:
+                        full_text = "".join(delivery_text_buffer)
                         if not full_text and completed_content:
                             full_text = str(completed_content)
-                            logger.info(
-                                "[RedisSession] Using completed_content fallback: text_len=%d",
-                                len(full_text),
-                            )
                         if full_text:
-                            logger.info(
-                                "[RedisSession] Delivering to Telegram: chat_id=%s, text_len=%d",
-                                self._telegram_chat_id,
-                                len(full_text),
-                            )
-                            await self._deliver_to_telegram(full_text)
-                        else:
-                            logger.warning(
-                                "[RedisSession] No text to deliver to Telegram: buffer_len=%d, completed_content=%s",
-                                len(telegram_text_buffer),
-                                "yes" if completed_content else "no",
+                            await delivery_handler.deliver(
+                                full_text, self._delivery_context
                             )
 
                     # Drain the remaining stream in background so learning/memory
@@ -926,25 +897,9 @@ class RedisSession:
                 elif evt_type == "text":
                     chunk = event.get("content", "")
                     agent_name = event.get("agent_name")
-                    logger.info(
-                        "[RedisSession] TEXT event: chunk_len=%d, source=%s, chat_id=%s",
-                        len(chunk) if chunk else 0,
-                        self._source,
-                        self._telegram_chat_id,
-                    )
                     if chunk:
-                        if self._source == "telegram":
-                            telegram_text_buffer.append(chunk)
-                            logger.info(
-                                "[RedisSession] Added to Telegram buffer: chunk_len=%d, buffer_len=%d",
-                                len(chunk),
-                                len(telegram_text_buffer),
-                            )
-                        else:
-                            logger.info(
-                                "[RedisSession] Skipping Telegram buffer: source=%s",
-                                self._source,
-                            )
+                        if delivery_handler and delivery_handler.should_buffer():
+                            delivery_text_buffer.append(chunk)
                         payload_data = {
                             "ix": idx,
                             "eof": False,
@@ -963,14 +918,8 @@ class RedisSession:
                 elif evt_type == "member_response":
                     chunk = event.get("content", "")
                     if chunk:
-                        # Add to Telegram buffer if this is a Telegram message
-                        if self._source == "telegram":
-                            telegram_text_buffer.append(chunk)
-                            logger.info(
-                                "[RedisSession] Added member_response to Telegram buffer: chunk_len=%d, buffer_len=%d",
-                                len(chunk),
-                                len(telegram_text_buffer),
-                            )
+                        if delivery_handler and delivery_handler.should_buffer():
+                            delivery_text_buffer.append(chunk)
                         # Send as a regular message part, but you might want to mark it
                         # so the frontend knows who sent it.
                         payload_data = {
@@ -1081,33 +1030,14 @@ class RedisSession:
                 await self._send_frame(
                     make_done(self.next_id, msg_chat_id, done_payload_fb)
                 )
-                # Deliver to Telegram if this is a Telegram message
-                logger.info(
-                    "[RedisSession] Fallback Telegram delivery check: source=%s, chat_id=%s",
-                    self._source,
-                    self._telegram_chat_id,
-                )
-                if self._source == "telegram" and self._telegram_chat_id:
-                    full_text = "".join(telegram_text_buffer)
-                    # Fallback to completed_content if buffer is empty
+                # Deliver to external channel via plugin delivery handler (fallback path)
+                if delivery_handler:
+                    full_text = "".join(delivery_text_buffer)
                     if not full_text and completed_content:
                         full_text = str(completed_content)
-                        logger.info(
-                            "[RedisSession] Fallback using completed_content: text_len=%d",
-                            len(full_text),
-                        )
                     if full_text:
-                        logger.info(
-                            "[RedisSession] Fallback delivering to Telegram: chat_id=%s, text_len=%d",
-                            self._telegram_chat_id,
-                            len(full_text),
-                        )
-                        await self._deliver_to_telegram(full_text)
-                    else:
-                        logger.warning(
-                            "[RedisSession] Fallback no text to deliver: buffer_len=%d, completed_content=%s",
-                            len(telegram_text_buffer),
-                            "yes" if completed_content else "no",
+                        await delivery_handler.deliver(
+                            full_text, self._delivery_context
                         )
 
         except asyncio.CancelledError:

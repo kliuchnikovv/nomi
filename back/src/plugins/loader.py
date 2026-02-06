@@ -93,6 +93,36 @@ def _register_server_builders(plugins_dir: Path, repo_root: Path) -> None:
             logger.warning("failed to load plugin %s server tools: %s", name, e)
 
 
+def _register_delivery_handlers() -> None:
+    """Import plugins/<name>/server/delivery and register DeliveryHandler instances."""
+    from src.server.delivery import DeliveryRegistry
+
+    for m in _manifests:
+        name = m.get("name", "")
+        delivery_module_name = f"plugins.{name}.server.delivery"
+        try:
+            mod = importlib.import_module(delivery_module_name)
+            # Look for a class named <Name>DeliveryHandler or just DeliveryHandler
+            handler_cls = None
+            for attr_name in dir(mod):
+                obj = getattr(mod, attr_name)
+                if (
+                    isinstance(obj, type)
+                    and attr_name.endswith("DeliveryHandler")
+                    and attr_name != "DeliveryHandler"
+                ):
+                    handler_cls = obj
+                    break
+            if handler_cls is None:
+                handler_cls = getattr(mod, "DeliveryHandler", None)
+            if handler_cls is not None:
+                DeliveryRegistry.register(name, handler_cls())
+        except ImportError:
+            pass  # Plugin has no delivery module, that's fine
+        except Exception as e:
+            logger.warning("failed to load delivery handler for %s: %s", name, e)
+
+
 def load_plugins() -> None:
     """Load plugin manifests and register server/hybrid tool builders. Idempotent."""
     global _manifests, _manifests_by_name, _loaded
@@ -103,6 +133,7 @@ def load_plugins() -> None:
     _manifests = _load_manifests(plugins_dir)
     _manifests_by_name = {m["name"]: m for m in _manifests}
     _register_server_builders(plugins_dir, repo_root)
+    _register_delivery_handlers()
     _loaded = True
 
 
@@ -143,3 +174,20 @@ def is_server_side_plugin(name: str) -> bool:
         return False
     exec_type = (m.get("execution") or {}).get("type", "")
     return exec_type in ("server", "hybrid")
+
+
+def register_plugin_routes(app) -> None:
+    """Scan loaded plugins for routes.py and auto-register FastAPI routers."""
+    for m in _manifests:
+        name = m.get("name", "")
+        routes_module_name = f"plugins.{name}.server.routes"
+        try:
+            mod = importlib.import_module(routes_module_name)
+            router = getattr(mod, "router", None)
+            if router is not None:
+                app.include_router(router)
+                logger.info("registered plugin routes: %s", name)
+        except ImportError:
+            pass  # Plugin has no routes module
+        except Exception as e:
+            logger.warning("failed to register plugin routes for %s: %s", name, e)

@@ -1,6 +1,8 @@
 """
 Telegram plugin service — handles webhook processing, account linking,
 and message delivery. All Telegram business logic lives here, not in the Go API.
+
+Uses the generic plugin_data table for storage instead of a dedicated telegram_users table.
 """
 
 import json
@@ -18,6 +20,8 @@ logger = logging.getLogger(__name__)
 TELEGRAM_API_BASE = "https://api.telegram.org"
 LINK_CODE_TTL = 600  # 10 minutes
 LINK_CODE_PREFIX = "telegram:code:"
+PLUGIN_NAME = "telegram"
+RECORD_TYPE_LINKED_ACCOUNT = "linked_account"
 
 
 class TelegramService:
@@ -37,6 +41,15 @@ class TelegramService:
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
             self._redis = redis.from_url(redis_url, decode_responses=True)
         return self._redis
+
+    async def _get_db_conn(self):
+        """Get an asyncpg connection to the database."""
+        import asyncpg
+
+        db_dsn = os.getenv("DB_DSN", "")
+        if db_dsn.startswith("postgres://"):
+            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
+        return await asyncpg.connect(db_dsn)
 
     # ─── Telegram Bot API ────────────────────────────────
 
@@ -63,10 +76,7 @@ class TelegramService:
     # ─── Webhook Registration ─────────────────────────────
 
     async def register_webhook(self) -> bool:
-        """Register the webhook URL with Telegram Bot API.
-        Uses WEBHOOK_BASE_URL env var (e.g. https://api.example.com).
-        Returns True if successful.
-        """
+        """Register the webhook URL with Telegram Bot API."""
         base_url = os.getenv("WEBHOOK_BASE_URL", "")
         if not base_url:
             logger.warning("WEBHOOK_BASE_URL not set, skipping Telegram webhook registration")
@@ -94,9 +104,7 @@ class TelegramService:
         username: str,
         first_name: str,
     ) -> str:
-        """Generate a 6-digit code for the Telegram user to enter in the app.
-        Stores Telegram user info in Redis keyed by the code.
-        """
+        """Generate a 6-digit code for the Telegram user to enter in the app."""
         code = f"{secrets.randbelow(1000000):06d}"
         info = json.dumps({
             "telegram_chat_id": telegram_chat_id,
@@ -112,10 +120,7 @@ class TelegramService:
         return code
 
     async def validate_link_code(self, code: str) -> Optional[Dict[str, Any]]:
-        """Validate a 6-digit code entered by the user in the app.
-        Returns Telegram user info dict or None if invalid/expired.
-        Deletes the code after single use.
-        """
+        """Validate a 6-digit code. Returns Telegram user info or None."""
         if len(code) != 6 or not code.isdigit():
             return None
 
@@ -125,11 +130,10 @@ class TelegramService:
         if not info_str:
             return None
 
-        # Delete after single use
         await r.delete(key)
         return json.loads(info_str)
 
-    # ─── Account Linking (DB) ────────────────────────────
+    # ─── Account Linking (plugin_data table) ──────────────
 
     async def link_user(
         self,
@@ -140,32 +144,31 @@ class TelegramService:
         first_name: str,
     ) -> Dict[str, Any]:
         """Link a Telegram account to a Genie user.
-        Creates a record in telegram_users table and a Genie chat.
-        Uses asyncpg for direct DB access.
+        Creates a record in plugin_data table and a Genie chat.
         """
-        import asyncpg
         import uuid
 
-        db_dsn = os.getenv("DB_DSN", "")
-        if db_dsn.startswith("postgres://"):
-            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
-
-        conn = await asyncpg.connect(db_dsn)
+        conn = await self._get_db_conn()
         try:
             # Check if already linked
             existing = await conn.fetchrow(
-                "SELECT id, chat_id, username, first_name FROM telegram_users WHERE telegram_chat_id = $1",
-                telegram_chat_id,
+                """SELECT id, data FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND data->>'telegram_chat_id' = $3""",
+                PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT, str(telegram_chat_id),
             )
             if existing:
                 # Update info
+                old_data = json.loads(existing["data"])
+                old_data["username"] = username
+                old_data["first_name"] = first_name
                 await conn.execute(
-                    "UPDATE telegram_users SET username = $1, first_name = $2 WHERE telegram_chat_id = $3",
-                    username, first_name, telegram_chat_id,
+                    "UPDATE plugin_data SET data = $1::jsonb, updated_at = NOW() WHERE id = $2",
+                    json.dumps(old_data), existing["id"],
                 )
                 return {
                     "id": str(existing["id"]),
-                    "chat_id": str(existing["chat_id"]),
+                    "chat_id": old_data.get("chat_id", ""),
                     "username": username,
                     "first_name": first_name,
                 }
@@ -179,19 +182,26 @@ class TelegramService:
                 chat_id, user_id, title,
             )
 
-            # Create the telegram_users mapping
-            tg_user_id = uuid.uuid4()
+            # Create the plugin_data record
+            pd_id = uuid.uuid4()
+            data = json.dumps({
+                "telegram_chat_id": telegram_chat_id,
+                "telegram_user_id": telegram_user_id,
+                "username": username,
+                "first_name": first_name,
+                "chat_id": str(chat_id),
+            })
             await conn.execute(
-                """INSERT INTO telegram_users (id, user_id, telegram_chat_id, telegram_user_id, username, first_name, chat_id, linked_at)
-                   VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, NOW())""",
-                tg_user_id, user_id, telegram_chat_id, telegram_user_id, username, first_name, chat_id,
+                """INSERT INTO plugin_data (id, user_id, plugin_name, record_type, data, created_at, updated_at)
+                   VALUES ($1, $2::uuid, $3, $4, $5::jsonb, NOW(), NOW())""",
+                pd_id, user_id, PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT, data,
             )
 
             logger.info("Linked telegram user: user_id=%s, telegram_chat_id=%d, chat_id=%s",
                          user_id, telegram_chat_id, chat_id)
 
             return {
-                "id": str(tg_user_id),
+                "id": str(pd_id),
                 "chat_id": str(chat_id),
                 "username": username,
                 "first_name": first_name,
@@ -201,26 +211,24 @@ class TelegramService:
 
     async def get_link_status(self, user_id: str) -> Dict[str, Any]:
         """Check if a Genie user has a linked Telegram account."""
-        import asyncpg
-
-        db_dsn = os.getenv("DB_DSN", "")
-        if db_dsn.startswith("postgres://"):
-            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
-
-        conn = await asyncpg.connect(db_dsn)
+        conn = await self._get_db_conn()
         try:
             row = await conn.fetchrow(
-                "SELECT username, first_name FROM telegram_users WHERE user_id = $1::uuid",
-                user_id,
+                """SELECT data FROM plugin_data
+                   WHERE user_id = $1::uuid AND plugin_name = $2 AND record_type = $3""",
+                user_id, PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT,
             )
             if not row:
                 return {"linked": False}
 
-            display_name = f"@{row['username']}" if row["username"] else row["first_name"]
+            data = json.loads(row["data"])
+            username = data.get("username", "")
+            first_name = data.get("first_name", "")
+            display_name = f"@{username}" if username else first_name
             return {
                 "linked": True,
-                "username": row["username"] or "",
-                "first_name": row["first_name"] or "",
+                "username": username,
+                "first_name": first_name,
                 "display_name": display_name,
             }
         finally:
@@ -230,7 +238,6 @@ class TelegramService:
 
     async def handle_webhook(self, update: Dict[str, Any]) -> None:
         """Process an incoming Telegram webhook update."""
-        # Handle callback queries (inline button presses)
         if "callback_query" in update and update["callback_query"]:
             await self._handle_callback_query(update["callback_query"])
             return
@@ -242,26 +249,21 @@ class TelegramService:
         chat_id = message["chat"]["id"]
         text = message.get("text", "")
 
-        # Handle /start command
         if text.startswith("/start"):
             await self._handle_start(chat_id, message)
             return
 
-        # Regular message — forward to AI via Redis
         await self._handle_regular_message(chat_id, message)
 
     async def _handle_start(self, chat_id: int, message: Dict[str, Any]) -> None:
         """Handle /start command — generate a link code."""
-        # Check if already linked
-        import asyncpg
-        db_dsn = os.getenv("DB_DSN", "")
-        if db_dsn.startswith("postgres://"):
-            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
-
-        conn = await asyncpg.connect(db_dsn)
+        conn = await self._get_db_conn()
         try:
             existing = await conn.fetchrow(
-                "SELECT id FROM telegram_users WHERE telegram_chat_id = $1", chat_id
+                """SELECT id FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND data->>'telegram_chat_id' = $3""",
+                PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT, str(chat_id),
             )
         finally:
             await conn.close()
@@ -273,13 +275,11 @@ class TelegramService:
             )
             return
 
-        # Extract user info
         from_user = message.get("from", {})
         username = from_user.get("username", "")
         first_name = from_user.get("first_name", "")
         user_id = from_user.get("id", 0)
 
-        # Generate a 6-digit code
         code = await self.generate_link_code(chat_id, user_id, username, first_name)
 
         await self.send_message(
@@ -291,17 +291,15 @@ class TelegramService:
 
     async def _handle_regular_message(self, chat_id: int, message: Dict[str, Any]) -> None:
         """Forward a regular Telegram message to the AI via Redis pub/sub."""
-        import asyncpg
         import uuid
 
-        db_dsn = os.getenv("DB_DSN", "")
-        if db_dsn.startswith("postgres://"):
-            db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
-
-        conn = await asyncpg.connect(db_dsn)
+        conn = await self._get_db_conn()
         try:
             row = await conn.fetchrow(
-                "SELECT user_id, chat_id FROM telegram_users WHERE telegram_chat_id = $1", chat_id
+                """SELECT user_id, data FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND data->>'telegram_chat_id' = $3""",
+                PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT, str(chat_id),
             )
         finally:
             await conn.close()
@@ -313,8 +311,9 @@ class TelegramService:
             )
             return
 
+        data = json.loads(row["data"])
         genie_user_id = str(row["user_id"])
-        genie_chat_id = str(row["chat_id"])
+        genie_chat_id = data.get("chat_id", "")
         text = message.get("text", "")
         if not text:
             photos = message.get("photo")
@@ -323,7 +322,6 @@ class TelegramService:
             else:
                 return
 
-        # Publish message to Redis for the AI agent to pick up
         r = await self._get_redis()
         message_id = str(uuid.uuid4())
         frame = {
@@ -355,7 +353,6 @@ class TelegramService:
         chat_id = message["chat"]["id"]
         data = query.get("data", "")
 
-        # Forward as a regular message
         fake_message = {
             "from": query.get("from", {}),
             "chat": {"id": chat_id},
