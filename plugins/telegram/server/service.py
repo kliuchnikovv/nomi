@@ -336,7 +336,6 @@ class TelegramService:
                 "message_id": message_id,
                 "message": text,
                 "role": "user",
-                "model": "default",
                 "trace_id": str(uuid.uuid4()),
                 "user_id": genie_user_id,
                 "source": "telegram",
