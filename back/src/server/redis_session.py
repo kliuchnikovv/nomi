@@ -754,6 +754,10 @@ class RedisSession:
 
         # --- NEW LOGIC: Init from Payload ---
 
+        # Reset Telegram context at the start of each request
+        self._source = None
+        self._telegram_chat_id = None
+
         # 0. Extract user_id first (critical for RAG)
         incoming_user_id = payload.get("user_id")
         if incoming_user_id:
@@ -763,6 +767,11 @@ class RedisSession:
         # 0b. Extract Telegram delivery context
         self._source = payload.get("source")
         self._telegram_chat_id = payload.get("telegram_chat_id")
+        logger.info(
+            "[RedisSession] Extracted source=%s, telegram_chat_id=%s from payload",
+            self._source,
+            self._telegram_chat_id,
+        )
 
         # 1. Check and update chat history
         incoming_history = payload.get("history")
