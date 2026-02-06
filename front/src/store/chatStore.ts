@@ -4,11 +4,74 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Message, ContentPart } from '../screens/main/models';
 import { dispatchPayload } from './handlers';
 
+// Throttling configuration for streaming performance
+const STREAM_THROTTLE_MS = 40; // Update UI max 25 times per second during streaming (was 80ms)
+const STREAM_FLUSH_THRESHOLD = 30; // Force update every 30 chars even within throttle window (was 50)
+
+interface PendingUpdate {
+    payload: any;
+    timestamp: number;
+}
+
 interface ChatStore {
     chats: Record<string, Message[]>;
     addMessage: (chatId: string, payload: any) => void;
     setMessages: (chatId: string, messages: Message[]) => void;
     clearChat: (chatId: string) => void;
+    flushPendingUpdates: (chatId: string) => void;
+}
+
+// Throttling state (outside store to avoid re-renders)
+const pendingUpdates = new Map<string, PendingUpdate[]>();
+const throttleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const lastFlushTime = new Map<string, number>();
+
+// Flush accumulated streaming updates for a chat
+function flushPendingUpdates(
+    chatId: string, 
+    set: (fn: (state: { chats: Record<string, Message[]> }) => { chats: Record<string, Message[]> }) => void
+) {
+    // Clear any pending timer
+    const existingTimer = throttleTimers.get(chatId);
+    if (existingTimer) {
+        clearTimeout(existingTimer);
+        throttleTimers.delete(chatId);
+    }
+
+    const updates = pendingUpdates.get(chatId);
+    if (!updates || updates.length === 0) {
+        return;
+    }
+
+    // Clear pending updates
+    pendingUpdates.set(chatId, []);
+    lastFlushTime.set(chatId, Date.now());
+
+    // Batch all accumulated chunks into a single store update
+    set((state) => {
+        let currentMessages = state.chats[chatId] || [];
+        let newMessages = [...currentMessages];
+
+        // Process all pending payloads in order
+        for (const update of updates) {
+            const result = onReceivedMessage(update.payload, newMessages, chatId);
+            if (result !== newMessages) {
+                newMessages = result;
+            }
+        }
+
+        // Only update if there were actual changes
+        if (newMessages === currentMessages) {
+            return state;
+        }
+
+        return {
+            chats: {
+                ...state.chats,
+                [chatId]: newMessages,
+            },
+        };
+    });
 }
 
 export const useChatStore = create<ChatStore>()(
@@ -17,6 +80,10 @@ export const useChatStore = create<ChatStore>()(
             chats: {},
 
             setMessages: (chatId, messages) => {
+                // Flush any pending streaming updates before replacing messages
+                if (pendingUpdates.has(chatId) && pendingUpdates.get(chatId)!.length > 0) {
+                    flushPendingUpdates(chatId, set);
+                }
                 set((state) => ({
                     chats: {
                         ...state.chats,
@@ -26,6 +93,15 @@ export const useChatStore = create<ChatStore>()(
             },
 
             clearChat: (chatId) => {
+                // Clear any pending updates for this chat
+                pendingUpdates.delete(chatId);
+                const existingTimer = throttleTimers.get(chatId);
+                if (existingTimer) {
+                    clearTimeout(existingTimer);
+                    throttleTimers.delete(chatId);
+                }
+                lastFlushTime.delete(chatId);
+                
                 set((state) => {
                     const newChats = { ...state.chats };
                     delete newChats[chatId];
@@ -33,7 +109,57 @@ export const useChatStore = create<ChatStore>()(
                 });
             },
 
+            flushPendingUpdates: (chatId) => {
+                // Manually flush any pending updates for this chat
+                if (pendingUpdates.has(chatId) && pendingUpdates.get(chatId)!.length > 0) {
+                    flushPendingUpdates(chatId, set);
+                }
+            },
+
             addMessage: (chatId, payload) => {
+                // Check if this is a streaming text chunk that should be throttled
+                const isStreamingChunk = payload?.type === 'text' && 
+                                         payload?.delta && 
+                                         !payload?.done;
+                
+                if (isStreamingChunk) {
+                    // Accumulate streaming chunks and throttle updates
+                    if (!pendingUpdates.has(chatId)) {
+                        pendingUpdates.set(chatId, []);
+                    }
+                    pendingUpdates.get(chatId)!.push({
+                        payload,
+                        timestamp: Date.now()
+                    });
+
+                    const now = Date.now();
+                    const lastFlush = lastFlushTime.get(chatId) || 0;
+                    const timeSinceLastFlush = now - lastFlush;
+                    
+                    // Calculate accumulated text length since last flush
+                    const accumulatedLength = pendingUpdates.get(chatId)!
+                        .reduce((sum, u) => sum + (u.payload.delta?.length || 0), 0);
+
+                    // Flush immediately if:
+                    // 1. Enough time has passed since last flush, OR
+                    // 2. We've accumulated enough characters
+                    if (timeSinceLastFlush >= STREAM_THROTTLE_MS || accumulatedLength >= STREAM_FLUSH_THRESHOLD) {
+                        flushPendingUpdates(chatId, set);
+                    } else if (!throttleTimers.has(chatId)) {
+                        // Schedule a flush
+                        const timer = setTimeout(() => {
+                            flushPendingUpdates(chatId, set);
+                        }, STREAM_THROTTLE_MS - timeSinceLastFlush);
+                        throttleTimers.set(chatId, timer);
+                    }
+                    return;
+                }
+
+                // Non-streaming messages: flush any pending updates first, then process immediately
+                if (pendingUpdates.has(chatId) && pendingUpdates.get(chatId)!.length > 0) {
+                    flushPendingUpdates(chatId, set);
+                }
+
                 console.log('[ChatStore 📥 addMessage]', {
                     chatId,
                     payload_type: payload?.type,

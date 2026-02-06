@@ -1,7 +1,27 @@
 import React from 'react';
 import { Text, Pressable, View } from 'react-native';
 
-export const createMarkdownRules = (onCodeCopy: (code: string) => void) => ({
+// Cache for default rules (no-op copy handler)
+let defaultRulesCache: any = null;
+const NOOP_COPY = () => {};
+
+/**
+ * Create markdown rules with optional code copy handler
+ * Results are cached for the default no-op handler for performance
+ */
+export const createMarkdownRules = (onCodeCopy: (code: string) => void) => {
+    // Use cached rules for the default no-op handler
+    if (onCodeCopy === NOOP_COPY) {
+        if (!defaultRulesCache) {
+            defaultRulesCache = createRulesInternal(NOOP_COPY);
+        }
+        return defaultRulesCache;
+    }
+
+    return createRulesInternal(onCodeCopy);
+};
+
+const createRulesInternal = (onCodeCopy: (code: string) => void) => ({
     fence: (node: any, children: any, parent: any, styles: any) => {
         return (
             <Pressable
@@ -24,7 +44,6 @@ export const createMarkdownRules = (onCodeCopy: (code: string) => void) => ({
         );
     },
     code_inline: (node: any, children: any, parent: any, styles: any) => {
-        // Use a View inside Text to support borderRadius on iOS (Inline View pattern)
         return (
             <Text
                 key={node.key}
@@ -33,13 +52,10 @@ export const createMarkdownRules = (onCodeCopy: (code: string) => void) => ({
                 <View style={[
                     styles.code_inline,
                     {
-                        // Override properties that shouldn't be on the container
                         color: undefined,
                         fontFamily: undefined,
                         fontSize: undefined,
-                        // Fix vertical alignment - push down to align with text baseline
                         transform: [{ translateY: 5.5 }],
-                        // Ensure text is centered vertically in the pill
                         justifyContent: 'center',
                     }
                 ]}>
@@ -48,7 +64,6 @@ export const createMarkdownRules = (onCodeCopy: (code: string) => void) => ({
                         fontSize: styles.code_inline.fontSize,
                         color: styles.code_inline.color,
                         backgroundColor: 'transparent',
-                        // Fix text vertical alignment inside the pill
                         lineHeight: styles.code_inline.fontSize * 1.3,
                         textAlignVertical: 'center',
                     }}>

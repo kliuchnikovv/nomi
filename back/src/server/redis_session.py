@@ -806,17 +806,52 @@ class RedisSession:
 
         self._last_run_completed_content = None
         idx = 0
+        done_sent = False
         try:
             # Stream agent events for real-time response
-            async for event in self._stream_agent_events(
+            stream_iter = self._stream_agent_events(
                 text, payload.get("attachments")
-            ):
+            )
+            async for event in stream_iter:
                 if self.cancel_event.is_set():
                     break
 
                 evt_type = event.get("type")
 
-                if evt_type == "text":
+                if evt_type == "content_done":
+                    # Content generation is complete — send DONE immediately
+                    # without waiting for learning/memory background tasks.
+                    done_payload: dict[str, Any] = {"message_id": message_id}
+                    completed_content = getattr(
+                        self, "_last_run_completed_content", None
+                    )
+                    if completed_content is not None:
+                        done_payload["content"] = str(completed_content)
+                    await self._send_frame(
+                        make_done(self.next_id, msg_chat_id, done_payload)
+                    )
+                    done_sent = True
+                    # Drain the remaining stream in background so learning/memory
+                    # tasks can finish without blocking the client.
+                    async def _drain_remaining(it):
+                        try:
+                            async for ev in it:
+                                # Process RunCompleted to capture final content
+                                ev_type = ev.get("type") if isinstance(ev, dict) else None
+                                if ev_type == "text" and ev.get("content"):
+                                    # Late text after content_done — update stored content
+                                    pass
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as e:
+                            logger.warning(
+                                "[RedisSession] Error draining post-done stream: %s", e
+                            )
+
+                    asyncio.create_task(_drain_remaining(stream_iter))
+                    break
+
+                elif evt_type == "text":
                     chunk = event.get("content", "")
                     agent_name = event.get("agent_name")
                     if chunk:
@@ -938,13 +973,18 @@ class RedisSession:
                     # Don't send done frame after error - error frame is terminal
                     return
 
-            # Done — include full content from RunCompletedEvent so Go can overwrite DB
-            # and fix duplication/wrong-order from chunk accumulation.
-            done_payload: dict[str, Any] = {"message_id": message_id}
-            completed_content = getattr(self, "_last_run_completed_content", None)
-            if completed_content is not None:
-                done_payload["content"] = str(completed_content)
-            await self._send_frame(make_done(self.next_id, msg_chat_id, done_payload))
+            # Fallback: if content_done was never received (e.g. older Agno
+            # version or non-streaming agent), send DONE after the stream ends.
+            if not done_sent:
+                done_payload_fb: dict[str, Any] = {"message_id": message_id}
+                completed_content = getattr(
+                    self, "_last_run_completed_content", None
+                )
+                if completed_content is not None:
+                    done_payload_fb["content"] = str(completed_content)
+                await self._send_frame(
+                    make_done(self.next_id, msg_chat_id, done_payload_fb)
+                )
 
         except asyncio.CancelledError:
             logger.info("[RedisSession] Streaming cancelled by user")
@@ -1348,6 +1388,11 @@ Continue the conversation."""
                     event.pop("_accumulated", None)
                     event.pop("_last_yielded", None)
                 yield event
+
+            # RunContentCompleted arrives BEFORE learning/memory tasks finish,
+            # so we use it as the "content is ready" signal to unblock DONE.
+            if "RunContentCompleted" in event_type:
+                yield {"type": "content_done"}
 
             async for event in self._handle_run_completed_event(
                 ev, event_type, current_agent_name, streamed_text_len

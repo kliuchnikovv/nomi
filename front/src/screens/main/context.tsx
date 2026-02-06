@@ -31,6 +31,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     const [chatsLoading, setChatsLoading] = useState(false);
     const [activeChatID, setActiveChatID] = useState<string | null>(null);
     const [sidebarFilter, setSidebarFilter] = useState<string>('all');
+    const [activePluginView, setActivePluginView] = useState<string | null>(null);
 
     const { isAuthenticated } = useAuth();
 
@@ -286,6 +287,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setSidebarFilter,
         pendingChatMode,
         clearPendingChatMode,
+        activePluginView,
+        setActivePluginView,
     };
 
     return (

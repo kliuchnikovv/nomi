@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from 'react';
-import { Linking, View, Text, ActionSheetIOS, Pressable } from 'react-native';
+import React, { useCallback, useMemo, memo } from 'react';
+import { Linking, View, Text, ActionSheetIOS, Pressable, StyleSheet } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
@@ -9,7 +9,6 @@ import { ThemeColors } from '../../../themes/types';
 import { useTheme } from '../../../context/ThemeContext';
 import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { ToolCallsSection } from '../message/ToolCalls';
 import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
@@ -18,42 +17,79 @@ import { createMarkdownRules } from '../message/markdownRules';
 import { useChat } from '../context';
 import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
 
-function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
-    const [expanded, setExpanded] = React.useState(false);
+// Stable markdown rules - don't recreate on every render
+const stableMarkdownRules = createMarkdownRules(() => {
+    Clipboard.setString('');
+});
 
-    // Create markdown styles with theme
-    const { palette } = useTheme(); // We need palette for createStyles
-    // Assuming 'theme' prop passed to SystemMessageBubble is ThemeColors
+// Simple text styles for fast rendering during streaming
+const createSimpleTextStyles = (theme: any) =>
+    StyleSheet.create({
+        text: {
+            fontSize: 16,
+            lineHeight: 22,
+            color: theme.colors?.text || '#fff',
+            fontFamily: undefined, // System font - fastest
+        },
+    });
+
+/**
+ * Detects if text contains markdown syntax
+ */
+function hasMarkdown(text: string): boolean {
+    return (
+        text.includes('**') ||
+        text.includes('*') ||
+        text.includes('`') ||
+        text.includes('[') ||
+        text.includes('#') ||
+        text.includes('- ') ||
+        text.includes('1.') ||
+        text.includes('>') ||
+        text.includes('```')
+    );
+}
+
+/**
+ * Fast text component for streaming - renders plain Text instead of Markdown
+ */
+const FastText = memo(function FastText({
+    text,
+    style,
+    onLongPress,
+}: {
+    text: string;
+    style: any;
+    onLongPress: (text: string) => void;
+}) {
+    return (
+        <Pressable onLongPress={() => onLongPress(text)} delayLongPress={300}>
+            <Text style={style}>{text}</Text>
+        </Pressable>
+    );
+});
+
+// Memoized system message bubble
+const SystemMessageBubble = memo(function SystemMessageBubble({ text, theme }: { text: string; theme: any }) {
+    const [expanded, setExpanded] = React.useState(false);
+    const { palette } = useTheme();
     const dynamicStyles = useMemo(() => createStyles(theme, palette), [theme, palette]);
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
-
-    const handleCodeCopy = (code: string) => {
-        Clipboard.setString(code);
-        console.log('System code copied');
-    };
-    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), []);
 
     return (
         <View style={{ marginBottom: 8, paddingHorizontal: 16 }}>
             <View style={dynamicStyles.toolCallsContainer}>
                 <Pressable
                     onPress={() => setExpanded(!expanded)}
-                    style={({ pressed }) => [
-                        dynamicStyles.toolCallsHeader,
-                        pressed && { opacity: 0.7 },
-                    ]}
+                    style={({ pressed }) => [dynamicStyles.toolCallsHeader, pressed && { opacity: 0.7 }]}
                 >
-                    <Text style={dynamicStyles.toolCallsHeaderText}>
-                        System Activity
-                    </Text>
-                    <Text style={dynamicStyles.toolCallsExpandIcon}>
-                        {expanded ? '▼' : '▶'}
-                    </Text>
+                    <Text style={dynamicStyles.toolCallsHeaderText}>System Activity</Text>
+                    <Text style={dynamicStyles.toolCallsExpandIcon}>{expanded ? '▼' : '▶'}</Text>
                 </Pressable>
                 {expanded && (
                     <View style={dynamicStyles.toolCallsList}>
                         <View style={dynamicStyles.toolCallItem}>
-                            <Markdown style={markdownStyles as any} rules={markdownRules}>
+                            <Markdown style={markdownStyles as any} rules={stableMarkdownRules}>
                                 {text}
                             </Markdown>
                         </View>
@@ -62,7 +98,7 @@ function SystemMessageBubble({ text, theme }: { text: string, theme: any }) {
             </View>
         </View>
     );
-}
+});
 
 interface GiftedChatRenderersParams {
     assistantContainerMaxWidth: string;
@@ -81,9 +117,6 @@ interface GiftedChatRenderersParams {
 
 export function useGiftedChatRenderers({
     assistantContainerMaxWidth,
-    assistantWorking,
-    bottomInset,
-    styles,
     theme,
     onSend,
     error,
@@ -94,24 +127,32 @@ export function useGiftedChatRenderers({
     onMessageAction,
 }: GiftedChatRenderersParams) {
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
-    // Use dynamicStyles createMarkdownStyles which takes MessageTheme (ThemeColors)
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
-
-    const handleCodeCopy = useCallback((code: string) => {
-        Clipboard.setString(code);
-        console.log('Code copied to clipboard');
-    }, []);
-    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), [handleCodeCopy]);
-
+    const simpleStyles = useMemo(() => createSimpleTextStyles(theme), [theme]);
     const { showToolCalls } = useChat();
 
+    // Stable handlers - use refs to avoid dependency changes
+    const onSendRef = React.useRef(onSend);
+    const onAttachmentPressRef = React.useRef(onAttachmentPress);
+    const onMessageActionRef = React.useRef(onMessageAction);
+
+    // Update refs when values change
+    React.useEffect(() => {
+        onSendRef.current = onSend;
+    }, [onSend]);
+
+    React.useEffect(() => {
+        onAttachmentPressRef.current = onAttachmentPress;
+    }, [onAttachmentPress]);
+
+    React.useEffect(() => {
+        onMessageActionRef.current = onMessageAction;
+    }, [onMessageAction]);
+
+    // Stable long press handler
     const handleLongPress = useCallback((context: any, message: any) => {
-        console.log('handleLongPress called', { context, message });
         const messageText = message?.text || '';
-        if (!messageText) {
-            console.log('No message text');
-            return;
-        }
+        if (!messageText) return;
 
         ActionSheetIOS.showActionSheetWithOptions(
             {
@@ -122,17 +163,14 @@ export function useGiftedChatRenderers({
             (buttonIndex) => {
                 if (buttonIndex === 0) {
                     Clipboard.setString(messageText);
-                    console.log('Copied to clipboard:', messageText.substring(0, 50));
                 }
             }
         );
     }, []);
 
-    // Direct long press handler for text content
+    // Stable text long press handler
     const handleTextLongPress = useCallback((text: string) => {
-        console.log('handleTextLongPress called', text?.substring(0, 50));
         if (!text) return;
-
         ActionSheetIOS.showActionSheetWithOptions(
             {
                 options: ['Copy', 'Cancel'],
@@ -142,314 +180,298 @@ export function useGiftedChatRenderers({
             (buttonIndex) => {
                 if (buttonIndex === 0) {
                     Clipboard.setString(text);
-                    console.log('Copied to clipboard');
                 }
             }
         );
     }, []);
 
-    const renderBubble = useCallback((props: any) => {
-        const { currentMessage } = props;
-        const attachments = currentMessage?.attachments;
-        const hasAttachments = attachments && attachments.length > 0;
-        const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
+    // Stable renderBubble - minimal dependencies
+    const renderBubble = useCallback(
+        (props: any) => {
+            return (
+                <View style={{ width: '100%' }}>
+                    <Bubble
+                        {...props}
+                        onLongPress={handleLongPress}
+                        wrapperStyle={{
+                            right: {
+                                backgroundColor: chatTheme.userBubble,
+                                borderRadius: 18,
+                                borderBottomRightRadius: 6,
+                                padding: 4,
+                                marginBottom: 0,
+                            },
+                            left: {
+                                backgroundColor: chatTheme.background,
+                                borderRadius: 18,
+                                paddingVertical: 12,
+                                paddingHorizontal: 16,
+                                marginBottom: 0,
+                                width: '95%',
+                                flex: 1,
+                                alignSelf: 'stretch',
+                            },
+                        }}
+                        textStyle={{
+                            right: {
+                                color: chatTheme.textPrimary,
+                                fontSize: 16,
+                                lineHeight: 20,
+                            },
+                            left: {
+                                color: chatTheme.textPrimary,
+                                fontSize: 16,
+                                lineHeight: 20,
+                            },
+                        }}
+                        timeTextStyle={{
+                            right: { color: 'rgba(255, 255, 255, 0.6)' },
+                            left: { color: 'rgba(255, 255, 255, 0.6)' },
+                        }}
+                        containerToNextStyle={{
+                            right: { marginBottom: 4 },
+                            left: { marginBottom: 4 },
+                        }}
+                        containerToPreviousStyle={{
+                            right: { marginBottom: 4 },
+                            left: { marginBottom: 4 },
+                        }}
+                    />
+                </View>
+            );
+        },
+        [chatTheme, handleLongPress]
+    );
 
-        return (
-            <View style={{ width: '100%' }}>
-                {/*
-                   If using custom logic inside Bubble, we can inject children or modify content.
-                   GiftedChat Bubble is a bit rigid.
-                   We can use renderCustomView to render something INSIDE the bubble
-                   but usually at the bottom of the bubble (below text).
+    // Stable input toolbar
+    const renderInputToolbar = useCallback(
+        (props: any) => {
+            return (
+                <View>
+                    <ErrorBanner error={error} onRetry={onRetry} onDismiss={onDismissError} theme={chatTheme} />
+                    <ChatInput onSend={onSendRef.current} />
+                </View>
+            );
+        },
+        [error, onRetry, onDismissError, chatTheme]
+    );
 
-                   However, user often wants attachments ABOVE text.
-                   GiftedChat renderMessageImage (which is usually top of bubble)
-                   isn't easily swappable without reimplementing the whole Bubble.
+    // Stable message renderer
+    const renderMessage = useCallback(
+        (props: any) => {
+            const { currentMessage } = props;
+            const attachments = currentMessage?.attachments;
+            const hasAttachments = attachments && attachments.length > 0;
+            const showAttachmentsOutside = hasAttachments && attachmentPosition === 'outside';
 
-                   But wait, renderBubble wraps everything.
-                   If we want to render attachments INSIDE the bubble but TOP of text,
-                   we might need to check if we can abuse `renderMessageImage`.
+            if (currentMessage.user._id === 'system') {
+                if (!showToolCalls) return null;
+                return <SystemMessageBubble text={currentMessage.text} theme={theme} />;
+            }
 
-                   Actually, let's use `renderCustomView`? It renders BELOW text by default.
-
-                   To render ABOVE text inside bubble, we can wrapper the MessageText.
-                */}
-                <Bubble
-                    {...props}
-                    onLongPress={handleLongPress}
-                    wrapperStyle={{
-                        right: {
-                            backgroundColor: chatTheme.userBubble,
-                            borderRadius: 18,
-                            borderBottomRightRadius: 6,
-                            padding: 4,
-                            marginBottom: 0,
-                        },
-                        left: {
-                            backgroundColor: chatTheme.background,
-                            borderRadius: 18,
-                            paddingVertical: 12,
-                            paddingHorizontal: 16,
-                            marginBottom: 0,
-                            width: '95%',
-                            flex: 1,
-                            alignSelf: 'stretch',
-                        },
-                    }}
-                    textStyle={{
-                        right: {
-                            color: chatTheme.textPrimary,
-                            fontSize: 16,
-                            lineHeight: 20,
-                        },
-                        left: {
-                            color: chatTheme.textPrimary,
-                            fontSize: 16,
-                            lineHeight: 20,
-                        },
-                    }}
-                    timeTextStyle={{
-                        right: { color: 'rgba(255, 255, 255, 0.6)' },
-                        left: { color: 'rgba(255, 255, 255, 0.6)' },
-                    }}
-                    containerToNextStyle={{
-                        right: { marginBottom: 4 },
-                        left: { marginBottom: 4 },
-                    }}
-                    containerToPreviousStyle={{
-                        right: { marginBottom: 4 },
-                        left: { marginBottom: 4 },
-                    }}
-                // We can hijack renderMessageText to include attachments above text if we want "inside"
-                />
-            </View>
-        );
-    }, [chatTheme, handleLongPress, attachmentPosition]);
-
-    const renderInputToolbar = useCallback((props: any) => {
-        return (
-            <View>
-                <ErrorBanner
-                    error={error}
-                    onRetry={onRetry}
-                    onDismiss={onDismissError}
-                    theme={chatTheme}
-                />
-                <ChatInput onSend={onSend} />
-            </View>
-        );
-    }, [onSend, error, onRetry, onDismissError, chatTheme]);
-
-    const renderMessage = useCallback((props: any) => {
-        const { currentMessage } = props;
-        const attachments = currentMessage?.attachments;
-        const hasAttachments = attachments && attachments.length > 0;
-        const showAttachmentsOutside = hasAttachments && attachmentPosition === 'outside';
-
-        // Check for system message (Tool Call style)
-        if (currentMessage.user._id === 'system') {
-            if (!showToolCalls) return null;
-            return <SystemMessageBubble text={currentMessage.text} theme={theme} />;
-        }
-
-        return (
-            <View style={{ width: '100%' }}>
-                {showAttachmentsOutside && (
-                    <View style={{
-                        marginLeft: currentMessage.user._id === 'assistant' ? 0 : 'auto',
-                        marginRight: currentMessage.user._id === 'assistant' ? 'auto' : 0,
-                        marginBottom: 4,
-                        maxWidth: '80%', // Limit width
-                        paddingHorizontal: 10
-                    }}>
-                        <MessageAttachments
-                            attachments={attachments}
-                            onAttachmentPress={onAttachmentPress}
-                            theme={theme}
-                        />
-                    </View>
-                )}
-                <Message
-                    {...props}
-                    containerStyle={{
-                        left: [{ maxWidth: assistantContainerMaxWidth, width: '100%' }],
-                    }}
-                />
-            </View>
-        );
-    }, [assistantContainerMaxWidth, attachmentPosition, theme, onAttachmentPress, markdownStyles]);
-
-
-
-    const renderMessageText = useCallback((props: any) => {
-        const isAssistant = props.currentMessage?.user?._id === 'assistant';
-        const toolCalls = props.currentMessage?.tool_calls;
-        const contentParts = props.currentMessage?.content_parts;
-
-        // Debug actions visibility
-        if (props.currentMessage?.actions) {
-            console.log('[useGiftedChatRenderers] Message has actions:', {
-                id: props.currentMessage.id || props.currentMessage._id,
-                actionsLen: props.currentMessage.actions.length,
-                hasContentParts: !!contentParts,
-            });
-        }
-
-
-        const attachments = props.currentMessage?.attachments;
-        const hasAttachments = attachments && attachments.length > 0;
-        const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
-
-        // Helper to render attachments inside bubble
-        const renderAttachments = () => (
-            <View style={{ marginBottom: 8 }}>
-                <MessageAttachments
-                    attachments={attachments}
-                    onAttachmentPress={onAttachmentPress}
-                    theme={theme}
-                />
-            </View>
-        );
-
-        // Helper to render actions
-        const renderActions = () => (
-            <MessageActions
-                actions={props.currentMessage?.actions}
-                theme={theme}
-                onActionPress={(action) => {
-                    if (action.url) {
-                        Linking.openURL(action.url).catch(err => console.error("Failed to open URL:", err));
-                    } else if (action.prompt) {
-                        onSend(action.prompt);
-                    } else {
-                        console.log('Action pressed:', action);
-                        if (onMessageAction && props.currentMessage?._id) {
-                            onMessageAction(String(props.currentMessage._id), action);
-                        }
-                    }
-                }}
-            />
-        );
-
-        const messageText = props.currentMessage?.text || '';
-
-        // If we have content parts, check whether they're all plain text (no tool_call, reasoning, member_response).
-        // For plain-text-only messages, use message.text as single source of truth to avoid
-        // duplication/merge bugs from content_parts (e.g. duplicate frames, \n\n gluing).
-        // member_response is excluded: it updates only content_parts, not message.text.
-        if (contentParts && contentParts.length > 0) {
-            const allPlainText = contentParts.every((p: any) => p.type === 'text');
-            if (allPlainText && isAssistant) {
-                return (
-                    <View style={{ width: '100%' }}>
-                        {showAttachmentsInside && renderAttachments()}
-                        <Pressable
-                            onLongPress={() => handleTextLongPress(messageText)}
-                            delayLongPress={300}
+            return (
+                <View style={{ width: '100%' }}>
+                    {showAttachmentsOutside && (
+                        <View
+                            style={{
+                                marginLeft: currentMessage.user._id === 'assistant' ? 0 : 'auto',
+                                marginRight: currentMessage.user._id === 'assistant' ? 'auto' : 0,
+                                marginBottom: 4,
+                                maxWidth: '80%',
+                                paddingHorizontal: 10,
+                            }}
                         >
-                            <Markdown
-                                style={markdownStyles as any}
-                                rules={markdownRules}
-                                onLinkPress={(url) => {
-                                    const openLink = async () => {
-                                        try {
-                                            if (await InAppBrowser.isAvailable()) {
-                                                await InAppBrowser.open(url, {
+                            <MessageAttachments
+                                attachments={attachments}
+                                onAttachmentPress={onAttachmentPressRef.current}
+                                theme={theme}
+                            />
+                        </View>
+                    )}
+                    <Message
+                        {...props}
+                        containerStyle={{
+                            left: [{ maxWidth: assistantContainerMaxWidth, width: '100%' }],
+                        }}
+                    />
+                </View>
+            );
+        },
+        [assistantContainerMaxWidth, attachmentPosition, theme, showToolCalls]
+    );
+
+    // Optimized message text renderer with fast path for streaming
+    const renderMessageText = useCallback(
+        (props: any) => {
+            const isAssistant = props.currentMessage?.user?._id === 'assistant';
+            const contentParts = props.currentMessage?.content_parts;
+            const attachments = props.currentMessage?.attachments;
+            const hasAttachments = attachments && attachments.length > 0;
+            const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
+            const messageText = props.currentMessage?.text || '';
+            const messageActions = props.currentMessage?.actions;
+
+            // Detect if this message is currently streaming (assistant text without ending punctuation)
+            const isStreaming =
+                isAssistant &&
+                messageText.length > 0 &&
+                !/[.!?。！？]\s*$/.test(messageText.trim()) &&
+                (!contentParts || contentParts.every((p: any) => p.type === 'text'));
+
+            // Render attachments helper component
+            const AttachmentsComponent = showAttachmentsInside ? (
+                <View style={{ marginBottom: 8 }}>
+                    <MessageAttachments
+                        attachments={attachments}
+                        onAttachmentPress={onAttachmentPressRef.current}
+                        theme={theme}
+                    />
+                </View>
+            ) : null;
+
+            // Render actions helper
+            const ActionsComponent = messageActions ? (
+                <MessageActions
+                    actions={messageActions}
+                    theme={theme}
+                    onActionPress={(action) => {
+                        if (action.url) {
+                            Linking.openURL(action.url).catch(() => {});
+                        } else if (action.prompt) {
+                            onSendRef.current?.(action.prompt);
+                        } else if (onMessageActionRef.current && props.currentMessage?._id) {
+                            onMessageActionRef.current(String(props.currentMessage._id), action);
+                        }
+                    }}
+                />
+            ) : null;
+
+            // Fast path: plain text content parts (most common during streaming)
+            if (contentParts && contentParts.length > 0) {
+                const allPlainText = contentParts.every((p: any) => p.type === 'text');
+
+                if (allPlainText && isAssistant) {
+                    // During streaming: use FastText (plain Text component) for maximum speed
+                    // After streaming: use Markdown only if text contains markdown syntax
+                    const shouldUseFastText = isStreaming || !hasMarkdown(messageText);
+
+                    if (shouldUseFastText) {
+                        return (
+                            <View style={{ width: '100%' }}>
+                                {AttachmentsComponent}
+                                <FastText
+                                    text={messageText}
+                                    style={simpleStyles.text}
+                                    onLongPress={handleTextLongPress}
+                                />
+                                {ActionsComponent}
+                            </View>
+                        );
+                    }
+
+                    return (
+                        <View style={{ width: '100%' }}>
+                            {AttachmentsComponent}
+                            <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
+                                <Markdown
+                                    style={markdownStyles as any}
+                                    rules={stableMarkdownRules}
+                                    onLinkPress={(url) => {
+                                        InAppBrowser.isAvailable().then((available) => {
+                                            if (available) {
+                                                InAppBrowser.open(url, {
                                                     showTitle: true,
                                                     dismissButtonStyle: 'close',
                                                     modalEnabled: true,
                                                     enableDefaultShare: false,
                                                 });
                                             } else {
-                                                await Linking.openURL(url);
+                                                Linking.openURL(url);
                                             }
-                                        } catch {
-                                            await Linking.openURL(url).catch(() => { });
-                                        }
-                                    };
-                                    openLink();
-                                    return false;
-                                }}
-                            >
-                                {messageText}
-                            </Markdown>
-                        </Pressable>
-                        {renderActions()}
+                                        });
+                                        return false;
+                                    }}
+                                >
+                                    {messageText}
+                                </Markdown>
+                            </Pressable>
+                            {ActionsComponent}
+                        </View>
+                    );
+                }
+
+                // Mixed content - use ContentPartsRenderer
+                return (
+                    <View style={{ width: '100%' }}>
+                        {AttachmentsComponent}
+                        <ContentPartsRenderer parts={contentParts} onLongPress={handleTextLongPress} />
+                        {ActionsComponent}
                     </View>
                 );
             }
+
+            // User message
+            if (!isAssistant) {
+                return (
+                    <View>
+                        {AttachmentsComponent}
+                        <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
+                            <MessageText {...props} />
+                        </Pressable>
+                    </View>
+                );
+            }
+
+            // Fallback Assistant with fast path for streaming
+            if (isStreaming && !hasMarkdown(messageText)) {
+                return (
+                    <View style={{ width: '100%' }}>
+                        {AttachmentsComponent}
+                        <FastText
+                            text={messageText}
+                            style={simpleStyles.text}
+                            onLongPress={handleTextLongPress}
+                        />
+                        {ActionsComponent}
+                    </View>
+                );
+            }
+
             return (
                 <View style={{ width: '100%' }}>
-                    {showAttachmentsInside && renderAttachments()}
-                    <ContentPartsRenderer
-                        parts={contentParts}
-                        onLongPress={handleTextLongPress}
-                    />
-                    {renderActions()}
-                </View>
-            );
-        }
-
-        // User message
-        if (!isAssistant) {
-            return (
-                <View>
-                    {showAttachmentsInside && renderAttachments()}
-                    <Pressable
-                        onLongPress={() => handleTextLongPress(messageText)}
-                        delayLongPress={300}
-                    >
-                        <MessageText {...props} />
-                    </Pressable>
-                </View>
-            );
-        }
-
-        // Fallback Assistant (Legacy)
-        return (
-            <View style={{ width: '100%' }}>
-                {showAttachmentsInside && renderAttachments()}
-                <Pressable
-                    onLongPress={() => handleTextLongPress(messageText)}
-                    delayLongPress={300}
-                >
-                    <Markdown
-                        style={markdownStyles as any}
-                        rules={markdownRules}
-                        onLinkPress={(url) => {
-                            const openLink = async () => {
-                                try {
-                                    if (await InAppBrowser.isAvailable()) {
-                                        await InAppBrowser.open(url, {
+                    {AttachmentsComponent}
+                    <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
+                        <Markdown
+                            style={markdownStyles as any}
+                            rules={stableMarkdownRules}
+                            onLinkPress={(url) => {
+                                InAppBrowser.isAvailable().then((available) => {
+                                    if (available) {
+                                        InAppBrowser.open(url, {
                                             showTitle: true,
                                             dismissButtonStyle: 'close',
                                             modalEnabled: true,
                                             enableDefaultShare: false,
                                         });
                                     } else {
-                                        await Linking.openURL(url);
+                                        Linking.openURL(url);
                                     }
-                                } catch {
-                                    await Linking.openURL(url).catch(() => { });
-                                }
-                            };
-                            openLink();
-                            return false;
-                        }}
-                    >
-                        {messageText}
-                    </Markdown>
-                </Pressable>
-                {/* {showToolCalls && toolCalls && toolCalls.length > 0 && (
-                    <ToolCallsSection toolCalls={toolCalls} />
-                )} */}
-                {showToolCalls && contentParts && contentParts.length > 0 && (
-                    <ContentPartsRenderer parts={contentParts} onLongPress={handleTextLongPress} />
-                )}
-                {renderActions()}
-            </View>
-        );
-    }, [markdownStyles, attachmentPosition, theme, onAttachmentPress, handleTextLongPress, onSend, onMessageAction, showToolCalls]);
+                                });
+                                return false;
+                            }}
+                        >
+                            {messageText}
+                        </Markdown>
+                    </Pressable>
+                    {showToolCalls && contentParts && contentParts.length > 0 && (
+                        <ContentPartsRenderer parts={contentParts} onLongPress={handleTextLongPress} />
+                    )}
+                    {ActionsComponent}
+                </View>
+            );
+        },
+        [markdownStyles, simpleStyles, attachmentPosition, theme, handleTextLongPress, showToolCalls]
+    );
 
     const renderFooter = useCallback(() => null, []);
 

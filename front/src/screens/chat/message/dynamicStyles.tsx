@@ -10,8 +10,21 @@ const withAlpha = (hex: string, alpha: number) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-// Create styles based on theme
+// Cache for styles to avoid recreating on every render
+const stylesCache = new Map<string, ReturnType<typeof StyleSheet.create>>();
+const markdownStylesCache = new Map<string, ReturnType<typeof createMarkdownStyles>>();
+
+// Generate cache key from theme properties
+const getThemeCacheKey = (theme: ThemeColors, palette: ThemePalette): string => {
+    return `${theme.id || 'default'}-${palette.id || 'default'}`;
+};
+
+// Create styles based on theme with caching
 export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
+    const cacheKey = getThemeCacheKey(theme, palette);
+    const cached = stylesCache.get(cacheKey);
+    if (cached) return cached;
+
     const tokens = {
         userBubble: palette.gutterGrey,
         actionBg: withAlpha(palette.blue, 0.12),
@@ -355,136 +368,161 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             color: theme.textSecondary,
         },
     });
+
+    // Cache the result (limit cache size to prevent memory leaks)
+    if (stylesCache.size > 10) {
+        const firstKey = stylesCache.keys().next().value;
+        stylesCache.delete(firstKey);
+    }
+    stylesCache.set(cacheKey, styles);
+    return styles;
 };
 
-// Markdown styles - theme-aware
-export const createMarkdownStyles = (theme: ThemeColors) => ({
-    body: {
-        color: theme.textPrimary,
-        fontSize: 16,
-        lineHeight: 24,
-    },
-    link: {
-        color: '#4A9EFF',
-        textDecorationLine: 'underline',
-    },
-    code_inline: {
-        backgroundColor: theme.codeInlineBg || '#24283b',
-        paddingHorizontal: 6,
-        paddingVertical: 1,
-        borderRadius: 6,
-        overflow: 'hidden',
-        fontFamily: 'Menlo',
-        fontSize: 12,
-        color: theme.codeText || '#a9b1d6',
-        borderColor: withAlpha(theme.codeText || '#a9b1d6', 0.1),
-        borderWidth: 0.5,
-    },
-    code_block: {
-        backgroundColor: theme.codeBg || '#1a1b26',
-        padding: 12,
-        borderRadius: 16,
-        marginVertical: 8,
-        overflow: 'hidden',
-        fontFamily: 'Menlo',
-        fontSize: 13,
-        color: theme.codeText || '#a9b1d6',
-        borderColor: withAlpha(theme.codeText || '#a9b1d6', 0.1),
-        borderWidth: 1,
-    },
-    blockquote: {
-        backgroundColor: theme.blockquoteBg || theme.surfaceAlt,
-        borderLeftWidth: 3,
-        borderLeftColor: theme.blockquoteBorder || theme.accent,
-        paddingLeft: 8,
-        paddingVertical: 4,
-        marginVertical: 4,
-        borderRadius: 4,
-        color: theme.textPrimary,
-    },
-    heading1: {
-        fontSize: 22,
-        fontWeight: '600'
-    },
-    heading2: {
-        fontSize: 20,
-        fontWeight: '600'
-    },
-    // Compact list styles to reduce spacing
-    bullet_list: {
-        marginTop: 4,
-        marginBottom: 4,
-        color: theme.textPrimary,
-    },
-    ordered_list: {
-        marginTop: 4,
-        marginBottom: 4,
-        color: theme.textPrimary,
-    },
-    list_item: {
-        marginTop: 2,
-        marginBottom: 2,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        width: '100%',
-        color: theme.textPrimary,
-    },
-    // Fix for list content width
-    bullet_list_icon: {
-        marginRight: 8,
-        color: theme.textPrimary,
-    },
-    bullet_list_content: {
-        flex: 1,
-        flexShrink: 1,
-        color: theme.textPrimary,
-    },
-    ordered_list_icon: {
-        marginRight: 8,
-        color: theme.textPrimary,
-    },
-    ordered_list_content: {
-        flex: 1,
-        flexShrink: 1,
-        color: theme.textPrimary,
-    },
-    paragraph: {
-        marginTop: 4,
-        marginBottom: 4,
-        color: theme.textPrimary,
-        fontSize: 16,
-        lineHeight: 24,
-    },
-    // Missing rules often causing white background defaults
-    fence: {
-        backgroundColor: theme.codeBg || '#1a1b26',
-        padding: 12,
-        borderRadius: 8,
-        marginVertical: 8,
-        fontFamily: 'Menlo',
-        fontSize: 14,
-        color: theme.codeText || '#a9b1d6',
-    },
-    table: {
-        borderWidth: 1,
-        borderColor: theme.border,
-        borderRadius: 8,
-    },
-    tr: {
-        backgroundColor: theme.background,
-        borderBottomWidth: 1,
-        borderColor: theme.border,
-        flexDirection: 'row',
-    },
-    th: {
-        flex: 1,
-        padding: 5,
-        fontWeight: 'bold',
-        color: theme.textPrimary,
-    },
-    td: {
-        flex: 1,
-        padding: 5,
-        color: theme.textPrimary,
-    },
-});
+// Markdown styles - theme-aware with caching
+export const createMarkdownStyles = (theme: ThemeColors) => {
+    // Simple cache key based on theme id or fallback
+    const cacheKey = theme.id || theme.name || JSON.stringify({
+        textPrimary: theme.textPrimary,
+        codeBg: theme.codeBg,
+        codeText: theme.codeText,
+    });
+
+    const cached = markdownStylesCache.get(cacheKey);
+    if (cached) return cached;
+
+    const styles = {
+        body: {
+            color: theme.textPrimary,
+            fontSize: 16,
+            lineHeight: 24,
+        },
+        link: {
+            color: '#4A9EFF',
+            textDecorationLine: 'underline',
+        },
+        code_inline: {
+            backgroundColor: theme.codeInlineBg || '#24283b',
+            paddingHorizontal: 6,
+            paddingVertical: 1,
+            borderRadius: 6,
+            overflow: 'hidden',
+            fontFamily: 'Menlo',
+            fontSize: 12,
+            color: theme.codeText || '#a9b1d6',
+            borderColor: withAlpha(theme.codeText || '#a9b1d6', 0.1),
+            borderWidth: 0.5,
+        },
+        code_block: {
+            backgroundColor: theme.codeBg || '#1a1b26',
+            padding: 12,
+            borderRadius: 16,
+            marginVertical: 8,
+            overflow: 'hidden',
+            fontFamily: 'Menlo',
+            fontSize: 13,
+            color: theme.codeText || '#a9b1d6',
+            borderColor: withAlpha(theme.codeText || '#a9b1d6', 0.1),
+            borderWidth: 1,
+        },
+        blockquote: {
+            backgroundColor: theme.blockquoteBg || theme.surfaceAlt,
+            borderLeftWidth: 3,
+            borderLeftColor: theme.blockquoteBorder || theme.accent,
+            paddingLeft: 8,
+            paddingVertical: 4,
+            marginVertical: 4,
+            borderRadius: 4,
+            color: theme.textPrimary,
+        },
+        heading1: {
+            fontSize: 22,
+            fontWeight: '600'
+        },
+        heading2: {
+            fontSize: 20,
+            fontWeight: '600'
+        },
+        bullet_list: {
+            marginTop: 4,
+            marginBottom: 4,
+            color: theme.textPrimary,
+        },
+        ordered_list: {
+            marginTop: 4,
+            marginBottom: 4,
+            color: theme.textPrimary,
+        },
+        list_item: {
+            marginTop: 2,
+            marginBottom: 2,
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            width: '100%',
+            color: theme.textPrimary,
+        },
+        bullet_list_icon: {
+            marginRight: 8,
+            color: theme.textPrimary,
+        },
+        bullet_list_content: {
+            flex: 1,
+            flexShrink: 1,
+            color: theme.textPrimary,
+        },
+        ordered_list_icon: {
+            marginRight: 8,
+            color: theme.textPrimary,
+        },
+        ordered_list_content: {
+            flex: 1,
+            flexShrink: 1,
+            color: theme.textPrimary,
+        },
+        paragraph: {
+            marginTop: 4,
+            marginBottom: 4,
+            color: theme.textPrimary,
+            fontSize: 16,
+            lineHeight: 24,
+        },
+        fence: {
+            backgroundColor: theme.codeBg || '#1a1b26',
+            padding: 12,
+            borderRadius: 8,
+            marginVertical: 8,
+            fontFamily: 'Menlo',
+            fontSize: 14,
+            color: theme.codeText || '#a9b1d6',
+        },
+        table: {
+            borderWidth: 1,
+            borderColor: theme.border,
+            borderRadius: 8,
+        },
+        tr: {
+            backgroundColor: theme.background,
+            borderBottomWidth: 1,
+            borderColor: theme.border,
+            flexDirection: 'row',
+        },
+        th: {
+            flex: 1,
+            padding: 5,
+            fontWeight: 'bold',
+            color: theme.textPrimary,
+        },
+        td: {
+            flex: 1,
+            padding: 5,
+            color: theme.textPrimary,
+        },
+    };
+
+    // Cache the result (limit cache size)
+    if (markdownStylesCache.size > 10) {
+        const firstKey = markdownStylesCache.keys().next().value;
+        markdownStylesCache.delete(firstKey);
+    }
+    markdownStylesCache.set(cacheKey, styles);
+    return styles;
+};

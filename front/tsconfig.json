@@ -9,7 +9,9 @@
       "@genie/plugin-gmail": ["../plugins/gmail/client/executor.ts"],
       "@genie/plugin-gmail/*": ["../plugins/gmail/client/*"],
       "@genie/plugin-calendar": ["../plugins/calendar/client/executor.ts"],
-      "@genie/plugin-calendar/*": ["../plugins/calendar/client/*"]
+      "@genie/plugin-calendar/*": ["../plugins/calendar/client/*"],
+      "@genie/plugin-github": ["../plugins/github/client/executor.ts"],
+      "@genie/plugin-github/*": ["../plugins/github/client/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

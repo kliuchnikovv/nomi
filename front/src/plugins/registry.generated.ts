@@ -16,6 +16,7 @@ export interface IntegrationMetadata {
     systemEventListeners: string[];
     authType: 'oauth2' | 'api_key' | 'none';
     category?: string;
+    color?: string;
 }
 
 export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
@@ -30,6 +31,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         systemEventListeners: ['push_notifications', 'app_lifecycle'],
         authType: 'oauth2',
         category: 'email',
+        color: '#EA4335',
     },
     calendar: {
         id: 'calendar',
@@ -42,6 +44,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         systemEventListeners: ['push_notifications', 'app_lifecycle'],
         authType: 'oauth2',
         category: 'calendar',
+        color: '#4285F4',
     },
     github: {
         id: 'github',
@@ -54,6 +57,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         systemEventListeners: [],
         authType: 'oauth2',
         category: 'development',
+        color: '#24292e',
     },
     jules: {
         id: 'jules',
@@ -66,5 +70,6 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         systemEventListeners: [],
         authType: 'api_key',
         category: 'development',
+        color: '#9334EA',
     },
 };

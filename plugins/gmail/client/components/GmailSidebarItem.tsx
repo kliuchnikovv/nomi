@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Mail } from 'iconoir-react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { ThemePalette } from '@genie/front/themes/types';
+import { integrationStorage } from '@genie/front/services/integrations/IntegrationStorage';
 
 interface GmailSidebarItemProps {
     integrationId: string;
@@ -12,10 +13,24 @@ interface GmailSidebarItemProps {
 
 export function GmailSidebarItem({ integrationId, onSelect, isSelected }: GmailSidebarItemProps) {
     const { theme, palette } = useTheme();
-    // In a real app, we would subscribe to a store or context to get the unread count for this specific integration.
-    // For now, we'll assume the parent component might pass it or we fetch it.
-    // Simplification: Static unread count or fetched from local storage hook (omitted for brevity).
-    const unreadCount = 0; 
+    const [accountEmail, setAccountEmail] = useState<string>('');
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    useEffect(() => {
+        const loadAccountInfo = async () => {
+            try {
+                const integrations = await integrationStorage.getIntegrations();
+                const gmailIntegration = integrations.find(i => i.provider.toLowerCase() === 'gmail');
+                if (gmailIntegration) {
+                    setAccountEmail(gmailIntegration.email || 'Gmail');
+                }
+            } catch (error) {
+                console.error('Failed to load Gmail account:', error);
+                setAccountEmail('Gmail');
+            }
+        };
+        loadAccountInfo();
+    }, [integrationId]);
 
     return (
         <Pressable
@@ -27,7 +42,7 @@ export function GmailSidebarItem({ integrationId, onSelect, isSelected }: GmailS
         >
             <View style={styles.left}>
                 <Mail width={20} height={20} color={palette.red} />
-                <Text style={[styles.label, { color: theme.text }]}>Gmail</Text>
+                <Text style={[styles.label, { color: theme.text }]}>{accountEmail}</Text>
             </View>
             {unreadCount > 0 && (
                 <View style={[styles.badge, { backgroundColor: palette.red }]}>

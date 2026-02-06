@@ -26,12 +26,14 @@ const config = {
       '@genie/front': path.resolve(__dirname, 'src'),
       '@genie/plugin-gmail': path.resolve(__dirname, '../plugins/gmail'),
       '@genie/plugin-calendar': path.resolve(__dirname, '../plugins/calendar'),
+      '@genie/plugin-github': path.resolve(__dirname, '../plugins/github'),
     },
     // Support for TypeScript path aliases
     alias: {
       '@genie/front': path.resolve(__dirname, 'src'),
       '@genie/plugin-gmail': path.resolve(__dirname, '../plugins/gmail/client'),
       '@genie/plugin-calendar': path.resolve(__dirname, '../plugins/calendar/client'),
+      '@genie/plugin-github': path.resolve(__dirname, '../plugins/github/client'),
     },
   },
   

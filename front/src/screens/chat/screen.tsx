@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { View, Platform, KeyboardAvoidingView, Keyboard, Text, TouchableOpacity, RefreshControl } from 'react-native';
 import { getApiUrl, API_URL } from '../../config';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
@@ -9,6 +9,7 @@ import { useSharedValue, withTiming, runOnJS } from 'react-native-reanimated';
 import ImageViewing from 'react-native-image-viewing';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { Message as GenieMessage } from '../main/models';
 
 import { useChat } from './context';
 import { useAuth } from '../auth/context';
@@ -88,6 +89,20 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
 
     const giftedMessages = useGiftedMessages(messages, user?.id);
+
+    // Track last message ID for optimization
+    const lastMessageIdRef = React.useRef<string>('');
+    const extraData = useMemo(() => {
+        const lastMsg = messages[0];
+        const lastId = lastMsg?.id || '';
+        const hasChanged = lastId !== lastMessageIdRef.current;
+        lastMessageIdRef.current = lastId;
+        return {
+            lastMessageId: lastId,
+            lastMessageUpdated: lastMsg?.updated_at || lastMsg?.created_at,
+            refreshTrigger: hasChanged ? Date.now() : extraData?.refreshTrigger,
+        };
+    }, [messages]);
 
     // Dice Roll Logic
     const [diceOverlayVisible, setDiceOverlayVisible] = useState(false);
@@ -235,6 +250,26 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             console.error('Failed to execute action', e);
             // Optionally set error or show toast
         }
+    }, []);
+
+    // Optimization: Only re-render message if it actually changed
+    const shouldUpdateMessage = useCallback((currentProps: any, nextProps: any) => {
+        const current = currentProps.currentMessage;
+        const next = nextProps.currentMessage;
+        
+        // Fast comparison - check if same reference first
+        if (current === next) return false;
+        
+        // Check key properties that affect rendering
+        if (current._id !== next._id) return true;
+        if (current.text !== next.text) return true;
+        if (current.createdAt !== next.createdAt) return true;
+        if ((current as any).content_parts !== (next as any).content_parts) return true;
+        if ((current as any).tool_calls !== (next as any).tool_calls) return true;
+        if ((current as any).actions !== (next as any).actions) return true;
+        if ((current as any).attachments !== (next as any).attachments) return true;
+        
+        return false;
     }, []);
 
 
@@ -471,6 +506,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         chatMode={chatMode}
                         teamId={selectedTeamId}
                         activeAgentsCount={activeAgentsCount}
+                        isWorking={assistantWorking}
                     />
 
 
@@ -519,6 +555,9 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                 isScrollToBottomEnabled={true}
                                 timeFormat="HH:mm"
                                 onLongPress={onLongPressMessage}
+                                shouldUpdateMessage={shouldUpdateMessage}
+                                extraData={extraData}
+                                keyExtractor={(message: IMessage) => String(message._id)}
                                 listProps={
                                     activeChatID && activeChatID !== emptyChatID && !isPluginThread
                                         ? {
@@ -530,8 +569,18 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                                     colors={[theme.accent]}
                                                 />
                                             ),
+                                            // Disable auto-scroll during streaming to prevent jumps
+                                            maintainVisibleContentPosition: undefined,
+                                            maxToRenderPerBatch: 10,
+                                            windowSize: 10,
+                                            initialNumToRender: 15,
+                                            updateCellsBatchingPeriod: 50,
                                         }
-                                        : undefined
+                                        : {
+                                            maxToRenderPerBatch: 10,
+                                            windowSize: 10,
+                                            initialNumToRender: 15,
+                                        }
                                 }
                                 renderChatEmpty={() => {
                                     if (messagesLoading) {

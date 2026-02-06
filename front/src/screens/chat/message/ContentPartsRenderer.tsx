@@ -1,231 +1,297 @@
-import React, { useMemo } from 'react';
-import { View, Pressable, Alert } from 'react-native';
-import Clipboard from '@react-native-clipboard/clipboard';
+import React, { useMemo, memo, useCallback } from 'react';
+import { View, Pressable, Text, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useChat } from '../context';
 import { ContentPart } from './models';
 import { useTheme } from '../../../context/ThemeContext';
 import { createMarkdownStyles } from './dynamicStyles';
 import { createMarkdownRules } from './markdownRules';
-import { SingleToolCall, ReasoningBlock, AgentThinkingBlock, CollapsibleSteps } from './ToolCalls';
+import { SingleToolCall, ReasoningBlock, CollapsibleSteps } from './ToolCalls';
 import { DocumentBlock } from './DocumentBlock';
 import { PollComponent, ButtonsComponent } from './UIComponents';
 
+// Create markdown rules once outside component (they don't depend on props)
+const markdownRules = createMarkdownRules(() => {});
+
+// Simple text styles for fast rendering during streaming
+const createSimpleTextStyles = (theme: any) =>
+    StyleSheet.create({
+        text: {
+            fontSize: 16,
+            lineHeight: 22,
+            color: theme.colors?.text || '#fff',
+            fontFamily: undefined, // System font - fastest
+        },
+    });
+
 /**
- * Detects if a string is a backend JSON log message that shouldn't be displayed in chat.
- * Attributes looked for: "level", "logger", "timestamp", "message" inside a JSON object.
+ * Detects if text contains markdown syntax
+ * Fast check for common markdown patterns
+ */
+function hasMarkdown(text: string): boolean {
+    // Quick check for common markdown patterns
+    return (
+        text.includes('**') ||
+        text.includes('*') ||
+        text.includes('`') ||
+        text.includes('[') ||
+        text.includes('#') ||
+        text.includes('- ') ||
+        text.includes('1.') ||
+        text.includes('>') ||
+        text.includes('```')
+    );
+}
+
+/**
+ * Detects if a string is a backend JSON log message
  */
 function isLogMessage(text: string): boolean {
-    if (!text || !text.trim().startsWith('{')) return false;
-    try {
-        // Quick heuristic check before parsing to avoid perf hit on all messages
-        if (!text.includes('"level"') && !text.includes('"timestamp"')) return false;
+    if (!text || text[0] !== '{') return false;
+    const hasLevel = text.includes('"level"');
+    const hasTimestamp = text.includes('"timestamp"');
+    if (!hasLevel && !hasTimestamp) return false;
 
+    try {
         const obj = JSON.parse(text);
-        if (typeof obj === 'object' && obj !== null) {
-            // Check for common log fields from backend (RailwayJsonFormatter)
-            if ('level' in obj && 'timestamp' in obj && 'message' in obj) {
-                return true;
-            }
-        }
-        return false;
-    } catch (e) {
+        return obj && typeof obj === 'object' && 'level' in obj && 'timestamp' in obj && 'message' in obj;
+    } catch {
         return false;
     }
 }
 
-// Helper to parse "Document" JSON from text (AnalystOutput, ArchitectPlan, etc.)
-function parseDocument(text: string): { msg: string, content: any } | null {
-    if (!text) return null;
+// Helper to parse "Document" JSON from text
+function parseDocument(text: string): { msg: string; content: any } | null {
+    if (!text || !text.includes('```json')) return null;
 
-    // Look for JSON code block: ```json { ... } ```
     const jsonBlockRegex = /```json\s*(\{[\s\S]*?\})\s*```/;
     const match = text.match(jsonBlockRegex);
 
-    if (match && match[1]) {
+    if (match?.[1]) {
         try {
             const obj = JSON.parse(match[1]);
-            // Check for our specific schema signatures
             if (obj && typeof obj === 'object' && 'msg' in obj && 'content' in obj) {
                 return { msg: obj.msg, content: obj.content };
             }
-        } catch (e) {
+        } catch {
             // Failed to parse, ignore
         }
     }
     return null;
 }
 
-export function ContentPartsRenderer({ parts, onLongPress }: { parts: ContentPart[], onLongPress: (text: string) => void }) {
-    const { showToolCalls, showReasoning, showMemberResponses } = useChat();
-    const { theme } = useTheme();
-    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+// ULTRA-FAST text renderer for streaming - uses plain Text, not Markdown
+const StreamingTextPart = memo(function StreamingTextPart({
+    text,
+    simpleStyles,
+    markdownStyles,
+    onLongPress,
+    isStreaming = false,
+}: {
+    text: string;
+    simpleStyles: any;
+    markdownStyles: any;
+    onLongPress: (text: string) => void;
+    isStreaming?: boolean;
+}) {
+    // Check for document structure (rare, but handle it)
+    const documentData = parseDocument(text);
 
-    const handleCodeCopy = (code: string) => {
-        Clipboard.setString(code);
-        // Optional: visible feedback
-        console.log('Code copied to clipboard');
-    };
+    if (documentData) {
+        return (
+            <View>
+                <Pressable
+                    onLongPress={() => onLongPress(documentData.msg)}
+                    delayLongPress={250}
+                    style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+                >
+                    <Markdown style={markdownStyles} rules={markdownRules}>
+                        {documentData.msg}
+                    </Markdown>
+                </Pressable>
+                <DocumentBlock title="Детали" content={documentData.content} />
+            </View>
+        );
+    }
 
-    const markdownRules = useMemo(() => createMarkdownRules(handleCodeCopy), []);
+    // During streaming: use plain Text for maximum speed
+    // After streaming: use Markdown only if text contains markdown syntax
+    const shouldUseMarkdown = !isStreaming && hasMarkdown(text);
 
-    const filteredParts = useMemo(() => {
-        return parts.filter(part => {
-            if (part.type === 'tool_call' && !showToolCalls) return false;
-            if (part.type === 'reasoning' && !showReasoning) return false;
+    if (shouldUseMarkdown) {
+        return (
+            <Pressable
+                onLongPress={() => onLongPress(text)}
+                delayLongPress={250}
+                style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+            >
+                <Markdown style={markdownStyles} rules={markdownRules}>
+                    {text}
+                </Markdown>
+            </Pressable>
+        );
+    }
 
-            // Filter out backend leaked logs
-            if (part.type === 'text' && isLogMessage(part.text)) {
-                return false;
-            }
-
-            // Member responses in team mode - always show as regular text
-            // (no longer filtered by showMemberResponses)
-            return true;
-        });
-    }, [parts, showToolCalls, showReasoning]);
-
-    // Merge consecutive text parts for proper markdown rendering
-    // Also treat member_response as text in team mode
-    const mergedParts = useMemo(() => {
-        const result: ContentPart[] = [];
-        for (const part of filteredParts) {
-            // Treat both 'text' and 'member_response' as text content
-            const isTextLike = part.type === 'text' || (part as any).type === 'member_response';
-            const textContent = part.type === 'text' ? part.text : (part as any).text;
-
-            if (isTextLike && textContent) {
-                const last = result[result.length - 1];
-                if (last && last.type === 'text') {
-                    // Merge with previous text part, adding separator to avoid text gluing
-                    last.text = (last.text || '') + '\n\n' + textContent;
-                } else {
-                    // Create new text part (copy to avoid mutation)
-                    result.push({ type: 'text', text: textContent });
-                }
-            } else if (!isTextLike) {
-                result.push(part);
-            }
-        }
-        return result;
-    }, [filteredParts]);
-
-    // Group parts for rendering: consecutive "internal" parts (tool_call, reasoning) should be grouped
-    const groupedParts = useMemo(() => {
-        const result: { type: 'group' | 'text' | 'member', parts?: ContentPart[], part?: ContentPart }[] = [];
-        let currentInternalGroup: ContentPart[] = [];
-
-        const isInternal = (part: ContentPart) => {
-            // member_response is now treated as regular text, not internal
-            return part.type === 'tool_call' || part.type === 'reasoning';
-        };
-
-        const flushInternalGroup = () => {
-            if (currentInternalGroup.length > 0) {
-                result.push({ type: 'group', parts: [...currentInternalGroup] });
-                currentInternalGroup = [];
-            }
-        };
-
-        for (const part of mergedParts) {
-            if (isInternal(part)) {
-                currentInternalGroup.push(part);
-            } else {
-                // Text part
-                flushInternalGroup();
-                result.push({ type: 'text', part });
-            }
-        }
-        flushInternalGroup();
-        return result;
-    }, [mergedParts]);
-
+    // Fast path: plain text rendering
     return (
-        <>
-            {groupedParts.map((group, groupIndex) => {
-                if (group.type === 'text' && group.part) {
-                    const part = group.part;
-                    const textContent = (part as any).text || '';
+        <Pressable
+            onLongPress={() => onLongPress(text)}
+            delayLongPress={250}
+            style={({ pressed }) => [pressed && { opacity: 0.75 }]}
+        >
+            <Text style={simpleStyles.text}>{text}</Text>
+        </Pressable>
+    );
+});
 
-                    // Try to parse as a structured Document first
-                    const documentData = parseDocument(textContent);
-
-                    if (documentData) {
-                        // Team Lead text: render as plain Markdown (no bubble)
+// Memoized component for tool calls and reasoning
+const ToolCallsGroup = memo(function ToolCallsGroup({ parts }: { parts: ContentPart[] }) {
+    return (
+        <CollapsibleSteps>
+            {parts.map((part, index) => {
+                if (part.type === 'tool_call') {
+                    // Custom UI Renderers
+                    if (part.tool_call.name === 'ui_client_show_poll') {
+                        const args =
+                            typeof part.tool_call.arguments === 'string'
+                                ? JSON.parse(part.tool_call.arguments)
+                                : part.tool_call.arguments;
                         return (
-                            <View key={`doc-${groupIndex}`}>
-                                <Pressable
-                                    onLongPress={() => onLongPress(documentData.msg)}
-                                    delayLongPress={250}
-                                    style={({ pressed }) => [pressed && { opacity: 0.75 }]}
-                                >
-                                    <Markdown style={markdownStyles as any} rules={markdownRules}>
-                                        {documentData.msg}
-                                    </Markdown>
-                                </Pressable>
-                                <DocumentBlock title="Детали" content={documentData.content} />
-                            </View>
+                            <PollComponent
+                                key={`poll-${index}`}
+                                question={args.question}
+                                options={args.options}
+                                allowMultiple={args.allow_multiple}
+                            />
                         );
                     }
-
-                    // Team Lead text: render as plain Markdown (no bubble) - same for both modes
-                    return (
-                        <Pressable
-                            key={`text-${groupIndex}`}
-                            onLongPress={() => onLongPress(textContent)}
-                            delayLongPress={250}
-                            style={({ pressed }) => [pressed && { opacity: 0.75 }]}
-                        >
-                            <Markdown style={markdownStyles as any} rules={markdownRules}>
-                                {textContent}
-                            </Markdown>
-                        </Pressable>
-                    );
-
-                } else if (group.type === 'group' && group.parts) {
-                    return (
-                        <CollapsibleSteps key={`group-${groupIndex}`}>
-                            {group.parts.map((part, index) => {
-                                if (part.type === 'tool_call') {
-                                    // Custom UI Renderers
-                                    if (part.tool_call.name === 'ui_client_show_poll') {
-                                        const args = typeof part.tool_call.arguments === 'string' 
-                                            ? JSON.parse(part.tool_call.arguments) 
-                                            : part.tool_call.arguments;
-                                        return (
-                                            <PollComponent 
-                                                key={`poll-${index}`}
-                                                question={args.question}
-                                                options={args.options}
-                                                allowMultiple={args.allow_multiple}
-                                            />
-                                        );
-                                    }
-                                    if (part.tool_call.name === 'ui_client_show_buttons') {
-                                        const args = typeof part.tool_call.arguments === 'string' 
-                                            ? JSON.parse(part.tool_call.arguments) 
-                                            : part.tool_call.arguments;
-                                        return (
-                                            <ButtonsComponent
-                                                key={`btns-${index}`}
-                                                text={args.text}
-                                                buttons={args.buttons}
-                                            />
-                                        );
-                                    }
-                                    // Default Tool Call Renderer
-                                    return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
-                                } else if (part.type === 'reasoning') {
-                                    return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
-                                }
-                                // member_response is now handled as text above
-                                return null;
-                            })}
-                        </CollapsibleSteps>
-                    );
+                    if (part.tool_call.name === 'ui_client_show_buttons') {
+                        const args =
+                            typeof part.tool_call.arguments === 'string'
+                                ? JSON.parse(part.tool_call.arguments)
+                                : part.tool_call.arguments;
+                        return (
+                            <ButtonsComponent
+                                key={`btns-${index}`}
+                                text={args.text}
+                                buttons={args.buttons}
+                            />
+                        );
+                    }
+                    return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
+                } else if (part.type === 'reasoning') {
+                    return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
                 }
                 return null;
             })}
+        </CollapsibleSteps>
+    );
+});
+
+// Memoized content parts processor
+function useProcessedParts(parts: ContentPart[], showToolCalls: boolean, showReasoning: boolean) {
+    return useMemo(() => {
+        if (!parts || parts.length === 0) return [];
+
+        const result: Array<{ type: 'text'; text: string } | { type: 'group'; parts: ContentPart[] }> = [];
+        let currentText = '';
+        let currentGroup: ContentPart[] = [];
+
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+
+            // Filter based on settings
+            if (part.type === 'tool_call' && !showToolCalls) continue;
+            if (part.type === 'reasoning' && !showReasoning) continue;
+            if (part.type === 'text' && isLogMessage(part.text)) continue;
+
+            const isTextLike = part.type === 'text' || (part as any).type === 'member_response';
+
+            if (isTextLike) {
+                // Flush any pending group
+                if (currentGroup.length > 0) {
+                    result.push({ type: 'group', parts: [...currentGroup] });
+                    currentGroup = [];
+                }
+
+                const textContent = part.type === 'text' ? part.text : (part as any).text;
+                if (textContent) {
+                    // Accumulate text with separator
+                    currentText = currentText ? currentText + '\n\n' + textContent : textContent;
+                }
+            } else if (part.type === 'tool_call' || part.type === 'reasoning') {
+                // Flush any pending text
+                if (currentText) {
+                    result.push({ type: 'text', text: currentText });
+                    currentText = '';
+                }
+                currentGroup.push(part);
+            }
+        }
+
+        // Flush remaining
+        if (currentText) {
+            result.push({ type: 'text', text: currentText });
+        }
+        if (currentGroup.length > 0) {
+            result.push({ type: 'group', parts: [...currentGroup] });
+        }
+
+        return result;
+    }, [parts, showToolCalls, showReasoning]);
+}
+
+// Detect if streaming is active by checking for incomplete text parts
+function isStreamingActive(parts: ContentPart[]): boolean {
+    // If last part is text and doesn't end with punctuation, likely streaming
+    if (!parts || parts.length === 0) return false;
+    const lastPart = parts[parts.length - 1];
+    if (lastPart.type !== 'text' || !lastPart.text) return false;
+    const text = lastPart.text.trim();
+    // Check if text ends with sentence-ending punctuation
+    return text.length > 0 && !/[.!?。！？]\s*$/.test(text);
+}
+
+export const ContentPartsRenderer = memo(function ContentPartsRenderer({
+    parts,
+    onLongPress,
+}: {
+    parts: ContentPart[];
+    onLongPress: (text: string) => void;
+}) {
+    const { showToolCalls, showReasoning } = useChat();
+    const { theme } = useTheme();
+
+    // Simple styles for fast text rendering
+    const simpleStyles = useMemo(() => createSimpleTextStyles(theme), [theme]);
+
+    // Markdown styles for final rendering
+    const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
+
+    // Process parts into groups - memoized
+    const groupedParts = useProcessedParts(parts, showToolCalls, showReasoning);
+
+    // Detect if we're currently streaming
+    const streaming = useMemo(() => isStreamingActive(parts), [parts]);
+
+    return (
+        <>
+            {groupedParts.map((group, index) => {
+                if (group.type === 'text') {
+                    return (
+                        <StreamingTextPart
+                            key={`text-${index}-${group.text.length}`}
+                            text={group.text}
+                            simpleStyles={simpleStyles}
+                            markdownStyles={markdownStyles as any}
+                            onLongPress={onLongPress}
+                            isStreaming={streaming}
+                        />
+                    );
+                } else {
+                    return <ToolCallsGroup key={`group-${index}`} parts={group.parts} />;
+                }
+            })}
         </>
     );
-}
+});

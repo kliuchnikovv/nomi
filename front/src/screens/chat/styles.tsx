@@ -38,7 +38,6 @@ export const createStyles = (theme: ThemeColors) => {
             width: 32,
             height: 32,
             borderRadius: 16,
-            backgroundColor: theme.accent,
             alignItems: 'center',
             justifyContent: 'center',
             marginRight: 12,

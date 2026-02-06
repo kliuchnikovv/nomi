@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, Pressable } from 'react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { gmailClient } from '@genie/front/services/integrations/clients/GmailClient';
 import { Email } from '@genie/front/services/integrations/IntegrationStorage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { XmarkCircle } from 'iconoir-react-native';
 
-export function GmailMainScreen() {
+export interface GmailMainScreenProps {
+    onClose?: () => void;
+}
+
+export function GmailMainScreen({ onClose }: GmailMainScreenProps) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const [emails, setEmails] = useState<Email[]>([]);
@@ -66,7 +71,14 @@ export function GmailMainScreen() {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
-                <Text style={[styles.headerTitle, { color: theme.text }]}>Gmail</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Gmail</Text>
+                    {onClose && (
+                        <Pressable onPress={onClose} hitSlop={12}>
+                            <XmarkCircle width={24} height={24} color={theme.textSecondary} />
+                        </Pressable>
+                    )}
+                </View>
             </View>
 
             {loading ? (

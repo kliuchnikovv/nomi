@@ -1,44 +1,70 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text } from 'react-native';
-
-// Verify imports one by one
-// 1. Models and Context (verified safe)
-import { InboxMessage, Plugin, PluginChat, PluginChatMessage } from './models';
+import { Plugin, PluginChat } from './models';
 import { PluginChatsContext } from './context';
-// 2. Database (verified safe)
-import * as DatabaseModule from '../../services/database/database';
-// 3. API Client (verified safe?)
-import { inboxApi, integrationsApi, sidebarApi } from '../../apiClient';
-
-// 4. IntegrationStorage
-import { integrationStorage } from '../../services/integrations/IntegrationStorage';
-// 5. GmailClient
-import { gmailClient } from '../../services/integrations/clients/GmailClient';
+import { getAllIntegrations } from '../../services/integrations/registry';
+import { INTEGRATION_REGISTRY } from '../../plugins/registry.generated';
 
 export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    console.log('PluginChatsProviderImpl (Simple version) rendering');
+    const [plugins, setPlugins] = useState<Plugin[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    console.log('DatabaseModule:', !!DatabaseModule);
-    console.log('inboxApi:', !!inboxApi);
-    console.log('integrationStorage:', !!integrationStorage);
-    console.log('gmailClient:', !!gmailClient);
+    const loadPlugins = async () => {
+        try {
+            setLoading(true);
+            setError(null);
 
-    const value = React.useMemo(() => ({
-        plugins: [],
-        loading: false,
+            // Load integrations from registry, exclude server-only
+            const integrations = getAllIntegrations().filter(
+                (integration) => integration.storageType !== 'server'
+            );
+            console.log('[PluginChatsProvider] Loading integrations:', integrations.length);
+
+            // Transform integrations to plugins format
+            const loadedPlugins: Plugin[] = integrations.map((integration) => {
+                const metadata = INTEGRATION_REGISTRY[integration.id.toLowerCase()];
+                console.log('[PluginChatsProvider] Loading plugin:', integration.id, integration.displayName);
+                return {
+                    id: integration.id,
+                    provider: integration.id,
+                    name: integration.displayName,
+                    icon: integration.icon,
+                    color: metadata?.color,
+                    chats: [],
+                };
+            });
+
+            console.log('[PluginChatsProvider] Loaded plugins:', loadedPlugins.length);
+            setPlugins(loadedPlugins);
+        } catch (err) {
+            console.error('Failed to load plugins:', err);
+            setError(err instanceof Error ? err.message : 'Unknown error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadPlugins();
+    }, []);
+
+    const value = useMemo(() => ({
+        plugins,
+        loading,
         refreshing: false,
-        error: null,
+        error,
         selectedChatId: null,
         selectedChatMessages: [],
         chatLoading: false,
         chatError: null,
         selectChat: async () => null,
         setSelectedChatId: () => { },
-        refresh: async () => { },
+        refresh: async () => { await loadPlugins(); },
         loadMoreForPlugin: async () => { },
         hasMoreForPlugin: () => false,
         loadingMorePlugins: new Set<string>(),
-    }), []);
+    }), [plugins, loading, error]);
 
     return (
         <PluginChatsContext.Provider value={value}>

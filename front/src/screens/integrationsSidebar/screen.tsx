@@ -6,9 +6,8 @@ import {
     RefreshControl,
     Text,
     View,
-    ScrollView,
 } from 'react-native';
-import { NavArrowDown, NavArrowRight, Mail, Calendar, Plus, Trash, Github, Play, Check, XmarkCircle } from 'iconoir-react-native';
+import { NavArrowDown, NavArrowRight, XmarkCircle } from 'iconoir-react-native';
 import { SharedValue } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,22 +18,57 @@ import { useChat } from '../chat/context';
 import { useTheme } from '../../context/ThemeContext';
 import { Sidebar } from '../../components/DrawerSidebar';
 import { ThemePalette } from '../../themes/types';
-import { CalendarSidebar } from '../chat/leftSidebar/CalendarSidebar';
 import { getClientPlugin } from '../../plugins/clientRegistry';
 import { useMain } from '../main/context';
+import { PluginIcon } from '../../components/PluginIcon';
+import { INTEGRATION_REGISTRY } from '../../services/integrations/registry';
 
-// ... existing code ...
+const pad = (value: number) => value.toString().padStart(2, '0');
+
+const formatTimestamp = (value?: string | number | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}, ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
 
 function PluginSection({
     plugin,
-    // ...
+    expandedPlugins,
+    onTogglePlugin,
+    expandedChats,
+    onToggleChat,
+    onThreadSelect,
+    onLoadMore,
+    hasMore,
+    isLoadingMore,
+    totalUnread,
+    styles,
+    palette,
+    onClose,
 }: {
-    // ...
+    plugin: Plugin;
+    expandedPlugins: Set<string>;
+    onTogglePlugin: (pluginId: string) => void;
+    expandedChats: Set<string>;
+    onToggleChat: (chatId: string) => void;
+    onThreadSelect: (chat: PluginChat, thread: any) => void;
+    onLoadMore: () => void;
+    hasMore: boolean;
+    isLoadingMore: boolean;
+    totalUnread: number;
+    styles: RightSidebarStyles;
+    palette: ThemePalette;
+    onClose?: () => void;
 }) {
     const { theme } = useTheme();
     const { activePluginView, setActivePluginView } = useMain();
     const isExpanded = expandedPlugins.has(plugin.id);
-    // ...
+
+    // Get metadata from registry
+    const metadata = INTEGRATION_REGISTRY[plugin.provider.toLowerCase()];
+    const displayName = metadata?.displayName || plugin.name;
+    const iconColor = metadata?.color || palette.textPrimary;
 
     // Check if plugin has a custom Sidebar component
     const clientPlugin = getClientPlugin(plugin.provider);
@@ -46,6 +80,7 @@ function PluginSection({
                 integrationId={plugin.id}
                 onSelect={() => setActivePluginView(plugin.provider)}
                 isSelected={activePluginView === plugin.provider}
+                onClose={onClose}
             />
         );
     }
@@ -60,14 +95,14 @@ function PluginSection({
 
                 <View style={styles.pluginHeaderRow}>
                     <View style={styles.pluginHeaderLeft}>
-                        <IconComponent
-                            width={16}
-                            height={16}
-                            color={iconMeta.color}
+                        <PluginIcon 
+                            provider={plugin.provider} 
+                            size={16} 
+                            color={iconColor}
                         />
-                        <Text style={styles.pluginName}>{plugin.name}</Text>
+                        <Text style={styles.pluginName}>{displayName}</Text>
                         {totalUnread > 0 && (
-                            <View style={[styles.unreadBadge, { backgroundColor: iconMeta.color }]}>
+                            <View style={[styles.unreadBadge, { backgroundColor: iconColor }]}>
                                 <Text style={styles.unreadBadgeText}>{totalUnread}</Text>
                             </View>
                         )}
@@ -235,6 +270,7 @@ function RightSidebarContent({
 }) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
+    const { activePluginView, setActivePluginView } = useMain();
     const { plugins, loading, refreshing, error, refresh, loadMoreForPlugin, hasMoreForPlugin, loadingMorePlugins } = usePluginChats();
     const { startPluginThread } = useChat();
     const [expandedPlugins, setExpandedPlugins] = useState<Set<string>>(new Set());
@@ -286,7 +322,7 @@ function RightSidebarContent({
         return (
             <View style={styles.root}>
                 <View style={[styles.sectionHeader, { paddingTop: insets.top + 12 }]}>
-                    <Text style={styles.sectionTitle}>Inbox Chats</Text>
+                    <Text style={styles.sectionTitle}>Integrations</Text>
                 </View>
                 <View style={styles.emptyState}>
                     <Text style={styles.emptyText}>Error: {error}</Text>
@@ -304,7 +340,7 @@ function RightSidebarContent({
         <View style={styles.root}>
             <View style={{ paddingTop: insets.top - 25 }} />
             <View style={[styles.sectionHeader, { marginTop: 12 }]}>
-                <Text style={styles.sectionTitle}>Inbox Chats</Text>
+                <Text style={styles.sectionTitle}>Integrations</Text>
             </View>
 
             {loading && plugins.length === 0 ? (
@@ -327,15 +363,28 @@ function RightSidebarContent({
                     }
                     ListEmptyComponent={
                         <View style={[styles.emptyState, { flex: 1 }]}>
-                            <Text style={styles.emptyText}>No inbox chats</Text>
+                            <Text style={styles.emptyText}>No integrations</Text>
+                            <Text style={[styles.emptyText, { fontSize: 12, marginTop: 8 }]}>
+                                Connect an integration to get started
+                            </Text>
                         </View>
                     }
                     renderItem={({ item: plugin }) => {
-                        if (plugin.provider === 'calendar') {
-                            // Cast to any to avoid type mismatch if models differ slightly, though id is present.
-                            // We disable scrolling so the outer FlatList handles it.
-                            return <CalendarSidebar integration={plugin as any} scrollEnabled={false} />;
+                        // Check if plugin has a custom Sidebar component
+                        const clientPlugin = getClientPlugin(plugin.provider);
+                        const SidebarComponent = clientPlugin?.SidebarComponent;
+
+                        if (SidebarComponent) {
+                            return (
+                                <SidebarComponent
+                                    integrationId={plugin.id}
+                                    onSelect={() => setActivePluginView(plugin.provider)}
+                                    isSelected={activePluginView === plugin.provider}
+                                    onClose={onClose}
+                                />
+                            );
                         }
+
                         return (
                             <PluginSection
                                 plugin={plugin}
@@ -347,8 +396,10 @@ function RightSidebarContent({
                                 onLoadMore={() => loadMoreForPlugin(plugin.id)}
                                 hasMore={hasMoreForPlugin(plugin.id)}
                                 isLoadingMore={loadingMorePlugins.has(plugin.id)}
+                                totalUnread={plugin.chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0)}
                                 styles={styles}
                                 palette={palette}
+                                onClose={onClose}
                             />
                         );
                     }}
@@ -358,7 +409,16 @@ function RightSidebarContent({
     );
 }
 
-import { StyleSheet } from 'react-native';
+
+export interface RightSidebarProps {
+    variant: 'inline' | 'overlay';
+    width: number;
+    onChatSelect?: (chat: PluginChat) => void;
+    onClose?: () => void;
+    translateX?: SharedValue<number>;
+    dragGesture?: ReturnType<typeof Gesture.Pan>;
+    visible?: boolean;
+}
 
 export default function RightSidebar({
     variant,

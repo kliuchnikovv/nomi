@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles } from '../styles';
 import { useTheme } from '../../../context/ThemeContext';
 import { TypingIndicator } from './TypingIndicator';
+import { SoupAnimation } from './SoupAnimation';
 
 
 interface ChatHeaderProps {
@@ -19,6 +20,7 @@ interface ChatHeaderProps {
     chatMode?: 'agent' | 'team' | 'plugin';
     teamId?: string | null;
     activeAgentsCount?: number;
+    isWorking?: boolean;
 }
 
 export function ChatHeader({
@@ -33,6 +35,7 @@ export function ChatHeader({
     chatMode,
     teamId,
     activeAgentsCount = 0,
+    isWorking = false,
 }: ChatHeaderProps) {
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
@@ -94,9 +97,11 @@ export function ChatHeader({
             <View style={[styles.headerAvatar, { backgroundColor: teamColor }]}>
                 {iconElement ? (
                     iconElement
+                ) : chatMode === 'agent' ? (
+                    <SoupAnimation working={isWorking} />
                 ) : (
                     <Text style={[styles.headerAvatarText, { color: theme.icon }]}>
-                        {isInboxMode ? 'I' : chatMode === 'agent' ? 'G' : 'T'}
+                        {isInboxMode ? 'I' : 'T'}
                     </Text>
                 )}
             </View>
@@ -149,9 +154,6 @@ export function ChatHeader({
                     />
                 </TouchableOpacity>
             )}
-
-
-
         </View>
     );
 }

@@ -17,6 +17,8 @@ export interface MainContextType {
     setSidebarFilter: (filter: string) => void;
     pendingChatMode?: { mode: 'agent' | 'team'; teamId: string | null; initialMessage?: string } | null;
     clearPendingChatMode?: () => void;
+    activePluginView: string | null;
+    setActivePluginView: (view: string | null) => void;
 }
 
 export type Chat = {

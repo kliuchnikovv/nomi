@@ -18,6 +18,7 @@ import { AVAILABLE_TEAMS } from './teams';
 import { useMain } from '../main/context';
 import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
+import { shallow } from 'zustand/shallow';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import { v4 as uuidv4 } from 'uuid';
 import { generateChatTitle } from '../../services/chatTitleGenerator';
@@ -42,12 +43,14 @@ export function ChatProvider({
     activeChatID,
     setActiveChatID,
 }: Props) {
-    // Select messages from global store
+    // Select messages from global store with shallow comparison to prevent re-renders
+    // when message content hasn't actually changed
     const messages = useChatStore(
         useCallback(
             (state) => (activeChatID ? state.chats[activeChatID] ?? EMPTY_MESSAGES : EMPTY_MESSAGES),
             [activeChatID]
-        )
+        ),
+        shallow
     );
     const setMessagesToStore = useChatStore((state) => state.setMessages);
 
@@ -767,6 +770,8 @@ export function ChatProvider({
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
                 }
+                // Flush any pending streaming updates to ensure final message state
+                useChatStore.getState().flushPendingUpdates(chatId);
             }
         });
         return unsubscribe;

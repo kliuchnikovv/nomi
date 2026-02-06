@@ -265,13 +265,26 @@ export class ChatSocket {
                 this.processOutbox(); // Replaced inline loop with method call
             };
 
+            // Performance optimization: batch streaming logs to reduce console spam
+            let logBatch: string[] = [];
+            let lastLogTime = Date.now();
+
+            const flushLogs = () => {
+                if (logBatch.length > 0) {
+                    console.log('[WS 📦 Batched]', logBatch.length, 'frames since last flush');
+                    logBatch = [];
+                    lastLogTime = Date.now();
+                }
+            };
+
             ws.onmessage = async (e: any) => {
                 this.touchActivity();
                 const raw = typeof e.data === 'string' ? e.data : '';
-                // Log raw WebSocket message
-                console.log('[WS ⬇️ Received] Raw data:', raw.substring(0, 500) + (raw.length > 500 ? `... (${raw.length} chars total)` : ''));
-                // NDJSON handling: split by newline
+
+                // Batch NDJSON processing for performance
                 const lines = raw.split('\n');
+                let hasStreamingText = false;
+                const streamingFrames: any[] = [];
 
                 for (const line of lines) {
                     const trimmed = line.trim();
@@ -284,52 +297,32 @@ export class ChatSocket {
                         const frame = rawJson as Frame;
                         const op = frame.op;
 
-                        // Log parsed frame with details
-                        console.log('[WS 📦 Frame]', {
-                            op: frame.op,
-                            kind: frame.kind,
-                            chat_id: frame.chat_id,
-                            payload_type: frame.payload?.type,
-                            payload_message: frame.payload?.message?.substring(0, 100),
-                            payload_keys: frame.payload ? Object.keys(frame.payload) : [],
-                            full_payload: frame.payload
-                        });
-                        // Handle global routing
+                        // Track streaming text frames for batch logging
+                        const isStreamingText = op === 'message' &&
+                            frame.kind === 'data' &&
+                            frame.payload?.type === 'text' &&
+                            frame.payload?.delta;
+
+                        if (isStreamingText) {
+                            hasStreamingText = true;
+                            streamingFrames.push(frame);
+                            continue; // Skip individual log, will batch later
+                        }
+
+                        // Flush streaming logs periodically (every 500ms or 10 frames)
+                        if (logBatch.length > 10 || Date.now() - lastLogTime > 500) {
+                            flushLogs();
+                        }
+
+                        // Handle routing for non-streaming frames
                         if (op === 'message' || op === 'tools' || op === 'model' || op === 'done' || op === 'signal') {
                             const chatId = frame.chat_id;
                             if (chatId) {
-                                console.log('[WS 🎯 Routing]', {
-                                    op,
-                                    kind: frame.kind,
-                                    chatId,
-                                    willUpdateStore: op === 'message' && frame.kind === 'data'
-                                });
-                                // 1. Update Global Store
-                                // NOTE: backend can forward the same chat stream into both:
-                                // - chat room websocket (channel=chat&chat_id=...)
-                                // - user notification websocket (channel=user)
-                                //
-                                // Previously we skipped *all* op=message frames on the user channel,
-                                // which caused the UI to never render assistant replies when the app
-                                // happened to stay connected only on channel=user.
-                                //
-                                // To avoid duplication/noise, we only write DATA messages to the store.
                                 if (op === 'message' && frame.kind === 'data') {
-                                    console.log('[WS 💾 Store Update] Adding message to chatStore:', {
-                                        chatId,
-                                        payload_type: frame.payload?.type,
-                                        payload_message_id: frame.payload?.message_id,
-                                        payload_agent_name: frame.payload?.agent_name,
-                                        payload_role: frame.payload?.role
-                                    });
                                     useChatStore.getState().addMessage(chatId, frame.payload);
-                                } else if (op === 'message') {
-                                    console.log('[WS ⏭️  Skip Store] Message not added (kind != data):', frame.kind);
                                 }
 
-                                // 2. Notify Listeners (legacy handlers for specific effects)
-                                // Only call legacy handlers if they are still relevant.
-                                // ChatContext might still want to know about completion or errors.
+                                // Notify listeners
                                 if (op === 'message' && frame.kind === 'data') {
                                     this.handlers.onMessage?.(frame);
                                 } else if (op === 'done') {
@@ -349,13 +342,11 @@ export class ChatSocket {
                                 this.handlers.onPing?.(frame);
                                 break;
                             case 'error':
-                                // Handle error frames with improved error extraction
                                 const errorInfo = frame.error || frame.payload?.error || frame.payload;
                                 const errorCode = errorInfo?.code || frame.payload?.code;
                                 const errorMessage = errorInfo?.message || frame.payload?.message || 'Произошла ошибка';
                                 const errorDetails = errorInfo?.details || frame.payload?.details;
 
-                                // Log error details for debugging
                                 if (errorDetails) {
                                     console.error('Error details:', errorDetails);
                                 }
@@ -410,6 +401,16 @@ export class ChatSocket {
                         }
                     } catch (err) {
                         console.warn('Failed to parse WS message:', err, trimmed);
+                    }
+                }
+
+                // Process accumulated streaming frames
+                if (streamingFrames.length > 0) {
+                    for (const frame of streamingFrames) {
+                        const chatId = frame.chat_id;
+                        if (chatId) {
+                            useChatStore.getState().addMessage(chatId, frame.payload);
+                        }
                     }
                 }
             };
