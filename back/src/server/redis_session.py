@@ -55,6 +55,10 @@ class RedisSession:
         # History storage
         self.chat_history: list[dict[str, str]] = []
 
+        # Telegram delivery context (set from payload in handle_user_message)
+        self._source: str | None = None
+        self._telegram_chat_id: str | int | None = None
+
         # Per-session client tool result handling
         self.pubsub: Any | None = None
         self.pending_client_tool_results: dict[str, asyncio.Future] = {}
@@ -255,6 +259,25 @@ class RedisSession:
 
         self.next_id = frame.id + 1
         return self.next_id
+
+    async def _deliver_to_telegram(self, text: str) -> None:
+        """Send completed AI response to Telegram chat."""
+        if not text or not self._telegram_chat_id:
+            return
+        try:
+            from plugins.telegram.server.service import get_service
+
+            service = get_service()
+            if service.enabled:
+                await service.send_message(
+                    int(self._telegram_chat_id), text, parse_mode="HTML"
+                )
+                logger.info(
+                    "[RedisSession] Delivered response to Telegram chat_id=%s",
+                    self._telegram_chat_id,
+                )
+        except Exception as e:
+            logger.error("[RedisSession] Failed to deliver to Telegram: %s", e)
 
     async def _send_client_action_and_wait(
         self, plugin: str, method: str, params: dict[str, Any]
@@ -737,6 +760,10 @@ class RedisSession:
             self.user_id = str(incoming_user_id)
             logger.info("[RedisSession] Updated user_id from payload: %s", self.user_id)
 
+        # 0b. Extract Telegram delivery context
+        self._source = payload.get("source")
+        self._telegram_chat_id = payload.get("telegram_chat_id")
+
         # 1. Check and update chat history
         incoming_history = payload.get("history")
         if incoming_history:
@@ -807,6 +834,7 @@ class RedisSession:
         self._last_run_completed_content = None
         idx = 0
         done_sent = False
+        telegram_text_buffer: list[str] = []
         try:
             # Stream agent events for real-time response
             stream_iter = self._stream_agent_events(
@@ -831,6 +859,10 @@ class RedisSession:
                         make_done(self.next_id, msg_chat_id, done_payload)
                     )
                     done_sent = True
+                    # Deliver to Telegram if this is a Telegram message
+                    if self._source == "telegram" and self._telegram_chat_id:
+                        full_text = "".join(telegram_text_buffer)
+                        await self._deliver_to_telegram(full_text)
                     # Drain the remaining stream in background so learning/memory
                     # tasks can finish without blocking the client.
                     async def _drain_remaining(it):
@@ -855,6 +887,8 @@ class RedisSession:
                     chunk = event.get("content", "")
                     agent_name = event.get("agent_name")
                     if chunk:
+                        if self._source == "telegram":
+                            telegram_text_buffer.append(chunk)
                         payload_data = {
                             "ix": idx,
                             "eof": False,
@@ -985,6 +1019,10 @@ class RedisSession:
                 await self._send_frame(
                     make_done(self.next_id, msg_chat_id, done_payload_fb)
                 )
+                # Deliver to Telegram if this is a Telegram message
+                if self._source == "telegram" and self._telegram_chat_id:
+                    full_text = "".join(telegram_text_buffer)
+                    await self._deliver_to_telegram(full_text)
 
         except asyncio.CancelledError:
             logger.info("[RedisSession] Streaming cancelled by user")
