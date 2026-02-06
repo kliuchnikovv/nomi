@@ -837,9 +837,7 @@ class RedisSession:
         telegram_text_buffer: list[str] = []
         try:
             # Stream agent events for real-time response
-            stream_iter = self._stream_agent_events(
-                text, payload.get("attachments")
-            )
+            stream_iter = self._stream_agent_events(text, payload.get("attachments"))
             async for event in stream_iter:
                 if self.cancel_event.is_set():
                     break
@@ -860,16 +858,30 @@ class RedisSession:
                     )
                     done_sent = True
                     # Deliver to Telegram if this is a Telegram message
+                    logger.info(
+                        "[RedisSession] Checking Telegram delivery: source=%s, chat_id=%s, buffer_len=%d",
+                        self._source,
+                        self._telegram_chat_id,
+                        len(telegram_text_buffer),
+                    )
                     if self._source == "telegram" and self._telegram_chat_id:
                         full_text = "".join(telegram_text_buffer)
+                        logger.info(
+                            "[RedisSession] Delivering to Telegram: chat_id=%s, text_len=%d",
+                            self._telegram_chat_id,
+                            len(full_text),
+                        )
                         await self._deliver_to_telegram(full_text)
+
                     # Drain the remaining stream in background so learning/memory
                     # tasks can finish without blocking the client.
                     async def _drain_remaining(it):
                         try:
                             async for ev in it:
                                 # Process RunCompleted to capture final content
-                                ev_type = ev.get("type") if isinstance(ev, dict) else None
+                                ev_type = (
+                                    ev.get("type") if isinstance(ev, dict) else None
+                                )
                                 if ev_type == "text" and ev.get("content"):
                                     # Late text after content_done — update stored content
                                     pass
@@ -1011,17 +1023,25 @@ class RedisSession:
             # version or non-streaming agent), send DONE after the stream ends.
             if not done_sent:
                 done_payload_fb: dict[str, Any] = {"message_id": message_id}
-                completed_content = getattr(
-                    self, "_last_run_completed_content", None
-                )
+                completed_content = getattr(self, "_last_run_completed_content", None)
                 if completed_content is not None:
                     done_payload_fb["content"] = str(completed_content)
                 await self._send_frame(
                     make_done(self.next_id, msg_chat_id, done_payload_fb)
                 )
                 # Deliver to Telegram if this is a Telegram message
+                logger.info(
+                    "[RedisSession] Fallback Telegram delivery check: source=%s, chat_id=%s",
+                    self._source,
+                    self._telegram_chat_id,
+                )
                 if self._source == "telegram" and self._telegram_chat_id:
                     full_text = "".join(telegram_text_buffer)
+                    logger.info(
+                        "[RedisSession] Fallback delivering to Telegram: chat_id=%s, text_len=%d",
+                        self._telegram_chat_id,
+                        len(full_text),
+                    )
                     await self._deliver_to_telegram(full_text)
 
         except asyncio.CancelledError:
