@@ -439,43 +439,6 @@ class TelegramService:
             logger.info("Provider keyboard sent successfully: %s", result)
         except Exception as e:
             logger.error("Failed to send provider keyboard: %s", e)
-            raise
-        keyboard.append(provider_row)
-
-        # Show models for each provider (limited to first 3 per provider to avoid too many buttons)
-        for provider, models in sorted(models_by_provider.items()):
-            for model in models[:3]:  # Limit to 3 models per provider
-                model_id = model.get("id", "")
-                model_name = model.get("name", model_id)
-
-                # Truncate long names
-                if len(model_name) > 20:
-                    model_name = model_name[:17] + "..."
-
-                # Mark selected model
-                prefix = "✅ " if model_id == selected_model else ""
-                button_text = f"{prefix}{model_name}"
-
-                keyboard.append(
-                    [{"text": button_text, "callback_data": f"model:{model_id}"}]
-                )
-
-        logger.info(
-            "Sending keyboard with %d rows to chat_id=%d", len(keyboard), chat_id
-        )
-
-        try:
-            result = await self._call_api(
-                "sendMessage",
-                {
-                    "chat_id": chat_id,
-                    "text": "Select AI Model:\n\nTap a model to select it:",
-                    "reply_markup": {"inline_keyboard": keyboard},
-                },
-            )
-            logger.info("Keyboard sent successfully: %s", result)
-        except Exception as e:
-            logger.error("Failed to send keyboard: %s", e)
             # Fallback: send simple message without keyboard
             await self.send_message(
                 chat_id,
