@@ -371,6 +371,87 @@ knowledge_tool = KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
 
 ---
 
+## Plugin System
+
+Genie supports **plugins** — server-side extensions that run within the Python back-end process and integrate external messaging platforms with the core AI system.
+
+### Architecture
+
+Plugins live in `plugins/<name>/` at the **repository root** (not inside `api/` or `back/`). Each plugin has:
+
+```
+plugins/<name>/
+├── manifest.yaml      # Plugin metadata (loaded by Go API for registration)
+├── package.json       # NPM package for frontend client component (optional)
+├── client/            # React Native UI component (optional)
+└── server/            # Python server-side logic
+    ├── __init__.py
+    ├── routes.py      # FastAPI router (auto-registered at startup)
+    ├── service.py     # Core logic
+    ├── delivery.py    # AI response delivery handler
+    └── tools.py       # API client helpers
+```
+
+### How Plugins Load
+
+1. **Go API** (`api/internal/plugins/loader.go`): Scans `PLUGINS_DIR` for `manifest.yaml` files, loads metadata for the REST API.
+2. **Python back-end** (`back/src/plugins/loader.py`): Scans the same directory, auto-imports `server/routes.py` as FastAPI routers, registers delivery handlers.
+3. **Frontend**: Uses `manifest.yaml` + optional `client/` component for UI integration.
+
+### Plugin ↔ Core Integration
+
+Plugins integrate with the core system through three mechanisms:
+
+#### 1. Redis Pub/Sub (Message Routing)
+- Plugin publishes user messages to `chat:request:{chat_id}` → Python brain processes them.
+- Python brain publishes responses to `chat:user:{user_id}` → Go Hub routes to mobile clients AND plugin delivery handler.
+
+#### 2. Go API Internal Endpoints
+- Plugins persist messages via `POST /internal/chats/:id/messages` (uses `X-User-ID` header, no JWT)
+- Plugins read `plugin_data` table directly via `asyncpg` for their own records (linked accounts, settings)
+- `plugin_data` table stores plugin-specific records with JSONB `data` column
+- Plugins may read `messages` table for loading chat history (read-only)
+- **Important**: Plugins should NOT write to `messages` or `chats` tables directly — use Go API internal endpoints
+
+#### 3. Delivery Handlers (`back/src/server/delivery.py`)
+- Plugins register a `DeliveryHandler` in `DeliveryRegistry`.
+- When a message has `"source": "<plugin_name>"` in its payload, `RedisSession` calls the handler to deliver the AI response back to the external platform.
+
+### Telegram Plugin
+
+**Flow:**
+```
+Telegram → Webhook → Plugin service →
+  1. Save user message to DB (messages table)
+  2. Load chat history from DB
+  3. Publish to Redis chat:request:{chat_id}
+  4. Python brain → Redis chat:user:{user_id}
+  5. Go Hub auto-creates headless Room for DB persistence
+  6. DeliveryHandler sends response back to Telegram
+```
+
+**Account Linking:** `/start` → 6-digit code → user enters in app → creates dedicated `chats` record.
+
+**Key Files:**
+- `plugins/telegram/server/service.py` — Core logic
+- `plugins/telegram/server/routes.py` — FastAPI webhook routes
+- `plugins/telegram/server/delivery.py` — `TelegramDeliveryHandler`
+
+**Important Patterns:**
+- User messages from Telegram are persisted via Go API internal endpoint (`POST /internal/chats/:id/messages`)
+- Go Hub auto-creates headless Room when LLM frames arrive for a chat with no connected clients
+- Chat deduplication in `link_user()` checks both `telegram_chat_id` and `user_id`
+- `GO_API_URL` env var points to Go API (default: `http://localhost:8080`, Docker: `http://api:8080`)
+
+### Shared Configuration
+
+Plugins and core services share config files in `config/` at the repo root:
+- `config/models.json` — Available AI models
+- Both `api/Dockerfile` and `back/Dockerfile` copy `config/` to `/app/config/`
+- `docker-compose.yml` mounts `./config:/config:ro` for the API service
+
+---
+
 ## Global Rules
 
 ### ALWAYS

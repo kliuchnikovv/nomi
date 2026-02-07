@@ -50,6 +50,42 @@ func (h *MessageHandler) CreateMessage(c *gin.Context) {
 	c.JSON(http.StatusCreated, createdMessage)
 }
 
+// InternalCreateMessage creates a message using X-User-ID header (no JWT auth).
+// Used by plugins (Python back-end) to persist messages through Go API
+// instead of writing directly to the database.
+func (h *MessageHandler) InternalCreateMessage(c *gin.Context) {
+	chatID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		apierror.Respond(c, apierror.NewBadRequest("Invalid chat UUID", nil))
+		return
+	}
+
+	userIDStr := c.GetHeader("X-User-ID")
+	if userIDStr == "" {
+		apierror.Respond(c, apierror.NewUnauthorized("X-User-ID header required"))
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		apierror.Respond(c, apierror.NewBadRequest("Invalid X-User-ID", nil))
+		return
+	}
+
+	var req services.CreateMessageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierror.Respond(c, apierror.NewBadRequest(err.Error(), nil))
+		return
+	}
+
+	createdMessage, err := h.service.CreateMessage(c.Request.Context(), userID, chatID, &req)
+	if err != nil {
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusCreated, createdMessage)
+}
+
 func (h *MessageHandler) GetMessages(c *gin.Context) {
 	var ctx = c.Request.Context()
 

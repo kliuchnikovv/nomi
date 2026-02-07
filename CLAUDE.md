@@ -214,6 +214,36 @@ Client-only integrations can register background processes:
 
 **File:** `front/src/services/integrations/BackgroundTaskManager.ts`
 
+### Plugin System (`plugins/`)
+
+Plugins are server-side extensions running within the Python back-end that integrate external platforms.
+
+**Structure:** `plugins/<name>/` at repo root with `manifest.yaml`, `server/` (Python), optional `client/` (React Native).
+
+**Loading:**
+- Go API loads `manifest.yaml` for REST metadata (`api/internal/plugins/loader.go`)
+- Python back-end auto-imports `server/routes.py` as FastAPI routers (`back/src/plugins/loader.py`)
+
+**Integration Points:**
+1. **Redis Pub/Sub**: Plugin publishes to `chat:request:{chat_id}`, receives via delivery handler
+2. **Go API Internal Endpoints**: `POST /internal/chats/:id/messages` (X-User-ID header) for message persistence
+3. **Direct DB (read-only)**: Plugin reads `plugin_data` and `messages` via `asyncpg`; writes only to `plugin_data`
+4. **Delivery Handlers**: Registered in `back/src/server/delivery.py` `DeliveryRegistry`, called when message has `"source": "<plugin_name>"`
+
+**Telegram Plugin Flow:**
+```
+Telegram → Webhook → Save message via Go API → Load history → Redis →
+Python brain → Redis → Go Hub (auto-creates headless Room) →
+DB persistence + DeliveryHandler → Telegram response
+```
+
+**Key Files:**
+- `plugins/telegram/server/service.py` — Core logic (messages, model selection, linking)
+- `plugins/telegram/server/routes.py` — FastAPI webhook routes
+- `plugins/telegram/server/delivery.py` — Response delivery to Telegram
+
+**Shared Config:** `config/models.json` at repo root, used by Go API, Python back-end, and plugins.
+
 ## Critical Patterns
 
 ### 1. Asyncio Cancellation (Stop Button)
@@ -284,9 +314,10 @@ repos = self.github_tool.list_repos(limit=50)
 ## Configuration Files
 
 - **API Config**: `config/config.yaml` (relative to `api/`)
+- **Shared Config**: `config/models.json` (repo root, shared by Go API, Python back-end, and plugins)
 - **Environment**: `.env` files (not committed) — see `.env.example` if present
 - **Database**: PostgreSQL 16 with pgvector extension
-- **Redis**: Used for pub/sub message routing between API and Python
+- **Redis**: Used for pub/sub message routing between API, Python, and plugins
 
 ## Testing Requirements
 

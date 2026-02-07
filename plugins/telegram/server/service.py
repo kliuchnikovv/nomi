@@ -199,23 +199,27 @@ class TelegramService:
 
         conn = await self._get_db_conn()
         try:
-            # Check if already linked
+            # Check if already linked — by telegram_chat_id OR by user_id
             existing = await conn.fetchrow(
                 """SELECT id, data FROM plugin_data
                    WHERE plugin_name = $1 AND record_type = $2
-                     AND data->>'telegram_chat_id' = $3""",
+                     AND (data->>'telegram_chat_id' = $3 OR user_id = $4::uuid)""",
                 PLUGIN_NAME,
                 RECORD_TYPE_LINKED_ACCOUNT,
                 str(telegram_chat_id),
+                user_id,
             )
             if existing:
-                # Update info
+                # Update info and ensure telegram_chat_id is current
                 old_data = json.loads(existing["data"])
                 old_data["username"] = username
                 old_data["first_name"] = first_name
+                old_data["telegram_chat_id"] = telegram_chat_id
+                old_data["telegram_user_id"] = telegram_user_id
                 await conn.execute(
-                    "UPDATE plugin_data SET data = $1::jsonb, updated_at = NOW() WHERE id = $2",
+                    "UPDATE plugin_data SET data = $1::jsonb, user_id = $2::uuid, updated_at = NOW() WHERE id = $3",
                     json.dumps(old_data),
+                    user_id,
                     existing["id"],
                 )
                 return {
@@ -485,8 +489,46 @@ class TelegramService:
             self._get_model_config(selected_model) if selected_model else None
         )
 
-        r = await self._get_redis()
         message_id = str(uuid.uuid4())
+
+        # Persist user message via Go API internal endpoint
+        # (avoids direct DB writes from plugins)
+        go_api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{go_api_url}/internal/chats/{genie_chat_id}/messages",
+                    json={"text": text, "role": "user"},
+                    headers={"X-User-ID": genie_user_id},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    if resp.status != 201:
+                        body = await resp.text()
+                        logger.error(
+                            "Failed to persist message via Go API: status=%d body=%s",
+                            resp.status, body,
+                        )
+        except Exception as e:
+            logger.error("Failed to call Go API for message persistence: %s", e)
+
+        # Load chat history from DB for context (read-only)
+        history: list[dict] = []
+        conn2 = await self._get_db_conn()
+        try:
+            rows = await conn2.fetch(
+                """SELECT role, text FROM messages
+                   WHERE chat_id = $1::uuid
+                   ORDER BY created_at ASC
+                   LIMIT 50""",
+                uuid.UUID(genie_chat_id),
+            )
+            history = [{"role": r["role"], "content": r["text"]} for r in rows]
+        except Exception as e:
+            logger.error("Failed to load chat history: %s", e)
+        finally:
+            await conn2.close()
+
+        r = await self._get_redis()
         frame = {
             "id": 0,
             "chat_id": genie_chat_id,
@@ -506,6 +548,7 @@ class TelegramService:
                 "streaming": model_config.get("streaming", False)
                 if model_config
                 else False,
+                "history": history,
             },
         }
         channel = f"chat:request:{genie_chat_id}"
