@@ -399,44 +399,88 @@ class TelegramService:
                 models_by_provider[provider] = []
             models_by_provider[provider].append(model)
 
-        # Build inline keyboard
+        # Build keyboard with providers only (2 per row)
         keyboard = []
-        for provider, models in sorted(models_by_provider.items()):
-            # Provider header (non-clickable)
-            keyboard.append(
-                [{"text": f"📦 {provider.upper()}", "callback_data": "model:noop"}]
-            )
+        providers = sorted(models_by_provider.keys())
 
-            # Model buttons (2 per row)
+        # Add info about current selection
+        current_text = (
+            f"Current: {selected_model}" if selected_model else "No model selected"
+        )
+
+        # Create rows with 2 provider buttons each
+        for i in range(0, len(providers), 2):
             row = []
-            for model in models:
+            for provider in providers[i : i + 2]:
+                row.append(
+                    {
+                        "text": provider.upper(),
+                        "callback_data": f"model:provider:{provider}",
+                    }
+                )
+            keyboard.append(row)
+
+        logger.info(
+            "Sending provider keyboard with %d rows to chat_id=%d",
+            len(keyboard),
+            chat_id,
+        )
+
+        try:
+            result = await self._call_api(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": f"<b>Select AI Model Provider</b>\n\n{current_text}\n\nChoose a provider:",
+                    "parse_mode": "HTML",
+                    "reply_markup": {"inline_keyboard": keyboard},
+                },
+            )
+            logger.info("Provider keyboard sent successfully: %s", result)
+        except Exception as e:
+            logger.error("Failed to send provider keyboard: %s", e)
+            raise
+        keyboard.append(provider_row)
+
+        # Show models for each provider (limited to first 3 per provider to avoid too many buttons)
+        for provider, models in sorted(models_by_provider.items()):
+            for model in models[:3]:  # Limit to 3 models per provider
                 model_id = model.get("id", "")
                 model_name = model.get("name", model_id)
 
+                # Truncate long names
+                if len(model_name) > 20:
+                    model_name = model_name[:17] + "..."
+
                 # Mark selected model
-                prefix = "✓ " if model_id == selected_model else ""
+                prefix = "✅ " if model_id == selected_model else ""
                 button_text = f"{prefix}{model_name}"
 
-                row.append({"text": button_text, "callback_data": f"model:{model_id}"})
+                keyboard.append(
+                    [{"text": button_text, "callback_data": f"model:{model_id}"}]
+                )
 
-                # Add row when we have 2 buttons
-                if len(row) == 2:
-                    keyboard.append(row)
-                    row = []
-
-            # Add remaining buttons in last row
-            if row:
-                keyboard.append(row)
-
-        await self._call_api(
-            "sendMessage",
-            {
-                "chat_id": chat_id,
-                "text": "🤖 <b>Select AI Model</b>\n\nChoose a model for this conversation:",
-                "parse_mode": "HTML",
-                "reply_markup": {"inline_keyboard": keyboard},
-            },
+        logger.info(
+            "Sending keyboard with %d rows to chat_id=%d", len(keyboard), chat_id
         )
+
+        try:
+            result = await self._call_api(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": "Select AI Model:\n\nTap a model to select it:",
+                    "reply_markup": {"inline_keyboard": keyboard},
+                },
+            )
+            logger.info("Keyboard sent successfully: %s", result)
+        except Exception as e:
+            logger.error("Failed to send keyboard: %s", e)
+            # Fallback: send simple message without keyboard
+            await self.send_message(
+                chat_id,
+                f"Use /model <model_id> to select a model. Available models: {len(self._models)}",
+            )
 
     async def _handle_regular_message(
         self, chat_id: int, message: Dict[str, Any]
@@ -525,16 +569,35 @@ class TelegramService:
 
         # Handle model selection callbacks
         if callback_data.startswith("model:"):
-            model_id = callback_data.split(":", 1)[1]
+            parts = callback_data.split(":")
+
+            if len(parts) >= 3 and parts[1] == "provider":
+                # Show models for selected provider
+                provider = parts[2]
+                await self._show_provider_models(chat_id, query_id, provider)
+                return
+
+            model_id = parts[1] if len(parts) > 1 else ""
 
             if model_id == "noop":
                 # Provider header - just dismiss the loading spinner
                 await self._answer_callback(query_id)
                 return
 
+            if model_id == "back":
+                # Back to main model selection
+                await self._answer_callback(query_id)
+                fake_message = {
+                    "from": query.get("from", {}),
+                    "chat": {"id": chat_id},
+                    "text": "/model",
+                }
+                await self._handle_model_command(chat_id, fake_message)
+                return
+
             # Set the selected model
             await self._set_model(chat_id, model_id)
-            await self._answer_callback(query_id, f"✓ Model: {model_id}")
+            await self._answer_callback(query_id, f"Model: {model_id}")
             return
 
         # Handle regular message callbacks (existing behavior)
@@ -595,6 +658,74 @@ class TelegramService:
             )
 
             logger.info("Set model for telegram_chat_id=%d: %s", chat_id, model_id)
+        finally:
+            await conn.close()
+
+    async def _show_provider_models(
+        self, chat_id: int, query_id: str, provider: str
+    ) -> None:
+        """Show all models for a specific provider."""
+        conn = await self._get_db_conn()
+        try:
+            row = await conn.fetchrow(
+                """SELECT data FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND data->>'telegram_chat_id' = $3""",
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+                str(chat_id),
+            )
+
+            if not row:
+                await self._answer_callback(query_id, "Error: Account not linked")
+                return
+
+            data = json.loads(row["data"])
+            selected_model = data.get("selected_model", "")
+
+            # Get models for this provider
+            provider_models = [m for m in self._models if m.get("provider") == provider]
+
+            if not provider_models:
+                await self._answer_callback(query_id, f"No models found for {provider}")
+                return
+
+            # Build keyboard with models for this provider
+            keyboard = []
+
+            for model in provider_models:
+                model_id = model.get("id", "")
+                model_name = model.get("name", model_id)
+
+                # Truncate long names
+                if len(model_name) > 25:
+                    model_name = model_name[:22] + "..."
+
+                # Mark selected model
+                prefix = "✅ " if model_id == selected_model else ""
+
+                keyboard.append(
+                    [
+                        {
+                            "text": f"{prefix}{model_name}",
+                            "callback_data": f"model:{model_id}",
+                        }
+                    ]
+                )
+
+            # Add back button
+            keyboard.append([{"text": "◀️ Back", "callback_data": "model:back"}])
+
+            await self._answer_callback(query_id)
+
+            await self._call_api(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": f"Models from {provider.upper()}:\n\nSelect a model:",
+                    "reply_markup": {"inline_keyboard": keyboard},
+                },
+            )
         finally:
             await conn.close()
 
