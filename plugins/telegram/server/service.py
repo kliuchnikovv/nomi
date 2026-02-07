@@ -29,8 +29,49 @@ class TelegramService:
 
     def __init__(self):
         self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-        self.base_url = f"{TELEGRAM_API_BASE}/bot{self.bot_token}" if self.bot_token else ""
+        self.base_url = (
+            f"{TELEGRAM_API_BASE}/bot{self.bot_token}" if self.bot_token else ""
+        )
         self._redis: Optional[redis.Redis] = None
+        self._models: list[dict] = self._load_models()
+
+    def _load_models(self) -> list[dict]:
+        """Load available models from models.json config."""
+        import pathlib
+
+        # Try multiple possible paths for models.json
+        possible_paths = [
+            pathlib.Path("/app/config/models.json"),  # Docker/container path
+            pathlib.Path(__file__).parent.parent.parent.parent
+            / "api"
+            / "config"
+            / "models.json",
+            pathlib.Path("api/config/models.json"),
+            pathlib.Path("../api/config/models.json"),
+            pathlib.Path("../../api/config/models.json"),
+        ]
+
+        for path in possible_paths:
+            if path.exists():
+                try:
+                    with open(path, "r") as f:
+                        config = json.load(f)
+                        models = config.get("models", [])
+                        logger.info("Loaded %d models from %s", len(models), path)
+                        return models
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning("Failed to load models from %s: %s", path, e)
+                    continue
+
+        logger.error("Could not load models.json from any known location")
+        return []
+
+    def _get_model_config(self, model_id: str) -> Optional[dict]:
+        """Get model configuration by ID."""
+        for model in self._models:
+            if model.get("id") == model_id:
+                return model
+        return None
 
     @property
     def enabled(self) -> bool:
@@ -53,19 +94,26 @@ class TelegramService:
 
     # ─── Telegram Bot API ────────────────────────────────
 
-    async def send_message(self, chat_id: int, text: str, parse_mode: str = "HTML") -> Dict[str, Any]:
+    async def send_message(
+        self, chat_id: int, text: str, parse_mode: str = "HTML"
+    ) -> Dict[str, Any]:
         """Send a text message to a Telegram chat."""
-        return await self._call_api("sendMessage", {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": parse_mode,
-        })
+        return await self._call_api(
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": parse_mode,
+            },
+        )
 
     async def _call_api(self, method: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Make a request to Telegram Bot API."""
         url = f"{self.base_url}/{method}"
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with session.post(
+                url, json=data, timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
                 result = await resp.json()
                 if not result.get("ok"):
                     error_desc = result.get("description", "Unknown error")
@@ -79,7 +127,9 @@ class TelegramService:
         """Register the webhook URL with Telegram Bot API."""
         base_url = os.getenv("WEBHOOK_BASE_URL", "")
         if not base_url:
-            logger.warning("WEBHOOK_BASE_URL not set, skipping Telegram webhook registration")
+            logger.warning(
+                "WEBHOOK_BASE_URL not set, skipping Telegram webhook registration"
+            )
             return False
 
         webhook_url = f"{base_url}/api/webhooks/telegram"
@@ -106,12 +156,14 @@ class TelegramService:
     ) -> str:
         """Generate a 6-digit code for the Telegram user to enter in the app."""
         code = f"{secrets.randbelow(1000000):06d}"
-        info = json.dumps({
-            "telegram_chat_id": telegram_chat_id,
-            "telegram_user_id": telegram_user_id,
-            "username": username,
-            "first_name": first_name,
-        })
+        info = json.dumps(
+            {
+                "telegram_chat_id": telegram_chat_id,
+                "telegram_user_id": telegram_user_id,
+                "username": username,
+                "first_name": first_name,
+            }
+        )
 
         r = await self._get_redis()
         key = LINK_CODE_PREFIX + code
@@ -155,7 +207,9 @@ class TelegramService:
                 """SELECT id, data FROM plugin_data
                    WHERE plugin_name = $1 AND record_type = $2
                      AND data->>'telegram_chat_id' = $3""",
-                PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT, str(telegram_chat_id),
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+                str(telegram_chat_id),
             )
             if existing:
                 # Update info
@@ -164,7 +218,8 @@ class TelegramService:
                 old_data["first_name"] = first_name
                 await conn.execute(
                     "UPDATE plugin_data SET data = $1::jsonb, updated_at = NOW() WHERE id = $2",
-                    json.dumps(old_data), existing["id"],
+                    json.dumps(old_data),
+                    existing["id"],
                 )
                 return {
                     "id": str(existing["id"]),
@@ -179,26 +234,38 @@ class TelegramService:
             await conn.execute(
                 """INSERT INTO chats (id, user_id, model, title, mode, created_at, updated_at)
                    VALUES ($1, $2::uuid, 'default', $3, 'agent', NOW(), NOW())""",
-                chat_id, user_id, title,
+                chat_id,
+                user_id,
+                title,
             )
 
             # Create the plugin_data record
             pd_id = uuid.uuid4()
-            data = json.dumps({
-                "telegram_chat_id": telegram_chat_id,
-                "telegram_user_id": telegram_user_id,
-                "username": username,
-                "first_name": first_name,
-                "chat_id": str(chat_id),
-            })
+            data = json.dumps(
+                {
+                    "telegram_chat_id": telegram_chat_id,
+                    "telegram_user_id": telegram_user_id,
+                    "username": username,
+                    "first_name": first_name,
+                    "chat_id": str(chat_id),
+                }
+            )
             await conn.execute(
                 """INSERT INTO plugin_data (id, user_id, plugin_name, record_type, data, created_at, updated_at)
                    VALUES ($1, $2::uuid, $3, $4, $5::jsonb, NOW(), NOW())""",
-                pd_id, user_id, PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT, data,
+                pd_id,
+                user_id,
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+                data,
             )
 
-            logger.info("Linked telegram user: user_id=%s, telegram_chat_id=%d, chat_id=%s",
-                         user_id, telegram_chat_id, chat_id)
+            logger.info(
+                "Linked telegram user: user_id=%s, telegram_chat_id=%d, chat_id=%s",
+                user_id,
+                telegram_chat_id,
+                chat_id,
+            )
 
             return {
                 "id": str(pd_id),
@@ -216,7 +283,9 @@ class TelegramService:
             row = await conn.fetchrow(
                 """SELECT data FROM plugin_data
                    WHERE user_id = $1::uuid AND plugin_name = $2 AND record_type = $3""",
-                user_id, PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT,
+                user_id,
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
             )
             if not row:
                 return {"linked": False}
@@ -253,6 +322,10 @@ class TelegramService:
             await self._handle_start(chat_id, message)
             return
 
+        if text.startswith("/model"):
+            await self._handle_model_command(chat_id, message)
+            return
+
         await self._handle_regular_message(chat_id, message)
 
     async def _handle_start(self, chat_id: int, message: Dict[str, Any]) -> None:
@@ -263,7 +336,9 @@ class TelegramService:
                 """SELECT id FROM plugin_data
                    WHERE plugin_name = $1 AND record_type = $2
                      AND data->>'telegram_chat_id' = $3""",
-                PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT, str(chat_id),
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+                str(chat_id),
             )
         finally:
             await conn.close()
@@ -289,7 +364,83 @@ class TelegramService:
             f"The code expires in 10 minutes.",
         )
 
-    async def _handle_regular_message(self, chat_id: int, message: Dict[str, Any]) -> None:
+    async def _handle_model_command(
+        self, chat_id: int, message: Dict[str, Any]
+    ) -> None:
+        """Handle /model command — show inline keyboard with available models."""
+        conn = await self._get_db_conn()
+        try:
+            row = await conn.fetchrow(
+                """SELECT id, data FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND data->>'telegram_chat_id' = $3""",
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+                str(chat_id),
+            )
+        finally:
+            await conn.close()
+
+        if not row:
+            await self.send_message(
+                chat_id,
+                "Your account is not linked. Send /start to get a link code.",
+            )
+            return
+
+        data = json.loads(row["data"])
+        selected_model = data.get("selected_model", "")
+
+        # Group models by provider
+        models_by_provider: dict[str, list[dict]] = {}
+        for model in self._models:
+            provider = model.get("provider", "unknown")
+            if provider not in models_by_provider:
+                models_by_provider[provider] = []
+            models_by_provider[provider].append(model)
+
+        # Build inline keyboard
+        keyboard = []
+        for provider, models in sorted(models_by_provider.items()):
+            # Provider header (non-clickable)
+            keyboard.append(
+                [{"text": f"📦 {provider.upper()}", "callback_data": "model:noop"}]
+            )
+
+            # Model buttons (2 per row)
+            row = []
+            for model in models:
+                model_id = model.get("id", "")
+                model_name = model.get("name", model_id)
+
+                # Mark selected model
+                prefix = "✓ " if model_id == selected_model else ""
+                button_text = f"{prefix}{model_name}"
+
+                row.append({"text": button_text, "callback_data": f"model:{model_id}"})
+
+                # Add row when we have 2 buttons
+                if len(row) == 2:
+                    keyboard.append(row)
+                    row = []
+
+            # Add remaining buttons in last row
+            if row:
+                keyboard.append(row)
+
+        await self._call_api(
+            "sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": "🤖 <b>Select AI Model</b>\n\nChoose a model for this conversation:",
+                "parse_mode": "HTML",
+                "reply_markup": {"inline_keyboard": keyboard},
+            },
+        )
+
+    async def _handle_regular_message(
+        self, chat_id: int, message: Dict[str, Any]
+    ) -> None:
         """Forward a regular Telegram message to the AI via Redis pub/sub."""
         import uuid
 
@@ -299,7 +450,9 @@ class TelegramService:
                 """SELECT user_id, data FROM plugin_data
                    WHERE plugin_name = $1 AND record_type = $2
                      AND data->>'telegram_chat_id' = $3""",
-                PLUGIN_NAME, RECORD_TYPE_LINKED_ACCOUNT, str(chat_id),
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+                str(chat_id),
             )
         finally:
             await conn.close()
@@ -322,6 +475,12 @@ class TelegramService:
             else:
                 return
 
+        # Get selected model from plugin_data
+        selected_model = data.get("selected_model", "")
+        model_config = (
+            self._get_model_config(selected_model) if selected_model else None
+        )
+
         r = await self._get_redis()
         message_id = str(uuid.uuid4())
         frame = {
@@ -338,27 +497,106 @@ class TelegramService:
                 "user_id": genie_user_id,
                 "source": "telegram",
                 "telegram_chat_id": chat_id,
+                "model": selected_model,
+                "endpoint": model_config.get("endpoint", "") if model_config else "",
+                "streaming": model_config.get("streaming", False)
+                if model_config
+                else False,
             },
         }
         channel = f"chat:request:{genie_chat_id}"
         await r.publish(channel, json.dumps(frame))
-        logger.info("Published telegram message to %s (user=%s)", channel, genie_user_id)
+        logger.info(
+            "Published telegram message to %s (user=%s, model=%s)",
+            channel,
+            genie_user_id,
+            selected_model or "default",
+        )
 
     async def _handle_callback_query(self, query: Dict[str, Any]) -> None:
-        """Handle inline button press as a regular message."""
+        """Handle inline button press."""
         message = query.get("message")
         if not message:
             return
 
         chat_id = message["chat"]["id"]
-        data = query.get("data", "")
+        callback_data = query.get("data", "")
+        query_id = query.get("id", "")
 
+        # Handle model selection callbacks
+        if callback_data.startswith("model:"):
+            model_id = callback_data.split(":", 1)[1]
+
+            if model_id == "noop":
+                # Provider header - just dismiss the loading spinner
+                await self._answer_callback(query_id)
+                return
+
+            # Set the selected model
+            await self._set_model(chat_id, model_id)
+            await self._answer_callback(query_id, f"✓ Model: {model_id}")
+            return
+
+        # Handle regular message callbacks (existing behavior)
         fake_message = {
             "from": query.get("from", {}),
             "chat": {"id": chat_id},
-            "text": data,
+            "text": callback_data,
         }
         await self._handle_regular_message(chat_id, fake_message)
+
+    async def _answer_callback(self, query_id: str, text: str = "") -> None:
+        """Answer a callback query to dismiss Telegram's loading spinner."""
+        data: dict[str, Any] = {"callback_query_id": query_id}
+        if text:
+            data["text"] = text
+        try:
+            await self._call_api("answerCallbackQuery", data)
+        except Exception as e:
+            logger.warning("Failed to answer callback query: %s", e)
+
+    async def _set_model(self, chat_id: int, model_id: str) -> None:
+        """Persist selected model in plugin_data."""
+        conn = await self._get_db_conn()
+        try:
+            row = await conn.fetchrow(
+                """SELECT id, data FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND data->>'telegram_chat_id' = $3""",
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+                str(chat_id),
+            )
+
+            if not row:
+                logger.warning(
+                    "Cannot set model: no linked account for chat_id=%d", chat_id
+                )
+                return
+
+            # Update the data with selected model
+            data = json.loads(row["data"])
+            data["selected_model"] = model_id
+
+            await conn.execute(
+                "UPDATE plugin_data SET data = $1::jsonb, updated_at = NOW() WHERE id = $2",
+                json.dumps(data),
+                row["id"],
+            )
+
+            # Send confirmation message
+            model_config = self._get_model_config(model_id)
+            model_name = (
+                model_config.get("name", model_id) if model_config else model_id
+            )
+            await self.send_message(
+                chat_id,
+                f"✅ <b>Model switched to:</b> {model_name}",
+            )
+
+            logger.info("Set model for telegram_chat_id=%d: %s", chat_id, model_id)
+        finally:
+            await conn.close()
 
     async def close(self) -> None:
         """Close resources."""
