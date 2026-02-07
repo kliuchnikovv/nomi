@@ -74,18 +74,10 @@ func (h *ModelsHandler) loadModels() (*ModelsResponse, error) {
 		return h.modelsCache, nil
 	}
 
-	// Read from config file
-	// Assuming running from root, path is api/config/models.json or config/models.json
-	// Let's try relative path assuming execution from project root
-	// Adjust path as necessary based on deployment
-	path := "api/config/models.json"
-
-	// Ensure we can find the file. If running inside docker or built binary, location might differ.
-	// For local dev "api/config/models.json" seems correct based on file structure.
-	file, err := os.Open(path)
+	// Try config/models.json (repo root or Docker), then api/config/models.json (legacy)
+	file, err := os.Open("config/models.json")
 	if err != nil {
-		// Fallback to "config/models.json" if "api/config/models.json" fails (e.g. running from api dir)
-		file, err = os.Open("config/models.json")
+		file, err = os.Open("api/config/models.json")
 		if err != nil {
 			return nil, fmt.Errorf("failed to open models config: %w", err)
 		}

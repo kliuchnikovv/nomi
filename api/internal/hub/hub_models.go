@@ -15,7 +15,7 @@ type modelsStreamingConfig struct {
 }
 
 func loadModelsStreaming() map[string]bool {
-	paths := []string{"api/config/models.json", "config/models.json"}
+	paths := []string{"config/models.json", "api/config/models.json"}
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {

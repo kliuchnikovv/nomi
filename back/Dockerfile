@@ -14,9 +14,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY back/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code and plugins (repo root)
+# Copy source code, plugins, and shared config (repo root)
 COPY back/ .
 COPY plugins /app/plugins
+COPY config/models.json /app/config/models.json
 
 ENV PLUGINS_DIR=/app/plugins
 

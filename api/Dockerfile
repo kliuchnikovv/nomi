@@ -33,8 +33,8 @@ COPY --from=builder /genie-api /app/genie-api
 # Copy Railway config
 COPY api/config.railway.yaml /app/config.railway.yaml
 
-# Copy models config
-COPY api/config/models.json /app/config/models.json
+# Copy shared config
+COPY config/models.json /app/config/models.json
 
 # Copy plugins (repo root)
 COPY plugins /app/plugins
