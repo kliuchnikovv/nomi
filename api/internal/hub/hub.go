@@ -180,15 +180,13 @@ func (h *Hub) GetOrCreateRoom(roomID uuid.UUID, roomType RoomType, userID uuid.U
 // BroadcastToUser sends a frame to the user's rooms. Stream chunks (op=message, kind=data)
 // are sent only to the matching chat room to avoid duplicate delivery when the same
 // user has both a chat connection and a user-channel connection (e.g. NotificationContext).
-// If no room exists for the frame's ChatID (e.g. Telegram-originated messages), a headless
-// room is auto-created to ensure DB persistence of assistant responses.
 func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 	h.mu.RLock()
+	defer h.mu.RUnlock()
 
 	h.logger.Info("broadcasting to user via redis", zap.String("user_id", userID.String()), zap.Int("total_rooms", len(h.rooms)))
 
 	found := 0
-	var chatRoomFound bool
 	for _, room := range h.rooms {
 		if room.initiatorID != userID {
 			continue
@@ -204,30 +202,11 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 			if frame.ChatID != uuid.Nil && frame.ChatID != room.ID {
 				continue // send only to the room that matches this chat
 			}
-			chatRoomFound = true
 		}
 		h.logger.Info("found matching room for user", zap.String("room_id", room.ID.String()))
 		room.HandleRemoteLLMFrame(frame)
 		found++
 	}
-	h.mu.RUnlock()
-
-	// Auto-create a headless room for DB persistence when no chat room exists
-	// (e.g. Telegram messages where no mobile client is connected)
-	if !chatRoomFound && frame.ChatID != uuid.Nil {
-		h.logger.Info("auto-creating headless room for persistence",
-			zap.String("chat_id", frame.ChatID.String()),
-			zap.String("user_id", userID.String()),
-		)
-		room, err := h.GetOrCreateRoom(frame.ChatID, RoomTypeChat, userID, "agent", "")
-		if err != nil {
-			h.logger.Error("failed to auto-create room", zap.Error(err))
-		} else {
-			room.HandleRemoteLLMFrame(frame)
-			found++
-		}
-	}
-
 	if found == 0 {
 		h.logger.Warn("no active rooms found for user", zap.String("user_id", userID.String()))
 	}

@@ -22,6 +22,7 @@ LINK_CODE_TTL = 600  # 10 minutes
 LINK_CODE_PREFIX = "telegram:code:"
 PLUGIN_NAME = "telegram"
 RECORD_TYPE_LINKED_ACCOUNT = "linked_account"
+RECORD_TYPE_MESSAGE = "message"
 
 
 class TelegramService:
@@ -193,7 +194,7 @@ class TelegramService:
         first_name: str,
     ) -> Dict[str, Any]:
         """Link a Telegram account to a Genie user.
-        Creates a record in plugin_data table and a Genie chat.
+        Creates a record in plugin_data table only — no chats table entries.
         """
         import uuid
 
@@ -224,23 +225,11 @@ class TelegramService:
                 )
                 return {
                     "id": str(existing["id"]),
-                    "chat_id": old_data.get("chat_id", ""),
                     "username": username,
                     "first_name": first_name,
                 }
 
-            # Create a Genie chat for this Telegram conversation
-            chat_id = uuid.uuid4()
-            title = f"Telegram: @{username}" if username else f"Telegram: {first_name}"
-            await conn.execute(
-                """INSERT INTO chats (id, user_id, model, title, mode, created_at, updated_at)
-                   VALUES ($1, $2::uuid, 'default', $3, 'agent', NOW(), NOW())""",
-                chat_id,
-                user_id,
-                title,
-            )
-
-            # Create the plugin_data record
+            # Create the plugin_data record (no chat creation — messages stay in plugin_data)
             pd_id = uuid.uuid4()
             data = json.dumps(
                 {
@@ -248,7 +237,6 @@ class TelegramService:
                     "telegram_user_id": telegram_user_id,
                     "username": username,
                     "first_name": first_name,
-                    "chat_id": str(chat_id),
                 }
             )
             await conn.execute(
@@ -262,15 +250,13 @@ class TelegramService:
             )
 
             logger.info(
-                "Linked telegram user: user_id=%s, telegram_chat_id=%d, chat_id=%s",
+                "Linked telegram user: user_id=%s, telegram_chat_id=%d",
                 user_id,
                 telegram_chat_id,
-                chat_id,
             )
 
             return {
                 "id": str(pd_id),
-                "chat_id": str(chat_id),
                 "username": username,
                 "first_name": first_name,
             }
@@ -449,7 +435,9 @@ class TelegramService:
     async def _handle_regular_message(
         self, chat_id: int, message: Dict[str, Any]
     ) -> None:
-        """Forward a regular Telegram message to the AI via Redis pub/sub."""
+        """Forward a regular Telegram message to the AI via Redis pub/sub.
+        Messages are stored in plugin_data (not in the messages table).
+        """
         import uuid
 
         conn = await self._get_db_conn()
@@ -474,7 +462,6 @@ class TelegramService:
 
         data = json.loads(row["data"])
         genie_user_id = str(row["user_id"])
-        genie_chat_id = data.get("chat_id", "")
         text = message.get("text", "")
         if not text:
             photos = message.get("photo")
@@ -491,47 +478,61 @@ class TelegramService:
 
         message_id = str(uuid.uuid4())
 
-        # Persist user message via Go API internal endpoint
-        # (avoids direct DB writes from plugins)
-        go_api_url = os.getenv("GO_API_URL", "http://localhost:8080")
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{go_api_url}/internal/chats/{genie_chat_id}/messages",
-                    json={"text": text, "role": "user"},
-                    headers={"X-User-ID": genie_user_id},
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as resp:
-                    if resp.status != 201:
-                        body = await resp.text()
-                        logger.error(
-                            "Failed to persist message via Go API: status=%d body=%s",
-                            resp.status, body,
-                        )
-        except Exception as e:
-            logger.error("Failed to call Go API for message persistence: %s", e)
-
-        # Load chat history from DB for context (read-only)
-        history: list[dict] = []
+        # Save user message to plugin_data
         conn2 = await self._get_db_conn()
         try:
-            rows = await conn2.fetch(
-                """SELECT role, text FROM messages
-                   WHERE chat_id = $1::uuid
-                   ORDER BY created_at ASC
-                   LIMIT 50""",
-                uuid.UUID(genie_chat_id),
+            await conn2.execute(
+                """INSERT INTO plugin_data (id, user_id, plugin_name, record_type, data, created_at, updated_at)
+                   VALUES ($1, $2::uuid, $3, $4, $5::jsonb, NOW(), NOW())""",
+                uuid.uuid4(),
+                genie_user_id,
+                PLUGIN_NAME,
+                RECORD_TYPE_MESSAGE,
+                json.dumps({
+                    "telegram_chat_id": chat_id,
+                    "role": "user",
+                    "text": text,
+                }),
             )
-            history = [{"role": r["role"], "content": r["text"]} for r in rows]
         except Exception as e:
-            logger.error("Failed to load chat history: %s", e)
+            logger.error("Failed to save user message to plugin_data: %s", e)
         finally:
             await conn2.close()
+
+        # Load chat history from plugin_data for context
+        history: list[dict] = []
+        conn3 = await self._get_db_conn()
+        try:
+            rows = await conn3.fetch(
+                """SELECT data FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND user_id = $3::uuid
+                     AND data->>'telegram_chat_id' = $4
+                   ORDER BY created_at ASC
+                   LIMIT 50""",
+                PLUGIN_NAME,
+                RECORD_TYPE_MESSAGE,
+                genie_user_id,
+                str(chat_id),
+            )
+            for r in rows:
+                msg_data = json.loads(r["data"])
+                history.append({
+                    "role": msg_data.get("role", "user"),
+                    "content": msg_data.get("text", ""),
+                })
+        except Exception as e:
+            logger.error("Failed to load chat history from plugin_data: %s", e)
+        finally:
+            await conn3.close()
+
+        # Use a virtual chat_id based on the telegram_chat_id (not a real chat)
+        virtual_chat_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"telegram:{chat_id}"))
 
         r = await self._get_redis()
         frame = {
             "id": 0,
-            "chat_id": genie_chat_id,
+            "chat_id": virtual_chat_id,
             "kind": "data",
             "op": "message",
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -551,7 +552,7 @@ class TelegramService:
                 "history": history,
             },
         }
-        channel = f"chat:request:{genie_chat_id}"
+        channel = f"chat:request:{virtual_chat_id}"
         await r.publish(channel, json.dumps(frame))
         logger.info(
             "Published telegram message to %s (user=%s, model=%s)",
@@ -729,6 +730,62 @@ class TelegramService:
                     "reply_markup": {"inline_keyboard": keyboard},
                 },
             )
+        finally:
+            await conn.close()
+
+    async def get_messages(
+        self, user_id: str, limit: int = 100
+    ) -> list[Dict[str, Any]]:
+        """Get Telegram messages for a user from plugin_data."""
+        conn = await self._get_db_conn()
+        try:
+            rows = await conn.fetch(
+                """SELECT id, data, created_at FROM plugin_data
+                   WHERE plugin_name = $1 AND record_type = $2
+                     AND user_id = $3::uuid
+                   ORDER BY created_at ASC
+                   LIMIT $4""",
+                PLUGIN_NAME,
+                RECORD_TYPE_MESSAGE,
+                user_id,
+                limit,
+            )
+            messages = []
+            for r in rows:
+                msg_data = json.loads(r["data"])
+                messages.append({
+                    "id": str(r["id"]),
+                    "role": msg_data.get("role", "user"),
+                    "text": msg_data.get("text", ""),
+                    "created_at": r["created_at"].isoformat() if r["created_at"] else "",
+                })
+            return messages
+        finally:
+            await conn.close()
+
+    async def save_assistant_message(
+        self, user_id: str, telegram_chat_id: int, text: str
+    ) -> None:
+        """Save an assistant response message to plugin_data."""
+        import uuid
+
+        conn = await self._get_db_conn()
+        try:
+            await conn.execute(
+                """INSERT INTO plugin_data (id, user_id, plugin_name, record_type, data, created_at, updated_at)
+                   VALUES ($1, $2::uuid, $3, $4, $5::jsonb, NOW(), NOW())""",
+                uuid.uuid4(),
+                user_id,
+                PLUGIN_NAME,
+                RECORD_TYPE_MESSAGE,
+                json.dumps({
+                    "telegram_chat_id": telegram_chat_id,
+                    "role": "assistant",
+                    "text": text,
+                }),
+            )
+        except Exception as e:
+            logger.error("Failed to save assistant message to plugin_data: %s", e)
         finally:
             await conn.close()
 

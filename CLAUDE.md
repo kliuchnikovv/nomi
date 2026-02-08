@@ -224,23 +224,29 @@ Plugins are server-side extensions running within the Python back-end that integ
 - Go API loads `manifest.yaml` for REST metadata (`api/internal/plugins/loader.go`)
 - Python back-end auto-imports `server/routes.py` as FastAPI routers (`back/src/plugins/loader.py`)
 
+**Data Separation Principle:**
+- Plugin data is **completely separated** from core chat data
+- All plugin data lives in `plugin_data` table — plugins do NOT write to `chats` or `messages` tables
+- Regular chat list shows ONLY core chats, never plugin chats
+- Plugin messages are displayed on dedicated plugin screens in the app
+
 **Integration Points:**
-1. **Redis Pub/Sub**: Plugin publishes to `chat:request:{chat_id}`, receives via delivery handler
-2. **Go API Internal Endpoints**: `POST /internal/chats/:id/messages` (X-User-ID header) for message persistence
-3. **Direct DB (read-only)**: Plugin reads `plugin_data` and `messages` via `asyncpg`; writes only to `plugin_data`
-4. **Delivery Handlers**: Registered in `back/src/server/delivery.py` `DeliveryRegistry`, called when message has `"source": "<plugin_name>"`
+1. **Redis Pub/Sub**: Plugin publishes to `chat:request:{virtual_chat_id}`, receives via delivery handler. Virtual chat IDs are deterministic UUIDs (e.g., `uuid5(NAMESPACE_DNS, "telegram:{chat_id}")`)
+2. **Plugin Data Table**: `plugin_data` with JSONB `data` column, `plugin_name`, `record_type` fields. Record types: `linked_account`, `message`
+3. **Delivery Handlers**: Registered in `back/src/server/delivery.py` `DeliveryRegistry`, called when message has `"source": "<plugin_name>"`. Also persist assistant responses to `plugin_data`
 
 **Telegram Plugin Flow:**
 ```
-Telegram → Webhook → Save message via Go API → Load history → Redis →
-Python brain → Redis → Go Hub (auto-creates headless Room) →
-DB persistence + DeliveryHandler → Telegram response
+Telegram → Webhook → Save user message to plugin_data → Load history from plugin_data →
+Redis → Python brain → Redis → DeliveryHandler →
+Send to Telegram + save assistant response to plugin_data
 ```
 
 **Key Files:**
 - `plugins/telegram/server/service.py` — Core logic (messages, model selection, linking)
-- `plugins/telegram/server/routes.py` — FastAPI webhook routes
-- `plugins/telegram/server/delivery.py` — Response delivery to Telegram
+- `plugins/telegram/server/routes.py` — FastAPI routes (webhook, link, status, messages)
+- `plugins/telegram/server/delivery.py` — Response delivery to Telegram + plugin_data persistence
+- `plugins/telegram/client/components/TelegramMainScreen.tsx` — Plugin UI screen
 
 **Shared Config:** `config/models.json` at repo root, used by Go API, Python back-end, and plugins.
 

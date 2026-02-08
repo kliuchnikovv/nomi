@@ -111,9 +111,6 @@ func New(
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))
 
-	// Internal API for plugins (X-User-ID header, no JWT)
-	r.POST("/internal/chats/:id/messages", messageHandler.InternalCreateMessage)
-
 	// Models API.
 	r.GET("/api/models", modelsHandler.ListModels)
 

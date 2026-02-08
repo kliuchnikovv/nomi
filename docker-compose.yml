@@ -43,7 +43,6 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/genie?sslmode=disable
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - REDIS_URL=redis://redis:6379
-      - GO_API_URL=http://api:8080
     depends_on:
       db:
         condition: service_healthy

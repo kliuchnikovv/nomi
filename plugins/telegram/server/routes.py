@@ -122,3 +122,17 @@ async def get_status(request: Request) -> Dict[str, Any]:
 
     service = get_service()
     return await service.get_link_status(user_id)
+
+
+# ─── Messages (authenticated via X-User-ID) ──────────
+
+@router.get("/messages")
+async def get_messages(request: Request) -> Dict[str, Any]:
+    """Get Telegram messages for the authenticated user from plugin_data."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    service = get_service()
+    messages = await service.get_messages(user_id)
+    return {"messages": messages}

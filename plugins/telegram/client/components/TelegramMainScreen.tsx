@@ -11,7 +11,7 @@ interface TelegramMessage {
     id: string;
     role: string;
     text: string;
-    created_at: number;
+    created_at: string;
 }
 
 interface TelegramStatus {
@@ -48,9 +48,36 @@ export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenP
         }
     };
 
+    const loadMessages = async () => {
+        try {
+            const apiUrl = getApiUrl();
+            const token = authStore.getToken();
+            if (!token) return;
+
+            const response = await fetch(`${apiUrl}/telegram/messages`, {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setMessages(data.messages || []);
+            }
+        } catch (error) {
+            console.error('Failed to load Telegram messages:', error);
+        }
+    };
+
     useEffect(() => {
         loadStatus();
     }, [integrationId]);
+
+    useEffect(() => {
+        if (status?.linked) {
+            loadMessages();
+            // Poll for new messages every 10 seconds
+            const interval = setInterval(loadMessages, 10000);
+            return () => clearInterval(interval);
+        }
+    }, [status?.linked]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -92,6 +119,8 @@ export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenP
                                 data={messages}
                                 keyExtractor={(item) => item.id}
                                 style={styles.messageList}
+                                inverted={false}
+                                onContentSizeChange={() => {}}
                                 renderItem={({ item }) => (
                                     <View style={[
                                         styles.messageItem,

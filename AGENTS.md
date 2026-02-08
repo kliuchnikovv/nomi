@@ -403,45 +403,49 @@ plugins/<name>/
 Plugins integrate with the core system through three mechanisms:
 
 #### 1. Redis Pub/Sub (Message Routing)
-- Plugin publishes user messages to `chat:request:{chat_id}` → Python brain processes them.
+- Plugin publishes user messages to `chat:request:{virtual_chat_id}` → Python brain processes them.
 - Python brain publishes responses to `chat:user:{user_id}` → Go Hub routes to mobile clients AND plugin delivery handler.
+- Virtual chat IDs are deterministic UUIDs derived from plugin-specific identifiers (e.g., `uuid5(NAMESPACE_DNS, "telegram:{chat_id}")`).
 
-#### 2. Go API Internal Endpoints
-- Plugins persist messages via `POST /internal/chats/:id/messages` (uses `X-User-ID` header, no JWT)
-- Plugins read `plugin_data` table directly via `asyncpg` for their own records (linked accounts, settings)
-- `plugin_data` table stores plugin-specific records with JSONB `data` column
-- Plugins may read `messages` table for loading chat history (read-only)
-- **Important**: Plugins should NOT write to `messages` or `chats` tables directly — use Go API internal endpoints
+#### 2. Plugin Data Storage (`plugin_data` table)
+- **All plugin data lives in `plugin_data`** — plugins do NOT write to `chats` or `messages` tables.
+- `plugin_data` table uses JSONB `data` column with `plugin_name` and `record_type` for filtering.
+- Record types: `linked_account` (account links, settings), `message` (chat history).
+- Plugins read/write `plugin_data` via `asyncpg` directly.
+- Plugin messages are served via dedicated API endpoints (e.g., `GET /api/plugins/telegram/messages`).
+- **Important**: Plugin data is completely separated from core chat data. Regular chat list shows ONLY core chats, not plugin chats.
 
 #### 3. Delivery Handlers (`back/src/server/delivery.py`)
 - Plugins register a `DeliveryHandler` in `DeliveryRegistry`.
 - When a message has `"source": "<plugin_name>"` in its payload, `RedisSession` calls the handler to deliver the AI response back to the external platform.
+- Delivery handlers also persist assistant responses to `plugin_data` for history display.
 
 ### Telegram Plugin
 
 **Flow:**
 ```
 Telegram → Webhook → Plugin service →
-  1. Save user message to DB (messages table)
-  2. Load chat history from DB
-  3. Publish to Redis chat:request:{chat_id}
+  1. Save user message to plugin_data (record_type="message")
+  2. Load chat history from plugin_data
+  3. Publish to Redis chat:request:{virtual_chat_id}
   4. Python brain → Redis chat:user:{user_id}
-  5. Go Hub auto-creates headless Room for DB persistence
-  6. DeliveryHandler sends response back to Telegram
+  5. DeliveryHandler sends response to Telegram + saves to plugin_data
 ```
 
-**Account Linking:** `/start` → 6-digit code → user enters in app → creates dedicated `chats` record.
+**Account Linking:** `/start` → 6-digit code → user enters in app → creates `plugin_data` record (no `chats` entry).
 
 **Key Files:**
-- `plugins/telegram/server/service.py` — Core logic
-- `plugins/telegram/server/routes.py` — FastAPI webhook routes
-- `plugins/telegram/server/delivery.py` — `TelegramDeliveryHandler`
+- `plugins/telegram/server/service.py` — Core logic (webhook, linking, message handling)
+- `plugins/telegram/server/routes.py` — FastAPI routes (webhook, link, status, messages)
+- `plugins/telegram/server/delivery.py` — `TelegramDeliveryHandler` (sends to Telegram + saves to plugin_data)
+- `plugins/telegram/client/components/TelegramMainScreen.tsx` — Plugin UI screen
 
 **Important Patterns:**
-- User messages from Telegram are persisted via Go API internal endpoint (`POST /internal/chats/:id/messages`)
-- Go Hub auto-creates headless Room when LLM frames arrive for a chat with no connected clients
-- Chat deduplication in `link_user()` checks both `telegram_chat_id` and `user_id`
-- `GO_API_URL` env var points to Go API (default: `http://localhost:8080`, Docker: `http://api:8080`)
+- All Telegram messages stored in `plugin_data` with `record_type="message"` — NOT in `messages` table
+- No entries in `chats` table for Telegram — plugin data is fully separated from core chats
+- Virtual chat IDs for Redis routing: `uuid5(NAMESPACE_DNS, "telegram:{telegram_chat_id}")`
+- Account deduplication in `link_user()` checks both `telegram_chat_id` and `user_id`
+- Frontend plugin screen polls `GET /api/plugins/telegram/messages` for message display
 
 ### Shared Configuration
 
