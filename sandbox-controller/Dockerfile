@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o controller ./cmd/controller/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o out ./cmd/controller/main.go
 
 # Final stage
 FROM alpine:3.19
@@ -24,11 +24,11 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 
 # Copy the binary from builder
-COPY --from=builder /app/controller .
+COPY --from=builder /app/out .
 
 # Expose port (Railway will assign PORT env var)
 EXPOSE 8090
 
 # Run the binary
 # Note: Railway sets PORT env variable, app reads it
-CMD ["./controller"]
+CMD ["./out"]
