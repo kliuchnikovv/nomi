@@ -121,6 +121,14 @@ func ProxyPlugin(cfg *config.Config, logger *zap.Logger, backendPath string) gin
 		}
 		defer resp.Body.Close()
 
+		// Log warnings for non-2xx responses to make them more visible
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			logger.Warn("Plugin request returned non-success status",
+				zap.Int("status_code", resp.StatusCode),
+				zap.String("path", backendPath),
+				zap.String("method", c.Request.Method))
+		}
+
 		for name, values := range resp.Header {
 			for _, value := range values {
 				c.Writer.Header().Add(name, value)
@@ -165,6 +173,14 @@ func ProxyPluginHandler(cfg *config.Config, logger *zap.Logger, backendPath stri
 			return
 		}
 		defer resp.Body.Close()
+
+		// Log warnings for non-2xx responses to make them more visible
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			logger.Warn("Plugin request returned non-success status",
+				zap.Int("status_code", resp.StatusCode),
+				zap.String("path", backendPath),
+				zap.String("method", c.Request.Method))
+		}
 
 		for name, values := range resp.Header {
 			for _, value := range values {
