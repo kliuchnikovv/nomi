@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -82,7 +83,7 @@ func main() {
 
 	// Setup server
 	srv := &http.Server{
-		Addr:    ":" + string(rune(cfg.Port)),
+		Addr:    ":" + strconv.Itoa(cfg.Port),
 		Handler: r,
 	}
 
