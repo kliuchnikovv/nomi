@@ -1,3 +1,6 @@
 go 1.25.2
 
-use ./api
+use (
+	./api
+	./sandbox-controller
+)

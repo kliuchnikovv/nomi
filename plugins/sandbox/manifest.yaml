@@ -1,0 +1,67 @@
+name: sandbox
+display_name: Sandbox
+description: Isolated Linux environment for code execution
+version: 1.0.0
+
+execution:
+  type: server
+  entry_points:
+    server: ./server/tools.py
+
+auth:
+  type: none
+
+ui:
+  icon: terminal
+  category: development
+  description_short: Run code in isolated Linux sandbox
+  color: '#4CAF50'
+
+methods:
+  - name: exec_command
+    description: Execute a command in the sandbox
+    parameters:
+      type: object
+      properties:
+        command:
+          type: array
+          items:
+            type: string
+          description: Command and arguments to execute
+        timeout:
+          type: integer
+          description: Timeout in seconds (default 60)
+      required: [command]
+  - name: upload_file
+    description: Upload a file to the sandbox
+    parameters:
+      type: object
+      properties:
+        path:
+          type: string
+          description: Path to save the file
+        content:
+          type: string
+          description: File content
+      required: [path, content]
+  - name: download_file
+    description: Download a file from the sandbox
+    parameters:
+      type: object
+      properties:
+        path:
+          type: string
+          description: Path to the file to download
+      required: [path]
+  - name: list_files
+    description: List files in a directory
+    parameters:
+      type: object
+      properties:
+        path:
+          type: string
+          description: Directory path (default /workspace)
+      required: []
+
+storage:
+  type: server

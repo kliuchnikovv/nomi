@@ -43,9 +43,33 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/genie?sslmode=disable
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - REDIS_URL=redis://redis:6379
+      - SANDBOX_CONTROLLER_URL=http://sandbox-controller:8090
+      - SANDBOX_CONTROLLER_TOKEN=dev-token
     depends_on:
       db:
         condition: service_healthy
+      sandbox-controller:
+        condition: service_started
+
+  sandbox-controller:
+    build:
+      context: ./sandbox-controller
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      - PORT=8090
+      - SANDBOX_BACKEND=docker
+      - SANDBOX_CONTROLLER_TOKEN=dev-token
+      - SANDBOX_NAMESPACE=genie-sandboxes
+      - SANDBOX_IMAGE=ubuntu:22.04
+      - SANDBOX_INACTIVITY_TIMEOUT=15m
+      - SANDBOX_PVC_RETENTION_DAYS=30
+      - SANDBOX_MAX_CPU=1
+      - SANDBOX_MAX_MEMORY=512Mi
+      - SANDBOX_MAX_PODS=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   db:
     image: postgres:16-alpine

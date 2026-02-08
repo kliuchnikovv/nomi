@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sandbox-controller
+  namespace: genie-sandboxes
+  labels:
+    app: sandbox-controller
+spec:
+  selector:
+    app: sandbox-controller
+  ports:
+    - port: 8090
+      targetPort: 8090
+      name: http
+  type: ClusterIP
