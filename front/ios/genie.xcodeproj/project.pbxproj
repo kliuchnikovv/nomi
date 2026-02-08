@@ -10,23 +10,23 @@
 		13112A72D0FA9E6D45F5B7C2 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECD1B15595A118097F48B914 /* ExpoModulesProvider.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		26F0D9021DF607CEAD46ADA9 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
+		30711E387DAF12D5B9B789DF /* libPods-genie.a in Frameworks */ = {isa = PBXBuildFile; fileRef = ED29F03D84E7A1DC13C12F6B /* libPods-genie.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
-		BE0BEDA0FFE6F8BC12BBF4E3 /* libPods-genie.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A17FF3EE7E869887727CDD5E /* libPods-genie.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0A0DF96E908582A13DEF8F85 /* Pods-genie.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.debug.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.debug.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* genie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = genie.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = genie/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = genie/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = genie/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		74D8BF5D59F3A3FBE8DCD647 /* Pods-genie.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.debug.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.debug.xcconfig"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = genie/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = genie/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		914400F9158098AF32E2A5DA /* Pods-genie.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.release.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.release.xcconfig"; sourceTree = "<group>"; };
-		A17FF3EE7E869887727CDD5E /* libPods-genie.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-genie.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D3039251C689D2B66356D26C /* Pods-genie.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.release.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.release.xcconfig"; sourceTree = "<group>"; };
 		ECD1B15595A118097F48B914 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-genie/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		ED29F03D84E7A1DC13C12F6B /* libPods-genie.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-genie.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -34,7 +34,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BE0BEDA0FFE6F8BC12BBF4E3 /* libPods-genie.a in Frameworks */,
+				30711E387DAF12D5B9B789DF /* libPods-genie.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,7 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				A17FF3EE7E869887727CDD5E /* libPods-genie.a */,
+				ED29F03D84E7A1DC13C12F6B /* libPods-genie.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -111,8 +111,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				0A0DF96E908582A13DEF8F85 /* Pods-genie.debug.xcconfig */,
-				914400F9158098AF32E2A5DA /* Pods-genie.release.xcconfig */,
+				74D8BF5D59F3A3FBE8DCD647 /* Pods-genie.debug.xcconfig */,
+				D3039251C689D2B66356D26C /* Pods-genie.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -124,14 +124,14 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "genie" */;
 			buildPhases = (
-				D78AD77DFFCF7409CB1A37A3 /* [CP] Check Pods Manifest.lock */,
+				5B5326F989354DC315EDF3AD /* [CP] Check Pods Manifest.lock */,
 				25E3A4B59362C4B75B141F99 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				6B1F4DD58EA5B10EBEC07A37 /* [CP] Embed Pods Frameworks */,
-				12B46BD5B8C6A0BCDABA31E4 /* [CP] Copy Pods Resources */,
+				A9467A7211929CC8A680ABF4 /* [CP] Embed Pods Frameworks */,
+				D688C16EE9655961E0D8346D /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -204,23 +204,6 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"$WITH_ENVIRONMENT $REACT_NATIVE_XCODE\"\n";
 		};
-		12B46BD5B8C6A0BCDABA31E4 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		25E3A4B59362C4B75B141F99 /* [Expo] Configure project */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -244,24 +227,7 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-genie/expo-configure-project.sh\"\n";
 		};
-		6B1F4DD58EA5B10EBEC07A37 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		D78AD77DFFCF7409CB1A37A3 /* [CP] Check Pods Manifest.lock */ = {
+		5B5326F989354DC315EDF3AD /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -283,6 +249,40 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
+		A9467A7211929CC8A680ABF4 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		D688C16EE9655961E0D8346D /* [CP] Copy Pods Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Copy Pods Resources";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-genie/Pods-genie-resources.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -300,7 +300,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 0A0DF96E908582A13DEF8F85 /* Pods-genie.debug.xcconfig */;
+			baseConfigurationReference = 74D8BF5D59F3A3FBE8DCD647 /* Pods-genie.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -332,7 +332,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 914400F9158098AF32E2A5DA /* Pods-genie.release.xcconfig */;
+			baseConfigurationReference = D3039251C689D2B66356D26C /* Pods-genie.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
