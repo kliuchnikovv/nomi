@@ -24,21 +24,26 @@ class TelegramDeliveryHandler:
 
             service = get_service()
             if service.enabled:
-                # Send to Telegram
-                await service.send_message(int(chat_id), text, parse_mode="HTML")
-                logger.info(
-                    "Delivered response to Telegram chat_id=%s, text_len=%d",
-                    chat_id,
-                    len(text),
-                )
-
-                # Save assistant message to plugin_data for history
+                # Step 1: Save assistant message to plugin_data first
+                # This ensures the message appears in the app immediately
                 if user_id:
                     await service.save_assistant_message(
                         user_id=user_id,
                         telegram_chat_id=int(chat_id),
                         text=text,
                     )
+                    logger.info(
+                        "Saved assistant message to plugin_data for chat_id=%s",
+                        chat_id,
+                    )
+
+                # Step 2: Send to Telegram
+                await service.send_message(int(chat_id), text, parse_mode="HTML")
+                logger.info(
+                    "Delivered response to Telegram chat_id=%s, text_len=%d",
+                    chat_id,
+                    len(text),
+                )
         except Exception as e:
             logger.error("Failed to deliver to Telegram: %s", e)
 

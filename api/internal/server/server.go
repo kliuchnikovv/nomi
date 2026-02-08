@@ -132,6 +132,7 @@ func New(
 	r.POST("/api/webhooks/telegram", handlers.ProxyPlugin(cfg, logger, "/api/plugins/telegram/webhook"))
 	r.POST("/api/telegram/link", wrapWithAuth(handlers.ProxyPluginHandler(cfg, logger, "/api/plugins/telegram/link"), authMiddleware))
 	r.GET("/api/telegram/status", wrapWithAuth(handlers.ProxyPluginHandler(cfg, logger, "/api/plugins/telegram/status"), authMiddleware))
+	r.GET("/api/telegram/messages", wrapWithAuth(handlers.ProxyPluginHandler(cfg, logger, "/api/plugins/telegram/messages"), authMiddleware))
 
 	// Mobile OAuth API (tokens returned to client, not stored on backend)
 	r.GET("/api/oauth/:provider/callback", mobileOAuthHandler.Callback) // Web callback from Google, redirects to app
