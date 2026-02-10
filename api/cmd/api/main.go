@@ -18,6 +18,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
+	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/server"
 	"go.uber.org/zap"
 )
@@ -85,6 +86,12 @@ func main() {
 
 	if err := integrations.InitRegistry(pluginsDir, logger); err != nil {
 		logger.Fatal("failed to init plugin registry", zap.Error(err))
+	}
+
+	if _, err := plugins.Load(pluginsDir, logger); err != nil {
+		logger.Warn("failed to load plugin manifests", zap.Error(err))
+	} else {
+		logger.Info("loaded plugin manifests", zap.Int("count", len(plugins.Manifests)))
 	}
 
 	// Создаем DI Container

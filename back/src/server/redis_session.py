@@ -749,9 +749,22 @@ class RedisSession:
         self._delivery_source = payload.get("source")
         if self._delivery_source:
             # Collect all plugin-specific context keys from payload
-            standard_keys = {"message", "role", "source", "message_id", "trace_id",
-                             "history", "tools", "command", "team", "attachments", "extracted_facts"}
-            self._delivery_context = {k: v for k, v in payload.items() if k not in standard_keys}
+            standard_keys = {
+                "message",
+                "role",
+                "source",
+                "message_id",
+                "trace_id",
+                "history",
+                "tools",
+                "command",
+                "team",
+                "attachments",
+                "extracted_facts",
+            }
+            self._delivery_context = {
+                k: v for k, v in payload.items() if k not in standard_keys
+            }
             logger.info(
                 "[RedisSession] Delivery source=%s, context_keys=%s",
                 self._delivery_source,

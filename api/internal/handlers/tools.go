@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
+	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -128,6 +129,22 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 			Name:    toolName,
 			Enabled: true,
 			Params:  params,
+		})
+	}
+
+	// Add Server Plugins (execution.type: server or hybrid)
+	for _, manifest := range plugins.Manifests {
+		if manifest.Execution.Type != "server" && manifest.Execution.Type != "hybrid" {
+			continue
+		}
+		toolParams := map[string]interface{}{}
+		if manifest.Execution.Type == "server" {
+			toolParams["user_id"] = userID.String()
+		}
+		tools = append(tools, ToolConfig{
+			Name:    manifest.Name,
+			Enabled: true,
+			Params:  toolParams,
 		})
 	}
 
