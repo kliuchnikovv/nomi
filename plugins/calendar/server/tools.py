@@ -15,10 +15,20 @@ logger = logging.getLogger(__name__)
 class CalendarTools(Toolkit):
     """Google Calendar integration tools (server-side)."""
 
-    def __init__(self, access_token: str, refresh_token: Optional[str] = None):
+    def __init__(
+        self,
+        access_token: str,
+        refresh_token: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        token_uri: Optional[str] = None,
+    ):
         super().__init__(name="calendar_tools")
         self.access_token = access_token
         self.refresh_token = refresh_token
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.token_uri = token_uri or "https://oauth2.googleapis.com/token"
         self.base_url = "https://www.googleapis.com/calendar/v3"
         self.headers = {
             "Authorization": f"Bearer {access_token}",
@@ -29,6 +39,56 @@ class CalendarTools(Toolkit):
         self.register(self.get_upcoming_events)
         self.register(self.create_event)
         self.register(self.list_calendars)
+
+    def _update_headers(self):
+        """Update headers with current access token."""
+        self.headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Accept": "application/json",
+        }
+
+    async def _refresh_access_token(self) -> bool:
+        """Refresh the access token using refresh token."""
+        if not self.refresh_token or not self.client_id or not self.client_secret:
+            logger.warning("Cannot refresh token: missing credentials")
+            return False
+
+        import aiohttp
+
+        data = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "refresh_token": self.refresh_token,
+            "grant_type": "refresh_token",
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.token_uri, data=data) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(
+                            "Failed to refresh token: %s - %s",
+                            response.status,
+                            error_text,
+                        )
+                        return False
+
+                    result = await response.json()
+                    new_access_token = result.get("access_token")
+                    if new_access_token:
+                        self.access_token = new_access_token
+                        self._update_headers()
+                        logger.info(
+                            "Successfully refreshed Google Calendar access token"
+                        )
+                        return True
+
+                    logger.error("Refresh response missing access_token")
+                    return False
+        except Exception as e:
+            logger.error("Exception while refreshing token: %s", e)
+            return False
 
     async def _make_request(
         self,
@@ -46,6 +106,27 @@ class CalendarTools(Toolkit):
             async with session.request(
                 method, url, headers=self.headers, json=data, params=params
             ) as response:
+                if response.status == 401:
+                    logger.info("Received 401, attempting token refresh...")
+                    if await self._refresh_access_token():
+                        logger.info("Token refreshed, retrying request...")
+                        async with session.request(
+                            method, url, headers=self.headers, json=data, params=params
+                        ) as retry_response:
+                            if retry_response.status >= 400:
+                                error_text = await retry_response.text()
+                                raise Exception(
+                                    f"Google Calendar API error after refresh: {retry_response.status} - {error_text}"
+                                )
+                            if retry_response.status == 204:
+                                return {}
+                            return await retry_response.json()
+                    else:
+                        error_text = await response.text()
+                        raise Exception(
+                            f"Google Calendar API error: 401 - Token refresh failed - {error_text}"
+                        )
+
                 if response.status >= 400:
                     error_text = await response.text()
                     raise Exception(
@@ -163,5 +244,15 @@ def build(params: Dict[str, Any]) -> Toolkit:
         or params.get("calendar_refresh_token")
     )
 
+    client_id = creds_data.get("client_id") or params.get("client_id")
+    client_secret = creds_data.get("client_secret") or params.get("client_secret")
+    token_uri = creds_data.get("token_uri") or params.get("token_uri")
+
     logger.info("Building Calendar tools with access token")
-    return CalendarTools(access_token=access_token, refresh_token=refresh_token)
+    return CalendarTools(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        client_id=client_id,
+        client_secret=client_secret,
+        token_uri=token_uri,
+    )

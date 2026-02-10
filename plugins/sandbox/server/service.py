@@ -10,7 +10,9 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-SANDBOX_CONTROLLER_URL = os.getenv("SANDBOX_CONTROLLER_URL", "http://sandbox-controller:8090")
+SANDBOX_CONTROLLER_URL = os.getenv(
+    "SANDBOX_CONTROLLER_URL", "http://sandbox-controller:8090"
+)
 SANDBOX_CONTROLLER_TOKEN = os.getenv("SANDBOX_CONTROLLER_TOKEN", "")
 
 
@@ -96,7 +98,9 @@ class SandboxService:
                         return await response.json()
                     elif response.status == 404:
                         # Sandbox was GC'd, need to recreate
-                        logger.warning(f"Sandbox {sandbox_id} not found, needs recreation")
+                        logger.warning(
+                            f"Sandbox {sandbox_id} not found, needs recreation"
+                        )
                         raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
                     else:
                         error_text = await response.text()

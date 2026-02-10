@@ -18,12 +18,15 @@ router = APIRouter(prefix="/api/plugins/sandbox", tags=["sandbox"])
 
 # ─── Create Sandbox ──────────────────────────────────
 
+
 class CreateSandboxRequest(BaseModel):
     project_id: str = ""
 
 
 @router.post("/create")
-async def create_sandbox(request: Request, body: CreateSandboxRequest) -> Dict[str, Any]:
+async def create_sandbox(
+    request: Request, body: CreateSandboxRequest
+) -> Dict[str, Any]:
     """Create a new sandbox for the authenticated user."""
     user_id = request.headers.get("X-User-ID")
     if not user_id:
@@ -40,6 +43,7 @@ async def create_sandbox(request: Request, body: CreateSandboxRequest) -> Dict[s
 
 
 # ─── Get Sandbox Status ──────────────────────────────
+
 
 @router.get("/status")
 async def get_sandbox_status(request: Request) -> Dict[str, Any]:
@@ -65,10 +69,9 @@ async def get_sandbox_status(request: Request) -> Dict[str, Any]:
 
 # ─── Destroy Sandbox ─────────────────────────────────
 
+
 @router.post("/destroy")
-async def destroy_sandbox(
-    request: Request, delete_pvc: bool = False
-) -> Dict[str, Any]:
+async def destroy_sandbox(request: Request, delete_pvc: bool = False) -> Dict[str, Any]:
     """Destroy the user's sandbox."""
     user_id = request.headers.get("X-User-ID")
     if not user_id:
