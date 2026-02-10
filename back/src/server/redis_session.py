@@ -206,20 +206,20 @@ class RedisSession:
                 await self.redis_client.publish(channel, payload_json)
                 # Log payload size in bytes (len=15 was misleading: number of frame keys).
                 # Use DEBUG for streaming MESSAGE to avoid hundreds of lines per response.
-                if frame.op == Op.MESSAGE:
-                    logger.debug(
-                        "[RedisSession] PUBLISH %s -> %s (bytes=%d)",
-                        channel,
-                        frame.op,
-                        len(payload_json),
-                    )
-                else:
-                    logger.info(
-                        "[RedisSession] PUBLISH %s -> %s (bytes=%d)",
-                        channel,
-                        frame.op,
-                        len(payload_json),
-                    )
+                # if frame.op == Op.MESSAGE:
+                #     logger.debug(
+                #         "[RedisSession] PUBLISH %s -> %s (bytes=%d)",
+                #         channel,
+                #         frame.op,
+                #         len(payload_json),
+                #     )
+                # else:
+                #     logger.info(
+                #         "[RedisSession] PUBLISH %s -> %s (bytes=%d)",
+                #         channel,
+                #         frame.op,
+                #         len(payload_json),
+                #     )
             except Exception as e:
                 logger.error(
                     "[RedisSession] Publish failed: %s",
