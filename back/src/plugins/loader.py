@@ -77,6 +77,14 @@ def _register_server_builders(plugins_dir: Path, repo_root: Path) -> None:
         exec_type = (m.get("execution") or {}).get("type", "")
         if exec_type not in ("server", "hybrid"):
             continue
+
+        # Check include flag in tools configuration
+        tools_config = m.get("tools", {})
+        include = tools_config.get("include", True)
+        if not include:
+            logger.info("plugin %s: skipped (include=false in manifest)", name)
+            continue
+
         server_dir = plugins_dir / name / "server"
         if not server_dir.is_dir():
             continue

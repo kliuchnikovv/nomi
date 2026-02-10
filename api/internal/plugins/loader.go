@@ -39,6 +39,18 @@ type Manifest struct {
 		Enabled      bool     `yaml:"enabled" json:"enabled"`
 		SystemEvents []string `yaml:"system_events" json:"system_events"`
 	} `yaml:"background_tasks" json:"background_tasks"`
+
+	Tools struct {
+		Include *bool `yaml:"include" json:"include"` // Auto-include in tools (default: true)
+	} `yaml:"tools" json:"tools"`
+}
+
+// GetInclude returns the include flag with default value true
+func (m *Manifest) GetInclude() bool {
+	if m.Tools.Include == nil {
+		return true
+	}
+	return *m.Tools.Include
 }
 
 // Manifests holds loaded plugin manifests (set by Load).

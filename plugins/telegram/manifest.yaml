@@ -75,3 +75,6 @@ background_tasks:
 storage:
   type: hybrid
   encrypted: true
+
+tools:
+  include: true

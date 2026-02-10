@@ -137,6 +137,10 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		if manifest.Execution.Type != "server" && manifest.Execution.Type != "hybrid" {
 			continue
 		}
+		// Skip if include=false in manifest
+		if !manifest.GetInclude() {
+			continue
+		}
 		toolParams := map[string]interface{}{}
 		if manifest.Execution.Type == "server" {
 			toolParams["user_id"] = userID.String()

@@ -1406,8 +1406,8 @@ Continue the conversation."""
                 break
 
             event_type = type(ev).__name__
-            logger.info("[RedisSession] Stream event received: %s", event_type)
-            logger.debug("[RedisSession] Event details: %s", ev)
+            # logger.info("[RedisSession] Stream event received: %s", event_type)
+            # logger.debug("[RedisSession] Event details: %s", ev)
 
             # Check if this is a member agent event
             agent_id = getattr(ev, "agent_id", None)

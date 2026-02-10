@@ -65,3 +65,6 @@ methods:
 
 storage:
   type: server
+
+tools:
+  include: true

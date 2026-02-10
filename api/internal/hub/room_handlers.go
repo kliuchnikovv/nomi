@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
 	intgr "github.com/kliuchnikovv/genie-api/internal/integrations"
+	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
@@ -437,6 +438,27 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		tools = append(tools, map[string]interface{}{"name": "web_search", "enabled": true})
 		knowledgeEntry := map[string]interface{}{"name": "knowledge_search", "enabled": true, "user_id": r.initiatorID.String()}
 		tools = append(tools, knowledgeEntry)
+
+		// Add Server Plugins (execution.type: server or hybrid)
+		// These are auto-included since they don't require user-specific integration/auth
+		for _, manifest := range plugins.Manifests {
+			if manifest.Execution.Type != "server" && manifest.Execution.Type != "hybrid" {
+				continue
+			}
+			// Skip if include=false in manifest
+			if !manifest.GetInclude() {
+				continue
+			}
+			toolParams := map[string]interface{}{}
+			if manifest.Execution.Type == "server" {
+				toolParams["user_id"] = r.initiatorID.String()
+			}
+			tools = append(tools, map[string]interface{}{
+				"name":    manifest.Name,
+				"enabled": true,
+				"params":  toolParams,
+			})
+		}
 
 		// Always fetch latest integrations from DB to get server-side tokens
 		var integrations []storage.Integration
