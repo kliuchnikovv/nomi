@@ -20,7 +20,10 @@ class SandboxService:
     """Service for interacting with the sandbox controller."""
 
     def __init__(self):
-        self.base_url = SANDBOX_CONTROLLER_URL.rstrip("/")
+        url = SANDBOX_CONTROLLER_URL.rstrip("/")
+        if not url.startswith(("http://", "https://")):
+            url = f"http://{url}"
+        self.base_url = url
         self.token = SANDBOX_CONTROLLER_TOKEN
         self._sandbox_cache: Dict[str, str] = {}  # user_id -> sandbox_id
 
@@ -50,18 +53,21 @@ class SandboxService:
             url = f"{self.base_url}/api/sandboxes"
             payload = {"user_id": user_id, "project_id": project_id}
 
-            async with session.post(
-                url, json=payload, headers=self._get_headers()
-            ) as response:
-                if response.status == 201:
-                    data = await response.json()
-                    sandbox_id = data["id"]
-                    self._sandbox_cache[cache_key] = sandbox_id
-                    logger.info(f"Created sandbox {sandbox_id} for user {user_id}")
-                    return sandbox_id
-                else:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to create sandbox: {error_text}")
+            try:
+                async with session.post(
+                    url, json=payload, headers=self._get_headers()
+                ) as response:
+                    if response.status == 201:
+                        data = await response.json()
+                        sandbox_id = data["id"]
+                        self._sandbox_cache[cache_key] = sandbox_id
+                        logger.info(f"Created sandbox {sandbox_id} for user {user_id}")
+                        return sandbox_id
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"Failed to create sandbox: {error_text}")
+            except aiohttp.ClientError as e:
+                raise Exception(f"Connection error to sandbox controller: {e}")
 
     async def get_sandbox_status(self, sandbox_id: str) -> Optional[Dict[str, Any]]:
         """Get sandbox status."""
@@ -139,49 +145,58 @@ class SandboxService:
             url = f"{self.base_url}/api/sandboxes/{sandbox_id}/upload"
             payload = {"path": path, "content": content}
 
-            async with session.post(
-                url, json=payload, headers=self._get_headers()
-            ) as response:
-                if response.status == 200:
-                    return True
-                elif response.status == 404:
-                    raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
-                else:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to upload file: {error_text}")
+            try:
+                async with session.post(
+                    url, json=payload, headers=self._get_headers()
+                ) as response:
+                    if response.status == 200:
+                        return True
+                    elif response.status == 404:
+                        raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"Failed to upload file: {error_text}")
+            except aiohttp.ClientError as e:
+                raise Exception(f"Connection error: {e}")
 
     async def download_file(self, sandbox_id: str, path: str) -> str:
         """Download a file from the sandbox."""
         async with aiohttp.ClientSession() as session:
             url = f"{self.base_url}/api/sandboxes/{sandbox_id}/download"
 
-            async with session.get(
-                url, params={"path": path}, headers=self._get_headers()
-            ) as response:
-                if response.status == 200:
-                    return await response.text()
-                elif response.status == 404:
-                    raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
-                else:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to download file: {error_text}")
+            try:
+                async with session.get(
+                    url, params={"path": path}, headers=self._get_headers()
+                ) as response:
+                    if response.status == 200:
+                        return await response.text()
+                    elif response.status == 404:
+                        raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"Failed to download file: {error_text}")
+            except aiohttp.ClientError as e:
+                raise Exception(f"Connection error: {e}")
 
     async def list_files(self, sandbox_id: str, path: str = "/workspace") -> list:
         """List files in a directory."""
         async with aiohttp.ClientSession() as session:
             url = f"{self.base_url}/api/sandboxes/{sandbox_id}/files"
 
-            async with session.get(
-                url, params={"path": path}, headers=self._get_headers()
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get("files", [])
-                elif response.status == 404:
-                    raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
-                else:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to list files: {error_text}")
+            try:
+                async with session.get(
+                    url, params={"path": path}, headers=self._get_headers()
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return data.get("files", [])
+                    elif response.status == 404:
+                        raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"Failed to list files: {error_text}")
+            except aiohttp.ClientError as e:
+                raise Exception(f"Connection error: {e}")
 
     async def destroy_sandbox(self, sandbox_id: str, delete_pvc: bool = False) -> bool:
         """Destroy a sandbox."""
@@ -189,18 +204,21 @@ class SandboxService:
             url = f"{self.base_url}/api/sandboxes/{sandbox_id}"
             params = {"delete_pvc": "true"} if delete_pvc else {}
 
-            async with session.delete(
-                url, params=params, headers=self._get_headers()
-            ) as response:
-                if response.status == 200:
-                    # Remove from cache
-                    for key, sid in list(self._sandbox_cache.items()):
-                        if sid == sandbox_id:
-                            del self._sandbox_cache[key]
-                    return True
-                else:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to destroy sandbox: {error_text}")
+            try:
+                async with session.delete(
+                    url, params=params, headers=self._get_headers()
+                ) as response:
+                    if response.status == 200:
+                        # Remove from cache
+                        for key, sid in list(self._sandbox_cache.items()):
+                            if sid == sandbox_id:
+                                del self._sandbox_cache[key]
+                        return True
+                    else:
+                        error_text = await response.text()
+                        raise Exception(f"Failed to destroy sandbox: {error_text}")
+            except aiohttp.ClientError as e:
+                raise Exception(f"Connection error: {e}")
 
     def clear_cache_for_user(self, user_id: str, project_id: str = ""):
         """Clear cache entry for a user."""
