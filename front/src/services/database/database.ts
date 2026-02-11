@@ -6,7 +6,7 @@
 import * as SQLite from 'expo-sqlite';
 
 const DATABASE_NAME = 'genie.db';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 6;
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -84,6 +84,9 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
     }
     if (currentVersion < 5) {
         await migrateV5(database);
+    }
+    if (currentVersion < 6) {
+        await migrateV6(database);
     }
 }
 
@@ -294,13 +297,50 @@ async function migrateV5(database: SQLite.SQLiteDatabase): Promise<void> {
     await database.execAsync(`
         -- Add external_id to events
         ALTER TABLE events ADD COLUMN external_id TEXT;
-        
+
         -- Index for looking up events by source and external ID
         CREATE INDEX IF NOT EXISTS idx_events_external ON events(source_id, external_id);
 
         INSERT INTO migrations (version, applied_at) VALUES (5, ${Date.now()});
     `);
     console.log('[Database] Migration V5 applied');
+}
+
+/**
+ * Migration V6: Plugin chats for local plugin data storage
+ */
+async function migrateV6(database: SQLite.SQLiteDatabase): Promise<void> {
+    await database.execAsync(`
+        -- Plugin chats table
+        CREATE TABLE IF NOT EXISTS plugin_chats (
+            id TEXT PRIMARY KEY,
+            plugin_name TEXT NOT NULL,
+            record_type TEXT NOT NULL,
+            source_id TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            data TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
+
+        -- Plugin messages table
+        CREATE TABLE IF NOT EXISTS plugin_messages (
+            id TEXT PRIMARY KEY,
+            chat_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY (chat_id) REFERENCES plugin_chats(id) ON DELETE CASCADE
+        );
+
+        -- Indexes
+        CREATE INDEX IF NOT EXISTS idx_plugin_chats_plugin ON plugin_chats(plugin_name);
+        CREATE INDEX IF NOT EXISTS idx_plugin_chats_source ON plugin_chats(source_id);
+        CREATE INDEX IF NOT EXISTS idx_plugin_messages_chat ON plugin_messages(chat_id);
+
+        INSERT INTO migrations (version, applied_at) VALUES (6, ${Date.now()});
+    `);
+    console.log('[Database] Migration V6 applied');
 }
 
 /**
@@ -329,6 +369,8 @@ export async function clearDatabase(): Promise<void> {
         DELETE FROM emails;
         DELETE FROM integration_credentials;
         DELETE FROM integrations;
+        DELETE FROM plugin_messages;
+        DELETE FROM plugin_chats;
     `);
     console.log('[Database] All data cleared');
 }

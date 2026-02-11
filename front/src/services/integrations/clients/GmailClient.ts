@@ -32,8 +32,7 @@ export interface GmailListResponse {
 }
 
 import { AppleIntelligence } from '../../ai/AppleIntelligence';
-
-// ... existing imports ...
+import { pluginChatStorage } from '../../plugins/PluginChatStorage';
 
 class GmailClient {
     /**
@@ -41,62 +40,87 @@ class GmailClient {
      */
     async onWake(integrationId: string): Promise<void> {
         console.log(`[GmailClient] onWake triggered for ${integrationId}`);
-        
-        // 1. Determine time window
-        // In a real scenario, we would store the last sync timestamp in integration credentials or separate meta table.
-        // For now, let's assume if we have cached emails, we sync from the latest one, otherwise 6 hours.
-        const lastSync = await this.getLastSyncTimestamp(integrationId);
-        const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
-        const since = lastSync ? Math.max(lastSync, sixHoursAgo) : sixHoursAgo; // Safety clamp
 
-        // 2. Sync emails
-        // syncEmails currently fetches 'recent' 20. Ideally it should support 'since' parameter.
-        // For this MVP, we'll just fetch the latest 20 and filter.
-        const emails = await this.syncEmails(integrationId, 20); // TODO: Add support for 'after:' query in syncEmails
+        try {
+            // 1. Fetch unread emails
+            const emails = await this.searchEmails(integrationId, 'is:unread', 10);
 
-        // Filter for new emails since 'since'
-        const newEmails = emails.filter(e => e.date && e.date.getTime() > since);
+            if (emails.length === 0) {
+                console.log('[GmailClient] No unread emails to process');
+                return;
+            }
 
-        if (newEmails.length === 0) {
-            console.log('[GmailClient] No new emails to analyze');
-            return;
-        }
+            console.log(`[GmailClient] Processing ${emails.length} unread emails with Apple Intelligence...`);
 
-        console.log(`[GmailClient] Analyzing ${newEmails.length} new emails with Apple FM...`);
+            // 2. Check if Apple Intelligence is available
+            if (!AppleIntelligence.isAvailable()) {
+                console.log('[GmailClient] Apple Intelligence not available, skipping analysis');
+                return;
+            }
 
-        // 3. Analyze with Apple Foundation Models
-        if (AppleIntelligence.isAvailable()) {
-            for (const email of newEmails) {
+            // 3. Process each email (limit to 5 to avoid performance issues)
+            const emailsToProcess = emails.slice(0, 5);
+
+            for (const email of emailsToProcess) {
                 try {
-                    // Skip if already analyzed (check DB)
-                     // const isAnalyzed = await integrationStorage.isEmailAnalyzed(email.id);
-                     // if (isAnalyzed) continue;
+                    // Check if chat already exists for this email
+                    const existingChat = await pluginChatStorage.getPluginChat(email.gmailId);
+                    if (existingChat) {
+                        console.log(`[GmailClient] Chat already exists for email ${email.gmailId}, skipping`);
+                        continue;
+                    }
 
-                    const prompt = `Analyze this email and extract key information.
-From: ${email.fromName} <${email.fromEmail}>
-Subject: ${email.subject}
-Body: ${email.snippet} ${email.bodyText?.slice(0, 500) || ''}
+                    // Create plugin chat for this email
+                    const chat = await pluginChatStorage.createPluginChat(
+                        'gmail',
+                        'email_chat',
+                        email.gmailId,
+                        email.subject || '(No subject)',
+                        {
+                            emailId: email.gmailId,
+                            from: email.fromEmail,
+                            fromName: email.fromName,
+                            date: email.date?.toISOString(),
+                        }
+                    );
 
-Provide a JSON summary with:
-- summary: 1 sentence summary
-- urgency: high/medium/low
-- action_needed: boolean
-`;
+                    // Create user message with email summary
+                    const emailSummary = `New email from ${email.fromName || email.fromEmail}
+
+Subject: ${email.subject || '(No subject)'}
+
+${email.snippet || email.bodyText?.slice(0, 300) || '(No content)'}`;
+
+                    await pluginChatStorage.addMessage(chat.id, 'user', emailSummary);
+
+                    // Analyze with Apple Intelligence
+                    const prompt = `Analyze this email and provide a brief response or suggested action.
+
+From: ${email.fromName || email.fromEmail} <${email.fromEmail}>
+Subject: ${email.subject || '(No subject)'}
+Text: ${email.snippet || email.bodyText?.slice(0, 500) || '(No content)'}
+
+Provide a concise analysis:
+1. What is this email about?
+2. Does it require any action?
+3. What would be an appropriate response or next step?
+
+Keep your response brief and actionable.`;
+
                     const analysis = await AppleIntelligence.generate(prompt);
-                    
-                    // 4. Save analysis
-                    // We need a method to save analysis results. 
-                    // Assuming we have 'analyzed_emails' table.
-                    // For now, just logging as proof of concept until storage method is exposed.
-                    console.log(`[GmailClient] Analysis for ${email.id}:`, analysis);
-                    
-                    // await integrationStorage.saveEmailAnalysis(email.id, analysis);
+
+                    // Save assistant response
+                    await pluginChatStorage.addMessage(chat.id, 'assistant', analysis);
+
+                    console.log(`[GmailClient] Created chat and analysis for email: ${email.subject}`);
                 } catch (e) {
-                    console.error(`[GmailClient] Failed to analyze email ${email.id}:`, e);
+                    console.error(`[GmailClient] Failed to process email ${email.gmailId}:`, e);
                 }
             }
-        } else {
-             console.log('[GmailClient] Apple Intelligence not available, skipping analysis');
+
+            console.log(`[GmailClient] Finished processing ${emailsToProcess.length} emails`);
+        } catch (error) {
+            console.error('[GmailClient] onWake error:', error);
         }
     }
 

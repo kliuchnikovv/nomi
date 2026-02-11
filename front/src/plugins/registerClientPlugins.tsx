@@ -13,6 +13,8 @@ import { backgroundTask as calendarBackgroundTask } from '@genie/plugin-calendar
 import { backgroundTask as githubBackgroundTask } from '@genie/plugin-github/background';
 import { GmailMainScreen } from '@genie/plugin-gmail/components/GmailMainScreen';
 import { GmailSidebar } from '@genie/plugin-gmail/components/GmailSidebar';
+import { GmailPluginScreen } from '@genie/plugin-gmail/components/GmailPluginScreen';
+import { CalendarPluginScreen } from '@genie/plugin-calendar/components/CalendarPluginScreen';
 import { GithubMainScreen } from '@genie/plugin-github/components/GithubMainScreen';
 import { GithubSidebarItem } from '@genie/plugin-github/components/GithubSidebarItem';
 import { telegramPlugin } from '@genie/plugin-telegram';
@@ -51,6 +53,18 @@ export function registerClientPlugins(): void {
         label: 'Morning Briefing',
         priority: 10,
         Component: BriefingCard,
+    });
+    registerWidget({
+        id: 'gmail-insights',
+        label: 'Email Insights',
+        priority: 20,
+        Component: GmailPluginScreen,
+    });
+    registerWidget({
+        id: 'calendar-insights',
+        label: 'Event Insights',
+        priority: 21,
+        Component: CalendarPluginScreen,
     });
 
     // ─── Plugin handlers ───────────────────────────────────

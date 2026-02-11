@@ -5,6 +5,8 @@
 
 import { tokenRefreshService } from '../tokenRefreshService';
 import { integrationStorage, ExtractedEvent } from '../IntegrationStorage';
+import { AppleIntelligence } from '../../ai/AppleIntelligence';
+import { pluginChatStorage } from '../../plugins/PluginChatStorage';
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3/calendars/primary';
 const CALENDAR_API_USERS_ME_CALENDARLIST = 'https://www.googleapis.com/calendar/v3/users/me/calendarList';
@@ -26,6 +28,125 @@ export interface CalendarListResponse {
 }
 
 class CalendarClient {
+    /**
+     * Called when the system wakes up the app in the background
+     */
+    async onWake(integrationId: string): Promise<void> {
+        console.log(`[CalendarClient] onWake triggered for ${integrationId}`);
+
+        try {
+            // 1. Fetch upcoming events for next 7 days
+            const now = new Date();
+            const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+            const events = await this.listEvents(
+                integrationId,
+                now.toISOString(),
+                sevenDaysLater.toISOString(),
+                20
+            );
+
+            if (events.length === 0) {
+                console.log('[CalendarClient] No upcoming events to process');
+                return;
+            }
+
+            // 2. Filter events that need action (tentative status or no response)
+            const eventsNeedingAction = events.filter(
+                event => event.status === 'tentative' || !event.status || event.status === 'confirmed'
+            );
+
+            if (eventsNeedingAction.length === 0) {
+                console.log('[CalendarClient] No events needing action');
+                return;
+            }
+
+            console.log(`[CalendarClient] Processing ${eventsNeedingAction.length} events with Apple Intelligence...`);
+
+            // 3. Check if Apple Intelligence is available
+            if (!AppleIntelligence.isAvailable()) {
+                console.log('[CalendarClient] Apple Intelligence not available, skipping analysis');
+                return;
+            }
+
+            // 4. Process each event (limit to 5 to avoid performance issues)
+            const eventsToProcess = eventsNeedingAction.slice(0, 5);
+
+            for (const event of eventsToProcess) {
+                try {
+                    // Check if chat already exists for this event
+                    const existingChat = await pluginChatStorage.getPluginChat(event.id);
+                    if (existingChat) {
+                        console.log(`[CalendarClient] Chat already exists for event ${event.id}, skipping`);
+                        continue;
+                    }
+
+                    // Create plugin chat for this event
+                    const chat = await pluginChatStorage.createPluginChat(
+                        'calendar',
+                        'event_chat',
+                        event.id,
+                        event.summary || '(No title)',
+                        {
+                            eventId: event.id,
+                            start: event.start.dateTime || event.start.date,
+                            end: event.end?.dateTime || event.end?.date,
+                            location: event.location,
+                            status: event.status,
+                        }
+                    );
+
+                    // Format event details
+                    const startDate = event.start.dateTime
+                        ? new Date(event.start.dateTime).toLocaleString()
+                        : event.start.date
+                        ? new Date(event.start.date).toLocaleDateString()
+                        : 'Unknown';
+
+                    // Create user message with event summary
+                    const eventSummary = `Upcoming calendar event
+
+Title: ${event.summary || '(No title)'}
+Date: ${startDate}
+${event.location ? `Location: ${event.location}` : ''}
+${event.description ? `Description: ${event.description}` : ''}
+Status: ${event.status || 'Unknown'}`;
+
+                    await pluginChatStorage.addMessage(chat.id, 'user', eventSummary);
+
+                    // Analyze with Apple Intelligence
+                    const prompt = `Analyze this calendar event and provide helpful suggestions.
+
+Event: ${event.summary || '(No title)'}
+Date: ${startDate}
+${event.location ? `Location: ${event.location}` : ''}
+${event.description ? `Description: ${event.description}` : ''}
+Status: ${event.status || 'Unknown'}
+
+Provide a brief analysis:
+1. What preparation might be needed for this event?
+2. Should the user confirm attendance?
+3. Any recommendations or reminders?
+
+Keep your response concise and actionable.`;
+
+                    const analysis = await AppleIntelligence.generate(prompt);
+
+                    // Save assistant response
+                    await pluginChatStorage.addMessage(chat.id, 'assistant', analysis);
+
+                    console.log(`[CalendarClient] Created chat and analysis for event: ${event.summary}`);
+                } catch (e) {
+                    console.error(`[CalendarClient] Failed to process event ${event.id}:`, e);
+                }
+            }
+
+            console.log(`[CalendarClient] Finished processing ${eventsToProcess.length} events`);
+        } catch (error) {
+            console.error('[CalendarClient] onWake error:', error);
+        }
+    }
+
     /**
      * Fetch upcoming events from Google Calendar API and cache them
      */

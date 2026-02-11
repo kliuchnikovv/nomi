@@ -13,6 +13,7 @@ from src.agents.souper import SouperAgent
 from dotenv import load_dotenv
 from src.core.config import Config
 from src.core.container import Container
+from src.plugins.loader import load_plugins, register_plugin_routes
 
 # Загружаем переменные окружения из .env файла, если он существует
 # Если файл не найден, используем переменные окружения из системы (для продакшн)
@@ -114,10 +115,9 @@ async def lifespan(app: FastAPI):
 
     logging.warning("[Lifespan] Loading plugins...")
     try:
-        from src.plugins.loader import load_plugins
-
         load_plugins()
-        logging.warning("[Lifespan] Plugins loaded successfully")
+        register_plugin_routes(app)
+        logging.warning("[Lifespan] Plugins loaded and routes registered successfully")
     except Exception as e:
         logging.error("[Lifespan] Failed to load plugins: %s", e, exc_info=True)
 
@@ -152,14 +152,6 @@ async def health_check():
     from datetime import datetime
 
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
-
-
-# ─── Plugin Routes ────────────────────────────────────
-# Dynamically register FastAPI routers from all plugins that expose them.
-from src.plugins.loader import load_plugins, register_plugin_routes
-
-load_plugins()
-register_plugin_routes(app)
 
 
 # Sessions for OAuth state (required for request.session)
