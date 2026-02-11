@@ -13,15 +13,32 @@ export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: P
     const [emails, setEmails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const integrationId = integrationIdProp ?? 'gmail'; 
+    if (!integrationIdProp) {
+        console.error('[GmailMainScreen] No integrationId provided');
+        return (
+            <View style={[styles.container, { backgroundColor: theme.background }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Gmail</Text>
+                </View>
+                <View style={styles.center}>
+                    <Text style={{ color: theme.textSecondary }}>No integration configured</Text>
+                </View>
+            </View>
+        );
+    }
+
+    const integrationId = integrationIdProp;
 
     const loadEmails = async () => {
         try {
             const data = await gmailClient.getCachedEmails(integrationId);
             setEmails(data);
+            setError(null);
         } catch (error) {
             console.error('Failed to load emails:', error);
+            setError(error instanceof Error ? error.message : 'Failed to load emails');
         } finally {
             setLoading(false);
         }
@@ -29,12 +46,14 @@ export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: P
 
     const handleRefresh = async () => {
         setRefreshing(true);
+        setError(null);
         try {
             // Force sync
             await gmailClient.syncEmails(integrationId);
             await loadEmails();
         } catch (error) {
             console.error('Failed to refresh emails:', error);
+            setError(error instanceof Error ? error.message : 'Failed to refresh emails');
         } finally {
             setRefreshing(false);
         }
@@ -77,11 +96,20 @@ export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: P
                 </View>
             </View>
 
-            {loading ? (
+            {error && !loading && (
+                <View style={styles.center}>
+                    <Text style={[styles.errorText, { color: theme.error || '#ef4444' }]}>{error}</Text>
+                    <Pressable onPress={handleRefresh} style={styles.retryButton}>
+                        <Text style={[styles.retryButtonText, { color: theme.accent }]}>Retry</Text>
+                    </Pressable>
+                </View>
+            )}
+
+            {loading && !error ? (
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color={theme.accent} />
                 </View>
-            ) : (
+            ) : !error ? (
                 <FlatList
                     data={emails}
                     renderItem={renderItem}
@@ -96,7 +124,7 @@ export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: P
                         </View>
                     }
                 />
-            )}
+            ) : null}
         </View>
     );
 }
@@ -118,6 +146,21 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    errorText: {
+        fontSize: 14,
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    retryButton: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+        backgroundColor: '#e0f2fe',
+    },
+    retryButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
     },
     listContent: {
         padding: 16,

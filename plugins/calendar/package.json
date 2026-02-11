@@ -20,6 +20,11 @@
       "import": "./client/background.ts",
       "require": "./client/background.ts",
       "types": "./client/background.ts"
+    },
+    "./components/*": {
+      "import": "./client/components/*.tsx",
+      "require": "./client/components/*.tsx",
+      "types": "./client/components/*.tsx"
     }
   },
   "peerDependencies": {

@@ -1,0 +1,133 @@
+name: ios_reminders
+display_name: iOS Reminders
+description: iOS native Reminders integration via EventKit for reminders management
+version: 1.0.0
+
+execution:
+  type: client
+  entry_points:
+    client: ./client/executor.ts
+
+auth:
+  type: none
+
+ui:
+  icon: check-square
+  description_short: iOS Reminders интеграция через EventKit
+  category: productivity
+
+methods:
+  - name: get_reminders
+    description: Get reminders with optional filtering
+    parameters:
+      type: object
+      properties:
+        list:
+          type: string
+          description: Reminder list identifier (optional)
+        is_completed:
+          type: boolean
+          description: Filter by completion status (optional)
+        due_date_start:
+          type: string
+          description: ISO format start date for due date range (optional)
+        due_date_end:
+          type: string
+          description: ISO format end date for due date range (optional)
+        limit:
+          type: integer
+          default: 20
+          description: Maximum number of reminders to return
+      required: []
+
+  - name: create_reminder
+    description: Create a new reminder
+    parameters:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Reminder title
+        notes:
+          type: string
+          description: Reminder notes/description
+        due_date:
+          type: string
+          description: ISO format due date
+        priority:
+          type: integer
+          default: 0
+          description: Priority level (0=None, 1=High, 9=Low)
+        list:
+          type: string
+          description: Reminder list identifier to add to
+        url:
+          type: string
+          description: Associated URL
+      required: [title]
+
+  - name: update_reminder
+    description: Update an existing reminder
+    parameters:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Reminder identifier (EKReminder identifier)
+        title:
+          type: string
+          description: New reminder title
+        notes:
+          type: string
+          description: New reminder notes
+        due_date:
+          type: string
+          description: New ISO format due date
+        is_completed:
+          type: boolean
+          description: New completion status
+        priority:
+          type: integer
+          description: New priority level
+        url:
+          type: string
+          description: New associated URL
+      required: [id]
+
+  - name: complete_reminder
+    description: Mark a reminder as completed
+    parameters:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Reminder identifier
+      required: [id]
+
+  - name: delete_reminder
+    description: Delete a reminder
+    parameters:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Reminder identifier to delete
+      required: [id]
+
+  - name: get_lists
+    description: Get list of reminder lists
+    parameters:
+      type: object
+      properties: {}
+
+background_tasks:
+  enabled: true
+  system_events:
+    - app_lifecycle
+
+storage:
+  type: client_only
+  encrypted: true
+
+tools:
+  include: true

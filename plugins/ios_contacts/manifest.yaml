@@ -1,0 +1,197 @@
+name: ios_contacts
+display_name: iOS Contacts
+description: iOS native Contacts integration via Contacts Framework for contacts management
+version: 1.0.0
+
+execution:
+  type: client
+  entry_points:
+    client: ./client/executor.ts
+
+auth:
+  type: none
+
+ui:
+  icon: user
+  description_short: iOS Contacts интеграция через Contacts Framework
+  category: social
+
+methods:
+  - name: search_contacts
+    description: Search contacts by name, email, or phone
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query (name, email, or phone)
+        limit:
+          type: integer
+          default: 10
+          description: Maximum number of contacts to return
+      required: [query]
+
+  - name: get_contact
+    description: Get contact details by identifier
+    parameters:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Contact identifier (CNContact identifier)
+      required: [id]
+
+  - name: create_contact
+    description: Create a new contact
+    parameters:
+      type: object
+      properties:
+        given_name:
+          type: string
+          description: First name
+        family_name:
+          type: string
+          description: Last name
+        middle_name:
+          type: string
+          description: Middle name
+        nickname:
+          type: string
+          description: Nickname
+        organization:
+          type: string
+          description: Company/organization name
+        job_title:
+          type: string
+          description: Job title
+        phone_numbers:
+          type: array
+          description: List of phone numbers
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+        email_addresses:
+          type: array
+          description: List of email addresses
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+        postal_addresses:
+          type: array
+          description: List of postal addresses
+          items:
+            type: object
+        notes:
+          type: string
+          description: Contact notes
+        url:
+          type: string
+          description: Profile URL
+        birthday:
+          type: string
+          description: ISO format birthday date
+        image_data:
+          type: string
+          description: Base64 encoded image data
+      required: []
+
+  - name: update_contact
+    description: Update an existing contact
+    parameters:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Contact identifier
+        given_name:
+          type: string
+          description: First name
+        family_name:
+          type: string
+          description: Last name
+        middle_name:
+          type: string
+          description: Middle name
+        nickname:
+          type: string
+          description: Nickname
+        organization:
+          type: string
+          description: Company/organization name
+        job_title:
+          type: string
+          description: Job title
+        phone_numbers:
+          type: array
+          description: List of phone numbers
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+        email_addresses:
+          type: array
+          description: List of email addresses
+          items:
+            type: object
+            properties:
+              label:
+                type: string
+              value:
+                type: string
+        postal_addresses:
+          type: array
+          description: List of postal addresses
+          items:
+            type: object
+        notes:
+          type: string
+          description: Contact notes
+        url:
+          type: string
+          description: Profile URL
+        birthday:
+          type: string
+          description: ISO format birthday date
+        image_data:
+          type: string
+          description: Base64 encoded image data
+      required: [id]
+
+  - name: delete_contact
+    description: Delete a contact
+    parameters:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Contact identifier to delete
+      required: [id]
+
+  - name: get_groups
+    description: Get list of contact groups
+    parameters:
+      type: object
+      properties: {}
+
+background_tasks:
+  enabled: true
+  system_events:
+    - app_lifecycle
+
+storage:
+  type: client_only
+  encrypted: true
+
+tools:
+  include: true

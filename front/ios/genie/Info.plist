@@ -58,6 +58,12 @@
 	<string>Genie needs access to your photo library to select images for attachments</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Genie uses speech recognition to transcribe your voice messages</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Genie needs access to your calendar to help manage your events</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Genie needs access to your reminders to help you stay organized</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Genie needs access to your contacts to help you communicate with people</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

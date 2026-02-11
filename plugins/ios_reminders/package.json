@@ -1,0 +1,39 @@
+{
+  "name": "@genie/plugin-ios_reminders",
+  "version": "1.0.0",
+  "description": "iOS native Reminders integration via EventKit",
+  "main": "./client/executor.ts",
+  "types": "./client/executor.ts",
+  "private": true,
+  "exports": {
+    ".": {
+      "import": "./client/executor.ts",
+      "require": "./client/executor.ts",
+      "types": "./client/executor.ts"
+    },
+    "./client": {
+      "import": "./client/executor.ts",
+      "require": "./client/executor.ts",
+      "types": "./client/executor.ts"
+    },
+    "./background": {
+      "import": "./client/background.ts",
+      "require": "./client/background.ts",
+      "types": "./client/background.ts"
+    },
+    "./components/*": {
+      "import": "./client/components/*.tsx",
+      "require": "./client/components/*.tsx",
+      "types": "./client/components/*.tsx"
+    }
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-native": "^0.81.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.1",
+    "typescript": "^5.8.3"
+  }
+}

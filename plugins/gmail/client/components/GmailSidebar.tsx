@@ -10,15 +10,18 @@ export function GmailSidebar({ integrationId, onSelect, isSelected }: PluginSide
     const { theme, palette } = useTheme();
     const [emails, setEmails] = useState<Email[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const loadEmails = async () => {
         try {
             setLoading(true);
+            setError(null);
             // Get recent emails (cached + sync)
             const data = await gmailClient.getRecentEmails(integrationId, 20);
             setEmails(data);
         } catch (error) {
             console.error('Failed to load gmail emails:', error);
+            setError(error instanceof Error ? error.message : 'Failed to load emails');
         } finally {
             setLoading(false);
         }
@@ -52,7 +55,7 @@ export function GmailSidebar({ integrationId, onSelect, isSelected }: PluginSide
 
     return (
         <View style={{ flex: 1 }}>
-            <Pressable 
+            <Pressable
                 style={[
                     styles.header,
                     isSelected && { backgroundColor: `${theme.accent}15` }
@@ -66,11 +69,20 @@ export function GmailSidebar({ integrationId, onSelect, isSelected }: PluginSide
                 {/* Optional: Add compose button or unread count */}
             </Pressable>
 
-            {loading && emails.length === 0 ? (
+            {error && !loading && (
+                <View style={styles.center}>
+                    <Text style={[styles.errorText, { color: theme.error || '#ef4444', textAlign: 'center' }]}>{error}</Text>
+                    <Pressable onPress={loadEmails} style={styles.retryButton}>
+                        <Text style={[styles.retryButtonText, { color: theme.accent }]}>Retry</Text>
+                    </Pressable>
+                </View>
+            )}
+
+            {loading && !error && emails.length === 0 ? (
                 <View style={styles.center}>
                     <ActivityIndicator color={theme.textSecondary} />
                 </View>
-            ) : (
+            ) : !error ? (
                 <SectionList
                     sections={sections}
                     keyExtractor={(item) => item.id}
@@ -91,7 +103,7 @@ export function GmailSidebar({ integrationId, onSelect, isSelected }: PluginSide
                         );
                     }}
                     renderItem={({ item }) => (
-                        <Pressable 
+                        <Pressable
                             style={[styles.emailItem, { backgroundColor: theme.card }]}
                             onPress={onSelect} // For now, clicking an email goes to main view
                         >
@@ -117,7 +129,7 @@ export function GmailSidebar({ integrationId, onSelect, isSelected }: PluginSide
                         </View>
                     }
                 />
-            )}
+            ) : null}
         </View>
     );
 }
@@ -143,6 +155,20 @@ const styles = StyleSheet.create({
     center: {
         padding: 20,
         alignItems: 'center',
+    },
+    errorText: {
+        fontSize: 13,
+        marginBottom: 12,
+    },
+    retryButton: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 6,
+        backgroundColor: '#e0f2fe',
+    },
+    retryButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
     },
     listContent: {
         padding: 12,

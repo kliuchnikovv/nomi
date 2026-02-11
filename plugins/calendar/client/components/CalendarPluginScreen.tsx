@@ -1,0 +1,243 @@
+/**
+ * Calendar Plugin Screen - Shows AI-analyzed event chats
+ */
+
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useTheme } from '@genie/front/context/ThemeContext';
+import { PluginMainScreenProps } from '@genie/front/plugins/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { XmarkCircle, Calendar } from 'iconoir-react-native';
+import { pluginChatStorage, PluginChat } from '@genie/front/services/plugins/PluginChatStorage';
+
+export function CalendarPluginScreen({ integrationId, onClose, navigation }: PluginMainScreenProps) {
+    const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
+    const [chats, setChats] = useState<PluginChat[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const loadChats = async () => {
+        try {
+            const data = await pluginChatStorage.getPluginChats('calendar', 'event_chat');
+            setChats(data);
+        } catch (error) {
+            console.error('[CalendarPluginScreen] Failed to load chats:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadChats();
+        // Refresh every 30 seconds to catch new background-processed events
+        const interval = setInterval(loadChats, 30000);
+        return () => clearInterval(interval);
+    }, [integrationId]);
+
+    const handleChatPress = (chat: PluginChat) => {
+        // Navigate to chat view
+        if (navigation) {
+            navigation.navigate('CalendarChatView', { chatId: chat.id });
+        }
+    };
+
+    const renderChatItem = ({ item }: { item: PluginChat }) => {
+        const metadata = item.data ? JSON.parse(item.data) : {};
+        const startDate = metadata.start ? new Date(metadata.start).toLocaleDateString() : '';
+        const location = metadata.location || '';
+
+        return (
+            <Pressable
+                style={({ pressed }) => [
+                    styles.chatItem,
+                    { backgroundColor: theme.card, borderColor: theme.border },
+                    pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => handleChatPress(item)}
+            >
+                <View style={styles.chatIcon}>
+                    <Calendar width={20} height={20} color={theme.accent} />
+                </View>
+                <View style={styles.chatContent}>
+                    <View style={styles.chatHeader}>
+                        <Text style={[styles.chatTitle, { color: theme.text }]} numberOfLines={1}>
+                            {item.title}
+                        </Text>
+                        <Text style={[styles.chatDate, { color: theme.textSecondary }]}>
+                            {startDate}
+                        </Text>
+                    </View>
+                    {location ? (
+                        <Text style={[styles.chatLocation, { color: theme.textSecondary }]} numberOfLines={1}>
+                            📍 {location}
+                        </Text>
+                    ) : null}
+                    <View style={[styles.badge, { backgroundColor: theme.accent + '20' }]}>
+                        <Text style={[styles.badgeText, { color: theme.accent }]}>
+                            AI Analyzed
+                        </Text>
+                    </View>
+                </View>
+            </Pressable>
+        );
+    };
+
+    return (
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            {/* Header */}
+            <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
+                <View style={styles.headerRow}>
+                    <View style={styles.headerLeft}>
+                        <Text style={styles.headerIcon}>📅</Text>
+                        <Text style={[styles.title, { color: theme.text }]}>Event Insights</Text>
+                    </View>
+                    {onClose && (
+                        <Pressable onPress={onClose} hitSlop={12}>
+                            <XmarkCircle width={24} height={24} color={theme.textSecondary} />
+                        </Pressable>
+                    )}
+                </View>
+                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+                    AI-analyzed upcoming events
+                </Text>
+            </View>
+
+            <View style={styles.content}>
+                {loading ? (
+                    <View style={styles.center}>
+                        <ActivityIndicator size="large" color={theme.accent} />
+                    </View>
+                ) : chats.length > 0 ? (
+                    <FlatList
+                        data={chats}
+                        keyExtractor={(item) => item.id}
+                        renderItem={renderChatItem}
+                        contentContainerStyle={styles.listContent}
+                    />
+                ) : (
+                    <View style={styles.emptyState}>
+                        <Text style={styles.emptyIcon}>🗓️</Text>
+                        <Text style={[styles.emptyTitle, { color: theme.text }]}>
+                            No Event Insights Yet
+                        </Text>
+                        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                            When you have upcoming events, they will be automatically analyzed and appear here.
+                        </Text>
+                    </View>
+                )}
+            </View>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+    },
+    header: {
+        paddingHorizontal: 20,
+        paddingBottom: 12,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    headerIcon: {
+        fontSize: 22,
+    },
+    title: {
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    subtitle: {
+        fontSize: 13,
+        marginTop: 2,
+    },
+    content: {
+        flex: 1,
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    listContent: {
+        padding: 16,
+    },
+    chatItem: {
+        flexDirection: 'row',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 12,
+        borderWidth: 1,
+    },
+    chatIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#e8f5e9',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    chatContent: {
+        flex: 1,
+    },
+    chatHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    chatTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        flex: 1,
+        marginRight: 8,
+    },
+    chatDate: {
+        fontSize: 11,
+    },
+    chatLocation: {
+        fontSize: 13,
+        marginBottom: 6,
+    },
+    badge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    badgeText: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    emptyState: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 32,
+    },
+    emptyIcon: {
+        fontSize: 48,
+        marginBottom: 16,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    emptyText: {
+        fontSize: 14,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+});

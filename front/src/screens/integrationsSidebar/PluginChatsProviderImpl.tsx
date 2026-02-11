@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { Plugin, PluginChat } from './models';
 import { PluginChatsContext } from './context';
+import { integrationStorage } from '../../services/integrations/IntegrationStorage';
 import { getAllIntegrations } from '../../services/integrations/registry';
 import { INTEGRATION_REGISTRY } from '../../plugins/registry.generated';
+import { getClientPlugin } from '../../plugins/clientRegistry';
 
 export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [plugins, setPlugins] = useState<Plugin[]>([]);
@@ -15,23 +17,39 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setLoading(true);
             setError(null);
 
-            // Load integrations from registry, exclude server-only
-            const integrations = getAllIntegrations().filter(
+            // Load enabled integrations from local database
+            const enabledIntegrations = await integrationStorage.getIntegrations();
+            console.log('[PluginChatsProvider] Loading enabled integrations:', enabledIntegrations.length);
+
+            // Get client-only providers from registry for filtering
+            const clientOnlyProviders = getAllIntegrations().filter(
                 (integration) => integration.storageType !== 'server'
+            ).map(i => i.id);
+
+            // Filter enabled integrations to only include client-only ones
+            const clientIntegrations = enabledIntegrations.filter(
+                (integration) => clientOnlyProviders.includes(integration.provider)
             );
-            console.log('[PluginChatsProvider] Loading integrations:', integrations.length);
 
             // Transform integrations to plugins format
-            const loadedPlugins: Plugin[] = integrations.map((integration) => {
-                const metadata = INTEGRATION_REGISTRY[integration.id.toLowerCase()];
-                console.log('[PluginChatsProvider] Loading plugin:', integration.id, integration.displayName);
+            const loadedPlugins: Plugin[] = clientIntegrations.map((integration) => {
+                const metadata = INTEGRATION_REGISTRY[integration.provider.toLowerCase()];
+                const clientPlugin = getClientPlugin(integration.provider);
+                console.log('[PluginChatsProvider] Loading plugin:', integration.id, integration.provider, integration.name);
                 return {
                     id: integration.id,
-                    provider: integration.id,
-                    name: integration.displayName,
-                    icon: integration.icon,
+                    provider: integration.provider,
+                    name: integration.name,
+                    icon: metadata?.icon,
                     color: metadata?.color,
                     chats: [],
+                    // Add metadata for additional plugin info
+                    metadata: {
+                        ...metadata,
+                        accountEmail: integration.accountEmail,
+                        hasSidebar: !!clientPlugin?.SidebarComponent,
+                        hasMainScreen: !!clientPlugin?.MainComponent,
+                    },
                 };
             });
 
