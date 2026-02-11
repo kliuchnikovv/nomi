@@ -154,6 +154,46 @@ async def health_check():
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
 
+# Embeddings endpoint for local RAG
+@app.post("/embeddings")
+async def generate_embeddings(request: dict):
+    """
+    Generate embeddings for text using Gemini embedding model.
+    Used by frontend's local RAG store for on-device semantic search.
+    """
+    from typing import List
+
+    # Handle both single text and batch texts
+    if "text" in request:
+        texts = [request["text"]]
+    elif "texts" in request:
+        texts = request["texts"]
+    else:
+        return {"error": "Missing 'text' or 'texts' in request body"}, 400
+
+    if not texts or len(texts) == 0:
+        return {"error": "No texts provided"}, 400
+
+    try:
+        # Get embedder from container
+        embedder = container.embedder
+
+        # Generate embeddings
+        embeddings: List[List[float]] = []
+        for text in texts:
+            embedding = embedder.get_embedding(text)
+            embeddings.append(embedding)
+
+        # Return appropriate response format
+        if "text" in request:
+            return {"embedding": embeddings[0]}
+        else:
+            return {"embeddings": embeddings}
+    except Exception as e:
+        logging.error("Failed to generate embeddings: %s", e, exc_info=True)
+        return {"error": str(e)}, 500
+
+
 # Sessions for OAuth state (required for request.session)
 app.add_middleware(SessionMiddleware, secret_key=config.session_secret)
 

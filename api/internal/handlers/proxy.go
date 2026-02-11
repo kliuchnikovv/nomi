@@ -19,7 +19,7 @@ func ProxyEmbeddings(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			targetURL = "http://127.0.0.1:7777"
 		}
 
-		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+"/api/embeddings", c.Request.Body)
+		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+"/embeddings", c.Request.Body)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create proxy request"})
 			return
