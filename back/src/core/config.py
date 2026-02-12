@@ -55,7 +55,7 @@ class Config:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
         return GeminiEmbedder(
-            id="text-embedding-004",
+            id="models/text-embedding-004",
             api_key=self.google_api_key,
             dimensions=768,
         )
