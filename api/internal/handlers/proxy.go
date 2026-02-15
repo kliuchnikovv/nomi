@@ -19,8 +19,13 @@ func ProxyEmbeddings(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			targetURL = "http://127.0.0.1:7777"
 		}
 
+		logger.Debug("Proxying embeddings request",
+			zap.String("target_url", targetURL+"/embeddings"),
+			zap.String("method", c.Request.Method))
+
 		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+"/embeddings", c.Request.Body)
 		if err != nil {
+			logger.Error("Failed to create proxy request", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create proxy request"})
 			return
 		}
@@ -34,11 +39,31 @@ func ProxyEmbeddings(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		client := &http.Client{Timeout: 60 * time.Second}
 		resp, err := client.Do(proxyReq)
 		if err != nil {
-			logger.Error("Failed to proxy embeddings request", zap.Error(err))
+			logger.Error("Failed to proxy embeddings request",
+				zap.Error(err),
+				zap.String("target_url", targetURL+"/embeddings"))
 			c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to contact AI service"})
 			return
 		}
 		defer resp.Body.Close()
+
+		logger.Info("Embeddings response received",
+			zap.Int("status_code", resp.StatusCode))
+
+		// Log warnings for non-2xx responses to make them more visible
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			logger.Warn("Embeddings request returned non-success status",
+				zap.Int("status_code", resp.StatusCode))
+			bodyBytes, readErr := io.ReadAll(resp.Body)
+			if readErr != nil {
+				logger.Error("Failed to read error response body", zap.Error(readErr))
+			} else {
+				logger.Warn("Embeddings error response",
+					zap.String("body", string(bodyBytes)))
+			}
+			c.JSON(resp.StatusCode, gin.H{"error": fmt.Sprintf("AI service returned status %d", resp.StatusCode)})
+			return
+		}
 
 		for name, values := range resp.Header {
 			for _, value := range values {
@@ -47,7 +72,15 @@ func ProxyEmbeddings(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		}
 		c.Status(resp.StatusCode)
 
-		_, _ = io.Copy(c.Writer, resp.Body)
+		bytesWritten, err := io.Copy(c.Writer, resp.Body)
+		if err != nil {
+			logger.Error("Failed to copy response body",
+				zap.Error(err),
+				zap.Int64("bytes_written", bytesWritten))
+		} else {
+			logger.Debug("Successfully proxied embeddings response",
+				zap.Int64("bytes", bytesWritten))
+		}
 	}
 }
 
