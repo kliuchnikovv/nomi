@@ -9,6 +9,20 @@ export const iosContactsPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {
         const client = new IOSContactsClient();
 
+        // Check permissions before executing any method
+        const permissionStatus = await client.checkPermissionStatus();
+
+        if (permissionStatus === 'notDetermined') {
+            // Request permission
+            const granted = await client.requestPermission();
+            if (!granted) {
+                return 'Please grant access to Contacts in the system settings to use this feature.';
+            }
+        } else if (permissionStatus === 'denied') {
+            return 'Contacts access is denied. Please enable it in iOS Settings > Genie > Contacts.';
+        }
+
+        // Permission granted, proceed with the method
         switch (method) {
             case 'search_contacts':
                 const contacts = await client.searchContacts(

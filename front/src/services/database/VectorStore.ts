@@ -59,8 +59,9 @@ export class VectorStore {
 
     /**
      * Add a single document to the vector store
+     * Returns true if document was inserted, false if it already existed
      */
-    async addDocument(doc: VectorDocument): Promise<void> {
+    async addDocument(doc: VectorDocument): Promise<boolean> {
         const startTime = Date.now();
         const contentPreview = doc.content.substring(0, 100).replace(/\n/g, ' ');
         console.log(
@@ -68,6 +69,17 @@ export class VectorStore {
         );
 
         const db = getDatabase();
+
+        // Check if document already exists
+        const existing = await db.getFirstAsync<{ id: string }>(
+            'SELECT id FROM vectors WHERE id = ?',
+            [doc.id]
+        );
+
+        if (existing) {
+            console.log(`[Local RAG Store] Document ${doc.id} already exists, skipping`);
+            return false;
+        }
 
         // 1. Generate embedding
         console.log('[Local RAG Store] Generating embedding...');
@@ -80,7 +92,7 @@ export class VectorStore {
         console.log('[Local RAG Store] Storing in SQLite...');
         const dbStartTime = Date.now();
         await db.runAsync(
-            `INSERT OR REPLACE INTO vectors (id, source_type, content, embedding, metadata, created_at)
+            `INSERT INTO vectors (id, source_type, content, embedding, metadata, created_at)
              VALUES (?, ?, ?, ?, ?, ?)`,
             [
                 doc.id,
@@ -92,54 +104,79 @@ export class VectorStore {
             ]
         );
         const dbTime = Date.now() - dbStartTime;
-        
+
         const totalTime = Date.now() - startTime;
         console.log(
             `[Local RAG Store] ✓ Document stored successfully in ${totalTime}ms (embedding: ${embeddingTime}ms, db: ${dbTime}ms)`
         );
+        return true;
     }
 
     /**
      * Add multiple documents to the vector store in batch (more efficient)
+     * Returns count of documents actually inserted (excludes duplicates)
      */
-    async addDocuments(docs: VectorDocument[]): Promise<void> {
+    async addDocuments(docs: VectorDocument[]): Promise<number> {
         if (docs.length === 0) {
             console.log('[Local RAG Store] No documents to add (empty batch)');
-            return;
+            return 0;
         }
 
         const startTime = Date.now();
         console.log(`[Local RAG Store] Starting batch add - ${docs.length} documents`);
 
-        // Log document previews
-        docs.forEach((doc, idx) => {
+        // Check which documents already exist (more efficient: single query with IN)
+        const db = getDatabase();
+        const existingIds = new Set<string>();
+
+        if (docs.length > 0) {
+            const placeholders = docs.map(() => '?').join(',');
+            const rows = await db.getAllAsync<{ id: string }>(
+                `SELECT id FROM vectors WHERE id IN (${placeholders})`,
+                docs.map(doc => doc.id)
+            );
+            rows.forEach(row => existingIds.add(row.id));
+        }
+
+        const duplicateCount = existingIds.size;
+        const newDocs = docs.filter(doc => !existingIds.has(doc.id));
+
+        if (duplicateCount > 0) {
+            console.log(`[Local RAG Store] Found ${duplicateCount} existing documents, skipping`);
+        }
+
+        if (newDocs.length === 0) {
+            console.log(`[Local RAG Store] No new documents to add (${duplicateCount} duplicates)`);
+            return 0;
+        }
+
+        // Log document previews for new docs only
+        newDocs.forEach((doc, idx) => {
             const contentPreview = doc.content.substring(0, 80).replace(/\n/g, ' ');
             console.log(
-                `[Local RAG Store] Document ${idx + 1}/${docs.length}: id=${doc.id} sourceType=${doc.sourceType} content="${contentPreview}..."`
+                `[Local RAG Store] Document ${idx + 1}/${newDocs.length}: id=${doc.id} sourceType=${doc.sourceType} content="${contentPreview}..."`
             );
         });
 
-        const db = getDatabase();
-
-        // 1. Generate all embeddings in one API call
+        // 1. Generate all embeddings in one API call for new docs only
         console.log('[Local RAG Store] Generating embeddings in batch...');
         const embeddingStartTime = Date.now();
-        const texts = docs.map(doc => doc.content);
+        const texts = newDocs.map(doc => doc.content);
         const embeddings = await this.generateEmbeddings(texts);
         const embeddingTime = Date.now() - embeddingStartTime;
         console.log(
-            `[Local RAG Store] Batch embeddings generated in ${embeddingTime}ms (${docs.length} documents, ${embeddings[0]?.length || 0} dimensions each)`
+            `[Local RAG Store] Batch embeddings generated in ${embeddingTime}ms (${newDocs.length} documents, ${embeddings[0]?.length || 0} dimensions each)`
         );
 
         // 2. Store all in SQLite
         console.log('[Local RAG Store] Storing batch in SQLite...');
         const dbStartTime = Date.now();
         const now = Date.now();
-        for (let i = 0; i < docs.length; i++) {
-            const doc = docs[i];
+        for (let i = 0; i < newDocs.length; i++) {
+            const doc = newDocs[i];
             const embedding = embeddings[i];
             await db.runAsync(
-                `INSERT OR REPLACE INTO vectors (id, source_type, content, embedding, metadata, created_at)
+                `INSERT INTO vectors (id, source_type, content, embedding, metadata, created_at)
                  VALUES (?, ?, ?, ?, ?, ?)`,
                 [
                     doc.id,
@@ -155,8 +192,9 @@ export class VectorStore {
 
         const totalTime = Date.now() - startTime;
         console.log(
-            `[Local RAG Store] ✓ Batch storage completed in ${totalTime}ms (embedding: ${embeddingTime}ms, db: ${dbTime}ms, avg per doc: ${(totalTime / docs.length).toFixed(1)}ms)`
+            `[Local RAG Store] ✓ Batch storage completed in ${totalTime}ms (${newDocs.length} new docs, ${duplicateCount} skipped; embedding: ${embeddingTime}ms, db: ${dbTime}ms, avg per new doc: ${(totalTime / newDocs.length).toFixed(1)}ms)`
         );
+        return newDocs.length;
     }
 
     /**

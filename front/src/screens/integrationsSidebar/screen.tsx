@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -438,13 +438,15 @@ export default function RightSidebar({
     const { theme, palette } = useTheme();
     const { refresh } = usePluginChats();
     const styles = useMemo(() => createRightSidebarStyles(theme, palette), [theme, palette]);
+    const hasRefreshed = useRef(false);
 
-    // Refresh when sidebar becomes visible
+    // Refresh when sidebar becomes visible (only once)
     useEffect(() => {
-        if (variant === 'inline' || (translateX && translateX.value === 0)) {
+        if (!hasRefreshed.current && (variant === 'inline' || (translateX && translateX.value === 0))) {
             refresh();
+            hasRefreshed.current = true;
         }
-    }, [variant, refresh]);
+    }, [variant, translateX, refresh]);
 
     return (
         <Sidebar

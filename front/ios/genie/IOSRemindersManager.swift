@@ -8,6 +8,7 @@
 import Foundation
 import React
 import EventKit
+import UIKit
 
 @objc(IOSRemindersManager)
 class IOSRemindersManager: NSObject {
@@ -245,6 +246,47 @@ class IOSRemindersManager: NSObject {
         }
 
         resolve(result)
+    }
+
+    @objc
+    func checkPermissionStatus(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        let status = EKEventStore.authorizationStatus(for: .reminder)
+        switch status {
+        case .authorized:
+            resolve("authorized")
+        case .denied, .restricted:
+            resolve("denied")
+        case .notDetermined:
+            resolve("notDetermined")
+        @unknown default:
+            resolve("notDetermined")
+        }
+    }
+
+    @objc
+    func requestPermission(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        eventStore.requestAccess(to: .reminder) { granted, error in
+            if let error = error {
+                reject("PERMISSION_ERROR", error.localizedDescription, error)
+            } else {
+                resolve(granted)
+            }
+        }
+    }
+
+    @objc
+    func openSettings(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+            resolve(nil)
+        } else {
+            reject("OPEN_FAILED", "Failed to open settings", nil)
+        }
+    }
+
+    @objc
+    static func requiresMainQueueSetup() -> Bool {
+        return false
     }
 }
 

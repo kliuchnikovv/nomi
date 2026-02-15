@@ -26,10 +26,8 @@ import { backgroundTask as iosCalendarBackgroundTask } from '@genie/plugin-ios_c
 import IOSCalendarPluginScreen from '@genie/plugin-ios_calendar/components/IOSCalendarPluginScreen';
 import { iosRemindersPlugin } from '@genie/plugin-ios_reminders/client';
 import { backgroundTask as iosRemindersBackgroundTask } from '@genie/plugin-ios_reminders/background';
-import IOSRemindersPluginScreen from '@genie/plugin-ios_reminders/components/IOSRemindersPluginScreen';
 import { iosContactsPlugin } from '@genie/plugin-ios_contacts/client';
 import { backgroundTask as iosContactsBackgroundTask } from '@genie/plugin-ios_contacts/background';
-import IOSContactsPluginScreen from '@genie/plugin-ios_contacts/components/IOSContactsPluginScreen';
 import { PollComponent, ButtonsComponent } from '../screens/chat/message/UIComponents';
 import { BriefingCard } from '../screens/chat/components/BriefingCard';
 
@@ -104,12 +102,10 @@ export function registerClientPlugins(): void {
     registerClientPlugin('ios_reminders', {
         ...iosRemindersPlugin,
         backgroundTask: iosRemindersBackgroundTask,
-        MainComponent: IOSRemindersPluginScreen,
     });
     registerClientPlugin('ios_contacts', {
         ...iosContactsPlugin,
         backgroundTask: iosContactsBackgroundTask,
-        MainComponent: IOSContactsPluginScreen,
     });
 
     registered = true;

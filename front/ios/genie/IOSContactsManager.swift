@@ -9,6 +9,7 @@ import Foundation
 import React
 import Contacts
 import UIKit
+import UIKit
 
 @objc(IOSContactsManager)
 class IOSContactsManager: NSObject {
@@ -17,6 +18,37 @@ class IOSContactsManager: NSObject {
 
     override init() {
         super.init()
+    }
+
+    @objc
+    func checkPermissionStatus(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        switch CNContactStore.authorizationStatus(for: .contacts) {
+        case .authorized:
+            resolve("authorized")
+        case .denied, .restricted:
+            resolve("denied")
+        case .notDetermined:
+            resolve("notDetermined")
+        @unknown default:
+            resolve("notDetermined")
+        }
+    }
+
+    @objc
+    func requestPermission(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        requestPermissions { granted in
+            resolve(granted)
+        }
+    }
+
+    @objc
+    func openSettings(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+            resolve(nil)
+        } else {
+            reject("OPEN_FAILED", "Failed to open settings", nil)
+        }
     }
 
     private func requestPermissions(_ resolve: @escaping (Bool) -> Void) {

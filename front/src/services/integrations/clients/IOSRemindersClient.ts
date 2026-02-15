@@ -213,6 +213,57 @@ class IOSRemindersClient {
     async onWake(integrationId: string): Promise<void> {
         await this.indexForRAG(integrationId);
     }
+
+    /**
+     * Check current permission status for Reminders access
+     */
+    async checkPermissionStatus(): Promise<'authorized' | 'denied' | 'notDetermined'> {
+        if (!IOSRemindersManager) {
+            throw new Error('IOSRemindersManager is not available.');
+        }
+
+        try {
+            const status: string = await IOSRemindersManager.checkPermissionStatus();
+            return status as 'authorized' | 'denied' | 'notDetermined';
+        } catch (error) {
+            console.error('[IOSRemindersClient] checkPermissionStatus error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Request permission to access Reminders
+     * @returns true if permission granted, false if denied
+     */
+    async requestPermission(): Promise<boolean> {
+        if (!IOSRemindersManager) {
+            throw new Error('IOSRemindersManager is not available.');
+        }
+
+        try {
+            const granted: boolean = await IOSRemindersManager.requestPermission();
+            return granted;
+        } catch (error) {
+            console.error('[IOSRemindersClient] requestPermission error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Open iOS Settings app to manage Reminders permissions
+     */
+    async openSettings(): Promise<void> {
+        if (!IOSRemindersManager) {
+            throw new Error('IOSRemindersManager is not available.');
+        }
+
+        try {
+            await IOSRemindersManager.openSettings();
+        } catch (error) {
+            console.error('[IOSRemindersClient] openSettings error:', error);
+            throw error;
+        }
+    }
 }
 
 export const iosRemindersClient = new IOSRemindersClient();

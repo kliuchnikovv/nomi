@@ -51,6 +51,57 @@ export interface ContactGroup {
 
 class IOSContactsClient {
     /**
+     * Check current permission status for Contacts access
+     */
+    async checkPermissionStatus(): Promise<'authorized' | 'denied' | 'notDetermined'> {
+        if (!IOSContactsManager) {
+            throw new Error('IOSContactsManager is not available.');
+        }
+
+        try {
+            const status: string = await IOSContactsManager.checkPermissionStatus();
+            return status as 'authorized' | 'denied' | 'notDetermined';
+        } catch (error) {
+            console.error('[IOSContactsClient] checkPermissionStatus error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Request permission to access Contacts
+     * @returns true if permission granted, false if denied
+     */
+    async requestPermission(): Promise<boolean> {
+        if (!IOSContactsManager) {
+            throw new Error('IOSContactsManager is not available.');
+        }
+
+        try {
+            const granted: boolean = await IOSContactsManager.requestPermission();
+            return granted;
+        } catch (error) {
+            console.error('[IOSContactsClient] requestPermission error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Open iOS Settings app to manage Contacts permissions
+     */
+    async openSettings(): Promise<void> {
+        if (!IOSContactsManager) {
+            throw new Error('IOSContactsManager is not available.');
+        }
+
+        try {
+            await IOSContactsManager.openSettings();
+        } catch (error) {
+            console.error('[IOSContactsClient] openSettings error:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Search contacts by name, email, or phone
      */
     async searchContacts(query: string, limit: number = 10): Promise<Contact[]> {

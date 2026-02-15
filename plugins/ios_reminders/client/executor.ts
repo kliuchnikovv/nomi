@@ -9,6 +9,20 @@ export const iosRemindersPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {
         const client = new IOSRemindersClient();
 
+        // Check permissions before executing any method
+        const permissionStatus = await client.checkPermissionStatus();
+
+        if (permissionStatus === 'notDetermined') {
+            // Request permission
+            const granted = await client.requestPermission();
+            if (!granted) {
+                return 'Please grant access to Reminders in the system settings to use this feature.';
+            }
+        } else if (permissionStatus === 'denied') {
+            return 'Reminders access is denied. Please enable it in iOS Settings > Genie > Reminders.';
+        }
+
+        // Permission granted, proceed with the method
         switch (method) {
             case 'get_reminders':
                 const reminders = await client.getReminders(

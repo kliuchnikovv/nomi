@@ -7,6 +7,7 @@ import {
     View,
     StyleSheet,
     Modal,
+    Platform,
 } from 'react-native';
 import React, { useMemo, useState } from 'react';
 import { Mail, Calendar, Github, Sparks, WarningCircle, SendDiagonal } from 'iconoir-react-native';
@@ -15,6 +16,7 @@ import { useTheme } from '../../../../context/ThemeContext';
 import { getStyles } from '../styles';
 import { CONNECTORS, Connector } from '../models';
 import { getIntegrationMetadata } from '../../../../services/integrations/registry';
+import { IOSRemindersClient } from '../../../../services/integrations/clients/IOSRemindersClient';
 
 export function BrowserTab() {
     const { integrations, startOAuth, toggleTool, getIntegrations, connectTelegram } = useConnectors();
@@ -73,10 +75,44 @@ export function BrowserTab() {
     const [telegramLoading, setTelegramLoading] = useState(false);
     const [telegramError, setTelegramError] = useState<string | null>(null);
 
-    // Handle connector press — Telegram gets a code input, others start OAuth
+    // Handle connector press — Telegram gets a code input, others start OAuth, client-only just enable
     const handleConnectorPress = async (connector: Connector) => {
         setErrorMsg(null);
         const metadata = getIntegrationMetadata(connector.id);
+        
+        // Client-only integrations (no auth) - request permissions if needed
+        if (metadata?.authType === 'none') {
+            try {
+                // Special handling for ios_reminders: request permission before enabling (iOS only)
+                if (connector.id === 'ios_reminders' && Platform.OS === 'ios') {
+                    const client = new IOSRemindersClient();
+
+                    // Check current permission status
+                    const status = await client.checkPermissionStatus();
+
+                    if (status === 'notDetermined') {
+                        // Request permission - this shows the iOS system prompt
+                        const granted = await client.requestPermission();
+
+                        if (!granted) {
+                            setErrorMsg('Reminders access was denied. Please enable it in Settings.');
+                            return;
+                        }
+                    } else if (status === 'denied') {
+                        setErrorMsg('Reminders access is denied. Please enable it in Settings → Privacy → Reminders.');
+                        return;
+                    }
+                    // If 'authorized', continue to enable the integration
+                }
+
+                await toggleTool(connector.id, true);
+            } catch (err) {
+                console.warn(`Failed to enable ${connector.id}`, err);
+                setErrorMsg(err instanceof Error ? err.message : `Failed to enable ${connector.name}`);
+            }
+            return;
+        }
+        
         if (metadata?.authType === 'api_key' && connector.id === 'telegram') {
             // Show Telegram code input modal
             setTelegramCode('');
@@ -118,7 +154,10 @@ export function BrowserTab() {
             p.provider !== 'imap' &&
             p.provider !== 'calendar' &&
             p.provider !== 'github' &&
-            p.provider !== 'telegram'
+            p.provider !== 'telegram' &&
+            p.provider !== 'ios_calendar' &&
+            p.provider !== 'ios_reminders' &&
+            p.provider !== 'ios_contacts'
         ),
         [integrations],
     );

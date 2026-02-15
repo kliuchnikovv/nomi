@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View } from 'react-native';
 import { Plugin, PluginChat } from './models';
 import { PluginChatsContext } from './context';
@@ -12,7 +12,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const loadPlugins = async () => {
+    const loadPlugins = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -61,11 +61,11 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         loadPlugins();
-    }, []);
+    }, [loadPlugins]);
 
     const value = useMemo(() => ({
         plugins,
@@ -78,11 +78,11 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         chatError: null,
         selectChat: async () => null,
         setSelectedChatId: () => { },
-        refresh: async () => { await loadPlugins(); },
+        refresh: loadPlugins,
         loadMoreForPlugin: async () => { },
         hasMoreForPlugin: () => false,
         loadingMorePlugins: new Set<string>(),
-    }), [plugins, loading, error]);
+    }), [plugins, loading, error, loadPlugins]);
 
     return (
         <PluginChatsContext.Provider value={value}>

@@ -24,17 +24,17 @@ methods:
       properties:
         start_date:
           type: string
-          description: ISO format start date (e.g., "2024-01-01T00:00:00Z")
+          description: ISO format start date
         end_date:
           type: string
-          description: ISO format end date (e.g., "2024-01-31T23:59:59Z")
+          description: ISO format end date
         limit:
           type: integer
           default: 20
           description: Maximum number of events to return
         calendar:
           type: string
-          description: Calendar identifier (default: default calendar)
+          description: Calendar identifier
       required: [start_date, end_date]
 
   - name: create_event

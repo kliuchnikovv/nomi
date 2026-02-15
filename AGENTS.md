@@ -218,7 +218,7 @@ Genie uses a **Hybrid RAG** approach with multiple layers:
 
 **Architecture:**
 - **Vector Database:** PostgreSQL with `pgvector` extension
-- **Embedder:** Google Gemini `text-embedding-004` (768 dimensions)
+- **Embedder:** Google Gemini `gemini-embedding-001` (768 dimensions)
 - **Storage:** `agent_knowledge` table in PostgreSQL
 - **Isolation:** `UserScopedKnowledge` wrapper enforces user_id isolation via metadata filters
 

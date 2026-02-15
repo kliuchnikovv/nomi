@@ -114,15 +114,20 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             // Умная синхронизация: синхронизируем только серверные интеграции
             // Клиентские интеграции загружаются только из локального SQLite
             for (const item of items) {
+                const provider = item.provider || item.Provider;
+                if (!item || !provider) {
+                    console.warn('[ConnectorsProvider] Skipping invalid integration item:', item);
+                    continue;
+                }
                 // Проверяем через реестр, является ли это серверной интеграцией
-                if (!isServer(item.provider)) {
-                    console.log(`[ConnectorsProvider] Skipping client-only integration: ${item.provider} (stored locally)`);
+                if (!isServer(provider)) {
+                    console.log(`[ConnectorsProvider] Skipping client-only integration: ${provider} (stored locally)`);
                     continue;
                 }
 
                 // Серверные интеграции синхронизируются для отображения метаданных
                 // Но токены не синхронизируются (они остаются на сервере)
-                console.log(`[ConnectorsProvider] Server integration found: ${item.provider} (metadata only)`);
+                console.log(`[ConnectorsProvider] Server integration found: ${provider} (metadata only)`);
                 
                 // Можно добавить логику для синхронизации метаданных серверных интеграций
                 // если это необходимо для UI
@@ -379,14 +384,34 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             throw authError;
         }
     }, [openOAuthFlow]);
-
+ 
     async function toggleTool(configID: string, enabled: boolean) {
         const integration = configs.find(c => c.id === configID || c.provider === configID);
         if (!integration) {
-            console.warn(`Integration not found for ID: ${configID}`);
+            // For client-only integrations (authType === 'none'), create the record if it doesn't exist
+            const metadata = getIntegrationMetadata(configID);
+            if (metadata?.authType === 'none') {
+                try {
+                    await integrationStorage.createIntegration({
+                        provider: configID as any,
+                        name: metadata.displayName,
+                        enabled: enabled,
+                        storageType: metadata.storageType,
+                        supportsBackgroundTasks: metadata.supportsBackgroundTasks,
+                        systemEventListeners: metadata.systemEventListeners,
+                    }, { accessToken: '' });
+                    await getIntegrations();
+                    console.log(`[ConnectorsProvider] Created client-only integration: ${configID}`);
+                    return;
+                } catch (e) {
+                    console.warn(`Failed to create client-only integration ${configID}:`, e);
+                }
+            } else {
+                console.warn(`Integration not found for ID: ${configID}`);
+            }
             return;
         }
-
+ 
         try {
             // Update in local storage
             await integrationStorage.updateIntegration(integration.id, { enabled });

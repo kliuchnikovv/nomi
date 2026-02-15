@@ -52,11 +52,11 @@ export function getIntegrationsWithBackgroundTasks() {
 }
 
 /**
- * Проверить, является ли интеграция серверной.
+ * Проверить, является ли интеграция серверной (server или hybrid).
  */
 export function isServer(integrationId: string): boolean {
     const metadata = getIntegrationMetadata(integrationId);
-    return metadata?.storageType === 'server' || false;
+    return metadata?.storageType === 'server' || metadata?.storageType === 'hybrid' || false;
 }
 
 /**
