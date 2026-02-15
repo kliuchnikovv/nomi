@@ -1,0 +1,313 @@
+name: ios_health
+display_name: Apple Health
+description: iOS native Apple Health (HealthKit) integration for health and fitness data
+version: 1.0.0
+
+execution:
+  type: client
+  entry_points:
+    client: ./client/executor.ts
+
+auth:
+  type: none
+
+ui:
+  icon: heart
+  description_short: Apple Health integration via HealthKit
+  category: health
+
+methods:
+  # Permission Management
+  - name: check_permission_status
+    description: Check HealthKit availability and authorization status
+    parameters:
+      type: object
+      properties: {}
+
+  - name: request_permission
+    description: Request HealthKit permissions for specified categories
+    parameters:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            type: string
+            enum: [activity, heart, sleep, body, nutrition, workouts]
+          description: Health data categories to request access to
+      required: [categories]
+
+  # Activity
+  - name: get_steps
+    description: Get step count for date range with optional interval grouping
+    parameters:
+      type: object
+      properties:
+        start_date:
+          type: string
+          description: ISO8601 format start date
+        end_date:
+          type: string
+          description: ISO8601 format end date
+        interval:
+          type: string
+          enum: [hour, day, week]
+          default: day
+          description: Aggregation interval
+      required: [start_date, end_date]
+
+  - name: get_activity_summary
+    description: Get comprehensive activity summary (steps, distance, calories, exercise, stand hours)
+    parameters:
+      type: object
+      properties:
+        start_date:
+          type: string
+          description: ISO8601 format start date
+        end_date:
+          type: string
+          description: ISO8601 format end date
+      required: [start_date, end_date]
+
+  # Heart
+  - name: get_heart_rate
+    description: Get heart rate measurements with optional limit
+    parameters:
+      type: object
+      properties:
+        start_date:
+          type: string
+          description: ISO8601 format start date
+        end_date:
+          type: string
+          description: ISO8601 format end date
+        limit:
+          type: integer
+          default: 100
+          description: Maximum number of measurements to return
+      required: [start_date, end_date]
+
+  - name: get_resting_heart_rate
+    description: Get resting heart rate data
+    parameters:
+      type: object
+      properties:
+        start_date:
+          type: string
+          description: ISO8601 format start date
+        end_date:
+          type: string
+          description: ISO8601 format end date
+      required: [start_date, end_date]
+
+  # Sleep
+  - name: get_sleep_analysis
+    description: Get sleep analysis data including duration, in-bed time, and sleep stages
+    parameters:
+      type: object
+      properties:
+        start_date:
+          type: string
+          description: ISO8601 format start date
+        end_date:
+          type: string
+          description: ISO8601 format end date
+      required: [start_date, end_date]
+
+  # Body Measurements
+  - name: get_body_metrics
+    description: Get body measurements over time (weight, height, BMI, body fat)
+    parameters:
+      type: object
+      properties:
+        metric_type:
+          type: string
+          enum: [weight, height, bmi, bodyFat]
+          description: Type of body metric to retrieve
+        start_date:
+          type: string
+          description: ISO8601 format start date
+        end_date:
+          type: string
+          description: ISO8601 format end date
+      required: [metric_type, start_date, end_date]
+
+  - name: get_latest_body_metric
+    description: Get the most recent body measurement
+    parameters:
+      type: object
+      properties:
+        metric_type:
+          type: string
+          enum: [weight, height, bmi, bodyFat]
+          description: Type of body metric to retrieve
+      required: [metric_type]
+
+  # Nutrition
+  - name: get_nutrition_summary
+    description: Get nutrition summary (calories, protein, carbs, fat, water)
+    parameters:
+      type: object
+      properties:
+        start_date:
+          type: string
+          description: ISO8601 format start date
+        end_date:
+          type: string
+          description: ISO8601 format end date
+      required: [start_date, end_date]
+
+  # Workouts
+  - name: get_workouts
+    description: Get workout sessions with details (type, duration, calories, distance)
+    parameters:
+      type: object
+      properties:
+        start_date:
+          type: string
+          description: ISO8601 format start date
+        end_date:
+          type: string
+          description: ISO8601 format end date
+        workout_type:
+          type: string
+          description: Optional workout type filter (running, cycling, swimming, etc.)
+        limit:
+          type: integer
+          default: 20
+          description: Maximum number of workouts to return
+      required: [start_date, end_date]
+
+  # Aggregated Summaries
+  - name: get_daily_summary
+    description: Get comprehensive daily health summary (activity, heart, sleep, workouts)
+    parameters:
+      type: object
+      properties:
+        date:
+          type: string
+          description: ISO8601 format date for the summary
+      required: [date]
+
+  - name: get_weekly_summary
+    description: Get 7-day aggregated health summary
+    parameters:
+      type: object
+      properties:
+        start_date:
+          type: string
+          description: ISO8601 format start date (beginning of week)
+      required: [start_date]
+
+  # Write Operations
+  - name: add_workout
+    description: Log a workout session to HealthKit
+    parameters:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Workout type (running, cycling, swimming, walking, etc.)
+        start:
+          type: string
+          description: ISO8601 format start time
+        duration:
+          type: number
+          description: Duration in minutes
+        calories:
+          type: number
+          description: Calories burned
+        distance:
+          type: number
+          description: Distance in meters (optional, use 0 if not applicable)
+          default: 0
+        metadata:
+          type: object
+          description: Additional workout metadata (optional)
+          default: {}
+      required: [type, start, duration, calories]
+
+  - name: add_body_metric
+    description: Log a body measurement to HealthKit
+    parameters:
+      type: object
+      properties:
+        metric_type:
+          type: string
+          enum: [weight, height, bmi, bodyFat]
+          description: Type of body metric
+        value:
+          type: number
+          description: Measurement value
+        date:
+          type: string
+          description: ISO8601 format date for the measurement
+      required: [metric_type, value, date]
+
+  - name: add_nutrition_entry
+    description: Log nutrition data to HealthKit (calories, macros, water)
+    parameters:
+      type: object
+      properties:
+        calories:
+          type: number
+          description: Total calories consumed
+        protein:
+          type: number
+          description: Protein in grams
+        carbs:
+          type: number
+          description: Carbohydrates in grams
+        fat:
+          type: number
+          description: Fat in grams
+        water:
+          type: number
+          description: Water in milliliters
+        date:
+          type: string
+          description: ISO8601 format date for the nutrition entry
+      required: [calories, protein, carbs, fat, water, date]
+
+  - name: add_sleep_session
+    description: Manually log a sleep session to HealthKit
+    parameters:
+      type: object
+      properties:
+        in_bed_start:
+          type: string
+          description: ISO8601 format time when got into bed
+        in_bed_end:
+          type: string
+          description: ISO8601 format time when got out of bed
+        asleep_start:
+          type: string
+          description: ISO8601 format time when fell asleep
+        asleep_end:
+          type: string
+          description: ISO8601 format time when woke up
+      required: [in_bed_start, in_bed_end, asleep_start, asleep_end]
+
+  - name: delete_health_record
+    description: Delete a health record from HealthKit by ID
+    parameters:
+      type: object
+      properties:
+        record_type:
+          type: string
+          enum: [workout, body_metric, nutrition, sleep]
+          description: Type of health record to delete
+        record_id:
+          type: string
+          description: HealthKit record UUID
+      required: [record_type, record_id]
+
+background_tasks:
+  enabled: false
+
+storage:
+  type: client_only
+  encrypted: true
+
+tools:
+  include: true

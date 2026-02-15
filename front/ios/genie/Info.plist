@@ -65,6 +65,10 @@
 	<string>Genie needs access to your reminders to help you stay organized</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Genie needs access to your contacts to help you communicate with people</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Genie needs access to read your health data to provide personalized health insights</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Genie needs permission to write health data like workouts, nutrition, and body measurements</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>

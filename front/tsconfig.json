@@ -19,7 +19,9 @@
       "@genie/plugin-ios_reminders": ["../plugins/ios_reminders"],
       "@genie/plugin-ios_reminders/*": ["../plugins/ios_reminders/*"],
       "@genie/plugin-ios_contacts": ["../plugins/ios_contacts"],
-      "@genie/plugin-ios_contacts/*": ["../plugins/ios_contacts/*"]
+      "@genie/plugin-ios_contacts/*": ["../plugins/ios_contacts/*"],
+      "@genie/plugin-ios_health": ["../plugins/ios_health"],
+      "@genie/plugin-ios_health/*": ["../plugins/ios_health/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

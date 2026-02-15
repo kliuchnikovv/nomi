@@ -101,6 +101,7 @@ const CONNECTOR_COLOR_MAP: Partial<Record<string, keyof ThemePalette>> = {
     ios_calendar: 'red',
     ios_reminders: 'orange',
     ios_contacts: 'blue',
+    ios_health: 'red',
 };
 
 function buildConnectors(): Connector[] {

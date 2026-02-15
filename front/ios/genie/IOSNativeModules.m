@@ -112,3 +112,116 @@ RCT_EXTERN_METHOD(getGroups:(RCTPromiseResolveBlock)resolve
                   reject:(RCTPromiseRejectBlock)reject)
 
 @end
+
+@interface RCT_EXTERN_MODULE(IOSHealthManager, NSObject)
+
+// Permission Management
+RCT_EXTERN_METHOD(checkPermissionStatus:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(requestPermission:(NSArray *)categories
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+// Activity Queries
+RCT_EXTERN_METHOD(getSteps:(NSString *)startDate
+                  endDate:(NSString *)endDate
+                  interval:(NSString *)interval
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getActivitySummary:(NSString *)startDate
+                  endDate:(NSString *)endDate
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+// Heart Queries
+RCT_EXTERN_METHOD(getHeartRate:(NSString *)startDate
+                  endDate:(NSString *)endDate
+                  limit:(NSInteger)limit
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getRestingHeartRate:(NSString *)startDate
+                  endDate:(NSString *)endDate
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+// Sleep Analysis
+RCT_EXTERN_METHOD(getSleepAnalysis:(NSString *)startDate
+                  endDate:(NSString *)endDate
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+// Body Metrics
+RCT_EXTERN_METHOD(getBodyMetrics:(NSString *)metricType
+                  startDate:(NSString *)startDate
+                  endDate:(NSString *)endDate
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getLatestBodyMetric:(NSString *)metricType
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+// Nutrition
+RCT_EXTERN_METHOD(getNutritionSummary:(NSString *)startDate
+                  endDate:(NSString *)endDate
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+// Workouts
+RCT_EXTERN_METHOD(getWorkouts:(NSString *)startDate
+                  endDate:(NSString *)endDate
+                  workoutType:(NSString *)workoutType
+                  limit:(NSInteger)limit
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+// Aggregated Summaries
+RCT_EXTERN_METHOD(getDailySummary:(NSString *)date
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getWeeklySummary:(NSString *)startDate
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+// Write Operations
+RCT_EXTERN_METHOD(addWorkout:(NSString *)type
+                  start:(NSString *)start
+                  duration:(double)duration
+                  calories:(double)calories
+                  distance:(double)distance
+                  metadata:(NSDictionary *)metadata
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(addBodyMetric:(NSString *)metricType
+                  value:(double)value
+                  date:(NSString *)date
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(addNutritionEntry:(double)calories
+                  protein:(double)protein
+                  carbs:(double)carbs
+                  fat:(double)fat
+                  water:(double)water
+                  date:(NSString *)date
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(addSleepSession:(NSString *)inBedStart
+                  inBedEnd:(NSString *)inBedEnd
+                  asleepStart:(NSString *)asleepStart
+                  asleepEnd:(NSString *)asleepEnd
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(deleteHealthRecord:(NSString *)recordType
+                  recordId:(NSString *)recordId
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+@end

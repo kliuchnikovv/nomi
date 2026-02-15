@@ -31,6 +31,7 @@ const config = {
       '@genie/plugin-ios_calendar': path.resolve(__dirname, '../plugins/ios_calendar'),
       '@genie/plugin-ios_reminders': path.resolve(__dirname, '../plugins/ios_reminders'),
       '@genie/plugin-ios_contacts': path.resolve(__dirname, '../plugins/ios_contacts'),
+      '@genie/plugin-ios_health': path.resolve(__dirname, '../plugins/ios_health'),
     },
     // Support for TypeScript path aliases
     alias: {
@@ -49,6 +50,8 @@ const config = {
       '@genie/plugin-ios_reminders/*': path.resolve(__dirname, '../plugins/ios_reminders/*'),
       '@genie/plugin-ios_contacts': path.resolve(__dirname, '../plugins/ios_contacts'),
       '@genie/plugin-ios_contacts/*': path.resolve(__dirname, '../plugins/ios_contacts/*'),
+      '@genie/plugin-ios_health': path.resolve(__dirname, '../plugins/ios_health'),
+      '@genie/plugin-ios_health/*': path.resolve(__dirname, '../plugins/ios_health/*'),
     },
   },
   

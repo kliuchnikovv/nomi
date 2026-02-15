@@ -124,4 +124,17 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         category: 'social',
         color: '#007AFF',
     },
+    ios_health: {
+        id: 'ios_health',
+        name: 'ios_health',
+        displayName: 'Apple Health',
+        description: 'iOS native Apple Health (HealthKit) integration for health and fitness data',
+        icon: 'heart',
+        storageType: 'client',
+        supportsBackgroundTasks: false,
+        systemEventListeners: [],
+        authType: 'none',
+        category: 'health',
+        color: '#FF2D55',
+    },
 };

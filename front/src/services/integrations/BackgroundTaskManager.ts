@@ -10,7 +10,7 @@ import * as BackgroundFetch from 'expo-background-fetch';
 import { AppState, AppStateStatus } from 'react-native';
 import { integrationStorage } from './IntegrationStorage';
 import { getIntegrationMetadata } from './registry';
-import { getBackgroundTask } from '../../plugins/clientRegistry';
+import { getBackgroundTask, getRegisteredClientPluginNames } from '../../plugins/clientRegistry';
 import { registerClientPlugins } from '../../plugins/registerClientPlugins';
 
 // Типы для фоновых задач
@@ -39,47 +39,49 @@ function getBackgroundTaskForProvider(provider: string): ((integrationId: string
 export function defineAllBackgroundTasks(): void {
     console.log('[BackgroundTaskManager] Defining all background tasks at module level...');
     registerClientPlugins();
-    
-    const providers = ['gmail', 'calendar', 'github', 'ios_calendar', 'ios_reminders', 'ios_contacts'];
-    
+
+    // Get providers dynamically from registered client plugins
+    const providers = getRegisteredClientPluginNames();
+    console.log(`[BackgroundTaskManager] Found ${providers.length} registered plugins: ${providers.join(', ')}`);
+
     for (const provider of providers) {
         const taskName = getTaskName(provider);
-        
+
         if (TaskManager.isTaskDefined(taskName)) {
             console.log(`[BackgroundTaskManager] Task ${taskName} already defined, skipping`);
             continue;
         }
-        
+
         TaskManager.defineTask(taskName, async ({ data: _data, error }: any) => {
             if (error) {
                 console.error(`[BackgroundTaskManager] Background task error for ${provider}:`, error);
                 return;
             }
-            
+
             try {
                 console.log(`[BackgroundTaskManager] Executing background task for ${provider}`);
-                
+
                 const config = activeTasks.get(provider);
                 if (!config) {
                     console.warn(`[BackgroundTaskManager] No active config for ${provider}, skipping...`);
                     return;
                 }
-                
+
                 const taskFunction = getBackgroundTaskForProvider(provider);
                 if (!taskFunction) {
                     console.warn(`[BackgroundTaskManager] No background task function for ${provider}`);
                     return;
                 }
-                
+
                 await taskFunction(config.integrationId);
             } catch (err) {
                 console.error(`[BackgroundTaskManager] Background task failed for ${provider}:`, err);
             }
         });
-        
+
         console.log(`[BackgroundTaskManager] Defined background task: ${taskName}`);
     }
-    
+
     console.log('[BackgroundTaskManager] All background tasks defined');
 }
 
