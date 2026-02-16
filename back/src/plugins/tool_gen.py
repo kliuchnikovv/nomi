@@ -11,11 +11,34 @@ from agno.tools import Function
 logger = logging.getLogger(__name__)
 
 
-def _build_parameters_schema(params: list[dict[str, Any]]) -> dict[str, Any]:
-    """Build JSON Schema for tool parameters from manifest params."""
+def _build_parameters_schema(params: list[dict[str, Any]] | dict[str, Any] | None) -> dict[str, Any] | None:
+    """
+    Build JSON Schema for tool parameters from manifest params.
+    Supports two formats:
+    1. List of param definitions: [{"name": "x", "type": "string", ...}]
+    2. Ready JSON Schema: {"type": "object", "properties": {...}, "required": [...]}
+    
+    Returns None if params are empty or have no properties.
+    """
+    if params is None:
+        return None
+    
+    # If params is already a JSON Schema (has "type" and "properties")
+    if isinstance(params, dict) and "type" in params and "properties" in params:
+        # Return None if properties dict is empty
+        properties = params.get("properties")
+        if not properties or (isinstance(properties, dict) and len(properties) == 0):
+            return None
+        return params
+    
+    # Otherwise, build JSON Schema from list of param definitions
+    if not isinstance(params, list):
+        logger.warning("Unexpected params type: %s", type(params))
+        return None
+    
     properties = {}
     required = []
-    for p in params or []:
+    for p in params:
         name = p.get("name")
         if not name:
             continue
@@ -28,6 +51,10 @@ def _build_parameters_schema(params: list[dict[str, Any]]) -> dict[str, Any]:
         properties[name] = prop
         if p.get("required", True):
             required.append(name)
+    
+    if not properties:
+        return None
+    
     return {"type": "object", "properties": properties, "required": required}
 
 
@@ -55,7 +82,7 @@ def build_client_proxy_tools(
                 m.get("description")
                 or f"Call {name}.{method_name} on the user's device"
             )
-            params_schema = _build_parameters_schema(m.get("params") or [])
+            params_schema = _build_parameters_schema(m.get("parameters"))
 
             def _make_proxy(plugin: str, method: str, runner: Any):
                 async def _proxy(**kwargs: Any) -> str:
@@ -94,14 +121,16 @@ def build_client_proxy_tools(
 
             fn = _make_proxy(name, method_name, client_runner)
             try:
-                tool = Function(
-                    name=tool_name,
-                    description=description,
-                    entrypoint=fn,
-                    parameters=params_schema
-                    if params_schema.get("properties")
-                    else None,
-                )
+                # Create Function - only pass parameters if schema exists
+                tool_kwargs = {
+                    "name": tool_name,
+                    "description": description,
+                    "entrypoint": fn,
+                }
+                if params_schema:
+                    tool_kwargs["parameters"] = params_schema
+                
+                tool = Function(**tool_kwargs)
                 tools.append(tool)
                 logger.debug("Added client proxy tool: %s", tool_name)
             except Exception as e:
