@@ -1,5 +1,4 @@
-//
-//  IOSRemindersManager.swift
+//  IOSRemindersManager.swift (clean version - without Date extension duplicates)
 //  Genie
 //
 //  iOS Reminders Manager for EventKit integration
@@ -38,7 +37,7 @@ class IOSRemindersManager: NSObject {
     }
 
     @objc
-    func getReminders(_ list: String, _ isCompleted: Bool?, _ dueDateStart: String?, _ dueDateEnd: String?, _ limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getReminders(_ list: String, isCompleted: NSNumber?, dueDateStart: String?, dueDateEnd: String?, limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard EKEventStore.authorizationStatus(for: .reminder) == .authorized else {
             reject("PERMISSION_DENIED", "Reminders access not authorized", nil)
             return
@@ -53,9 +52,10 @@ class IOSRemindersManager: NSObject {
 
             var result: [[String: Any]] = []
             let dateFormatter = ISO8601DateFormatter()
+            let isCompletedBool = isCompleted?.boolValue
 
             for reminder in reminders where result.count < limit {
-                if let isCompleted = isCompleted, reminder.isCompleted != isCompleted {
+                if let isCompletedBool = isCompletedBool, reminder.isCompleted != isCompletedBool {
                     continue
                 }
                 if !list.isEmpty, let calendar = reminder.calendar, calendar.calendarIdentifier != list {
@@ -80,23 +80,30 @@ class IOSRemindersManager: NSObject {
                     "id": reminder.calendarItemIdentifier,
                     "title": reminder.title ?? "",
                     "isCompleted": reminder.isCompleted,
-                    "priority": reminder.priority.rawValue,
-                    "creationDate": reminder.creationDate.iso8601String
+                    "priority": reminder.priority
                 ]
+
+                if let creationDate = reminder.creationDate {
+                    reminderData["creationDate"] = creationDate.iso8601String
+                }
 
                 if let notes = reminder.notes {
                     reminderData["notes"] = notes
                 }
+
                 if let dueDateComponents = reminder.dueDateComponents,
                    let dueDate = dueDateComponents.date {
                     reminderData["dueDate"] = dueDate.iso8601String
                 }
+
                 if let calendar = reminder.calendar {
                     reminderData["list"] = calendar.calendarIdentifier
                 }
+
                 if let url = reminder.url {
                     reminderData["url"] = url.absoluteString
                 }
+
                 if let completionDate = reminder.completionDate {
                     reminderData["completionDate"] = completionDate.iso8601String
                 }
@@ -122,18 +129,22 @@ class IOSRemindersManager: NSObject {
         if let notes = options["notes"] as? String {
             reminder.notes = notes
         }
+
         if let dueDateString = options["dueDate"] as? String {
             let dateFormatter = ISO8601DateFormatter()
             if let dueDate = dateFormatter.date(from: dueDateString) {
                 reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
             }
         }
+
         if let priority = options["priority"] as? Int {
             reminder.priority = priority
         }
+
         if let urlString = options["url"] as? String, let url = URL(string: urlString) {
             reminder.url = url
         }
+
         if let calendarId = options["list"] as? String,
            let calendar = eventStore.calendar(withIdentifier: calendarId) {
             reminder.calendar = calendar
@@ -141,12 +152,13 @@ class IOSRemindersManager: NSObject {
 
         do {
             try eventStore.save(reminder, commit: true)
-            resolve([
+            let result: [String: Any] = [
                 "id": reminder.calendarItemIdentifier,
                 "title": reminder.title ?? "",
                 "isCompleted": reminder.isCompleted,
-                "priority": reminder.priority.rawValue
-            ])
+                "priority": reminder.priority
+            ]
+            resolve(result)
         } catch {
             reject("CREATE_FAILED", "Failed to create reminder", error)
         }
@@ -167,36 +179,42 @@ class IOSRemindersManager: NSObject {
         if let title = updates["title"] as? String {
             reminder.title = title
         }
+
         if let notes = updates["notes"] as? String {
             reminder.notes = notes
         }
+
         if let dueDateString = updates["dueDate"] as? String {
             let dateFormatter = ISO8601DateFormatter()
             if let dueDate = dateFormatter.date(from: dueDateString) {
                 reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
             }
         }
+
         if let isCompleted = updates["isCompleted"] as? Bool {
             reminder.isCompleted = isCompleted
             if isCompleted {
                 reminder.completionDate = Date()
             }
         }
+
         if let priority = updates["priority"] as? Int {
             reminder.priority = priority
         }
+
         if let urlString = updates["url"] as? String, let url = URL(string: urlString) {
             reminder.url = url
         }
 
         do {
             try eventStore.save(reminder, commit: true)
-            resolve([
+            let result: [String: Any] = [
                 "id": reminder.calendarItemIdentifier,
                 "title": reminder.title ?? "",
                 "isCompleted": reminder.isCompleted,
-                "priority": reminder.priority.rawValue
-            ])
+                "priority": reminder.priority
+            ]
+            resolve(result)
         } catch {
             reject("UPDATE_FAILED", "Failed to update reminder", error)
         }
@@ -236,12 +254,15 @@ class IOSRemindersManager: NSObject {
                 "title": calendar.title,
                 "type": calendar.type.rawValue
             ]
-            if let cgColor = calendar.cgColor {
+
+            if let cgColor = calendar.cgColor,
+               let components = cgColor.components, components.count >= 3 {
                 calendarData["color"] = String(format: "#%02X%02X%02X",
-                    Int(cgColor.components[0] * 255),
-                    Int(cgColor.components[1] * 255),
-                    Int(cgColor.components[2] * 255))
+                    Int(components[0]) * 255,
+                    Int(components[1]) * 255,
+                    Int(components[2]) * 255)
             }
+
             return calendarData
         }
 
@@ -287,19 +308,5 @@ class IOSRemindersManager: NSObject {
     @objc
     static func requiresMainQueueSetup() -> Bool {
         return false
-    }
-}
-
-extension DateComponents {
-    var date: Date? {
-        guard let year = year,
-              let month = month else {
-            return nil
-        }
-        var components = self
-        components.hour = components.hour ?? 0
-        components.minute = components.minute ?? 0
-        components.second = components.second ?? 0
-        return Calendar.current.date(from: components)
     }
 }

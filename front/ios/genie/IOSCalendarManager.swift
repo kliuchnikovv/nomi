@@ -61,7 +61,7 @@ class IOSCalendarManager: NSObject {
                 "start": event.startDate.iso8601String,
                 "end": event.endDate.iso8601String,
                 "allDay": event.isAllDay,
-                "status": event.status?.rawValue ?? 0
+                "status": event.status.rawValue
             ]
 
             if let location = event.location {
@@ -121,13 +121,14 @@ class IOSCalendarManager: NSObject {
 
         do {
             try eventStore.save(event, span: .thisEvent)
-            resolve([
+            let result: [String: Any] = [
                 "id": event.eventIdentifier,
                 "title": event.title ?? "",
                 "start": event.startDate.iso8601String,
                 "end": event.endDate.iso8601String,
                 "allDay": event.isAllDay
-            ])
+            ]
+            resolve(result)
         } catch {
             reject("CREATE_FAILED", "Failed to create event", error)
         }
@@ -175,13 +176,14 @@ class IOSCalendarManager: NSObject {
 
         do {
             try eventStore.save(event, span: .thisEvent)
-            resolve([
+            let result: [String: Any] = [
                 "id": event.eventIdentifier,
                 "title": event.title ?? "",
                 "start": event.startDate.iso8601String,
                 "end": event.endDate.iso8601String,
                 "allDay": event.isAllDay
-            ])
+            ]
+            resolve(result)
         } catch {
             reject("UPDATE_FAILED", "Failed to update event", error)
         }
@@ -216,22 +218,22 @@ class IOSCalendarManager: NSObject {
 
         let calendars = eventStore.calendars(for: .event)
         let result = calendars.map { calendar in
-            [
+            var calendarData: [String: Any] = [
                 "id": calendar.calendarIdentifier,
                 "title": calendar.title,
                 "type": calendar.type.rawValue,
-                "source": calendar.source.sourceIdentifier,
-                "color": calendar.cgColor.map { String(format: "#%02X%02X%02X", Int($0.components[0] * 255), Int($0.components[1] * 255), Int($0.components[2] * 255)) } ?? ""
-            ] as [String: Any]
+                "source": calendar.source.sourceIdentifier
+            ]
+            if let cgColor = calendar.cgColor,
+               let components = cgColor.components, components.count >= 3 {
+                calendarData["color"] = String(format: "#%02X%02X%02X",
+                    Int(components[0] * 255),
+                    Int(components[1] * 255),
+                    Int(components[2] * 255))
+            }
+            return calendarData
         }
 
         resolve(result)
-    }
-}
-
-extension Date {
-    var iso8601String: String {
-        let formatter = ISO8601DateFormatter()
-        return formatter.string(from: self)
     }
 }

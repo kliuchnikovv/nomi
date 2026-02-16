@@ -9,7 +9,6 @@ import Foundation
 import React
 import Contacts
 import UIKit
-import UIKit
 
 @objc(IOSContactsManager)
 class IOSContactsManager: NSObject {
@@ -121,8 +120,9 @@ class IOSContactsManager: NSObject {
         if !contact.note.isEmpty {
             dict["notes"] = contact.note
         }
-        if let url = contact.urlAddresses.first?.value as String, !url.isEmpty {
-            dict["url"] = url
+        if let urlAddress = contact.urlAddresses.first,
+           let url = urlAddress.value as? URL, !url.absoluteString.isEmpty {
+            dict["url"] = url.absoluteString
         }
         if let birthday = contact.birthday, let date = birthday.date {
             dict["birthday"] = date.iso8601String
@@ -253,7 +253,7 @@ class IOSContactsManager: NSObject {
                 contact.note = notes
             }
             if let urlString = contactData["url"] as? String, let url = URL(string: urlString) {
-                contact.urlAddresses = [CNLabeledValue(label: CNLabelOther, value: url as NSString)]
+                contact.urlAddresses = [CNLabeledValue(label: CNLabelOther, value: url.absoluteString as NSString)]
             }
 
             if let phoneNumbers = contactData["phoneNumbers"] as? [[String: Any]] {
@@ -361,7 +361,7 @@ class IOSContactsManager: NSObject {
                     mutableContact.note = notes
                 }
                 if let urlString = updates["url"] as? String, let url = URL(string: urlString) {
-                    mutableContact.urlAddresses = [CNLabeledValue(label: CNLabelOther, value: url as NSString)]
+                    mutableContact.urlAddresses = [CNLabeledValue(label: CNLabelOther, value: url.absoluteString as NSString)]
                 }
 
                 if let phoneNumbers = updates["phoneNumbers"] as? [[String: Any]] {
@@ -458,14 +458,7 @@ class IOSContactsManager: NSObject {
                 resolve(result)
             } catch {
                 reject("FETCH_FAILED", "Failed to fetch groups", error)
+                }
             }
         }
-    }
-}
-
-extension Date {
-    var iso8601String: String {
-        let formatter = ISO8601DateFormatter()
-        return formatter.string(from: self)
-    }
 }

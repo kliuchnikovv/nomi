@@ -17,6 +17,7 @@ import { getStyles } from '../styles';
 import { CONNECTORS, Connector } from '../models';
 import { getIntegrationMetadata } from '../../../../services/integrations/registry';
 import { IOSRemindersClient } from '../../../../services/integrations/clients/IOSRemindersClient';
+import { IOSHealthClient } from '../../../../services/integrations/clients/IOSHealthClient';
 
 export function BrowserTab() {
     const { integrations, startOAuth, toggleTool, getIntegrations, connectTelegram } = useConnectors();
@@ -103,6 +104,47 @@ export function BrowserTab() {
                         return;
                     }
                     // If 'authorized', continue to enable the integration
+                }
+
+                // Special handling for ios_health: request permission before enabling (iOS only)
+                if (connector.id === 'ios_health' && Platform.OS === 'ios') {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/settings/connectors/tabs/BrowserTab.tsx:111',message:'Attempting to enable ios_health',data:{connectorId:connector.id,platformOS:Platform.OS},timestamp:Date.now()})}).catch(()=>{});
+                    // #endregion
+                    const healthClient = new IOSHealthClient();
+
+                    // Check current permission status
+                    const status = await healthClient.checkPermissionStatus();
+
+                    if (!status.available) {
+                        setErrorMsg('HealthKit is not available on this device.');
+                        return;
+                    }
+
+                    // Request permissions for all categories
+                    const allCategories: Array<'activity' | 'heart' | 'sleep' | 'body' | 'nutrition' | 'workouts'> = [
+                        'activity',
+                        'heart',
+                        'sleep',
+                        'body',
+                        'nutrition',
+                        'workouts'
+                    ];
+
+                    try {
+                        const result = await healthClient.requestPermission(allCategories);
+
+                        if (!result.granted) {
+                            setErrorMsg('Health data access was denied. Please enable it in Settings.');
+                            return;
+                        }
+
+                        // If granted, continue to enable the integration
+                    } catch (err) {
+                        console.error('[BrowserTab] Failed to request health permissions', err);
+                        setErrorMsg('Failed to request health permissions. Please try again.');
+                        return;
+                    }
                 }
 
                 await toggleTool(connector.id, true);

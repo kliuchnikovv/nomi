@@ -98,14 +98,25 @@ export interface WeeklySummary {
 }
 
 class IOSHealthClient {
+    // #region agent log
     private ensureAvailable(): void {
+        // Hypothesis B: Check if NativeModule is registered
+        const hasModule = !!IOSHealthManager;
+        const platformOS = Platform.OS;
+        const nativeModulesKeys = Object.keys(NativeModules);
+        const hasHealthModuleInRegistry = nativeModulesKeys.includes('IOSHealthManager');
+
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/integrations/clients/IOSHealthClient.ts:103',message:'IOSHealthManager availability check',data:{hasModule,platformOS,hasHealthModuleInRegistry,nativeModulesKeys:nativeModulesKeys.slice(0,20)},timestamp:Date.now()})}).catch(()=>{});
+
         if (!IOSHealthManager) {
+            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/integrations/clients/IOSHealthClient.ts:103',message:'IOSHealthManager module NOT FOUND',data:{hasModule,platformOS,nativeModulesKeys:nativeModulesKeys.slice(0,20)},timestamp:Date.now()})}).catch(()=>{});
             throw new Error('IOSHealthManager is not available. Make sure iOS native module is properly linked.');
         }
         if (Platform.OS !== 'ios') {
             throw new Error('Apple Health is only available on iOS devices.');
         }
     }
+    // #endregion
 
     // MARK: - Permission Management
 

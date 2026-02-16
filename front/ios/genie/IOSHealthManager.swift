@@ -476,16 +476,16 @@ class IOSHealthManager: NSObject {
             }
         }
 
-        let asleepStart = asleepSamples.first?.startDate
-        let asleepEnd = asleepSamples.last?.endDate
+        let asleepStart: Date? = asleepSamples.first?.startDate
+        let asleepEnd: Date? = asleepSamples.last?.endDate
 
         let duration = inBedEnd.timeIntervalSince(inBedStart) / 3600.0 // hours
 
-        var session: [String: Any] = [
+        var session: [String: String] = [
             "date": firstSample.startDate.iso8601String.components(separatedBy: "T")[0],
             "inBedStart": inBedStart.iso8601String,
             "inBedEnd": inBedEnd.iso8601String,
-            "duration": duration
+            "duration": String(duration)
         ]
 
         if let asleepStart = asleepStart {
@@ -1181,10 +1181,3 @@ class IOSHealthManager: NSObject {
     }
 }
 
-// MARK: - Date Extension
-
-extension Date {
-    var iso8601String: String {
-        return ISO8601DateFormatter().string(from: self)
-    }
-}
