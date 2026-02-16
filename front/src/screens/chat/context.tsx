@@ -538,16 +538,20 @@ export function ChatProvider({
 
             const result = await clientToolExecutor.execute({ tool, method, params: params || {} });
 
+            console.log('[ChatContext] ✅ Tool executed successfully, result:', result?.substring(0, 200));
+            console.log('[ChatContext] callId present?', !!callId, 'callId=', callId);
+
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/chat/context.tsx:539',message:'Client tool execution completed',data:{tool,method,resultLength:result?.length},timestamp:Date.now()})}).catch(()=>{});
+            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/chat/context.tsx:539',message:'Client tool execution completed',data:{tool,method,resultLength:result?.length,callId,hasCallId:!!callId},timestamp:Date.now()})}).catch(()=>{});
             // #endregion
 
             if (callId) {
+                console.log('[ChatContext] 📤 Sending result to server via REST API...');
                 const { sendClientToolResult } = await import('../../apiClient');
                 await sendClientToolResult(activeChatID, callId, result);
-                console.log('[ChatContext] Round-trip: sent client tool result for call_id=', callId);
+                console.log('[ChatContext] ✅ Round-trip: sent client tool result for call_id=', callId);
             } else {
-                console.log('[ChatContext] Action executed, sending result as system message');
+                console.log('[ChatContext] ⚠️ No callId, sending result as system message');
                 await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`, [], false, undefined, 'system');
             }
         } catch (error: any) {

@@ -14,6 +14,22 @@ class IOSHealthManager: NSObject {
 
     private let healthStore = HKHealthStore()
 
+    // Helper to parse ISO8601 dates with or without timezone
+    private func parseDate(_ dateString: String) -> Date? {
+        // Try with timezone first (e.g., "2026-02-16T00:00:00Z")
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: dateString) {
+            return date
+        }
+
+        // Try without timezone, assume UTC (e.g., "2026-02-16T00:00:00")
+        if let date = formatter.date(from: dateString + "Z") {
+            return date
+        }
+
+        return nil
+    }
+
     // HealthKit type definitions
     private lazy var activityTypes: Set<HKQuantityType> = {
         var types = Set<HKQuantityType>()
@@ -185,17 +201,22 @@ class IOSHealthManager: NSObject {
 
     @objc
     func getSteps(_ startDate: String, endDate: String, interval: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        print("[IOSHealthManager] getSteps called: \(startDate) to \(endDate), interval: \(interval)")
+
         guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+            print("[IOSHealthManager] ERROR: Step count type not available")
             reject("TYPE_ERROR", "Step count type not available", nil)
             return
         }
 
-        guard let start = ISO8601DateFormatter().date(from: startDate),
-              let end = ISO8601DateFormatter().date(from: endDate) else {
+        guard let start = parseDate(startDate),
+              let end = parseDate(endDate) else {
+            print("[IOSHealthManager] ERROR: Invalid date format - startDate=\(startDate), endDate=\(endDate)")
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
 
+        print("[IOSHealthManager] Executing HealthKit query for steps...")
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
 
         let query = HKStatisticsCollectionQuery(
@@ -207,15 +228,24 @@ class IOSHealthManager: NSObject {
         )
 
         query.initialResultsHandler = { query, results, error in
-            guard let results = results else {
-                reject("QUERY_ERROR", error?.localizedDescription ?? "Failed to fetch steps", error)
+            if let error = error {
+                print("[IOSHealthManager] HealthKit query error: \(error.localizedDescription)")
+                reject("QUERY_ERROR", error.localizedDescription, error)
                 return
             }
 
+            guard let results = results else {
+                print("[IOSHealthManager] ERROR: No results returned from HealthKit")
+                reject("QUERY_ERROR", "Failed to fetch steps", nil)
+                return
+            }
+
+            print("[IOSHealthManager] HealthKit query successful, processing results...")
             var stepsData: [[String: Any]] = []
             results.enumerateStatistics(from: start, to: end) { statistics, _ in
                 if let sum = statistics.sumQuantity() {
                     let steps = sum.doubleValue(for: HKUnit.count())
+                    print("[IOSHealthManager] Found steps: \(steps) for date: \(statistics.startDate)")
                     stepsData.append([
                         "date": statistics.startDate.iso8601String,
                         "value": steps,
@@ -224,6 +254,7 @@ class IOSHealthManager: NSObject {
                 }
             }
 
+            print("[IOSHealthManager] Returning \(stepsData.count) step entries")
             resolve(stepsData)
         }
 
@@ -232,8 +263,8 @@ class IOSHealthManager: NSObject {
 
     @objc
     func getActivitySummary(_ startDate: String, endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard let start = ISO8601DateFormatter().date(from: startDate),
-              let end = ISO8601DateFormatter().date(from: endDate) else {
+        guard let start = parseDate(startDate),
+              let end = parseDate(endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -319,8 +350,8 @@ class IOSHealthManager: NSObject {
             return
         }
 
-        guard let start = ISO8601DateFormatter().date(from: startDate),
-              let end = ISO8601DateFormatter().date(from: endDate) else {
+        guard let start = parseDate(startDate),
+              let end = parseDate(endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -356,8 +387,8 @@ class IOSHealthManager: NSObject {
             return
         }
 
-        guard let start = ISO8601DateFormatter().date(from: startDate),
-              let end = ISO8601DateFormatter().date(from: endDate) else {
+        guard let start = parseDate(startDate),
+              let end = parseDate(endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -395,8 +426,8 @@ class IOSHealthManager: NSObject {
             return
         }
 
-        guard let start = ISO8601DateFormatter().date(from: startDate),
-              let end = ISO8601DateFormatter().date(from: endDate) else {
+        guard let start = parseDate(startDate),
+              let end = parseDate(endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -487,8 +518,8 @@ class IOSHealthManager: NSObject {
             return
         }
 
-        guard let start = ISO8601DateFormatter().date(from: startDate),
-              let end = ISO8601DateFormatter().date(from: endDate) else {
+        guard let start = parseDate(startDate),
+              let end = parseDate(endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -547,8 +578,8 @@ class IOSHealthManager: NSObject {
 
     @objc
     func getNutritionSummary(_ startDate: String, endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard let start = ISO8601DateFormatter().date(from: startDate),
-              let end = ISO8601DateFormatter().date(from: endDate) else {
+        guard let start = parseDate(startDate),
+              let end = parseDate(endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -619,8 +650,8 @@ class IOSHealthManager: NSObject {
 
     @objc
     func getWorkouts(_ startDate: String, endDate: String, workoutType: String, limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard let start = ISO8601DateFormatter().date(from: startDate),
-              let end = ISO8601DateFormatter().date(from: endDate) else {
+        guard let start = parseDate(startDate),
+              let end = parseDate(endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -671,7 +702,7 @@ class IOSHealthManager: NSObject {
 
     @objc
     func getDailySummary(_ date: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard let targetDate = ISO8601DateFormatter().date(from: date) else {
+        guard let targetDate = parseDate(date) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -768,7 +799,7 @@ class IOSHealthManager: NSObject {
 
     @objc
     func getWeeklySummary(_ startDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard let start = ISO8601DateFormatter().date(from: startDate) else {
+        guard let start = parseDate(startDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -809,7 +840,7 @@ class IOSHealthManager: NSObject {
 
     @objc
     func addWorkout(_ type: String, start: String, duration: Double, calories: Double, distance: Double, metadata: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard let startDate = ISO8601DateFormatter().date(from: start) else {
+        guard let startDate = parseDate(start) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -847,7 +878,7 @@ class IOSHealthManager: NSObject {
             return
         }
 
-        guard let sampleDate = ISO8601DateFormatter().date(from: date) else {
+        guard let sampleDate = parseDate(date) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }
@@ -867,7 +898,7 @@ class IOSHealthManager: NSObject {
 
     @objc
     func addNutritionEntry(_ calories: Double, protein: Double, carbs: Double, fat: Double, water: Double, date: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard let sampleDate = ISO8601DateFormatter().date(from: date) else {
+        guard let sampleDate = parseDate(date) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
         }

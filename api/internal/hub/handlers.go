@@ -20,6 +20,7 @@ var payloadHandlers = map[PayloadType]PayloadHandler{
 	PayloadTypeMetadata:       handleMetadataPayload,
 	PayloadTypeActions:        handleActionsPayload,
 	PayloadTypeChatUpdate:     handleChatUpdatePayload,
+	PayloadTypeClientAction:   handleClientActionPayload,
 	// Error handling is usually done at the top level, but we can have a payload handler too
 }
 
@@ -143,5 +144,13 @@ func handleChatUpdatePayload(r *Room, data []byte) error {
 	// Logic to update chat title
 	r.logger.Info("Chat update received", zap.String("message", p.Message))
 	// Implement chat title update if needed, similar to old logic
+	return nil
+}
+
+func handleClientActionPayload(r *Room, data []byte) error {
+	// client_action payloads are sent to mobile clients for execution
+	// They don't need to be persisted to the database
+	// Just return nil to avoid "unknown payload type" error
+	r.logger.Debug("client_action payload received (not persisted)")
 	return nil
 }
