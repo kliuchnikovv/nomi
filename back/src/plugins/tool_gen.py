@@ -27,15 +27,19 @@ def _build_parameters_schema(params: list[dict[str, Any]] | dict[str, Any] | Non
     # If params is already a JSON Schema (has "type" and "properties")
     if isinstance(params, dict) and "type" in params and "properties" in params:
         # Check if properties dict is empty
-        properties = params.get("properties")
+        properties = params.get("properties", {})
         if not properties or (isinstance(properties, dict) and len(properties) == 0):
             # Return None - this ensures Function gets no parameters field
             return None
-        
-        # Build schema - exclude 'required' if empty (Gemini API validation fix)
+
+        # Build schema - only include 'required' if it exists and all fields are valid
         required = params.get("required", [])
+        if required:
+            # Validate that all required fields exist in properties
+            required = [r for r in required if r in properties]
+
         schema = {"type": params["type"], "properties": properties}
-        if required and len(required) > 0:
+        if required:  # Only add 'required' if non-empty after validation
             schema["required"] = required
         return schema
     
