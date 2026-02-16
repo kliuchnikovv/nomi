@@ -98,6 +98,26 @@ export interface WeeklySummary {
 }
 
 class IOSHealthClient {
+    /**
+     * Helper method to handle permission errors and auto-request permissions
+     */
+    private async handlePermissionError<T>(
+        error: any,
+        categories: HealthCategory[],
+        retryFn: () => Promise<T>
+    ): Promise<T> {
+        if (error?.code === 'PERMISSION_DENIED') {
+            console.log(`[IOSHealthClient] Permission denied, requesting permissions for: ${categories.join(', ')}`);
+            const permissionResult = await this.requestPermission(categories);
+            if (permissionResult.granted) {
+                console.log('[IOSHealthClient] Permissions granted, retrying operation...');
+                return await retryFn();
+            }
+            throw new Error(`HealthKit permission was denied by user. Please grant access in Settings → Privacy → Health → genie`);
+        }
+        throw error;
+    }
+
     // #region agent log
     private ensureAvailable(): void {
         // Hypothesis B: Check if NativeModule is registered
@@ -155,12 +175,34 @@ class IOSHealthClient {
      */
     async getSteps(startDate: string, endDate: string, interval: IntervalType = 'day'): Promise<StepData[]> {
         this.ensureAvailable();
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/integrations/clients/IOSHealthClient.ts:157',message:'getSteps called',data:{startDate,endDate,interval},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+
         try {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/integrations/clients/IOSHealthClient.ts:163',message:'Calling IOSHealthManager.getSteps',data:{startDate,endDate,interval},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+
             const steps: StepData[] = await IOSHealthManager.getSteps(startDate, endDate, interval);
+
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/integrations/clients/IOSHealthClient.ts:169',message:'IOSHealthManager.getSteps returned',data:{stepsCount:steps?.length,steps:steps?.slice(0,2)},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+
             return steps;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getSteps error:', error);
-            throw error;
+
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/integrations/clients/IOSHealthClient.ts:176',message:'getSteps error',data:{error:String(error),errorMessage:error?.message},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+
+            // If permission denied, request permission and retry
+            return await this.handlePermissionError(error, ['activity'], () =>
+                IOSHealthManager.getSteps(startDate, endDate, interval)
+            );
         }
     }
 
@@ -172,9 +214,11 @@ class IOSHealthClient {
         try {
             const summary: ActivitySummary = await IOSHealthManager.getActivitySummary(startDate, endDate);
             return summary;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getActivitySummary error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['activity'], () =>
+                IOSHealthManager.getActivitySummary(startDate, endDate)
+            );
         }
     }
 
@@ -188,9 +232,11 @@ class IOSHealthClient {
         try {
             const heartRates: HeartRateMeasurement[] = await IOSHealthManager.getHeartRate(startDate, endDate, limit);
             return heartRates;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getHeartRate error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['heart'], () =>
+                IOSHealthManager.getHeartRate(startDate, endDate, limit)
+            );
         }
     }
 
@@ -202,9 +248,11 @@ class IOSHealthClient {
         try {
             const restingHR: HeartRateMeasurement[] = await IOSHealthManager.getRestingHeartRate(startDate, endDate);
             return restingHR;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getRestingHeartRate error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['heart'], () =>
+                IOSHealthManager.getRestingHeartRate(startDate, endDate)
+            );
         }
     }
 
@@ -218,9 +266,11 @@ class IOSHealthClient {
         try {
             const sleepData: SleepAnalysis[] = await IOSHealthManager.getSleepAnalysis(startDate, endDate);
             return sleepData;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getSleepAnalysis error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['sleep'], () =>
+                IOSHealthManager.getSleepAnalysis(startDate, endDate)
+            );
         }
     }
 
@@ -234,9 +284,11 @@ class IOSHealthClient {
         try {
             const metrics: BodyMetric[] = await IOSHealthManager.getBodyMetrics(metricType, startDate, endDate);
             return metrics;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getBodyMetrics error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['body'], () =>
+                IOSHealthManager.getBodyMetrics(metricType, startDate, endDate)
+            );
         }
     }
 
@@ -248,9 +300,11 @@ class IOSHealthClient {
         try {
             const metric: BodyMetric = await IOSHealthManager.getLatestBodyMetric(metricType);
             return metric;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getLatestBodyMetric error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['body'], () =>
+                IOSHealthManager.getLatestBodyMetric(metricType)
+            );
         }
     }
 
@@ -264,9 +318,11 @@ class IOSHealthClient {
         try {
             const summary: NutritionSummary = await IOSHealthManager.getNutritionSummary(startDate, endDate);
             return summary;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getNutritionSummary error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['nutrition'], () =>
+                IOSHealthManager.getNutritionSummary(startDate, endDate)
+            );
         }
     }
 
@@ -285,9 +341,11 @@ class IOSHealthClient {
                 limit
             );
             return workouts;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getWorkouts error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['workouts'], () =>
+                IOSHealthManager.getWorkouts(startDate, endDate, workoutType || '', limit)
+            );
         }
     }
 
@@ -301,9 +359,12 @@ class IOSHealthClient {
         try {
             const summary: DailySummary = await IOSHealthManager.getDailySummary(date);
             return summary;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getDailySummary error:', error);
-            throw error;
+            // Daily summary needs all categories
+            return await this.handlePermissionError(error, ['activity', 'heart', 'sleep', 'workouts'], () =>
+                IOSHealthManager.getDailySummary(date)
+            );
         }
     }
 
@@ -315,9 +376,12 @@ class IOSHealthClient {
         try {
             const summary: WeeklySummary = await IOSHealthManager.getWeeklySummary(startDate);
             return summary;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] getWeeklySummary error:', error);
-            throw error;
+            // Weekly summary needs all categories
+            return await this.handlePermissionError(error, ['activity', 'heart', 'sleep', 'workouts'], () =>
+                IOSHealthManager.getWeeklySummary(startDate)
+            );
         }
     }
 
@@ -338,9 +402,11 @@ class IOSHealthClient {
         try {
             const result = await IOSHealthManager.addWorkout(type, start, duration, calories, distance, metadata);
             return result;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] addWorkout error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['workouts'], () =>
+                IOSHealthManager.addWorkout(type, start, duration, calories, distance, metadata)
+            );
         }
     }
 
@@ -352,9 +418,11 @@ class IOSHealthClient {
         try {
             const result = await IOSHealthManager.addBodyMetric(metricType, value, date);
             return result;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] addBodyMetric error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['body'], () =>
+                IOSHealthManager.addBodyMetric(metricType, value, date)
+            );
         }
     }
 
@@ -373,9 +441,11 @@ class IOSHealthClient {
         try {
             const result = await IOSHealthManager.addNutritionEntry(calories, protein, carbs, fat, water, date);
             return result;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] addNutritionEntry error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['nutrition'], () =>
+                IOSHealthManager.addNutritionEntry(calories, protein, carbs, fat, water, date)
+            );
         }
     }
 
@@ -392,9 +462,11 @@ class IOSHealthClient {
         try {
             const result = await IOSHealthManager.addSleepSession(inBedStart, inBedEnd, asleepStart, asleepEnd);
             return result;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] addSleepSession error:', error);
-            throw error;
+            return await this.handlePermissionError(error, ['sleep'], () =>
+                IOSHealthManager.addSleepSession(inBedStart, inBedEnd, asleepStart, asleepEnd)
+            );
         }
     }
 
@@ -406,9 +478,19 @@ class IOSHealthClient {
         try {
             const result = await IOSHealthManager.deleteHealthRecord(recordType, recordId);
             return result;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[IOSHealthClient] deleteHealthRecord error:', error);
-            throw error;
+            // Delete requires the same permissions as the record type being deleted
+            const categoryMap: Record<string, HealthCategory[]> = {
+                'workout': ['workouts'],
+                'body_metric': ['body'],
+                'nutrition': ['nutrition'],
+                'sleep': ['sleep']
+            };
+            const categories = categoryMap[recordType] || ['activity'];
+            return await this.handlePermissionError(error, categories, () =>
+                IOSHealthManager.deleteHealthRecord(recordType, recordId)
+            );
         }
     }
 

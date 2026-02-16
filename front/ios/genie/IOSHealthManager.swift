@@ -184,14 +184,9 @@ class IOSHealthManager: NSObject {
     // MARK: - Activity Queries
 
     @objc
-    func getSteps(_ startDate: String, _ endDate: String, _ interval: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getSteps(_ startDate: String, endDate: String, interval: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
             reject("TYPE_ERROR", "Step count type not available", nil)
-            return
-        }
-
-        guard healthStore.authorizationStatus(for: stepType) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "Steps access not authorized", nil)
             return
         }
 
@@ -236,7 +231,7 @@ class IOSHealthManager: NSObject {
     }
 
     @objc
-    func getActivitySummary(_ startDate: String, _ endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getActivitySummary(_ startDate: String, endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let start = ISO8601DateFormatter().date(from: startDate),
               let end = ISO8601DateFormatter().date(from: endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
@@ -318,14 +313,9 @@ class IOSHealthManager: NSObject {
     // MARK: - Heart Queries
 
     @objc
-    func getHeartRate(_ startDate: String, _ endDate: String, _ limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getHeartRate(_ startDate: String, endDate: String, limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
             reject("TYPE_ERROR", "Heart rate type not available", nil)
-            return
-        }
-
-        guard healthStore.authorizationStatus(for: heartRateType) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "Heart rate access not authorized", nil)
             return
         }
 
@@ -360,14 +350,9 @@ class IOSHealthManager: NSObject {
     }
 
     @objc
-    func getRestingHeartRate(_ startDate: String, _ endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getRestingHeartRate(_ startDate: String, endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let restingHRType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) else {
             reject("TYPE_ERROR", "Resting heart rate type not available", nil)
-            return
-        }
-
-        guard healthStore.authorizationStatus(for: restingHRType) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "Resting heart rate access not authorized", nil)
             return
         }
 
@@ -404,14 +389,9 @@ class IOSHealthManager: NSObject {
     // MARK: - Sleep Analysis
 
     @objc
-    func getSleepAnalysis(_ startDate: String, _ endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getSleepAnalysis(_ startDate: String, endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
             reject("TYPE_ERROR", "Sleep analysis type not available", nil)
-            return
-        }
-
-        guard healthStore.authorizationStatus(for: sleepType) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "Sleep analysis access not authorized", nil)
             return
         }
 
@@ -501,14 +481,9 @@ class IOSHealthManager: NSObject {
     // MARK: - Body Metrics
 
     @objc
-    func getBodyMetrics(_ metricType: String, _ startDate: String, _ endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getBodyMetrics(_ metricType: String, startDate: String, endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let quantityType = bodyMetricType(for: metricType) else {
             reject("TYPE_ERROR", "Invalid metric type: \(metricType)", nil)
-            return
-        }
-
-        guard healthStore.authorizationStatus(for: quantityType) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "\(metricType) access not authorized", nil)
             return
         }
 
@@ -549,11 +524,6 @@ class IOSHealthManager: NSObject {
             return
         }
 
-        guard healthStore.authorizationStatus(for: quantityType) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "\(metricType) access not authorized", nil)
-            return
-        }
-
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
         let query = HKSampleQuery(sampleType: quantityType, predicate: nil, limit: 1, sortDescriptors: [sortDescriptor]) { query, samples, error in
@@ -576,7 +546,7 @@ class IOSHealthManager: NSObject {
     // MARK: - Nutrition
 
     @objc
-    func getNutritionSummary(_ startDate: String, _ endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getNutritionSummary(_ startDate: String, endDate: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let start = ISO8601DateFormatter().date(from: startDate),
               let end = ISO8601DateFormatter().date(from: endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
@@ -648,12 +618,7 @@ class IOSHealthManager: NSObject {
     // MARK: - Workouts
 
     @objc
-    func getWorkouts(_ startDate: String, _ endDate: String, _ workoutType: String, _ limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard healthStore.authorizationStatus(for: HKWorkoutType.workoutType()) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "Workouts access not authorized", nil)
-            return
-        }
-
+    func getWorkouts(_ startDate: String, endDate: String, workoutType: String, limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let start = ISO8601DateFormatter().date(from: startDate),
               let end = ISO8601DateFormatter().date(from: endDate) else {
             reject("DATE_ERROR", "Invalid date format", nil)
@@ -720,7 +685,7 @@ class IOSHealthManager: NSObject {
 
         // Get activity summary
         group.enter()
-        getActivitySummary(startOfDay.iso8601String, endOfDay.iso8601String, resolve: { activityData in
+        getActivitySummary(startOfDay.iso8601String, endDate: endOfDay.iso8601String, resolve: { activityData in
             if let activity = activityData as? [String: Double] {
                 summary["activity"] = activity
             }
@@ -731,7 +696,7 @@ class IOSHealthManager: NSObject {
 
         // Get heart data
         group.enter()
-        getHeartRate(startOfDay.iso8601String, endOfDay.iso8601String, 1000, resolve: { heartData in
+        getHeartRate(startOfDay.iso8601String, endDate: endOfDay.iso8601String, limit: 1000, resolve: { heartData in
             if let heartRates = heartData as? [[String: Any]] {
                 let values = heartRates.compactMap { $0["value"] as? Double }
                 if !values.isEmpty {
@@ -743,7 +708,7 @@ class IOSHealthManager: NSObject {
                 }
 
                 // Get resting heart rate
-                self.getRestingHeartRate(startOfDay.iso8601String, endOfDay.iso8601String, resolve: { restingData in
+              self.getRestingHeartRate(startOfDay.iso8601String, endDate: endOfDay.iso8601String, resolve: { restingData in
                     if let restingRates = restingData as? [[String: Any]],
                        let firstRate = restingRates.first,
                        let restingValue = firstRate["value"] as? Double {
@@ -765,7 +730,7 @@ class IOSHealthManager: NSObject {
 
         // Get sleep data
         group.enter()
-        getSleepAnalysis(startOfDay.iso8601String, endOfDay.iso8601String, resolve: { sleepData in
+        getSleepAnalysis(startOfDay.iso8601String, endDate: endOfDay.iso8601String, resolve: { sleepData in
             if let sleepSessions = sleepData as? [[String: Any]], let firstSession = sleepSessions.first {
                 let duration = firstSession["duration"] as? Double ?? 0
                 summary["sleep"] = [
@@ -780,7 +745,7 @@ class IOSHealthManager: NSObject {
 
         // Get workouts
         group.enter()
-        getWorkouts(startOfDay.iso8601String, endOfDay.iso8601String, "", 100, resolve: { workoutsData in
+        getWorkouts(startOfDay.iso8601String, endDate: endOfDay.iso8601String, workoutType: "", limit: 100, resolve: { workoutsData in
             if let workouts = workoutsData as? [[String: Any]] {
                 let workoutSummary = workouts.map { workout in
                     return [
@@ -843,12 +808,7 @@ class IOSHealthManager: NSObject {
     // MARK: - Write Operations
 
     @objc
-    func addWorkout(_ type: String, _ start: String, _ duration: Double, _ calories: Double, _ distance: Double, _ metadata: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        guard healthStore.authorizationStatus(for: HKWorkoutType.workoutType()) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "Workouts write access not authorized", nil)
-            return
-        }
-
+    func addWorkout(_ type: String, start: String, duration: Double, calories: Double, distance: Double, metadata: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let startDate = ISO8601DateFormatter().date(from: start) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
@@ -881,14 +841,9 @@ class IOSHealthManager: NSObject {
     }
 
     @objc
-    func addBodyMetric(_ metricType: String, _ value: Double, _ date: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func addBodyMetric(_ metricType: String, value: Double, date: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let quantityType = bodyMetricType(for: metricType) else {
             reject("TYPE_ERROR", "Invalid metric type: \(metricType)", nil)
-            return
-        }
-
-        guard healthStore.authorizationStatus(for: quantityType) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "\(metricType) write access not authorized", nil)
             return
         }
 
@@ -911,7 +866,7 @@ class IOSHealthManager: NSObject {
     }
 
     @objc
-    func addNutritionEntry(_ calories: Double, _ protein: Double, _ carbs: Double, _ fat: Double, _ water: Double, _ date: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func addNutritionEntry(_ calories: Double, protein: Double, carbs: Double, fat: Double, water: Double, date: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let sampleDate = ISO8601DateFormatter().date(from: date) else {
             reject("DATE_ERROR", "Invalid date format", nil)
             return
@@ -959,14 +914,9 @@ class IOSHealthManager: NSObject {
     }
 
     @objc
-    func addSleepSession(_ inBedStart: String, _ inBedEnd: String, _ asleepStart: String, _ asleepEnd: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func addSleepSession(_ inBedStart: String, inBedEnd: String, asleepStart: String, asleepEnd: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
             reject("TYPE_ERROR", "Sleep analysis type not available", nil)
-            return
-        }
-
-        guard healthStore.authorizationStatus(for: sleepType) == .sharingAuthorized else {
-            reject("PERMISSION_DENIED", "Sleep write access not authorized", nil)
             return
         }
 
@@ -1001,7 +951,7 @@ class IOSHealthManager: NSObject {
     }
 
     @objc
-    func deleteHealthRecord(_ recordType: String, _ recordId: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func deleteHealthRecord(_ recordType: String, recordId: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let uuid = UUID(uuidString: recordId) else {
             reject("ID_ERROR", "Invalid record ID", nil)
             return

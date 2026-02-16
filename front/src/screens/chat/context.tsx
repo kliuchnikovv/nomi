@@ -522,11 +522,25 @@ export function ChatProvider({
 
     const handleClientAction = useCallback(async (payload: any) => {
         console.log('[ChatContext] Handling client action:', payload);
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/chat/context.tsx:524',message:'handleClientAction called',data:{payload},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+
         const { call_id: callId, tool, method, params } = payload;
 
         try {
             const { clientToolExecutor } = await import('../../services/tools/ClientToolExecutor');
+
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/chat/context.tsx:534',message:'About to execute client tool',data:{tool,method,params,callId},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
+
             const result = await clientToolExecutor.execute({ tool, method, params: params || {} });
+
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/chat/context.tsx:539',message:'Client tool execution completed',data:{tool,method,resultLength:result?.length},timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
 
             if (callId) {
                 const { sendClientToolResult } = await import('../../apiClient');

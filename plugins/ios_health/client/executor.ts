@@ -7,6 +7,10 @@ import { IOSHealthClient } from '@genie/front/services/integrations/clients/IOSH
 
 export const iosHealthPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'plugins/ios_health/client/executor.ts:9',message:'iosHealthPlugin.execute called',data:{method,params},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+
         const client = new IOSHealthClient();
 
         switch (method) {
@@ -25,7 +29,16 @@ export const iosHealthPlugin: ClientPluginHandler = {
 
             // Activity Queries
             case 'get_steps': {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'plugins/ios_health/client/executor.ts:30',message:'get_steps case entered',data:{params},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+
                 const steps = await client.getSteps(params.start_date, params.end_date, params.interval || 'day');
+
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'plugins/ios_health/client/executor.ts:36',message:'get_steps data received',data:{stepsCount:steps.length,steps:steps.slice(0,3)},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+
                 const total = steps.reduce((sum, s) => sum + s.value, 0);
                 return `<details><summary>Steps (Total: ${total.toFixed(0)})</summary>\n\n\`\`\`json\n${JSON.stringify(steps, null, 2)}\n\`\`\`\n</details>`;
             }

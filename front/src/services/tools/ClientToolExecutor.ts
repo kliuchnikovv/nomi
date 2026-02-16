@@ -17,6 +17,10 @@ export class ClientToolExecutor {
 
         console.log(`[ClientToolExecutor] Executing ${action.tool}.${action.method}`, action.params);
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:18',message:'ClientToolExecutor.execute called',data:{tool:action.tool,method:action.method,params:action.params},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+
         const metadata = getIntegrationMetadata(action.tool);
         if (metadata && !isClientOnly(action.tool)) {
             throw new Error(`Tool ${action.tool} is not a client-side tool. It should be executed on the server.`);
@@ -28,7 +32,17 @@ export class ClientToolExecutor {
             }
             const handler = getClientPluginHandler(action.tool);
             if (handler) {
-                return await handler.execute(action.method, action.params);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:32',message:'Handler found, executing',data:{tool:action.tool,method:action.method},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+
+                const result = await handler.execute(action.method, action.params);
+
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:37',message:'Handler execution completed',data:{tool:action.tool,method:action.method,resultLength:result?.length},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+
+                return result;
             }
             if (metadata) {
                 throw new Error(`Tool ${action.tool} is registered but not implemented in ClientToolExecutor`);
