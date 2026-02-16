@@ -19,17 +19,25 @@ def _build_parameters_schema(params: list[dict[str, Any]] | dict[str, Any] | Non
     2. Ready JSON Schema: {"type": "object", "properties": {...}, "required": [...]}
     
     Returns None if params are empty or have no properties.
+    Excludes 'required' field if there are no required parameters (to fix Gemini API validation).
     """
     if params is None:
         return None
     
     # If params is already a JSON Schema (has "type" and "properties")
     if isinstance(params, dict) and "type" in params and "properties" in params:
-        # Return None if properties dict is empty
+        # Check if properties dict is empty
         properties = params.get("properties")
         if not properties or (isinstance(properties, dict) and len(properties) == 0):
+            # Return None - this ensures Function gets no parameters field
             return None
-        return params
+        
+        # Build schema - exclude 'required' if empty (Gemini API validation fix)
+        required = params.get("required", [])
+        schema = {"type": params["type"], "properties": properties}
+        if required and len(required) > 0:
+            schema["required"] = required
+        return schema
     
     # Otherwise, build JSON Schema from list of param definitions
     if not isinstance(params, list):
@@ -55,7 +63,12 @@ def _build_parameters_schema(params: list[dict[str, Any]] | dict[str, Any] | Non
     if not properties:
         return None
     
-    return {"type": "object", "properties": properties, "required": required}
+    # Build schema - exclude 'required' if empty (Gemini API validation fix)
+    schema = {"type": "object", "properties": properties}
+    if required and len(required) > 0:
+        schema["required"] = required
+    
+    return schema
 
 
 def build_client_proxy_tools(
