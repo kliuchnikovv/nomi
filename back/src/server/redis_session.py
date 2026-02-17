@@ -81,37 +81,15 @@ class RedisSession:
                 "[RedisSession] Subscribed to client tool result channel: %s", channel
             )
 
-            # Wait for subscription confirmation to avoid race condition
-            timeout = 2.0
-            start_time = asyncio.get_event_loop().time()
-            subscription_ready = False
-
-            async for message in self.pubsub.listen():
-                if message["type"] == "subscribe":
-                    logger.info("[RedisSession] Subscription confirmed for %s", channel)
-                    subscription_ready = True
-                    break
-
-                if asyncio.get_event_loop().time() - start_time > timeout:
-                    logger.warning(
-                        "[RedisSession] Subscription timeout, proceeding anyway"
-                    )
-                    subscription_ready = True
-                    break
-
-            if subscription_ready:
-                # Start background listener task
-                self._result_listener_task = asyncio.create_task(
-                    self._listen_for_results()
-                )
-                logger.info(
-                    "[RedisSession] Result listener started for session %s",
-                    self.session_id,
-                )
-            else:
-                logger.warning(
-                    "[RedisSession] Failed to confirm subscription for %s", channel
-                )
+            # Start background listener task immediately
+            # No need to wait for subscription confirmation - Redis subscription is reliable
+            self._result_listener_task = asyncio.create_task(
+                self._listen_for_results()
+            )
+            logger.info(
+                "[RedisSession] Result listener started for session %s",
+                self.session_id,
+            )
 
         except Exception as e:
             logger.error(
@@ -300,9 +278,11 @@ class RedisSession:
             # Exponential backoff retry
             MAX_RETRIES = 3
             BASE_TIMEOUT = 30.0  # seconds
+            HEALTHKIT_TIMEOUT = 90.0  # Increased timeout for HealthKit operations (can be slow for large datasets)
 
             for attempt in range(MAX_RETRIES):
-                timeout = BASE_TIMEOUT * (1.5**attempt)  # 30s, 45s, 67.5s
+                # Use longer timeout for HealthKit operations
+                timeout = HEALTHKIT_TIMEOUT if plugin.startswith("ios_") else (BASE_TIMEOUT * (1.5**attempt))
                 try:
                     logger.info(
                         "[ClientTool] Waiting for result (attempt %d/%d, timeout=%.1fs, call_id=%s)",
