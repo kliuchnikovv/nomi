@@ -254,19 +254,34 @@ type ClientToolResultRequest struct {
 // ClientToolResult receives client tool execution result and publishes to Redis for Python worker.
 func (h *StreamHandler) ClientToolResult(c *gin.Context) {
 	ctx := c.Request.Context()
+
+	h.logger.Info("[StreamHandler] ClientToolResult called",
+		zap.String("session_id", req.SessionID),
+		zap.String("call_id", req.CallID),
+		zap.Int("result_len", len(req.Result)),
+	)
+
 	if _, err := userFromCtx(ctx); err != nil {
+		h.logger.Error("[StreamHandler] Unauthorized client tool result request")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	var req ClientToolResultRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("[StreamHandler] Invalid client tool result body", zap.Error(err))
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body: session_id and call_id required"})
 		return
 	}
 
+	h.logger.Info("[StreamHandler] Publishing client tool result to Redis",
+		zap.String("session_id", req.SessionID),
+		zap.String("call_id", req.CallID),
+		zap.Int("result_len", len(req.Result)),
+	)
+
 	if err := h.hub.PublishClientToolResult(ctx, req.SessionID, req.CallID, req.Result); err != nil {
-		h.logger.Error("failed to publish client tool result",
+		h.logger.Error("[StreamHandler] Failed to publish client tool result",
 			zap.String("session_id", req.SessionID),
 			zap.String("call_id", req.CallID),
 			zap.Error(err),
@@ -274,5 +289,7 @@ func (h *StreamHandler) ClientToolResult(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to deliver result"})
 		return
 	}
+
+	h.logger.Info("[StreamHandler] Client tool result published successfully")
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
