@@ -255,13 +255,8 @@ type ClientToolResultRequest struct {
 func (h *StreamHandler) ClientToolResult(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	h.logger.Info("[StreamHandler] ClientToolResult called",
-		zap.String("session_id", req.SessionID),
-		zap.String("call_id", req.CallID),
-		zap.Int("result_len", len(req.Result)),
-	)
-
-	if _, err := userFromCtx(ctx); err != nil {
+	user, err := userFromCtx(ctx)
+	if err != nil {
 		h.logger.Error("[StreamHandler] Unauthorized client tool result request")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -275,6 +270,7 @@ func (h *StreamHandler) ClientToolResult(c *gin.Context) {
 	}
 
 	h.logger.Info("[StreamHandler] Publishing client tool result to Redis",
+		zap.String("user_id", user.ID.String()),
 		zap.String("session_id", req.SessionID),
 		zap.String("call_id", req.CallID),
 		zap.Int("result_len", len(req.Result)),
