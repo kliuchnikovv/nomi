@@ -392,6 +392,24 @@ plugins/<name>/
     └── tools.py       # API client helpers
 ```
 
+### Code Placement Rules
+
+**RULE:** All plugin implementation code (server routes, tools, delivery handlers, service logic) MUST be located in `plugins/<name>/` directory at the repository root.
+
+**FORBIDDEN:** Placing plugin implementation code in `back/src/` or `api/`. These directories may ONLY contain generic infrastructure code for all plugins (loader, delivery registry, proxy handlers).
+
+**Examples of what MUST be in `plugins/<name>/server/`:**
+- Plugin-specific route handlers (`routes.py`)
+- Plugin service logic (`service.py`)
+- Plugin tool definitions (`tools.py`)
+- Plugin delivery handlers (`delivery.py`)
+
+**Examples of what MUST NOT be in `plugins/`:**
+- Generic plugin loader infrastructure → `back/src/plugins/loader.py`
+- Generic delivery registry → `back/src/server/delivery.py`
+- Generic proxy handlers → `api/internal/handlers/proxy.go`
+- Generic manifest loader → `api/internal/plugins/loader.go`
+
 ### How Plugins Load
 
 1. **Go API** (`api/internal/plugins/loader.go`): Scans `PLUGINS_DIR` for `manifest.yaml` files, loads metadata for the REST API.

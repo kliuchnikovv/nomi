@@ -159,9 +159,6 @@ export const pluginsApi = {
     getPluginState: (name: string) => apiClient.get<{ enabled: boolean; state: Record<string, any> }>(`${API_URL()}/plugins/${name}/state`),
     updatePluginState: (name: string, state: Record<string, any>) => apiClient.put<void>(`${API_URL()}/plugins/${name}/state`, state),
     startOAuthLogin,
-    syncGmail: () => apiClient.post<{ message: string }>(`${API_URL()}/plugins/gmail/sync`, {}),
-    syncImap: (config: { host: string; username: string; password: string }) =>
-        apiClient.post<{ status: string }>(`${API_URL()}/plugins/imap/sync`, config),
 };
 
 export const integrationsApi = {
