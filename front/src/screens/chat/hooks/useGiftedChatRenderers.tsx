@@ -10,6 +10,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { MessageAttachments } from '../components/MessageAttachments';
+import { MessageContextItems } from '../components/MessageContextItems';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
 import { createStyles, createMarkdownStyles } from '../message/dynamicStyles';
@@ -300,13 +301,15 @@ export function useGiftedChatRenderers({
         [assistantContainerMaxWidth, attachmentPosition, theme, showToolCalls]
     );
 
-    // Optimized message text renderer with fast path for streaming
+    // Stable message text renderer
     const renderMessageText = useCallback(
         (props: any) => {
             const isAssistant = props.currentMessage?.user?._id === 'assistant';
             const contentParts = props.currentMessage?.content_parts;
             const attachments = props.currentMessage?.attachments;
+            const contextItems = props.currentMessage?.context_items;
             const hasAttachments = attachments && attachments.length > 0;
+            const hasContextItems = contextItems && contextItems.length > 0;
             const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
             const messageText = props.currentMessage?.text || '';
             const messageActions = props.currentMessage?.actions;
@@ -327,6 +330,14 @@ export function useGiftedChatRenderers({
                         theme={theme}
                     />
                 </View>
+            ) : null;
+
+            // Render context items helper component
+            const ContextItemsComponent = hasContextItems ? (
+                <MessageContextItems
+                    contextItems={contextItems}
+                    theme={theme}
+                />
             ) : null;
 
             // Render actions helper
@@ -358,6 +369,7 @@ export function useGiftedChatRenderers({
                     if (shouldUseFastText) {
                         return (
                             <View style={{ width: '100%' }}>
+                                {ContextItemsComponent}
                                 {AttachmentsComponent}
                                 <FastText
                                     text={messageText}
@@ -371,6 +383,7 @@ export function useGiftedChatRenderers({
 
                     return (
                         <View style={{ width: '100%' }}>
+                            {ContextItemsComponent}
                             {AttachmentsComponent}
                             <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
                                 <Markdown
@@ -403,6 +416,7 @@ export function useGiftedChatRenderers({
                 // Mixed content - use ContentPartsRenderer
                 return (
                     <View style={{ width: '100%' }}>
+                        {ContextItemsComponent}
                         {AttachmentsComponent}
                         <ContentPartsRenderer parts={contentParts} onLongPress={handleTextLongPress} />
                         {ActionsComponent}
@@ -414,6 +428,7 @@ export function useGiftedChatRenderers({
             if (!isAssistant) {
                 return (
                     <View>
+                        {ContextItemsComponent}
                         {AttachmentsComponent}
                         <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
                             <MessageText {...props} />
@@ -426,6 +441,7 @@ export function useGiftedChatRenderers({
             if (isStreaming && !hasMarkdown(messageText)) {
                 return (
                     <View style={{ width: '100%' }}>
+                        {ContextItemsComponent}
                         {AttachmentsComponent}
                         <FastText
                             text={messageText}
@@ -439,6 +455,7 @@ export function useGiftedChatRenderers({
 
             return (
                 <View style={{ width: '100%' }}>
+                    {ContextItemsComponent}
                     {AttachmentsComponent}
                     <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
                         <Markdown

@@ -90,6 +90,7 @@ export type Message = {
     content_parts?: ContentPart[] // For inline tool call rendering
     model?: string
     attachments?: Attachment[]
+    context_items?: any[] // Context items (emails, documents, etc.)
     /** Last processed stream chunk index (ix); used for dedup when same frame arrives from multiple channels. */
     _stream_ix?: number
 }

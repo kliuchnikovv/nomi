@@ -60,6 +60,14 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		messageModel.Model = m.Model
 	}
 
+	// Handle ContextItems if provided
+	if m.ContextItems != nil {
+		contextItemsJSON, err := json.Marshal(m.ContextItems)
+		if err == nil {
+			messageModel.ContextItems = contextItemsJSON
+		}
+	}
+
 	if err := s.DB.WithContext(ctx).Create(messageModel).Error; err != nil {
 		return nil, err
 	}
@@ -306,6 +314,11 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 			}
 		}
 
+		// Unmarshal ContextItems if present
+		if len(msg.ContextItems) > 0 {
+			m.ContextItems = msg.ContextItems
+		}
+
 		result[i] = m
 	}
 	return result, nil
@@ -374,6 +387,11 @@ func (s *Storage) GetMessagesAfter(ctx context.Context, userID uuid.UUID, chatID
 			if err := json.Unmarshal(msg.Actions, &actions); err == nil {
 				m.Actions = actions
 			}
+		}
+
+		// Unmarshal ContextItems if present
+		if len(msg.ContextItems) > 0 {
+			m.ContextItems = msg.ContextItems
 		}
 
 		result[i] = m

@@ -5,8 +5,8 @@ import { Message, ContentPart } from '../screens/main/models';
 import { dispatchPayload } from './handlers';
 
 // Throttling configuration for streaming performance
-const STREAM_THROTTLE_MS = 40; // Update UI max 25 times per second during streaming (was 80ms)
-const STREAM_FLUSH_THRESHOLD = 30; // Force update every 30 chars even within throttle window (was 50)
+const STREAM_THROTTLE_MS = 80; // Update UI max 25 times per second during streaming (was 80ms)
+const STREAM_FLUSH_THRESHOLD = 50; // Force update every 30 chars even within throttle window (was 50)
 
 interface PendingUpdate {
     payload: any;
@@ -276,6 +276,8 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
             text: role === 'user' ? (payload.message || "") : " ",
             created_at: Date.now(),
             content_parts: role === 'user' ? undefined : [], // Initialize content_parts for assistant
+            attachments: payload.attachments,
+            context_items: payload.context_items,
         };
         // For user messages from other devices, we're done - don't accumulate
         if (role === 'user') {
@@ -301,6 +303,7 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
             newMessages[messageIdx] = {
                 ...newMessages[messageIdx],
                 text: payload.message, // Replace, don't append
+                context_items: payload.context_items, // Preserve context items
             };
         }
         return newMessages;

@@ -507,7 +507,8 @@ export class ChatSocket {
         userId?: string,
         endpoint?: string,
         authToken?: string,
-        command?: any
+        command?: any,
+        contextItems?: any[]
     ) {
         if (!chatId) {
             return;
@@ -532,6 +533,7 @@ export class ChatSocket {
             // Without this, it falls back to session_id (=chat_id) and Go Hub can't map frames to user rooms.
             user_id: userId,
             command: command,
+            context_items: contextItems, // Context items (emails, documents, etc.)
         };
         if (endpoint !== undefined && endpoint !== '') {
             payload.endpoint = endpoint;

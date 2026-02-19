@@ -1,0 +1,213 @@
+/**
+ * Context Item Card Component
+ *
+ * Displays notifications when items (emails, documents, images) are added to chat context.
+ * Users can remove items from context by clicking X button.
+ */
+
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTheme } from '../../../context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+
+export interface ContextItem {
+    id: string;
+    sourceType: 'email' | 'document' | 'image' | 'task' | 'note';
+    title: string;
+    preview?: string;
+    metadata?: Record<string, any>;
+    addedAt: number;
+}
+
+interface ContextItemCardProps {
+    item: ContextItem;
+    onRemove?: (id: string) => void;
+    removable?: boolean; // If false, don't show remove button
+}
+
+export const ContextItemCard = ({ item, onRemove, removable = true }: ContextItemCardProps) => {
+    const { theme } = useTheme();
+
+    const getSourceDetails = () => {
+        switch (item.sourceType) {
+            case 'email':
+                return {
+                    icon: 'mail' as const,
+                    label: 'Email',
+                    color: '#EA4335',
+                };
+            case 'document':
+                return {
+                    icon: 'document-text' as const,
+                    label: 'Document',
+                    color: '#4285F4',
+                };
+            case 'image':
+                return {
+                    icon: 'image' as const,
+                    label: 'Image',
+                    color: '#34A853',
+                };
+            case 'task':
+                return {
+                    icon: 'checkmark-circle' as const,
+                    label: 'Task',
+                    color: '#FBBC04',
+                };
+            case 'note':
+                return {
+                    icon: 'document' as const,
+                    label: 'Note',
+                    color: '#9C27B0',
+                };
+            default:
+                return {
+                    icon: 'apps' as const,
+                    label: 'Item',
+                    color: theme.textSecondary || '#888888',
+                };
+        }
+    };
+
+    const { icon, label, color } = getSourceDetails();
+
+    const formatTime = (timestamp: number): string => {
+        const now = Date.now();
+        const diff = now - timestamp;
+
+        if (diff < 60000) return 'только что';
+        if (diff < 3600000) return `${Math.floor(diff / 60000)} мин назад`;
+        if (diff < 86400000) return `${Math.floor(diff / 3600000)} ч назад`;
+        return new Date(timestamp).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    };
+
+    const truncateText = (text: string, maxLength: number = 30): string => {
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
+    };
+
+    const displayName = truncateText(item.title);
+
+    return (
+        <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {removable && (
+                <TouchableOpacity
+                    onPress={() => onRemove && onRemove(item.id)}
+                    style={styles.removeButton}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Ionicons name="close-circle" size={20} color={theme.textSecondary || '#888888'} />
+                </TouchableOpacity>
+            )}
+
+            <View style={styles.content}>
+                {/* Icon and title */}
+                <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
+                    <Ionicons name={icon} size={18} color={color} />
+                </View>
+                <Text style={[styles.title, { color: theme.textPrimary ?? theme.text }]} numberOfLines={1}>
+                    {displayName}
+                </Text>
+            </View>
+        </View>
+    );
+};
+
+interface ContextItemsListProps {
+    items: ContextItem[];
+    onRemove: (id: string) => void;
+    onClearAll?: () => void;
+}
+
+export const ContextItemsList = ({ items, onRemove, onClearAll }: ContextItemsListProps) => {
+    const { theme } = useTheme();
+
+    if (items.length === 0) return null;
+
+    return (
+        <View style={[styles.listContainer, { backgroundColor: theme.background }]}>
+            <View style={styles.listHeader}>
+                <Text style={[styles.listTitle, { color: theme.textPrimary }]}>
+                    В контексте {items.length} {items.length === 1 ? 'элемент' : items.length < 5 ? 'элемента' : 'элементов'}
+                </Text>
+                {onClearAll && (
+                    <TouchableOpacity onPress={onClearAll} style={styles.clearButton}>
+                        <Text style={[styles.clearText, { color: theme.primary }]}>Очистить всё</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {items.map((item, index) => (
+                <ContextItemCard key={item.id} item={item} onRemove={onRemove} />
+            ))}
+        </View>
+    );
+};
+
+const styles = StyleSheet.create({
+    container: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    removeButton: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        zIndex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
+        borderRadius: 12,
+        padding: 4,
+    },
+    content: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        flex: 1,
+    },
+    iconContainer: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+    },
+    title: {
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    listContainer: {
+        marginHorizontal: 16,
+        marginTop: 8,
+        borderRadius: 16,
+        padding: 12,
+    },
+    listHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 4,
+        paddingBottom: 8,
+        marginBottom: 4,
+    },
+    listTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    clearButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+    },
+    clearText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+});

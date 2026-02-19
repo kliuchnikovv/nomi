@@ -131,6 +131,7 @@ export function ChatProvider({
         messageId?: string;
         webSearch?: boolean;
         thinking?: string;
+        contextItems?: any[];
     } | null>(null);
 
     // Thinking mode state (persists within chat session)
@@ -293,7 +294,7 @@ export function ChatProvider({
     }, [chatMode, selectedTeamId, setActiveChatID, activeChat]);
 
     // Define createMessage early so sendStreamingMessage can use it
-    const createMessage = useCallback(async (text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean, role: string = 'user') => {
+    const createMessage = useCallback(async (text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean, role: string = 'user', contextItems?: any[]) => {
         let messageID: string;
 
         try {
@@ -307,6 +308,7 @@ export function ChatProvider({
                     model: model,
                     attachment_ids: attachmentIDs,
                     web_search: webSearch,
+                    context_items: contextItems, // Add context items to message
                 },
             );
             if (created?.id) {
@@ -336,7 +338,7 @@ export function ChatProvider({
     const storeMessages = useChatStore(messagesSelector);
 
     const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string, role: string = 'user') => {
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string, role: string = 'user', contextItems?: any[]) => {
             if (!text.trim() && attachments.length === 0) return;
             if (!user?.id) return;
 
@@ -356,7 +358,8 @@ export function ChatProvider({
                 attachments: attachments,
                 messageId: reuseMessageId,
                 webSearch,
-                thinking
+                thinking,
+                contextItems
             });
 
             let chatIdToUse = activeChatID;
@@ -400,7 +403,7 @@ export function ChatProvider({
                 }
 
                 if (!reuseMessageId) {
-                    messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch, role);
+                    messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch, role, contextItems);
                     if (!messageID) {
                         console.error('Failed to create message before sending via WebSocket');
                         setError('Не удалось создать сообщение');
@@ -417,6 +420,7 @@ export function ChatProvider({
                         text: text.trim(),
                         created_at: timestamp,
                         attachments: modelAttachments,
+                        context_items: contextItems, // Include context items in message
                     };
 
                     // Update Store
@@ -425,6 +429,8 @@ export function ChatProvider({
                         role: role,
                         message: text.trim(),
                         sender: user.id,
+                        attachments: modelAttachments,
+                        context_items: contextItems,
                         // eof: true // user message is complete
                     });
                 } else {
@@ -494,15 +500,16 @@ export function ChatProvider({
                 user.id, // user_id for backend routing
                 selectedEndpoint,
                 token ?? undefined, // auth_token for list/agent tools that call Go API
-                commandToSend
+                commandToSend,
+                contextItems // Pass context items (emails, documents, etc.)
             );
         },
         [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, renameChat, setLastFailedMessage, tools, availableModels],
     );
 
     const sendMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, role: string = 'user') => {
-            await sendStreamingMessage(text, attachments, webSearch, thinking, undefined, role);
+        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, role: string = 'user', contextItems?: any[]) => {
+            await sendStreamingMessage(text, attachments, webSearch, thinking, undefined, role, contextItems);
         },
         [sendStreamingMessage],
     );
@@ -515,7 +522,9 @@ export function ChatProvider({
                 lastFailedMessage.attachments,
                 lastFailedMessage.webSearch,
                 lastFailedMessage.thinking,
-                lastFailedMessage.messageId // reusing the message ID!
+                lastFailedMessage.messageId, // reusing the message ID!
+                'user',
+                lastFailedMessage.contextItems
             );
         }
     }, [lastFailedMessage, sendStreamingMessage]);

@@ -125,8 +125,12 @@ PODS:
     - ExpoModulesCore
   - ExpoSharing (14.0.8):
     - ExpoModulesCore
-  - ExpoSQLite (15.1.4):
+  - ExpoSQLite (14.0.6):
     - ExpoModulesCore
+    - "sqlite3 (~> 3.45.3+1)"
+    - "sqlite3/bytecodevtab (~> 3.45.3+1)"
+    - "sqlite3/fts (~> 3.45.3+1)"
+    - "sqlite3/fts5 (~> 3.45.3+1)"
   - EXTaskManager (12.0.6):
     - ExpoModulesCore
     - UMAppLoader
@@ -134,7 +138,7 @@ PODS:
   - FBLazyVector (0.81.1)
   - fmt (11.0.2)
   - glog (0.3.5)
-  - GoogleSignIn (9.0.0):
+  - GoogleSignIn (9.1.0):
     - AppAuth (~> 2.0)
     - AppCheckCore (~> 11.0)
     - GTMAppAuth (~> 5.0)
@@ -3155,6 +3159,15 @@ PODS:
     - SocketRocket
     - Yoga
   - SocketRocket (0.7.1)
+  - "sqlite3 (3.45.3+1)":
+    - "sqlite3/common (= 3.45.3+1)"
+  - "sqlite3/bytecodevtab (3.45.3+1)":
+    - sqlite3/common
+  - "sqlite3/common (3.45.3+1)"
+  - "sqlite3/fts (3.45.3+1)":
+    - sqlite3/common
+  - "sqlite3/fts5 (3.45.3+1)":
+    - sqlite3/common
   - UMAppLoader (5.0.1)
   - Yoga (0.0.0)
 
@@ -3280,6 +3293,7 @@ SPEC REPOS:
     - GTMSessionFetcher
     - PromisesObjC
     - SocketRocket
+    - sqlite3
 
 EXTERNAL SOURCES:
   AppleLLM:
@@ -3520,13 +3534,13 @@ SPEC CHECKSUMS:
   ExpoNetwork: ee1fb67b0de59ab7f36794caf8242955dd8ae046
   ExpoSecureStore: 3f1b632d6d40bcc62b4983ef9199cd079592a50a
   ExpoSharing: 0d983394ed4a80334bab5a0d5384f75710feb7e8
-  ExpoSQLite: 10fceac6748e9e8f010c70733e0e704fa67399ab
+  ExpoSQLite: 9ed0c4fb3b432f68dee65e795ccd630a7cfabd3c
   EXTaskManager: 0dcaa9b4b058b435f4e5bff4919c863f4f46badc
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
   FBLazyVector: b8f1312d48447cca7b4abc21ed155db14742bd03
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
-  GoogleSignIn: c7f09cfbc85a1abf69187be091997c317cc33b77
+  GoogleSignIn: fcee2257188d5eda57a5e2b6a715550ffff9206d
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   GTMAppAuth: 217a876b249c3c585a54fd6f73e6b58c4f5c4238
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
@@ -3615,6 +3629,7 @@ SPEC CHECKSUMS:
   RNSVG: 2665a9bfe8821a19898dbeb49fdd2c95f8ae2b48
   RNVectorIcons: 791f13226ec4a3fd13062eda9e892159f0981fae
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
+  sqlite3: 02d1f07eaaa01f80a1c16b4b31dfcbb3345ee01a
   UMAppLoader: 7e7e0eaa7854ffd652c00a68c443afb28c3bedba
   Yoga: 11c9686a21e2cd82a094a723649d9f4507200fb0
 

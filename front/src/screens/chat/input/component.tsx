@@ -34,6 +34,8 @@ import { apiClient } from '../../../apiClient';
 import { useMain } from '../../main/context';
 import { getApiUrl, API_URL } from '../../../config';
 import { AVAILABLE_TEAMS, TeamDetails } from '../teams';
+import { ContextItem, ContextItemCard } from '../components/ContextItemCard';
+import { contextStore } from '../../../services/ContextStore';
 
 type Props = {
     onSend: (text: string) => void;
@@ -58,6 +60,8 @@ export default function ChatInput(props: Props) {
 
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
 
+    const [contextItems, setContextItems] = useState<ContextItem[]>([]);
+
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
@@ -71,6 +75,10 @@ export default function ChatInput(props: Props) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSend = useCallback(async () => {
+        console.log('[ChatInput] handleSend called');
+        console.log('[ChatInput] contextItems count:', contextItems.length);
+        console.log('[ChatInput] contextItems:', contextItems);
+
         if (isSubmitting) return;
         const text = (value ?? '').trim();
         const hasAttachments = attachments.length > 0 && !attachments.some(a => a.loading);
@@ -79,9 +87,8 @@ export default function ChatInput(props: Props) {
 
         setIsSubmitting(true);
         try {
-            // Pass full attachments (including URI) to sendMessage for optimistic updates
-            // webSearchEnabled is now always valid/handled, but we can pass true or ignore it if backend handles it
-            await sendMessage(text, attachments, true, thinkingLevel);
+            // Send text with context items
+            await sendMessage(text, attachments, true, thinkingLevel, 'user', contextItems);
         } finally {
             setIsSubmitting(false);
         }
@@ -89,13 +96,36 @@ export default function ChatInput(props: Props) {
         Keyboard.dismiss();
         setValue('');
         setAttachments([]);
-    }, [value, attachments, sendMessage, thinkingLevel, isSubmitting]);
+        // Clear context items after sending - they are now part of the message
+        contextStore.clear();
+    }, [value, attachments, contextItems, sendMessage, thinkingLevel, isSubmitting]);
 
     // Reset input when switching chats
     useEffect(() => {
         setValue('');
         setAttachments([]);
+        // Don't clear context when switching chats - context should persist across messages
     }, [activeChatID]);
+
+    // Listen for context item changes
+    useEffect(() => {
+        console.log('[ChatInput] Setting up contextStore subscription');
+        const unsub = contextStore.subscribe(() => {
+            const items = contextStore.getAll();
+            console.log('[ChatInput] Context updated, items count:', items.length);
+            console.log('[ChatInput] Context items:', items);
+            setContextItems(items);
+        });
+
+        // Load initial items
+        const initialItems = contextStore.getAll();
+        console.log('[ChatInput] Initial context items:', initialItems.length);
+        if (initialItems.length > 0) {
+            setContextItems(initialItems);
+        }
+
+        return unsub;
+    }, []);
 
 
 
@@ -298,6 +328,11 @@ export default function ChatInput(props: Props) {
         setAttachments(prev => prev.filter(a => a.id !== id));
     };
 
+    const removeContextItem = (id: string) => {
+        console.log('[ChatInput] Removing context item:', id);
+        contextStore.remove(id);
+    };
+
     // Helper to build default team command if switching model in team mode
     const buildDefaultTeamCommand = useCallback((modelId: string) => {
         return {
@@ -382,7 +417,7 @@ export default function ChatInput(props: Props) {
         }
         return name;
     }, [availableModels, selectedModel]);
-    const isSendDisabled = ((value?.length ?? 0) === 0 && attachments.length === 0) || attachments.some(a => a.loading);
+    const isSendDisabled = ((value?.length ?? 0) === 0 && attachments.length === 0 && contextItems.length === 0) || attachments.some(a => a.loading);
 
     useEffect(() => {
         const keyboardDidShowListener = Keyboard.addListener(
@@ -411,6 +446,17 @@ export default function ChatInput(props: Props) {
                 { paddingBottom: isKeyboardVisible ? 12 : Math.max(insets.bottom, 12) }
             ]}>
 
+
+                {/* Context Items Preview */}
+                {contextItems.length > 0 && (
+                    <ScrollView horizontal style={{ padding: 8, maxHeight: 100 }} contentContainerStyle={{ gap: 8 }}>
+                        {contextItems.map(item => (
+                            <View key={item.id} style={{ width: 160 }}>
+                                <ContextItemCard item={item} onRemove={removeContextItem} />
+                            </View>
+                        ))}
+                    </ScrollView>
+                )}
 
                 {/* Attachments Preview */}
                 {attachments.length > 0 && (

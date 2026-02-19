@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, Pressable, Alert } from 'react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { gmailClient } from '@genie/front/services/integrations/clients/GmailClient';
 import { Email } from '@genie/front/services/integrations/IntegrationStorage';
 import { PluginMainScreenProps } from '@genie/front/plugins/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XmarkCircle } from 'iconoir-react-native';
+import { integrationStorage } from '@genie/front/services/integrations/IntegrationStorage';
+import { ContextItem } from '@genie/front/screens/chat/components/ContextItemCard';
+import { contextStore } from '@genie/front/services/ContextStore';
 
 export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
@@ -14,13 +17,38 @@ export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: P
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [integrationName, setIntegrationName] = useState<string>('Gmail');
+
+    useEffect(() => {
+        const loadIntegrationName = async () => {
+            if (!integrationIdProp) return;
+            try {
+                const integrations = await integrationStorage.getIntegrations();
+                const gmailIntegration = integrations.find(i => i.id === integrationIdProp);
+                if (gmailIntegration) {
+                    setIntegrationName(gmailIntegration.name || 'Gmail');
+                }
+            } catch (error) {
+                console.error('Failed to load integration name:', error);
+                setIntegrationName('Gmail');
+            }
+        };
+        loadIntegrationName();
+    }, [integrationIdProp]);
+
+    const truncateText = (text: string, maxLength: number = 20): string => {
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
+    };
+
+    const displayName = integrationName === 'Gmail' ? integrationName : truncateText(integrationName);
 
     if (!integrationIdProp) {
         console.error('[GmailMainScreen] No integrationId provided');
         return (
             <View style={[styles.container, { backgroundColor: theme.background }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
-                    <Text style={[styles.headerTitle, { color: theme.text }]}>Gmail</Text>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>{displayName}</Text>
                 </View>
                 <View style={styles.center}>
                     <Text style={{ color: theme.textSecondary }}>No integration configured</Text>
@@ -63,8 +91,48 @@ export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: P
         loadEmails();
     }, []);
 
+    const handleEmailPress = async (email: Email) => {
+        await handleEmailLongPress(email);
+    };
+
+    const handleEmailLongPress = async (email: Email) => {
+        console.log('[GmailMainScreen] Adding email to context:', email.id, email.subject);
+        try {
+            const item: ContextItem = {
+                id: email.id,
+                sourceType: 'email',
+                title: email.subject || '(no subject)',
+                preview: email.snippet || email.fromEmail || '',
+                metadata: {
+                    subject: email.subject,
+                    from: email.fromEmail,
+                    fromName: email.fromName,
+                    body: email.bodyText || email.snippet || '',
+                    date: email.date,
+                },
+                addedAt: Date.now(),
+            };
+
+            console.log('[GmailMainScreen] Adding to contextStore:', item);
+            contextStore.add(item);
+            Alert.alert('Добавлено в чат', email.subject || '(no subject)');
+            
+            // Close the plugin screen after adding to context
+            onClose?.();
+        } catch (error) {
+            console.error('[GmailMainScreen] Failed to add email to context:', error);
+        }
+    };
+
     const renderItem = ({ item }: { item: Email }) => (
-        <View style={[styles.emailItem, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <Pressable
+            onPress={() => handleEmailPress(item)}
+            style={({ pressed }) => [
+                styles.emailItem,
+                { backgroundColor: theme.card, borderColor: theme.border },
+                pressed && { opacity: 0.7 },
+            ]}
+        >
             <View style={styles.emailHeader}>
                 <Text style={[styles.sender, { color: theme.text }]} numberOfLines={1}>
                     {item.fromName || item.fromEmail}
@@ -79,7 +147,7 @@ export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: P
             <Text style={[styles.snippet, { color: theme.textSecondary }]} numberOfLines={2}>
                 {item.snippet}
             </Text>
-        </View>
+        </Pressable>
     );
 
     return (
@@ -87,7 +155,7 @@ export function GmailMainScreen({ integrationId: integrationIdProp, onClose }: P
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[styles.headerTitle, { color: theme.text }]}>Gmail</Text>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>{displayName}</Text>
                     {onClose && (
                         <Pressable onPress={onClose} hitSlop={12}>
                             <XmarkCircle width={24} height={24} color={theme.textSecondary} />

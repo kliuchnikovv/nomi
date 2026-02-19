@@ -47,6 +47,16 @@ export type Message = {
     content_parts?: ContentPart[] // For inline tool call rendering
     model?: string
     attachments?: Attachment[]
+    context_items?: ContextItem[]
+}
+
+export type ContextItem = {
+    id: string;
+    sourceType: 'email' | 'document' | 'image' | 'task' | 'note';
+    title: string;
+    preview?: string;
+    metadata?: Record<string, any>;
+    addedAt: number;
 }
 
 export type Attachment = {

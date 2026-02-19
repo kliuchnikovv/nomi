@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XmarkCircle, Mail } from 'iconoir-react-native';
 import { pluginChatStorage, PluginChat } from '@genie/front/services/plugins/PluginChatStorage';
 
-export function GmailPluginScreen({ integrationId, onClose, navigation }: PluginMainScreenProps) {
+export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const [chats, setChats] = useState<PluginChat[]>([]);
@@ -34,13 +34,6 @@ export function GmailPluginScreen({ integrationId, onClose, navigation }: Plugin
         return () => clearInterval(interval);
     }, [integrationId]);
 
-    const handleChatPress = (chat: PluginChat) => {
-        // Navigate to chat view
-        if (navigation) {
-            navigation.navigate('GmailChatView', { chatId: chat.id });
-        }
-    };
-
     const renderChatItem = ({ item }: { item: PluginChat }) => {
         const metadata = item.data ? JSON.parse(item.data) : {};
         const fromName = metadata.fromName || metadata.from || 'Unknown';
@@ -53,7 +46,6 @@ export function GmailPluginScreen({ integrationId, onClose, navigation }: Plugin
                     { backgroundColor: theme.card, borderColor: theme.border },
                     pressed && { opacity: 0.7 },
                 ]}
-                onPress={() => handleChatPress(item)}
             >
                 <View style={styles.chatIcon}>
                     <Mail width={20} height={20} color={theme.accent} />

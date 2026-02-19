@@ -20,9 +20,9 @@ export function GmailSidebarItem({ integrationId, onSelect, isSelected }: GmailS
         const loadAccountInfo = async () => {
             try {
                 const integrations = await integrationStorage.getIntegrations();
-                const gmailIntegration = integrations.find(i => i.provider.toLowerCase() === 'gmail');
+                const gmailIntegration = integrations.find(i => i.id === integrationId);
                 if (gmailIntegration) {
-                    setAccountEmail(gmailIntegration.email || 'Gmail');
+                    setAccountEmail(gmailIntegration.name || 'Gmail');
                 }
             } catch (error) {
                 console.error('Failed to load Gmail account:', error);
