@@ -125,8 +125,9 @@ type UserMessagePayload struct {
 	AgentType      string       `json:"agent_type,omitempty"`
 	Tools          interface{}  `json:"tools,omitempty"` // User-provided tools/integrations
 	UserID         uuid.UUID    `json:"user_id,omitempty"`
-	AuthToken      string       `json:"auth_token,omitempty"` // JWT for backend tools (e.g. list item API calls)
+	AuthToken      string       `json:"auth_token,omitempty"`      // JWT for backend tools (e.g. list item API calls)
 	ExtractedFacts []string     `json:"extracted_facts,omitempty"` // Optional client-extracted facts (sync path)
+	ContextItems   interface{}  `json:"context_items,omitempty"`   // Context items (emails, documents, etc.)
 }
 
 // StoreFactsPayload is used for op "store_facts" (async client-side extraction result)

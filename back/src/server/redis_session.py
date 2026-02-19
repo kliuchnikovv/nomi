@@ -55,7 +55,13 @@ class RedisSession:
         # History storage
         self.chat_history: list[dict[str, str]] = []
 
+        # Context items (emails, documents, etc.)
+        # Context items (emails, documents, etc.)
+        self.context_items: list[dict[str, Any]] = []
+
         # Plugin delivery context (set from payload in handle_user_message)
+
+
         self._delivery_source: str | None = None
         self._delivery_context: dict[str, Any] = {}
 
@@ -725,6 +731,7 @@ class RedisSession:
                 "team",
                 "attachments",
                 "extracted_facts",
+                "context_items",
             }
             self._delivery_context = {
                 k: v for k, v in payload.items() if k not in standard_keys
@@ -776,6 +783,24 @@ class RedisSession:
                                 )
             except Exception as e:
                 logger.warning("[RedisSession] Failed to store extracted_facts: %s", e)
+
+        # Extract and store context items (emails, documents, etc.)
+        incoming_context_items = payload.get("context_items")
+        if incoming_context_items:
+            if isinstance(incoming_context_items, list):
+                self.context_items = incoming_context_items
+                logger.info(
+                    "[RedisSession] Stored %d context items",
+                    len(self.context_items)
+                )
+            else:
+                logger.warning(
+                    "[RedisSession] Invalid context_items type: %s",
+                    type(incoming_context_items).__name__
+                )
+        else:
+            # Clear context items if not provided (user removed them)
+            self.context_items = []
 
         # Run memory extraction in background (does not block response)
         if payload.get("role") != "system":
@@ -1089,42 +1114,85 @@ class RedisSession:
             yield event
 
     def _build_agent_input(self, text: str) -> str:
-        """Build agent input with conversation history context."""
-        if not self.chat_history:
-            return text
+        """Build agent input with conversation history and context items."""
+        context_parts = []
 
-        try:
-            # Format history as conversation context
-            # Make it clear this is the ACTUAL conversation history the model should reference
-            history_lines = []
-            for h in self.chat_history:
-                role = "User" if h["role"] == "user" else "You"
-                content = h["content"]
-                history_lines.append(f"{role}: {content}")
+        # Add context items (emails, documents, etc.)
+        if self.context_items:
+            context_lines = []
+            for item in self.context_items:
+                if isinstance(item, dict):
+                    source_type = item.get("sourceType", "item")
+                    title = item.get("title", "Untitled")
+                    preview = item.get("preview", "")
+                    metadata = item.get("metadata", {})
 
-            history_context = "\n".join(history_lines)
+                    if source_type == "email":
+                        from_email = metadata.get("from", "")
+                        subject = title
+                        date = metadata.get("date", "")
+                        context_lines.append(
+                            f"📧 Email from {from_email}: {subject}"
+                        )
+                        if date:
+                            context_lines.append(f"   Date: {date}")
+                        if preview:
+                            context_lines.append(f"   Preview: {preview[:200]}")
+                    elif source_type == "document":
+                        context_lines.append(f"📄 Document: {title}")
+                        if preview:
+                            context_lines.append(f"   Preview: {preview[:200]}")
+                    elif source_type == "image":
+                        context_lines.append(f"🖼️ Image: {title}")
+                    elif source_type == "task":
+                        context_lines.append(f"✅ Task: {title}")
+                        if preview:
+                            context_lines.append(f"   Details: {preview[:200]}")
+                    elif source_type == "note":
+                        context_lines.append(f"📝 Note: {title}")
+                        if preview:
+                            context_lines.append(f"   Preview: {preview[:200]}")
+                    else:
+                        context_lines.append(f"📎 {source_type.title()}: {title}")
 
-            # Format with clear instructions that this IS the conversation
-            if text:
-                return f"""[IMPORTANT: The following is your conversation history with this user. Use it to answer questions about previous messages.]
+            if context_lines:
+                context_parts.append(
+                    "--- Context Items (emails, documents, etc.) ---\n" + "\n".join(context_lines) + "\n--- End Context Items ---"
+                )
+
+        # Add conversation history
+        if self.chat_history:
+            try:
+                # Format history as conversation context
+                # Make it clear this is ACTUAL conversation history model should reference
+                history_lines = []
+                for h in self.chat_history:
+                    role = "User" if h["role"] == "user" else "You"
+                    content = h["content"]
+                    history_lines.append(f"{role}: {content}")
+
+                history_context = "\\n".join(history_lines)
+
+                # Format with clear instructions that this IS conversation
+                context_parts.append(
+                    f"""[IMPORTANT: The following is your conversation history with this user. Use it to answer questions about previous messages.]
 
 --- Previous messages in this conversation ---
 {history_context}
---- End of conversation history ---
+--- End of conversation history ---"""
+                )
+            except Exception as e:
+                logger.error("[RedisSession] Failed to inject history: %s", e)
 
-User's new message: {text}"""
+        # Combine all context parts
+        if context_parts:
+            combined_context = "\n\n".join(context_parts)
+            if text:
+                return f"{combined_context}\n\nUser's new message: {text}"
             else:
-                return f"""[IMPORTANT: Continue the conversation based on history below.]
+                return combined_context
 
---- Previous messages ---
-{history_context}
---- End ---
-
-Continue the conversation."""
-
-        except Exception as e:
-            logger.error("[RedisSession] Failed to inject history: %s", e)
-            return text
+        return text
 
     def _process_attachments(self, attachments: list) -> list[Image]:
         """Process attachments and extract images."""
