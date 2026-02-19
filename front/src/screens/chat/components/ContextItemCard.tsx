@@ -25,7 +25,11 @@ interface ContextItemCardProps {
     removable?: boolean; // If false, don't show remove button
 }
 
-export const ContextItemCard = ({ item, onRemove, removable = true }: ContextItemCardProps) => {
+export const ContextItemCard = ({
+    item,
+    onRemove,
+    removable = true,
+}: ContextItemCardProps) => {
     const { theme } = useTheme();
 
     const getSourceDetails = () => {
@@ -71,17 +75,7 @@ export const ContextItemCard = ({ item, onRemove, removable = true }: ContextIte
 
     const { icon, label, color } = getSourceDetails();
 
-    const formatTime = (timestamp: number): string => {
-        const now = Date.now();
-        const diff = now - timestamp;
-
-        if (diff < 60000) return 'только что';
-        if (diff < 3600000) return `${Math.floor(diff / 60000)} мин назад`;
-        if (diff < 86400000) return `${Math.floor(diff / 3600000)} ч назад`;
-        return new Date(timestamp).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-    };
-
-    const truncateText = (text: string, maxLength: number = 30): string => {
+    const truncateText = (text: string, maxLength: number = 17): string => {
         if (text.length <= maxLength) return text;
         return text.substring(0, maxLength) + '...';
     };
@@ -89,23 +83,43 @@ export const ContextItemCard = ({ item, onRemove, removable = true }: ContextIte
     const displayName = truncateText(item.title);
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <View
+            style={[
+                styles.container,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+        >
             {removable && (
                 <TouchableOpacity
                     onPress={() => onRemove && onRemove(item.id)}
                     style={styles.removeButton}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                    <Ionicons name="close-circle" size={20} color={theme.textSecondary || '#888888'} />
+                    <Ionicons
+                        name="close-circle"
+                        size={20}
+                        color={theme.textSecondary || '#888888'}
+                    />
                 </TouchableOpacity>
             )}
 
             <View style={styles.content}>
                 {/* Icon and title */}
-                <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
+                <View
+                    style={[
+                        styles.iconContainer,
+                        { backgroundColor: `${color}15` },
+                    ]}
+                >
                     <Ionicons name={icon} size={18} color={color} />
                 </View>
-                <Text style={[styles.title, { color: theme.textPrimary ?? theme.text }]} numberOfLines={1}>
+                <Text
+                    style={[
+                        styles.title,
+                        { color: theme.textPrimary ?? theme.text },
+                    ]}
+                    numberOfLines={1}
+                >
                     {displayName}
                 </Text>
             </View>
@@ -119,26 +133,43 @@ interface ContextItemsListProps {
     onClearAll?: () => void;
 }
 
-export const ContextItemsList = ({ items, onRemove, onClearAll }: ContextItemsListProps) => {
+export const ContextItemsList = ({
+    items,
+    onRemove,
+    onClearAll,
+}: ContextItemsListProps) => {
     const { theme } = useTheme();
 
     if (items.length === 0) return null;
 
     return (
-        <View style={[styles.listContainer, { backgroundColor: theme.background }]}>
+        <View
+            style={[
+                styles.listContainer,
+                { backgroundColor: theme.background },
+            ]}
+        >
             <View style={styles.listHeader}>
-                <Text style={[styles.listTitle, { color: theme.textPrimary }]}>
-                    В контексте {items.length} {items.length === 1 ? 'элемент' : items.length < 5 ? 'элемента' : 'элементов'}
-                </Text>
                 {onClearAll && (
-                    <TouchableOpacity onPress={onClearAll} style={styles.clearButton}>
-                        <Text style={[styles.clearText, { color: theme.primary }]}>Очистить всё</Text>
+                    <TouchableOpacity
+                        onPress={onClearAll}
+                        style={styles.clearButton}
+                    >
+                        <Text
+                            style={[styles.clearText, { color: theme.primary }]}
+                        >
+                            Clean
+                        </Text>
                     </TouchableOpacity>
                 )}
             </View>
 
             {items.map((item, index) => (
-                <ContextItemCard key={item.id} item={item} onRemove={onRemove} />
+                <ContextItemCard
+                    key={item.id}
+                    item={item}
+                    onRemove={onRemove}
+                />
             ))}
         </View>
     );
@@ -169,7 +200,7 @@ const styles = StyleSheet.create({
     },
     content: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         flex: 1,
     },
     iconContainer: {

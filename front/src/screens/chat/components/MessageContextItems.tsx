@@ -8,16 +8,16 @@ interface MessageContextItemsProps {
     theme: ThemeColors;
 }
 
-export const MessageContextItems: React.FC<MessageContextItemsProps> = ({ contextItems, theme }) => {
+export const MessageContextItems: React.FC<MessageContextItemsProps> = ({
+    contextItems,
+    theme,
+}) => {
     if (!contextItems || contextItems.length === 0) {
         return null;
     }
 
     return (
         <View style={styles.container}>
-            <Text style={[styles.label, { color: theme.textSecondary }]}>
-                В контексте {contextItems.length} {contextItems.length === 1 ? 'элемент' : contextItems.length < 5 ? 'элемента' : 'элементов'}
-            </Text>
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -25,10 +25,7 @@ export const MessageContextItems: React.FC<MessageContextItemsProps> = ({ contex
             >
                 {contextItems.map((item: any) => (
                     <View key={item.id} style={styles.itemWrapper}>
-                        <ContextItemCard
-                            item={item}
-                            onRemove={() => {}} // Disabled remove for historical context items
-                        />
+                        <ContextItemCard item={item} removable={false} />
                     </View>
                 ))}
             </ScrollView>
@@ -50,6 +47,6 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     itemWrapper: {
-        width: 160,
+        width: 200,
     },
 });

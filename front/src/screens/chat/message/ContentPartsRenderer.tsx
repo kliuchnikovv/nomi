@@ -1,5 +1,5 @@
-import React, { useMemo, memo, useCallback } from 'react';
-import { View, Pressable, Text, StyleSheet } from 'react-native';
+import React, { useMemo, memo, useEffect, useRef } from 'react';
+import { View, Pressable, Text, StyleSheet, Animated } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useChat } from '../context';
 import { ContentPart } from './models';
@@ -94,6 +94,29 @@ const StreamingTextPart = memo(function StreamingTextPart({
     onLongPress: (text: string) => void;
     isStreaming?: boolean;
 }) {
+    const cursorOpacity = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        if (isStreaming) {
+            const animation = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(cursorOpacity, {
+                        toValue: 0,
+                        duration: 400,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(cursorOpacity, {
+                        toValue: 1,
+                        duration: 400,
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+            animation.start();
+            return () => animation.stop();
+        }
+    }, [isStreaming, cursorOpacity]);
+
     // Check for document structure (rare, but handle it)
     const documentData = parseDocument(text);
 
@@ -139,7 +162,12 @@ const StreamingTextPart = memo(function StreamingTextPart({
             delayLongPress={250}
             style={({ pressed }) => [pressed && { opacity: 0.75 }]}
         >
-            <Text style={simpleStyles.text}>{text}</Text>
+            <Text style={simpleStyles.text}>
+                {text}
+                {isStreaming && (
+                    <Animated.Text style={{ opacity: cursorOpacity }}>▋</Animated.Text>
+                )}
+            </Text>
         </Pressable>
     );
 });

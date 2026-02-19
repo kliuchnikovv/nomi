@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, memo } from 'react';
-import { Linking, View, Text, ActionSheetIOS, Pressable, StyleSheet } from 'react-native';
+import React, { useCallback, useMemo, memo, useEffect, useRef } from 'react';
+import { Linking, View, Text, ActionSheetIOS, Pressable, StyleSheet, Animated } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
@@ -58,14 +58,44 @@ const FastText = memo(function FastText({
     text,
     style,
     onLongPress,
+    isStreaming = false,
 }: {
     text: string;
     style: any;
     onLongPress: (text: string) => void;
+    isStreaming?: boolean;
 }) {
+    const cursorOpacity = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        if (isStreaming) {
+            const animation = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(cursorOpacity, {
+                        toValue: 0,
+                        duration: 400,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(cursorOpacity, {
+                        toValue: 1,
+                        duration: 400,
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+            animation.start();
+            return () => animation.stop();
+        }
+    }, [isStreaming, cursorOpacity]);
+
     return (
         <Pressable onLongPress={() => onLongPress(text)} delayLongPress={300}>
-            <Text style={style}>{text}</Text>
+            <Text style={style}>
+                {text}
+                {isStreaming && (
+                    <Animated.Text style={{ opacity: cursorOpacity }}>▋</Animated.Text>
+                )}
+            </Text>
         </Pressable>
     );
 });
@@ -246,7 +276,7 @@ export function useGiftedChatRenderers({
 
     // Stable input toolbar
     const renderInputToolbar = useCallback(
-        (props: any) => {
+        (_props: any) => {
             return (
                 <View>
                     <ErrorBanner error={error} onRetry={onRetry} onDismiss={onDismissError} theme={chatTheme} />
@@ -375,6 +405,7 @@ export function useGiftedChatRenderers({
                                     text={messageText}
                                     style={simpleStyles.text}
                                     onLongPress={handleTextLongPress}
+                                    isStreaming={isStreaming}
                                 />
                                 {ActionsComponent}
                             </View>
@@ -447,6 +478,7 @@ export function useGiftedChatRenderers({
                             text={messageText}
                             style={simpleStyles.text}
                             onLongPress={handleTextLongPress}
+                            isStreaming={isStreaming}
                         />
                         {ActionsComponent}
                     </View>

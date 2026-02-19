@@ -5,8 +5,8 @@ import { Message, ContentPart } from '../screens/main/models';
 import { dispatchPayload } from './handlers';
 
 // Throttling configuration for streaming performance
-const STREAM_THROTTLE_MS = 80; // Update UI max 25 times per second during streaming (was 80ms)
-const STREAM_FLUSH_THRESHOLD = 50; // Force update every 30 chars even within throttle window (was 50)
+const STREAM_THROTTLE_MS = 120; // Update UI max ~8 times per second during streaming
+const STREAM_FLUSH_THRESHOLD = 100; // Force update every 100 chars even within throttle window
 
 interface PendingUpdate {
     payload: any;

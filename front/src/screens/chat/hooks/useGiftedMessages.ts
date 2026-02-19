@@ -8,6 +8,7 @@ export interface ExtendedIMessage extends IMessage {
     attachments?: Attachment[];
     actions?: any[];
     content_parts?: any[];
+    context_items?: any[];
 }
 
 const getTimestamp = (value?: number | string | null): number => {
@@ -36,6 +37,7 @@ const shouldShowMessage = (msg: GenieMessage): boolean => {
     if (msg.tool_calls?.length) return true;
     if (msg.actions?.length) return true;
     if (msg.content_parts?.length) return true;
+    if (msg.context_items?.length) return true;
     return false;
 };
 
@@ -109,6 +111,7 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
                 attachments: msg.attachments,
                 actions: msg.actions,
                 content_parts: msg.content_parts,
+                context_items: msg.context_items,
             });
         }
 
