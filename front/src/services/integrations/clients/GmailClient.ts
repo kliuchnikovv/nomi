@@ -186,7 +186,7 @@ Keep your response brief and actionable.`;
             isRead: e.isRead,
         })));
 
-        // Index emails in VectorStore
+        // Index emails in VectorStore (per integration)
         for (const email of emails) {
             try {
                 // Construct a meaningful text representation for the embedding
@@ -197,11 +197,16 @@ Date: ${email.date ? new Date(email.date).toLocaleDateString() : 'Unknown'}
 ${email.snippet || ''}
 ${email.bodyText || ''}`;
 
+                // Use unique ID per integration to avoid conflicts between accounts
+                const docId = `${integrationId}_${email.gmailId}`;
+                
                 await vectorStore.addDocument({
-                    id: email.gmailId,
+                    id: docId,
                     sourceType: 'email',
                     content: content,
                     metadata: {
+                        integrationId: integrationId,
+                        gmailId: email.gmailId,
                         subject: email.subject,
                         from: email.fromEmail,
                         date: email.date

@@ -16,15 +16,24 @@ export const gmailPlugin: ClientPluginHandler = {
         const { integrationStorage } = await import('@genie/front/services/integrations/IntegrationStorage');
         const integrations = await integrationStorage.getIntegrations();
         
-        // Find enabled gmail integration (case-insensitive provider check)
-        const gmailInteg = integrations.find(i => i.provider.toLowerCase() === 'gmail' && i.enabled);
-
-        if (!gmailInteg) {
-            const available = integrations.map(i => `${i.provider}:${i.enabled}`).join(', ');
-            throw new Error(`No active Gmail integration found on device. Available integrations: ${available}`);
+        // Use integration_id from params if provided (from AI agent), otherwise find first enabled
+        let integrationId = params.integration_id;
+        
+        if (!integrationId) {
+            // Find enabled gmail integration (case-insensitive provider check)
+            const gmailInteg = integrations.find(i => i.provider.toLowerCase() === 'gmail' && i.enabled);
+            if (!gmailInteg) {
+                const available = integrations.map(i => `${i.provider}:${i.enabled}`).join(', ');
+                throw new Error(`No active Gmail integration found on device. Available integrations: ${available}`);
+            }
+            integrationId = gmailInteg.id;
+        } else {
+            // Verify the integration exists and is enabled
+            const validIntegration = integrations.find(i => i.id === integrationId && i.enabled);
+            if (!validIntegration) {
+                throw new Error(`Integration ${integrationId} not found or not enabled`);
+            }
         }
-
-        const integrationId = gmailInteg.id;
 
         switch (method) {
             case 'send_email':
@@ -43,7 +52,12 @@ export const gmailPlugin: ClientPluginHandler = {
 
             case 'search_emails':
                 const { vectorStore } = await import('@genie/front/services/database/VectorStore');
-                const searchResults = await vectorStore.search(params.query, params.max_results || 5, 'email');
+                const searchResults = await vectorStore.search(
+                    params.query, 
+                    params.max_results || 5, 
+                    'email',
+                    { integrationId: integrationId }  // Filter by specific account
+                );
                 if (searchResults.length === 0) {
                     return "No relevant emails found in local cache.";
                 }

@@ -199,11 +199,20 @@ export class VectorStore {
 
     /**
      * Search for similar documents
+     * @param query Search query
+     * @param limit Max results
+     * @param sourceType Filter by source type (e.g., 'email')
+     * @param metadataFilter Filter by metadata fields (e.g., { integrationId: 'uuid' })
      */
-    async search(query: string, limit: number = 5, sourceType?: string): Promise<SearchResult[]> {
+    async search(
+        query: string, 
+        limit: number = 5, 
+        sourceType?: string,
+        metadataFilter?: Record<string, string>
+    ): Promise<SearchResult[]> {
         const searchStartTime = Date.now();
         console.log(
-            `[Local RAG Search] Starting search - query="${query}" limit=${limit} sourceType=${sourceType || 'all'}`
+            `[Local RAG Search] Starting search - query="${query}" limit=${limit} sourceType=${sourceType || 'all'} metadataFilter=${JSON.stringify(metadataFilter || {})}`
         );
 
         const db = getDatabase();
@@ -231,19 +240,29 @@ export class VectorStore {
         const dbTime = Date.now() - dbStartTime;
         console.log(`[Local RAG Search] Fetched ${rows.length} vectors from SQLite in ${dbTime}ms`);
 
-        // 3. Compute Cosine Similarity in JS
+        // 3. Compute Cosine Similarity in JS, with metadata filtering
         console.log('[Local RAG Search] Computing cosine similarity for all documents...');
         const similarityStartTime = Date.now();
-        const results: SearchResult[] = rows.map(row => {
-            const vector = JSON.parse(row.embedding) as number[];
-            const score = this.cosineSimilarity(queryEmbedding, vector);
-            return {
-                id: row.id,
-                content: row.content,
-                score,
-                metadata: row.metadata ? JSON.parse(row.metadata) : undefined
-            };
-        });
+        const results: SearchResult[] = rows
+            .map(row => {
+                const vector = JSON.parse(row.embedding) as number[];
+                const score = this.cosineSimilarity(queryEmbedding, vector);
+                return {
+                    id: row.id,
+                    content: row.content,
+                    score,
+                    metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+                };
+            })
+            .filter(row => {
+                // Apply metadata filter if provided
+                if (!metadataFilter) return true;
+                if (!row.metadata) return false;
+                for (const [key, value] of Object.entries(metadataFilter)) {
+                    if (row.metadata[key] !== value) return false;
+                }
+                return true;
+            });
         const similarityTime = Date.now() - similarityStartTime;
         console.log(`[Local RAG Search] Similarity computation completed in ${similarityTime}ms`);
 

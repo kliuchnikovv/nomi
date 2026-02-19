@@ -358,16 +358,19 @@ class AgentFactory:
 
                 load_plugins()
                 client_manifests = []
-                for name in config_used.entries:
+                integration_ids: dict[str, str] = {}
+                for name, tool_item in config_used.entries.items():
                     manifest = get_manifest(name)
                     if (
                         manifest
                         and (manifest.get("execution") or {}).get("type") == "client"
                     ):
                         client_manifests.append(manifest)
+                        if tool_item.params.get("integration_id"):
+                            integration_ids[name] = tool_item.params["integration_id"]
                 if client_manifests:
                     proxy_tools = build_client_proxy_tools(
-                        client_manifests, client_tool_runner
+                        client_manifests, client_tool_runner, integration_ids
                     )
                     tools = list(tools) + proxy_tools
                     logger.info(

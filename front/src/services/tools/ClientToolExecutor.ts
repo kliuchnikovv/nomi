@@ -1,11 +1,12 @@
 import { getIntegrationMetadata, isClientOnly } from '../integrations/registry';
-import { getClientPluginHandler } from '../../plugins/clientRegistry';
+import { getClientPluginHandler, getClientPlugin } from '../../plugins/clientRegistry';
 import { registerClientPlugins } from '../../plugins/registerClientPlugins';
 
 export interface ClientToolAction {
     tool: string;
     method: string;
     params: Record<string, any>;
+    integration_id?: string;
 }
 
 export class ClientToolExecutor {
@@ -30,17 +31,34 @@ export class ClientToolExecutor {
             if (action.tool === 'rag') {
                 return await this.executeRagAction(action.method, action.params);
             }
-            const handler = getClientPluginHandler(action.tool);
+
+            let handler = getClientPluginHandler(action.tool);
+            let resolvedIntegrationId = action.integration_id;
+
+            // If no exact match and we have integration_id, try fallback to base provider
+            // e.g., "gmail_uuid123_send_email" -> fallback to "gmail"
+            if (!handler && action.integration_id) {
+                // Extract base provider name from tool name (e.g., "gmail" from "gmail_uuid123_send_email")
+                const toolBase = action.tool.split('_')[0];
+                handler = getClientPluginHandler(toolBase);
+                if (handler) {
+                    console.log(`[ClientToolExecutor] Falling back to base provider "${toolBase}" for integration ${action.integration_id}`);
+                }
+            }
+
             if (handler) {
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:32',message:'Handler found, executing',data:{tool:action.tool,method:action.method},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:32',message:'Handler found, executing',data:{tool:action.tool,method:action.method,integrationId:resolvedIntegrationId},timestamp:Date.now()})}).catch(()=>{});
 
-                const result = await handler.execute(action.method, action.params);
+                // Pass integration_id in params to handler
+                const paramsWithIntegration = {
+                    ...action.params,
+                    integration_id: resolvedIntegrationId,
+                };
+                const result = await handler.execute(action.method, paramsWithIntegration);
 
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:37',message:'Handler execution completed',data:{tool:action.tool,method:action.method,resultLength:result?.length},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:45',message:'Handler execution completed',data:{tool:action.tool,method:action.method,resultLength:result?.length},timestamp:Date.now()})}).catch(()=>{});
 
                 return result;
             }

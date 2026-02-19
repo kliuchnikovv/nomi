@@ -61,7 +61,6 @@ class RedisSession:
 
         # Plugin delivery context (set from payload in handle_user_message)
 
-
         self._delivery_source: str | None = None
         self._delivery_context: dict[str, Any] = {}
 
@@ -89,9 +88,7 @@ class RedisSession:
 
             # Start background listener task immediately
             # No need to wait for subscription confirmation - Redis subscription is reliable
-            self._result_listener_task = asyncio.create_task(
-                self._listen_for_results()
-            )
+            self._result_listener_task = asyncio.create_task(self._listen_for_results())
             logger.info(
                 "[RedisSession] Result listener started for session %s",
                 self.session_id,
@@ -268,6 +265,8 @@ class RedisSession:
                 )
 
             # Send client_action frame
+            # Extract integration_id from params if present (for multi-account support)
+            integration_id = params.pop("integration_id", None)
             payload_data = {
                 "type": "client_action",
                 "call_id": call_id,
@@ -275,6 +274,8 @@ class RedisSession:
                 "method": method,
                 "params": params,
             }
+            if integration_id:
+                payload_data["integration_id"] = integration_id
             await self._send_frame(
                 make_data(self.next_id, Op.MESSAGE, self.chat_id, payload_data)
             )
@@ -288,7 +289,11 @@ class RedisSession:
 
             for attempt in range(MAX_RETRIES):
                 # Use longer timeout for HealthKit operations
-                timeout = HEALTHKIT_TIMEOUT if plugin.startswith("ios_") else (BASE_TIMEOUT * (1.5**attempt))
+                timeout = (
+                    HEALTHKIT_TIMEOUT
+                    if plugin.startswith("ios_")
+                    else (BASE_TIMEOUT * (1.5**attempt))
+                )
                 try:
                     logger.info(
                         "[ClientTool] Waiting for result (attempt %d/%d, timeout=%.1fs, call_id=%s)",
@@ -790,13 +795,12 @@ class RedisSession:
             if isinstance(incoming_context_items, list):
                 self.context_items = incoming_context_items
                 logger.info(
-                    "[RedisSession] Stored %d context items",
-                    len(self.context_items)
+                    "[RedisSession] Stored %d context items", len(self.context_items)
                 )
             else:
                 logger.warning(
                     "[RedisSession] Invalid context_items type: %s",
-                    type(incoming_context_items).__name__
+                    type(incoming_context_items).__name__,
                 )
         else:
             # Clear context items if not provided (user removed them)
@@ -1131,9 +1135,7 @@ class RedisSession:
                         from_email = metadata.get("from", "")
                         subject = title
                         date = metadata.get("date", "")
-                        context_lines.append(
-                            f"📧 Email from {from_email}: {subject}"
-                        )
+                        context_lines.append(f"📧 Email from {from_email}: {subject}")
                         if date:
                             context_lines.append(f"   Date: {date}")
                         if preview:
@@ -1157,7 +1159,9 @@ class RedisSession:
 
             if context_lines:
                 context_parts.append(
-                    "--- Context Items (emails, documents, etc.) ---\n" + "\n".join(context_lines) + "\n--- End Context Items ---"
+                    "--- Context Items (emails, documents, etc.) ---\n"
+                    + "\n".join(context_lines)
+                    + "\n--- End Context Items ---"
                 )
 
         # Add conversation history

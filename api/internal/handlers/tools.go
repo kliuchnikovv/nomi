@@ -107,7 +107,7 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 
 	// Add Integrations (server and client-only: backend uses client-only to add proxy tools from manifests)
 	for _, integration := range userIntegrations {
-		_, ok := integrations.GetProvider(integration.Provider)
+		provider, ok := integrations.GetProvider(integration.Provider)
 		if !ok {
 			h.logger.Warn("provider not found in registry, skipping",
 				zap.String("provider", integration.Provider),
@@ -118,6 +118,14 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		var params map[string]interface{}
 		if integration.Params != "" {
 			_ = json.Unmarshal([]byte(integration.Params), &params)
+		}
+
+		// Always include integration_id in params for client-side tools
+		if provider.StorageType == integrations.StorageTypeClientOnly || provider.StorageType == integrations.StorageTypeHybrid {
+			if params == nil {
+				params = make(map[string]interface{})
+			}
+			params["integration_id"] = integration.ID.String()
 		}
 
 		toolName := integration.Provider

@@ -15,13 +15,23 @@ export const calendarPlugin: ClientPluginHandler = {
 
         const { integrationStorage } = await import('@genie/front/services/integrations/IntegrationStorage');
         const integrations = await integrationStorage.getIntegrations();
-        const calInteg = integrations.find(i => i.provider === 'calendar' && i.enabled);
-
-        if (!calInteg) {
-            throw new Error('No active Calendar integration found on device');
+        
+        // Use integration_id from params if provided (from AI agent), otherwise find first enabled
+        let integrationId = params.integration_id;
+        
+        if (!integrationId) {
+            const calInteg = integrations.find(i => i.provider === 'calendar' && i.enabled);
+            if (!calInteg) {
+                throw new Error('No active Calendar integration found on device');
+            }
+            integrationId = calInteg.id;
+        } else {
+            // Verify the integration exists and is enabled
+            const validIntegration = integrations.find(i => i.id === integrationId && i.enabled);
+            if (!validIntegration) {
+                throw new Error(`Integration ${integrationId} not found or not enabled`);
+            }
         }
-
-        const integrationId = calInteg.id;
 
         switch (method) {
             case 'create_event':
