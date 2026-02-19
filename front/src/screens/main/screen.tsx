@@ -27,12 +27,17 @@ function MainScreenContent() {
         <ConnectorsProvider>
             <View style={styles.root}>
                 {PluginComponent ? (
-                    <View style={styles.content}>
-                        <PluginComponent
-                            integrationId={activePluginIntegrationId ?? undefined}
-                            onClose={() => setActivePluginView(null)}
-                        />
-                    </View>
+                    <ChatProvider
+                        activeChatID={emptyChatID}
+                        setActiveChatID={() => {}}
+                    >
+                        <View style={styles.content}>
+                            <PluginComponent
+                                integrationId={activePluginIntegrationId ?? undefined}
+                                onClose={() => setActivePluginView(null)}
+                            />
+                        </View>
+                    </ChatProvider>
                 ) : (
                     <ChatProvider
                         activeChatID={activeChatID ? activeChatID : emptyChatID}

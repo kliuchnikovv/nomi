@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 export interface ContextItem {
     id: string;
-    sourceType: 'email' | 'document' | 'image' | 'task' | 'note';
+    sourceType: 'email' | 'document' | 'image' | 'task' | 'note' | 'calendar_event';
     title: string;
     preview?: string;
     metadata?: Record<string, any>;
@@ -64,12 +64,33 @@ export const ContextItemCard = ({
                     label: 'Note',
                     color: '#9C27B0',
                 };
+            case 'calendar_event':
+                return {
+                    icon: 'calendar' as const,
+                    label: 'Calendar',
+                    color: '#4285F4',
+                };
             default:
                 return {
                     icon: 'apps' as const,
                     label: 'Item',
                     color: theme.textSecondary || '#888888',
                 };
+        }
+    };
+
+    const formatEventDate = (start: string): string => {
+        try {
+            const date = new Date(start);
+            return date.toLocaleString(undefined, {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        } catch {
+            return start;
         }
     };
 
@@ -113,15 +134,28 @@ export const ContextItemCard = ({
                 >
                     <Ionicons name={icon} size={18} color={color} />
                 </View>
-                <Text
-                    style={[
-                        styles.title,
-                        { color: theme.textPrimary ?? theme.text },
-                    ]}
-                    numberOfLines={1}
-                >
-                    {displayName}
-                </Text>
+                <View style={styles.textContent}>
+                    <Text
+                        style={[
+                            styles.title,
+                            { color: theme.textPrimary ?? theme.text },
+                        ]}
+                        numberOfLines={1}
+                    >
+                        {displayName}
+                    </Text>
+                    {item.sourceType === 'calendar_event' && item.metadata?.start && (
+                        <Text
+                            style={[
+                                styles.subtitle,
+                                { color: theme.textSecondary },
+                            ]}
+                            numberOfLines={1}
+                        >
+                            {formatEventDate(item.metadata.start)}
+                        </Text>
+                    )}
+                </View>
             </View>
         </View>
     );
@@ -200,7 +234,7 @@ const styles = StyleSheet.create({
     },
     content: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         flex: 1,
     },
     iconContainer: {
@@ -211,9 +245,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginRight: 8,
     },
+    textContent: {
+        flex: 1,
+    },
     title: {
         fontSize: 13,
         fontWeight: '500',
+    },
+    subtitle: {
+        fontSize: 11,
+        marginTop: 2,
     },
     listContainer: {
         marginHorizontal: 16,

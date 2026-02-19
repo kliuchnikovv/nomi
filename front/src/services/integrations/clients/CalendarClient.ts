@@ -61,16 +61,12 @@ class CalendarClient {
                 return;
             }
 
-            console.log(`[CalendarClient] Processing ${eventsNeedingAction.length} events with Apple Intelligence...`);
-
-            // 3. Check if Apple Intelligence is available
-            if (!AppleIntelligence.isAvailable()) {
-                console.log('[CalendarClient] Apple Intelligence not available, skipping analysis');
-                return;
-            }
-
-            // 4. Process each event (limit to 5 to avoid performance issues)
+            // Process each event (limit to 5 to avoid performance issues)
             const eventsToProcess = eventsNeedingAction.slice(0, 5);
+            console.log(`[CalendarClient] Processing ${eventsToProcess.length} events...`);
+
+            // Check if Apple Intelligence is available
+            const aiAvailable = AppleIntelligence.isAvailable();
 
             for (const event of eventsToProcess) {
                 try {
@@ -114,8 +110,9 @@ Status: ${event.status || 'Unknown'}`;
 
                     await pluginChatStorage.addMessage(chat.id, 'user', eventSummary);
 
-                    // Analyze with Apple Intelligence
-                    const prompt = `Analyze this calendar event and provide helpful suggestions.
+                    // Only analyze with AI if available
+                    if (aiAvailable) {
+                        const prompt = `Analyze this calendar event and provide helpful suggestions.
 
 Event: ${event.summary || '(No title)'}
 Date: ${startDate}
@@ -130,12 +127,19 @@ Provide a brief analysis:
 
 Keep your response concise and actionable.`;
 
-                    const analysis = await AppleIntelligence.generate(prompt);
+                        try {
+                            const analysis = await AppleIntelligence.generate(prompt);
+                            await pluginChatStorage.addMessage(chat.id, 'assistant', analysis);
+                        } catch (aiError) {
+                            console.error(`[CalendarClient] AI analysis failed for event ${event.id}:`, aiError);
+                            await pluginChatStorage.addMessage(chat.id, 'assistant', 'Event loaded. Would you like me to analyze this event?');
+                        }
+                    } else {
+                        console.log('[CalendarClient] Apple Intelligence not available, creating chat without analysis');
+                        await pluginChatStorage.addMessage(chat.id, 'assistant', 'Event loaded. Connect Apple Intelligence on iOS for AI-powered analysis.');
+                    }
 
-                    // Save assistant response
-                    await pluginChatStorage.addMessage(chat.id, 'assistant', analysis);
-
-                    console.log(`[CalendarClient] Created chat and analysis for event: ${event.summary}`);
+                    console.log(`[CalendarClient] Created chat for event: ${event.summary}`);
                 } catch (e) {
                     console.error(`[CalendarClient] Failed to process event ${event.id}:`, e);
                 }

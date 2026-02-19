@@ -4,7 +4,10 @@
  */
 
 import { getDatabase } from '../database/database';
-import { v4 as uuidv4 } from 'uuid';
+
+function generateId(): string {
+    return `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
+}
 
 export interface PluginChat {
     id: string;
@@ -38,7 +41,7 @@ class PluginChatStorage {
     ): Promise<PluginChat> {
         const db = getDatabase();
         const now = Date.now();
-        const id = uuidv4();
+        const id = generateId();
 
         const dataStr = data ? JSON.stringify(data) : null;
 
@@ -152,7 +155,7 @@ class PluginChatStorage {
     async addMessage(chatId: string, role: 'user' | 'assistant', content: string): Promise<PluginMessage> {
         const db = getDatabase();
         const now = Date.now();
-        const id = uuidv4();
+        const id = generateId();
 
         await db.runAsync(
             `INSERT INTO plugin_messages (id, chat_id, role, content, created_at)

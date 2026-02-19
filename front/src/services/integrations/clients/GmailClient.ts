@@ -50,16 +50,12 @@ class GmailClient {
                 return;
             }
 
-            console.log(`[GmailClient] Processing ${emails.length} unread emails with Apple Intelligence...`);
-
-            // 2. Check if Apple Intelligence is available
-            if (!AppleIntelligence.isAvailable()) {
-                console.log('[GmailClient] Apple Intelligence not available, skipping analysis');
-                return;
-            }
-
-            // 3. Process each email (limit to 5 to avoid performance issues)
+            // Process each email (limit to 5 to avoid performance issues)
             const emailsToProcess = emails.slice(0, 5);
+            console.log(`[GmailClient] Processing ${emailsToProcess.length} emails...`);
+
+            // Check if Apple Intelligence is available
+            const aiAvailable = AppleIntelligence.isAvailable();
 
             for (const email of emailsToProcess) {
                 try {
@@ -93,8 +89,9 @@ ${email.snippet || email.bodyText?.slice(0, 300) || '(No content)'}`;
 
                     await pluginChatStorage.addMessage(chat.id, 'user', emailSummary);
 
-                    // Analyze with Apple Intelligence
-                    const prompt = `Analyze this email and provide a brief response or suggested action.
+                    // Only analyze with AI if available
+                    if (aiAvailable) {
+                        const prompt = `Analyze this email and provide a brief response or suggested action.
 
 From: ${email.fromName || email.fromEmail} <${email.fromEmail}>
 Subject: ${email.subject || '(No subject)'}
@@ -107,12 +104,19 @@ Provide a concise analysis:
 
 Keep your response brief and actionable.`;
 
-                    const analysis = await AppleIntelligence.generate(prompt);
+                        try {
+                            const analysis = await AppleIntelligence.generate(prompt);
+                            await pluginChatStorage.addMessage(chat.id, 'assistant', analysis);
+                        } catch (aiError) {
+                            console.error(`[GmailClient] AI analysis failed for email ${email.gmailId}:`, aiError);
+                            await pluginChatStorage.addMessage(chat.id, 'assistant', 'Email loaded. Would you like me to analyze this email?');
+                        }
+                    } else {
+                        console.log('[GmailClient] Apple Intelligence not available, creating chat without analysis');
+                        await pluginChatStorage.addMessage(chat.id, 'assistant', 'Email loaded. Connect Apple Intelligence on iOS for AI-powered analysis.');
+                    }
 
-                    // Save assistant response
-                    await pluginChatStorage.addMessage(chat.id, 'assistant', analysis);
-
-                    console.log(`[GmailClient] Created chat and analysis for email: ${email.subject}`);
+                    console.log(`[GmailClient] Created chat for email: ${email.subject}`);
                 } catch (e) {
                     console.error(`[GmailClient] Failed to process email ${email.gmailId}:`, e);
                 }

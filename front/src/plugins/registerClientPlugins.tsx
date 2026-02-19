@@ -82,7 +82,11 @@ export function registerClientPlugins(): void {
         MainComponent: GmailMainScreen,
         SidebarComponent: GmailSidebar,
     });
-    registerClientPlugin('calendar', { ...calendarPlugin, backgroundTask: calendarBackgroundTask });
+    registerClientPlugin('calendar', { 
+        ...calendarPlugin, 
+        backgroundTask: calendarBackgroundTask,
+        MainComponent: CalendarPluginScreen,
+    });
     registerClientPlugin('github', {
         ...githubPlugin,
         backgroundTask: githubBackgroundTask,

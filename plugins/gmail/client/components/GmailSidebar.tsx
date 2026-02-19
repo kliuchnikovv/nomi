@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Mail } from 'iconoir-react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
+import { ThemePalette } from '@genie/front/themes/types';
 import { PluginSidebarProps } from '@genie/front/plugins/types';
 import { integrationStorage } from '@genie/front/services/integrations/IntegrationStorage';
 
 export function GmailSidebar({ integrationId, onSelect, isSelected }: PluginSidebarProps) {
     const { theme, palette } = useTheme();
-    const [accountEmail, setAccountEmail] = useState<string>('Gmail');
+    const [accountEmail, setAccountEmail] = useState<string>('');
+    const [unreadCount, setUnreadCount] = useState(0);
 
     useEffect(() => {
         const loadAccountInfo = async () => {
@@ -33,41 +35,58 @@ export function GmailSidebar({ integrationId, onSelect, isSelected }: PluginSide
     const displayName = accountEmail === 'Gmail' ? accountEmail : truncateText(accountEmail);
 
     return (
-        <View>
-            <Pressable
-                style={[
-                    styles.header,
-                    isSelected && { backgroundColor: `${theme.accent}15` }
-                ]}
-                onPress={onSelect}
-            >
-                <View style={styles.headerLeft}>
-                    <Mail width={20} height={20} color={palette.red} />
-                    <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
-                        {displayName}
-                    </Text>
+        <Pressable
+            style={[
+                styles.container,
+                isSelected && { backgroundColor: `${theme.accent}15` }
+            ]}
+            onPress={onSelect}
+        >
+            <View style={styles.left}>
+                <Mail width={20} height={20} color={palette.red} />
+                <Text style={[styles.label, { color: theme.text }]} numberOfLines={1}>
+                    {displayName}
+                </Text>
+            </View>
+            {unreadCount > 0 && (
+                <View style={[styles.badge, { backgroundColor: palette.red }]}>
+                    <Text style={styles.badgeText}>{unreadCount}</Text>
                 </View>
-            </Pressable>
-        </View>
+            )}
+        </Pressable>
     );
 }
 
 const styles = StyleSheet.create({
-    header: {
+    container: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: 'rgba(150, 150, 150, 0.2)',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        marginVertical: 2,
     },
-    headerLeft: {
+    left: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 10,
     },
-    headerTitle: {
-        fontSize: 16,
-        fontWeight: '600',
+    label: {
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    badge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 10,
+        minWidth: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    badgeText: {
+        color: 'white',
+        fontSize: 11,
+        fontWeight: '700',
     },
 });

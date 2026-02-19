@@ -2,19 +2,22 @@
  * Calendar Plugin Screen - Shows AI-analyzed event chats
  */
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { PluginMainScreenProps } from '@genie/front/plugins/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { XmarkCircle, Calendar } from 'iconoir-react-native';
 import { pluginChatStorage, PluginChat } from '@genie/front/services/plugins/PluginChatStorage';
+import { calendarClient } from '@genie/front/services/integrations/clients/CalendarClient';
+import { contextStore } from '@genie/front/services/ContextStore';
 
-export function CalendarPluginScreen({ integrationId, onClose, navigation }: PluginMainScreenProps) {
+export function CalendarPluginScreen({ integrationId, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const [chats, setChats] = useState<PluginChat[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
 
     const loadChats = async () => {
         try {
@@ -24,8 +27,22 @@ export function CalendarPluginScreen({ integrationId, onClose, navigation }: Plu
             console.error('[CalendarPluginScreen] Failed to load chats:', error);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            if (integrationId) {
+                await calendarClient.onWake(integrationId);
+            }
+            await loadChats();
+        } catch (error) {
+            console.error('[CalendarPluginScreen] Refresh failed:', error);
+            setRefreshing(false);
+        }
+    }, [integrationId]);
 
     useEffect(() => {
         loadChats();
@@ -34,10 +51,34 @@ export function CalendarPluginScreen({ integrationId, onClose, navigation }: Plu
         return () => clearInterval(interval);
     }, [integrationId]);
 
-    const handleChatPress = (chat: PluginChat) => {
-        // Navigate to chat view
-        if (navigation) {
-            navigation.navigate('CalendarChatView', { chatId: chat.id });
+    const handleChatPress = async (chat: PluginChat) => {
+        console.log('[CalendarPluginScreen] handleChatPress called, chat:', chat.id);
+        
+        try {
+            const metadata = chat.data ? JSON.parse(chat.data) : {};
+            
+            // Add event to context (same as Gmail emails)
+            contextStore.add({
+                id: chat.id,
+                sourceType: 'calendar_event',
+                title: chat.title,
+                preview: metadata.start ? new Date(metadata.start).toLocaleString() : '',
+                metadata: {
+                    eventId: metadata.eventId,
+                    title: chat.title,
+                    start: metadata.start,
+                    end: metadata.end,
+                    location: metadata.location,
+                    status: metadata.status,
+                    integrationId: integrationId,
+                },
+                addedAt: Date.now(),
+            });
+            
+            console.log('[CalendarPluginScreen] Event added to context, closing...');
+            onClose?.();
+        } catch (error) {
+            console.error('[CalendarPluginScreen] Error:', error);
         }
     };
 
@@ -102,7 +143,18 @@ export function CalendarPluginScreen({ integrationId, onClose, navigation }: Plu
                 </Text>
             </View>
 
-            <View style={styles.content}>
+            <ScrollView 
+                style={styles.content}
+                contentContainerStyle={chats.length === 0 ? styles.emptyContainer : undefined}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={theme.accent}
+                        colors={[theme.accent]}
+                    />
+                }
+            >
                 {loading ? (
                     <View style={styles.center}>
                         <ActivityIndicator size="large" color={theme.accent} />
@@ -113,6 +165,7 @@ export function CalendarPluginScreen({ integrationId, onClose, navigation }: Plu
                         keyExtractor={(item) => item.id}
                         renderItem={renderChatItem}
                         contentContainerStyle={styles.listContent}
+                        scrollEnabled={false}
                     />
                 ) : (
                     <View style={styles.emptyState}>
@@ -123,9 +176,15 @@ export function CalendarPluginScreen({ integrationId, onClose, navigation }: Plu
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                             When you have upcoming events, they will be automatically analyzed and appear here.
                         </Text>
+                        <Pressable
+                            style={[styles.refreshButton, { backgroundColor: theme.accent }]}
+                            onPress={onRefresh}
+                        >
+                            <Text style={styles.refreshButtonText}>Refresh</Text>
+                        </Pressable>
                     </View>
                 )}
-            </View>
+            </ScrollView>
         </View>
     );
 }
@@ -239,5 +298,19 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textAlign: 'center',
         lineHeight: 20,
+    },
+    emptyContainer: {
+        flex: 1,
+    },
+    refreshButton: {
+        marginTop: 20,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    refreshButtonText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '600',
     },
 });

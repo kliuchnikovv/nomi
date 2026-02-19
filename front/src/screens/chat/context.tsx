@@ -20,8 +20,11 @@ import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
 import { shallow } from 'zustand/shallow';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
-import { v4 as uuidv4 } from 'uuid';
 import { generateChatTitle } from '../../services/chatTitleGenerator';
+
+function generateId(): string {
+    return `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
+}
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
@@ -376,7 +379,7 @@ export function ChatProvider({
 
                 // For plugin mode, we generate ID locally if not provided
                 if (!messageID) {
-                    messageID = uuidv4();
+                    messageID = generateId();
                 }
             } else {
                 if (!chatIdToUse || chatIdToUse === emptyChatID) {

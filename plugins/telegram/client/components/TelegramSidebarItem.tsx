@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { SendDiagonal } from 'iconoir-react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
+import { ThemePalette } from '@genie/front/themes/types';
 import { PluginSidebarProps } from '@genie/front/plugins/types';
 
 export function TelegramSidebarItem({ integrationId, onSelect, isSelected }: PluginSidebarProps) {
@@ -15,7 +17,7 @@ export function TelegramSidebarItem({ integrationId, onSelect, isSelected }: Plu
             onPress={onSelect}
         >
             <View style={styles.left}>
-                <Text style={styles.icon}>✈️</Text>
+                <SendDiagonal width={20} height={20} color={palette.blue} />
                 <Text style={[styles.label, { color: theme.text }]}>Telegram</Text>
             </View>
         </Pressable>
@@ -36,9 +38,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
-    },
-    icon: {
-        fontSize: 18,
     },
     label: {
         fontSize: 15,
