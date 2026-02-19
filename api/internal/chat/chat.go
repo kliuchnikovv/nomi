@@ -50,5 +50,6 @@ type Message struct {
 	Attachments   []Attachment  `json:"attachments,omitempty"`    // For reading
 	AttachmentIDs []uuid.UUID   `json:"attachment_ids,omitempty"` // For writing
 	WebSearch     bool          `json:"web_search,omitempty"`     // For writing
+	ContextItems  interface{}   `json:"context_items,omitempty"`  // Context items (emails, documents, etc.)
 	CreatedAt     time.Time     `json:"created_at"`
 }

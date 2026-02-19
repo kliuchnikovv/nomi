@@ -28,6 +28,7 @@ type CreateMessageRequest struct {
 	Model         string      `json:"model,omitempty"`
 	AttachmentIDs []uuid.UUID `json:"attachment_ids,omitempty"`
 	WebSearch     bool        `json:"web_search,omitempty"`
+	ContextItems  interface{} `json:"context_items,omitempty"`
 }
 
 // CreateMessage creates a new message
@@ -46,6 +47,7 @@ func (s *MessageService) CreateMessage(ctx context.Context, userID uuid.UUID, ch
 			Model:         v.Model,
 			AttachmentIDs: v.AttachmentIDs,
 			WebSearch:     v.WebSearch,
+			ContextItems:  v.ContextItems,
 		}
 	default:
 		return nil, ErrInvalidRequest
@@ -59,6 +61,7 @@ func (s *MessageService) CreateMessage(ctx context.Context, userID uuid.UUID, ch
 		Model:         createReq.Model,
 		AttachmentIDs: createReq.AttachmentIDs,
 		WebSearch:     createReq.WebSearch,
+		ContextItems:  createReq.ContextItems,
 		CreatedAt:     time.Now().UTC(),
 	}
 

@@ -49,6 +49,7 @@ type Message struct {
 	Reasoning    string         `gorm:"type:text"`  // Stores accumulated reasoning/thinking steps
 	Model        string         `gorm:"type:text"`
 	Actions      datatypes.JSON `gorm:"type:jsonb"` // Stores potential user actions (buttons)
+	ContextItems datatypes.JSON `gorm:"type:jsonb"` // Stores context items (emails, documents, etc.)
 	Attachments  []Attachment   `gorm:"foreignKey:MessageID"`
 	CreatedAt    time.Time      `gorm:"not null;index:idx_messages_chat_created,priority:2,sort:desc"`
 	UpdatedAt    time.Time      `gorm:"not null"`
