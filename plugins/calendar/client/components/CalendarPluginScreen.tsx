@@ -6,22 +6,39 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { PluginMainScreenProps } from '@genie/front/plugins/types';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { XmarkCircle, Calendar } from 'iconoir-react-native';
+import { Calendar } from 'iconoir-react-native';
 import { pluginChatStorage, PluginChat } from '@genie/front/services/plugins/PluginChatStorage';
 import { calendarClient } from '@genie/front/services/integrations/clients/CalendarClient';
 import { contextStore } from '@genie/front/services/ContextStore';
+import { integrationStorage } from '@genie/front/services/integrations/IntegrationStorage';
+import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
 
 export function CalendarPluginScreen({ integrationId, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
-    const insets = useSafeAreaInsets();
     const [chats, setChats] = useState<PluginChat[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [integrationName, setIntegrationName] = useState<string>('Calendar');
+
+    useEffect(() => {
+        const loadIntegrationName = async () => {
+            if (!integrationId) return;
+            try {
+                const integrations = await integrationStorage.getIntegrations();
+                const found = integrations.find((i) => i.id === integrationId);
+                if (found) {
+                    setIntegrationName(found.name || 'Calendar');
+                }
+            } catch (error) {
+                console.error('[CalendarPluginScreen] Failed to load integration name:', error);
+            }
+        };
+        loadIntegrationName();
+    }, [integrationId]);
 
     const loadChats = async () => {
         try {
-            const data = await pluginChatStorage.getPluginChats('calendar', 'event_chat');
+            const data = await pluginChatStorage.getPluginChats('calendar', 'event_chat', integrationId);
             setChats(data);
         } catch (error) {
             console.error('[CalendarPluginScreen] Failed to load chats:', error);
@@ -53,11 +70,10 @@ export function CalendarPluginScreen({ integrationId, onClose }: PluginMainScree
 
     const handleChatPress = async (chat: PluginChat) => {
         console.log('[CalendarPluginScreen] handleChatPress called, chat:', chat.id);
-        
+
         try {
             const metadata = chat.data ? JSON.parse(chat.data) : {};
-            
-            // Add event to context (same as Gmail emails)
+
             contextStore.add({
                 id: chat.id,
                 sourceType: 'calendar_event',
@@ -74,9 +90,9 @@ export function CalendarPluginScreen({ integrationId, onClose }: PluginMainScree
                 },
                 addedAt: Date.now(),
             });
-            
+
             console.log('[CalendarPluginScreen] Event added to context, closing...');
-            onClose?.();
+            onClose?.(true);
         } catch (error) {
             console.error('[CalendarPluginScreen] Error:', error);
         }
@@ -124,26 +140,8 @@ export function CalendarPluginScreen({ integrationId, onClose }: PluginMainScree
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
-                <View style={styles.headerRow}>
-                    <View style={styles.headerLeft}>
-                        <Text style={styles.headerIcon}>📅</Text>
-                        <Text style={[styles.title, { color: theme.text }]}>Event Insights</Text>
-                    </View>
-                    {onClose && (
-                        <Pressable onPress={onClose} hitSlop={12}>
-                            <XmarkCircle width={24} height={24} color={theme.textSecondary} />
-                        </Pressable>
-                    )}
-                </View>
-                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                    AI-analyzed upcoming events
-                </Text>
-            </View>
-
-            <ScrollView 
+        <SharedPluginScreen title={integrationName} onClose={onClose}>
+            <ScrollView
                 style={styles.content}
                 contentContainerStyle={chats.length === 0 ? styles.emptyContainer : undefined}
                 refreshControl={
@@ -185,41 +183,11 @@ export function CalendarPluginScreen({ integrationId, onClose }: PluginMainScree
                     </View>
                 )}
             </ScrollView>
-        </View>
+        </SharedPluginScreen>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingBottom: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    headerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 4,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    headerIcon: {
-        fontSize: 22,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    subtitle: {
-        fontSize: 13,
-        marginTop: 2,
-    },
     content: {
         flex: 1,
     },

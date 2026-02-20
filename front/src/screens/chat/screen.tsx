@@ -72,11 +72,11 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
     const { width: windowWidth } = useWindowDimensions();
     const {
         chats, chatsLoading, activeChatID, activeChat, setActiveChatID,
-        getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat
+        getChats, createNewChat, createNewChatWithMode, renameChat, deleteChat,
+        rightSidebarVisible, setRightSidebarVisible,
     } = useMain();
 
     const [sidebarVisible, setSidebarVisible] = useState(false);
-    const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
 
     // Attachment Logic
     const [imageViewerVisible, setImageViewerVisible] = useState(false);
@@ -319,6 +319,15 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             rightSidebarTranslateX.value = sidebarWidth;
         }
     }, [sidebarWidth, isWide]);
+
+    // Update right sidebar position when visibility changes
+    useEffect(() => {
+        if (rightSidebarVisible) {
+            rightSidebarTranslateX.value = 0;
+        } else {
+            rightSidebarTranslateX.value = sidebarWidth;
+        }
+    }, [rightSidebarVisible, sidebarWidth]);
 
     // Close right sidebar when opening left
     const handleOpenMenu = useCallback(() => {

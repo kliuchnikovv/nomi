@@ -5,7 +5,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Trash } from 'iconoir-react-native';
 import { pluginChatStorage, PluginMessage } from '@genie/front/services/plugins/PluginChatStorage';
 
@@ -17,7 +16,6 @@ interface CalendarChatViewProps {
 
 export function CalendarChatView({ chatId, navigation, onClose }: CalendarChatViewProps) {
     const { theme } = useTheme();
-    const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<PluginMessage[]>([]);
     const [chatTitle, setChatTitle] = useState('');
     const [loading, setLoading] = useState(true);
@@ -86,7 +84,7 @@ export function CalendarChatView({ chatId, navigation, onClose }: CalendarChatVi
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
+            <View style={[styles.header, { borderBottomColor: theme.border }]}>
                 <View style={styles.headerRow}>
                     <Pressable onPress={handleBack} style={styles.backButton} hitSlop={12}>
                         <ArrowLeft width={24} height={24} color={theme.text} />

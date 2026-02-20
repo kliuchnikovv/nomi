@@ -29,8 +29,10 @@ export interface PluginSidebarProps {
 export interface PluginMainScreenProps {
     /** Server-assigned integration ID for this plugin instance */
     integrationId?: string;
-    /** Navigate back from the full-screen view */
-    onClose?: () => void;
+    /** Navigate back from the full-screen view
+     * @param closeSidebar - if true, close the sidebar; if false, keep it open
+     */
+    onClose?: (closeSidebar?: boolean) => void;
 }
 
 // ─── Widgets ───────────────────────────────────────────────

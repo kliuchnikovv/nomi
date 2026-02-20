@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { PluginMainScreenProps } from '@genie/front/plugins/types';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { XmarkCircle } from 'iconoir-react-native';
 import { getApiUrl } from '@genie/front/config';
 import { authStore } from '@genie/front/apiClient';
+import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
 
 interface TelegramMessage {
     id: string;
@@ -23,7 +22,6 @@ interface TelegramStatus {
 
 export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
-    const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<TelegramMessage[]>([]);
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<TelegramStatus | null>(null);
@@ -73,29 +71,13 @@ export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenP
     useEffect(() => {
         if (status?.linked) {
             loadMessages();
-            // Poll for new messages every 10 seconds
             const interval = setInterval(loadMessages, 10000);
             return () => clearInterval(interval);
         }
     }, [status?.linked]);
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
-                <View style={styles.headerRow}>
-                    <View style={styles.headerLeft}>
-                        <Text style={styles.headerIcon}>✈️</Text>
-                        <Text style={[styles.title, { color: theme.text }]}>Telegram</Text>
-                    </View>
-                    {onClose && (
-                        <Pressable onPress={onClose} hitSlop={12}>
-                            <XmarkCircle width={24} height={24} color={theme.textSecondary} />
-                        </Pressable>
-                    )}
-                </View>
-            </View>
-
+        <SharedPluginScreen title="Telegram" onClose={onClose}>
             <View style={styles.content}>
                 {loading ? (
                     <View style={styles.center}>
@@ -119,8 +101,6 @@ export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenP
                                 data={messages}
                                 keyExtractor={(item) => item.id}
                                 style={styles.messageList}
-                                inverted={false}
-                                onContentSizeChange={() => {}}
                                 renderItem={({ item }) => (
                                     <View style={[
                                         styles.messageItem,
@@ -152,36 +132,11 @@ export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenP
                     </View>
                 )}
             </View>
-        </View>
+        </SharedPluginScreen>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingBottom: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    headerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    headerIcon: {
-        fontSize: 22,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: '700',
-    },
     content: {
         flex: 1,
         padding: 16,

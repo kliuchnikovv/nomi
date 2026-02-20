@@ -5,33 +5,33 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '@genie/front/context/ThemeContext';
+import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
+import { PluginMainScreenProps } from '@genie/front/plugins/types';
 
-export default function IOSCalendarPluginScreen() {
+export default function IOSCalendarPluginScreen({ onClose }: PluginMainScreenProps) {
+    const { theme } = useTheme();
+
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>iOS Calendar</Text>
-            <Text style={styles.description}>
-                Calendar integration via EventKit
-            </Text>
-        </View>
+        <SharedPluginScreen title="iOS Calendar" onClose={onClose}>
+            <View style={styles.center}>
+                <Text style={[styles.description, { color: theme.textSecondary }]}>
+                    Calendar integration via EventKit
+                </Text>
+            </View>
+        </SharedPluginScreen>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
+    center: {
         flex: 1,
-        padding: 20,
         justifyContent: 'center',
         alignItems: 'center',
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 10,
+        padding: 20,
     },
     description: {
         fontSize: 16,
         textAlign: 'center',
-        color: '#666',
     },
 });

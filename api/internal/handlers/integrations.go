@@ -61,7 +61,7 @@ func (h *IntegrationsHandler) GetIntegration(c *gin.Context) {
 	c.JSON(http.StatusOK, integration)
 }
 
-// DeleteIntegration removes an integration
+// DeleteIntegration removes an integration and its associated plugin data
 func (h *IntegrationsHandler) DeleteIntegration(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
 	idStr := c.Param("id")
@@ -72,15 +72,28 @@ func (h *IntegrationsHandler) DeleteIntegration(c *gin.Context) {
 		return
 	}
 
-	result := h.store.DB.Where("id = ? AND user_id = ?", id, userID).Delete(&storage.Integration{})
-	if result.Error != nil {
-		h.logger.Error("failed to delete integration", zap.Error(result.Error))
+	// Look up the integration to get its provider name before deletion
+	var integration storage.Integration
+	if err := h.store.DB.Where("id = ? AND user_id = ?", id, userID).First(&integration).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "integration not found"})
+			return
+		}
+		h.logger.Error("failed to find integration", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete integration"})
 		return
 	}
 
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "integration not found"})
+	// Clean up associated plugin_data records
+	if err := h.store.DB.Where("user_id = ? AND plugin_name = ?", userID, integration.Provider).
+		Delete(&storage.PluginData{}).Error; err != nil {
+		h.logger.Warn("failed to clean up plugin data", zap.Error(err), zap.String("provider", integration.Provider))
+	}
+
+	// Delete the integration itself
+	if err := h.store.DB.Delete(&integration).Error; err != nil {
+		h.logger.Error("failed to delete integration", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete integration"})
 		return
 	}
 

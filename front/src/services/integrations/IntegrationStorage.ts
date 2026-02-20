@@ -266,6 +266,9 @@ class IntegrationStorage {
 
     async deleteIntegration(id: string): Promise<void> {
         const db = getDatabase();
+        // Clean up events and tasks that reference this integration as source_id
+        await db.runAsync('DELETE FROM events WHERE source_id = ?', [id]);
+        await db.runAsync('DELETE FROM tasks WHERE source_id = ?', [id]);
         // Cascading delete will handle credentials, emails, and content
         await db.runAsync('DELETE FROM integrations WHERE id = ?', [id]);
     }
@@ -594,16 +597,21 @@ class IntegrationStorage {
         await db.runAsync('UPDATE emails SET analyzed_at = ? WHERE id = ?', [Date.now(), emailId]);
     }
 
-    async getEventsForDate(date: Date): Promise<ExtractedEvent[]> {
+    async getEventsForDate(date: Date, integrationId?: string): Promise<ExtractedEvent[]> {
         const db = getDatabase();
         const startOfDay = new Date(date);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
 
+        const whereClause = integrationId ? 'AND source_id = ?' : '';
+        const params = integrationId 
+            ? [startOfDay.getTime(), endOfDay.getTime(), integrationId]
+            : [startOfDay.getTime(), endOfDay.getTime()];
+
         const rows = await db.getAllAsync<any>(
-            `SELECT * FROM events WHERE start_date >= ? AND start_date <= ? ORDER BY start_date ASC`,
-            [startOfDay.getTime(), endOfDay.getTime()]
+            `SELECT * FROM events WHERE start_date >= ? AND start_date <= ? ${whereClause} ORDER BY start_date ASC`,
+            params
         );
 
         return rows.map(row => ({
@@ -619,11 +627,17 @@ class IntegrationStorage {
         }));
     }
 
-    async getEventsRange(startDate: Date, endDate: Date): Promise<ExtractedEvent[]> {
+    async getEventsRange(startDate: Date, endDate: Date, integrationId?: string): Promise<ExtractedEvent[]> {
         const db = getDatabase();
+        
+        const whereClause = integrationId ? 'AND source_id = ?' : '';
+        const params = integrationId
+            ? [startDate.getTime(), endDate.getTime(), integrationId]
+            : [startDate.getTime(), endDate.getTime()];
+
         const rows = await db.getAllAsync<any>(
-            `SELECT * FROM events WHERE start_date >= ? AND start_date <= ? ORDER BY start_date ASC`,
-            [startDate.getTime(), endDate.getTime()]
+            `SELECT * FROM events WHERE start_date >= ? AND start_date <= ? ${whereClause} ORDER BY start_date ASC`,
+            params
         );
 
         return rows.map(row => ({

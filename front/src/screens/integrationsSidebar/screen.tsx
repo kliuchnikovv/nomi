@@ -34,7 +34,7 @@ function PluginSection({
     onClose?: () => void;
 }) {
     const { theme } = useTheme();
-    const { setActivePluginView, setActivePluginIntegrationId } = useMain();
+    const { setActivePluginView, setActivePluginIntegrationId, setRightSidebarVisible } = useMain();
 
     const metadata = INTEGRATION_REGISTRY[plugin.provider.toLowerCase()];
     const displayName = plugin.name;
@@ -43,6 +43,7 @@ function PluginSection({
     const handlePress = () => {
         setActivePluginView(plugin.provider);
         setActivePluginIntegrationId(plugin.id);
+        setRightSidebarVisible(false);
         onClose?.();
     };
 

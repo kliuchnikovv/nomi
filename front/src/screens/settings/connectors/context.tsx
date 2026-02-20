@@ -26,6 +26,7 @@ import {
     registerSystemEventListeners,
     initializeSystemEventListeners,
 } from '../../../services/integrations/BackgroundTaskManager';
+import { pluginChatStorage } from '../../../services/plugins/PluginChatStorage';
 
 // Safe wrapper for initDatabase that handles edge cases during startup
 async function safeInitDatabase(): Promise<void> {
@@ -471,9 +472,15 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 }
             }
 
-            // Delete from local storage
+            // Clean up plugin chats for this integration's provider
+            const integration = configs.find(c => c.id === id);
+            if (integration?.provider) {
+                await pluginChatStorage.deletePluginChatsByPlugin(integration.provider);
+            }
+
+            // Delete from local storage (also cleans up events, tasks, credentials, emails)
             await integrationStorage.deleteIntegration(id);
-            
+
             // Обновляем фоновые задачи после удаления интеграции
             await refreshBackgroundTasks();
             await getIntegrations();

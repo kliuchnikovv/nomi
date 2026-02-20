@@ -21,6 +21,10 @@ export interface MainContextType {
     setActivePluginView: (view: string | null) => void;
     activePluginIntegrationId: string | null;
     setActivePluginIntegrationId: (id: string | null) => void;
+    rightSidebarVisible: boolean;
+    setRightSidebarVisible: (visible: boolean) => void;
+    closePluginKeepSidebar: () => void;
+    closePluginWithSidebar: () => void;
 }
 
 export type Chat = {

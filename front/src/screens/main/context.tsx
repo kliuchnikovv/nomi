@@ -33,6 +33,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     const [sidebarFilter, setSidebarFilter] = useState<string>('all');
     const [activePluginView, setActivePluginView] = useState<string | null>(null);
     const [activePluginIntegrationId, setActivePluginIntegrationId] = useState<string | null>(null);
+    const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
 
     const { isAuthenticated } = useAuth();
 
@@ -269,6 +270,18 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setActiveChatID(emptyChatID);
     }
 
+    // Close plugin view and keep sidebar open
+    function closePluginKeepSidebar() {
+        setActivePluginView(null);
+        setRightSidebarVisible(true);
+    }
+
+    // Close plugin view and sidebar
+    function closePluginWithSidebar() {
+        setActivePluginView(null);
+        setRightSidebarVisible(false);
+    }
+
     // Export pending mode for chat context to use
     const getPendingChatMode = () => pendingChatMode;
     const clearPendingChatMode = () => setPendingChatMode(null);
@@ -292,6 +305,10 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setActivePluginView,
         activePluginIntegrationId,
         setActivePluginIntegrationId,
+        rightSidebarVisible,
+        setRightSidebarVisible,
+        closePluginKeepSidebar,
+        closePluginWithSidebar,
     };
 
     return (

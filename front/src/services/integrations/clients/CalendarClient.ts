@@ -8,8 +8,17 @@ import { integrationStorage, ExtractedEvent } from '../IntegrationStorage';
 import { AppleIntelligence } from '../../ai/AppleIntelligence';
 import { pluginChatStorage } from '../../plugins/PluginChatStorage';
 
-const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3/calendars/primary';
+const getCalendarApiBase = (calendarId: string) => 
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}`;
+
 const CALENDAR_API_USERS_ME_CALENDARLIST = 'https://www.googleapis.com/calendar/v3/users/me/calendarList';
+
+// Helper to get calendar API base URL for a given integration
+async function getIntegrationCalendarApiBase(integrationId: string): Promise<string> {
+    const integration = await integrationStorage.getIntegration(integrationId);
+    const calendarId = integration?.accountEmail || 'primary';
+    return getCalendarApiBase(calendarId);
+}
 
 export interface CalendarEvent {
     id: string;
@@ -85,6 +94,7 @@ class CalendarClient {
                         event.summary || '(No title)',
                         {
                             eventId: event.id,
+                            integrationId: integrationId,
                             start: event.start.dateTime || event.start.date,
                             end: event.end?.dateTime || event.end?.date,
                             location: event.location,
@@ -156,6 +166,13 @@ Keep your response concise and actionable.`;
      */
     async syncEvents(integrationId: string, timeMin?: Date, timeMax?: Date): Promise<ExtractedEvent[]> {
         const accessToken = await tokenRefreshService.getValidToken(integrationId);
+        
+        // Get integration to find the account email (calendar ID)
+        const integration = await integrationStorage.getIntegration(integrationId);
+        const calendarId = integration?.accountEmail || 'primary';
+        const calendarApiBase = getCalendarApiBase(calendarId);
+
+        console.log(`[CalendarClient] syncEvents - integrationId=${integrationId} calendarId=${calendarId}`);
 
         const start = timeMin ? timeMin.toISOString() : new Date().toISOString();
         // Default to 30 days ahead if not specified
@@ -170,7 +187,7 @@ Keep your response concise and actionable.`;
         });
 
         const response = await fetch(
-            `${CALENDAR_API_BASE}/events?${params.toString()}`,
+            `${calendarApiBase}/events?${params.toString()}`,
             {
                 headers: { Authorization: `Bearer ${accessToken}` },
             }
@@ -246,6 +263,9 @@ Keep your response concise and actionable.`;
         timezone?: string
     ): Promise<CalendarEvent> {
         const accessToken = await tokenRefreshService.getValidToken(integrationId);
+        const calendarApiBase = await getIntegrationCalendarApiBase(integrationId);
+        
+        console.log(`[CalendarClient] createEvent - integrationId=${integrationId} calendarApiBase=${calendarApiBase} title=${title}`);
 
         const timeZoneToUse = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -274,7 +294,7 @@ Keep your response concise and actionable.`;
         }
 
         const response = await fetch(
-            `${CALENDAR_API_BASE}/events`,
+            `${calendarApiBase}/events`,
             {
                 method: 'POST',
                 headers: {
@@ -302,9 +322,10 @@ Keep your response concise and actionable.`;
      */
     async deleteEvent(integrationId: string, eventId: string): Promise<void> {
         const accessToken = await tokenRefreshService.getValidToken(integrationId);
+        const calendarApiBase = await getIntegrationCalendarApiBase(integrationId);
 
         const response = await fetch(
-            `${CALENDAR_API_BASE}/events/${eventId}`,
+            `${calendarApiBase}/events/${eventId}`,
             {
                 method: 'DELETE',
                 headers: {
@@ -358,8 +379,9 @@ Keep your response concise and actionable.`;
             patchBody.attendees = updates.attendees.map(email => ({ email }));
         }
 
+        const calendarApiBase = await getIntegrationCalendarApiBase(integrationId);
         const response = await fetch(
-            `${CALENDAR_API_BASE}/events/${eventId}`,
+            `${calendarApiBase}/events/${eventId}`,
             {
                 method: 'PATCH',
                 headers: {
@@ -385,6 +407,9 @@ Keep your response concise and actionable.`;
      */
     async listEvents(integrationId: string, start?: string, end?: string, maxResults: number = 10): Promise<CalendarEvent[]> {
         const accessToken = await tokenRefreshService.getValidToken(integrationId);
+        const calendarApiBase = await getIntegrationCalendarApiBase(integrationId);
+
+        console.log(`[CalendarClient] listEvents - integrationId=${integrationId} calendarApiBase=${calendarApiBase}`);
 
         const timeMin = start ? new Date(start).toISOString() : new Date().toISOString();
         const timeMax = end ? new Date(end).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -398,7 +423,7 @@ Keep your response concise and actionable.`;
         });
 
         const response = await fetch(
-            `${CALENDAR_API_BASE}/events?${params.toString()}`,
+            `${calendarApiBase}/events?${params.toString()}`,
             {
                 headers: { Authorization: `Bearer ${accessToken}` },
             }

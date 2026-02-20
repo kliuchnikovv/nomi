@@ -2,17 +2,17 @@
  * Gmail Plugin Screen - Shows AI-analyzed email chats
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTheme } from '@genie/front/context/ThemeContext';
 import { PluginMainScreenProps } from '@genie/front/plugins/types';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { XmarkCircle, Mail } from 'iconoir-react-native';
+import { Mail } from 'iconoir-react-native';
 import { pluginChatStorage, PluginChat } from '@genie/front/services/plugins/PluginChatStorage';
+import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
+import { contextStore } from '@genie/front/services/ContextStore';
 
 export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
-    const insets = useSafeAreaInsets();
     const [chats, setChats] = useState<PluginChat[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -34,6 +34,36 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
         return () => clearInterval(interval);
     }, [integrationId]);
 
+    const handleChatPress = useCallback(async (chat: PluginChat) => {
+        console.log('[GmailPluginScreen] handleChatPress called, chat:', chat.id);
+
+        try {
+            const metadata = chat.data ? JSON.parse(chat.data) : {};
+
+            contextStore.add({
+                id: chat.id,
+                sourceType: 'email',
+                title: chat.title,
+                preview: metadata.snippet || metadata.body?.substring(0, 100) || '',
+                metadata: {
+                    emailId: metadata.emailId,
+                    from: metadata.from,
+                    fromName: metadata.fromName,
+                    subject: chat.title,
+                    body: metadata.body,
+                    snippet: metadata.snippet,
+                    integrationId: integrationId,
+                },
+                addedAt: Date.now(),
+            });
+
+            console.log('[GmailPluginScreen] Email added to context, closing...');
+            onClose?.(true);
+        } catch (error) {
+            console.error('[GmailPluginScreen] Error:', error);
+        }
+    }, [integrationId, onClose]);
+
     const renderChatItem = ({ item }: { item: PluginChat }) => {
         const metadata = item.data ? JSON.parse(item.data) : {};
         const fromName = metadata.fromName || metadata.from || 'Unknown';
@@ -46,6 +76,7 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
                     { backgroundColor: theme.card, borderColor: theme.border },
                     pressed && { opacity: 0.7 },
                 ]}
+                onPress={() => handleChatPress(item)}
             >
                 <View style={styles.chatIcon}>
                     <Mail width={20} height={20} color={theme.accent} />
@@ -73,25 +104,7 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
-            {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: theme.border }]}>
-                <View style={styles.headerRow}>
-                    <View style={styles.headerLeft}>
-                        <Text style={styles.headerIcon}>📧</Text>
-                        <Text style={[styles.title, { color: theme.text }]}>Email Insights</Text>
-                    </View>
-                    {onClose && (
-                        <Pressable onPress={onClose} hitSlop={12}>
-                            <XmarkCircle width={24} height={24} color={theme.textSecondary} />
-                        </Pressable>
-                    )}
-                </View>
-                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                    AI-analyzed unread emails
-                </Text>
-            </View>
-
+        <SharedPluginScreen title="Email Insights" onClose={onClose}>
             <View style={styles.content}>
                 {loading ? (
                     <View style={styles.center}>
@@ -116,41 +129,11 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
                     </View>
                 )}
             </View>
-        </View>
+        </SharedPluginScreen>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    header: {
-        paddingHorizontal: 20,
-        paddingBottom: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    headerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 4,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    headerIcon: {
-        fontSize: 22,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    subtitle: {
-        fontSize: 13,
-        marginTop: 2,
-    },
     content: {
         flex: 1,
     },

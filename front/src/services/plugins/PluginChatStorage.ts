@@ -66,9 +66,9 @@ class PluginChatStorage {
     }
 
     /**
-     * Get all plugin chats for a specific plugin
+     * Get all plugin chats for a specific plugin, optionally filtered by integrationId stored in data JSON
      */
-    async getPluginChats(pluginName: string, recordType?: string): Promise<PluginChat[]> {
+    async getPluginChats(pluginName: string, recordType?: string, integrationId?: string): Promise<PluginChat[]> {
         const db = getDatabase();
 
         let query = 'SELECT * FROM plugin_chats WHERE plugin_name = ?';
@@ -77,6 +77,11 @@ class PluginChatStorage {
         if (recordType) {
             query += ' AND record_type = ?';
             params.push(recordType);
+        }
+
+        if (integrationId) {
+            query += ' AND json_extract(data, \'$.integrationId\') = ?';
+            params.push(integrationId);
         }
 
         query += ' ORDER BY updated_at DESC';
@@ -210,6 +215,15 @@ class PluginChatStorage {
         await db.runAsync('DELETE FROM plugin_chats WHERE id = ?', [chatId]);
 
         console.log(`[PluginChatStorage] Deleted chat ${chatId}`);
+    }
+
+    /**
+     * Delete all plugin chats (and their messages via CASCADE) for a specific plugin
+     */
+    async deletePluginChatsByPlugin(pluginName: string): Promise<void> {
+        const db = getDatabase();
+        await db.runAsync('DELETE FROM plugin_chats WHERE plugin_name = ?', [pluginName]);
+        console.log(`[PluginChatStorage] Deleted all chats for plugin: ${pluginName}`);
     }
 
     /**

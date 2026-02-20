@@ -7,24 +7,22 @@ import {
   RefreshControl,
   ActivityIndicator,
   Pressable,
-  Alert,
+  ScrollView,
 } from "react-native";
 import { useTheme } from "@genie/front/context/ThemeContext";
 import { gmailClient } from "@genie/front/services/integrations/clients/GmailClient";
 import { Email } from "@genie/front/services/integrations/IntegrationStorage";
 import { PluginMainScreenProps } from "@genie/front/plugins/types";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { XmarkCircle } from "iconoir-react-native";
 import { integrationStorage } from "@genie/front/services/integrations/IntegrationStorage";
 import { ContextItem } from "@genie/front/screens/chat/components/ContextItemCard";
 import { contextStore } from "@genie/front/services/ContextStore";
+import { SharedPluginScreen } from "@genie/front/plugins/components/SharedPluginScreen";
 
 export function GmailMainScreen({
   integrationId: integrationIdProp,
   onClose,
 }: PluginMainScreenProps) {
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,23 +61,13 @@ export function GmailMainScreen({
   if (!integrationIdProp) {
     console.error("[GmailMainScreen] No integrationId provided");
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View
-          style={[
-            styles.header,
-            { paddingTop: insets.top + 10, borderBottomColor: theme.border },
-          ]}
-        >
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            {displayName}
-          </Text>
-        </View>
+      <SharedPluginScreen title={displayName} onClose={onClose}>
         <View style={styles.center}>
           <Text style={{ color: theme.textSecondary }}>
             No integration configured
           </Text>
         </View>
-      </View>
+      </SharedPluginScreen>
     );
   }
 
@@ -104,7 +92,6 @@ export function GmailMainScreen({
     setRefreshing(true);
     setError(null);
     try {
-      // Force sync
       await gmailClient.syncEmails(integrationId);
       await loadEmails();
     } catch (error) {
@@ -149,8 +136,7 @@ export function GmailMainScreen({
 
       console.log("[GmailMainScreen] Adding to contextStore:", item);
       contextStore.add(item);
-      // Close the plugin screen after adding to context
-      onClose?.();
+      onClose?.(true);
     } catch (error) {
       console.error("[GmailMainScreen] Failed to add email to context:", error);
     }
@@ -186,32 +172,7 @@ export function GmailMainScreen({
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { paddingTop: insets.top + 10, borderBottomColor: theme.border },
-        ]}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Text style={[styles.headerTitle, { color: theme.text }]}>
-            {displayName}
-          </Text>
-          {onClose && (
-            <Pressable onPress={onClose} hitSlop={12}>
-              <XmarkCircle width={24} height={24} color={theme.textSecondary} />
-            </Pressable>
-          )}
-        </View>
-      </View>
-
+    <SharedPluginScreen title={displayName} onClose={onClose}>
       {error && !loading && (
         <View style={styles.center}>
           <Text style={[styles.errorText, { color: theme.error || "#ef4444" }]}>
@@ -230,11 +191,9 @@ export function GmailMainScreen({
           <ActivityIndicator size="large" color={theme.accent} />
         </View>
       ) : !error ? (
-        <FlatList
-          data={emails}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={emails.length === 0 ? styles.emptyScrollContent : styles.listContent}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -242,31 +201,35 @@ export function GmailMainScreen({
               tintColor={theme.accent}
             />
           }
-          ListEmptyComponent={
+          alwaysBounceVertical={true}
+        >
+          {emails.length === 0 ? (
             <View style={styles.center}>
               <Text style={{ color: theme.textSecondary }}>
                 No emails found
               </Text>
             </View>
-          }
-        />
+          ) : (
+            <FlatList
+              data={emails}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+            />
+          )}
+        </ScrollView>
       ) : null}
-    </View>
+    </SharedPluginScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollView: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
+  emptyScrollContent: {
+    flexGrow: 1,
+    padding: 16,
   },
   center: {
     flex: 1,
