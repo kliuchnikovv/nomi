@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
-import { Github, RefreshCw, ExternalLink } from 'iconoir-react-native';
-import { useTheme } from '@genie/front/context/ThemeContext';
-import { ThemePalette } from '@genie/front/themes/types';
-import { PluginMainScreenProps } from '@genie/front/plugins/types';
-import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
+import React, { useEffect, useState } from "react";
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { Github, RefreshCw, ExternalLink } from "iconoir-react-native";
+import { useTheme } from "@genie/front/context/ThemeContext";
+import { ThemePalette } from "@genie/front/themes/types";
+import { PluginMainScreenProps } from "@genie/front/plugins/types";
+import { SharedPluginScreen } from "@genie/front/plugins/components/SharedPluginScreen";
+import { getApiUrl } from "@genie/front/config";
+import { authStore } from "@genie/front/apiClient";
 
 interface Repo {
     id: number;
@@ -21,15 +23,37 @@ export function GithubMainScreen({ integrationId, onClose }: PluginMainScreenPro
     const { theme, palette } = useTheme();
     const [repos, setRepos] = useState<Repo[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const loadRepos = async () => {
         try {
             setLoading(true);
-            // TODO: Implement github client to fetch repos
-            // const data = await githubClient.listRepos(integrationId);
-            // setRepos(data);
+            setError(null);
+
+            const apiUrl = getApiUrl();
+            const token = authStore.getToken();
+
+            if (!token) {
+                throw new Error("Not authenticated");
+            }
+
+            const response = await fetch(`${apiUrl}/github/repos?limit=30`, {
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || "Failed to load repositories");
+            }
+
+            const data = await response.json();
+            setRepos(data.repos || []);
         } catch (error) {
-            console.error('Failed to load GitHub repos:', error);
+            console.error("Failed to load GitHub repos:", error);
+            setError(error instanceof Error ? error.message : "Failed to load repositories");
         } finally {
             setLoading(false);
         }
@@ -40,7 +64,7 @@ export function GithubMainScreen({ integrationId, onClose }: PluginMainScreenPro
     }, [integrationId]);
 
     const openRepo = (url: string) => {
-        console.log('Opening repo:', url);
+        console.log("Opening repo:", url);
         onClose?.(true);
     };
 
@@ -53,12 +77,29 @@ export function GithubMainScreen({ integrationId, onClose }: PluginMainScreenPro
                 onRefresh={loadRepos}
                 refreshing={loading}
                 ListEmptyComponent={
-                    !loading ? (
+                    loading ? (
+                        <View style={styles.emptyState}>
+                            <ActivityIndicator size="large" color={theme.primary} />
+                            <Text style={[styles.emptyText, { color: theme.text, marginTop: 16 }]}>Loading repositories...</Text>
+                        </View>
+                    ) : error ? (
+                        <View style={styles.emptyState}>
+                            <Text style={[styles.emptyText, { color: theme.text }]}>Error loading repositories</Text>
+                            <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>{error}</Text>
+                            <Pressable
+                                style={[styles.retryButton, { backgroundColor: theme.primary }]}
+                                onPress={loadRepos}
+                            >
+                                <RefreshCw width={16} height={16} color="white" />
+                                <Text style={styles.retryButtonText}>Retry</Text>
+                            </Pressable>
+                        </View>
+                    ) : (
                         <View style={styles.emptyState}>
                             <Text style={[styles.emptyText, { color: theme.text }]}>No repositories found</Text>
                             <Text style={[styles.emptySubtext, { color: theme.textSecondary }]}>Connect your GitHub account to see your repositories</Text>
                         </View>
-                    ) : null
+                    )
                 }
                 renderItem={({ item }) => (
                     <Pressable
@@ -100,7 +141,7 @@ function getLanguageColor(language: string, palette: ThemePalette): string {
         Go: palette.cyan,
         Rust: palette.orange,
         Java: palette.red,
-        'C++': palette.purple,
+        "C++": palette.purple,
         Swift: palette.pink,
     };
     return colors[language] || palette.textSecondary;
@@ -112,17 +153,17 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     emptyState: {
-        alignItems: 'center',
+        alignItems: "center",
         paddingVertical: 40,
     },
     emptyText: {
         fontSize: 16,
-        fontWeight: '500',
+        fontWeight: "500",
     },
     emptySubtext: {
         fontSize: 14,
         marginTop: 8,
-        textAlign: 'center',
+        textAlign: "center",
     },
     repoItem: {
         borderRadius: 12,
@@ -130,27 +171,27 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     repoHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
         marginBottom: 8,
     },
     repoName: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: "600",
     },
     repoDescription: {
         fontSize: 14,
         marginBottom: 12,
     },
     repoFooter: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
         gap: 16,
     },
     languageBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
         gap: 6,
     },
     languageDot: {
@@ -162,10 +203,24 @@ const styles = StyleSheet.create({
         fontSize: 12,
     },
     stat: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
     },
     statText: {
         fontSize: 12,
+    },
+    retryButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 8,
+        marginTop: 16,
+    },
+    retryButtonText: {
+        color: "white",
+        fontSize: 14,
+        fontWeight: "600",
     },
 });

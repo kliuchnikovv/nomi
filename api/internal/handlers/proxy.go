@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -124,14 +125,42 @@ func ProxyGitHub(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 	}
 }
 
-// ProxyPlugin forwards a request to a Python plugin endpoint (public, no auth injection).
-// Used for webhooks that come from external services (e.g. Telegram).
-func ProxyPlugin(cfg *config.Config, logger *zap.Logger, backendPath string) gin.HandlerFunc {
+// ProxyPlugins forwards requests to Python plugin endpoints for all plugins.
+// Generic route: /api/{plugin}/*path -> /api/plugins/{plugin}/*path
+func ProxyPlugins(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Extract plugin name and path from URL
+		// /api/github/repos -> plugin="github", path="repos"
+		// /api/telegram/messages -> plugin="telegram", path="messages"
+		path := c.Param("path")
+		if path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Plugin path is required"})
+			return
+		}
+
+		// Split path into plugin name and resource path
+		parts := strings.Split(path, "/")
+		if len(parts) < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid plugin path"})
+			return
+		}
+
+		pluginName := parts[0]
+		resourcePath := strings.Join(parts[1:], "/")
+
 		targetURL := cfg.LLM.BaseURL
 		if targetURL == "" {
 			targetURL = "http://127.0.0.1:7777"
 		}
+
+		// Build backend path: /api/plugins/{plugin}/{resource}
+		backendPath := fmt.Sprintf("/api/plugins/%s/%s", pluginName, resourcePath)
+
+		logger.Debug("Proxying plugin request",
+			zap.String("plugin", pluginName),
+			zap.String("resource_path", resourcePath),
+			zap.String("backend_path", backendPath),
+			zap.String("method", c.Request.Method))
 
 		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+backendPath, c.Request.Body)
 		if err != nil {
@@ -145,10 +174,17 @@ func ProxyPlugin(cfg *config.Config, logger *zap.Logger, backendPath string) gin
 			}
 		}
 
+		// Inject authenticated user ID so Python plugin can identify user
+		if userID, exists := c.Get("userID"); exists {
+			proxyReq.Header.Set("X-User-ID", fmt.Sprintf("%v", userID))
+		}
+
 		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Do(proxyReq)
 		if err != nil {
-			logger.Error("Failed to proxy plugin request", zap.Error(err), zap.String("path", backendPath))
+			logger.Error("Failed to proxy plugin request", zap.Error(err),
+				zap.String("plugin", pluginName),
+				zap.String("path", resourcePath))
 			c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to contact plugin service"})
 			return
 		}
@@ -158,7 +194,8 @@ func ProxyPlugin(cfg *config.Config, logger *zap.Logger, backendPath string) gin
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			logger.Warn("Plugin request returned non-success status",
 				zap.Int("status_code", resp.StatusCode),
-				zap.String("path", backendPath),
+				zap.String("plugin", pluginName),
+				zap.String("path", resourcePath),
 				zap.String("method", c.Request.Method))
 		}
 
@@ -172,14 +209,41 @@ func ProxyPlugin(cfg *config.Config, logger *zap.Logger, backendPath string) gin
 	}
 }
 
-// ProxyPluginHandler forwards an authenticated request to a Python plugin endpoint.
-// Injects the user ID from auth middleware into the X-User-ID header for the plugin.
-func ProxyPluginHandler(cfg *config.Config, logger *zap.Logger, backendPath string) gin.HandlerFunc {
+// ProxyWebhooks forwards public webhook requests to Python plugins (no auth).
+// Route: /api/webhooks/{plugin}/*path -> /api/plugins/{plugin}/webhook/*path
+func ProxyWebhooks(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Extract plugin name and path from URL
+		// /api/webhooks/telegram -> plugin="telegram", path="webhook"
+		path := c.Param("path")
+		if path == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Webhook path is required"})
+			return
+		}
+
+		// Split path into plugin name and resource path
+		parts := strings.Split(path, "/")
+		if len(parts) < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid webhook path"})
+			return
+		}
+
+		pluginName := parts[0]
+		resourcePath := strings.Join(parts[1:], "/")
+
 		targetURL := cfg.LLM.BaseURL
 		if targetURL == "" {
 			targetURL = "http://127.0.0.1:7777"
 		}
+
+		// Build backend path: /api/plugins/{plugin}/{resource}
+		backendPath := fmt.Sprintf("/api/plugins/%s/%s", pluginName, resourcePath)
+
+		logger.Debug("Proxying webhook request",
+			zap.String("plugin", pluginName),
+			zap.String("resource_path", resourcePath),
+			zap.String("backend_path", backendPath),
+			zap.String("method", c.Request.Method))
 
 		proxyReq, err := http.NewRequest(c.Request.Method, targetURL+backendPath, c.Request.Body)
 		if err != nil {
@@ -187,21 +251,21 @@ func ProxyPluginHandler(cfg *config.Config, logger *zap.Logger, backendPath stri
 			return
 		}
 
+		// Copy all headers except auth (webhooks are public)
 		for name, values := range c.Request.Header {
-			for _, value := range values {
-				proxyReq.Header.Add(name, value)
+			if name != "Authorization" {
+				for _, value := range values {
+					proxyReq.Header.Add(name, value)
+				}
 			}
-		}
-
-		// Inject authenticated user ID so the Python plugin can identify the user
-		if userID, exists := c.Get("userID"); exists {
-			proxyReq.Header.Set("X-User-ID", fmt.Sprintf("%v", userID))
 		}
 
 		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Do(proxyReq)
 		if err != nil {
-			logger.Error("Failed to proxy plugin request", zap.Error(err), zap.String("path", backendPath))
+			logger.Error("Failed to proxy webhook request", zap.Error(err),
+				zap.String("plugin", pluginName),
+				zap.String("path", resourcePath))
 			c.JSON(http.StatusBadGateway, gin.H{"error": "Failed to contact plugin service"})
 			return
 		}
@@ -209,12 +273,14 @@ func ProxyPluginHandler(cfg *config.Config, logger *zap.Logger, backendPath stri
 
 		// Log warnings for non-2xx responses to make them more visible
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			logger.Warn("Plugin request returned non-success status",
+			logger.Warn("Webhook request returned non-success status",
 				zap.Int("status_code", resp.StatusCode),
-				zap.String("path", backendPath),
+				zap.String("plugin", pluginName),
+				zap.String("path", resourcePath),
 				zap.String("method", c.Request.Method))
 		}
 
+		// Copy response headers
 		for name, values := range resp.Header {
 			for _, value := range values {
 				c.Writer.Header().Add(name, value)

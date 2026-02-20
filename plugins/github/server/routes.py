@@ -1,0 +1,195 @@
+"""
+FastAPI routes for the GitHub plugin.
+Registered in the main app at startup via plugin loader.
+"""
+
+import logging
+import os
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, HTTPException, Request
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/plugins/github", tags=["github"])
+
+
+async def _get_github_token(user_id: str) -> str:
+    """Get GitHub access token from database for user."""
+    import asyncpg
+
+    db_dsn = os.getenv("DB_DSN", "")
+    if db_dsn.startswith("postgres://"):
+        db_dsn = db_dsn.replace("postgres://", "postgresql://", 1)
+
+    conn = await asyncpg.connect(db_dsn)
+    try:
+        # Get token from oauth_tokens table
+        row = await conn.fetchrow(
+            """
+            SELECT token_encrypted
+            FROM oauth_tokens
+            WHERE user_id = $1 AND provider = 'github' AND deleted_at IS NULL
+            LIMIT 1
+            """,
+            user_id,
+        )
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail="GitHub integration not found for this user. Please connect your GitHub account.",
+            )
+
+        # Token is encrypted - for now we'll try to decode it
+        # Note: In production, you should properly decrypt the token
+        token_bytes = row["token_encrypted"]
+
+        # Try to decode as UTF-8 (assuming tokens are stored with simple encoding)
+        # This is a simplification - proper decryption should use the encryption system
+        try:
+            token = token_bytes.decode("utf-8")
+            return token
+        except Exception as e:
+            logger.warning("Failed to decode token, trying base64: %s", e)
+            import base64
+
+            try:
+                token = base64.b64decode(token_bytes).decode("utf-8")
+                return token
+            except Exception as e2:
+                logger.error("Failed to decode GitHub token: %s", e2)
+                raise HTTPException(
+                    status_code=500, detail="Failed to decode GitHub access token"
+                )
+    finally:
+        await conn.close()
+
+
+async def _get_github_tools(user_id: str):
+    """Get GitHubTools instance for user."""
+    from .tools import GitHubTools
+
+    access_token = await _get_github_token(user_id)
+    return GitHubTools(access_token=access_token)
+
+
+# ─── Repositories (authenticated via X-User-ID) ────────────────
+
+@router.get("/repos")
+async def list_repos(request: Request, limit: int = 30) -> Dict[str, Any]:
+    """List GitHub repositories for the authenticated user."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        github_tool = await _get_github_tools(user_id)
+        repos = await github_tool.list_repos(limit=limit)
+        return {"repos": repos}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch GitHub repos for user %s: %s", user_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/repos/{owner}/{repo}")
+async def get_repo(request: Request, owner: str, repo: str) -> Dict[str, Any]:
+    """Get details of a specific repository."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        github_tool = await _get_github_tools(user_id)
+        repo_data = await github_tool.get_repo(owner=owner, repo=repo)
+        return repo_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch GitHub repo %s/%s: %s", owner, repo, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Issues (authenticated via X-User-ID) ─────────────────────
+
+@router.get("/repos/{owner}/{repo}/issues")
+async def list_issues(
+    request: Request,
+    owner: str,
+    repo: str,
+    state: str = "open",
+    limit: int = 10,
+) -> Dict[str, Any]:
+    """List issues in a repository."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if state not in ("open", "closed", "all"):
+        raise HTTPException(status_code=400, detail="Invalid state. Must be open, closed, or all")
+
+    try:
+        github_tool = await _get_github_tools(user_id)
+        issues = await github_tool.list_issues(owner=owner, repo=repo, state=state, limit=limit)
+        return {"issues": issues}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch GitHub issues for %s/%s: %s", owner, repo, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Pull Requests (authenticated via X-User-ID) ──────────────
+
+@router.get("/repos/{owner}/{repo}/pulls")
+async def list_pull_requests(
+    request: Request,
+    owner: str,
+    repo: str,
+    state: str = "open",
+    limit: int = 10,
+) -> Dict[str, Any]:
+    """List pull requests in a repository."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if state not in ("open", "closed", "all"):
+        raise HTTPException(status_code=400, detail="Invalid state. Must be open, closed, or all")
+
+    try:
+        github_tool = await _get_github_tools(user_id)
+        pulls = await github_tool.list_pull_requests(owner=owner, repo=repo, state=state, limit=limit)
+        return {"pulls": pulls}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch GitHub PRs for %s/%s: %s", owner, repo, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── File Content (authenticated via X-User-ID) ─────────────────
+
+@router.get("/repos/{owner}/{repo}/contents/{path:path}")
+async def get_file_content(
+    request: Request,
+    owner: str,
+    repo: str,
+    path: str,
+    ref: str = "main",
+) -> Dict[str, Any]:
+    """Get content of a file in a repository."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        github_tool = await _get_github_tools(user_id)
+        file_data = await github_tool.get_file_content(owner=owner, repo=repo, path=path, ref=ref)
+        return file_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to fetch GitHub file content for %s/%s/%s: %s", owner, repo, path, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

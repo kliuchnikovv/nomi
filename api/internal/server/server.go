@@ -125,14 +125,17 @@ func New(
 	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))
 	r.GET("/api/attachments/:id", wrapWithAuth(uploadHandler.GetAttachment, authMiddleware))
 
-	// Webhooks
-	r.POST("/api/webhooks/github", webhooksHandler.HandleGitHubWebhook)
+	// Generic plugin proxy — forwards all requests to Python plugins
+	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path
+	// Examples:
+	//   /api/github/repos -> /api/plugins/github/repos
+	//   /api/github/repos/owner/repo -> /api/plugins/github/repos/owner/repo
+	//   /api/telegram/messages -> /api/plugins/telegram/messages
+	r.Any("/api/:plugin/*path", wrapWithAuth(handlers.ProxyPlugins(cfg, logger), authMiddleware))
 
-	// Telegram plugin — all logic lives in Python plugin, Go API only proxies
-	r.POST("/api/webhooks/telegram", handlers.ProxyPlugin(cfg, logger, "/api/plugins/telegram/webhook"))
-	r.POST("/api/telegram/link", wrapWithAuth(handlers.ProxyPluginHandler(cfg, logger, "/api/plugins/telegram/link"), authMiddleware))
-	r.GET("/api/telegram/status", wrapWithAuth(handlers.ProxyPluginHandler(cfg, logger, "/api/plugins/telegram/status"), authMiddleware))
-	r.GET("/api/telegram/messages", wrapWithAuth(handlers.ProxyPluginHandler(cfg, logger, "/api/plugins/telegram/messages"), authMiddleware))
+	// Webhooks — public routes for plugin webhooks (no auth)
+	// Route: /api/webhooks/{plugin}/*path -> /api/plugins/{plugin}/webhook/*path
+	r.Any("/api/webhooks/:plugin/*path", handlers.ProxyWebhooks(cfg, logger))
 
 	// Mobile OAuth API (tokens returned to client, not stored on backend)
 	r.GET("/api/oauth/:provider/callback", mobileOAuthHandler.Callback) // Web callback from Google, redirects to app
@@ -146,12 +149,6 @@ func New(
 	r.GET("/api/credentials/:provider/check", wrapWithAuth(credentialsHandler.Check, authMiddleware))
 	r.DELETE("/api/credentials/:provider", wrapWithAuth(credentialsHandler.Delete, authMiddleware))
 	r.POST("/api/credentials/request", wrapWithAuth(credentialsHandler.Request, authMiddleware))
-
-	// Proxy for Embeddings - forwards to Python backend
-	r.POST("/api/embeddings", handlers.ProxyEmbeddings(cfg, logger))
-
-	// Proxy for GitHub Repos - forwards to Python backend
-	r.POST("/api/github/repos", handlers.ProxyGitHub(cfg, logger))
 
 	return &Server{
 		httpServer: &http.Server{
