@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 export interface ContextItem {
     id: string;
-    sourceType: 'email' | 'document' | 'image' | 'task' | 'note' | 'calendar_event';
+    sourceType: 'email' | 'document' | 'image' | 'task' | 'note' | 'calendar_event' | 'github_repo';
     title: string;
     preview?: string;
     metadata?: Record<string, any>;
@@ -69,6 +69,12 @@ export const ContextItemCard = ({
                     icon: 'calendar' as const,
                     label: 'Calendar',
                     color: '#4285F4',
+                };
+            case 'github_repo':
+                return {
+                    icon: 'logo-github' as const,
+                    label: 'GitHub',
+                    color: '#24292e',
                 };
             default:
                 return {

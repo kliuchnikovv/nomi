@@ -14,6 +14,9 @@ import { PluginMainScreenProps } from "@genie/front/plugins/types";
 import { SharedPluginScreen } from "@genie/front/plugins/components/SharedPluginScreen";
 import { getApiUrl } from "@genie/front/config";
 import { authStore } from "@genie/front/apiClient";
+import { ContextItem } from "@genie/front/screens/chat/components/ContextItemCard";
+import { contextStore } from "@genie/front/services/ContextStore";
+import { gitHubRepoCache } from "../cache";
 
 interface Repo {
   id: number;
@@ -35,7 +38,7 @@ export function GithubMainScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadRepos = async () => {
+  const loadRepos = async (forceRefresh = false) => {
     try {
       setLoading(true);
       setError(null);
@@ -45,6 +48,20 @@ export function GithubMainScreen({
 
       if (!token) {
         throw new Error("Not authenticated");
+      }
+
+      // Try to get from cache first
+      if (!forceRefresh && integrationId) {
+        try {
+          const cached = await gitHubRepoCache.getCachedRepos(integrationId);
+          if (cached.length > 0) {
+            setRepos(cached);
+            setLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.error("[GithubMainScreen] Failed to load from cache:", error);
+        }
       }
 
       const response = await fetch(`${apiUrl}/github/repos?limit=30`, {
@@ -60,7 +77,17 @@ export function GithubMainScreen({
       }
 
       const data = await response.json();
-      setRepos(data.repos || []);
+      const repos = data.repos || [];
+      setRepos(repos);
+
+      // Update client-side cache
+      if (integrationId && repos.length > 0) {
+        try {
+          await gitHubRepoCache.setCachedRepos(integrationId, repos);
+        } catch (error) {
+          console.error("[GithubMainScreen] Failed to update cache:", error);
+        }
+      }
     } catch (error) {
       console.error("Failed to load GitHub repos:", error);
       setError(
@@ -72,12 +99,39 @@ export function GithubMainScreen({
   };
 
   useEffect(() => {
-    loadRepos();
+    loadRepos(false);
   }, [integrationId]);
 
-  const openRepo = (url: string) => {
-    console.log("Opening repo:", url);
-    onClose?.(true);
+  const handleRefresh = () => {
+    loadRepos(true);
+  };
+
+  const openRepo = async (repo: Repo) => {
+    console.log("[GithubMainScreen] Adding repository to context:", repo.id, repo.full_name);
+    try {
+      const item: ContextItem = {
+        id: repo.id.toString(),
+        sourceType: "github_repo",
+        title: repo.full_name,
+        preview: repo.description || "",
+        metadata: {
+          name: repo.name,
+          full_name: repo.full_name,
+          description: repo.description,
+          html_url: repo.html_url,
+          stargazers_count: repo.stargazers_count,
+          language: repo.language,
+          updated_at: repo.updated_at,
+        },
+        addedAt: Date.now(),
+      };
+
+      console.log("[GithubMainScreen] Adding to contextStore:", item);
+      contextStore.add(item);
+      onClose?.(true);
+    } catch (error) {
+      console.error("[GithubMainScreen] Failed to add repository to context:", error);
+    }
   };
 
   return (
@@ -86,7 +140,7 @@ export function GithubMainScreen({
         data={repos}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
-        onRefresh={loadRepos}
+        onRefresh={handleRefresh}
         refreshing={loading}
         ListEmptyComponent={
           loading ? (
@@ -110,7 +164,7 @@ export function GithubMainScreen({
               </Text>
               <Pressable
                 style={[styles.retryButton, { backgroundColor: theme.primary }]}
-                onPress={loadRepos}
+                onPress={handleRefresh}
               >
                 {/*<RefreshCw width={16} height={16} color="white" />*/}
                 <Text style={styles.retryButtonText}>Retry</Text>
@@ -135,7 +189,7 @@ export function GithubMainScreen({
               styles.repoItem,
               { backgroundColor: theme.card, borderColor: theme.border },
             ]}
-            onPress={() => openRepo(item.html_url)}
+            onPress={() => openRepo(item)}
           >
             <View style={styles.repoHeader}>
               <Text style={[styles.repoName, { color: theme.text }]}>

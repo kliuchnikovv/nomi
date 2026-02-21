@@ -6,7 +6,7 @@
 import * as SQLite from 'expo-sqlite';
 
 const DATABASE_NAME = 'genie.db';
-const DATABASE_VERSION = 6;
+const DATABASE_VERSION = 7;
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -87,6 +87,7 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
     }
     if (currentVersion < 6) {
         await migrateV6(database);
+        await migrateV7(database);
     }
 }
 
@@ -344,6 +345,33 @@ async function migrateV6(database: SQLite.SQLiteDatabase): Promise<void> {
 }
 
 /**
+ * Migration V7: GitHub repositories cache
+ */
+async function migrateV7(database: SQLite.SQLiteDatabase): Promise<void> {
+    await database.execAsync(`
+        CREATE TABLE IF NOT EXISTS github_repos_cache (
+            id INTEGER NOT NULL,
+            integrationId TEXT NOT NULL,
+            name TEXT NOT NULL,
+            full_name TEXT NOT NULL,
+            description TEXT,
+            html_url TEXT NOT NULL,
+            stargazers_count INTEGER DEFAULT 0,
+            language TEXT,
+            updated_at TEXT NOT NULL,
+            cachedAt INTEGER NOT NULL,
+            PRIMARY KEY (id, integrationId)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_github_repos_integration ON github_repos_cache(integrationId);
+        CREATE INDEX IF NOT EXISTS idx_github_repos_cached_at ON github_repos_cache(cachedAt);
+
+        INSERT INTO migrations (version, applied_at) VALUES (7, ${Date.now()});
+    `);
+    console.log('[Database] Migration V7 applied');
+}
+
+/**
  * Close the database connection
  */
 export async function closeDatabase(): Promise<void> {
@@ -371,6 +399,7 @@ export async function clearDatabase(): Promise<void> {
         DELETE FROM integrations;
         DELETE FROM plugin_messages;
         DELETE FROM plugin_chats;
+        DELETE FROM github_repos_cache;
     `);
     console.log('[Database] All data cleared');
 }

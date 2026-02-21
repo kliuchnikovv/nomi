@@ -9,6 +9,8 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request
 
+from .cache import GitHubRepoCache
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/plugins/github", tags=["github"])
@@ -44,7 +46,10 @@ async def _get_github_token(user_id: str) -> str:
         params = json.loads(row["params"])
         token = params.get("access_token")
         if not token:
-            raise HTTPException(status_code=500, detail="GitHub access token missing in integration params")
+            raise HTTPException(
+                status_code=500,
+                detail="GitHub access token missing in integration params",
+            )
         return token
     finally:
         await conn.close()
@@ -60,21 +65,40 @@ async def _get_github_tools(user_id: str):
 
 # ─── Repositories (authenticated via X-User-ID) ────────────────
 
+
 @router.get("/repos")
-async def list_repos(request: Request, limit: int = 30) -> Dict[str, Any]:
+async def list_repos(
+    request: Request, limit: int = 30, refresh: bool = False
+) -> Dict[str, Any]:
     """List GitHub repositories for the authenticated user."""
     user_id = request.headers.get("X-User-ID")
     if not user_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
+        # Try to get cached repos if not forcing refresh
+        if not refresh:
+            cached = await GitHubRepoCache.get_cached_repos(user_id)
+            if cached:
+                logger.info("Returning cached repos for user %s", user_id)
+                # Apply limit to cached repos
+                repos = cached[:limit] if cached else []
+                return {"repos": repos, "cached": True}
+
+        # Fetch from GitHub API
         github_tool = await _get_github_tools(user_id)
         repos = await github_tool.list_repos(limit=limit)
-        return {"repos": repos}
+
+        # Update cache
+        await GitHubRepoCache.set_cached_repos(user_id, repos)
+
+        return {"repos": repos, "cached": False}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to fetch GitHub repos for user %s: %s", user_id, e, exc_info=True)
+        logger.error(
+            "Failed to fetch GitHub repos for user %s: %s", user_id, e, exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -92,11 +116,14 @@ async def get_repo(request: Request, owner: str, repo: str) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to fetch GitHub repo %s/%s: %s", owner, repo, e, exc_info=True)
+        logger.error(
+            "Failed to fetch GitHub repo %s/%s: %s", owner, repo, e, exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── Issues (authenticated via X-User-ID) ─────────────────────
+
 
 @router.get("/repos/{owner}/{repo}/issues")
 async def list_issues(
@@ -112,20 +139,27 @@ async def list_issues(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     if state not in ("open", "closed", "all"):
-        raise HTTPException(status_code=400, detail="Invalid state. Must be open, closed, or all")
+        raise HTTPException(
+            status_code=400, detail="Invalid state. Must be open, closed, or all"
+        )
 
     try:
         github_tool = await _get_github_tools(user_id)
-        issues = await github_tool.list_issues(owner=owner, repo=repo, state=state, limit=limit)
+        issues = await github_tool.list_issues(
+            owner=owner, repo=repo, state=state, limit=limit
+        )
         return {"issues": issues}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to fetch GitHub issues for %s/%s: %s", owner, repo, e, exc_info=True)
+        logger.error(
+            "Failed to fetch GitHub issues for %s/%s: %s", owner, repo, e, exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── Pull Requests (authenticated via X-User-ID) ──────────────
+
 
 @router.get("/repos/{owner}/{repo}/pulls")
 async def list_pull_requests(
@@ -141,20 +175,27 @@ async def list_pull_requests(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     if state not in ("open", "closed", "all"):
-        raise HTTPException(status_code=400, detail="Invalid state. Must be open, closed, or all")
+        raise HTTPException(
+            status_code=400, detail="Invalid state. Must be open, closed, or all"
+        )
 
     try:
         github_tool = await _get_github_tools(user_id)
-        pulls = await github_tool.list_pull_requests(owner=owner, repo=repo, state=state, limit=limit)
+        pulls = await github_tool.list_pull_requests(
+            owner=owner, repo=repo, state=state, limit=limit
+        )
         return {"pulls": pulls}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to fetch GitHub PRs for %s/%s: %s", owner, repo, e, exc_info=True)
+        logger.error(
+            "Failed to fetch GitHub PRs for %s/%s: %s", owner, repo, e, exc_info=True
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─── File Content (authenticated via X-User-ID) ─────────────────
+
 
 @router.get("/repos/{owner}/{repo}/contents/{path:path}")
 async def get_file_content(
@@ -171,10 +212,19 @@ async def get_file_content(
 
     try:
         github_tool = await _get_github_tools(user_id)
-        file_data = await github_tool.get_file_content(owner=owner, repo=repo, path=path, ref=ref)
+        file_data = await github_tool.get_file_content(
+            owner=owner, repo=repo, path=path, ref=ref
+        )
         return file_data
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to fetch GitHub file content for %s/%s/%s: %s", owner, repo, path, e, exc_info=True)
+        logger.error(
+            "Failed to fetch GitHub file content for %s/%s/%s: %s",
+            owner,
+            repo,
+            path,
+            e,
+            exc_info=True,
+        )
         raise HTTPException(status_code=500, detail=str(e))
