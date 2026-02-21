@@ -58,7 +58,6 @@ func New(
 			}
 			return h
 		}()
-		webhooksHandler     = handlers.NewWebhooksHandler(ctr.Storage, logger, cfg)
 		toolsHandler        = handlers.NewToolsHandler(ctr.Storage, logger)
 		integrationsHandler = handlers.NewIntegrationsHandler(ctr.Storage, logger)
 	)
