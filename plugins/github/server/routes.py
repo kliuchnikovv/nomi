@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/plugins/github", tags=["github"])
 async def _get_github_token(user_id: str) -> str:
     """Get GitHub access token from database for user."""
     import asyncpg
+    import json
 
     db_dsn = os.getenv("DB_DSN", "")
     if db_dsn.startswith("postgres://"):
@@ -24,12 +25,12 @@ async def _get_github_token(user_id: str) -> str:
 
     conn = await asyncpg.connect(db_dsn)
     try:
-        # Get token from oauth_tokens table
+        # Tokens are stored in the integrations table as JSON params
         row = await conn.fetchrow(
             """
-            SELECT token_encrypted
-            FROM oauth_tokens
-            WHERE user_id = $1 AND provider = 'github' AND deleted_at IS NULL
+            SELECT params
+            FROM integrations
+            WHERE user_id = $1 AND provider = 'github' AND enabled = true
             LIMIT 1
             """,
             user_id,
@@ -40,27 +41,11 @@ async def _get_github_token(user_id: str) -> str:
                 detail="GitHub integration not found for this user. Please connect your GitHub account.",
             )
 
-        # Token is encrypted - for now we'll try to decode it
-        # Note: In production, you should properly decrypt the token
-        token_bytes = row["token_encrypted"]
-
-        # Try to decode as UTF-8 (assuming tokens are stored with simple encoding)
-        # This is a simplification - proper decryption should use the encryption system
-        try:
-            token = token_bytes.decode("utf-8")
-            return token
-        except Exception as e:
-            logger.warning("Failed to decode token, trying base64: %s", e)
-            import base64
-
-            try:
-                token = base64.b64decode(token_bytes).decode("utf-8")
-                return token
-            except Exception as e2:
-                logger.error("Failed to decode GitHub token: %s", e2)
-                raise HTTPException(
-                    status_code=500, detail="Failed to decode GitHub access token"
-                )
+        params = json.loads(row["params"])
+        token = params.get("access_token")
+        if not token:
+            raise HTTPException(status_code=500, detail="GitHub access token missing in integration params")
+        return token
     finally:
         await conn.close()
 
