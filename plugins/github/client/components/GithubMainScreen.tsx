@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from "react-native";
-import { Github, RefreshCw, ExternalLink } from "iconoir-react-native";
+import { Github  } from "iconoir-react-native";
 import { useTheme } from "@genie/front/context/ThemeContext";
-import { ThemePalette } from "@genie/front/themes/types";
+import { ThemePalette, ThemeColors } from "@genie/front/themes/types";
 import { PluginMainScreenProps } from "@genie/front/plugins/types";
 import { SharedPluginScreen } from "@genie/front/plugins/components/SharedPluginScreen";
 import { getApiUrl } from "@genie/front/config";
@@ -37,7 +37,7 @@ export function GithubMainScreen({ integrationId, onClose }: PluginMainScreenPro
                 throw new Error("Not authenticated");
             }
 
-            const response = await fetch(`${apiUrl}/github/repos?limit=30`, {
+            const response = await fetch(`${apiUrl}/api/github/repos?limit=30`, {
                 headers: {
                     "Authorization": `Bearer ${token}`,
                     "Content-Type": "application/json",
@@ -90,7 +90,7 @@ export function GithubMainScreen({ integrationId, onClose }: PluginMainScreenPro
                                 style={[styles.retryButton, { backgroundColor: theme.primary }]}
                                 onPress={loadRepos}
                             >
-                                <RefreshCw width={16} height={16} color="white" />
+                                {/*<RefreshCw width={16} height={16} color="white" />*/}
                                 <Text style={styles.retryButtonText}>Retry</Text>
                             </Pressable>
                         </View>
@@ -108,7 +108,7 @@ export function GithubMainScreen({ integrationId, onClose }: PluginMainScreenPro
                     >
                         <View style={styles.repoHeader}>
                             <Text style={[styles.repoName, { color: theme.text }]}>{item.name}</Text>
-                            <ExternalLink width={16} height={16} color={theme.textSecondary} />
+                            {/*<ExternalLink width={16} height={16} color={theme.textSecondary} />*/}
                         </View>
                         {item.description && (
                             <Text style={[styles.repoDescription, { color: theme.textSecondary }]} numberOfLines={2}>
@@ -118,7 +118,7 @@ export function GithubMainScreen({ integrationId, onClose }: PluginMainScreenPro
                         <View style={styles.repoFooter}>
                             {item.language && (
                                 <View style={styles.languageBadge}>
-                                    <View style={[styles.languageDot, { backgroundColor: getLanguageColor(item.language, palette) }]} />
+                                    <View style={[styles.languageDot, { backgroundColor: getLanguageColor(item.language, palette, theme) }]} />
                                     <Text style={[styles.languageText, { color: theme.textSecondary }]}>{item.language}</Text>
                                 </View>
                             )}
@@ -133,7 +133,7 @@ export function GithubMainScreen({ integrationId, onClose }: PluginMainScreenPro
     );
 }
 
-function getLanguageColor(language: string, palette: ThemePalette): string {
+function getLanguageColor(language: string, palette: ThemePalette, theme: ThemeColors): string {
     const colors: Record<string, string> = {
         TypeScript: palette.blue,
         JavaScript: palette.yellow,
@@ -142,9 +142,9 @@ function getLanguageColor(language: string, palette: ThemePalette): string {
         Rust: palette.orange,
         Java: palette.red,
         "C++": palette.purple,
-        Swift: palette.pink,
+        Swift: palette.magenta,
     };
-    return colors[language] || palette.textSecondary;
+    return colors[language] || theme.textSecondary;
 }
 
 const styles = StyleSheet.create({

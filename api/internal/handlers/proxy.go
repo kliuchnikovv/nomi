@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,14 +115,36 @@ func ProxyGitHub(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		}
 		defer resp.Body.Close()
 
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Error("Failed to read response body", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
+			return
+		}
+
+		// Log warnings for non-2xx responses to make them more visible
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			logger.Warn("GitHub repos request returned non-success status",
+				zap.Int("status_code", resp.StatusCode),
+				zap.String("response_body", string(bodyBytes)))
+
+			// Try to parse as JSON, if not, return a generic error
+			if !isValidJSON(bodyBytes) {
+				c.JSON(resp.StatusCode, gin.H{
+					"error":   fmt.Sprintf("AI service returned status %d", resp.StatusCode),
+					"details": string(bodyBytes),
+				})
+				return
+			}
+		}
+
 		for name, values := range resp.Header {
 			for _, value := range values {
 				c.Writer.Header().Add(name, value)
 			}
 		}
 		c.Status(resp.StatusCode)
-
-		_, _ = io.Copy(c.Writer, resp.Body)
+		_, _ = c.Writer.Write(bodyBytes)
 	}
 }
 
@@ -190,13 +213,32 @@ func ProxyPlugins(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		}
 		defer resp.Body.Close()
 
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Error("Failed to read response body", zap.Error(err),
+				zap.String("plugin", pluginName),
+				zap.String("path", resourcePath))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
+			return
+		}
+
 		// Log warnings for non-2xx responses to make them more visible
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			logger.Warn("Plugin request returned non-success status",
 				zap.Int("status_code", resp.StatusCode),
 				zap.String("plugin", pluginName),
 				zap.String("path", resourcePath),
-				zap.String("method", c.Request.Method))
+				zap.String("method", c.Request.Method),
+				zap.String("response_body", string(bodyBytes)))
+
+			// Try to parse as JSON, if not, return a generic error
+			if !isValidJSON(bodyBytes) {
+				c.JSON(resp.StatusCode, gin.H{
+					"error":   fmt.Sprintf("Plugin service returned status %d", resp.StatusCode),
+					"details": string(bodyBytes),
+				})
+				return
+			}
 		}
 
 		for name, values := range resp.Header {
@@ -205,8 +247,13 @@ func ProxyPlugins(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			}
 		}
 		c.Status(resp.StatusCode)
-		_, _ = io.Copy(c.Writer, resp.Body)
+		_, _ = c.Writer.Write(bodyBytes)
 	}
+}
+
+func isValidJSON(data []byte) bool {
+	var js map[string]interface{}
+	return json.Unmarshal(data, &js) == nil
 }
 
 // ProxyWebhooks forwards public webhook requests to Python plugins (no auth).
@@ -271,13 +318,32 @@ func ProxyWebhooks(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		}
 		defer resp.Body.Close()
 
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Error("Failed to read response body", zap.Error(err),
+				zap.String("plugin", pluginName),
+				zap.String("path", resourcePath))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read response"})
+			return
+		}
+
 		// Log warnings for non-2xx responses to make them more visible
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			logger.Warn("Webhook request returned non-success status",
 				zap.Int("status_code", resp.StatusCode),
 				zap.String("plugin", pluginName),
 				zap.String("path", resourcePath),
-				zap.String("method", c.Request.Method))
+				zap.String("method", c.Request.Method),
+				zap.String("response_body", string(bodyBytes)))
+
+			// Try to parse as JSON, if not, return a generic error
+			if !isValidJSON(bodyBytes) {
+				c.JSON(resp.StatusCode, gin.H{
+					"error":   fmt.Sprintf("Plugin service returned status %d", resp.StatusCode),
+					"details": string(bodyBytes),
+				})
+				return
+			}
 		}
 
 		// Copy response headers
@@ -287,6 +353,6 @@ func ProxyWebhooks(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			}
 		}
 		c.Status(resp.StatusCode)
-		_, _ = io.Copy(c.Writer, resp.Body)
+		_, _ = c.Writer.Write(bodyBytes)
 	}
 }
