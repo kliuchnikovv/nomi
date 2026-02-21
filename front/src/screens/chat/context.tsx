@@ -8,7 +8,9 @@ import React, {
     useState,
     useCallback,
     useMemo,
+    startTransition,
 } from 'react';
+import { InteractionManager } from 'react-native';
 import { ChatContextType, Props, Model, DetailLevel } from './models';
 import { useAuth } from '../auth/context.tsx';
 import { socket } from '../../socket';
@@ -177,17 +179,22 @@ export function ChatProvider({
 
     // Ensure chat socket is connected to the active chat room (RoomTypeChat).
     // Reconnect when activeChatID changes so we join the new room (avoid DONE only on user channel).
+    // Deferred via InteractionManager so screen transition animations complete before
+    // the socket connection (and any initial data processing) begins.
     useEffect(() => {
         if (!activeChatID || activeChatID === emptyChatID) return;
         if (!token) return;
-        socket.setChannel('chat');
-        socket.setChatId(activeChatID);
-        if (socket.isReady()) {
-            socket.close();
-        }
-        if (!socket.isReady()) {
-            socket.connect();
-        }
+        const task = InteractionManager.runAfterInteractions(() => {
+            socket.setChannel('chat');
+            socket.setChatId(activeChatID);
+            if (socket.isReady()) {
+                socket.close();
+            }
+            if (!socket.isReady()) {
+                socket.connect();
+            }
+        });
+        return () => task.cancel();
     }, [activeChatID, token]);
 
     const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0]?.id ?? null);
@@ -732,13 +739,16 @@ export function ChatProvider({
         // We set handlers to the global socket to update local state like 'assistantWorking'
         socket.setHandlers({
             onDone: () => {
-                setAssistantWorking(false);
-                setActiveAgentsCount(0);
-                // Clear timeout when response is received
+                // Clear timeout synchronously (not UI work)
                 if (responseTimeoutRef.current) {
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
                 }
+                // Mark as low-priority transition so in-flight gestures aren't interrupted
+                startTransition(() => {
+                    setAssistantWorking(false);
+                    setActiveAgentsCount(0);
+                });
             },
             onSignal: (payload: any) => {
                 if (payload.type === 'system_status' && typeof payload.active_agents_count === 'number') {
@@ -746,13 +756,15 @@ export function ChatProvider({
                 }
             },
             onError: (err: any) => {
-                setAssistantWorking(false);
-                setActiveAgentsCount(0);
-                // Clear timeout when error is received
+                // Clear timeout synchronously
                 if (responseTimeoutRef.current) {
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
                 }
+                startTransition(() => {
+                    setAssistantWorking(false);
+                    setActiveAgentsCount(0);
+                });
                 // Extract error message from frame
                 let message = 'Ошибка соединения';
                 if (err?.error?.message) {
@@ -794,14 +806,16 @@ export function ChatProvider({
     useEffect(() => {
         const unsubscribe = subscribeGenerationDone((chatId) => {
             if (chatId === activeChatID) {
-                setAssistantWorking(false);
-                setActiveAgentsCount(0);
                 if (responseTimeoutRef.current) {
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
                 }
-                // Flush any pending streaming updates to ensure final message state
+                // Flush final streaming state before transitioning UI
                 useChatStore.getState().flushPendingUpdates(chatId);
+                startTransition(() => {
+                    setAssistantWorking(false);
+                    setActiveAgentsCount(0);
+                });
             }
         });
         return unsubscribe;

@@ -234,7 +234,7 @@ ${email.bodyText || ''}`;
         const emails = await this.syncEmails(integrationId, maxResults);
 
         // Trigger background analysis for unread emails
-        this.analyzeNewEmailsInBackground(onAsapDetected).catch(err => {
+        this.analyzeNewEmailsInBackground(integrationId, onAsapDetected).catch(err => {
             console.warn('[GmailClient] Background analysis failed:', err);
         });
 
@@ -245,6 +245,7 @@ ${email.bodyText || ''}`;
      * Analyze new emails in background and handle ASAP detection
      */
     private async analyzeNewEmailsInBackground(
+        integrationId: string,
         onAsapDetected?: (emailId: string) => void
     ): Promise<void> {
         try {
@@ -252,7 +253,7 @@ ${email.bodyText || ''}`;
             const { briefingGenerator } = await import('../../briefing/BriefingGenerator');
 
             // Analyze unanalyzed emails (up to 5 at a time for performance)
-            const analyzed = await briefingGenerator.analyzeUnanalyzedEmails(5);
+            const analyzed = await briefingGenerator.analyzeUnanalyzedEmails(5, integrationId);
 
             if (analyzed > 0 && onAsapDetected) {
                 // Check for new ASAP emails

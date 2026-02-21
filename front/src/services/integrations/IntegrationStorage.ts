@@ -492,11 +492,13 @@ class IntegrationStorage {
 
     // ==================== Analysis & Extraction ====================
 
-    async getUnanalyzedEmails(limit: number = 10): Promise<Email[]> {
+    async getUnanalyzedEmails(limit: number = 10, integrationId?: string): Promise<Email[]> {
         const db = getDatabase();
         const rows = await db.getAllAsync<any>(
-            'SELECT * FROM emails WHERE analyzed_at IS NULL ORDER BY date DESC LIMIT ?',
-            [limit]
+            integrationId
+                ? 'SELECT * FROM emails WHERE analyzed_at IS NULL AND integration_id = ? ORDER BY date DESC LIMIT ?'
+                : 'SELECT * FROM emails WHERE analyzed_at IS NULL ORDER BY date DESC LIMIT ?',
+            integrationId ? [integrationId, limit] : [limit]
         );
 
         return rows.map(row => ({

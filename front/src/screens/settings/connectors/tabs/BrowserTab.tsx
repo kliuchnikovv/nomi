@@ -10,7 +10,7 @@ import {
     Platform,
 } from 'react-native';
 import React, { useMemo, useState } from 'react';
-import { Mail, Calendar, Github, Sparks, WarningCircle, SendDiagonal } from 'iconoir-react-native';
+import { PluginIcon } from '../../../../components/PluginIcon';
 import { useConnectors } from '../context';
 import { useTheme } from '../../../../context/ThemeContext';
 import { getStyles } from '../styles';
@@ -351,12 +351,7 @@ const ConnectorCard = ({ connector, onPress, styles, palette }: {
         onPress={onPress}
     >
         <View style={[styles.iconBubble, { backgroundColor: palette[connector.colorKey] || palette.blue }]}>
-            {connector.glyph === 'mail' && <Mail width={32} height={32} color="#fff" strokeWidth={2} />}
-            {connector.glyph === 'gmail' && <Mail width={32} height={32} color="#fff" strokeWidth={2} />}
-            {connector.glyph === 'calendar' && <Calendar width={32} height={32} color="#fff" strokeWidth={2} />}
-            {connector.glyph === 'github' && <Github width={32} height={32} color="#fff" strokeWidth={2} />}
-            {connector.glyph === 'telegram' && <SendDiagonal width={32} height={32} color="#fff" strokeWidth={2} />}
-            {connector.glyph !== 'mail' && connector.glyph !== 'gmail' && connector.glyph !== 'calendar' && connector.glyph !== 'github' && connector.glyph !== 'telegram' && <WarningCircle width={32} height={32} color="#fff" strokeWidth={2} />}
+            <PluginIcon provider={connector.id} size={32} color="#fff" />
         </View>
         <Text style={styles.title}>{connector.name}</Text>
     </Pressable>

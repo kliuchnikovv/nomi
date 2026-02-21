@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { startTransition } from 'react';
 import { Message, ContentPart } from '../screens/main/models';
 import { dispatchPayload } from './handlers';
 
@@ -47,30 +48,33 @@ function flushPendingUpdates(
     pendingUpdates.set(chatId, []);
     lastFlushTime.set(chatId, Date.now());
 
-    // Batch all accumulated chunks into a single store update
-    set((state) => {
-        let currentMessages = state.chats[chatId] || [];
-        let newMessages = [...currentMessages];
+    // Batch all accumulated chunks into a single low-priority store update.
+    // startTransition marks this as interruptible so taps/gestures get priority.
+    startTransition(() => {
+        set((state) => {
+            let currentMessages = state.chats[chatId] || [];
+            let newMessages = [...currentMessages];
 
-        // Process all pending payloads in order
-        for (const update of updates) {
-            const result = onReceivedMessage(update.payload, newMessages, chatId);
-            if (result !== newMessages) {
-                newMessages = result;
+            // Process all pending payloads in order
+            for (const update of updates) {
+                const result = onReceivedMessage(update.payload, newMessages, chatId);
+                if (result !== newMessages) {
+                    newMessages = result;
+                }
             }
-        }
 
-        // Only update if there were actual changes
-        if (newMessages === currentMessages) {
-            return state;
-        }
+            // Only update if there were actual changes
+            if (newMessages === currentMessages) {
+                return state;
+            }
 
-        return {
-            chats: {
-                ...state.chats,
-                [chatId]: newMessages,
-            },
-        };
+            return {
+                chats: {
+                    ...state.chats,
+                    [chatId]: newMessages,
+                },
+            };
+        });
     });
 }
 
@@ -168,32 +172,34 @@ export const useChatStore = create<ChatStore>()(
                     payload_role: payload?.role,
                     payload_message_preview: payload?.message?.substring(0, 50)
                 });
-                set((state) => {
-                    const currentMessages = state.chats[chatId] || [];
-                    console.log('[ChatStore 📋 Before]', {
-                        chatId,
-                        messageCount: currentMessages.length,
-                        messageIds: currentMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`)
-                    });
-                    const newMessages = onReceivedMessage(payload, currentMessages, chatId);
+                startTransition(() => {
+                    set((state) => {
+                        const currentMessages = state.chats[chatId] || [];
+                        console.log('[ChatStore 📋 Before]', {
+                            chatId,
+                            messageCount: currentMessages.length,
+                            messageIds: currentMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`)
+                        });
+                        const newMessages = onReceivedMessage(payload, currentMessages, chatId);
 
-                    if (newMessages === currentMessages) {
-                        console.log('[ChatStore ⏭️  Skip] No changes, returning previous state');
-                        return state;
-                    }
+                        if (newMessages === currentMessages) {
+                            console.log('[ChatStore ⏭️  Skip] No changes, returning previous state');
+                            return state;
+                        }
 
-                    console.log('[ChatStore 📋 After]', {
-                        chatId,
-                        messageCount: newMessages.length,
-                        messageIds: newMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`),
-                        added: newMessages.length - currentMessages.length
+                        console.log('[ChatStore 📋 After]', {
+                            chatId,
+                            messageCount: newMessages.length,
+                            messageIds: newMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`),
+                            added: newMessages.length - currentMessages.length
+                        });
+                        return {
+                            chats: {
+                                ...state.chats,
+                                [chatId]: newMessages,
+                            },
+                        };
                     });
-                    return {
-                        chats: {
-                            ...state.chats,
-                            [chatId]: newMessages,
-                        },
-                    };
                 });
             },
         }),

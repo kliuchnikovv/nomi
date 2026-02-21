@@ -62,8 +62,8 @@ class BriefingGenerator {
     /**
      * Analyze all unanalyzed emails and save results
      */
-    async analyzeUnanalyzedEmails(limit: number = 10): Promise<number> {
-        const emails = await integrationStorage.getUnanalyzedEmails(limit);
+    async analyzeUnanalyzedEmails(limit: number = 10, integrationId?: string): Promise<number> {
+        const emails = await integrationStorage.getUnanalyzedEmails(limit, integrationId);
         let analyzed = 0;
 
         for (const email of emails) {

@@ -7,7 +7,8 @@ import {
     View,
 } from 'react-native';
 import React, { useMemo } from 'react';
-import { NavArrowRight, Mail, Calendar, WarningCircle, Trash, Github, Sparks } from 'iconoir-react-native';
+import { NavArrowRight, Trash } from 'iconoir-react-native';
+import { PluginIcon } from '../../../../components/PluginIcon';
 import { useConnectors } from '../context';
 import { useTheme } from '../../../../context/ThemeContext';
 import { getStyles } from '../styles';
@@ -86,7 +87,7 @@ export function ConnectedTab() {
                                 <Item
                                     name={integration.name}
                                     enabled={!!integration.connected}
-                                    glyph={glyphStr}
+                                    provider={integration.provider}
                                     color={color}
                                     configID={integration.id}
                                     statusText={getIntegrationStatus(integration)}
@@ -129,10 +130,10 @@ export function ConnectedTab() {
     );
 }
 
-const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
+const Item = ({ name, enabled, color, provider, configID, statusText, onDelete }: {
     name: string;
     enabled: boolean;
-    glyph: string;
+    provider: string;
     color: string;
     configID: string;
     statusText?: string | null;
@@ -160,11 +161,7 @@ const Item = ({ name, enabled, color, glyph, configID, statusText, onDelete }: {
     return (
         <View style={styles.row}>
             <View style={[styles.iconBubble, { backgroundColor: color }]}>
-                {glyph === 'mail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph === 'gmail' && <Mail width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph === 'calendar' && <Calendar width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph === 'github' && <Github width={20} height={20} color="#fff" strokeWidth={2} />}
-                {glyph !== 'mail' && glyph !== 'gmail' && glyph !== 'calendar' && glyph !== 'github' && <WarningCircle width={20} height={20} color="#fff" strokeWidth={2} />}
+                <PluginIcon provider={provider} size={20} color="#fff" />
             </View>
             <View style={styles.titleBlock}>
                 <Text style={styles.rowTitle} numberOfLines={1}>

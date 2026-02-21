@@ -74,7 +74,7 @@ export const ContextItemCard = ({
                 return {
                     icon: 'logo-github' as const,
                     label: 'GitHub',
-                    color: '#24292e',
+                    color: theme.textPrimary ?? '#FFFFFF',
                 };
             default:
                 return {
@@ -107,7 +107,12 @@ export const ContextItemCard = ({
         return text.substring(0, maxLength) + '...';
     };
 
-    const displayName = truncateText(item.title);
+    // For GitHub repos, split owner/repo into separate display parts
+    const githubParts = item.sourceType === 'github_repo' && item.title.includes('/')
+        ? { owner: item.title.split('/')[0], repo: item.title.split('/')[1] }
+        : null;
+
+    const displayName = githubParts ? truncateText(githubParts.repo) : truncateText(item.title);
 
     return (
         <View
@@ -159,6 +164,17 @@ export const ContextItemCard = ({
                             numberOfLines={1}
                         >
                             {formatEventDate(item.metadata.start)}
+                        </Text>
+                    )}
+                    {githubParts && (
+                        <Text
+                            style={[
+                                styles.subtitle,
+                                { color: theme.textSecondary },
+                            ]}
+                            numberOfLines={1}
+                        >
+                            {githubParts.owner}
                         </Text>
                     )}
                 </View>

@@ -87,6 +87,10 @@ function RightSidebarContent({
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const { plugins, loading, refreshing, error, refresh } = usePluginChats();
+    const sortedPlugins = useMemo(
+        () => [...plugins].sort((a, b) => a.name.localeCompare(b.name)),
+        [plugins],
+    );
 
     if (error) {
         return (
@@ -119,7 +123,7 @@ function RightSidebarContent({
                 </View>
             ) : (
                 <FlatList
-                    data={plugins}
+                    data={sortedPlugins}
                     keyExtractor={plugin => plugin.id}
                     style={{ flex: 1 }}
                     contentContainerStyle={[styles.pluginsList, plugins.length === 0 && { flex: 1 }]}

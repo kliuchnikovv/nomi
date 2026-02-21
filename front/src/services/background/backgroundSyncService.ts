@@ -22,7 +22,7 @@ TaskManager.defineTask(BACKGROUND_EMAIL_SYNC_TASK, async () => {
 
                 // Analyze pending emails (incremental)
                 // Limit to small batch to respect background execution time limits
-                const unanalyzed = await integrationStorage.getUnanalyzedEmails(5);
+                const unanalyzed = await integrationStorage.getUnanalyzedEmails(5, integration.id);
                 if (unanalyzed.length > 0) {
                     console.log(`[BackgroundSync] Analyzing ${unanalyzed.length} new emails...`);
                     for (const email of unanalyzed) {

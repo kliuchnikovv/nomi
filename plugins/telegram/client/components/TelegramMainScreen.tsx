@@ -5,6 +5,7 @@ import { PluginMainScreenProps } from '@genie/front/plugins/types';
 import { getApiUrl } from '@genie/front/config';
 import { authStore } from '@genie/front/apiClient';
 import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
+import { palette } from '@genie/front/themes';
 
 interface TelegramMessage {
     id: string;
@@ -19,6 +20,15 @@ interface TelegramStatus {
     first_name?: string;
     display_name?: string;
 }
+
+const withAlpha = (hex: string, alpha: number) => {
+    const h = hex.replace('#', '');
+    const bigint = parseInt(h, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
@@ -85,9 +95,9 @@ export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenP
                     </View>
                 ) : status?.linked ? (
                     <View style={styles.linkedState}>
-                        <View style={[styles.statusBadge, { backgroundColor: '#e8f5e9' }]}>
+                        <View style={[styles.statusBadge, { backgroundColor: withAlpha(palette.green, 0.15) }]}>
                             <Text style={styles.statusIcon}>✅</Text>
-                            <Text style={[styles.statusText, { color: '#2e7d32' }]}>
+                            <Text style={[styles.statusText, { color: palette.green }]}>
                                 Connected as {status.display_name}
                             </Text>
                         </View>
@@ -104,7 +114,9 @@ export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenP
                                 renderItem={({ item }) => (
                                     <View style={[
                                         styles.messageItem,
-                                        item.role === 'user' ? styles.userMessage : styles.assistantMessage,
+                                        item.role === 'user' 
+                                            ? { ...styles.userMessage, backgroundColor: withAlpha(palette.blue, 0.15) } 
+                                            : { ...styles.assistantMessage, backgroundColor: theme.surfaceHighlight },
                                     ]}>
                                         <Text style={[styles.messageRole, { color: theme.textSecondary }]}>
                                             {item.role === 'user' ? 'You (Telegram)' : 'Genie'}
@@ -179,12 +191,10 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     userMessage: {
-        backgroundColor: '#e3f2fd',
         alignSelf: 'flex-end',
         maxWidth: '80%',
     },
     assistantMessage: {
-        backgroundColor: '#f5f5f5',
         alignSelf: 'flex-start',
         maxWidth: '80%',
     },

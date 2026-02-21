@@ -57,7 +57,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         systemEventListeners: [],
         authType: 'oauth2',
         category: 'development',
-        color: '#24292e',
+        color: '#6e7681',
     },
     telegram: {
         id: 'telegram',
