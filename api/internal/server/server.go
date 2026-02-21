@@ -89,11 +89,6 @@ func New(
 		),
 	))
 
-	// Integrations API
-	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
-	r.GET("/api/integrations/:id", wrapWithAuth(integrationsHandler.GetIntegration, authMiddleware))
-	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
-
 	// Chat API (protected)
 	r.POST("/api/chats", wrapWithAuth(chatHandler.CreateChat, authMiddleware))
 	r.GET("/api/chats", wrapWithAuth(chatHandler.ListChats, authMiddleware))
@@ -120,17 +115,23 @@ func New(
 	// Plugins registry (manifest list for frontend/Python)
 	r.GET("/api/plugins", handlers.ListPlugins)
 
-	// File Upload API
-	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))
-	r.GET("/api/attachments/:id", wrapWithAuth(uploadHandler.GetAttachment, authMiddleware))
-
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path
 	// Examples:
 	//   /api/github/repos -> /api/plugins/github/repos
 	//   /api/github/repos/owner/repo -> /api/plugins/github/repos/owner/repo
 	//   /api/telegram/messages -> /api/plugins/telegram/messages
+	// IMPORTANT: This route must be defined BEFORE /api/integrations/:id to avoid conflicts
 	r.Any("/api/:plugin/*path", wrapWithAuth(handlers.ProxyPlugins(cfg, logger), authMiddleware))
+
+	// Integrations API
+	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
+	r.GET("/api/integrations/:id", wrapWithAuth(integrationsHandler.GetIntegration, authMiddleware))
+	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
+
+	// File Upload API
+	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))
+	r.GET("/api/attachments/:id", wrapWithAuth(uploadHandler.GetAttachment, authMiddleware))
 
 	// Webhooks — public routes for plugin webhooks (no auth)
 	// Route: /api/webhooks/{plugin}/*path -> /api/plugins/{plugin}/webhook/*path
