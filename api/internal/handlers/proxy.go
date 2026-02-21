@@ -155,21 +155,13 @@ func ProxyPlugins(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		// Extract plugin name and path from URL
 		// /api/github/repos -> plugin="github", path="repos"
 		// /api/telegram/messages -> plugin="telegram", path="messages"
-		path := c.Param("path")
-		if path == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Plugin path is required"})
+		pluginName := c.Param("plugin")
+		resourcePath := c.Param("path")
+
+		if pluginName == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Plugin name is required"})
 			return
 		}
-
-		// Split path into plugin name and resource path
-		parts := strings.Split(path, "/")
-		if len(parts) < 1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid plugin path"})
-			return
-		}
-
-		pluginName := parts[0]
-		resourcePath := strings.Join(parts[1:], "/")
 
 		targetURL := cfg.LLM.BaseURL
 		if targetURL == "" {
