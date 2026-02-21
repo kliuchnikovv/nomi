@@ -169,6 +169,8 @@ func ProxyPlugins(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		}
 
 		// Build backend path: /api/plugins/{plugin}/{resource}
+		// c.Param("path") for wildcard routes includes a leading slash, strip it
+		resourcePath = strings.TrimPrefix(resourcePath, "/")
 		backendPath := fmt.Sprintf("/api/plugins/%s/%s", pluginName, resourcePath)
 
 		logger.Debug("Proxying plugin request",
