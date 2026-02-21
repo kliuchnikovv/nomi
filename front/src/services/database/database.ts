@@ -87,6 +87,8 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
     }
     if (currentVersion < 6) {
         await migrateV6(database);
+    }
+    if (currentVersion < 7) {
         await migrateV7(database);
     }
 }

@@ -7,7 +7,7 @@ import asyncpg
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class GitHubRepoCache:
                 return None
 
             # Check if cache is stale
-            cache_age = datetime.utcnow() - row["created_at"]
+            cache_age = datetime.now(timezone.utc) - row["created_at"]
             if cache_age > GitHubRepoCache.CACHE_TTL:
                 logger.info(
                     "GitHub repos cache for user %s is stale (age: %s)",
