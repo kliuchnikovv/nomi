@@ -225,3 +225,83 @@ RCT_EXTERN_METHOD(deleteHealthRecord:(NSString *)recordType
                   reject:(RCTPromiseRejectBlock)reject)
 
 @end
+
+@interface RCT_EXTERN_MODULE(IOSShortcutsManager, NSObject)
+
+RCT_EXTERN_METHOD(getSirikitShortcuts:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(runShortcut:(NSString *)name
+                   input:(nullable NSString *)input
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(donateShortcut:(NSString *)name
+                   suggestedPhrase:(NSString *)suggestedPhrase
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(importShortcut:(NSString *)fileUrl
+                   name:(NSString *)name
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+@end
+
+@interface RCT_EXTERN_MODULE(IOSMailManager, NSObject)
+
+RCT_EXTERN_METHOD(testConnection:(NSDictionary *)config
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(listMailboxes:(NSDictionary *)config
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(fetchEmails:(NSDictionary *)config
+                   mailbox:(NSString *)mailbox
+                   limit:(NSInteger)limit
+                   sinceUid:(NSInteger)sinceUid
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(fetchEmailBody:(NSDictionary *)config
+                   mailbox:(NSString *)mailbox
+                   uid:(NSInteger)uid
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(sendEmail:(NSDictionary *)smtpConfig
+                   message:(NSDictionary *)message
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(moveEmail:(NSDictionary *)config
+                   mailbox:(NSString *)mailbox
+                   uid:(NSInteger)uid
+                   destinationMailbox:(NSString *)destinationMailbox
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(deleteEmail:(NSDictionary *)config
+                   mailbox:(NSString *)mailbox
+                   uid:(NSInteger)uid
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setFlags:(NSDictionary *)config
+                   mailbox:(NSString *)mailbox
+                   uid:(NSInteger)uid
+                   flags:(NSString *)flags
+                   remove:(BOOL)remove
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(searchMailbox:(NSDictionary *)config
+                   mailbox:(NSString *)mailbox
+                   searchCriteria:(NSString *)searchCriteria
+                   limit:(NSInteger)limit
+                   resolver:(RCTPromiseResolveBlock)resolve
+                   rejecter:(RCTPromiseRejectBlock)reject)
+
+@end
