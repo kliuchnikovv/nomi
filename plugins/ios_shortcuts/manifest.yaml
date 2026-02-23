@@ -1,0 +1,106 @@
+name: ios_shortcuts
+display_name: iOS Shortcuts
+description: Manage iOS Shortcuts app — list, run, donate, and track shortcuts
+version: 1.0.0
+
+execution:
+  type: client
+  entry_points:
+    client: ./client/executor.ts
+
+auth:
+  type: none
+
+ui:
+  icon: shortcuts
+  description_short: iOS Shortcuts integration via Shortcuts app
+  category: automation
+
+methods:
+  - name: list_shortcuts
+    description: Get all available shortcuts (SiriKit + manual list)
+    parameters:
+      type: object
+      properties: {}
+
+  - name: run_shortcut
+    description: Run a shortcut by name
+    parameters:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Shortcut name (case-sensitive)
+        input:
+          type: string
+          description: Optional text input for the shortcut
+      required: [name]
+
+  - name: get_shortcut_info
+    description: Get details about a specific shortcut
+    parameters:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+
+  - name: donate_shortcut
+    description: Donate a shortcut to Siri (makes it available via voice)
+    parameters:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Shortcut display name
+        suggested_phrase:
+          type: string
+          description: Siri invocation phrase (e.g. "Start my morning routine")
+      required: [name, suggested_phrase]
+
+  - name: add_shortcut_to_list
+    description: Add a shortcut name to the manual list
+    parameters:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+      required: [name]
+
+  - name: remove_shortcut_from_list
+    description: Remove a shortcut from the manual list
+    parameters:
+      type: object
+      properties:
+        name:
+          type: string
+      required: [name]
+
+  - name: create_shortcut
+    description: >
+      Create a new iOS Shortcut by importing a .shortcut plist file.
+      Provide shortcut_data as a base64-encoded XML plist (WFWorkflow format).
+      The user will see an "Add Shortcut?" dialog and must tap Add to confirm.
+      Requires iOS 13+.
+    parameters:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Display name for the shortcut (shown in import dialog)
+        shortcut_data:
+          type: string
+          description: Base64-encoded XML plist (.shortcut file content) in WFWorkflow format
+      required: [name, shortcut_data]
+
+background_tasks:
+  enabled: false
+
+storage:
+  type: client_only
+  encrypted: false
+
+tools:
+  include: false
