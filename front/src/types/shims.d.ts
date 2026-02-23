@@ -30,7 +30,8 @@ declare module 'react-native-vector-icons/MaterialCommunityIcons' {
 declare module 'expo-file-system' {
   export const documentDirectory: string | null;
   export const cacheDirectory: string | null;
+  export const EncodingType: { Base64: 'base64'; UTF8: 'utf8' };
   export function downloadAsync(...args: any[]): Promise<any>;
-  export function writeAsStringAsync(...args: any[]): Promise<any>;
+  export function writeAsStringAsync(fileUri: string, contents: string, options?: { encoding?: string }): Promise<void>;
 }
 
