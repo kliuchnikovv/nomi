@@ -199,6 +199,7 @@ export class VectorStore {
 
     /**
      * Search for similar documents
+     * Uses chunked processing to avoid loading entire vectors table into memory at once.
      * @param query Search query
      * @param limit Max results
      * @param sourceType Filter by source type (e.g., 'email')
@@ -224,58 +225,82 @@ export class VectorStore {
         const embeddingTime = Date.now() - embeddingStartTime;
         console.log(`[Local RAG Search] Query embedding generated in ${embeddingTime}ms (${queryEmbedding.length} dimensions)`);
 
-        // 2. Fetch all vectors (Linear Scan - optimized for small local datasets < 1000 items)
-        // For larger datasets, we would need a native vector extension or optimized storage.
+        // 2. Get total count first to log progress
         const whereClause = sourceType ? 'WHERE source_type = ?' : '';
         const params = sourceType ? [sourceType] : [];
 
-        console.log('[Local RAG Search] Fetching vectors from SQLite...');
-        const dbStartTime = Date.now();
-        const rows = await db.getAllAsync<{
-            id: string;
-            content: string;
-            embedding: string;
-            metadata: string;
-        }>(`SELECT id, content, embedding, metadata FROM vectors ${whereClause}`, params);
-        const dbTime = Date.now() - dbStartTime;
-        console.log(`[Local RAG Search] Fetched ${rows.length} vectors from SQLite in ${dbTime}ms`);
+        const countResult = await db.getFirstAsync<{ cnt: number }>(
+            `SELECT COUNT(*) as cnt FROM vectors ${whereClause}`, params
+        );
+        const totalCount = countResult?.cnt || 0;
+        console.log(`[Local RAG Search] Total vectors to scan: ${totalCount}`);
 
-        // 3. Compute Cosine Similarity in JS, with metadata filtering
-        console.log('[Local RAG Search] Computing cosine similarity for all documents...');
+        if (totalCount === 0) {
+            console.warn('[Local RAG Search] No documents found in local knowledge base');
+            return [];
+        }
+
+        // 3. Process in chunks to limit peak memory usage
+        const CHUNK_SIZE = 100;
+        const topResults: SearchResult[] = [];
+
+        console.log('[Local RAG Search] Computing cosine similarity in chunks...');
         const similarityStartTime = Date.now();
-        const results: SearchResult[] = rows
-            .map(row => {
+
+        for (let offset = 0; offset < totalCount; offset += CHUNK_SIZE) {
+            const chunkRows = await db.getAllAsync<{
+                id: string;
+                content: string;
+                embedding: string;
+                metadata: string;
+            }>(`SELECT id, content, embedding, metadata FROM vectors ${whereClause} LIMIT ? OFFSET ?`,
+                [...params, CHUNK_SIZE, offset]
+            );
+
+            for (const row of chunkRows) {
+                // Apply metadata filter early to skip unnecessary cosine computation
+                let meta: Record<string, any> | undefined;
+                if (row.metadata) {
+                    try {
+                        meta = JSON.parse(row.metadata);
+                    } catch {
+                        continue;
+                    }
+                }
+                if (metadataFilter) {
+                    if (!meta) continue;
+                    let skip = false;
+                    for (const [key, value] of Object.entries(metadataFilter)) {
+                        if (meta[key] !== value) { skip = true; break; }
+                    }
+                    if (skip) continue;
+                }
+
                 const vector = JSON.parse(row.embedding) as number[];
                 const score = this.cosineSimilarity(queryEmbedding, vector);
-                return {
-                    id: row.id,
-                    content: row.content,
-                    score,
-                    metadata: row.metadata ? JSON.parse(row.metadata) : undefined
-                };
-            })
-            .filter(row => {
-                // Apply metadata filter if provided
-                if (!metadataFilter) return true;
-                if (!row.metadata) return false;
-                for (const [key, value] of Object.entries(metadataFilter)) {
-                    if (row.metadata[key] !== value) return false;
-                }
-                return true;
-            });
-        const similarityTime = Date.now() - similarityStartTime;
-        console.log(`[Local RAG Search] Similarity computation completed in ${similarityTime}ms`);
 
-        // 4. Sort and return top K
-        const sortedResults = results.sort((a, b) => b.score - a.score);
-        const topResults = sortedResults.slice(0, limit);
+                // Maintain a bounded top-K list (min-heap behavior via sorted insert)
+                if (topResults.length < limit) {
+                    topResults.push({ id: row.id, content: row.content, score, metadata: meta });
+                    // Keep sorted descending so the last element is the smallest
+                    topResults.sort((a, b) => b.score - a.score);
+                } else if (score > topResults[topResults.length - 1].score) {
+                    topResults[topResults.length - 1] = { id: row.id, content: row.content, score, metadata: meta };
+                    topResults.sort((a, b) => b.score - a.score);
+                }
+                // Explicit cleanup: allow GC to reclaim parsed vector array
+            }
+            // chunkRows goes out of scope here, allowing GC between chunks
+        }
+
+        const similarityTime = Date.now() - similarityStartTime;
 
         // Log detailed results
         const totalTime = Date.now() - searchStartTime;
         console.log(
-            `[Local RAG Search] Search completed in ${totalTime}ms (embedding: ${embeddingTime}ms, db: ${dbTime}ms, similarity: ${similarityTime}ms)`
+            `[Local RAG Search] Search completed in ${totalTime}ms (embedding: ${embeddingTime}ms, similarity: ${similarityTime}ms)`
         );
-        console.log(`[Local RAG Search] Returning ${topResults.length}/${rows.length} documents (top ${limit})`);
+        console.log(`[Local RAG Search] Returning ${topResults.length}/${totalCount} documents (top ${limit})`);
 
         // Log each result with detailed info
         topResults.forEach((result, idx) => {
@@ -288,10 +313,10 @@ export class VectorStore {
 
         // Warn if no results or low relevance
         if (topResults.length === 0) {
-            console.warn('[Local RAG Search] ⚠️ No documents found in local knowledge base');
+            console.warn('[Local RAG Search] No documents found in local knowledge base');
         } else if (topResults[0].score < 0.5) {
             console.warn(
-                `[Local RAG Search] ⚠️ Top result has low relevance (score=${topResults[0].score.toFixed(3)}). Consider lowering threshold or expanding knowledge base.`
+                `[Local RAG Search] Top result has low relevance (score=${topResults[0].score.toFixed(3)}). Consider lowering threshold or expanding knowledge base.`
             );
         }
 

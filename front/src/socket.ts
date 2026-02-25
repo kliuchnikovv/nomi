@@ -15,6 +15,9 @@ type Handlers = {
     onSignal?: (frame: Frame) => void;
 };
 
+// Cap outbox size to prevent unbounded memory growth when socket is disconnected
+const MAX_OUTBOX_SIZE = 100;
+
 export class ChatSocket {
     private ws: any | null = null;
     private token: string | null = null;
@@ -117,6 +120,17 @@ export class ChatSocket {
         this.isIntentionallyClosed = false;
         this.shouldReconnect = true;
         this.open();
+    }
+
+    /**
+     * Push a message to the outbox, dropping the oldest if the cap is exceeded.
+     */
+    private pushToOutbox(msg: any) {
+        if (this.outbox.length >= MAX_OUTBOX_SIZE) {
+            console.warn(`[Socket] Outbox full (${MAX_OUTBOX_SIZE}), dropping oldest message`);
+            this.outbox.shift();
+        }
+        this.outbox.push(msg);
     }
 
     processOutbox() {
@@ -554,10 +568,10 @@ export class ChatSocket {
                 this.ws.send(JSON.stringify(msg));
                 this.touchActivity();
             } catch (err) {
-                this.outbox.push(msg);
+                this.pushToOutbox(msg);
             }
         } else {
-            this.outbox.push(msg);
+            this.pushToOutbox(msg);
             // If not connected, we should probably try to connect?
             // But open() doesn't take params anymore.
             // We assume open() is called by App.
@@ -600,11 +614,11 @@ export class ChatSocket {
             } catch (err) {
                 // Non-critical: put in outbox so it gets sent when connection is restored
                 console.warn('[Socket] sendStoreFacts failed, queuing for retry', err);
-                this.outbox.push(msg);
+                this.pushToOutbox(msg);
             }
         } else {
             // Queue for later — same as sendMessage; processOutbox will send when socket connects
-            this.outbox.push(msg);
+            this.pushToOutbox(msg);
             console.log('[Socket] Facts queued (socket not ready), will send when connected');
         }
     }
@@ -622,7 +636,7 @@ export class ChatSocket {
         if (this.isReady()) {
             this.ws.send(JSON.stringify(frame));
         } else {
-            this.outbox.push(frame);
+            this.pushToOutbox(frame);
         }
     }
 

@@ -240,6 +240,8 @@ export async function stopAllBackgroundTasks(): Promise<void> {
 
 export class SystemEventListener {
     private listeners: Map<string, Set<(data?: any) => Promise<void>>> = new Map();
+    // Track registered providers to prevent duplicate handler registration
+    private registeredProviders: Set<string> = new Set();
     
     registerListener(eventType: string, handler: (data?: any) => Promise<void>): void {
         if (!this.listeners.has(eventType)) {
@@ -257,6 +259,24 @@ export class SystemEventListener {
                 this.listeners.delete(eventType);
             }
         }
+    }
+
+    clearAllListeners(): void {
+        this.listeners.clear();
+        this.registeredProviders.clear();
+        console.log('[BackgroundTaskManager] All event listeners cleared');
+    }
+
+    isProviderRegistered(provider: string): boolean {
+        return this.registeredProviders.has(provider);
+    }
+
+    markProviderRegistered(provider: string): void {
+        this.registeredProviders.add(provider);
+    }
+
+    unmarkProvider(provider: string): void {
+        this.registeredProviders.delete(provider);
     }
     
     async triggerEvent(eventType: string, data?: any): Promise<void> {
@@ -280,8 +300,18 @@ export class SystemEventListener {
 
 export const systemEventListener = new SystemEventListener();
 
+// Guard: ensure AppState listener is registered only once
+let appStateListenerInitialized = false;
+let appStateSubscription: ReturnType<typeof AppState.addEventListener> | null = null;
+
 export function initializeSystemEventListeners(): void {
-    AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+    if (appStateListenerInitialized) {
+        console.log('[BackgroundTaskManager] System event listeners already initialized, skipping');
+        return;
+    }
+    appStateListenerInitialized = true;
+
+    appStateSubscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
         if (nextAppState === 'active') {
             systemEventListener.triggerEvent('app_lifecycle', { state: 'active' });
         } else if (nextAppState === 'background') {
@@ -292,11 +322,30 @@ export function initializeSystemEventListeners(): void {
     console.log('[BackgroundTaskManager] System event listeners initialized');
 }
 
+/**
+ * Remove the global AppState listener. Call on logout or cleanup.
+ */
+export function cleanupSystemEventListeners(): void {
+    if (appStateSubscription) {
+        appStateSubscription.remove();
+        appStateSubscription = null;
+    }
+    appStateListenerInitialized = false;
+    systemEventListener.clearAllListeners();
+    console.log('[BackgroundTaskManager] System event listeners cleaned up');
+}
+
 export async function registerSystemEventListeners(integrationId: string, provider: string): Promise<void> {
     const metadata = getIntegrationMetadata(provider);
     if (!metadata || !metadata.supportsBackgroundTasks) {
         return;
     }
+
+    // Skip if this provider's listeners are already registered
+    if (systemEventListener.isProviderRegistered(provider)) {
+        return;
+    }
+    systemEventListener.markProviderRegistered(provider);
     
     for (const eventType of metadata.systemEventListeners) {
         if (eventType === 'push_notifications') {
@@ -308,7 +357,7 @@ export async function registerSystemEventListeners(integrationId: string, provid
                 }
             });
         } else if (eventType === 'app_lifecycle') {
-            // Обработчик уже зарегистрирован глобально
+            // Handler is already registered globally via initializeSystemEventListeners
         }
     }
 }

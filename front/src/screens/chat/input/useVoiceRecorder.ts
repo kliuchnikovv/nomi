@@ -85,11 +85,16 @@ export function useVoiceRecorder() {
                 }
             }, 100);
 
-            // Simulate audio levels with random values for animation
+            // Simulate audio levels with random values for animation.
+            // Use a fixed-size ring buffer (60 entries = 3 seconds at 50ms intervals)
+            // to prevent unbounded array growth during long recordings.
+            const MAX_AUDIO_LEVELS = 60;
             animationIntervalRef.current = setInterval(() => {
-                // Generate random audio level between 0.2 and 0.9
                 const randomLevel = 0.2 + Math.random() * 0.7;
-                setAudioLevels((prev) => [...prev, randomLevel]);
+                setAudioLevels((prev) => {
+                    const next = [...prev, randomLevel];
+                    return next.length > MAX_AUDIO_LEVELS ? next.slice(-MAX_AUDIO_LEVELS) : next;
+                });
             }, 50);
         } catch (err) {
             console.error('Failed to start recording:', err);

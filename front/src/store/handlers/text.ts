@@ -43,7 +43,8 @@ export const handleTextPayload: MessageHandler = (payload, prevMessages, message
         } else {
             // Overlap: newText may start with suffix of currentText (e.g. "Привет" + "ивет!!").
             // Append only the non-overlapping tail.
-            const maxOverlap = Math.min(currentText.length, newText.length);
+            // Cap overlap scan at 200 chars to avoid O(n²) for very long texts.
+            const maxOverlap = Math.min(currentText.length, newText.length, 200);
             for (let k = maxOverlap; k >= 1; k--) {
                 if (currentText.endsWith(newText.slice(0, k))) {
                     effectiveDelta = newText.slice(k);

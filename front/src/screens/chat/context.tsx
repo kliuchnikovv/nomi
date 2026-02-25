@@ -601,6 +601,7 @@ export function ChatProvider({
         }
         setExternalTitle(null);
         setError(null); // Clear error on chat switch
+        setLastFailedMessage(null); // Release retained attachment URIs and context items
         // Reset manual selection flag when switching chats
         manualModelSelectionRef.current = false;
 
@@ -671,7 +672,10 @@ export function ChatProvider({
         }
     }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode, sidebarFilter, sendMessage, clearPendingChatMode]);
 
-    // Fetch available models on mount with retry
+    // Fetch available models on mount with retry.
+    // Retry timer IDs are tracked so they can be cancelled on unmount.
+    const modelsRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     useEffect(() => {
         let mounted = true;
         const fetchModels = async (retryCount = 0) => {
@@ -684,18 +688,24 @@ export function ChatProvider({
                     selectedProviderRef.current = models.find(m => m.id === current)?.provider;
                 } else if (mounted && retryCount < 3) {
                     console.log(`Fetch models returned empty list, retrying... (${retryCount + 1}/3)`);
-                    setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));
+                    modelsRetryTimerRef.current = setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));
                 }
             } catch (error) {
                 console.error('Failed to fetch models:', error);
                 if (mounted && retryCount < 3) {
                     console.log(`Fetch models failed, retrying... (${retryCount + 1}/3)`);
-                    setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));
+                    modelsRetryTimerRef.current = setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));
                 }
             }
         };
         fetchModels();
-        return () => { mounted = false; };
+        return () => {
+            mounted = false;
+            if (modelsRetryTimerRef.current) {
+                clearTimeout(modelsRetryTimerRef.current);
+                modelsRetryTimerRef.current = null;
+            }
+        };
     }, []);
 
 
@@ -797,9 +807,11 @@ export function ChatProvider({
             },
         });
 
-        // No explicit cleanup to remove handlers for now as they are simple and global-ish.
-        // Ideally we should manage multiple listeners.
-        // For now, this component is the main consumer.
+        // Clear handlers on unmount to prevent stale closures from referencing
+        // unmounted component state (setAssistantWorking, setError, etc.)
+        return () => {
+            socket.setHandlers({});
+        };
     }, [refreshToken, getChats, handleClientAction]);
 
     // Clear "Assistant is thinking" when DONE is received on user channel (or any socket).

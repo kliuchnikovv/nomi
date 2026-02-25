@@ -9,6 +9,12 @@ import { dispatchPayload } from './handlers';
 const STREAM_THROTTLE_MS = 120; // Update UI max ~8 times per second during streaming
 const STREAM_FLUSH_THRESHOLD = 100; // Force update every 100 chars even within throttle window
 
+// Memory management: limit how many chats and messages are kept in memory
+const MAX_CHATS_IN_MEMORY = 10; // Only keep the N most recently accessed chats in memory
+const MAX_MESSAGES_PER_CHAT = 200; // Cap messages per chat to prevent unbounded growth
+const MAX_PERSISTED_CHATS = 5; // Only persist the N most recently accessed chats to AsyncStorage
+const MAX_PERSISTED_MESSAGES = 50; // Persist fewer messages per chat (rest loaded from server on demand)
+
 interface PendingUpdate {
     payload: any;
     timestamp: number;
@@ -26,6 +32,46 @@ interface ChatStore {
 const pendingUpdates = new Map<string, PendingUpdate[]>();
 const throttleTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const lastFlushTime = new Map<string, number>();
+
+// LRU tracking: ordered list of chatIds, most recently accessed last
+const chatAccessOrder: string[] = [];
+
+function touchChatAccess(chatId: string) {
+    const idx = chatAccessOrder.indexOf(chatId);
+    if (idx !== -1) {
+        chatAccessOrder.splice(idx, 1);
+    }
+    chatAccessOrder.push(chatId);
+}
+
+function evictOldChats(chats: Record<string, Message[]>): Record<string, Message[]> {
+    if (chatAccessOrder.length <= MAX_CHATS_IN_MEMORY) {
+        return chats;
+    }
+    const newChats = { ...chats };
+    // Evict least recently accessed chats
+    while (chatAccessOrder.length > MAX_CHATS_IN_MEMORY) {
+        const evictId = chatAccessOrder.shift()!;
+        delete newChats[evictId];
+        // Also clean up throttling state for evicted chats
+        pendingUpdates.delete(evictId);
+        const timer = throttleTimers.get(evictId);
+        if (timer) {
+            clearTimeout(timer);
+            throttleTimers.delete(evictId);
+        }
+        lastFlushTime.delete(evictId);
+    }
+    return newChats;
+}
+
+function trimMessages(messages: Message[], limit: number): Message[] {
+    if (messages.length <= limit) {
+        return messages;
+    }
+    // Keep the most recent messages
+    return messages.slice(messages.length - limit);
+}
 
 // Flush accumulated streaming updates for a chat
 function flushPendingUpdates(
@@ -68,11 +114,16 @@ function flushPendingUpdates(
                 return state;
             }
 
+            // Trim messages if they exceed the limit
+            newMessages = trimMessages(newMessages, MAX_MESSAGES_PER_CHAT);
+
+            touchChatAccess(chatId);
+
             return {
-                chats: {
+                chats: evictOldChats({
                     ...state.chats,
                     [chatId]: newMessages,
-                },
+                }),
             };
         });
     });
@@ -88,11 +139,13 @@ export const useChatStore = create<ChatStore>()(
                 if (pendingUpdates.has(chatId) && pendingUpdates.get(chatId)!.length > 0) {
                     flushPendingUpdates(chatId, set);
                 }
+                touchChatAccess(chatId);
+                const trimmed = trimMessages(messages, MAX_MESSAGES_PER_CHAT);
                 set((state) => ({
-                    chats: {
+                    chats: evictOldChats({
                         ...state.chats,
-                        [chatId]: messages,
-                    },
+                        [chatId]: trimmed,
+                    }),
                 }));
             },
 
@@ -105,6 +158,11 @@ export const useChatStore = create<ChatStore>()(
                     throttleTimers.delete(chatId);
                 }
                 lastFlushTime.delete(chatId);
+                // Remove from LRU tracking
+                const lruIdx = chatAccessOrder.indexOf(chatId);
+                if (lruIdx !== -1) {
+                    chatAccessOrder.splice(lruIdx, 1);
+                }
                 
                 set((state) => {
                     const newChats = { ...state.chats };
@@ -172,6 +230,7 @@ export const useChatStore = create<ChatStore>()(
                     payload_role: payload?.role,
                     payload_message_preview: payload?.message?.substring(0, 50)
                 });
+                touchChatAccess(chatId);
                 startTransition(() => {
                     set((state) => {
                         const currentMessages = state.chats[chatId] || [];
@@ -180,12 +239,15 @@ export const useChatStore = create<ChatStore>()(
                             messageCount: currentMessages.length,
                             messageIds: currentMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`)
                         });
-                        const newMessages = onReceivedMessage(payload, currentMessages, chatId);
+                        let newMessages = onReceivedMessage(payload, currentMessages, chatId);
 
                         if (newMessages === currentMessages) {
                             console.log('[ChatStore ⏭️  Skip] No changes, returning previous state');
                             return state;
                         }
+
+                        // Trim messages if they exceed the limit
+                        newMessages = trimMessages(newMessages, MAX_MESSAGES_PER_CHAT);
 
                         console.log('[ChatStore 📋 After]', {
                             chatId,
@@ -194,10 +256,10 @@ export const useChatStore = create<ChatStore>()(
                             added: newMessages.length - currentMessages.length
                         });
                         return {
-                            chats: {
+                            chats: evictOldChats({
                                 ...state.chats,
                                 [chatId]: newMessages,
-                            },
+                            }),
                         };
                     });
                 });
@@ -206,6 +268,18 @@ export const useChatStore = create<ChatStore>()(
         {
             name: 'chat-storage',
             storage: createJSONStorage(() => AsyncStorage),
+            // Only persist a subset of chats with fewer messages to limit AsyncStorage size
+            partialize: (state) => {
+                const recentChatIds = chatAccessOrder.slice(-MAX_PERSISTED_CHATS);
+                const persistedChats: Record<string, Message[]> = {};
+                for (const chatId of recentChatIds) {
+                    const messages = state.chats[chatId];
+                    if (messages) {
+                        persistedChats[chatId] = trimMessages(messages, MAX_PERSISTED_MESSAGES);
+                    }
+                }
+                return { chats: persistedChats };
+            },
         }
     )
 );

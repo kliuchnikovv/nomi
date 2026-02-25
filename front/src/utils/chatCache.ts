@@ -85,11 +85,20 @@ export class ChatCache {
         }
     }
 
+    // Maximum number of messages to keep in the per-chat AsyncStorage cache
+    private static readonly MAX_CACHED_MESSAGES = 200;
+
     // Update messages in cache (merge with WebSocket updates)
     static async updateCachedMessages(chatId: string, newMessages: Message[]): Promise<void> {
         const cached = await this.getCachedMessages(chatId);
         if (!cached) {
-            await this.cacheMessages(chatId, newMessages);
+            // Even for a fresh cache, cap the size
+            const capped = newMessages.length > this.MAX_CACHED_MESSAGES
+                ? newMessages
+                    .sort((a, b) => a.created_at - b.created_at)
+                    .slice(-this.MAX_CACHED_MESSAGES)
+                : newMessages;
+            await this.cacheMessages(chatId, capped);
             return;
         }
 
@@ -98,9 +107,15 @@ export class ChatCache {
         cached.messages.forEach(m => messageMap.set(m.id, m));
         newMessages.forEach(m => messageMap.set(m.id, m));
 
-        const merged = Array.from(messageMap.values()).sort(
+        let merged = Array.from(messageMap.values()).sort(
             (a, b) => a.created_at - b.created_at
         );
+
+        // Prune to keep only the most recent messages
+        if (merged.length > this.MAX_CACHED_MESSAGES) {
+            merged = merged.slice(-this.MAX_CACHED_MESSAGES);
+        }
+
         await this.cacheMessages(chatId, merged);
     }
 

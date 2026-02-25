@@ -1,0 +1,244 @@
+name: imap_email
+display_name: Email (IMAP)
+description: Universal IMAP/SMTP email integration — iCloud, Gmail, Outlook, any provider
+version: 1.0.0
+
+execution:
+  type: client
+  entry_points:
+    client: ./client/executor.ts
+
+auth:
+  type: none
+
+ui:
+  icon: mail
+  description_short: Universal IMAP/SMTP email client
+  category: email
+
+methods:
+  - name: test_connection
+    description: Test IMAP connection with provided credentials
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID to get credentials from
+      required: [integration_id]
+
+  - name: list_mailboxes
+    description: Get list of available mailboxes (folders)
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID to get credentials from
+      required: [integration_id]
+
+  - name: get_recent_emails
+    description: Get recent emails from mailbox (cached + background sync)
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        mailbox:
+          type: string
+          description: Mailbox name (default: INBOX)
+        limit:
+          type: integer
+          description: Number of emails to return (default: 20)
+      required: [integration_id]
+
+  - name: sync_emails
+    description: Sync emails from IMAP server
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        mailbox:
+          type: string
+          description: Mailbox name (default: INBOX)
+        limit:
+          type: integer
+          description: Number of emails to sync (default: 100)
+      required: [integration_id]
+
+  - name: get_email_body
+    description: Get full email body
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        uid:
+          type: integer
+          description: Email UID
+        mailbox:
+          type: string
+          description: Mailbox name (default: INBOX)
+      required: [integration_id, uid]
+
+  - name: send_email
+    description: Send email via SMTP
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        to:
+          type: string
+          description: Recipient email address
+        subject:
+          type: string
+          description: Email subject
+        body:
+          type: string
+          description: Email body content
+        from:
+          type: string
+          description: From email address (optional, defaults to username)
+      required: [integration_id, to, subject, body]
+
+  - name: reply_email
+    description: Reply to an email
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        uid:
+          type: integer
+          description: Email UID to reply to
+        mailbox:
+          type: string
+          description: Mailbox name (default: INBOX)
+        body:
+          type: string
+          description: Reply body content
+      required: [integration_id, uid, body]
+
+  - name: move_email
+    description: Move email to another mailbox
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        uid:
+          type: integer
+          description: Email UID
+        mailbox:
+          type: string
+          description: Current mailbox name
+        destination_mailbox:
+          type: string
+          description: Destination mailbox name
+      required: [integration_id, uid, mailbox, destination_mailbox]
+
+  - name: archive_email
+    description: Archive email (move to Archive or delete)
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        uid:
+          type: integer
+          description: Email UID
+        mailbox:
+          type: string
+          description: Current mailbox name
+      required: [integration_id, uid, mailbox]
+
+  - name: delete_email
+    description: Delete email
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        uid:
+          type: integer
+          description: Email UID
+        mailbox:
+          type: string
+          description: Mailbox name
+      required: [integration_id, uid, mailbox]
+
+  - name: mark_email
+    description: Set email flags (read, flagged, etc.)
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        uid:
+          type: integer
+          description: Email UID
+        mailbox:
+          type: string
+          description: Mailbox name
+        flag:
+          type: string
+          description: Flag to set (e.g., \\Seen, \\Flagged)
+        remove:
+          type: boolean
+          description: Remove flag instead of add (default: false)
+      required: [integration_id, uid, mailbox, flag]
+
+  - name: search_emails
+    description: Semantic search emails using RAG
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query
+        integration_id:
+          type: string
+          description: Integration ID
+      required: [query, integration_id]
+
+  - name: search_emails_server
+    description: Search emails on IMAP server
+    parameters:
+      type: object
+      properties:
+        integration_id:
+          type: string
+          description: Integration ID
+        criteria:
+          type: string
+          description: IMAP SEARCH criteria (e.g., "FROM \"user@example.com\"", "SUBJECT \"meeting\"")
+        mailbox:
+          type: string
+          description: Mailbox name (default: INBOX)
+        limit:
+          type: integer
+          description: Number of emails to return (default: 50)
+      required: [integration_id, criteria]
+
+background_tasks:
+  enabled: true
+  system_events:
+    - app_lifecycle
+
+storage:
+  type: client_only
+  encrypted: true
+
+tools:
+  include: false
