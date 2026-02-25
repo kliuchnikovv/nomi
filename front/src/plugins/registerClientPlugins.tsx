@@ -29,6 +29,7 @@ import { backgroundTask as iosRemindersBackgroundTask } from '@genie/plugin-ios_
 import { iosContactsPlugin } from '@genie/plugin-ios_contacts/client';
 import { backgroundTask as iosContactsBackgroundTask } from '@genie/plugin-ios_contacts/background';
 import { iosHealthPlugin } from '@genie/plugin-ios_health/client';
+import { appleDiscoveryPlugin } from '@genie/plugin-apple_discovery/client';
 import { PollComponent, ButtonsComponent } from '../screens/chat/message/UIComponents';
 import { BriefingCard } from '../screens/chat/components/BriefingCard';
 
@@ -114,6 +115,9 @@ export function registerClientPlugins(): void {
     });
     registerClientPlugin('ios_health', {
         ...iosHealthPlugin,
+    });
+    registerClientPlugin('apple_discovery', {
+        ...appleDiscoveryPlugin,
     });
 
     registered = true;

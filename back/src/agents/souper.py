@@ -38,6 +38,17 @@ You are {name}, a personal AI assistant designed to help users with their daily 
 - Be proactive — it's better to search and confirm than to guess.
 - If no relevant tools are available, answer from your knowledge but note it may be outdated."""
 
+DISCOVERY_INSTRUCTIONS = (
+    "\n\n## Tool Activation Protocol\n"
+    "MANDATORY FIRST STEP: Before performing any task that requires tools, call "
+    "`discover_tools(query)` with a brief description of what you need to do. "
+    "This activates the relevant tools for your task.\n"
+    "After calling discover_tools, you will receive a list of available tools. "
+    "Use those tools immediately to complete the task.\n"
+    "You only need to call discover_tools ONCE per task. "
+    "Skip it only for pure knowledge/reasoning questions that need no external tools."
+)
+
 
 class SouperAgent(Agent):
     def __init__(
@@ -56,6 +67,7 @@ class SouperAgent(Agent):
         instructions = (
             BASE_INSTRUCTIONS
             + f"\nCurrent time is: {datetime.now(ZoneInfo(effective_timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
+            + DISCOVERY_INSTRUCTIONS
         )
 
         super().__init__(

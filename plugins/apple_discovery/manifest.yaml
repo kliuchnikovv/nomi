@@ -1,0 +1,46 @@
+name: apple_discovery
+display_name: Apple Discovery
+description: Local tool discovery using Apple Foundation Models
+version: 1.0.0
+
+execution:
+  type: client
+  entry_points:
+    client: ./client/executor.ts
+
+auth:
+  type: none
+
+ui:
+  icon: sparkle
+  category: ai
+  description_short: Local AI-powered tool discovery
+
+methods:
+  - name: discover_tools
+    description: Select tools relevant to user's request using local Apple AI
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+          description: User's request to analyze
+        catalog:
+          type: object
+          description: Complete catalog of available tools
+          additionalProperties:
+            type: object
+            properties:
+              display_name:
+                type: string
+              description:
+                type: string
+              methods:
+                type: array
+                items:
+                  type: object
+      required: [query, catalog]
+
+storage:
+  type: client_only
+  encrypted: false

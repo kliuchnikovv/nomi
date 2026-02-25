@@ -1,0 +1,26 @@
+{
+  "name": "@genie/plugin-apple_discovery",
+  "version": "1.0.0",
+  "description": "Apple Discovery plugin for Genie - local AI-powered tool discovery using Apple Foundation Models",
+  "main": "./client/executor.ts",
+  "types": "./client/executor.ts",
+  "private": true,
+  "exports": {
+    ".": {
+      "import": "./client/executor.ts",
+      "require": "./client/executor.ts",
+      "types": "./client/executor.ts"
+    },
+    "./client": {
+      "import": "./client/executor.ts",
+      "require": "./client/executor.ts",
+      "types": "./client/executor.ts"
+    }
+  },
+  "dependencies": {
+    "@react-native-ai/apple": "^0.12.0"
+  },
+  "peerDependencies": {
+    "ai": "^6.0.0"
+  }
+}
