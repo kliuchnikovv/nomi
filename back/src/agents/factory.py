@@ -1,6 +1,6 @@
 import logging
 import os
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from agno.agent import Agent
@@ -13,7 +13,7 @@ from src.agents.souper import SouperAgent
 from src.models.safe_gemini import SafeGemini
 
 from src.tools.config import ToolConfigClient
-from src.tools.factory import ToolsConfig
+from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
 from agno.tools import Toolkit
 
@@ -25,56 +25,18 @@ class AgentRunWrapper:
     Thin wrapper that injects knowledge_filters={"user_id": rag_user_id} into every
     run/arun call so agentic search is scoped to the user. Call sites do not need
     to pass knowledge_filters explicitly.
-
-    arun() implements the two-arun pattern:
-      - Run 1: Only DiscoveryToolkit is visible; agent calls discover_tools() which
-               adds actual tools to the agent and sets agent._discovery_done = True.
-      - Run 2: All discovered tools are now registered; agent executes the real task.
-    If discovery does not happen (pure knowledge question), run-1 output is yielded
-    directly without a second run.
     """
 
     def __init__(self, agent: Agent, rag_user_id: str):
         self._agent = agent
         self._rag_user_id = rag_user_id
 
-    async def arun(self, input, **kwargs) -> AsyncIterator:  # type: ignore[override]
+    def arun(self, input, **kwargs):
         filters = kwargs.get("knowledge_filters") or {}
         if isinstance(filters, dict):
             filters = {**filters, "user_id": self._rag_user_id}
         kwargs["knowledge_filters"] = filters
-
-        # Reset discovery state before run
-        self._agent._discovery_done = False
-
-        # Run 1: only DiscoveryToolkit visible (or no discovery needed).
-        # Buffer run-1 output — only yield if discovery did NOT happen.
-        run1_chunks = []
-        async for chunk in self._agent.arun(input, **kwargs):
-            run1_chunks.append(chunk)
-
-        if not getattr(self._agent, "_discovery_done", False):
-            # No discovery happened — pure knowledge/reasoning question.
-            # Yield run-1 output directly.
-            for chunk in run1_chunks:
-                yield chunk
-            return
-
-        # Discovery happened: run-2 with discovered tools now visible.
-        logger.debug(
-            "[AgentRunWrapper] Discovery done, starting run-2 with discovered tools"
-        )
-        self._agent._discovery_done = False
-
-        # Clear in-memory messages from run-1 to avoid polluting context.
-        if hasattr(self._agent, "memory") and self._agent.memory:
-            try:
-                self._agent.memory.messages = []
-            except Exception:
-                pass
-
-        async for chunk in self._agent.arun(input, **kwargs):
-            yield chunk
+        return self._agent.arun(input, **kwargs)
 
     def run(self, input, **kwargs):
         filters = kwargs.get("knowledge_filters") or {}
@@ -107,6 +69,8 @@ class AgentFactory:
     def config_client(self) -> ToolConfigClient:
         """Access to ToolConfigClient for requesting tools."""
         return self._config_client
+
+    # ... (build_model omitted)
 
     def build_model(
         self,
@@ -298,6 +262,16 @@ class AgentFactory:
             else self._model
         )
 
+        # ... (Tool fetching logic unchanged) ...
+        # NOTE: Since I am replacing a huge chunk, I need to be careful to include the tools logic or skip it if I can target specific lines.
+        # But wait, the file content shows `tools` fetching is before this.
+        # I only need to change the `build` method signature and the agent creation part.
+        # This implementation below is targeting the method signature and skipping to the end where agent is created.
+
+        # ... (Skipping tools fetching logic for brevity in replace block if possible, but replace_file_content works on contiguous blocks)
+        # It's better to do 2 separate edits: 1 for signature, 1 for logic.
+        pass
+
         list_id = command_desc.get("list_id") if command_desc else None
 
         tools: list[Toolkit | Any] = []
@@ -311,9 +285,13 @@ class AgentFactory:
                 params["auth_token"] = command_desc["auth_token"]
             config.add("knowledge_search", **params)
             config_used = config
-        # If user_id provided but tools_specs is None (not passed), fetch tools from config_client
-        # Note: empty list [] means no tools from frontend, don't fetch from API
-        elif tools_specs is None and user_id:
+            try:
+                tools = await build_tools(config)
+                logger.info("[Factory] Built %d tools for ListAgent", len(tools))
+            except Exception as e:
+                logger.warning("[Factory] Failed to build list tools: %s", e)
+        # If user_id provided but no tools_specs, fetch tools from config_client
+        elif not tools_specs and user_id:
             try:
                 logger.debug("[Factory] Fetching tools for user_id=%s", user_id)
                 tools_config = await self._config_client.fetch_tools(user_id=user_id)
@@ -332,6 +310,8 @@ class AgentFactory:
                 else:
                     tools_config.add("web_search")
                     logger.info("[Factory] Added web search tool")
+
+                tools = await build_tools(tools_config)
             except Exception as e:
                 logger.warning(
                     "[Factory] Failed to fetch tools for user %s: %s", user_id, e
@@ -339,7 +319,7 @@ class AgentFactory:
                 # Continue with empty tools list
         elif tools_specs:
             # Build tools from provided specs
-            logger.debug("[WS] tools: %s", [(t.name, t.enabled) for t in tools_specs])
+            logger.debug("[WS] tools: %s", [t.name for t in tools_specs])
             config = ToolsConfig()
             for tool_spec in tools_specs:
                 if tool_spec.enabled:
@@ -368,41 +348,52 @@ class AgentFactory:
                 logger.info("[WS] Added web search tool (always enabled)")
 
             config_used = config
+            tools = await build_tools(config)
+
+        # Add client proxy tools from plugin manifests (round-trip: model -> device -> result)
+        if client_tool_runner and config_used and config_used.entries:
+            try:
+                from src.plugins.loader import load_plugins, get_manifest
+                from src.plugins.tool_gen import build_client_proxy_tools
+
+                load_plugins()
+                client_manifests = []
+                integration_ids: dict[str, str] = {}
+                for name, tool_item in config_used.entries.items():
+                    manifest = get_manifest(name)
+                    if (
+                        manifest
+                        and (manifest.get("execution") or {}).get("type") == "client"
+                    ):
+                        client_manifests.append(manifest)
+                        if tool_item.params.get("integration_id"):
+                            integration_ids[name] = tool_item.params["integration_id"]
+                if client_manifests:
+                    proxy_tools = build_client_proxy_tools(
+                        client_manifests, client_tool_runner, integration_ids
+                    )
+                    tools = list(tools) + proxy_tools
+                    logger.info(
+                        "[Factory] Added %d client proxy tools from manifests",
+                        len(proxy_tools),
+                    )
+            except Exception as e:
+                logger.warning("[Factory] Failed to add client proxy tools: %s", e)
+
+        # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
+        # We pass the actual Toolkit objects, not ToolSpec configs
 
         # Setup RAG User ID: use user_id if explicit, or session_id if anonymous
         rag_user_id = user_id or session_id
 
-        # Build catalog and DiscoveryToolkit from config (lazy tool loading via discovery)
-        from src.tools.catalog import build_catalog
-        from src.tools.discovery import DiscoveryToolkit
-
-        discovery_toolkit: DiscoveryToolkit | None = None
-        agent_tools: list[Toolkit | Any]
-
-        if config_used and config_used.entries:
-            catalog = build_catalog(config_used)
-            discovery_toolkit = DiscoveryToolkit(
-                catalog=catalog,
-                config=config_used,
-                sub_agent_model=model,
-                client_tool_runner=client_tool_runner,
-            )
-            agent_tools = [discovery_toolkit]
-            logger.info(
-                "[Factory] Built DiscoveryToolkit with %d catalog entries",
-                len(catalog.entries),
-            )
-        else:
-            # No config — anonymous user with no tools; pass empty list directly
-            agent_tools = tools
-
+        logger.debug("[WS] tools: %s", [t.name for t in tools])
         logger.info(
-            "[WS] Building agent: session_id=%s rag_user_id=%s model=%s agent_type=%s catalog_entries=%d",
+            "[WS] Building agent: session_id=%s rag_user_id=%s model=%s agent_type=%s tools_count=%d",
             session_id,
             rag_user_id,
             model_name or "default",
             agent_type or "genie",
-            len(config_used.entries) if config_used else len(agent_tools),
+            len(tools),
         )
 
         try:
@@ -419,16 +410,15 @@ class AgentFactory:
             agent = SouperAgent(
                 db=self._db,
                 model=model,
-                tools=agent_tools,
+                tools=tools,
                 debug_mode=self._debug_mode,
                 thinking=thinking,
                 user_id=rag_user_id,
                 timezone=timezone,
             )
 
-            if discovery_toolkit is not None:
-                discovery_toolkit.set_parent_agent(agent)
-
+            # _attach_tool_context removed - ChatHistoryTool is disabled
+            # self._attach_tool_context(agent, tools)
             logger.info(
                 "[WS] Agent created successfully: session_id=%s type=%s",
                 session_id,

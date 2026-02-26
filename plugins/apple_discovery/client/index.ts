@@ -1,1 +1,0 @@
-export { appleDiscoveryPlugin } from './executor';

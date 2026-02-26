@@ -72,9 +72,9 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		return
 	}
 
-	// 3. Fetch Integrations (all, not just enabled - filter by enabled when building response)
+	// 3. Fetch Integrations
 	var userIntegrations []storage.Integration
-	if err := h.store.DB.Where("user_id = ?", userID).Find(&userIntegrations).Error; err != nil {
+	if err := h.store.DB.Where("user_id = ? AND enabled = ?", userID, true).Find(&userIntegrations).Error; err != nil {
 		h.logger.Error("failed to fetch integrations", zap.Error(err))
 		// Proceed with default tools even if integrations fail
 	}
@@ -135,7 +135,7 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 
 		tools = append(tools, ToolConfig{
 			Name:    toolName,
-			Enabled: integration.Enabled,
+			Enabled: true,
 			Params:  params,
 		})
 	}

@@ -29,4 +29,3 @@ api/api
 .cursor
 __pycache__
 node_modules
-.idea
