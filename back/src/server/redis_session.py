@@ -60,7 +60,6 @@ class RedisSession:
         self.context_items: list[dict[str, Any]] = []
 
         # Plugin delivery context (set from payload in handle_user_message)
-
         self._delivery_source: str | None = None
         self._delivery_context: dict[str, Any] = {}
 
@@ -68,6 +67,9 @@ class RedisSession:
         self.pubsub: Any | None = None
         self.pending_client_tool_results: dict[str, asyncio.Future] = {}
         self._result_listener_task: asyncio.Task | None = None
+
+        # Accumulated tool results for agent context
+        self._accumulated_tool_results: list[dict[str, Any]] = []
 
     async def _start_result_listener(self):
         """Start listening for client tool results on per-session channel."""
@@ -1185,10 +1187,32 @@ class RedisSession:
 {history_context}
 --- End of conversation history ---"""
                 )
+
+                # Add accumulated tool results to context
+                if self._accumulated_tool_results:
+                    tool_results_lines = []
+                    for idx, tool_result in enumerate(self._accumulated_tool_results):
+                        tool_name = tool_result.get("name", "unknown")
+                        result_data = tool_result.get("result")
+                        if result_data:
+                            tool_results_lines.append(f"**Tool Result {idx + 1}:**")
+                            tool_results_lines.append(f"Tool: {tool_name}")
+                            tool_results_lines.append(f"Result: {str(result_data)[:200]}...")
+                        else:
+                            tool_results_lines.append(f"**Tool Result {idx + 1}:**")
+                            tool_results_lines.append(f"Tool: {tool_name}")
+                            tool_results_lines.append(f"Result: No result data")
+
+                    if tool_results_lines:
+                        context_parts.append(
+                            "\\n".join(tool_results_lines) + "\\n"
+                        )
+                        # Clear accumulated results after adding to context
+                        self._accumulated_tool_results.clear()
             except Exception as e:
                 logger.error("[RedisSession] Failed to inject history: %s", e)
 
-        # Combine all context parts
+        # Combine all context parts (including tool results)
         if context_parts:
             combined_context = "\n\n".join(context_parts)
             if text:
@@ -1653,6 +1677,9 @@ class RedisSession:
                     tool_dict["name"],
                     tool_dict["id"],
                 )
+
+                # Accumulate tool result for agent context
+                self._accumulated_tool_results.append(tool_dict)
 
                 tool_data = {"type": "tool_call", "tool": tool_dict}
                 if current_agent_name:

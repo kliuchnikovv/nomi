@@ -178,18 +178,19 @@ class AgentFactory:
                     api_key=api_key,
                     base_url=base_url,
                 )
-            from agno.models.openai import OpenAIChat
+            else:
+                from agno.models.openai import OpenAIChat
 
-            logger.info(
-                "[Factory] Creating OpenCode model (Chat Completions): %s (base_url=%s)",
-                model_name,
-                base_url,
-            )
-            return OpenAIChat(
-                id=model_name,
-                api_key=api_key,
-                base_url=base_url,
-            )
+                logger.info(
+                    "[Factory] Creating OpenCode model (Chat Completions): %s (base_url=%s)",
+                    model_name,
+                    base_url,
+                )
+                return OpenAIChat(
+                    id=model_name,
+                    api_key=api_key,
+                    base_url=base_url,
+                )
 
         # Support OpenRouter models (base_url from config endpoint, no hardcoding)
         elif (
@@ -237,7 +238,7 @@ class AgentFactory:
             if not api_key:
                 raise ValueError("ZAI_API_KEY environment variable not set")
 
-            from agno.models.openai import OpenAIChat
+            from src.models.safe_openai import SafeOpenAI
 
             # Prefer endpoint from config (payload)
             if endpoint and endpoint.strip():
@@ -253,7 +254,7 @@ class AgentFactory:
                 model_name,
                 base_url,
             )
-            return OpenAIChat(
+            return SafeOpenAI(
                 id=model_name,
                 api_key=api_key,
                 base_url=base_url,
