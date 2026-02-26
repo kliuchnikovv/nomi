@@ -390,7 +390,7 @@ class AgentFactory:
 
                 load_plugins()
                 client_manifests = []
-                integration_ids: dict[str, str] = {}
+                integration_ids: dict[str, list[dict]] = {}
                 for name, tool_item in config_used.entries.items():
                     manifest = get_manifest(name)
                     if (
@@ -398,8 +398,13 @@ class AgentFactory:
                         and (manifest.get("execution") or {}).get("type") == "client"
                     ):
                         client_manifests.append(manifest)
-                        if tool_item.params.get("integration_id"):
-                            integration_ids[name] = tool_item.params["integration_id"]
+                        # New format: params["accounts"] = [{"id": ..., "display_name": ...}]
+                        accounts = tool_item.params.get("accounts")
+                        if accounts and isinstance(accounts, list):
+                            integration_ids[name] = accounts
+                        elif tool_item.params.get("integration_id"):
+                            # Backwards-compat: single integration_id
+                            integration_ids[name] = [{"id": tool_item.params["integration_id"]}]
                 if client_manifests:
                     proxy_tools = build_client_proxy_tools(
                         client_manifests, client_tool_runner, integration_ids

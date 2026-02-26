@@ -77,10 +77,37 @@ def _build_parameters_schema(
     return schema
 
 
+def _build_account_id_param(accounts: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """
+    Build a JSON Schema property for account_id selection when multiple accounts exist.
+    Returns None if no accounts provided.
+    """
+    if not accounts:
+        return None
+
+    account_ids = [a.get("id") for a in accounts if a.get("id")]
+    if not account_ids:
+        return None
+
+    # Build human-readable description of available accounts
+    labels = []
+    for a in accounts:
+        aid = a.get("id", "")
+        display = a.get("display_name", "")
+        labels.append(f"{aid} ({display})" if display else aid)
+
+    prop: dict[str, Any] = {
+        "type": "string",
+        "description": "Account to use. Available accounts: " + ", ".join(labels),
+        "enum": account_ids,
+    }
+    return prop
+
+
 def build_client_proxy_tools(
     manifests: list[dict[str, Any]],
     client_runner: Callable[[str, str, dict[str, Any]], Awaitable[str]],
-    integration_ids: dict[str, str] | None = None,
+    integration_ids: dict[str, list[dict[str, Any]]] | None = None,
 ) -> list[Function]:
     """
     Build Function tools for client-only plugins from manifests.
@@ -89,7 +116,8 @@ def build_client_proxy_tools(
     Args:
         manifests: List of plugin manifests
         client_runner: Function to execute client-side tools
-        integration_ids: Dict mapping provider name to integration_id (e.g., {"gmail": "uuid-123"})
+        integration_ids: Dict mapping provider name to list of account dicts
+                         [{"id": "uuid", "display_name": "alice@gmail.com"}, ...]
     """
     tools: list[Function] = []
     integration_ids = integration_ids or {}
@@ -100,7 +128,10 @@ def build_client_proxy_tools(
         if execution.get("type") != "client":
             continue
 
-        integration_id = integration_ids.get(name)
+        accounts = integration_ids.get(name) or []
+        # Single account: use it as default, account_id optional
+        # Multiple accounts: require account_id selection
+        single_account_id = accounts[0].get("id") if len(accounts) == 1 else None
         methods = manifest.get("methods") or []
 
         for m in methods:
@@ -108,25 +139,46 @@ def build_client_proxy_tools(
             if not method_name:
                 continue
 
-            # Tool name: provider_method or provider_integrationId_method
-            if integration_id:
-                tool_name = f"{name}_{integration_id}_{method_name}"
-            else:
-                tool_name = f"{name}_{method_name}"
+            tool_name = f"{name}_{method_name}"
 
             description = (
                 m.get("description")
                 or f"Call {name}.{method_name} on the user's device"
             )
+
+            # Build base params schema from manifest
             params_schema = _build_parameters_schema(m.get("parameters"))
 
+            # Inject account_id parameter when accounts are available
+            account_id_prop = _build_account_id_param(accounts)
+            if account_id_prop is not None:
+                if params_schema is None:
+                    params_schema = {"type": "object", "properties": {}}
+                params_schema["properties"]["account_id"] = account_id_prop
+                # Required only when multiple accounts exist (model must choose)
+                if len(accounts) > 1:
+                    required = params_schema.get("required", [])
+                    if "account_id" not in required:
+                        required = list(required) + ["account_id"]
+                    params_schema["required"] = required
+
             def _make_proxy(
-                plugin: str, method: str, runner: Any, integ_id: str | None
+                plugin: str,
+                method: str,
+                runner: Any,
+                default_account_id: str | None,
+                num_accounts: int,
             ):
                 async def _proxy(**kwargs: Any) -> str:
-                    # Pass integration_id to runner if available
-                    if integ_id:
-                        kwargs["integration_id"] = integ_id
+                    # Resolve account_id: use provided value or fall back to single default
+                    account_id = kwargs.pop("account_id", None) or default_account_id
+                    if not account_id and num_accounts > 1:
+                        return (
+                            f"Error: account_id is required when multiple {plugin} accounts are configured. "
+                            "Please specify which account to use."
+                        )
+                    if account_id:
+                        kwargs["integration_id"] = account_id
 
                     logger.info(
                         "[ClientProxyTool] Calling %s.%s with params: %s",
@@ -161,10 +213,9 @@ def build_client_proxy_tools(
 
                 return _proxy
 
-            fn = _make_proxy(name, method_name, client_runner, integration_id)
+            fn = _make_proxy(name, method_name, client_runner, single_account_id, len(accounts))
             try:
-                # Create Function - only pass parameters if schema exists
-                tool_kwargs = {
+                tool_kwargs: dict[str, Any] = {
                     "name": tool_name,
                     "description": description,
                     "entrypoint": fn,

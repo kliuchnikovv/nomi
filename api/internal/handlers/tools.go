@@ -105,7 +105,21 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		},
 	})
 
-	// Add Integrations (server and client-only: backend uses client-only to add proxy tools from manifests)
+	// AccountInfo holds per-account identity for multi-account support.
+	type AccountInfo struct {
+		ID          string `json:"id"`
+		DisplayName string `json:"display_name,omitempty"`
+	}
+
+	// Group integrations by provider so that multiple accounts of the same provider
+	// are exposed as a single tool with an "accounts" list.
+	type providerEntry struct {
+		provider     *integrations.ProviderDefinition
+		accounts     []AccountInfo
+		mergedParams map[string]interface{} // server-side credentials keyed by account id
+	}
+	providerMap := make(map[string]*providerEntry)
+
 	for _, integration := range userIntegrations {
 		provider, ok := integrations.GetProvider(integration.Provider)
 		if !ok {
@@ -115,26 +129,54 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 			continue
 		}
 
-		var params map[string]interface{}
+		var rawParams map[string]interface{}
 		if integration.Params != "" {
-			_ = json.Unmarshal([]byte(integration.Params), &params)
-		}
-
-		// Always include integration_id in params for client-side tools
-		if provider.StorageType == integrations.StorageTypeClientOnly || provider.StorageType == integrations.StorageTypeHybrid {
-			if params == nil {
-				params = make(map[string]interface{})
+			if err := json.Unmarshal([]byte(integration.Params), &rawParams); err != nil {
+				h.logger.Warn("failed to unmarshal integration params, skipping credentials",
+					zap.String("integration_id", integration.ID.String()),
+					zap.String("provider", integration.Provider),
+					zap.Error(err),
+				)
 			}
-			params["integration_id"] = integration.ID.String()
 		}
 
-		toolName := integration.Provider
-		if toolName == "" {
-			toolName = integration.Name
+		displayName, _ := rawParams["display_name"].(string)
+		if displayName == "" {
+			displayName, _ = rawParams["account_email"].(string)
+		}
+
+		accountID := integration.ID.String()
+		account := AccountInfo{
+			ID:          accountID,
+			DisplayName: displayName,
+		}
+
+		entry, exists := providerMap[integration.Provider]
+		if !exists {
+			entry = &providerEntry{
+				provider:     provider,
+				mergedParams: make(map[string]interface{}),
+			}
+			providerMap[integration.Provider] = entry
+		}
+		entry.accounts = append(entry.accounts, account)
+
+		// For server-side tools, store credentials per account id so Python can resolve them.
+		if provider.StorageType == integrations.StorageTypeServer || provider.StorageType == integrations.StorageTypeHybrid {
+			entry.mergedParams[accountID] = rawParams
+		}
+	}
+
+	for providerName, entry := range providerMap {
+		params := make(map[string]interface{})
+		params["accounts"] = entry.accounts
+
+		if entry.provider.StorageType == integrations.StorageTypeServer || entry.provider.StorageType == integrations.StorageTypeHybrid {
+			params["credentials"] = entry.mergedParams
 		}
 
 		tools = append(tools, ToolConfig{
-			Name:    toolName,
+			Name:    providerName,
 			Enabled: true,
 			Params:  params,
 		})

@@ -224,6 +224,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	}
 
 	var accountEmail string
+	var displayName string
 
 	if providerName == "github" {
 		// GitHub does not return ID Token. Fetch user email manually.
@@ -245,6 +246,8 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		if err := json.NewDecoder(userResp.Body).Decode(&ghUser); err != nil {
 			h.logger.Error("failed to decode github user", zap.Error(err))
 		}
+		// display_name for GitHub is always the login (username), not the email
+		displayName = ghUser.Login
 		accountEmail = ghUser.Email
 		if accountEmail == "" {
 			// Email might be private. Try /user/emails
@@ -300,6 +303,8 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 			return
 		}
 		accountEmail = claims.Email
+		// display_name for Google providers is the account email
+		displayName = accountEmail
 	}
 
 	// Return tokens to client WITHOUT saving to backend database
@@ -327,6 +332,9 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 			"client_id":     oauthConfig.ClientID,
 			"client_secret": oauthConfig.ClientSecret,
 			"token_type":    token.TokenType,
+		}
+		if displayName != "" {
+			params["display_name"] = displayName
 		}
 
 		// Определяем token_uri на основе провайдера

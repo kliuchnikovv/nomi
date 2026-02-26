@@ -180,9 +180,43 @@ async def build(config: ToolsConfig) -> list[Toolkit]:
 
         # Gracefully skip tools that fail to initialize (e.g., missing credentials)
         try:
-            tool = builder(item.params)
-            tools.append(tool)
-            logger.debug(f"[Tools] Successfully built tool: {item.name}")
+            # Multi-account: build one Toolkit per account with a unique name so
+            # the model can distinguish between them (e.g. "github_work", "github_personal").
+            # credentials maps account_id -> per-account params dict.
+            credentials = item.params.get("credentials")
+            accounts = item.params.get("accounts")
+            if credentials and isinstance(credentials, dict) and accounts and len(accounts) > 0:
+                for account in accounts:
+                    account_id = account.get("id")
+                    if not account_id:
+                        continue
+                    account_creds = credentials.get(account_id)
+                    if not account_creds or not isinstance(account_creds, dict):
+                        continue
+                    try:
+                        tool = builder(account_creds)
+                        # Give the toolkit a unique name so the LLM can select the right account.
+                        display = account.get("display_name") or account_id[:8]
+                        # Sanitize: replace characters invalid in tool names
+                        safe_display = display.replace("@", "_at_").replace(".", "_").replace("-", "_")
+                        tool.name = f"{item.name}_{safe_display}"
+                        tools.append(tool)
+                        logger.debug(
+                            "[Tools] Built tool '%s' for account %s",
+                            tool.name,
+                            account_id,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "[Tools] Failed to build tool '%s' for account %s: %s - skipping",
+                            item.name,
+                            account_id,
+                            exc,
+                        )
+            else:
+                tool = builder(item.params)
+                tools.append(tool)
+                logger.debug(f"[Tools] Successfully built tool: {item.name}")
         except Exception as exc:
             logger.warning(
                 "[Tools] Failed to build tool '%s': %s - skipping", item.name, exc
