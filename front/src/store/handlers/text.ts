@@ -3,7 +3,9 @@ import { MessageHandler } from './types';
 
 export const handleTextPayload: MessageHandler = (payload, prevMessages, messageIdx) => {
     const newMessages = [...prevMessages];
-    const newText = payload.delta || payload.message || '';
+    const rawText = payload.delta || payload.message || '';
+    // Skip whitespace-only deltas (Python sends "\n\n" as separators between tool calls)
+    const newText = rawText.trim() ? rawText : '';
     console.log('[handleTextPayload 📝]', {
         messageIdx,
         message_id: prevMessages[messageIdx]?.id,

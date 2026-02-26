@@ -230,7 +230,8 @@ function useProcessedParts(parts: ContentPart[], showToolCalls: boolean, showRea
                 }
 
                 const textContent = part.type === 'text' ? part.text : (part as any).text;
-                if (textContent) {
+                // Skip whitespace-only separators that Python sends between tool calls
+                if (textContent && textContent.trim()) {
                     // Accumulate text with separator
                     currentText = currentText ? currentText + '\n\n' + textContent : textContent;
                 }

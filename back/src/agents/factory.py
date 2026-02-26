@@ -227,6 +227,38 @@ class AgentFactory:
                 base_url=base_url,
             )
 
+        # Support z.ai / GLM models (OpenAI-compatible API)
+        elif (
+            provider_norm == "z.ai"
+            or provider_norm == "z-ai"
+            or model_name.startswith("glm-")
+        ):
+            api_key = os.getenv("ZAI_API_KEY")
+            if not api_key:
+                raise ValueError("ZAI_API_KEY environment variable not set")
+
+            from agno.models.openai import OpenAIChat
+
+            # Prefer endpoint from config (payload)
+            if endpoint and endpoint.strip():
+                ep = endpoint.strip().rstrip("/")
+                if ep.endswith("chat/completions"):
+                    base_url = ep[: -len("chat/completions")].rstrip("/")
+                else:
+                    base_url = ep
+            else:
+                base_url = "https://api.z.ai/api/coding/paas/v4"  # z.ai GLM API default endpoint
+            logger.info(
+                "[Factory] Creating z.ai GLM model: %s (base_url=%s)",
+                model_name,
+                base_url,
+            )
+            return OpenAIChat(
+                id=model_name,
+                api_key=api_key,
+                base_url=base_url,
+            )
+
         # Add support for other providers as needed
         raise ValueError(f"Unsupported model: {model_name}")
 
@@ -324,14 +356,14 @@ class AgentFactory:
             for tool_spec in tools_specs:
                 if tool_spec.enabled:
                     params = dict(tool_spec.params)
-                    # Inject command_desc auth_token and list_id for knowledge_search (list chat)
-                    if tool_spec.name == "knowledge_search" and command_desc:
-                        if "auth_token" not in params and command_desc.get(
-                            "auth_token"
-                        ):
-                            params["auth_token"] = command_desc["auth_token"]
-                        if "list_id" not in params and command_desc.get("list_id"):
-                            params["list_id"] = command_desc["list_id"]
+                    # # Inject command_desc auth_token and list_id for knowledge_search (list chat)
+                    # if tool_spec.name == "knowledge_search" and command_desc:
+                    #     if "auth_token" not in params and command_desc.get(
+                    #         "auth_token"
+                    #     ):
+                    #         params["auth_token"] = command_desc["auth_token"]
+                    #     if "list_id" not in params and command_desc.get("list_id"):
+                    #         params["list_id"] = command_desc["list_id"]
                     config.add(tool_spec.name, provider=tool_spec.provider, **params)
                     logger.debug("[WS] tool appended: enabled")
                 else:
