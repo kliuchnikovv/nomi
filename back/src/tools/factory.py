@@ -194,8 +194,10 @@ async def build(config: ToolsConfig) -> list[Toolkit]:
                     if not account_creds or not isinstance(account_creds, dict):
                         continue
                     try:
+                        account_creds["account_id"] = account_id  # Inject account_id into params
+                        account_creds["display_name"] = account.get("display_name") or account_id[:8]  # Also inject display_name
                         tool = builder(account_creds)
-                        # Give the toolkit a unique name so the LLM can select the right account.
+                        # Give the toolkit a unique name so LLM can select the right account.
                         display = account.get("display_name") or account_id[:8]
                         # Sanitize: replace characters invalid in tool names
                         safe_display = display.replace("@", "_at_").replace(".", "_").replace("-", "_")
