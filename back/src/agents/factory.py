@@ -392,20 +392,47 @@ class AgentFactory:
                 load_plugins()
                 client_manifests = []
                 integration_ids: dict[str, list[dict]] = {}
+                seen_manifest_names: set[str] = set()
                 for name, tool_item in config_used.entries.items():
                     manifest = get_manifest(name)
-                    if (
-                        manifest
-                        and (manifest.get("execution") or {}).get("type") in ("client", "hybrid")
-                    ):
+                    if not manifest:
+                        continue
+                    exec_type = (manifest.get("execution") or {}).get("type")
+                    if exec_type not in ("client", "hybrid"):
+                        continue
+
+                    manifest_name = manifest.get("name", "")
+
+                    # Add each manifest only once (multiple per-account entries share the same manifest)
+                    if manifest_name not in seen_manifest_names:
+                        seen_manifest_names.add(manifest_name)
                         client_manifests.append(manifest)
-                        # New format: params["accounts"] = [{"id": ..., "display_name": ...}]
-                        accounts = tool_item.params.get("accounts")
-                        if accounts and isinstance(accounts, list):
-                            integration_ids[name] = accounts
-                        elif tool_item.params.get("integration_id"):
-                            # Backwards-compat: single integration_id
-                            integration_ids[name] = [{"id": tool_item.params["integration_id"]}]
+
+                    # Collect account info, always keyed by manifest name (not raw entry name)
+                    accounts_list = tool_item.params.get("accounts")
+                    if accounts_list and isinstance(accounts_list, list):
+                        # New grouped format — authoritative list
+                        integration_ids[manifest_name] = accounts_list
+                    elif tool_item.params.get("integration_id"):
+                        # Legacy single integration_id
+                        existing = integration_ids.get(manifest_name, [])
+                        entry = {
+                            "id": tool_item.params["integration_id"],
+                            "display_name": tool_item.params.get("display_name", ""),
+                        }
+                        if not any(a.get("id") == entry["id"] for a in existing):
+                            existing.append(entry)
+                        integration_ids[manifest_name] = existing
+                    elif name.lower() != manifest_name.lower():
+                        # Per-account OAuth entry, e.g. "Gmail (user@example.com)"
+                        # Use account_email as the stable integration ID recognised by the device
+                        account_email = tool_item.params.get("account_email", "")
+                        if account_email:
+                            display = tool_item.params.get("display_name", account_email)
+                            existing = integration_ids.get(manifest_name, [])
+                            if not any(a.get("id") == account_email for a in existing):
+                                existing.append({"id": account_email, "display_name": display})
+                            integration_ids[manifest_name] = existing
                 if client_manifests:
                     proxy_tools = build_client_proxy_tools(
                         client_manifests, client_tool_runner, integration_ids

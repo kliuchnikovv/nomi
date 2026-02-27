@@ -129,7 +129,7 @@ def build_client_proxy_tools(
     for manifest in manifests:
         name = manifest.get("name") or ""
         execution = manifest.get("execution") or {}
-        if execution.get("type") != "client":
+        if execution.get("type") not in ("client", "hybrid"):
             continue
 
         accounts = integration_ids.get(name) or []
