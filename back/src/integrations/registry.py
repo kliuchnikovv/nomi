@@ -153,7 +153,21 @@ def is_client_side(provider_name: str) -> bool:
 
 def should_include_in_tools(provider_name: str) -> bool:
     """
-    True if provider should be included in tools list for Python backend.
-    Only server-side providers are included; client-side execute on device.
+    True if provider should be included in server-side tools list for Python backend.
+    Only pure server-side providers are included; client-side and hybrid providers
+    execute on the device via client proxy tools.
     """
-    return is_server_side(provider_name)
+    try:
+        from src.plugins.loader import get_manifest, load_plugins
+        load_plugins()
+        m = get_manifest(provider_name.lower())
+        if m:
+            exec_type = (m.get("execution") or {}).get("type", "client")
+            # Hybrid plugins use the client proxy path with account_id selection,
+            # not server-side tool building (which would cause method name conflicts
+            # when multiple accounts register the same function names).
+            return exec_type == "server"
+    except Exception:
+        pass
+    p = REGISTRY.get(provider_name.lower())
+    return p is not None and p.tool_type == ToolType.SERVER_SIDE

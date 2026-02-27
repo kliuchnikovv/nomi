@@ -396,7 +396,7 @@ class AgentFactory:
                     manifest = get_manifest(name)
                     if (
                         manifest
-                        and (manifest.get("execution") or {}).get("type") == "client"
+                        and (manifest.get("execution") or {}).get("type") in ("client", "hybrid")
                     ):
                         client_manifests.append(manifest)
                         # New format: params["accounts"] = [{"id": ..., "display_name": ...}]
