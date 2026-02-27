@@ -4,35 +4,32 @@
 
 import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
 import { gmailClient } from '@genie/front/services/integrations/clients/GmailClient';
-import { getIntegrationMetadata, isClientOnly } from '@genie/front/services/integrations/registry';
 
 export const gmailPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {
-        const metadata = getIntegrationMetadata('gmail');
-        if (!metadata || !isClientOnly('gmail')) {
-            throw new Error('Gmail is not configured as a client-side integration');
-        }
-
         const { integrationStorage } = await import('@genie/front/services/integrations/IntegrationStorage');
         const integrations = await integrationStorage.getIntegrations();
-        
-        // Use integration_id from params if provided (from AI agent), otherwise find first enabled
-        let integrationId = params.integration_id;
-        
+        const gmailIntegrations = integrations.filter(i => i.provider.toLowerCase() === 'gmail' && i.enabled);
+
+        // Use integration_id from params if provided (from AI agent), otherwise find first enabled.
+        // integration_id may be a UUID or an accountEmail — support both.
+        let integrationId = params.integration_id as string | undefined;
+
         if (!integrationId) {
-            // Find enabled gmail integration (case-insensitive provider check)
-            const gmailInteg = integrations.find(i => i.provider.toLowerCase() === 'gmail' && i.enabled);
-            if (!gmailInteg) {
+            if (gmailIntegrations.length === 0) {
                 const available = integrations.map(i => `${i.provider}:${i.enabled}`).join(', ');
                 throw new Error(`No active Gmail integration found on device. Available integrations: ${available}`);
             }
-            integrationId = gmailInteg.id;
+            integrationId = gmailIntegrations[0].id;
         } else {
-            // Verify the integration exists and is enabled
-            const validIntegration = integrations.find(i => i.id === integrationId && i.enabled);
-            if (!validIntegration) {
-                throw new Error(`Integration ${integrationId} not found or not enabled`);
+            // Resolve by UUID or accountEmail, then normalise to UUID for downstream use
+            const resolved = gmailIntegrations.find(
+                i => i.id === integrationId || i.accountEmail === integrationId
+            );
+            if (!resolved) {
+                throw new Error(`Gmail integration '${integrationId}' not found or not enabled`);
             }
+            integrationId = resolved.id;
         }
 
         switch (method) {

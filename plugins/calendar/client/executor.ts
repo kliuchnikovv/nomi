@@ -4,33 +4,30 @@
 
 import type { ClientPluginHandler } from '@genie/front/plugins/clientRegistry';
 import { calendarClient } from '@genie/front/services/integrations/clients/CalendarClient';
-import { getIntegrationMetadata, isClientOnly } from '@genie/front/services/integrations/registry';
-
 export const calendarPlugin: ClientPluginHandler = {
     async execute(method: string, params: Record<string, any>): Promise<string> {
-        const metadata = getIntegrationMetadata('calendar');
-        if (!metadata || !isClientOnly('calendar')) {
-            throw new Error('Calendar is not configured as a client-side integration');
-        }
-
         const { integrationStorage } = await import('@genie/front/services/integrations/IntegrationStorage');
         const integrations = await integrationStorage.getIntegrations();
-        
-        // Use integration_id from params if provided (from AI agent), otherwise find first enabled
-        let integrationId = params.integration_id;
-        
+        const calIntegrations = integrations.filter(i => i.provider === 'calendar' && i.enabled);
+
+        // Use integration_id from params if provided (from AI agent), otherwise find first enabled.
+        // integration_id may be a UUID or an accountEmail — support both.
+        let integrationId = params.integration_id as string | undefined;
+
         if (!integrationId) {
-            const calInteg = integrations.find(i => i.provider === 'calendar' && i.enabled);
-            if (!calInteg) {
+            if (calIntegrations.length === 0) {
                 throw new Error('No active Calendar integration found on device');
             }
-            integrationId = calInteg.id;
+            integrationId = calIntegrations[0].id;
         } else {
-            // Verify the integration exists and is enabled
-            const validIntegration = integrations.find(i => i.id === integrationId && i.enabled);
-            if (!validIntegration) {
-                throw new Error(`Integration ${integrationId} not found or not enabled`);
+            // Resolve by UUID or accountEmail, then normalise to UUID for downstream use
+            const resolved = calIntegrations.find(
+                i => i.id === integrationId || i.accountEmail === integrationId
+            );
+            if (!resolved) {
+                throw new Error(`Calendar integration '${integrationId}' not found or not enabled`);
             }
+            integrationId = resolved.id;
         }
 
         switch (method) {

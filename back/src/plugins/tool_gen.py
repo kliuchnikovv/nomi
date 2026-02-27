@@ -80,9 +80,9 @@ def _build_parameters_schema(
 def _build_account_id_param(accounts: list[dict[str, Any]]) -> dict[str, Any] | None:
     """
     Build a JSON Schema property for account_id selection when multiple accounts exist.
-    Returns None if no accounts provided.
+    Returns None if fewer than 2 accounts (no selection needed).
     """
-    if not accounts:
+    if len(accounts) < 2:
         return None
 
     account_ids = [a.get("id") for a in accounts if a.get("id")]
@@ -101,9 +101,10 @@ def _build_account_id_param(accounts: list[dict[str, Any]]) -> dict[str, Any] | 
         "description": (
             "The account to use for this operation. "
             "Available accounts: " + ", ".join(labels) + ". "
-            "If the user has not specified which account to use, ask them first."
+            "Use 'all' to check all accounts (default when the user hasn't specified one). "
+            "Only specify a particular account when the user explicitly asks for it."
         ),
-        "enum": account_ids,
+        "enum": ["all"] + account_ids,
     }
     return prop
 
@@ -133,9 +134,6 @@ def build_client_proxy_tools(
             continue
 
         accounts = integration_ids.get(name) or []
-        # Single account: use it as default, account_id optional
-        # Multiple accounts: require account_id selection
-        single_account_id = accounts[0].get("id") if len(accounts) == 1 else None
         methods = manifest.get("methods") or []
 
         for m in methods:
@@ -153,71 +151,84 @@ def build_client_proxy_tools(
             # Build base params schema from manifest
             params_schema = _build_parameters_schema(m.get("parameters"))
 
-            # Inject account_id parameter when accounts are available
+            # Inject account_id parameter when multiple accounts are available
             account_id_prop = _build_account_id_param(accounts)
             if account_id_prop is not None:
                 if params_schema is None:
                     params_schema = {"type": "object", "properties": {}}
                 params_schema["properties"]["account_id"] = account_id_prop
-                # Required only when multiple accounts exist (model must choose)
-                if len(accounts) > 1:
-                    required = params_schema.get("required", [])
-                    if "account_id" not in required:
-                        required = list(required) + ["account_id"]
-                    params_schema["required"] = required
+                # account_id is NEVER required — model defaults to "all"
 
             def _make_proxy(
                 plugin: str,
                 method: str,
                 runner: Any,
-                default_account_id: str | None,
-                num_accounts: int,
+                accs: list[dict[str, Any]],
             ):
-                async def _proxy(**kwargs: Any) -> str:
-                    # Resolve account_id: use provided value or fall back to single default
-                    account_id = kwargs.pop("account_id", None) or default_account_id
-                    if not account_id and num_accounts > 1:
-                        return (
-                            f"Error: account_id is required when multiple {plugin} accounts are configured. "
-                            "Please specify which account to use."
-                        )
-                    if account_id:
-                        kwargs["integration_id"] = account_id
+                account_ids = [a.get("id") for a in accs if a.get("id")]
+                account_labels = {
+                    a.get("id"): a.get("display_name") or a.get("id")
+                    for a in accs if a.get("id")
+                }
 
+                async def _call_one(target_id: str | None, kw: dict[str, Any]) -> str:
+                    if target_id:
+                        kw["integration_id"] = target_id
                     logger.info(
-                        "[ClientProxyTool] Calling %s.%s with params: %s",
-                        plugin,
-                        method,
-                        kwargs,
+                        "[ClientProxyTool] Calling %s.%s integration=%s params=%s",
+                        plugin, method, target_id, kw,
                     )
-                    try:
-                        result = await runner(plugin, method, kwargs)
-                        if result is None:
-                            logger.warning(
-                                "[ClientProxyTool] %s.%s returned None!", plugin, method
-                            )
-                            return "Error: Tool execution returned None"
+                    result = await runner(plugin, method, kw)
+                    if result is None:
+                        logger.warning("[ClientProxyTool] %s.%s returned None!", plugin, method)
+                        return "Error: Tool execution returned None"
+                    logger.info(
+                        "[ClientProxyTool] %s.%s returned: %s",
+                        plugin, method, result[:100] if result else result,
+                    )
+                    return result
 
-                        logger.info(
-                            "[ClientProxyTool] %s.%s returned: %s",
-                            plugin,
-                            method,
-                            result[:100] if result else result,
-                        )
-                        return result
-                    except Exception as e:
-                        logger.error(
-                            "[ClientProxyTool] %s.%s failed: %s",
-                            plugin,
-                            method,
-                            str(e),
-                            exc_info=True,
-                        )
-                        return f"Error executing tool: {str(e)}"
+                async def _proxy(**kwargs: Any) -> str:
+                    account_id = kwargs.pop("account_id", None)
+
+                    # Determine targets
+                    if not account_ids:
+                        # No accounts registered — call without integration_id
+                        targets = [None]
+                    elif not account_id or account_id == "all":
+                        # Default: query all accounts
+                        targets = account_ids
+                    else:
+                        targets = [account_id]
+
+                    if len(targets) == 1:
+                        try:
+                            return await _call_one(targets[0], dict(kwargs))
+                        except Exception as e:
+                            logger.error(
+                                "[ClientProxyTool] %s.%s failed: %s", plugin, method, str(e),
+                                exc_info=True,
+                            )
+                            return f"Error executing tool: {str(e)}"
+
+                    # Multiple targets — call each and combine
+                    parts: list[str] = []
+                    for target_id in targets:
+                        label = account_labels.get(target_id, target_id)
+                        try:
+                            result = await _call_one(target_id, dict(kwargs))
+                            parts.append(f"[{label}]\n{result}")
+                        except Exception as e:
+                            logger.error(
+                                "[ClientProxyTool] %s.%s (%s) failed: %s",
+                                plugin, method, target_id, str(e), exc_info=True,
+                            )
+                            parts.append(f"[{label}]\nError: {str(e)}")
+                    return "\n\n---\n\n".join(parts)
 
                 return _proxy
 
-            fn = _make_proxy(name, method_name, client_runner, single_account_id, len(accounts))
+            fn = _make_proxy(name, method_name, client_runner, accounts)
             try:
                 tool_kwargs: dict[str, Any] = {
                     "name": tool_name,
