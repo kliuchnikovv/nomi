@@ -1,4 +1,4 @@
-import { getIntegrationMetadata, isClientOnly } from '../integrations/registry';
+import { getIntegrationMetadata } from '../integrations/registry';
 import { getClientPluginHandler, getClientPlugin } from '../../plugins/clientRegistry';
 import { registerClientPlugins } from '../../plugins/registerClientPlugins';
 
@@ -23,7 +23,7 @@ export class ClientToolExecutor {
         // #endregion
 
         const metadata = getIntegrationMetadata(action.tool);
-        if (metadata && !isClientOnly(action.tool)) {
+        if (metadata?.storageType === 'server') {
             throw new Error(`Tool ${action.tool} is not a client-side tool. It should be executed on the server.`);
         }
 
