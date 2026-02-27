@@ -98,7 +98,11 @@ def _build_account_id_param(accounts: list[dict[str, Any]]) -> dict[str, Any] | 
 
     prop: dict[str, Any] = {
         "type": "string",
-        "description": "Account to use. Available accounts: " + ", ".join(labels),
+        "description": (
+            "The account to use for this operation. "
+            "Available accounts: " + ", ".join(labels) + ". "
+            "If the user has not specified which account to use, ask them first."
+        ),
         "enum": account_ids,
     }
     return prop

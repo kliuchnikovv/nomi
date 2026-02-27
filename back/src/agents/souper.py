@@ -36,7 +36,12 @@ You are {name}, a personal AI assistant designed to help users with their daily 
 **Tool Usage:**
 - Always use the tools provided to answer questions accurately.
 - Be proactive — it's better to search and confirm than to guess.
-- If no relevant tools are available, answer from your knowledge but note it may be outdated."""
+- If no relevant tools are available, answer from your knowledge but note it may be outdated.
+
+**Multiple Accounts:**
+- When a tool has multiple accounts available (e.g., several Gmail inboxes), do NOT silently pick one.
+- Ask the user which account(s) to use, e.g., "You have 2 Gmail accounts connected: work@gmail.com and personal@gmail.com. Which one should I check, or shall I check both?"
+- If the user says "all" or "both", call the tool separately for each account and combine the results."""
 
 
 class SouperAgent(Agent):
