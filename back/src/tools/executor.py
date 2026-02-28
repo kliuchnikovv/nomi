@@ -15,14 +15,23 @@ def _build_web_search(_: dict[str, Any]) -> Toolkit:
 
 
 def _build_gmail(credentials: dict[str, Any]) -> Toolkit:
-    from src.tools.factory import _make_credentials
-    creds = _make_credentials(credentials)
-    try:
-        from agno.tools.gmail import GmailTools
-    except ImportError:
-        logger.warning("[Executor] agno.tools.gmail not available, falling back to plugin GmailTools")
-        from plugins.gmail.server.tools import GmailTools  # type: ignore[import]
-    return GmailTools(creds=creds)
+    from plugins.gmail.server.tools import GmailTools  # type: ignore[import]
+
+    # Extract credentials from params
+    access_token = credentials.get("access_token") or credentials.get("token")
+    refresh_token = credentials.get("refresh_token")
+    client_id = credentials.get("client_id")
+    client_secret = credentials.get("client_secret")
+
+    if not access_token:
+        raise ValueError("Gmail access_token is required")
+
+    return GmailTools(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        client_id=client_id,
+        client_secret=client_secret,
+    )
 
 
 def _build_github(credentials: dict[str, Any]) -> Toolkit:

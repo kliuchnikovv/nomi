@@ -1,9 +1,9 @@
 """
-Gmail tools for hybrid plugin (server-side execution).
+Gmail tools for server-side plugin (no local storage).
 Provides email reading and sending functionality.
 
-NOTE: This is the SERVER-SIDE component of the hybrid plugin.
-All operations are performed directly via Gmail API - no local storage.
+NOTE: All methods are synchronous wrappers around async Gmail API calls.
+This is required because the tool executor expects sync methods.
 """
 
 import asyncio
@@ -54,7 +54,7 @@ class GmailTools(Toolkit):
             "Accept": "application/json",
         }
 
-    async def _refresh_access_token(self) -> bool:
+    async def _async_refresh_access_token(self) -> bool:
         """Refresh the access token using refresh token."""
         if not self.refresh_token or not self.client_id or not self.client_secret:
             logger.warning("Cannot refresh token: missing credentials")
@@ -95,7 +95,7 @@ class GmailTools(Toolkit):
             logger.error("Exception while refreshing token: %s", e)
             return False
 
-    async def _make_request(
+    async def _async_make_request(
         self, method: str, endpoint: str, data: Optional[Dict] = None
     ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """Make an authenticated request to Gmail API."""
@@ -109,7 +109,7 @@ class GmailTools(Toolkit):
             ) as response:
                 if response.status == 401:
                     logger.info("Received 401, attempting token refresh...")
-                    if await self._refresh_access_token():
+                    if await self._async_refresh_access_token():
                         logger.info("Token refreshed, retrying request...")
                         async with session.request(
                             method, url, headers=self.headers, json=data
@@ -139,7 +139,32 @@ class GmailTools(Toolkit):
 
                 return await response.json()
 
-    async def search_emails(
+    def _make_request(
+        self, method: str, endpoint: str, data: Optional[Dict] = None
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """Sync wrapper for async_make_request."""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're in an async context, need to create new loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(
+                        self._async_make_request(method, endpoint, data)
+                    )
+                    return result
+                finally:
+                    loop.close()
+            else:
+                return loop.run_until_complete(
+                    self._async_make_request(method, endpoint, data)
+                )
+        except RuntimeError:
+            # No event loop, create one
+            return asyncio.run(self._async_make_request(method, endpoint, data))
+
+    def search_emails(
         self, query: str, max_results: int = 10
     ) -> List[Dict[str, Any]]:
         """Search emails in Gmail.
@@ -153,7 +178,7 @@ class GmailTools(Toolkit):
         """
         # First get message list
         params = f"?q={query}&maxResults={max_results}"
-        result = await self._make_request("GET", f"users/me/messages{params}")
+        result = self._make_request("GET", f"users/me/messages{params}")
 
         if not isinstance(result, dict) or "messages" not in result:
             return []
@@ -165,7 +190,7 @@ class GmailTools(Toolkit):
         for msg in messages[:max_results]:
             msg_id = msg.get("id")
             if msg_id:
-                full_msg = await self._make_request(
+                full_msg = self._make_request(
                     "GET", f"users/me/messages/{msg_id}"
                 )
                 if isinstance(full_msg, dict):
@@ -173,7 +198,7 @@ class GmailTools(Toolkit):
 
         return full_messages
 
-    async def get_recent_emails(
+    def get_recent_emails(
         self, limit: int = 10
     ) -> List[Dict[str, Any]]:
         """Get recent emails from the user's Gmail inbox.
@@ -185,7 +210,7 @@ class GmailTools(Toolkit):
             List of email objects with id, threadId, snippet, headers
         """
         params = f"?maxResults={limit}"
-        result = await self._make_request("GET", f"users/me/messages{params}")
+        result = self._make_request("GET", f"users/me/messages{params}")
 
         if not isinstance(result, dict) or "messages" not in result:
             return []
@@ -198,7 +223,7 @@ class GmailTools(Toolkit):
             msg_id = msg.get("id")
             if msg_id:
                 # Use metadata format for faster loading
-                full_msg = await self._make_request(
+                full_msg = self._make_request(
                     "GET", f"users/me/messages/{msg_id}?format=metadata"
                 )
                 if isinstance(full_msg, dict):
@@ -206,7 +231,7 @@ class GmailTools(Toolkit):
 
         return full_messages
 
-    async def get_email(self, message_id: str) -> Dict[str, Any]:
+    def get_email(self, message_id: str) -> Dict[str, Any]:
         """Get full email content by message ID.
 
         Args:
@@ -215,10 +240,58 @@ class GmailTools(Toolkit):
         Returns:
             Full email object with headers, body, attachments
         """
-        result = await self._make_request("GET", f"users/me/messages/{message_id}")
+        result = self._make_request("GET", f"users/me/messages/{message_id}")
         return result if isinstance(result, dict) else {}
 
-    async def reply_email(
+    def send_email(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        html: bool = False,
+    ) -> Dict[str, Any]:
+        """Send an email from the user's Gmail account.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Email body
+            cc: CC recipients (comma-separated)
+            bcc: BCC recipients (comma-separated)
+            html: Whether body is HTML
+
+        Returns:
+            Sent message details
+        """
+        # Build email content
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        msg = MIMEMultipart()
+        msg["to"] = to
+        msg["subject"] = subject
+
+        if cc:
+            msg["cc"] = cc
+        if bcc:
+            msg["bcc"] = bcc
+
+        # Add body
+        content_type = "html" if html else "plain"
+        msg.attach(MIMEText(body, content_type))
+
+        # Encode to base64 URL-safe
+        raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+
+        # Send via API
+        data = {"raw": raw_message}
+        result = self._make_request("POST", "users/me/messages/send", data)
+
+        return result if isinstance(result, dict) else {}
+
+    def reply_email(
         self,
         message_id: str,
         body: str,
@@ -239,7 +312,7 @@ class GmailTools(Toolkit):
             Sent message details
         """
         # Get original message to retrieve thread ID and headers
-        original_msg = await self.get_email(message_id)
+        original_msg = self.get_email(message_id)
         if not original_msg:
             raise ValueError(f"Message {message_id} not found")
 
@@ -287,11 +360,11 @@ class GmailTools(Toolkit):
 
         # Send via API
         data = {"raw": raw_message, "threadId": thread_id}
-        result = await self._make_request("POST", "users/me/messages/send", data)
+        result = self._make_request("POST", "users/me/messages/send", data)
 
         return result if isinstance(result, dict) else {}
 
-    async def create_draft(
+    def create_draft(
         self,
         to: str,
         subject: str,
@@ -335,55 +408,7 @@ class GmailTools(Toolkit):
 
         # Create draft via API
         data = {"message": {"raw": raw_message}}
-        result = await self._make_request("POST", "users/me/drafts", data)
-
-        return result if isinstance(result, dict) else {}
-
-    async def send_email(
-        self,
-        to: str,
-        subject: str,
-        body: str,
-        cc: Optional[str] = None,
-        bcc: Optional[str] = None,
-        html: bool = False,
-    ) -> Dict[str, Any]:
-        """Send an email from the user's Gmail account.
-
-        Args:
-            to: Recipient email address
-            subject: Email subject
-            body: Email body
-            cc: CC recipients (comma-separated)
-            bcc: BCC recipients (comma-separated)
-            html: Whether body is HTML
-
-        Returns:
-            Sent message details
-        """
-        # Build email content
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
-
-        msg = MIMEMultipart()
-        msg["to"] = to
-        msg["subject"] = subject
-
-        if cc:
-            msg["cc"] = cc
-        if bcc:
-            msg["bcc"] = bcc
-
-        # Add body
-        content_type = "html" if html else "plain"
-        msg.attach(MIMEText(body, content_type))
-
-        # Encode to base64 URL-safe
-        raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
-
-        # Send via API
-        data = {"raw": raw_message}
-        result = await self._make_request("POST", "users/me/messages/send", data)
+        result = self._make_request("POST", "users/me/drafts", data)
 
         return result if isinstance(result, dict) else {}
 
