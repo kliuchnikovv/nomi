@@ -48,9 +48,8 @@ def test_registry_includes_web_search_without_accounts(monkeypatch):
             "methods": [{"name": "search", "description": "Search", "parameters": {}}],
         } if name == "web_search" else None,
     )
-    config = _make_config("web_search")
-    # web_search has no accounts field in params
-    config.entries["web_search"].params.pop("accounts", None)
+    config = ToolsConfig()
+    config.add("web_search", access_token="tok")  # no accounts kwarg
     schemas = ToolRegistry.build(config)
     assert len(schemas) == 1
     assert schemas[0]["accounts"] == []

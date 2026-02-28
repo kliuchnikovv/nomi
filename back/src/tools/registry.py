@@ -11,8 +11,12 @@ logger = logging.getLogger(__name__)
 def _load_manifest(provider_name: str) -> dict | None:
     try:
         from src.plugins.loader import get_manifest
+    except ImportError:
+        return None
+    try:
         return get_manifest(provider_name)
     except Exception:
+        logger.warning("[Registry] Failed to load manifest for %s", provider_name, exc_info=True)
         return None
 
 
