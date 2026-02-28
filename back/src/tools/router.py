@@ -93,7 +93,7 @@ class ToolRouter:
             tool=raw.get("tool", ""),
             method=raw.get("method", ""),
             account_id=raw.get("account_id", ""),
-            params=raw.get("params") or {},
+            params=raw.get("params") if isinstance(raw.get("params"), dict) else {},
             question=raw.get("question", ""),
-            options=raw.get("options") or [],
+            options=raw.get("options") if isinstance(raw.get("options"), list) else [],
         )

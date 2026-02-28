@@ -24,7 +24,11 @@ GMAIL_SCHEMA = {
 
 
 @pytest.fixture
-def router():
+def router(monkeypatch):
+    import google.generativeai as genai
+    # Prevent real API calls during construction
+    monkeypatch.setattr(genai, "configure", lambda **kwargs: None)
+    monkeypatch.setattr(genai, "GenerativeModel", lambda **kwargs: MagicMock())
     return ToolRouter()
 
 
@@ -95,3 +99,13 @@ def test_router_passes_context_to_model(router, monkeypatch):
 
     router.decide("send email", "use work@gmail.com", [GMAIL_SCHEMA])
     assert "use work@gmail.com" in captured["prompt"]
+
+
+def test_router_returns_none_on_model_failure(router, monkeypatch):
+    mock_model = MagicMock()
+    mock_model.generate_content.side_effect = Exception("API error")
+    monkeypatch.setattr(router, "_model", mock_model)
+
+    result = router.decide("send email", "", [GMAIL_SCHEMA])
+    assert result.action == "none"
+    assert result.tool == ""
