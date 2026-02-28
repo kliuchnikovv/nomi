@@ -66,7 +66,9 @@ async def test_discovery_tool_returns_result_on_success(
     result_json = await fn.entrypoint(request="send email to pete", context="")
     result = json.loads(result_json)
     assert result["type"] == "result"
-    assert result["result"] == "Email sent"
+    # hybrid execution with client runner present: client runner takes precedence
+    assert result["result"] == "client tool result"
+    mock_runner.assert_called_once_with("gmail", "send_email", {"to": "pete@x.com", "subject": "Hi", "body": "Hello"})
 
 
 @pytest.mark.asyncio

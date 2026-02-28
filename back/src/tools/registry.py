@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 def _load_manifest(provider_name: str) -> dict | None:
     try:
-        from src.plugins.loader import get_manifest
+        from src.plugins.loader import load_plugins, get_manifest
+        load_plugins()
     except ImportError:
         return None
     try:

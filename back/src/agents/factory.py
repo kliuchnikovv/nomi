@@ -300,7 +300,12 @@ class AgentFactory:
 
         tools: list[Toolkit | Any] = []
 
-        if os.getenv("USE_DISCOVERY_TOOL") == "1" and user_id and client_tool_runner:
+        if (
+            os.getenv("USE_DISCOVERY_TOOL") == "1"
+            and user_id
+            and client_tool_runner
+            and not (agent_type and agent_type.lower() == "list")
+        ):
             # Discovery mode: single routing tool replaces all per-integration tools
             discovery_fn = build_discovery_tool(
                 user_id=user_id,

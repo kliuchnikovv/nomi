@@ -78,21 +78,23 @@ def build_discovery_tool(
         if not tool_schema:
             return json.dumps({"type": "error", "error": f"Unknown tool: {decision.tool}"})
 
-        # Client-execution path (iOS-native: Calendar, Reminders)
-        if tool_schema.get("execution") == "client":
-            if not client_tool_runner:
+        # Client-execution path (iOS-native: Calendar, Reminders) and hybrid tools (Gmail, etc.)
+        if tool_schema.get("execution") in ("client", "hybrid"):
+            if tool_schema.get("execution") == "client" and not client_tool_runner:
                 return json.dumps({"type": "error", "error": "Client tool runner not configured"})
-            try:
-                result = await client_tool_runner(decision.tool, decision.method, decision.params)
-                return json.dumps({"type": "result", "result": result})
-            except Exception:
-                logger.warning(
-                    "[Discovery] Client tool error: tool=%s method=%s",
-                    decision.tool,
-                    decision.method,
-                    exc_info=True,
-                )
-                return json.dumps({"type": "error", "error": "Client tool execution failed"})
+            if client_tool_runner:
+                try:
+                    result = await client_tool_runner(decision.tool, decision.method, decision.params)
+                    return json.dumps({"type": "result", "result": result})
+                except Exception:
+                    logger.warning(
+                        "[Discovery] Client tool error: tool=%s method=%s",
+                        decision.tool,
+                        decision.method,
+                        exc_info=True,
+                    )
+                    return json.dumps({"type": "error", "error": "Client tool execution failed"})
+            # hybrid with no runner: fall through to server execution below
 
         # Server-execution path
         entry = tools_config.entries.get(decision.tool)
