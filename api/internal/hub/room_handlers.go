@@ -477,7 +477,16 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 		if payload.Tools != nil {
 			if clientTools, ok := payload.Tools.([]interface{}); ok && len(clientTools) > 0 {
-				r.logger.Info("enriching client-sent integrations with DB tokens", zap.Int("count", len(clientTools)))
+				r.logger.Info("grouping client-sent integrations by provider", zap.Int("count", len(clientTools)))
+
+				// Group client tools by provider to support multiple accounts
+				type providerEntry struct {
+					provider     string
+					accounts     []map[string]interface{}
+					mergedParams map[string]interface{} // credentials keyed by account_id
+				}
+				providerMap := make(map[string]*providerEntry)
+
 				for _, ct := range clientTools {
 					if ctMap, ok := ct.(map[string]interface{}); ok {
 						name, _ := ctMap["name"].(string)
@@ -486,10 +495,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 							continue
 						}
 
-						// Try to find matching integration in DB to get tokens
+						// Try to find matching integration in DB
 						providerToMatch := provider
 						if providerToMatch == "" {
-							// Try to extract provider from name or match display name
 							nameLower := strings.ToLower(name)
 							// Match against known provider IDs in DB
 							for pName := range dbIntegrations {
@@ -512,21 +520,72 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 							}
 						}
 
-						if dbParams, exists := dbIntegrations[providerToMatch]; exists {
-							// Merge DB params into client tool params
-							clientParams, _ := ctMap["params"].(map[string]interface{})
-							if clientParams == nil {
-								clientParams = make(map[string]interface{})
-							}
-							for k, v := range dbParams {
-								clientParams[k] = v
-							}
-							ctMap["params"] = clientParams
-							r.logger.Info("enriched tool with DB params", zap.String("tool", name), zap.String("provider", providerToMatch))
+						// Skip if no matching provider in DB (no credentials to enrich)
+						if _, exists := dbIntegrations[providerToMatch]; !exists {
+							r.logger.Debug("tool has no matching DB integration", zap.String("tool", name), zap.String("provider", providerToMatch))
+							continue
 						}
 
-						tools = append(tools, ct)
+						// Get or create provider entry
+						entry, exists := providerMap[providerToMatch]
+						if !exists {
+							entry = &providerEntry{
+								provider:     providerToMatch,
+								mergedParams: make(map[string]interface{}),
+							}
+							providerMap[providerToMatch] = entry
+						}
+
+						// Enrich client params with DB credentials
+						clientParams, _ := ctMap["params"].(map[string]interface{})
+						if clientParams == nil {
+							clientParams = make(map[string]interface{})
+						}
+						if dbParams, exists := dbIntegrations[providerToMatch]; exists {
+							for k, v := range dbParams {
+								if _, ok := clientParams[k]; !ok {
+									clientParams[k] = v
+								}
+							}
+						}
+
+						// Extract account info
+						accountID := ""
+						displayName := ""
+						if id, ok := clientParams["account_id"].(string); ok {
+							accountID = id
+						}
+						if dn, ok := clientParams["display_name"].(string); ok {
+							displayName = dn
+						} else if email, ok := clientParams["account_email"].(string); ok {
+							displayName = email
+						}
+						if accountID == "" {
+							accountID = uuid.New().String()
+						}
+
+						// Add account to list and store credentials
+						entry.accounts = append(entry.accounts, map[string]interface{}{
+							"id":           accountID,
+							"display_name": displayName,
+						})
+						entry.mergedParams[accountID] = clientParams
 					}
+				}
+
+				// Build tools from grouped entries
+				for providerName, entry := range providerMap {
+					toolItem := map[string]interface{}{
+						"name":     providerName,
+						"provider": providerName,
+						"enabled":  true,
+						"params": map[string]interface{}{
+							"accounts":    entry.accounts,
+							"credentials": entry.mergedParams,
+						},
+					}
+					tools = append(tools, toolItem)
+					r.logger.Info("grouped tool", zap.String("provider", providerName), zap.Int("accounts", len(entry.accounts)))
 				}
 			}
 		} else {

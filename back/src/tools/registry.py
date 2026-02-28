@@ -41,6 +41,8 @@ class ToolRegistry:
         seen: set[str] = set()
 
         for entry in config:
+            logger.info("[Registry] Processing tool entry: name=%s, provider=%s, params_keys=%s",
+                       entry.name, entry.provider, list(entry.params.keys()))
             manifest = _load_manifest(entry.name.lower())
             if not manifest:
                 if entry.provider:
@@ -51,11 +53,15 @@ class ToolRegistry:
 
             provider_name = manifest.get("name", entry.name)
             if provider_name in seen:
+                logger.debug("[Registry] Provider %s already seen, skipping duplicate", provider_name)
                 continue
             seen.add(provider_name)
 
             exec_type = (manifest.get("execution") or {}).get("type", "server")
             accounts: list[dict] = entry.params.get("accounts") or []
+
+            logger.info("[Registry] Adding schema: provider=%s, accounts=%d, execution=%s",
+                       provider_name, len(accounts), exec_type)
 
             schemas.append({
                 "name": provider_name,
