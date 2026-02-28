@@ -55,3 +55,13 @@ def test_executor_returns_empty_string_for_none_result(executor, monkeypatch):
 
     result = executor.run("web_search", "some_method", {}, {})
     assert result == ""
+
+
+def test_executor_calls_github(executor, monkeypatch):
+    mock_toolkit = MagicMock()
+    mock_toolkit.list_repos.return_value = "repo1, repo2"
+    monkeypatch.setattr("src.tools.executor._build_github", lambda creds: mock_toolkit)
+
+    result = executor.run("github", "list_repos", {"limit": 10}, {"access_token": "gh_tok"})
+    assert result == "repo1, repo2"
+    mock_toolkit.list_repos.assert_called_once_with(limit=10)

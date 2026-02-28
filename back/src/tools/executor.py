@@ -19,10 +19,10 @@ def _build_gmail(credentials: dict[str, Any]) -> Toolkit:
     creds = _make_credentials(credentials)
     try:
         from agno.tools.gmail import GmailTools
-        return GmailTools(creds=creds)
     except ImportError:
+        logger.warning("[Executor] agno.tools.gmail not available, falling back to plugin GmailTools")
         from plugins.gmail.server.tools import GmailTools  # type: ignore[import]
-        return GmailTools(creds=creds)
+    return GmailTools(creds=creds)
 
 
 def _build_github(credentials: dict[str, Any]) -> Toolkit:
