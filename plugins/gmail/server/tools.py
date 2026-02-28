@@ -146,16 +146,24 @@ class GmailTools(Toolkit):
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # We're in an async context, need to create new loop
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    result = loop.run_until_complete(
-                        self._async_make_request(method, endpoint, data)
-                    )
-                    return result
-                finally:
-                    loop.close()
+                # We're in an async context - need to run in a separate thread
+                # to avoid "event loop is already running" issues
+                import concurrent.futures
+
+                # Create a new thread with its own event loop
+                def run_in_thread():
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        return new_loop.run_until_complete(
+                            self._async_make_request(method, endpoint, data)
+                        )
+                    finally:
+                        new_loop.close()
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(run_in_thread)
+                    return future.result(timeout=30)
             else:
                 return loop.run_until_complete(
                     self._async_make_request(method, endpoint, data)
