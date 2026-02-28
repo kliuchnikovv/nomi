@@ -58,7 +58,11 @@ def build_discovery_tool(
         if not schemas:
             return json.dumps({"type": "error", "error": "No integrations connected"})
 
-        decision = _router.decide(request, context, schemas)
+        try:
+            decision = _router.decide(request, context, schemas)
+        except Exception:
+            logger.warning("[Discovery] Router failed for user=%s", user_id, exc_info=True)
+            return json.dumps({"type": "error", "error": "Failed to route request"})
 
         if decision.action == "question":
             return json.dumps({
@@ -75,7 +79,9 @@ def build_discovery_tool(
             return json.dumps({"type": "error", "error": f"Unknown tool: {decision.tool}"})
 
         # Client-execution path (iOS-native: Calendar, Reminders)
-        if tool_schema.get("execution") == "client" and client_tool_runner:
+        if tool_schema.get("execution") == "client":
+            if not client_tool_runner:
+                return json.dumps({"type": "error", "error": "Client tool runner not configured"})
             try:
                 result = await client_tool_runner(decision.tool, decision.method, decision.params)
                 return json.dumps({"type": "result", "result": result})

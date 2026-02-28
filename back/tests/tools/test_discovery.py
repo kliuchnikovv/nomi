@@ -115,6 +115,7 @@ async def test_discovery_tool_returns_error_for_no_tool(
     result_json = await fn.entrypoint(request="play chess", context="")
     result = json.loads(result_json)
     assert result["type"] == "error"
+    assert "play chess" in result["error"]
 
 
 @pytest.mark.asyncio
