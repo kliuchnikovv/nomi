@@ -1,5 +1,4 @@
 # back/tests/tools/test_registry.py
-import pytest
 from src.tools.registry import ToolRegistry
 from src.tools.factory import ToolsConfig
 

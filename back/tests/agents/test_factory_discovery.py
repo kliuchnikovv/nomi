@@ -1,6 +1,6 @@
 # back/tests/agents/test_factory_discovery.py
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from agno.tools import Function
 
 

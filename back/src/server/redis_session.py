@@ -1201,7 +1201,7 @@ class RedisSession:
                         else:
                             tool_results_lines.append(f"**Tool Result {idx + 1}:**")
                             tool_results_lines.append(f"Tool: {tool_name}")
-                            tool_results_lines.append(f"Result: No result data")
+                            tool_results_lines.append("Result: No result data")
 
                     if tool_results_lines:
                         context_parts.append(
