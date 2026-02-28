@@ -84,8 +84,15 @@ class ToolRouter:
         try:
             response = self._model.generate_content(prompt)
             raw = json.loads(response.text)
-        except Exception:
-            logger.warning("[Router] Failed to get routing decision", exc_info=True)
+            if not isinstance(raw, dict):
+                logger.warning(
+                    "[Router] Unexpected response type %s, expected dict. Response: %s",
+                    type(raw).__name__,
+                    response.text[:200] if hasattr(response, 'text') else str(raw)[:200],
+                )
+                return RoutingDecision(action="none")
+        except Exception as e:
+            logger.warning("[Router] Failed to get routing decision: %s", e, exc_info=True)
             return RoutingDecision(action="none")
 
         return RoutingDecision(
