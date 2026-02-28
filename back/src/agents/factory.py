@@ -13,6 +13,7 @@ from src.agents.souper import SouperAgent
 from src.models.safe_gemini import SafeGemini
 
 from src.tools.config import ToolConfigClient
+from src.tools.discovery import build_discovery_tool
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
 from agno.tools import Toolkit
@@ -308,142 +309,154 @@ class AgentFactory:
         list_id = command_desc.get("list_id") if command_desc else None
 
         tools: list[Toolkit | Any] = []
-        config_used: ToolsConfig | None = None
 
-        # List agent: only list tools (knowledge_search with list_id), no web_search
-        if agent_type and agent_type.lower() == "list" and user_id:
-            config = ToolsConfig()
-            params = {"user_id": user_id, "list_id": list_id}
-            if command_desc and command_desc.get("auth_token"):
-                params["auth_token"] = command_desc["auth_token"]
-            config.add("knowledge_search", **params)
-            config_used = config
-            try:
-                tools = await build_tools(config)
-                logger.info("[Factory] Built %d tools for ListAgent", len(tools))
-            except Exception as e:
-                logger.warning("[Factory] Failed to build list tools: %s", e)
-        # If user_id provided but no tools_specs, fetch tools from config_client
-        elif not tools_specs and user_id:
-            try:
-                logger.debug("[Factory] Fetching tools for user_id=%s", user_id)
-                tools_config = await self._config_client.fetch_tools(user_id=user_id)
-                config_used = tools_config
-                logger.info(
-                    "[Factory] Fetched %d tools for user %s",
-                    len(tools_config.entries),
-                    user_id,
-                )
+        if os.getenv("USE_DISCOVERY_TOOL") == "1" and user_id and client_tool_runner:
+            # Discovery mode: single routing tool replaces all per-integration tools
+            discovery_fn = build_discovery_tool(
+                user_id=user_id,
+                config_client=self._config_client,
+                client_tool_runner=client_tool_runner,
+            )
+            tools = [discovery_fn]
+            logger.info("[Factory] Discovery mode: built discovery_tool for user=%s", user_id)
+        else:
+            # Legacy mode: unchanged existing code
+            config_used: ToolsConfig | None = None
 
-                # Add web search tool if supported
+            # List agent: only list tools (knowledge_search with list_id), no web_search
+            if agent_type and agent_type.lower() == "list" and user_id:
+                config = ToolsConfig()
+                params = {"user_id": user_id, "list_id": list_id}
+                if command_desc and command_desc.get("auth_token"):
+                    params["auth_token"] = command_desc["auth_token"]
+                config.add("knowledge_search", **params)
+                config_used = config
+                try:
+                    tools = await build_tools(config)
+                    logger.info("[Factory] Built %d tools for ListAgent", len(tools))
+                except Exception as e:
+                    logger.warning("[Factory] Failed to build list tools: %s", e)
+            # If user_id provided but no tools_specs, fetch tools from config_client
+            elif not tools_specs and user_id:
+                try:
+                    logger.debug("[Factory] Fetching tools for user_id=%s", user_id)
+                    tools_config = await self._config_client.fetch_tools(user_id=user_id)
+                    config_used = tools_config
+                    logger.info(
+                        "[Factory] Fetched %d tools for user %s",
+                        len(tools_config.entries),
+                        user_id,
+                    )
+
+                    # Add web search tool if supported
+                    if model_name and model_name.startswith("gemma-"):
+                        logger.info(
+                            "[Factory] Skipping web_search for Gemma model %s", model_name
+                        )
+                    else:
+                        tools_config.add("web_search")
+                        logger.info("[Factory] Added web search tool")
+
+                    tools = await build_tools(tools_config)
+                except Exception as e:
+                    logger.warning(
+                        "[Factory] Failed to fetch tools for user %s: %s", user_id, e
+                    )
+                    # Continue with empty tools list
+            elif tools_specs:
+                # Build tools from provided specs
+                logger.debug("[WS] tools: %s", [t.name for t in tools_specs])
+                config = ToolsConfig()
+                for tool_spec in tools_specs:
+                    if tool_spec.enabled:
+                        params = dict(tool_spec.params)
+                        # # Inject command_desc auth_token and list_id for knowledge_search (list chat)
+                        # if tool_spec.name == "knowledge_search" and command_desc:
+                        #     if "auth_token" not in params and command_desc.get(
+                        #         "auth_token"
+                        #     ):
+                        #         params["auth_token"] = command_desc["auth_token"]
+                        #     if "list_id" not in params and command_desc.get("list_id"):
+                        #         params["list_id"] = command_desc["list_id"]
+                        config.add(tool_spec.name, provider=tool_spec.provider, **params)
+                        logger.debug("[WS] tool appended: enabled")
+                    else:
+                        logger.debug("[WS] tool not appended: not enabled")
+
+                # Add web search tool if supported (Gemini only, not Gemma)
                 if model_name and model_name.startswith("gemma-"):
                     logger.info(
-                        "[Factory] Skipping web_search for Gemma model %s", model_name
+                        "[WS] Skipping web_search for Gemma model %s (tools not supported)",
+                        model_name,
                     )
                 else:
-                    tools_config.add("web_search")
-                    logger.info("[Factory] Added web search tool")
+                    config.add("web_search")
+                    logger.info("[WS] Added web search tool (always enabled)")
 
-                tools = await build_tools(tools_config)
-            except Exception as e:
-                logger.warning(
-                    "[Factory] Failed to fetch tools for user %s: %s", user_id, e
-                )
-                # Continue with empty tools list
-        elif tools_specs:
-            # Build tools from provided specs
-            logger.debug("[WS] tools: %s", [t.name for t in tools_specs])
-            config = ToolsConfig()
-            for tool_spec in tools_specs:
-                if tool_spec.enabled:
-                    params = dict(tool_spec.params)
-                    # # Inject command_desc auth_token and list_id for knowledge_search (list chat)
-                    # if tool_spec.name == "knowledge_search" and command_desc:
-                    #     if "auth_token" not in params and command_desc.get(
-                    #         "auth_token"
-                    #     ):
-                    #         params["auth_token"] = command_desc["auth_token"]
-                    #     if "list_id" not in params and command_desc.get("list_id"):
-                    #         params["list_id"] = command_desc["list_id"]
-                    config.add(tool_spec.name, provider=tool_spec.provider, **params)
-                    logger.debug("[WS] tool appended: enabled")
-                else:
-                    logger.debug("[WS] tool not appended: not enabled")
+                config_used = config
+                tools = await build_tools(config)
 
-            # Add web search tool if supported (Gemini only, not Gemma)
-            if model_name and model_name.startswith("gemma-"):
-                logger.info(
-                    "[WS] Skipping web_search for Gemma model %s (tools not supported)",
-                    model_name,
-                )
-            else:
-                config.add("web_search")
-                logger.info("[WS] Added web search tool (always enabled)")
+            # Add client proxy tools from plugin manifests (round-trip: model -> device -> result)
+            if client_tool_runner and config_used and config_used.entries:
+                try:
+                    from src.plugins.loader import load_plugins, get_manifest
+                    from src.plugins.tool_gen import build_client_proxy_tools
 
-            config_used = config
-            tools = await build_tools(config)
+                    load_plugins()
+                    client_manifests = []
+                    integration_ids: dict[str, list[dict]] = {}
+                    seen_manifest_names: set[str] = set()
+                    for name, tool_item in config_used.entries.items():
+                        manifest = get_manifest(name)
+                        if not manifest:
+                            continue
+                        exec_type = (manifest.get("execution") or {}).get("type")
+                        if exec_type not in ("client", "hybrid"):
+                            continue
 
-        # Add client proxy tools from plugin manifests (round-trip: model -> device -> result)
-        if client_tool_runner and config_used and config_used.entries:
-            try:
-                from src.plugins.loader import load_plugins, get_manifest
-                from src.plugins.tool_gen import build_client_proxy_tools
+                        manifest_name = manifest.get("name", "")
 
-                load_plugins()
-                client_manifests = []
-                integration_ids: dict[str, list[dict]] = {}
-                seen_manifest_names: set[str] = set()
-                for name, tool_item in config_used.entries.items():
-                    manifest = get_manifest(name)
-                    if not manifest:
-                        continue
-                    exec_type = (manifest.get("execution") or {}).get("type")
-                    if exec_type not in ("client", "hybrid"):
-                        continue
+                        # Add each manifest only once (multiple per-account entries share the same manifest)
+                        if manifest_name not in seen_manifest_names:
+                            seen_manifest_names.add(manifest_name)
+                            client_manifests.append(manifest)
 
-                    manifest_name = manifest.get("name", "")
-
-                    # Add each manifest only once (multiple per-account entries share the same manifest)
-                    if manifest_name not in seen_manifest_names:
-                        seen_manifest_names.add(manifest_name)
-                        client_manifests.append(manifest)
-
-                    # Collect account info, always keyed by manifest name (not raw entry name)
-                    accounts_list = tool_item.params.get("accounts")
-                    if accounts_list and isinstance(accounts_list, list):
-                        # New grouped format — authoritative list
-                        integration_ids[manifest_name] = accounts_list
-                    elif tool_item.params.get("integration_id"):
-                        # Legacy single integration_id
-                        existing = integration_ids.get(manifest_name, [])
-                        entry = {
-                            "id": tool_item.params["integration_id"],
-                            "display_name": tool_item.params.get("display_name", ""),
-                        }
-                        if not any(a.get("id") == entry["id"] for a in existing):
-                            existing.append(entry)
-                        integration_ids[manifest_name] = existing
-                    elif name.lower() != manifest_name.lower():
-                        # Per-account OAuth entry, e.g. "Gmail (user@example.com)"
-                        # Use account_email as the stable integration ID recognised by the device
-                        account_email = tool_item.params.get("account_email", "")
-                        if account_email:
-                            display = tool_item.params.get("display_name", account_email)
+                        # Collect account info, always keyed by manifest name (not raw entry name)
+                        accounts_list = tool_item.params.get("accounts")
+                        if accounts_list and isinstance(accounts_list, list):
+                            # New grouped format — authoritative list
+                            integration_ids[manifest_name] = accounts_list
+                        elif tool_item.params.get("integration_id"):
+                            # Legacy single integration_id
                             existing = integration_ids.get(manifest_name, [])
-                            if not any(a.get("id") == account_email for a in existing):
-                                existing.append({"id": account_email, "display_name": display})
+                            entry = {
+                                "id": tool_item.params["integration_id"],
+                                "display_name": tool_item.params.get("display_name", ""),
+                            }
+                            if not any(a.get("id") == entry["id"] for a in existing):
+                                existing.append(entry)
                             integration_ids[manifest_name] = existing
-                if client_manifests:
-                    proxy_tools = build_client_proxy_tools(
-                        client_manifests, client_tool_runner, integration_ids
-                    )
-                    tools = list(tools) + proxy_tools
-                    logger.info(
-                        "[Factory] Added %d client proxy tools from manifests",
-                        len(proxy_tools),
-                    )
-            except Exception as e:
-                logger.warning("[Factory] Failed to add client proxy tools: %s", e)
+                        elif name.lower() != manifest_name.lower():
+                            # Per-account OAuth entry, e.g. "Gmail (user@example.com)"
+                            # Use account_email as the stable integration ID recognised by the device
+                            account_email = tool_item.params.get("account_email", "")
+                            if account_email:
+                                display = tool_item.params.get("display_name", account_email)
+                                existing = integration_ids.get(manifest_name, [])
+                                if not any(a.get("id") == account_email for a in existing):
+                                    existing.append({"id": account_email, "display_name": display})
+                                integration_ids[manifest_name] = existing
+                    if client_manifests:
+                        proxy_tools = build_client_proxy_tools(
+                            client_manifests, client_tool_runner, integration_ids
+                        )
+                        tools = list(tools) + proxy_tools
+                        logger.info(
+                            "[Factory] Added %d client proxy tools from manifests",
+                            len(proxy_tools),
+                        )
+                except Exception as e:
+                    logger.warning("[Factory] Failed to add client proxy tools: %s", e)
 
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs
