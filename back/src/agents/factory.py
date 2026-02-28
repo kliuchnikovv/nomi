@@ -296,16 +296,6 @@ class AgentFactory:
             else self._model
         )
 
-        # ... (Tool fetching logic unchanged) ...
-        # NOTE: Since I am replacing a huge chunk, I need to be careful to include the tools logic or skip it if I can target specific lines.
-        # But wait, the file content shows `tools` fetching is before this.
-        # I only need to change the `build` method signature and the agent creation part.
-        # This implementation below is targeting the method signature and skipping to the end where agent is created.
-
-        # ... (Skipping tools fetching logic for brevity in replace block if possible, but replace_file_content works on contiguous blocks)
-        # It's better to do 2 separate edits: 1 for signature, 1 for logic.
-        pass
-
         list_id = command_desc.get("list_id") if command_desc else None
 
         tools: list[Toolkit | Any] = []
