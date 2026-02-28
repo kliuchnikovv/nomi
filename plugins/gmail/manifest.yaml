@@ -4,9 +4,8 @@ description: Gmail integration for email management
 version: 1.0.0
 
 execution:
-  type: hybrid
+  type: server
   entry_points:
-    client: ./client/executor.ts
     server: ./server/tools.py
 
 auth:
@@ -96,11 +95,8 @@ methods:
       required: [to, subject, body]
 
 background_tasks:
-  enabled: true
-  system_events:
-    - push_notifications
-    - app_lifecycle
+  enabled: false
 
 storage:
-  type: client_only
+  type: server
   encrypted: true

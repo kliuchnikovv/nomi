@@ -3,7 +3,7 @@ Gmail tools for hybrid plugin (server-side execution).
 Provides email reading and sending functionality.
 
 NOTE: This is the SERVER-SIDE component of the hybrid plugin.
-The client-side executor.ts handles UI interactions and local caching.
+All operations are performed directly via Gmail API - no local storage.
 """
 
 import asyncio
@@ -40,9 +40,12 @@ class GmailTools(Toolkit):
         }
 
         # Register tools
+        self.register(self.get_recent_emails)
         self.register(self.search_emails)
         self.register(self.get_email)
         self.register(self.send_email)
+        self.register(self.reply_email)
+        self.register(self.create_draft)
 
     def _update_headers(self):
         """Update headers with current access token."""
@@ -170,6 +173,39 @@ class GmailTools(Toolkit):
 
         return full_messages
 
+    async def get_recent_emails(
+        self, limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Get recent emails from the user's Gmail inbox.
+
+        Args:
+            limit: Maximum number of emails to return
+
+        Returns:
+            List of email objects with id, threadId, snippet, headers
+        """
+        params = f"?maxResults={limit}"
+        result = await self._make_request("GET", f"users/me/messages{params}")
+
+        if not isinstance(result, dict) or "messages" not in result:
+            return []
+
+        # Get message details in lightweight format (metadata only)
+        messages = result.get("messages", [])
+        full_messages = []
+
+        for msg in messages[:limit]:
+            msg_id = msg.get("id")
+            if msg_id:
+                # Use metadata format for faster loading
+                full_msg = await self._make_request(
+                    "GET", f"users/me/messages/{msg_id}?format=metadata"
+                )
+                if isinstance(full_msg, dict):
+                    full_messages.append(full_msg)
+
+        return full_messages
+
     async def get_email(self, message_id: str) -> Dict[str, Any]:
         """Get full email content by message ID.
 
@@ -180,6 +216,127 @@ class GmailTools(Toolkit):
             Full email object with headers, body, attachments
         """
         result = await self._make_request("GET", f"users/me/messages/{message_id}")
+        return result if isinstance(result, dict) else {}
+
+    async def reply_email(
+        self,
+        message_id: str,
+        body: str,
+        html: bool = False,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Reply to an existing email.
+
+        Args:
+            message_id: Gmail message ID to reply to
+            body: Reply body
+            html: Whether body is HTML
+            cc: CC recipients (comma-separated)
+            bcc: BCC recipients (comma-separated)
+
+        Returns:
+            Sent message details
+        """
+        # Get original message to retrieve thread ID and headers
+        original_msg = await self.get_email(message_id)
+        if not original_msg:
+            raise ValueError(f"Message {message_id} not found")
+
+        thread_id = original_msg.get("threadId")
+        if not thread_id:
+            raise ValueError(f"Thread ID not found for message {message_id}")
+
+        # Extract headers from original message
+        headers = original_msg.get("payload", {}).get("headers", [])
+        headers_dict = {h["name"]: h["value"] for h in headers}
+
+        # Determine references and in-reply-to
+        references = headers_dict.get("References", "")
+        message_id_header = headers_dict.get("Message-ID", "")
+        subject = headers_dict.get("Subject", "")
+        from_addr = headers_dict.get("From", "")
+
+        # Build reply email
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        msg = MIMEMultipart()
+        msg["Subject"] = subject
+        msg["In-Reply-To"] = message_id_header
+        if references:
+            msg["References"] = f"{references} {message_id_header}"
+        else:
+            msg["References"] = message_id_header
+
+        if cc:
+            msg["cc"] = cc
+        if bcc:
+            msg["bcc"] = bcc
+
+        # Reply to original sender
+        if from_addr:
+            msg["To"] = from_addr
+
+        # Add body
+        content_type = "html" if html else "plain"
+        msg.attach(MIMEText(body, content_type))
+
+        # Encode to base64 URL-safe
+        raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+
+        # Send via API
+        data = {"raw": raw_message, "threadId": thread_id}
+        result = await self._make_request("POST", "users/me/messages/send", data)
+
+        return result if isinstance(result, dict) else {}
+
+    async def create_draft(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        html: bool = False,
+    ) -> Dict[str, Any]:
+        """Create a draft email.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Email body
+            cc: CC recipients (comma-separated)
+            bcc: BCC recipients (comma-separated)
+            html: Whether body is HTML
+
+        Returns:
+            Created draft details with id
+        """
+        # Build email content
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+
+        msg = MIMEMultipart()
+        msg["to"] = to
+        msg["subject"] = subject
+
+        if cc:
+            msg["cc"] = cc
+        if bcc:
+            msg["bcc"] = bcc
+
+        # Add body
+        content_type = "html" if html else "plain"
+        msg.attach(MIMEText(body, content_type))
+
+        # Encode to base64 URL-safe
+        raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+
+        # Create draft via API
+        data = {"message": {"raw": raw_message}}
+        result = await self._make_request("POST", "users/me/drafts", data)
+
         return result if isinstance(result, dict) else {}
 
     async def send_email(
