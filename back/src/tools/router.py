@@ -84,6 +84,12 @@ class ToolRouter:
         try:
             response = self._model.generate_content(prompt)
             raw = json.loads(response.text)
+
+            # Handle list responses - use first element if valid
+            if isinstance(raw, list) and len(raw) > 0 and isinstance(raw[0], dict):
+                logger.info("[Router] Received list, using first element")
+                raw = raw[0]
+
             if not isinstance(raw, dict):
                 logger.warning(
                     "[Router] Unexpected response type %s, expected dict. Response: %s",

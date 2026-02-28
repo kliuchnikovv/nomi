@@ -112,14 +112,41 @@ def test_router_returns_none_on_model_failure(router, monkeypatch):
 
 
 def test_router_returns_none_on_list_response(router, monkeypatch):
-    """Test that router handles unexpected list responses from model."""
+    """Test that router extracts first element from list responses from model."""
     mock_resp = MagicMock()
     # Model incorrectly returns a list instead of dict
-    mock_resp.text = json.dumps([{"action": "execute", "tool": "gmail"}])
+    mock_resp.text = json.dumps([{"action": "execute", "tool": "gmail", "method": "send_email"}])
+    mock_model = MagicMock()
+    mock_model.generate_content.return_value = mock_resp
+    monkeypatch.setattr(router, "_model", mock_model)
+
+    result = router.decide("send email", "", [GMAIL_SCHEMA])
+    # Router should extract the first element from the list
+    assert result.action == "execute"
+    assert result.tool == "gmail"
+    assert result.method == "send_email"
+
+
+def test_router_returns_none_on_empty_list(router, monkeypatch):
+    """Test that router handles empty list responses from model."""
+    mock_resp = MagicMock()
+    mock_resp.text = json.dumps([])
     mock_model = MagicMock()
     mock_model.generate_content.return_value = mock_resp
     monkeypatch.setattr(router, "_model", mock_model)
 
     result = router.decide("send email", "", [GMAIL_SCHEMA])
     assert result.action == "none"
-    assert result.tool == ""
+
+
+def test_router_returns_none_on_list_with_invalid_elements(router, monkeypatch):
+    """Test that router handles list responses with non-dict elements."""
+    mock_resp = MagicMock()
+    # List contains strings instead of dict
+    mock_resp.text = json.dumps(["not a dict", "also not a dict"])
+    mock_model = MagicMock()
+    mock_model.generate_content.return_value = mock_resp
+    monkeypatch.setattr(router, "_model", mock_model)
+
+    result = router.decide("send email", "", [GMAIL_SCHEMA])
+    assert result.action == "none"
