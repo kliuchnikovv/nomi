@@ -475,21 +475,39 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
+		// Helper structure for grouping client tools by provider
+		type AccountInfo struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"display_name,omitempty"`
+		}
+		type providerEntry struct {
+			provider     string
+			accounts     []AccountInfo
+			mergedParams map[string]interface{}
+		}
+
 		if payload.Tools != nil {
 			if clientTools, ok := payload.Tools.([]interface{}); ok && len(clientTools) > 0 {
 				r.logger.Info("enriching client-sent integrations with DB tokens", zap.Int("count", len(clientTools)))
+
+				// Group tools by provider
+				providerMap := make(map[string]*providerEntry)
+				r.logger.Debug("[Tools] Using client-sent tools path")
+
 				for _, ct := range clientTools {
 					if ctMap, ok := ct.(map[string]interface{}); ok {
 						name, _ := ctMap["name"].(string)
 						provider, _ := ctMap["provider"].(string)
+
+						// Standard tools (web_search, knowledge_search) - add directly without grouping
 						if name == "web_search" || name == "knowledge_search" {
+							tools = append(tools, ctMap)
 							continue
 						}
 
-						// Try to find matching integration in DB to get tokens
+						// Identify the provider for this tool
 						providerToMatch := provider
 						if providerToMatch == "" {
-							// Try to extract provider from name or match display name
 							nameLower := strings.ToLower(name)
 							// Match against known provider IDs in DB
 							for pName := range dbIntegrations {
@@ -512,41 +530,152 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 							}
 						}
 
+						// Get client params
+						clientParams, _ := ctMap["params"].(map[string]interface{})
+						if clientParams == nil {
+							clientParams = make(map[string]interface{})
+						}
+
+						// Enrich with DB params if available
 						if dbParams, exists := dbIntegrations[providerToMatch]; exists {
-							// Merge DB params into client tool params
-							clientParams, _ := ctMap["params"].(map[string]interface{})
-							if clientParams == nil {
-								clientParams = make(map[string]interface{})
-							}
 							for k, v := range dbParams {
-								clientParams[k] = v
+								if _, alreadySet := clientParams[k]; !alreadySet {
+									clientParams[k] = v
+								}
 							}
-							ctMap["params"] = clientParams
 							r.logger.Info("enriched tool with DB params", zap.String("tool", name), zap.String("provider", providerToMatch))
 						}
 
-						tools = append(tools, ct)
+						// Extract display name for account identification
+						displayName, _ := clientParams["display_name"].(string)
+						if displayName == "" {
+							displayName, _ = clientParams["account_email"].(string)
+						}
+						if displayName == "" {
+							displayName = name // Use tool name as fallback
+						}
+
+						// Add to provider group
+						entry, exists := providerMap[providerToMatch]
+						if !exists {
+							entry = &providerEntry{
+								provider:     providerToMatch,
+								mergedParams: make(map[string]interface{}),
+							}
+							providerMap[providerToMatch] = entry
+						}
+
+						// Use a synthetic account ID based on tool name (which includes the email)
+						accountID := strings.ToLower(strings.ReplaceAll(name, " ", "_"))
+						accountID = strings.ReplaceAll(accountID, "(", "_")
+						accountID = strings.ReplaceAll(accountID, ")", "")
+						accountID = strings.ReplaceAll(accountID, "@", "_at_")
+						accountID = strings.ReplaceAll(accountID, ".", "_")
+
+						entry.accounts = append(entry.accounts, AccountInfo{
+							ID:          accountID,
+							DisplayName: displayName,
+						})
+
+						// Store credentials per account for server-side tools
+						entry.mergedParams[accountID] = clientParams
 					}
 				}
+
+				// Now add grouped tools
+				for providerName, entry := range providerMap {
+					toolParams := make(map[string]interface{})
+					toolParams["accounts"] = entry.accounts
+
+					// Get provider definition to check storage type
+					providerDef, ok := intgr.GetProvider(providerName)
+					if ok && (providerDef.StorageType == intgr.StorageTypeServer || providerDef.StorageType == intgr.StorageTypeHybrid) {
+						toolParams["credentials"] = entry.mergedParams
+					}
+
+					tools = append(tools, map[string]interface{}{
+						"name":     providerName,
+						"provider": providerName,
+						"enabled":  true,
+						"params":   toolParams,
+					})
+					r.logger.Info("grouped client tools by provider", zap.String("provider", providerName), zap.Int("account_count", len(entry.accounts)))
+				}
+			} else {
+				r.logger.Debug("[Tools] Using DB integrations path")
+				// Group integrations by provider for multi-account support
+			type AccountInfo struct {
+				ID          string `json:"id"`
+				DisplayName string `json:"display_name,omitempty"`
 			}
-		} else {
+			type providerEntry struct {
+				provider     *intgr.ProviderDefinition
+				accounts     []AccountInfo
+				mergedParams map[string]interface{}
+			}
+			providerMap := make(map[string]*providerEntry)
+
 			r.logger.Info("using integrations from DB", zap.Int("count", len(integrations)))
 			for _, integ := range integrations {
+				provider, ok := intgr.GetProvider(integ.Provider)
+				if !ok {
+					r.logger.Warn("provider not found in registry, skipping",
+						zap.String("provider", integ.Provider),
+					)
+					continue
+				}
+
 				params := dbIntegrations[integ.Provider]
 				if params == nil {
 					params = make(map[string]interface{})
 				}
-				// Ensure provider name is set for manifest matching in Python
-				toolItem := map[string]interface{}{
-					"name":     integ.Provider,
-					"provider": integ.Provider,
-					"enabled":  true,
-					"params":   params,
+
+				displayName, _ := params["display_name"].(string)
+				if displayName == "" {
+					displayName, _ = params["account_email"].(string)
 				}
-				tools = append(tools, toolItem)
+
+				accountID := integ.ID.String()
+				account := AccountInfo{
+					ID:          accountID,
+					DisplayName: displayName,
+				}
+
+				entry, exists := providerMap[integ.Provider]
+				if !exists {
+					entry = &providerEntry{
+						provider:     &provider,
+						mergedParams: make(map[string]interface{}),
+					}
+					providerMap[integ.Provider] = entry
+				}
+				entry.accounts = append(entry.accounts, account)
+
+				// For server-side tools, store credentials per account id
+				if provider.StorageType == intgr.StorageTypeServer || provider.StorageType == intgr.StorageTypeHybrid {
+					entry.mergedParams[accountID] = params
+				}
+			}
+
+			for providerName, entry := range providerMap {
+				toolParams := make(map[string]interface{})
+				toolParams["accounts"] = entry.accounts
+
+				if entry.provider.StorageType == intgr.StorageTypeServer || entry.provider.StorageType == intgr.StorageTypeHybrid {
+					toolParams["credentials"] = entry.mergedParams
+				}
+
+				tools = append(tools, map[string]interface{}{
+					"name":     providerName,
+					"provider": providerName,
+					"enabled":  true,
+					"params":   toolParams,
+				})
+				r.logger.Info("grouped DB tools by provider", zap.String("provider", providerName), zap.Int("account_count", len(entry.accounts)))
 			}
 		}
 
+		r.logger.Info("Final tools built", zap.Int("count", len(tools)), zap.Any("tools", tools))
 		payload.Tools = tools
 
 		// 5.2 Fetch and Bundle Chat History
