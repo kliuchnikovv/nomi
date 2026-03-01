@@ -19,12 +19,22 @@ decide which tool and method to call.
 Rules:
 1. If the request clearly maps to one tool and method → action: "execute"
 2. If it is a WRITE operation (send, create, delete, update) and the tool has 2+
-   accounts → action: "question" asking which account to use
-3. If it is a READ operation and 2+ accounts exist → try to infer from the request
-   or context; if unclear → action: "question"
+    accounts → action: "question" asking which account to use
+3. If it is a READ operation and 2+ accounts exist:
+    - If the request contains "each" "every" "all" "every" "все" "каждый" "во всех" "по всем"
+      or similar phrasing indicating ALL accounts → account_id: "*"
+    - Otherwise, try to infer from the request or context; if unclear → action: "question"
 4. If no tool matches the request → action: "none"
 5. For action "execute", always include: tool, method, account_id (empty string if
-   no accounts), params (JSON object matching the method's parameter schema)
+    no accounts, "*" for all accounts), params (JSON object matching the method's parameter schema)
+
+Examples:
+- "What emails are in my Gmail?" (1 account) → account_id: ""
+- "What emails are in my Gmail accounts?" (2+ accounts, unclear which) → action: "question"
+- "What are the recent emails in each Gmail account?" (2+ accounts, "each") → account_id: "*"
+- "Show me all my Gmail emails across all accounts" (2+ accounts, "all") → account_id: "*"
+- "Send email to bob@example.com" (1 account) → account_id: ""
+- "Send email to bob@example.com" (2+ accounts, WRITE) → action: "question"
 
 Return valid JSON only, no markdown fences.
 
@@ -33,7 +43,7 @@ Response schema:
   "action": "execute" | "question" | "none",
   "tool": "<tool name or empty>",
   "method": "<method name or empty>",
-  "account_id": "<account id or empty>",
+  "account_id": "<account id or empty or * for all accounts>",
   "params": {},
   "question": "<question text if action is question>",
   "options": ["<option 1>", ...]
@@ -94,11 +104,15 @@ class ToolRouter:
                 logger.warning(
                     "[Router] Unexpected response type %s, expected dict. Response: %s",
                     type(raw).__name__,
-                    response.text[:200] if hasattr(response, 'text') else str(raw)[:200],
+                    response.text[:200]
+                    if hasattr(response, "text")
+                    else str(raw)[:200],
                 )
                 return RoutingDecision(action="none")
         except Exception as e:
-            logger.warning("[Router] Failed to get routing decision: %s", e, exc_info=True)
+            logger.warning(
+                "[Router] Failed to get routing decision: %s", e, exc_info=True
+            )
             return RoutingDecision(action="none")
 
         return RoutingDecision(

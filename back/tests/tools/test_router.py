@@ -9,14 +9,18 @@ GMAIL_SCHEMA = {
     "display_name": "Gmail",
     "description": "Send and read Gmail emails",
     "methods": [
-        {"name": "send_email", "description": "Send an email", "parameters": {
-            "type": "object",
-            "properties": {
-                "to": {"type": "string"},
-                "subject": {"type": "string"},
-                "body": {"type": "string"},
+        {
+            "name": "send_email",
+            "description": "Send an email",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string"},
+                    "subject": {"type": "string"},
+                    "body": {"type": "string"},
+                },
             },
-        }},
+        },
     ],
     "accounts": [{"id": "work@gmail.com", "display_name": "work@gmail.com"}],
     "execution": "hybrid",
@@ -26,6 +30,7 @@ GMAIL_SCHEMA = {
 @pytest.fixture
 def router(monkeypatch):
     import google.generativeai as genai
+
     # Prevent real API calls during construction
     monkeypatch.setattr(genai, "configure", lambda **kwargs: None)
     monkeypatch.setattr(genai, "GenerativeModel", lambda **kwargs: MagicMock())
@@ -91,9 +96,11 @@ def test_router_passes_context_to_model(router, monkeypatch):
     }
     mock_model = _mock_gemini_response(decision)
     original_generate = mock_model.generate_content
+
     def capturing_generate(prompt, **kwargs):
         captured["prompt"] = prompt
         return original_generate(prompt, **kwargs)
+
     mock_model.generate_content = capturing_generate
     monkeypatch.setattr(router, "_model", mock_model)
 
@@ -115,7 +122,9 @@ def test_router_returns_none_on_list_response(router, monkeypatch):
     """Test that router extracts first element from list responses from model."""
     mock_resp = MagicMock()
     # Model incorrectly returns a list instead of dict
-    mock_resp.text = json.dumps([{"action": "execute", "tool": "gmail", "method": "send_email"}])
+    mock_resp.text = json.dumps(
+        [{"action": "execute", "tool": "gmail", "method": "send_email"}]
+    )
     mock_model = MagicMock()
     mock_model.generate_content.return_value = mock_resp
     monkeypatch.setattr(router, "_model", mock_model)
@@ -150,3 +159,34 @@ def test_router_returns_none_on_list_with_invalid_elements(router, monkeypatch):
 
     result = router.decide("send email", "", [GMAIL_SCHEMA])
     assert result.action == "none"
+
+
+def test_router_returns_asterisk_for_all_accounts_request(router, monkeypatch):
+    """Test that router returns account_id='*' for requests asking for all accounts."""
+    schema = dict(GMAIL_SCHEMA)
+    schema["accounts"] = [
+        {"id": "work@gmail.com", "display_name": "work@gmail.com"},
+        {"id": "personal@gmail.com", "display_name": "personal@gmail.com"},
+    ]
+    schema["methods"] = [
+        {
+            "name": "get_recent_emails",
+            "description": "Get recent emails",
+            "parameters": {},
+        },
+    ]
+
+    decision = {
+        "action": "execute",
+        "tool": "gmail",
+        "method": "get_recent_emails",
+        "account_id": "*",
+        "params": {},
+    }
+    monkeypatch.setattr(router, "_model", _mock_gemini_response(decision))
+
+    result = router.decide("show emails from each account", "", [schema])
+    assert result.action == "execute"
+    assert result.account_id == "*"
+    assert result.tool == "gmail"
+    assert result.method == "get_recent_emails"

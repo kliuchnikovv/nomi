@@ -14,6 +14,92 @@ from src.tools.router import ToolRouter
 logger = logging.getLogger(__name__)
 
 
+async def _execute_for_all_accounts(
+    decision,
+    tool_schema,
+    tools_config,
+    executor,
+    client_tool_runner,
+) -> str:
+    """Execute operation for all accounts of a tool and aggregate results."""
+    accounts = tool_schema.get("accounts", [])
+    if not accounts:
+        return json.dumps({"type": "error", "error": "No accounts found"})
+
+    results = []
+
+    for account in accounts:
+        account_id = account.get("id", "")
+        if not account_id:
+            continue
+
+        try:
+            if (
+                tool_schema.get("execution") in ("client", "hybrid")
+                and client_tool_runner
+            ):
+                client_result = await client_tool_runner(
+                    decision.tool, decision.method, decision.params
+                )
+                results.append(
+                    {
+                        "account_id": account_id,
+                        "account_display": account.get("display_name", account_id),
+                        "result": client_result,
+                    }
+                )
+            else:
+                entry = tools_config.entries.get(decision.tool)
+                if not entry:
+                    continue
+
+                creds_map = (
+                    entry.params.get("credentials")
+                    if isinstance(entry.params.get("credentials"), dict)
+                    else {}
+                )
+                credentials = creds_map.get(account_id) or {}
+
+                server_result = executor.run(
+                    decision.tool, decision.method, decision.params, credentials
+                )
+                results.append(
+                    {
+                        "account_id": account_id,
+                        "account_display": account.get("display_name", account_id),
+                        "result": server_result,
+                    }
+                )
+        except Exception as e:
+            logger.warning(
+                "[Discovery] Failed to execute for account=%s: %s",
+                account_id,
+                e,
+                exc_info=True,
+            )
+            results.append(
+                {
+                    "account_id": account_id,
+                    "account_display": account.get("display_name", account_id),
+                    "error": str(e),
+                }
+            )
+
+    if not results:
+        return json.dumps(
+            {"type": "error", "error": "Failed to execute for any account"}
+        )
+
+    return json.dumps(
+        {
+            "type": "result",
+            "result": results,
+            "aggregated": True,
+            "account_count": len(results),
+        }
+    )
+
+
 def build_discovery_tool(
     user_id: str,
     config_client: ToolConfigClient,
@@ -39,14 +125,18 @@ def build_discovery_tool(
         account to use), it will return a question — pass it to the user and
         call this tool again with the answer in `context`.
 
+        Multi-account support: When account_id="*" is returned by the router,
+        the tool executes the operation for all accounts and returns aggregated results.
+
         Args:
             request: Natural language description of the action to perform.
-            context: Optional additional context (e.g., "use work@gmail.com").
+            context: Optional additional context (e.g. "use work@gmail.com").
 
         Returns:
             JSON string: {"type": "result", "result": "..."}
                       or {"type": "question", "question": "...", "options": [...]}
                       or {"type": "error", "error": "..."}
+            For multi-account execution: {"type": "result", "result": [...], "aggregated": True, "account_count": N}
         """
         try:
             tools_config = await config_client.fetch_tools(user_id=user_id)
@@ -86,6 +176,15 @@ def build_discovery_tool(
         if not tool_schema:
             return json.dumps(
                 {"type": "error", "error": f"Unknown tool: {decision.tool}"}
+            )
+
+        if decision.account_id == "*":
+            return await _execute_for_all_accounts(
+                decision,
+                tool_schema,
+                tools_config,
+                _executor,
+                client_tool_runner,
             )
 
         # Client-execution path (iOS-native: Calendar, Reminders) and hybrid tools (Gmail, etc.)
