@@ -349,33 +349,20 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 
 		paramsJSON, _ := json.Marshal(params)
 
-		var integration storage.Integration
-		err := h.storage.DB.Where("user_id = ? AND provider = ?", user.ID, providerName).First(&integration).Error
-
-		if err == nil {
-			// Update existing
-			integration.Params = string(paramsJSON)
-			integration.Name = accountEmail // Update name to match email
-			integration.Enabled = true
-			integration.UpdatedAt = time.Now()
-			h.storage.DB.Save(&integration)
-			h.logger.Info("updated integration", zap.String("provider", providerName), zap.String("user_id", user.ID.String()))
+		integration := &storage.Integration{
+			UserID:       user.ID,
+			Name:         accountEmail,
+			Provider:     providerName,
+			AccountEmail: accountEmail,
+			Params:       string(paramsJSON),
+			Enabled:      true,
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		}
+		if err := h.storage.UpsertIntegration(integration); err != nil {
+			h.logger.Error("failed to upsert integration", zap.Error(err))
 		} else {
-			// Create new
-			newIntegration := storage.Integration{
-				UserID:    user.ID,
-				Name:      accountEmail,
-				Provider:  providerName,
-				Params:    string(paramsJSON),
-				Enabled:   true,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
-			}
-			if err := h.storage.DB.Create(&newIntegration).Error; err != nil {
-				h.logger.Error("failed to create integration", zap.Error(err))
-			} else {
-				h.logger.Info("created integration", zap.String("provider", providerName), zap.String("user_id", user.ID.String()))
-			}
+			h.logger.Info("upserted integration", zap.String("provider", providerName), zap.String("account_email", accountEmail))
 		}
 	} else {
 		h.logger.Warn("could not save integration: user not found in context", zap.Error(err))

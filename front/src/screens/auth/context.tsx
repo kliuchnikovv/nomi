@@ -1,13 +1,18 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, {
+    createContext,
+    useContext,
+    useEffect,
+    useMemo,
+    useState,
+} from 'react';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import { apiClient, setupApiClient } from '../../apiClient';
-import { getApiUrl, API_URL } from '../../config';
-import { AuthContextType, User, alertError } from "./models";
+import { getApiUrl } from '../../config';
+import { AuthContextType, User, alertError } from './models';
 import { secureTokenStorage } from '../../services/auth/SecureTokenStorage';
-
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -22,7 +27,9 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
-    const [refreshTokenValue, setRefreshTokenValue] = useState<string | null>(null);
+    const [refreshTokenValue, setRefreshTokenValue] = useState<string | null>(
+        null,
+    );
     const [isLoading, setIsLoading] = useState(true);
 
     // API base URL is defined in src/config.ts
@@ -31,41 +38,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         const loadAuthData = async () => {
-            let currentToken: string | null = null;
-            let currentRefreshToken: string | null = null;
             try {
                 const storedUser = await AsyncStorage.getItem('user');
                 const storedToken = await AsyncStorage.getItem('token');
-                const storedRefreshToken = await AsyncStorage.getItem('refreshToken');
+                const storedRefreshToken = await AsyncStorage.getItem(
+                    'refreshToken',
+                );
                 if (storedToken && storedUser && storedRefreshToken) {
                     setUser(JSON.parse(storedUser));
                     setToken(storedToken);
                     setRefreshTokenValue(storedRefreshToken);
-                    currentToken = storedToken;
-                    currentRefreshToken = storedRefreshToken;
                 }
-                console.log(`data loaded`, storedUser, storedToken, storedRefreshToken);
+                console.log(
+                    `data loaded`,
+                    storedUser,
+                    storedToken,
+                    storedRefreshToken,
+                );
             } catch (e) {
-                console.error("Failed to load auth data", e);
+                console.error('Failed to load auth data', e);
             } finally {
                 setIsLoading(false);
                 // Initialize apiClient with tokens loaded from storage to avoid race conditions
+                // Note: We use a reference that will be updated by closure in refreshToken/logout
+                // This is a workaround to avoid circular dependencies with useEffect hooks
                 setupApiClient({
-                    getToken: () => currentToken,
-                    refreshToken: () => refreshToken(),
-                    logout: () => logout(),
+                    getToken: () => {
+                        // Use latest token from state
+                        return token;
+                    },
+                    refreshToken: async () => {
+                        // This will be called from apiClient and will refresh using current state
+                        return refreshToken();
+                    },
+                    logout: async () => {
+                        // Call logout function from this component
+                        await logout();
+                    },
                 });
             }
         };
 
         loadAuthData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Configure Google Sign-In
     useEffect(() => {
         GoogleSignin.configure({
-            webClientId: '174083236719-itfjiur5c404ndjjhj3rukinl85sug66.apps.googleusercontent.com',
-            iosClientId: '174083236719-ume8kgknccr5drb5qbjfrap6t4kgg88p.apps.googleusercontent.com',
+            webClientId:
+                '174083236719-itfjiur5c404ndjjhj3rukinl85sug66.apps.googleusercontent.com',
+            iosClientId:
+                '174083236719-ume8kgknccr5drb5qbjfrap6t4kgg88p.apps.googleusercontent.com',
             offlineAccess: true,
             scopes: [
                 'https://www.googleapis.com/auth/gmail.readonly',
@@ -127,11 +151,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-            const data = await apiClient.post<any>(`${getApiUrl()}/auth/register`, {
-                name,
-                email,
-                password,
-            });
+            const data = await apiClient.post<any>(
+                `${getApiUrl()}/auth/register`,
+                {
+                    name,
+                    email,
+                    password,
+                },
+            );
             await setAuthData(data.user, data.token, data.refresh_token);
         } catch (error) {
             alertError(`Error creating user: ${error}`);
@@ -150,11 +177,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-            const data = await apiClient.post<any>(`${getApiUrl()}/auth/login`, {
-                email,
-                password,
-            });
-            console.log(data)
+            const data = await apiClient.post<any>(
+                `${getApiUrl()}/auth/login`,
+                {
+                    email,
+                    password,
+                },
+            );
+            console.log(data);
             await setAuthData(data.user, data.token, data.refresh_token);
         } catch (error) {
             alertError(`Error logging in: ${error}`);
@@ -175,7 +205,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         refreshPromise = (async () => {
-            const currentRefreshToken = refreshTokenValue || (await AsyncStorage.getItem('refreshToken'));
+            const currentRefreshToken =
+                refreshTokenValue ||
+                (await AsyncStorage.getItem('refreshToken'));
 
             if (!currentRefreshToken) {
                 await logout();
@@ -195,11 +227,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (!response.ok) {
                     // Only logout on permanent auth errors (invalid/expired refresh token)
                     if (response.status === 401 || response.status === 403) {
-                        console.warn('[Auth] Refresh failed: invalid refresh token, logging out');
+                        console.warn(
+                            '[Auth] Refresh failed: invalid refresh token, logging out',
+                        );
                         await logout();
                     } else {
                         // Server errors (5xx) or other issues - temporary, do not logout
-                        console.warn(`[Auth] Refresh failed: HTTP ${response.status}, will retry on next request`);
+                        console.warn(
+                            `[Auth] Refresh failed: HTTP ${response.status}, will retry on next request`,
+                        );
                     }
                     return false;
                 }
@@ -226,9 +262,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const userInfo = await GoogleSignin.signIn();
 
             // Exchange Google token with backend
-            const data = await apiClient.post<any>(`${getApiUrl()}/auth/google`, {
-                id_token: userInfo.data?.idToken,
-            });
+            const data = await apiClient.post<any>(
+                `${getApiUrl()}/auth/google`,
+                {
+                    id_token: userInfo.data?.idToken,
+                },
+            );
 
             await setAuthData(data.user, data.token, data.refresh_token);
 
@@ -272,44 +311,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 // Or simply: The user just logged in. We can assume we want to use these tokens for future calls.
                 // We will create/update the "Primary" integration.
 
-                // For this step, let's just save the tokens to SecureStore using a temporary 'primary_google' key 
+                // For this step, let's just save the tokens to SecureStore using a temporary 'primary_google' key
                 // OR we can import `integrationStorage` here?
                 // `apiClient` is imported, `IntegrationStorage` is in services.
 
                 // Let's do a dynamic import to avoid circular dep issues in `context.tsx` (often generic).
-                const { integrationStorage } = await import('../../services/integrations/IntegrationStorage');
+                const { integrationStorage } = await import(
+                    '../../services/integrations/IntegrationStorage'
+                );
 
                 // Ensure we have a local integration record for Gmail and Calendar
                 // If not, create them locally.
 
                 // Check for Gmail integration
+                console.log('[Auth] Fetching existing integrations...');
                 const integrations = await integrationStorage.getIntegrations();
+                console.log(
+                    `[Auth] Found ${integrations.length} existing integrations`,
+                );
+
                 let gmailInteg = integrations.find(i => i.provider === 'gmail');
                 if (!gmailInteg) {
-                    gmailInteg = await integrationStorage.createIntegration({
-                        provider: 'gmail',
-                        name: userInfo.data?.user.email || 'Gmail',
-                        enabled: true,
-                        accountEmail: userInfo.data?.user.email,
-                    }, {
-                        accessToken: tokens.accessToken,
-                        refreshToken: 'google-signin-managed',
-                        tokenExpiry: new Date(Date.now() + 3500 * 1000),
-                    });
+                    console.log('[Auth] Creating new Gmail integration...');
+                    gmailInteg = await integrationStorage.createIntegration(
+                        {
+                            provider: 'gmail',
+                            name: userInfo.data?.user.email || 'Gmail',
+                            enabled: true,
+                            accountEmail: userInfo.data?.user.email,
+                        },
+                        {
+                            accessToken: tokens.accessToken,
+                            refreshToken: 'google-signin-managed',
+                            tokenExpiry: new Date(Date.now() + 3500 * 1000),
+                        },
+                    );
+                    console.log(
+                        '[Auth] Gmail integration created:',
+                        gmailInteg.id,
+                    );
+                } else {
+                    console.log(
+                        '[Auth] Gmail integration already exists:',
+                        gmailInteg.id,
+                    );
                 }
 
-                let calendarInteg = integrations.find(i => i.provider === 'calendar');
+                let calendarInteg = integrations.find(
+                    i => i.provider === 'calendar',
+                );
                 if (!calendarInteg) {
-                    calendarInteg = await integrationStorage.createIntegration({
-                        provider: 'calendar',
-                        name: userInfo.data?.user.email || 'Calendar',
-                        enabled: true,
-                        accountEmail: userInfo.data?.user.email,
-                    }, {
-                        accessToken: tokens.accessToken,
-                        refreshToken: 'google-signin-managed',
-                        tokenExpiry: new Date(Date.now() + 3500 * 1000),
-                    });
+                    console.log('[Auth] Creating new Calendar integration...');
+                    calendarInteg = await integrationStorage.createIntegration(
+                        {
+                            provider: 'calendar',
+                            name: userInfo.data?.user.email || 'Calendar',
+                            enabled: true,
+                            accountEmail: userInfo.data?.user.email,
+                        },
+                        {
+                            accessToken: tokens.accessToken,
+                            refreshToken: 'google-signin-managed',
+                            tokenExpiry: new Date(Date.now() + 3500 * 1000),
+                        },
+                    );
+                    console.log(
+                        '[Auth] Calendar integration created:',
+                        calendarInteg.id,
+                    );
+                } else {
+                    console.log(
+                        '[Auth] Calendar integration already exists:',
+                        calendarInteg.id,
+                    );
                 }
 
                 const tokenData = {
@@ -320,24 +394,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     expiry: Date.now() + 3500 * 1000,
                 };
 
+                console.log('[Auth] Saving Gmail tokens...');
                 await secureTokenStorage.saveToken(gmailInteg!.id, tokenData);
-                await secureTokenStorage.saveToken(calendarInteg!.id, tokenData);
+                console.log('[Auth] Saving Calendar tokens...');
+                await secureTokenStorage.saveToken(
+                    calendarInteg!.id,
+                    tokenData,
+                );
 
-                console.log('[Auth] Google tokens saved locally for Remote Brain usage');
-
-            } catch (tokenError) {
-                console.error('[Auth] Failed to save Google tokens locally:', tokenError);
+                console.log(
+                    '[Auth] Google tokens saved locally for Remote Brain usage',
+                );
+            } catch (tokenError: any) {
+                console.error(
+                    '[Auth] Failed to save Google tokens locally:',
+                    tokenError,
+                );
+                alertError(
+                    `Error saving Google tokens: ${
+                        tokenError.message || 'Unknown error'
+                    }`,
+                );
+                // Continue anyway - the user is logged in, just local token storage failed
             }
         } catch (error: any) {
+            console.error('[Auth] Google Sign-In error:', error);
+
             if (error.code === 'SIGN_IN_CANCELLED') {
-                console.log('User cancelled Google Sign-In');
+                console.log('[Auth] User cancelled Google Sign-In');
             } else if (error.code === 'IN_PROGRESS') {
-                console.log('Google Sign-In already in progress');
+                console.log('[Auth] Google Sign-In already in progress');
             } else if (error.code === 'PLAY_SERVICES_NOT_AVAILABLE') {
                 alertError('Google Play Services not available');
             } else {
-                alertError(`Error signing in with Google: ${error.message || error}`);
-                console.error('Google Sign-In error:', error);
+                const errorMsg = error.message || error.toString();
+                alertError(`Error signing in with Google: ${errorMsg}`);
+                console.error('[Auth] Google Sign-In full error:', {
+                    code: error.code,
+                    message: error.message,
+                    stack: error.stack,
+                    details: error,
+                });
             }
         }
     }

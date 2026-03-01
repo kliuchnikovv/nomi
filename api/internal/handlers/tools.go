@@ -140,7 +140,11 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 			}
 		}
 
-		displayName, _ := rawParams["display_name"].(string)
+		// Prefer the dedicated account_email column; fall back to params.
+		displayName := integration.AccountEmail
+		if displayName == "" {
+			displayName, _ = rawParams["display_name"].(string)
+		}
 		if displayName == "" {
 			displayName, _ = rawParams["account_email"].(string)
 		}
