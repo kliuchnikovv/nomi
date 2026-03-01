@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 import logging
 from typing import Any, Callable
 
@@ -57,5 +59,8 @@ class ServerToolExecutor:
         if not callable(method):
             raise ValueError(f"Tool {tool_name} has no method: {method_name}")
 
-        result = method(**params)
+        if inspect.iscoroutinefunction(method):
+            result = asyncio.run(method(**params))
+        else:
+            result = method(**params)
         return str(result) if result is not None else ""
