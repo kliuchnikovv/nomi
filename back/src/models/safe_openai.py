@@ -1,9 +1,10 @@
 """
-SafeOpenAI wrapper that converts 'developer' role to 'system' for GLM models.
+SafeOpenAI wrapper that converts 'developer' and 'system' roles to 'user' for GLM models.
 
 The OpenAI API (and some OpenAI-compatible APIs like GLM) use 'developer' role
 for system instructions, but GLM models reject this with "Incorrect role information".
-This wrapper converts 'developer' to 'system' before sending to API.
+Additionally, some APIs (like Z.ai) don't support 'system' role at all.
+This wrapper converts 'developer' to 'system', then 'system' to 'user' before sending to API.
 
 Additionally, GLM models don't support 'tool' role messages, so we filter those out
 and remove tool_calls from assistant messages since the API doesn't support them.
@@ -20,15 +21,16 @@ logger = logging.getLogger(__name__)
 
 class SafeOpenAI(OpenAIChat):
     """
-    An OpenAI-compatible model wrapper that converts 'developer' role to 'system',
-    filters out 'tool' role messages, and removes tool_calls from assistant messages
-    for APIs that don't support these features (e.g., GLM models).
+    An OpenAI-compatible model wrapper that converts 'developer' and 'system' roles
+    to 'user', filters out 'tool' role messages, and removes tool_calls from assistant
+    messages for APIs that don't support these features (e.g., GLM models, Z.ai).
     """
 
     def _normalize_messages(self, messages: list[Message]) -> list[Message]:
-        """Convert 'developer' to 'system', filter out 'tool' role, and remove tool_calls."""
+        """Convert 'developer' to 'system', 'system' to 'user', filter out 'tool' role, and remove tool_calls."""
         normalized_messages = []
         developer_converted = 0
+        system_converted = 0
         tool_filtered = 0
         tool_calls_removed = 0
 
@@ -51,9 +53,10 @@ class SafeOpenAI(OpenAIChat):
             )
 
             if msg.role == "developer":
+                # Convert developer -> system -> user for APIs that don't support system
                 new_msg = Message(
-                    role="system",
-                    content=msg.content,
+                    role="user",
+                    content=f"System: {msg.content}",
                     **{
                         k: v
                         for k, v in msg.__dict__.items()
@@ -62,7 +65,23 @@ class SafeOpenAI(OpenAIChat):
                 )
                 normalized_messages.append(new_msg)
                 developer_converted += 1
-                logger.debug("[SafeOpenAI] Converted 'developer' to 'system' role")
+                logger.debug(
+                    "[SafeOpenAI] Converted 'developer' to 'user' role (via system)"
+                )
+            elif msg.role == "system":
+                # Convert system -> user for APIs that don't support system role
+                new_msg = Message(
+                    role="user",
+                    content=f"System: {msg.content}",
+                    **{
+                        k: v
+                        for k, v in msg.__dict__.items()
+                        if k not in ["role", "content"]
+                    },
+                )
+                normalized_messages.append(new_msg)
+                system_converted += 1
+                logger.debug("[SafeOpenAI] Converted 'system' to 'user' role")
             elif msg.role == "tool":
                 tool_filtered += 1
                 logger.debug(
@@ -90,8 +109,14 @@ class SafeOpenAI(OpenAIChat):
 
         if developer_converted > 0:
             logger.info(
-                "[SafeOpenAI] Converted %d 'developer' -> 'system' messages",
+                "[SafeOpenAI] Converted %d 'developer' -> 'user' messages",
                 developer_converted,
+            )
+
+        if system_converted > 0:
+            logger.info(
+                "[SafeOpenAI] Converted %d 'system' -> 'user' messages",
+                system_converted,
             )
 
         if tool_filtered > 0:
