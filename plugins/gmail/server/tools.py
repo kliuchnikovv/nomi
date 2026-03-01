@@ -172,9 +172,7 @@ class GmailTools(Toolkit):
             # No event loop, create one
             return asyncio.run(self._async_make_request(method, endpoint, data))
 
-    def search_emails(
-        self, query: str, max_results: int = 10
-    ) -> List[Dict[str, Any]]:
+    def search_emails(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
         """Search emails in Gmail.
 
         Args:
@@ -198,17 +196,13 @@ class GmailTools(Toolkit):
         for msg in messages[:max_results]:
             msg_id = msg.get("id")
             if msg_id:
-                full_msg = self._make_request(
-                    "GET", f"users/me/messages/{msg_id}"
-                )
+                full_msg = self._make_request("GET", f"users/me/messages/{msg_id}")
                 if isinstance(full_msg, dict):
                     full_messages.append(full_msg)
 
         return full_messages
 
-    def get_recent_emails(
-        self, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    def get_recent_emails(self, limit: int = 10) -> List[Dict[str, Any]]:
         """Get recent emails from the user's Gmail inbox.
 
         Args:
@@ -437,15 +431,40 @@ def build(params: Dict[str, Any]) -> Toolkit:
     Returns:
         Configured GmailTools instance
     """
-    logger.info("[GmailBuild] Building GmailTools with params keys: %s", list(params.keys()))
-    logger.info("[GmailBuild] params content: %s", {k: "***" if "token" in k.lower() or "secret" in k.lower() else v for k, v in params.items()})
-
-    # Support nested credentials
-    creds_data = (
-        params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
+    logger.info(
+        "[GmailBuild] ==================== BUILDING GMAIL TOOLS ===================="
+    )
+    logger.info("[GmailBuild] params type: %s", type(params))
+    logger.info(
+        "[GmailBuild] params keys: %s",
+        list(params.keys()) if isinstance(params, dict) else "not a dict",
     )
 
-    logger.info("[GmailBuild] creds_data keys: %s", list(creds_data.keys()))
+    # Mask sensitive data
+    masked_params = {}
+    if isinstance(params, dict):
+        for k, v in params.items():
+            if (
+                "token" in k.lower()
+                or "secret" in k.lower()
+                or "credential" in k.lower()
+            ):
+                masked_params[k] = (
+                    f"*** ({type(v).__name__}, len={len(str(v)) if hasattr(v, '__len__') else 'N/A'})"
+                )
+            else:
+                masked_params[k] = v
+    logger.info("[GmailBuild] params (masked): %s", masked_params)
+
+    # Support nested creds dict
+    has_creds_key = isinstance(params.get("creds"), dict)
+    logger.info("[GmailBuild] Has 'creds' key: %s", has_creds_key)
+
+    creds_data = params.get("creds", {}) if has_creds_key else params
+    logger.info(
+        "[GmailBuild] creds_data keys: %s",
+        list(creds_data.keys()) if isinstance(creds_data, dict) else "not a dict",
+    )
 
     access_token = (
         creds_data.get("access_token")
@@ -454,6 +473,22 @@ def build(params: Dict[str, Any]) -> Toolkit:
         or params.get("gmail_access_token")
     )
 
+    logger.info("[GmailBuild] Access token sources checked:")
+    logger.info(
+        "[GmailBuild]   creds_data.get('access_token'): %s",
+        bool(creds_data.get("access_token")),
+    )
+    logger.info(
+        "[GmailBuild]   creds_data.get('token'): %s", bool(creds_data.get("token"))
+    )
+    logger.info(
+        "[GmailBuild]   params.get('access_token'): %s",
+        bool(params.get("access_token")),
+    )
+    logger.info(
+        "[GmailBuild]   params.get('gmail_access_token'): %s",
+        bool(params.get("gmail_access_token")),
+    )
     logger.info("[GmailBuild] Found access_token: %s", bool(access_token))
 
     if not access_token:

@@ -160,6 +160,22 @@ def build_discovery_tool(
                 bool(credentials.get("access_token") or credentials.get("token")),
             )
 
+            # Check if we have valid credentials for server execution
+            has_access_token = bool(
+                credentials.get("access_token") or credentials.get("token")
+            )
+            if not has_access_token:
+                logger.warning(
+                    "[Discovery] No access_token found in credentials for tool=%s",
+                    decision.tool,
+                )
+                return json.dumps(
+                    {
+                        "type": "error",
+                        "error": f"Missing credentials for {decision.tool}. Please re-connect your account.",
+                    }
+                )
+
         try:
             result = _executor.run(
                 decision.tool, decision.method, decision.params, credentials

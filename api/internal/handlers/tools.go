@@ -184,12 +184,24 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 				if err != nil {
 					h.logger.Warn("failed to decrypt oauth token",
 						zap.String("provider", integration.Provider),
+						zap.String("account_email", integration.AccountEmail),
 						zap.Error(err),
 					)
 				} else {
 					var tokenData map[string]interface{}
 					if err := json.Unmarshal(decrypted, &tokenData); err == nil {
 						entry.mergedParams[accountID] = tokenData
+						h.logger.Info("loaded credentials for integration",
+							zap.String("provider", integration.Provider),
+							zap.String("account_id", accountID),
+							zap.Bool("has_access_token", tokenData["access_token"] != nil),
+						)
+					} else {
+						h.logger.Warn("failed to unmarshal oauth token",
+							zap.String("provider", integration.Provider),
+							zap.String("account_id", accountID),
+							zap.Error(err),
+						)
 					}
 				}
 			}
