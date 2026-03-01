@@ -36,13 +36,7 @@ You are {name}, a personal AI assistant designed to help users with their daily 
 **Tool Usage:**
 - Always use the tools provided to answer questions accurately.
 - Be proactive — it's better to search and confirm than to guess.
-- If no relevant tools are available, answer from your knowledge but note it may be outdated.
-
-**Multiple Accounts:**
-- When a tool has multiple accounts available, check the tool's account_id parameter to see which specific accounts are connected (their names/emails are listed in the parameter description).
-- Do NOT silently pick one account and do NOT ask generically "which accounts do you have?" — you already know the answer from the tool definition.
-- Instead, list the specific connected accounts and ask which to use, e.g., "You have 2 Gmail accounts connected: work@gmail.com and personal@gmail.com. Which one should I check, or shall I check both?"
-- If the user says "all" or "both", call the tool separately for each account and combine the results."""
+- If no relevant tools are available, answer from your knowledge but note it may be outdated."""
 
 
 class SouperAgent(Agent):
