@@ -468,19 +468,17 @@ class AgentFactory:
                 except Exception as e:
                     logger.warning("[Factory] Failed to add client proxy tools: %s", e)
 
-            # Add user_interaction tool (ask_user) - available to all agents with client_tool_runner
-            if client_tool_runner:
-                try:
-                    from src.tools.user_interaction import UserInteractionTools
+        # Add user_interaction tool (ask_user) - available to all agents with client_tool_runner
+        if client_tool_runner:
+            try:
+                from src.tools.user_interaction import UserInteractionTools
 
-                    user_interaction_tool = UserInteractionTools()
-                    user_interaction_tool.client_tool_runner = client_tool_runner
-                    tools = list(tools) + [user_interaction_tool]
-                    logger.info("[Factory] Added user_interaction tool (ask_user)")
-                except Exception as e:
-                    logger.warning(
-                        "[Factory] Failed to add user_interaction tool: %s", e
-                    )
+                user_interaction_tool = UserInteractionTools()
+                user_interaction_tool.client_tool_runner = client_tool_runner
+                tools = list(tools) + [user_interaction_tool]
+                logger.info("[Factory] Added user_interaction tool (ask_user)")
+            except Exception as e:
+                logger.warning("[Factory] Failed to add user_interaction tool: %s", e)
 
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs
