@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 from typing import Any, Callable
 
 from agno.tools import Toolkit
@@ -9,63 +8,13 @@ from agno.tools import Toolkit
 logger = logging.getLogger(__name__)
 
 
-def _build_web_search(_: dict[str, Any]) -> Toolkit:
-    from src.tools.duckduckgo_custom import DuckDuckGoTools
-    return DuckDuckGoTools()
-
-
-def _build_gmail(credentials: dict[str, Any]) -> Toolkit:
-    from plugins.gmail.server.tools import GmailTools  # type: ignore[import]
-
-    # Extract credentials from params
-    access_token = credentials.get("access_token") or credentials.get("token")
-    refresh_token = credentials.get("refresh_token")
-    client_id = credentials.get("client_id")
-    client_secret = credentials.get("client_secret")
-
-    if not access_token:
-        raise ValueError("Gmail access_token is required")
-
-    return GmailTools(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        client_id=client_id,
-        client_secret=client_secret,
-    )
-
-
-def _build_github(credentials: dict[str, Any]) -> Toolkit:
-    from src.tools.factory import SafeGithubTools
-    token = credentials.get("access_token") or credentials.get("token")
-    return SafeGithubTools(access_token=token)
-
-
-# Maps tool name -> builder function name in this module.
-# Stored as names so monkeypatching the module-level functions takes effect.
-_BUILDER_NAMES: dict[str, str] = {
-    "web_search": "_build_web_search",
-    "gmail": "_build_gmail",
-    "github": "_build_github",
-}
-
-# Public registry for custom builders (direct callable references).
-_CUSTOM_BUILDERS: dict[str, Callable[[dict[str, Any]], Toolkit]] = {}
-
-
-def register_executor(name: str, builder: Callable[[dict[str, Any]], Toolkit]) -> None:
-    """Register a custom executor builder."""
-    _CUSTOM_BUILDERS[name] = builder
-
-
 def _get_builder(tool_name: str) -> Callable[[dict[str, Any]], Toolkit] | None:
-    """Return the current builder for tool_name, respecting monkeypatching."""
-    if tool_name in _CUSTOM_BUILDERS:
-        return _CUSTOM_BUILDERS[tool_name]
-    func_name = _BUILDER_NAMES.get(tool_name)
-    if func_name is None:
+    """Return the current builder for tool_name from factory registry."""
+    try:
+        from src.tools.factory import TOOL_BUILDERS
+        return TOOL_BUILDERS.get(tool_name)
+    except ImportError:
         return None
-    module = sys.modules[__name__]
-    return getattr(module, func_name, None)
 
 
 class ServerToolExecutor:
@@ -76,6 +25,10 @@ class ServerToolExecutor:
         params: dict[str, Any],
         credentials: dict[str, Any],
     ) -> str:
+        logger.debug("[Executor] tool=%s method=%s", tool_name, method_name)
+        logger.debug("[Executor] credentials keys: %s", list(credentials.keys()) if isinstance(credentials, dict) else "not a dict")
+        logger.debug("[Executor] Has access_token: %s", bool(credentials.get("access_token") or credentials.get("token")))
+
         builder = _get_builder(tool_name)
         if not builder:
             raise ValueError(f"No executor registered for: {tool_name}")

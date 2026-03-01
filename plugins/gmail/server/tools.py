@@ -437,10 +437,15 @@ def build(params: Dict[str, Any]) -> Toolkit:
     Returns:
         Configured GmailTools instance
     """
+    logger.info("[GmailBuild] Building GmailTools with params keys: %s", list(params.keys()))
+    logger.info("[GmailBuild] params content: %s", {k: "***" if "token" in k.lower() or "secret" in k.lower() else v for k, v in params.items()})
+
     # Support nested credentials
     creds_data = (
         params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
     )
+
+    logger.info("[GmailBuild] creds_data keys: %s", list(creds_data.keys()))
 
     access_token = (
         creds_data.get("access_token")
@@ -448,6 +453,8 @@ def build(params: Dict[str, Any]) -> Toolkit:
         or params.get("access_token")
         or params.get("gmail_access_token")
     )
+
+    logger.info("[GmailBuild] Found access_token: %s", bool(access_token))
 
     if not access_token:
         raise ValueError("Gmail access_token is required")

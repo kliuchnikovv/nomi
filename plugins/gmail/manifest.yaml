@@ -97,6 +97,9 @@ methods:
 background_tasks:
   enabled: false
 
+tools:
+  include: true
+
 storage:
   type: server
   encrypted: true

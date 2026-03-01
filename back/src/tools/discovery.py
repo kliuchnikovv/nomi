@@ -107,8 +107,14 @@ def build_discovery_tool(
                     else {}
                 )
                 credentials = creds_map.get(decision.account_id) or entry.params
+                logger.debug("[Discovery] Using credentials for account_id=%s, found=%s", decision.account_id, bool(creds_map.get(decision.account_id)))
             else:
                 credentials = entry.params
+                logger.debug("[Discovery] No account_id, using entry.params directly")
+
+            logger.debug("[Discovery] entry.params keys: %s", list(entry.params.keys()))
+            logger.debug("[Discovery] credentials keys: %s", list(credentials.keys()) if isinstance(credentials, dict) else "not a dict")
+            logger.debug("[Discovery] Has access_token: %s", bool(credentials.get("access_token") or credentials.get("token")))
 
         try:
             result = _executor.run(decision.tool, decision.method, decision.params, credentials)

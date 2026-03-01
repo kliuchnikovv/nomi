@@ -212,12 +212,17 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 	}
 
 	// Add Server Plugins (execution.type: server or hybrid)
+	// Only add if not already present from integrations (to avoid overwriting credentials)
 	for _, manifest := range plugins.Manifests {
 		if manifest.Execution.Type != "server" && manifest.Execution.Type != "hybrid" {
 			continue
 		}
 		// Skip if include=false in manifest
 		if !manifest.GetInclude() {
+			continue
+		}
+		// Skip if this provider is already in providerMap (already added from integrations)
+		if _, exists := providerMap[manifest.Name]; exists {
 			continue
 		}
 		toolParams := map[string]interface{}{}

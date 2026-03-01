@@ -49,6 +49,7 @@ class ToolConfigClient:
             )
             response.raise_for_status()
             payload = response.json()
+            logger.info("[ToolConfig] Successfully loaded tools from API: %s", json_lib.dumps(payload, indent=2)[:500])
         except httpx.HTTPError as exc:
             logger.warning("Failed to load tools for session %s: %s", session_id, exc)
             return config
@@ -62,7 +63,9 @@ class ToolConfigClient:
             for tool in parsed.tools:
                 if not tool.enabled:
                     continue
+                logger.info("[ToolConfig] Adding tool from parsed response: name=%s, provider=%s, params_keys=%s", tool.name, tool.provider, list(tool.params.keys()))
                 config.add(tool.name, provider=tool.provider, **tool.params)
+            logger.info("[ToolConfig] Config entries after parsed response: %s", list(config.entries.keys()))
             return config
 
         # Handle direct array response from /api/tools
@@ -75,7 +78,9 @@ class ToolConfigClient:
                     continue
                 provider = entry.get("provider")
                 params = entry.get("params") or entry.get("options") or {}
+                logger.info("[ToolConfig] Adding tool from list: name=%s, provider=%s, params_keys=%s", name, provider, list(params.keys()))
                 config.add(name, provider=provider, **params)
+            logger.info("[ToolConfig] Config entries after list response: %s", list(config.entries.keys()))
             return config
 
         # Handle object with "tools" field
