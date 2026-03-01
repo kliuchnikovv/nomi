@@ -313,7 +313,9 @@ class AgentFactory:
                 client_tool_runner=client_tool_runner,
             )
             tools = [discovery_fn]
-            logger.info("[Factory] Discovery mode: built discovery_tool for user=%s", user_id)
+            logger.info(
+                "[Factory] Discovery mode: built discovery_tool for user=%s", user_id
+            )
         else:
             # Legacy mode: unchanged existing code
             config_used: ToolsConfig | None = None
@@ -335,7 +337,9 @@ class AgentFactory:
             elif not tools_specs and user_id:
                 try:
                     logger.debug("[Factory] Fetching tools for user_id=%s", user_id)
-                    tools_config = await self._config_client.fetch_tools(user_id=user_id)
+                    tools_config = await self._config_client.fetch_tools(
+                        user_id=user_id
+                    )
                     config_used = tools_config
                     logger.info(
                         "[Factory] Fetched %d tools for user %s",
@@ -346,7 +350,8 @@ class AgentFactory:
                     # Add web search tool if supported
                     if model_name and model_name.startswith("gemma-"):
                         logger.info(
-                            "[Factory] Skipping web_search for Gemma model %s", model_name
+                            "[Factory] Skipping web_search for Gemma model %s",
+                            model_name,
                         )
                     else:
                         tools_config.add("web_search")
@@ -373,7 +378,9 @@ class AgentFactory:
                         #         params["auth_token"] = command_desc["auth_token"]
                         #     if "list_id" not in params and command_desc.get("list_id"):
                         #         params["list_id"] = command_desc["list_id"]
-                        config.add(tool_spec.name, provider=tool_spec.provider, **params)
+                        config.add(
+                            tool_spec.name, provider=tool_spec.provider, **params
+                        )
                         logger.debug("[WS] tool appended: enabled")
                     else:
                         logger.debug("[WS] tool not appended: not enabled")
@@ -426,7 +433,9 @@ class AgentFactory:
                             existing = integration_ids.get(manifest_name, [])
                             entry = {
                                 "id": tool_item.params["integration_id"],
-                                "display_name": tool_item.params.get("display_name", ""),
+                                "display_name": tool_item.params.get(
+                                    "display_name", ""
+                                ),
                             }
                             if not any(a.get("id") == entry["id"] for a in existing):
                                 existing.append(entry)
@@ -436,10 +445,16 @@ class AgentFactory:
                             # Use account_email as the stable integration ID recognised by the device
                             account_email = tool_item.params.get("account_email", "")
                             if account_email:
-                                display = tool_item.params.get("display_name", account_email)
+                                display = tool_item.params.get(
+                                    "display_name", account_email
+                                )
                                 existing = integration_ids.get(manifest_name, [])
-                                if not any(a.get("id") == account_email for a in existing):
-                                    existing.append({"id": account_email, "display_name": display})
+                                if not any(
+                                    a.get("id") == account_email for a in existing
+                                ):
+                                    existing.append(
+                                        {"id": account_email, "display_name": display}
+                                    )
                                 integration_ids[manifest_name] = existing
                     if client_manifests:
                         proxy_tools = build_client_proxy_tools(
@@ -452,6 +467,20 @@ class AgentFactory:
                         )
                 except Exception as e:
                     logger.warning("[Factory] Failed to add client proxy tools: %s", e)
+
+            # Add user_interaction tool (ask_user) - available to all agents with client_tool_runner
+            if client_tool_runner:
+                try:
+                    from src.tools.user_interaction import UserInteractionTools
+
+                    user_interaction_tool = UserInteractionTools()
+                    user_interaction_tool.client_tool_runner = client_tool_runner
+                    tools = list(tools) + [user_interaction_tool]
+                    logger.info("[Factory] Added user_interaction tool (ask_user)")
+                except Exception as e:
+                    logger.warning(
+                        "[Factory] Failed to add user_interaction tool: %s", e
+                    )
 
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs

@@ -28,6 +28,8 @@ import { sidebarApi } from '../../apiClient';
 import { AVAILABLE_TEAMS } from './teams';
 import { DiceRollOverlay } from './components/DiceRollOverlay';
 import { DashboardScreen } from '../dashboard/DashboardScreen';
+import { useAskUser } from './AskUserContext';
+import { AskUserDialog } from './components/AskUserDialog';
 
 function MessageListSkeleton() {
     return (
@@ -47,6 +49,7 @@ function MessageListSkeleton() {
 }
 
 export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () => void }) {
+    const { showDialog, dialogState, submitResponse, cancelDialog } = useAskUser();
     const {
         messages,
         messagesLoading,
@@ -146,6 +149,16 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
             }
         }
     }, [messages, processedRolls]);
+
+    // Register AskUser dialog globally for ClientToolExecutor
+    useEffect(() => {
+        (globalThis as any).__askUserDialog = showDialog;
+        console.log('[ChatScreen] Registered askUserDialog globally');
+        return () => {
+            delete (globalThis as any).__askUserDialog;
+            console.log('[ChatScreen] Unregistered askUserDialog globally');
+        };
+    }, [showDialog]);
 
     const handleDiceComplete = useCallback((resultMessage: string) => {
         setDiceOverlayVisible(false);
@@ -682,6 +695,14 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                 dc={diceDC}
                 onComplete={handleDiceComplete}
                 onClose={() => setDiceOverlayVisible(false)}
+            />
+            <AskUserDialog
+                visible={dialogState.visible}
+                question={dialogState.question}
+                options={dialogState.options}
+                onSubmit={submitResponse}
+                onCancel={cancelDialog}
+                theme={theme}
             />
         </View>
     );

@@ -103,13 +103,27 @@ def _build_web_search(_: dict[str, Any]) -> Toolkit:
     tool = WebSearchTools()
     tool.add_instructions = True
     tool.instructions = """You have access to web search.
-Use this to search for current information, news, and facts from the internet.
+Use this to search for current information, news, and facts from internet.
 Always cite sources when providing information from search results."""
+    return tool
+
+
+def _build_user_interaction(_: dict[str, Any]) -> Toolkit:
+    """Build user interaction tools (ask_user)."""
+    logger.info("[UserInteraction] Building user interaction tools")
+    from src.tools.user_interaction import UserInteractionTools
+
+    tool = UserInteractionTools()
+    tool.add_instructions = True
+    tool.instructions = """You have access to ask_user tool.
+Use this to ask the user questions when you need clarification, preferences, or specific input.
+The user will see a modal dialog with predefined options and a text input field for custom answers."""
     return tool
 
 
 TOOL_BUILDERS: dict[str, ToolBuilder] = {
     "web_search": _build_web_search,
+    "user_interaction": _build_user_interaction,
 }
 
 
@@ -185,7 +199,12 @@ async def build(config: ToolsConfig) -> list[Toolkit]:
             # credentials maps account_id -> per-account params dict.
             credentials = item.params.get("credentials")
             accounts = item.params.get("accounts")
-            if credentials and isinstance(credentials, dict) and accounts and len(accounts) > 0:
+            if (
+                credentials
+                and isinstance(credentials, dict)
+                and accounts
+                and len(accounts) > 0
+            ):
                 for account in accounts:
                     account_id = account.get("id")
                     if not account_id:
@@ -194,13 +213,21 @@ async def build(config: ToolsConfig) -> list[Toolkit]:
                     if not account_creds or not isinstance(account_creds, dict):
                         continue
                     try:
-                        account_creds["account_id"] = account_id  # Inject account_id into params
-                        account_creds["display_name"] = account.get("display_name") or account_id[:8]  # Also inject display_name
+                        account_creds["account_id"] = (
+                            account_id  # Inject account_id into params
+                        )
+                        account_creds["display_name"] = (
+                            account.get("display_name") or account_id[:8]
+                        )  # Also inject display_name
                         tool = builder(account_creds)
                         # Give the toolkit a unique name so LLM can select the right account.
                         display = account.get("display_name") or account_id[:8]
                         # Sanitize: replace characters invalid in tool names
-                        safe_display = display.replace("@", "_at_").replace(".", "_").replace("-", "_")
+                        safe_display = (
+                            display.replace("@", "_at_")
+                            .replace(".", "_")
+                            .replace("-", "_")
+                        )
                         tool.name = f"{item.name}_{safe_display}"
                         tools.append(tool)
                         logger.debug(

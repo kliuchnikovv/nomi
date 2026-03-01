@@ -22,6 +22,11 @@ export class ClientToolExecutor {
         fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:18',message:'ClientToolExecutor.execute called',data:{tool:action.tool,method:action.method,params:action.params},timestamp:Date.now()})}).catch(()=>{});
         // #endregion
 
+        // Special handling for ask_user tool (built-in, not an integration)
+        if (action.tool === 'ask_user') {
+            return await this.executeAskUserAction(action.method, action.params);
+        }
+
         const metadata = getIntegrationMetadata(action.tool);
         if (metadata?.storageType === 'server') {
             throw new Error(`Tool ${action.tool} is not a client-side tool. It should be executed on the server.`);
@@ -48,7 +53,7 @@ export class ClientToolExecutor {
 
             if (handler) {
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:32',message:'Handler found, executing',data:{tool:action.tool,method:action.method,integrationId:resolvedIntegrationId},timestamp:Date.now()})}).catch(()=>{});
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:38',message:'Handler found, executing',data:{tool:action.tool,method:action.method,integrationId:resolvedIntegrationId},timestamp:Date.now()})}).catch(()=>{});
 
                 // Pass integration_id in params to handler
                 const paramsWithIntegration = {
@@ -58,7 +63,7 @@ export class ClientToolExecutor {
                 const result = await handler.execute(action.method, paramsWithIntegration);
 
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:45',message:'Handler execution completed',data:{tool:action.tool,method:action.method,resultLength:result?.length},timestamp:Date.now()})}).catch(()=>{});
+                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:51',message:'Handler execution completed',data:{tool:action.tool,method:action.method,resultLength:result?.length},timestamp:Date.now()})}).catch(()=>{});
 
                 return result;
             }
@@ -69,6 +74,32 @@ export class ClientToolExecutor {
         } catch (error: any) {
             console.error(`[ClientToolExecutor] Execution failed:`, error);
             return `Error executing default.${action.tool}.${action.method}: ${error.message || String(error)}`;
+        }
+    }
+
+    private async executeAskUserAction(method: string, params: Record<string, any>): Promise<string> {
+        console.log('[ClientToolExecutor] Executing AskUser action', params);
+
+        const { question, options } = params;
+
+        if (method !== 'ask') {
+            throw new Error(`Unknown AskUser method: ${method}`);
+        }
+
+        // Access the global AskUser dialog function (set by ChatProvider)
+        const askUserDialog = (globalThis as any).__askUserDialog;
+        if (!askUserDialog) {
+            console.error('[ClientToolExecutor] AskUser dialog not available');
+            return 'Error: AskUser dialog not available';
+        }
+
+        try {
+            const response = await askUserDialog(question, options || []);
+            console.log('[ClientToolExecutor] User responded:', response);
+            return response;
+        } catch (error: any) {
+            console.error('[ClientToolExecutor] AskUser error:', error);
+            return `Error: ${error.message || String(error)}`;
         }
     }
 
