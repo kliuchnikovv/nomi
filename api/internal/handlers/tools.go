@@ -124,6 +124,13 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 	providerMap := make(map[string]*providerEntry)
 
 	for _, integration := range userIntegrations {
+		h.logger.Info("processing integration",
+			zap.String("name", integration.Name),
+			zap.String("provider", integration.Provider),
+			zap.String("account_email", integration.AccountEmail),
+			zap.Bool("enabled", integration.Enabled),
+		)
+
 		provider, ok := integrations.GetProvider(integration.Provider)
 		if !ok {
 			h.logger.Warn("provider not found in registry, skipping",
