@@ -4,6 +4,9 @@ SafeOpenAI wrapper that converts 'developer' role to 'system' for GLM models.
 The OpenAI API (and some OpenAI-compatible APIs like GLM) use 'developer' role
 for system instructions, but GLM models reject this with "Incorrect role information".
 This wrapper converts 'developer' to 'system' before sending to API.
+
+Additionally, GLM models don't support 'tool' role messages, so we filter those out
+while preserving assistant messages with tool_calls.
 """
 
 import logging
@@ -18,17 +21,18 @@ logger = logging.getLogger(__name__)
 class SafeOpenAI(OpenAIChat):
     """
     An OpenAI-compatible model wrapper that converts 'developer' role to 'system'
-    for APIs that don't support the 'developer' role (e.g., GLM models).
+    and filters out 'tool' role messages for APIs that don't support these roles
+    (e.g., GLM models).
     """
 
-    def _convert_developer_to_system(self, messages: list[Message]) -> list[Message]:
-        """Convert all 'developer' roles to 'system' to avoid API rejections."""
-        converted_messages = []
-        converted_count = 0
+    def _normalize_messages(self, messages: list[Message]) -> list[Message]:
+        """Convert 'developer' to 'system' and filter out 'tool' role messages."""
+        normalized_messages = []
+        developer_converted = 0
+        tool_filtered = 0
 
         for msg in messages:
             if msg.role == "developer":
-                # Create new message with 'system' role
                 new_msg = Message(
                     role="system",
                     content=msg.content,
@@ -38,39 +42,51 @@ class SafeOpenAI(OpenAIChat):
                         if k not in ["role", "content"]
                     },
                 )
-                converted_messages.append(new_msg)
-                converted_count += 1
+                normalized_messages.append(new_msg)
+                developer_converted += 1
+                logger.debug("[SafeOpenAI] Converted 'developer' to 'system' role")
+            elif msg.role == "tool":
+                tool_filtered += 1
                 logger.debug(
-                    "[SafeOpenAI] Converted 'developer' to 'system' role"
+                    "[SafeOpenAI] Filtered out 'tool' role message (tool_call_id=%s)",
+                    getattr(msg, "tool_call_id", "unknown"),
                 )
             else:
-                converted_messages.append(msg)
+                normalized_messages.append(msg)
 
-        if converted_count > 0:
+        if developer_converted > 0:
             logger.info(
                 "[SafeOpenAI] Converted %d 'developer' -> 'system' messages",
-                converted_count,
+                developer_converted,
             )
 
-        return converted_messages
+        if tool_filtered > 0:
+            logger.info(
+                "[SafeOpenAI] Filtered out %d 'tool' role messages",
+                tool_filtered,
+            )
+
+        if not normalized_messages:
+            logger.warning(
+                "[SafeOpenAI] All messages were filtered out. Returning original messages to avoid empty list."
+            )
+            return messages
+
+        return normalized_messages
 
     def invoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
-        """Override invoke to convert developer roles before calling parent."""
-        converted = self._convert_developer_to_system(messages)
-        return super().invoke(converted, *args, **kwargs)
+        normalized = self._normalize_messages(messages)
+        return super().invoke(normalized, *args, **kwargs)
 
     async def ainvoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
-        """Override ainvoke to convert developer roles before calling parent."""
-        converted = self._convert_developer_to_system(messages)
-        return await super().ainvoke(converted, *args, **kwargs)
+        normalized = self._normalize_messages(messages)
+        return await super().ainvoke(normalized, *args, **kwargs)
 
-    def invoke_stream(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
-        """Override invoke_stream to convert developer roles before calling parent."""
-        converted = self._convert_developer_to_system(messages)
-        return super().invoke_stream(converted, *args, **kwargs)
+    def invoke_stream(self, messages: list[Message], *args, **kwargs):
+        normalized = self._normalize_messages(messages)
+        yield from super().invoke_stream(normalized, *args, **kwargs)
 
     async def ainvoke_stream(self, messages: list[Message], *args, **kwargs):
-        """Override ainvoke_stream to convert developer roles before calling parent."""
-        converted = self._convert_developer_to_system(messages)
-        async for response in super().ainvoke_stream(converted, *args, **kwargs):
+        normalized = self._normalize_messages(messages)
+        async for response in super().ainvoke_stream(normalized, *args, **kwargs):
             yield response

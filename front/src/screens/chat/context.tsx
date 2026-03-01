@@ -25,7 +25,9 @@ import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import { generateChatTitle } from '../../services/chatTitleGenerator';
 
 function generateId(): string {
-    return `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
+    return `${Date.now().toString(36)}-${Math.random()
+        .toString(16)
+        .slice(2, 10)}`;
 }
 
 const emptyChatID = '00000000-0000-0000-0000-000000000000';
@@ -52,12 +54,15 @@ export function ChatProvider({
     // when message content hasn't actually changed
     const messages = useChatStore(
         useCallback(
-            (state) => (activeChatID ? state.chats[activeChatID] ?? EMPTY_MESSAGES : EMPTY_MESSAGES),
-            [activeChatID]
+            state =>
+                activeChatID
+                    ? state.chats[activeChatID] ?? EMPTY_MESSAGES
+                    : EMPTY_MESSAGES,
+            [activeChatID],
         ),
-        shallow
+        shallow,
     );
-    const setMessagesToStore = useChatStore((state) => state.setMessages);
+    const setMessagesToStore = useChatStore(state => state.setMessages);
 
     const [messagesLoading, setMessagesLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
@@ -65,68 +70,113 @@ export function ChatProvider({
     const [externalTitle, setExternalTitle] = useState<string | null>(null);
     const seededChatRef = useRef<string | null>(null);
     const newChatInitializedRef = useRef<boolean>(false);
-    const [pluginThreadMeta, setPluginThreadMeta] = useState<{ provider: string; chatId: string | number; integrationId?: string; integrationName?: string | null } | null>(null);
+    const [pluginThreadMeta, setPluginThreadMeta] = useState<{
+        provider: string;
+        chatId: string | number;
+        integrationId?: string;
+        integrationName?: string | null;
+    } | null>(null);
 
-    const mapPluginMessage = useCallback((msg: any, provider: string, fallbackRole: 'assistant' | 'user' = 'assistant'): Message => {
-        const roleFromMsg = msg.role
-            || (msg.sender && msg.sender !== provider ? 'user' : undefined)
-            || (msg.metadata?.from === 'user' ? 'user' : undefined)
-            || fallbackRole;
-        const normalizedRole = roleFromMsg === 'daemon' ? 'assistant' : roleFromMsg;
-        return {
-            id: msg.id || `plugin-${Date.now()}`,
-            chat_id: String(pluginThreadMeta?.chatId ?? msg.thread_id ?? msg.chat_id ?? ''),
-            sender: msg.sender || provider,
-            role: normalizedRole,
-            text: msg.summary || msg.content || msg.title || '',
-            created_at: msg.received_at ? new Date(msg.received_at).getTime() : Date.now(),
-            actions: msg.actions,
-            importance: msg.importance,
-            metadata: {
-                ...(msg.metadata || {}),
-                originalRole: msg.role || roleFromMsg,
-                title: msg.title,
-                integrationId: msg.integration_id || pluginThreadMeta?.integrationId,
-                integrationName: pluginThreadMeta?.integrationName,
-                threadId: msg.thread_id,
-            },
-        };
-    }, [pluginThreadMeta?.chatId, pluginThreadMeta?.integrationId, pluginThreadMeta?.integrationName]);
+    const mapPluginMessage = useCallback(
+        (
+            msg: any,
+            provider: string,
+            fallbackRole: 'assistant' | 'user' = 'assistant',
+        ): Message => {
+            const roleFromMsg =
+                msg.role ||
+                (msg.sender && msg.sender !== provider ? 'user' : undefined) ||
+                (msg.metadata?.from === 'user' ? 'user' : undefined) ||
+                fallbackRole;
+            const normalizedRole =
+                roleFromMsg === 'daemon' ? 'assistant' : roleFromMsg;
+            return {
+                id: msg.id || `plugin-${Date.now()}`,
+                chat_id: String(
+                    pluginThreadMeta?.chatId ??
+                        msg.thread_id ??
+                        msg.chat_id ??
+                        '',
+                ),
+                sender: msg.sender || provider,
+                role: normalizedRole,
+                text: msg.summary || msg.content || msg.title || '',
+                created_at: msg.received_at
+                    ? new Date(msg.received_at).getTime()
+                    : Date.now(),
+                actions: msg.actions,
+                importance: msg.importance,
+                metadata: {
+                    ...(msg.metadata || {}),
+                    originalRole: msg.role || roleFromMsg,
+                    title: msg.title,
+                    integrationId:
+                        msg.integration_id || pluginThreadMeta?.integrationId,
+                    integrationName: pluginThreadMeta?.integrationName,
+                    threadId: msg.thread_id,
+                },
+            };
+        },
+        [
+            pluginThreadMeta?.chatId,
+            pluginThreadMeta?.integrationId,
+            pluginThreadMeta?.integrationName,
+        ],
+    );
 
-    const [currentMessageID, setCurrentMessageID] = useState<string | null>(null);
+    const [currentMessageID, setCurrentMessageID] = useState<string | null>(
+        null,
+    );
     const [assistantWorking, setAssistantWorking] = useState<boolean>(false);
     const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
     const [teamCommand, setTeamCommand] = useState<any>(null);
     const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
-    const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
     const RESPONSE_TIMEOUT_MS = 60000; // 60 seconds
 
     // Model selection state
-    const [selectedModel, setSelectedModelInternal] = useState<string | null>('gpt-5-nano');
+    const [selectedModel, setSelectedModelInternal] = useState<string | null>(
+        'gpt-5-nano',
+    );
     const selectedModelRef = useRef<string | null>('gpt-5-nano');
     const selectedProviderRef = useRef<string | undefined>(undefined);
     const manualModelSelectionRef = useRef<boolean>(false);
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
 
-    const setSelectedModel = useCallback((model: string, isManual: boolean = true) => {
-        console.log('setSelectedModel called with:', model, 'isManual:', isManual);
-        setSelectedModelInternal(model);
-        selectedModelRef.current = model;
+    const setSelectedModel = useCallback(
+        (model: string, isManual: boolean = true) => {
+            console.log(
+                'setSelectedModel called with:',
+                model,
+                'isManual:',
+                isManual,
+            );
+            setSelectedModelInternal(model);
+            selectedModelRef.current = model;
 
-        // Keep provider in sync with model selection (best-effort)
-        const nextProvider = availableModels.find(m => m.id === model)?.provider;
-        selectedProviderRef.current = nextProvider;
+            // Keep provider in sync with model selection (best-effort)
+            const nextProvider = availableModels.find(
+                m => m.id === model,
+            )?.provider;
+            selectedProviderRef.current = nextProvider;
 
-        if (isManual) {
-            manualModelSelectionRef.current = true;
-        }
+            if (isManual) {
+                manualModelSelectionRef.current = true;
+            }
 
-        // Notify WebSocket about model change if connection is active
-        if (activeChatID) {
-            console.log('Notifying WebSocket about model change to:', model);
-            socket.changeModel(activeChatID, model);
-        }
-    }, [activeChatID, availableModels]);
+            // Notify WebSocket about model change if connection is active
+            if (activeChatID) {
+                console.log(
+                    'Notifying WebSocket about model change to:',
+                    model,
+                );
+                socket.changeModel(activeChatID, model);
+            }
+        },
+        [activeChatID, availableModels],
+    );
 
     // Error state management
     const [error, setError] = useState<string | null>(null);
@@ -145,7 +195,8 @@ export function ChatProvider({
     // Display settings (persists within chat session)
     const [showToolCalls, setShowToolCalls] = useState<boolean>(true);
     const [showReasoning, setShowReasoning] = useState<boolean>(true);
-    const [showMemberResponses, setShowMemberResponses] = useState<boolean>(true);
+    const [showMemberResponses, setShowMemberResponses] =
+        useState<boolean>(true);
     const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('all');
 
     const setDetailLevel = useCallback((level: DetailLevel) => {
@@ -175,7 +226,14 @@ export function ChatProvider({
     }, []);
 
     const { user, token, refreshToken } = useAuth();
-    const { activeChat, pendingChatMode, clearPendingChatMode, sidebarFilter, renameChat, getChats } = useMain();
+    const {
+        activeChat,
+        pendingChatMode,
+        clearPendingChatMode,
+        sidebarFilter,
+        renameChat,
+        getChats,
+    } = useMain();
 
     // Ensure chat socket is connected to the active chat room (RoomTypeChat).
     // Reconnect when activeChatID changes so we join the new room (avoid DONE only on user channel).
@@ -197,158 +255,192 @@ export function ChatProvider({
         return () => task.cancel();
     }, [activeChatID, token]);
 
-    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(AVAILABLE_TEAMS[0]?.id ?? null);
+    const [selectedTeamId, setSelectedTeamId] = useState<string | null>(
+        AVAILABLE_TEAMS[0]?.id ?? null,
+    );
 
     const selectTeam = useCallback((teamId: string) => {
         setSelectedTeamId(teamId);
         setChatMode('team');
     }, []);
 
-
     // Keep getMessages for initial load and manual refresh if needed
-    const getMessages = useCallback(async (chatID: string, opts?: { isRefresh?: boolean }) => {
-        if (!chatID || chatID === emptyChatID) return;
-        const isRefresh = opts?.isRefresh === true;
-        if (isRefresh) {
-            setRefreshing(true);
-        } else {
-            setMessagesLoading(true);
-        }
-        try {
-            const data = await apiClient.get<Message[]>(
-                `${getApiUrl()}/chats/${chatID}/messages`,
-                isRefresh ? { headers: { 'Cache-Control': 'no-cache, no-store' } } : undefined,
-            );
-            if (!data) {
-                return;
+    const getMessages = useCallback(
+        async (chatID: string, opts?: { isRefresh?: boolean }) => {
+            if (!chatID || chatID === emptyChatID) return;
+            const isRefresh = opts?.isRefresh === true;
+            if (isRefresh) {
+                setRefreshing(true);
+            } else {
+                setMessagesLoading(true);
             }
+            try {
+                const data = await apiClient.get<Message[]>(
+                    `${getApiUrl()}/chats/${chatID}/messages`,
+                    isRefresh
+                        ? { headers: { 'Cache-Control': 'no-cache, no-store' } }
+                        : undefined,
+                );
+                if (!data) {
+                    return;
+                }
 
-            // Update store (always replace so refresh shows latest from server)
-            setMessagesToStore(chatID, data);
+                // Update store (always replace so refresh shows latest from server)
+                setMessagesToStore(chatID, data);
 
-            // Sync model from last assistant message or any message that has a model field
-            if (!manualModelSelectionRef.current && data.length > 0) {
-                // Find the last message that has a model defined
-                let lastModel = null;
-                for (let i = data.length - 1; i >= 0; i--) {
-                    if (data[i].model) {
-                        lastModel = data[i].model;
-                        break;
+                // Sync model from last assistant message or any message that has a model field
+                if (!manualModelSelectionRef.current && data.length > 0) {
+                    // Find the last message that has a model defined
+                    let lastModel = null;
+                    for (let i = data.length - 1; i >= 0; i--) {
+                        if (data[i].model) {
+                            lastModel = data[i].model;
+                            break;
+                        }
+                    }
+
+                    if (lastModel) {
+                        console.log('Syncing model from history:', lastModel);
+                        setSelectedModel(lastModel, false);
+                    } else {
+                        console.log(
+                            'No model found in history, resetting to default',
+                        );
+                        setSelectedModel('gpt-5-nano', false);
+                    }
+                }
+            } catch (error) {
+                console.error(
+                    `Failed to fetch messages for chat ${chatID}:`,
+                    error,
+                );
+            } finally {
+                if (isRefresh) {
+                    setRefreshing(false);
+                } else {
+                    setMessagesLoading(false);
+                }
+            }
+        },
+        [setSelectedModel, setMessagesToStore],
+    );
+
+    // Define createChat early so sendStreamingMessage can use it
+    const createChat = useCallback(
+        async (title: string) => {
+            let chatID: string;
+
+            try {
+                // Sanitize payload: don't send team_id if mode is agent, unless it's a specific agent-as-team
+                let teamIdToSend = selectedTeamId || null;
+                if (chatMode === 'agent') {
+                    // Check if the selectedTeamId is actually an agent
+                    const teamDef = AVAILABLE_TEAMS.find(
+                        t => t.id === selectedTeamId,
+                    );
+                    if (teamDef && !teamDef.isAgent) {
+                        // If it's a TEAM but we are in AGENT mode, sanitize it.
+                        // Agents shouldn't have a team_id unless they are specific agent-types.
+                        teamIdToSend = null;
                     }
                 }
 
-                if (lastModel) {
-                    console.log('Syncing model from history:', lastModel);
-                    setSelectedModel(lastModel, false);
+                const created = await apiClient.post<{ id: string }>(
+                    `${getApiUrl()}/chats`,
+                    {
+                        title: title,
+                        model: selectedModelRef.current || 'gpt-5-nano',
+                        mode: chatMode,
+                        team_id: teamIdToSend,
+                        list_id: activeChat?.list_id,
+                    },
+                );
+                if (created?.id) {
+                    chatID = created.id;
+                    setActiveChatID(created.id);
                 } else {
-                    console.log('No model found in history, resetting to default');
-                    setSelectedModel('gpt-5-nano', false);
+                    console.error('Chat create returned no id', created);
+                    return;
                 }
-            }
-
-        } catch (error) {
-            console.error(
-                `Failed to fetch messages for chat ${chatID}:`,
-                error,
-            );
-        } finally {
-            if (isRefresh) {
-                setRefreshing(false);
-            } else {
-                setMessagesLoading(false);
-            }
-        }
-    }, [setSelectedModel, setMessagesToStore]);
-
-
-    // Define createChat early so sendStreamingMessage can use it
-    const createChat = useCallback(async (title: string) => {
-        let chatID: string;
-
-        try {
-            // Sanitize payload: don't send team_id if mode is agent, unless it's a specific agent-as-team
-            let teamIdToSend = selectedTeamId || null;
-            if (chatMode === 'agent') {
-                // Check if the selectedTeamId is actually an agent
-                const teamDef = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
-                if (teamDef && !teamDef.isAgent) {
-                    // If it's a TEAM but we are in AGENT mode, sanitize it.
-                    // Agents shouldn't have a team_id unless they are specific agent-types.
-                    teamIdToSend = null;
-                }
-            }
-
-            const created = await apiClient.post<{ id: string }>(
-                `${getApiUrl()}/chats`,
-                {
-                    "title": title,
-                    "model": selectedModelRef.current || 'gpt-5-nano',
-                    "mode": chatMode,
-                    "team_id": teamIdToSend,
-                    "list_id": activeChat?.list_id,
-                },
-            );
-            if (created?.id) {
-                chatID = created.id;
-                setActiveChatID(created.id);
-            } else {
-                console.error('Chat create returned no id', created);
+            } catch (e) {
+                console.error('Failed to create chat before sending:', e);
                 return;
             }
-        } catch (e) {
-            console.error('Failed to create chat before sending:', e);
-            return;
-        }
 
-        return chatID;
-    }, [chatMode, selectedTeamId, setActiveChatID, activeChat]);
+            return chatID;
+        },
+        [chatMode, selectedTeamId, setActiveChatID, activeChat],
+    );
 
     // Define createMessage early so sendStreamingMessage can use it
-    const createMessage = useCallback(async (text: string, chatID: string, attachmentIDs?: string[], webSearch?: boolean, role: string = 'user', contextItems?: any[]) => {
-        let messageID: string;
+    const createMessage = useCallback(
+        async (
+            text: string,
+            chatID: string,
+            attachmentIDs?: string[],
+            webSearch?: boolean,
+            role: string = 'user',
+            contextItems?: any[],
+        ) => {
+            let messageID: string;
 
-        try {
-            const model = selectedModelRef.current;
-            const created = await apiClient.post<{ id: string }>(
-                `${getApiUrl()}/chats/${chatID}/messages`,
-                {
-                    chat_id: chatID,
-                    role: role,
-                    text: text,
-                    model: model,
-                    attachment_ids: attachmentIDs,
-                    web_search: webSearch,
-                    context_items: contextItems, // Add context items to message
-                },
-            );
-            if (created?.id) {
-                messageID = created.id;
-                setCurrentMessageID(created.id);
-            } else {
-                console.error('Message create returned no id', created);
+            try {
+                const model = selectedModelRef.current;
+                const created = await apiClient.post<{ id: string }>(
+                    `${getApiUrl()}/chats/${chatID}/messages`,
+                    {
+                        chat_id: chatID,
+                        role: role,
+                        text: text,
+                        model: model,
+                        attachment_ids: attachmentIDs,
+                        web_search: webSearch,
+                        context_items: contextItems, // Add context items to message
+                    },
+                );
+                if (created?.id) {
+                    messageID = created.id;
+                    setCurrentMessageID(created.id);
+                } else {
+                    console.error('Message create returned no id', created);
+                    return;
+                }
+            } catch (e) {
+                console.error('Failed to create message before sending:', e);
                 return;
             }
-        } catch (e) {
-            console.error('Failed to create message before sending:', e);
-            return;
-        }
 
-        return messageID;
-    }, []);
+            return messageID;
+        },
+        [],
+    );
 
     // We need to update how `messages` is selected to support plugins
-    const messagesSelector = useCallback((state: any) => {
-        if (pluginThreadMeta) {
-            const pluginChatKey = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
-            return state.chats[pluginChatKey] ?? EMPTY_MESSAGES;
-        }
-        return activeChatID ? state.chats[activeChatID] ?? EMPTY_MESSAGES : EMPTY_MESSAGES;
-    }, [activeChatID, pluginThreadMeta]);
+    const messagesSelector = useCallback(
+        (state: any) => {
+            if (pluginThreadMeta) {
+                const pluginChatKey = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
+                return state.chats[pluginChatKey] ?? EMPTY_MESSAGES;
+            }
+            return activeChatID
+                ? state.chats[activeChatID] ?? EMPTY_MESSAGES
+                : EMPTY_MESSAGES;
+        },
+        [activeChatID, pluginThreadMeta],
+    );
 
     const storeMessages = useChatStore(messagesSelector);
 
     const sendStreamingMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, reuseMessageId?: string, role: string = 'user', contextItems?: any[]) => {
+        async (
+            text: string,
+            attachments: any[] = [],
+            webSearch?: boolean,
+            thinking?: string,
+            reuseMessageId?: string,
+            role: string = 'user',
+            contextItems?: any[],
+        ) => {
             if (!text.trim() && attachments.length === 0) return;
             if (!user?.id) return;
 
@@ -360,7 +452,7 @@ export function ChatProvider({
                 file_name: a.name,
                 file_type: a.mimeType,
                 size: 0,
-                uri: a.uri
+                uri: a.uri,
             }));
 
             setLastFailedMessage({
@@ -369,7 +461,7 @@ export function ChatProvider({
                 messageId: reuseMessageId,
                 webSearch,
                 thinking,
-                contextItems
+                contextItems,
             });
 
             let chatIdToUse = activeChatID;
@@ -390,37 +482,64 @@ export function ChatProvider({
                 }
             } else {
                 if (!chatIdToUse || chatIdToUse === emptyChatID) {
-                    chatIdToUse = await createChat('New Chat') || activeChatID;
+                    chatIdToUse =
+                        (await createChat('New Chat')) || activeChatID;
                     if (chatIdToUse) {
-                        console.log('[ChatContext] New chat created, starting title generation for', chatIdToUse);
-                        generateChatTitle(text).then((title) => {
-                            if (title) {
-                                console.log('[ChatContext] Title generated, renaming chat to:', title);
-                                renameChat(chatIdToUse!, title);
-                            } else {
-                                console.log('[ChatContext] No title from generator (e.g. Android or fallback empty)');
-                            }
-                        }).catch((e) => {
-                            console.warn('[ChatContext] Title generation failed:', e);
-                        });
+                        console.log(
+                            '[ChatContext] New chat created, starting title generation for',
+                            chatIdToUse,
+                        );
+                        generateChatTitle(text)
+                            .then(title => {
+                                if (title) {
+                                    console.log(
+                                        '[ChatContext] Title generated, renaming chat to:',
+                                        title,
+                                    );
+                                    renameChat(chatIdToUse!, title);
+                                } else {
+                                    console.log(
+                                        '[ChatContext] No title from generator (e.g. Android or fallback empty)',
+                                    );
+                                }
+                            })
+                            .catch(e => {
+                                console.warn(
+                                    '[ChatContext] Title generation failed:',
+                                    e,
+                                );
+                            });
                     }
                 }
 
                 if (!chatIdToUse) {
-                    console.error('Failed to resolve chat id before sending message');
+                    console.error(
+                        'Failed to resolve chat id before sending message',
+                    );
                     setError('Не удалось создать чат');
                     return;
                 }
 
                 if (!reuseMessageId) {
-                    messageID = await createMessage(text, chatIdToUse, attachmentIDs, webSearch, role, contextItems);
+                    messageID = await createMessage(
+                        text,
+                        chatIdToUse,
+                        attachmentIDs,
+                        webSearch,
+                        role,
+                        contextItems,
+                    );
                     if (!messageID) {
-                        console.error('Failed to create message before sending via WebSocket');
+                        console.error(
+                            'Failed to create message before sending via WebSocket',
+                        );
                         setError('Не удалось создать сообщение');
                         return;
                     }
                     setCurrentMessageID(messageID!);
-                    setLastFailedMessage(prev => prev ? { ...prev, messageId: messageID } : null);
+                    setLastFailedMessage(prev =>
+                        prev ? { ...prev, messageId: messageID } : null,
+                    );
 
                     const userMessage: Message = {
                         id: messageID!,
@@ -444,7 +563,10 @@ export function ChatProvider({
                         // eof: true // user message is complete
                     });
                 } else {
-                    console.log('Reusing existing message ID for retry:', reuseMessageId);
+                    console.log(
+                        'Reusing existing message ID for retry:',
+                        reuseMessageId,
+                    );
                     setCurrentMessageID(reuseMessageId);
                 }
             }
@@ -467,20 +589,20 @@ export function ChatProvider({
             }
 
             // Set timeout for response
-            responseTimeoutRef.current = setTimeout(() => {
-                setAssistantWorking((current) => {
-                    if (current) {
-                        setActiveAgentsCount(0);
-                        setError('Превышено время ожидания ответа. Попробуйте отправить сообщение снова.');
-                        responseTimeoutRef.current = null;
-                        return false;
-                    }
-                    return current;
-                });
-            }, RESPONSE_TIMEOUT_MS);
+            // responseTimeoutRef.current = setTimeout(() => {
+            //     setAssistantWorking((current) => {
+            //         if (current) {
+            //             setActiveAgentsCount(0);
+            //             setError('Превышено время ожидания ответа. Попробуйте отправить сообщение снова.');
+            //             responseTimeoutRef.current = null;
+            //             return false;
+            //         }
+            //         return current;
+            //     });
+            // }, RESPONSE_TIMEOUT_MS);
 
             const selectedEndpoint = availableModels.find(
-                (m) => m.id === (selectedModelRef.current ?? '')
+                m => m.id === (selectedModelRef.current ?? ''),
             )?.endpoint;
 
             // Prepare command (context) to send
@@ -490,7 +612,7 @@ export function ChatProvider({
                 if (activeChat.list_id) {
                     commandToSend = {
                         list_id: activeChat.list_id,
-                        auth_token: token
+                        auth_token: token,
                     };
                 }
             }
@@ -511,15 +633,40 @@ export function ChatProvider({
                 selectedEndpoint,
                 token ?? undefined, // auth_token for list/agent tools that call Go API
                 commandToSend,
-                contextItems // Pass context items (emails, documents, etc.)
+                contextItems, // Pass context items (emails, documents, etc.)
             );
         },
-        [activeChatID, user?.id, pluginThreadMeta, createChat, createMessage, renameChat, setLastFailedMessage, tools, availableModels],
+        [
+            activeChatID,
+            user?.id,
+            pluginThreadMeta,
+            createChat,
+            createMessage,
+            renameChat,
+            setLastFailedMessage,
+            tools,
+            availableModels,
+        ],
     );
 
     const sendMessage = useCallback(
-        async (text: string, attachments: any[] = [], webSearch?: boolean, thinking?: string, role: string = 'user', contextItems?: any[]) => {
-            await sendStreamingMessage(text, attachments, webSearch, thinking, undefined, role, contextItems);
+        async (
+            text: string,
+            attachments: any[] = [],
+            webSearch?: boolean,
+            thinking?: string,
+            role: string = 'user',
+            contextItems?: any[],
+        ) => {
+            await sendStreamingMessage(
+                text,
+                attachments,
+                webSearch,
+                thinking,
+                undefined,
+                role,
+                contextItems,
+            );
         },
         [sendStreamingMessage],
     );
@@ -534,55 +681,141 @@ export function ChatProvider({
                 lastFailedMessage.thinking,
                 lastFailedMessage.messageId, // reusing the message ID!
                 'user',
-                lastFailedMessage.contextItems
+                lastFailedMessage.contextItems,
             );
         }
     }, [lastFailedMessage, sendStreamingMessage]);
 
-    const handleClientAction = useCallback(async (payload: any) => {
-        console.log('[ChatContext] Handling client action:', payload);
-
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/chat/context.tsx:524',message:'handleClientAction called',data:{payload},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-
-        const { call_id: callId, tool, method, params } = payload;
-
-        try {
-            const { clientToolExecutor } = await import('../../services/tools/ClientToolExecutor');
+    const handleClientAction = useCallback(
+        async (payload: any) => {
+            console.log('[ChatContext] Handling client action:', payload);
 
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/chat/context.tsx:534',message:'About to execute client tool',data:{tool,method,params,callId},timestamp:Date.now()})}).catch(()=>{});
+            fetch(
+                'http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        location: 'front/src/screens/chat/context.tsx:524',
+                        message: 'handleClientAction called',
+                        data: { payload },
+                        timestamp: Date.now(),
+                    }),
+                },
+            ).catch(() => {});
             // #endregion
 
-            const result = await clientToolExecutor.execute({ tool, method, params: params || {} });
+            const { call_id: callId, tool, method, params } = payload;
 
-            console.log('[ChatContext] ✅ Tool executed successfully, result:', result?.substring(0, 200));
-            console.log('[ChatContext] callId present?', !!callId, 'callId=', callId);
+            try {
+                const { clientToolExecutor } = await import(
+                    '../../services/tools/ClientToolExecutor'
+                );
 
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/chat/context.tsx:539',message:'Client tool execution completed',data:{tool,method,resultLength:result?.length,callId,hasCallId:!!callId},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
+                // #region agent log
+                fetch(
+                    'http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            location: 'front/src/screens/chat/context.tsx:534',
+                            message: 'About to execute client tool',
+                            data: { tool, method, params, callId },
+                            timestamp: Date.now(),
+                        }),
+                    },
+                ).catch(() => {});
+                // #endregion
 
-            if (callId) {
-                console.log('[ChatContext] 📤 Sending result to server via REST API...');
-                const { sendClientToolResult } = await import('../../apiClient');
-                await sendClientToolResult(activeChatID, callId, result);
-                console.log('[ChatContext] ✅ Round-trip: sent client tool result for call_id=', callId);
-            } else {
-                console.log('[ChatContext] ⚠️ No callId, sending result as system message');
-                await sendMessage(`[System] Tool ${tool}.${method} Output:\n${result}`, [], false, undefined, 'system');
+                const result = await clientToolExecutor.execute({
+                    tool,
+                    method,
+                    params: params || {},
+                });
+
+                console.log(
+                    '[ChatContext] ✅ Tool executed successfully, result:',
+                    result?.substring(0, 200),
+                );
+                console.log(
+                    '[ChatContext] callId present?',
+                    !!callId,
+                    'callId=',
+                    callId,
+                );
+
+                // #region agent log
+                fetch(
+                    'http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            location: 'front/src/screens/chat/context.tsx:539',
+                            message: 'Client tool execution completed',
+                            data: {
+                                tool,
+                                method,
+                                resultLength: result?.length,
+                                callId,
+                                hasCallId: !!callId,
+                            },
+                            timestamp: Date.now(),
+                        }),
+                    },
+                ).catch(() => {});
+                // #endregion
+
+                if (callId) {
+                    console.log(
+                        '[ChatContext] 📤 Sending result to server via REST API...',
+                    );
+                    const { sendClientToolResult } = await import(
+                        '../../apiClient'
+                    );
+                    await sendClientToolResult(activeChatID, callId, result);
+                    console.log(
+                        '[ChatContext] ✅ Round-trip: sent client tool result for call_id=',
+                        callId,
+                    );
+                } else {
+                    console.log(
+                        '[ChatContext] ⚠️ No callId, sending result as system message',
+                    );
+                    await sendMessage(
+                        `[System] Tool ${tool}.${method} Output:\n${result}`,
+                        [],
+                        false,
+                        undefined,
+                        'system',
+                    );
+                }
+            } catch (error: any) {
+                const errMsg = error?.message ?? String(error);
+                if (callId) {
+                    const { sendClientToolResult } = await import(
+                        '../../apiClient'
+                    );
+                    await sendClientToolResult(
+                        activeChatID,
+                        callId,
+                        `Error: ${errMsg}`,
+                    );
+                } else {
+                    await sendMessage(
+                        `[System] Tool ${tool}.${method} Failed: ${errMsg}`,
+                        [],
+                        false,
+                        undefined,
+                        'system',
+                    );
+                }
             }
-        } catch (error: any) {
-            const errMsg = error?.message ?? String(error);
-            if (callId) {
-                const { sendClientToolResult } = await import('../../apiClient');
-                await sendClientToolResult(activeChatID, callId, `Error: ${errMsg}`);
-            } else {
-                await sendMessage(`[System] Tool ${tool}.${method} Failed: ${errMsg}`, [], false, undefined, 'system');
-            }
-        }
-    }, [sendMessage, activeChatID]);
+        },
+        [sendMessage, activeChatID],
+    );
 
     // Fetch messages when activeChatID changes
     useEffect(() => {
@@ -620,8 +853,11 @@ export function ChatProvider({
                 teamIdToUse = pendingChatMode.teamId;
                 clearPendingChatMode?.();
             } else {
-                modeToUse = (sidebarFilter === 'all' || sidebarFilter === 'agent' ? 'agent' : 'team');
-                teamIdToUse = (modeToUse === 'team' ? sidebarFilter : null);
+                modeToUse =
+                    sidebarFilter === 'all' || sidebarFilter === 'agent'
+                        ? 'agent'
+                        : 'team';
+                teamIdToUse = modeToUse === 'team' ? sidebarFilter : null;
             }
 
             setChatMode(modeToUse);
@@ -633,14 +869,20 @@ export function ChatProvider({
             newChatInitializedRef.current = false;
 
             // Check for initial message from pendingChatMode if it was just set
-            if (pendingChatMode?.initialMessage && activeChatID === activeChat.id) {
+            if (
+                pendingChatMode?.initialMessage &&
+                activeChatID === activeChat.id
+            ) {
                 const initialMsg = pendingChatMode.initialMessage;
                 // Clear it from state to prevent double-sending
                 clearPendingChatMode?.();
 
                 // Send after a short delay to ensure socket initialization
                 setTimeout(() => {
-                    console.log('Sending initial message for task-linked chat:', initialMsg);
+                    console.log(
+                        'Sending initial message for task-linked chat:',
+                        initialMsg,
+                    );
                     sendMessage(initialMsg);
                 }, 500);
             }
@@ -670,11 +912,22 @@ export function ChatProvider({
         if (messages.length === 0) {
             getMessages(activeChatID);
         }
-    }, [activeChatID, getMessages, pluginThreadMeta, activeChat, pendingChatMode, sidebarFilter, sendMessage, clearPendingChatMode]);
+    }, [
+        activeChatID,
+        getMessages,
+        pluginThreadMeta,
+        activeChat,
+        pendingChatMode,
+        sidebarFilter,
+        sendMessage,
+        clearPendingChatMode,
+    ]);
 
     // Fetch available models on mount with retry.
     // Retry timer IDs are tracked so they can be cancelled on unmount.
-    const modelsRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const modelsRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
 
     useEffect(() => {
         let mounted = true;
@@ -685,16 +938,32 @@ export function ChatProvider({
                     setAvailableModels(models);
                     // Initialize provider ref for default model (or currently selected)
                     const current = selectedModelRef.current || 'gpt-5-nano';
-                    selectedProviderRef.current = models.find(m => m.id === current)?.provider;
+                    selectedProviderRef.current = models.find(
+                        m => m.id === current,
+                    )?.provider;
                 } else if (mounted && retryCount < 3) {
-                    console.log(`Fetch models returned empty list, retrying... (${retryCount + 1}/3)`);
-                    modelsRetryTimerRef.current = setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));
+                    console.log(
+                        `Fetch models returned empty list, retrying... (${
+                            retryCount + 1
+                        }/3)`,
+                    );
+                    modelsRetryTimerRef.current = setTimeout(
+                        () => fetchModels(retryCount + 1),
+                        2000 * (retryCount + 1),
+                    );
                 }
             } catch (error) {
                 console.error('Failed to fetch models:', error);
                 if (mounted && retryCount < 3) {
-                    console.log(`Fetch models failed, retrying... (${retryCount + 1}/3)`);
-                    modelsRetryTimerRef.current = setTimeout(() => fetchModels(retryCount + 1), 2000 * (retryCount + 1));
+                    console.log(
+                        `Fetch models failed, retrying... (${
+                            retryCount + 1
+                        }/3)`,
+                    );
+                    modelsRetryTimerRef.current = setTimeout(
+                        () => fetchModels(retryCount + 1),
+                        2000 * (retryCount + 1),
+                    );
                 }
             }
         };
@@ -708,11 +977,12 @@ export function ChatProvider({
         };
     }, []);
 
-
     useEffect(() => {
         if (chatMode !== 'team') return;
 
-        const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId) || AVAILABLE_TEAMS[0];
+        const team =
+            AVAILABLE_TEAMS.find(t => t.id === selectedTeamId) ||
+            AVAILABLE_TEAMS[0];
         if (!team) return;
         const baseCommand = team.command;
 
@@ -725,7 +995,9 @@ export function ChatProvider({
         setTeamCommand((prev: any) => {
             try {
                 if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
-            } catch { /* ignore */ }
+            } catch {
+                /* ignore */
+            }
             return next;
         });
     }, [chatMode, selectedModel, selectedTeamId, token, activeChat]);
@@ -761,7 +1033,10 @@ export function ChatProvider({
                 });
             },
             onSignal: (payload: any) => {
-                if (payload.type === 'system_status' && typeof payload.active_agents_count === 'number') {
+                if (
+                    payload.type === 'system_status' &&
+                    typeof payload.active_agents_count === 'number'
+                ) {
                     setActiveAgentsCount(payload.active_agents_count);
                 }
             },
@@ -801,7 +1076,12 @@ export function ChatProvider({
             onMessage: (frame: Frame) => {
                 const payload = frame.payload;
                 if (payload?.type === 'client_action') {
-                    console.log('[ChatContext] Received client_action, executing locally:', payload.tool, payload.method, payload.params);
+                    console.log(
+                        '[ChatContext] Received client_action, executing locally:',
+                        payload.tool,
+                        payload.method,
+                        payload.params,
+                    );
                     handleClientAction(payload);
                 }
             },
@@ -816,7 +1096,7 @@ export function ChatProvider({
 
     // Clear "Assistant is thinking" when DONE is received on user channel (or any socket).
     useEffect(() => {
-        const unsubscribe = subscribeGenerationDone((chatId) => {
+        const unsubscribe = subscribeGenerationDone(chatId => {
             if (chatId === activeChatID) {
                 if (responseTimeoutRef.current) {
                     clearTimeout(responseTimeoutRef.current);
@@ -833,7 +1113,6 @@ export function ChatProvider({
         return unsubscribe;
     }, [activeChatID]);
 
-
     const refreshPluginThread = useCallback(async () => {
         if (!pluginThreadMeta) return;
         try {
@@ -842,7 +1121,9 @@ export function ChatProvider({
                 pluginThreadMeta.chatId,
                 pluginThreadMeta.integrationId,
             );
-            const converted = (resp?.messages || []).map(msg => mapPluginMessage(msg, pluginThreadMeta.provider));
+            const converted = (resp?.messages || []).map(msg =>
+                mapPluginMessage(msg, pluginThreadMeta.provider),
+            );
             // Update store directly or local state? Plugin threads might not be in chat store yet.
             // For now, plugins use local `messages` state in previous code, but here we bound `messages` to store.
             // If pluginThreadMeta is set, `activeChatID` is likely emptyChatID.
@@ -866,30 +1147,64 @@ export function ChatProvider({
         }
     }, [pluginThreadMeta, mapPluginMessage, setMessagesToStore]);
 
-    const startPluginThread = useCallback(async ({ provider, chatId, title, integrationId, integrationName, messages: preloadedMessages }: { provider: string; chatId: string | number; title?: string | null; integrationId?: string; integrationName?: string | null; messages?: any[] }) => {
-        setPluginThreadMeta({ provider, chatId, integrationId, integrationName });
-        setChatMode('agent');
-        setTeamCommand(null);
-        setExternalTitle(title || null);
-        setAssistantWorking(false);
-        setActiveChatID(emptyChatID); // Deselect main chat
+    const startPluginThread = useCallback(
+        async ({
+            provider,
+            chatId,
+            title,
+            integrationId,
+            integrationName,
+            messages: preloadedMessages,
+        }: {
+            provider: string;
+            chatId: string | number;
+            title?: string | null;
+            integrationId?: string;
+            integrationName?: string | null;
+            messages?: any[];
+        }) => {
+            setPluginThreadMeta({
+                provider,
+                chatId,
+                integrationId,
+                integrationName,
+            });
+            setChatMode('agent');
+            setTeamCommand(null);
+            setExternalTitle(title || null);
+            setAssistantWorking(false);
+            setActiveChatID(emptyChatID); // Deselect main chat
 
-        try {
-            let incomingMessages: any[] = [];
-            if (preloadedMessages && Array.isArray(preloadedMessages)) {
-                incomingMessages = preloadedMessages;
-            } else {
-                const resp = await sidebarApi.getChatMessages(provider, chatId, integrationId);
-                incomingMessages = resp?.messages || [];
+            try {
+                let incomingMessages: any[] = [];
+                if (preloadedMessages && Array.isArray(preloadedMessages)) {
+                    incomingMessages = preloadedMessages;
+                } else {
+                    const resp = await sidebarApi.getChatMessages(
+                        provider,
+                        chatId,
+                        integrationId,
+                    );
+                    incomingMessages = resp?.messages || [];
+                }
+                const converted = (incomingMessages || []).map(msg =>
+                    mapPluginMessage(msg, provider),
+                );
+                // Update Store for this plugin chat
+                // Key: String(chatId) which is the real ID
+                setMessagesToStore(String(chatId), converted);
+            } catch (err) {
+                console.error('Failed to load plugin chat on start', err);
             }
-            const converted = (incomingMessages || []).map(msg => mapPluginMessage(msg, provider));
-            // Update Store for this plugin chat
-            // Key: String(chatId) which is the real ID
-            setMessagesToStore(String(chatId), converted);
-        } catch (err) {
-            console.error('Failed to load plugin chat on start', err);
-        }
-    }, [setActiveChatID, mapPluginMessage, setChatMode, setTeamCommand, setMessagesToStore]);
+        },
+        [
+            setActiveChatID,
+            mapPluginMessage,
+            setChatMode,
+            setTeamCommand,
+            setMessagesToStore,
+        ],
+    );
 
     const clearPluginThread = useCallback(() => {
         setPluginThreadMeta(null);
@@ -897,11 +1212,25 @@ export function ChatProvider({
         // Messages will clear because selector depends on pluginThreadMeta
     }, []);
 
-    const executeMessageAction = useCallback(async (action: any, messageId: string) => {
-        console.log('[ChatContext] Executing action:', action.label, 'for message:', messageId);
-        // For now, just send the action label as a new message
-        await sendMessage(action.label || action.action, [], false, undefined, 'user');
-    }, [sendMessage]);
+    const executeMessageAction = useCallback(
+        async (action: any, messageId: string) => {
+            console.log(
+                '[ChatContext] Executing action:',
+                action.label,
+                'for message:',
+                messageId,
+            );
+            // For now, just send the action label as a new message
+            await sendMessage(
+                action.label || action.action,
+                [],
+                false,
+                undefined,
+                'user',
+            );
+        },
+        [sendMessage],
+    );
 
     const stopGeneration = useCallback(() => {
         console.log('Stopping generation');
@@ -949,7 +1278,6 @@ export function ChatProvider({
         setDetailLevel,
         activeAgentsCount,
     };
-
 
     return (
         <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

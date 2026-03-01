@@ -31,23 +31,49 @@ interface FlashMessageListProps {
     refreshControl?: JSX.Element;
 }
 
+// Helper to check if message contains only tool_calls (no text)
+function isToolCallsOnlyMessage(msg: any): boolean {
+    if (!msg) return false;
+    // Check content_parts for tool_calls
+    if (msg.content_parts && msg.content_parts.length > 0) {
+        const hasOnlyToolCalls = msg.content_parts.every(
+            (p: any) => p.type === 'tool_call' || p.type === 'reasoning'
+        );
+        const hasNoText = msg.content_parts.every((p: any) => p.type !== 'text');
+        if (hasOnlyToolCalls && hasNoText) return true;
+    }
+    // Check legacy tool_calls
+    if (msg.tool_calls && msg.tool_calls.length > 0 && !msg.text) {
+        return true;
+    }
+    return false;
+}
+
 // Memoized message item renderer for FlashList
 const MemoizedMessageItem = memo(function MessageItem({
     item,
+    previousItem,
     renderMessage,
     renderBubble,
     renderMessageText,
 }: {
     item: ExtendedIMessage;
+    previousItem: ExtendedIMessage | null;
     renderMessage: (props: any) => JSX.Element;
     renderBubble: (props: any) => JSX.Element;
     renderMessageText: (props: any) => JSX.Element;
 }) {
+    // Check if this message should be combined with previous
+    const shouldCombineWithPrevious = 
+        previousItem && 
+        isToolCallsOnlyMessage(previousItem) && 
+        isToolCallsOnlyMessage(item);
+
     // GiftedChat message props
     const messageProps = {
         currentMessage: item,
         nextMessage: null, // FlashList doesn't provide this
-        previousMessage: null, // FlashList doesn't provide this
+        previousMessage: previousItem,
         position: 'left' as any, // Simplified for FlashList
     };
 
@@ -58,16 +84,23 @@ const MemoizedMessageItem = memo(function MessageItem({
                 containerStyle: {
                     left: [{ maxWidth: '95%', width: '100%' }],
                 },
+                // Pass info about whether to combine with previous
+                combineWithPrevious: shouldCombineWithPrevious,
+                previousMessageToolCalls: shouldCombineWithPrevious ? previousItem : null,
             })}
         </View>
     );
 }, (prevProps, nextProps) => {
     // Custom comparison for message items
+    const prevCombine = prevProps.combineWithPrevious;
+    const nextCombine = nextProps.combineWithPrevious;
     return (
         prevProps.item._id === nextProps.item._id &&
         prevProps.item.text === nextProps.item.text &&
         prevProps.item.createdAt === nextProps.item.createdAt &&
-        (prevProps.item as any).content_parts === (nextProps.item as any).content_parts
+        (prevProps.item as any).content_parts === (nextProps.item as any).content_parts &&
+        prevCombine === nextCombine &&
+        (prevCombine ? (prevProps.previousItem as any)?._id === (nextProps.previousItem as any)?._id : true)
     );
 });
 
@@ -123,15 +156,18 @@ export function FlashMessageList({
 
     // Render individual message
     const renderItem = useCallback(({ item, index }: { item: ExtendedIMessage; index: number }) => {
+        // Get previous message (in inverted list, previous means next in chronological order)
+        const previousItem = index < messages.length - 1 ? messages[index + 1] : null;
         return (
             <MemoizedMessageItem
                 item={item}
+                previousItem={previousItem}
                 renderMessage={renderMessage}
                 renderBubble={renderBubble}
                 renderMessageText={renderMessageText}
             />
         );
-    }, [renderMessage, renderBubble, renderMessageText]);
+    }, [renderMessage, renderBubble, renderMessageText, messages]);
 
     // Calculate estimated item size (average message height)
     const estimatedItemSize = useMemo(() => {

@@ -290,7 +290,8 @@ export function useGiftedChatRenderers({
     // Stable message renderer
     const renderMessage = useCallback(
         (props: any) => {
-            const { currentMessage } = props;
+            const { currentMessage, combineWithPrevious, previousMessageToolCalls } = props;
+            
             const attachments = currentMessage?.attachments;
             const hasAttachments = attachments && attachments.length > 0;
             const showAttachmentsOutside = hasAttachments && attachmentPosition === 'outside';
@@ -299,6 +300,22 @@ export function useGiftedChatRenderers({
                 if (!showToolCalls) return null;
                 return <SystemMessageBubble text={currentMessage.text} theme={theme} />;
             }
+
+            // If this message should be combined with previous, pass the tool_calls for merging
+            const extendedProps = combineWithPrevious && previousMessageToolCalls
+                ? {
+                    ...props,
+                    // Merge tool_calls from previous message into current
+                    content_parts: [
+                        ...(previousMessageToolCalls.content_parts || []),
+                        ...(currentMessage.content_parts || []),
+                    ],
+                    tool_calls: [
+                        ...(previousMessageToolCalls.tool_calls || []),
+                        ...(currentMessage.tool_calls || []),
+                    ],
+                }
+                : props;
 
             return (
                 <View style={{ width: '100%' }}>
@@ -320,7 +337,7 @@ export function useGiftedChatRenderers({
                         </View>
                     )}
                     <Message
-                        {...props}
+                        {...extendedProps}
                         containerStyle={{
                             left: [{ maxWidth: assistantContainerMaxWidth, width: '100%' }],
                         }}
