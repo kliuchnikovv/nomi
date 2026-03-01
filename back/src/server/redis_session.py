@@ -1197,16 +1197,16 @@ class RedisSession:
                         if result_data:
                             tool_results_lines.append(f"**Tool Result {idx + 1}:**")
                             tool_results_lines.append(f"Tool: {tool_name}")
-                            tool_results_lines.append(f"Result: {str(result_data)[:200]}...")
+                            tool_results_lines.append(
+                                f"Result: {str(result_data)[:200]}..."
+                            )
                         else:
                             tool_results_lines.append(f"**Tool Result {idx + 1}:**")
                             tool_results_lines.append(f"Tool: {tool_name}")
                             tool_results_lines.append("Result: No result data")
 
                     if tool_results_lines:
-                        context_parts.append(
-                            "\\n".join(tool_results_lines) + "\\n"
-                        )
+                        context_parts.append("\\n".join(tool_results_lines) + "\\n")
                         # Clear accumulated results after adding to context
                         self._accumulated_tool_results.clear()
             except Exception as e:
@@ -1706,9 +1706,14 @@ class RedisSession:
             ) > len(accumulated_reasoning):
                 to_yield = captured_reasoning[len(accumulated_reasoning) :]
                 new_accumulated = captured_reasoning
+            elif captured_reasoning == accumulated_reasoning:
+                # Content hasn't changed, nothing new to yield
+                to_yield = ""
+                new_accumulated = accumulated_reasoning
             else:
+                # Content changed but not cumulative - use as-is
                 to_yield = captured_reasoning
-                new_accumulated = accumulated_reasoning + to_yield
+                new_accumulated = captured_reasoning
 
             if to_yield and to_yield != last_yielded_reasoning:
                 reasoning_data = {
@@ -1893,9 +1898,14 @@ class RedisSession:
         if chunk.startswith(accumulated_text) and len(chunk) > len(accumulated_text):
             to_yield = chunk[len(accumulated_text) :]
             new_accumulated = chunk
+        elif chunk == accumulated_text:
+            # Content hasn't changed, nothing new to yield
+            to_yield = ""
+            new_accumulated = accumulated_text
         else:
+            # Content changed but not cumulative - use as-is
             to_yield = chunk
-            new_accumulated = accumulated_text + to_yield
+            new_accumulated = chunk
 
         if to_yield and to_yield != last_yielded_text:
             # Use current_agent_name to detect if we're in a member context
