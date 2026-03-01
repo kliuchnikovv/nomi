@@ -77,11 +77,40 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 
 	// 3. Fetch Integrations
 	var userIntegrations []storage.Integration
+
+	// First, log ALL integrations (including disabled ones)
+	var allIntegrations []storage.Integration
+	h.store.DB.Where("user_id = ?", userID).Find(&allIntegrations)
+	h.logger.Info("ALL integrations for user", zap.Int("count", len(allIntegrations)), zap.String("user_id", userID.String()))
+	for _, integration := range allIntegrations {
+		h.logger.Info("all integration",
+			zap.String("name", integration.Name),
+			zap.String("provider", integration.Provider),
+			zap.String("account_email", integration.AccountEmail),
+			zap.Bool("enabled", integration.Enabled),
+		)
+	}
+
+	// Now get only enabled ones
 	if err := h.store.DB.Where("user_id = ? AND enabled = ?", userID, true).Find(&userIntegrations).Error; err != nil {
 		h.logger.Error("failed to fetch integrations", zap.Error(err))
 		// Proceed with default tools even if integrations fail
 	}
-	h.logger.Info("fetched integrations", zap.Int("count", len(userIntegrations)), zap.String("user_id", userID.String()))
+	h.logger.Info("fetched ENABLED integrations", zap.Int("count", len(userIntegrations)), zap.String("user_id", userID.String()))
+
+	// Also check OAuth tokens
+	var oauthTokens []storage.OAuthToken
+	if err := h.store.DB.Where("user_id = ?", userID).Find(&oauthTokens).Error; err != nil {
+		h.logger.Error("failed to fetch oauth tokens", zap.Error(err))
+	} else {
+		h.logger.Info("OAuth tokens found", zap.Int("count", len(oauthTokens)), zap.String("user_id", userID.String()))
+		for _, token := range oauthTokens {
+			h.logger.Info("OAuth token",
+				zap.String("provider", token.Provider),
+				zap.String("account_email", token.AccountEmail),
+			)
+		}
+	}
 
 	// 4. Build Response
 	type ToolConfig struct {
