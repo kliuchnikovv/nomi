@@ -43,6 +43,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&RefreshToken{},
 		&Attachment{},
 		&PluginData{},
+		&Integration{},
 	); err != nil {
 		return nil, err
 	}
