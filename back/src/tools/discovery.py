@@ -51,7 +51,9 @@ def build_discovery_tool(
         try:
             tools_config = await config_client.fetch_tools(user_id=user_id)
         except Exception:
-            logger.warning("[Discovery] Failed to fetch tools for user=%s", user_id, exc_info=True)
+            logger.warning(
+                "[Discovery] Failed to fetch tools for user=%s", user_id, exc_info=True
+            )
             return json.dumps({"type": "error", "error": "Failed to load integrations"})
 
         schemas = ToolRegistry.build(tools_config)
@@ -61,30 +63,42 @@ def build_discovery_tool(
         try:
             decision = _router.decide(request, context, schemas)
         except Exception:
-            logger.warning("[Discovery] Router failed for user=%s", user_id, exc_info=True)
+            logger.warning(
+                "[Discovery] Router failed for user=%s", user_id, exc_info=True
+            )
             return json.dumps({"type": "error", "error": "Failed to route request"})
 
         if decision.action == "question":
-            return json.dumps({
-                "type": "question",
-                "question": decision.question,
-                "options": decision.options,
-            })
+            return json.dumps(
+                {
+                    "type": "question",
+                    "question": decision.question,
+                    "options": decision.options,
+                }
+            )
 
         if decision.action == "none":
-            return json.dumps({"type": "error", "error": f"No tool found for: {request}"})
+            return json.dumps(
+                {"type": "error", "error": f"No tool found for: {request}"}
+            )
 
         tool_schema = next((s for s in schemas if s["name"] == decision.tool), None)
         if not tool_schema:
-            return json.dumps({"type": "error", "error": f"Unknown tool: {decision.tool}"})
+            return json.dumps(
+                {"type": "error", "error": f"Unknown tool: {decision.tool}"}
+            )
 
         # Client-execution path (iOS-native: Calendar, Reminders) and hybrid tools (Gmail, etc.)
         if tool_schema.get("execution") in ("client", "hybrid"):
             if tool_schema.get("execution") == "client" and not client_tool_runner:
-                return json.dumps({"type": "error", "error": "Client tool runner not configured"})
+                return json.dumps(
+                    {"type": "error", "error": "Client tool runner not configured"}
+                )
             if client_tool_runner:
                 try:
-                    result = await client_tool_runner(decision.tool, decision.method, decision.params)
+                    result = await client_tool_runner(
+                        decision.tool, decision.method, decision.params
+                    )
                     return json.dumps({"type": "result", "result": result})
                 except Exception:
                     logger.warning(
@@ -93,7 +107,9 @@ def build_discovery_tool(
                         decision.method,
                         exc_info=True,
                     )
-                    return json.dumps({"type": "error", "error": "Client tool execution failed"})
+                    return json.dumps(
+                        {"type": "error", "error": "Client tool execution failed"}
+                    )
             # hybrid with no runner: fall through to server execution below
 
         # Server-execution path
@@ -107,17 +123,47 @@ def build_discovery_tool(
                     else {}
                 )
                 credentials = creds_map.get(decision.account_id) or entry.params
-                logger.debug("[Discovery] Using credentials for account_id=%s, found=%s", decision.account_id, bool(creds_map.get(decision.account_id)))
+                logger.debug(
+                    "[Discovery] Using credentials for account_id=%s, found=%s",
+                    decision.account_id,
+                    bool(creds_map.get(decision.account_id)),
+                )
             else:
-                credentials = entry.params
-                logger.debug("[Discovery] No account_id, using entry.params directly")
+                # No account_id - use first credentials from map or entry.params
+                creds_map = (
+                    entry.params.get("credentials")
+                    if isinstance(entry.params.get("credentials"), dict)
+                    else {}
+                )
+                if creds_map:
+                    # Get first credential (single account case)
+                    first_cred = next(iter(creds_map.values()), {})
+                    credentials = first_cred if first_cred else entry.params
+                    logger.debug(
+                        "[Discovery] No account_id, using first credentials from map"
+                    )
+                else:
+                    credentials = entry.params
+                    logger.debug(
+                        "[Discovery] No account_id, using entry.params directly"
+                    )
 
             logger.debug("[Discovery] entry.params keys: %s", list(entry.params.keys()))
-            logger.debug("[Discovery] credentials keys: %s", list(credentials.keys()) if isinstance(credentials, dict) else "not a dict")
-            logger.debug("[Discovery] Has access_token: %s", bool(credentials.get("access_token") or credentials.get("token")))
+            logger.debug(
+                "[Discovery] credentials keys: %s",
+                list(credentials.keys())
+                if isinstance(credentials, dict)
+                else "not a dict",
+            )
+            logger.debug(
+                "[Discovery] Has access_token: %s",
+                bool(credentials.get("access_token") or credentials.get("token")),
+            )
 
         try:
-            result = _executor.run(decision.tool, decision.method, decision.params, credentials)
+            result = _executor.run(
+                decision.tool, decision.method, decision.params, credentials
+            )
             return json.dumps({"type": "result", "result": result})
         except Exception:
             logger.warning(
