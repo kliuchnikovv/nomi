@@ -36,6 +36,7 @@ type Config struct {
 		// Refresh token if it will expire in less than this many minutes
 		RefreshBeforeMinutes int    `yaml:"refresh_before_minutes"`
 		JWTSecret            string `yaml:"jwt_secret"`
+		EncryptionKey        string `yaml:"encryption_key"` // hex-encoded 32-byte AES-256 key
 	} `yaml:"token"`
 	GitHub struct {
 		WebhookSecret string `yaml:"webhook_secret"`

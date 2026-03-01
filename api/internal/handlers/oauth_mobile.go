@@ -8,32 +8,33 @@ import (
 	"net/http"
 	"time"
 
+	"net/url"
+
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/crypto"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
-	"net/url"
 )
 
 // MobileOAuthHandler handles OAuth flows for mobile clients.
-// Unlike regular OAuth, tokens are returned to the client instead of being stored on the backend.
+// Tokens are stored encrypted server-side in oauth_tokens table.
 type MobileOAuthHandler struct {
 	cfg          *config.Config
 	storage      *storage.Storage
 	logger       *zap.Logger
 	oauthFactory *integrations.OAuthFactory
 	oidcProvider *oidc.Provider
+	cryptoKey    []byte // AES-256 key, 32 bytes
 }
 
-// MobileOAuthResponse contains tokens returned to the mobile client
+// MobileOAuthResponse contains data returned to the mobile client after OAuth
+// Note: tokens are stored encrypted server-side, not returned to client
 type MobileOAuthResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	TokenExpiry  int64  `json:"token_expiry"` // Unix timestamp
 	AccountEmail string `json:"account_email"`
 	Provider     string `json:"provider"`
 }
@@ -55,6 +56,7 @@ func NewMobileOAuthHandler(
 	logger *zap.Logger,
 	cfg *config.Config,
 	db *storage.Storage,
+	cryptoKey []byte,
 ) (*MobileOAuthHandler, error) {
 	// Создаем OAuth фабрику из реестра
 	oauthFactory, err := integrations.NewOAuthFactory(cfg, logger)
@@ -74,6 +76,7 @@ func NewMobileOAuthHandler(
 		logger:       logger,
 		oauthFactory: oauthFactory,
 		oidcProvider: oidcProvider,
+		cryptoKey:    cryptoKey,
 	}, nil
 }
 
@@ -307,68 +310,87 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		displayName = accountEmail
 	}
 
-	// Return tokens to client WITHOUT saving to backend database
-	response := MobileOAuthResponse{
+	// Encrypt and save tokens to oauth_tokens table
+	type tokenPayload struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token,omitempty"`
+		ClientID     string `json:"client_id,omitempty"`
+		ClientSecret string `json:"client_secret,omitempty"`
+		TokenURI     string `json:"token_uri,omitempty"`
+		TokenType    string `json:"token_type,omitempty"`
+	}
+	payload := tokenPayload{
 		AccessToken:  token.AccessToken,
 		RefreshToken: token.RefreshToken,
-		TokenExpiry:  token.Expiry.Unix(),
-		AccountEmail: accountEmail,
-		Provider:     providerName,
+		ClientID:     oauthConfig.ClientID,
+		ClientSecret: oauthConfig.ClientSecret,
+		TokenType:    token.TokenType,
+	}
+	// Determine token_uri by provider
+	if providerName == "github" {
+		payload.TokenURI = "https://github.com/login/oauth/access_token"
+	} else {
+		payload.TokenURI = "https://oauth2.googleapis.com/token"
 	}
 
-	h.logger.Info("mobile OAuth callback successful",
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		h.logger.Error("failed to marshal token payload", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save credentials"})
+		return
+	}
+
+	encrypted, err := crypto.Encrypt(h.cryptoKey, payloadJSON)
+	if err != nil {
+		h.logger.Error("failed to encrypt token", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save credentials"})
+		return
+	}
+
+	user, err := userFromCtxMobile(c.Request.Context())
+	if err != nil || user == nil {
+		h.logger.Warn("could not save tokens: user not found in context", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
+		return
+	}
+
+	oauthToken := &storage.OAuthToken{
+		UserID:         user.ID,
+		Provider:       providerName,
+		AccountEmail:   accountEmail,
+		TokenEncrypted: encrypted,
+	}
+	if err := h.storage.SaveOAuthToken(ctx, oauthToken); err != nil {
+		h.logger.Error("failed to save oauth token", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save credentials"})
+		return
+	}
+
+	// Save integration metadata (no tokens in params)
+	metaParams, _ := json.Marshal(map[string]string{"display_name": displayName})
+	integration := &storage.Integration{
+		UserID:       user.ID,
+		Name:         accountEmail,
+		Provider:     providerName,
+		AccountEmail: accountEmail,
+		Params:       string(metaParams),
+		Enabled:      true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := h.storage.UpsertIntegration(integration); err != nil {
+		h.logger.Error("failed to upsert integration", zap.Error(err))
+	}
+
+	h.logger.Info("mobile OAuth callback successful, tokens saved server-side",
 		zap.String("provider", providerName),
 		zap.String("email", accountEmail),
 	)
 
-	// Save integration to backend database so Python agent can use it
-	user, err := userFromCtxMobile(c.Request.Context())
-	if err == nil && user != nil {
-		params := map[string]interface{}{
-			"access_token":  token.AccessToken,
-			"refresh_token": token.RefreshToken,
-			"token_expiry":  token.Expiry.Unix(),
-			"account_email": accountEmail,
-			"client_id":     oauthConfig.ClientID,
-			"client_secret": oauthConfig.ClientSecret,
-			"token_type":    token.TokenType,
-		}
-		if displayName != "" {
-			params["display_name"] = displayName
-		}
-
-		// Определяем token_uri на основе провайдера
-		provider, _ := integrations.GetProvider(providerName)
-		if provider != nil && provider.OAuthConfig != nil {
-			if providerName == "github" {
-				params["token_uri"] = "https://github.com/login/oauth/access_token"
-			} else {
-				params["token_uri"] = "https://oauth2.googleapis.com/token"
-			}
-		}
-
-		paramsJSON, _ := json.Marshal(params)
-
-		integration := &storage.Integration{
-			UserID:       user.ID,
-			Name:         accountEmail,
-			Provider:     providerName,
-			AccountEmail: accountEmail,
-			Params:       string(paramsJSON),
-			Enabled:      true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
-		}
-		if err := h.storage.UpsertIntegration(integration); err != nil {
-			h.logger.Error("failed to upsert integration", zap.Error(err))
-		} else {
-			h.logger.Info("upserted integration", zap.String("provider", providerName), zap.String("account_email", accountEmail))
-		}
-	} else {
-		h.logger.Warn("could not save integration: user not found in context", zap.Error(err))
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, MobileOAuthResponse{
+		AccountEmail: accountEmail,
+		Provider:     providerName,
+	})
 }
 
 // RefreshToken refreshes an access token using a refresh token.

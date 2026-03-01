@@ -13,12 +13,15 @@ import { ConnectorContextType, Tool, Integration } from './models';
 import { pluginsApi, authStore } from '../../../apiClient.ts';
 import { OAUTH_CALLBACK_URL, getApiUrl } from '../../../config.ts';
 import * as DatabaseModule from '../../../services/database/database';
-import { integrationStorage, Integration as LocalIntegration } from '../../../services/integrations/IntegrationStorage';
-import { 
-    getIntegrationMetadata, 
-    isServer, 
+import {
+    integrationStorage,
+    Integration as LocalIntegration,
+} from '../../../services/integrations/IntegrationStorage';
+import {
+    getIntegrationMetadata,
+    isServer,
     getServerIntegrations,
-    INTEGRATION_REGISTRY 
+    INTEGRATION_REGISTRY,
 } from '../../../services/integrations/registry';
 import {
     initializeBackgroundTasks,
@@ -42,19 +45,23 @@ async function safeInitDatabase(): Promise<void> {
     }
 }
 
-const ConnectorsContext = createContext<ConnectorContextType | undefined>(undefined);
+const ConnectorsContext = createContext<ConnectorContextType | undefined>(
+    undefined,
+);
 
 export function useConnectors() {
     const context = useContext(ConnectorsContext);
     if (!context) {
-        throw new Error('useConnectors must be used within a ConnectorsProvider');
+        throw new Error(
+            'useConnectors must be used within a ConnectorsProvider',
+        );
     }
     return context;
 }
 
 export function ConnectorsProvider({ children }: { children: ReactNode }) {
-    const [tools, setTools] = useState<Tool[]>([])
-    const [configs, setConfigs] = useState<Integration[]>([])
+    const [tools, setTools] = useState<Tool[]>([]);
+    const [configs, setConfigs] = useState<Integration[]>([]);
     const [pendingProvider, setPendingProvider] = useState<string | null>(null);
     const [pendingCode, setPendingCode] = useState<string | null>(null);
     const [authStatus, setAuthStatus] = useState<string | null>(null);
@@ -69,7 +76,10 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 setDbReady(true);
             })
             .catch(e => {
-                console.error('[ConnectorsProvider] Failed to initialize database:', e);
+                console.error(
+                    '[ConnectorsProvider] Failed to initialize database:',
+                    e,
+                );
             });
     }, []);
 
@@ -78,10 +88,13 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         if (dbReady) {
             // Инициализируем обработчики системных событий
             initializeSystemEventListeners();
-            
+
             // Инициализируем фоновые задачи для активных интеграций
             initializeBackgroundTasks().catch(e => {
-                console.error('[ConnectorsProvider] Failed to initialize background tasks:', e);
+                console.error(
+                    '[ConnectorsProvider] Failed to initialize background tasks:',
+                    e,
+                );
             });
         }
     }, [dbReady]);
@@ -104,7 +117,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             if (!token) return;
 
             const response = await fetch(`${apiUrl}/integrations`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
             });
 
             if (!response.ok) return;
@@ -117,19 +130,26 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             for (const item of items) {
                 const provider = item.provider || item.Provider;
                 if (!item || !provider) {
-                    console.warn('[ConnectorsProvider] Skipping invalid integration item:', item);
+                    console.warn(
+                        '[ConnectorsProvider] Skipping invalid integration item:',
+                        item,
+                    );
                     continue;
                 }
                 // Проверяем через реестр, является ли это серверной интеграцией
                 if (!isServer(provider)) {
-                    console.log(`[ConnectorsProvider] Skipping client-only integration: ${provider} (stored locally)`);
+                    console.log(
+                        `[ConnectorsProvider] Skipping client-only integration: ${provider} (stored locally)`,
+                    );
                     continue;
                 }
 
                 // Серверные интеграции синхронизируются для отображения метаданных
                 // Но токены не синхронизируются (они остаются на сервере)
-                console.log(`[ConnectorsProvider] Server integration found: ${provider} (metadata only)`);
-                
+                console.log(
+                    `[ConnectorsProvider] Server integration found: ${provider} (metadata only)`,
+                );
+
                 // Можно добавить логику для синхронизации метаданных серверных интеграций
                 // если это необходимо для UI
             }
@@ -146,7 +166,8 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             await syncFromBackend();
 
             // Load from local SQLite
-            const localIntegrations = await integrationStorage.getIntegrations();
+            const localIntegrations =
+                await integrationStorage.getIntegrations();
 
             const normalized: Integration[] = [];
             const toolsList: Tool[] = [];
@@ -154,7 +175,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             for (const p of localIntegrations) {
                 // Получаем метаданные из реестра
                 const metadata = getIntegrationMetadata(p.provider);
-                
+
                 // Fetch credentials
                 const creds = await integrationStorage.getCredentials(p.id);
                 const params: any = { account_email: p.accountEmail };
@@ -163,8 +184,12 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 if (creds) {
                     params.access_token = creds.accessToken;
                     // Also include refresh token and expiry if available
-                    if (creds.refreshToken) params.refresh_token = creds.refreshToken;
-                    if (creds.tokenExpiry) params.token_expiry = Math.floor(creds.tokenExpiry.getTime() / 1000);
+                    if (creds.refreshToken)
+                        params.refresh_token = creds.refreshToken;
+                    if (creds.tokenExpiry)
+                        params.token_expiry = Math.floor(
+                            creds.tokenExpiry.getTime() / 1000,
+                        );
                 }
 
                 // Добавляем метаданные из реестра
@@ -191,20 +216,33 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             setConfigs(normalized);
             setTools(toolsList);
 
-            console.log(`[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`);
-            
+            console.log(
+                `[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`,
+            );
+
             // Обновляем фоновые задачи на основе текущего состояния интеграций
             refreshBackgroundTasks().catch(e => {
-                console.error('[ConnectorsProvider] Failed to refresh background tasks:', e);
+                console.error(
+                    '[ConnectorsProvider] Failed to refresh background tasks:',
+                    e,
+                );
             });
-            
+
             // Регистрируем обработчики системных событий для каждой интеграции
             for (const integration of localIntegrations) {
                 if (integration.enabled) {
-                    const metadata = getIntegrationMetadata(integration.provider);
+                    const metadata = getIntegrationMetadata(
+                        integration.provider,
+                    );
                     if (metadata?.supportsBackgroundTasks) {
-                        registerSystemEventListeners(integration.id, integration.provider).catch(e => {
-                            console.error(`[ConnectorsProvider] Failed to register system listeners for ${integration.provider}:`, e);
+                        registerSystemEventListeners(
+                            integration.id,
+                            integration.provider,
+                        ).catch(e => {
+                            console.error(
+                                `[ConnectorsProvider] Failed to register system listeners for ${integration.provider}:`,
+                                e,
+                            );
                         });
                     }
                 }
@@ -216,50 +254,65 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         }
     }, [dbReady]);
 
-    const handleOAuthUrl = React.useCallback(async (url: string) => {
-        if (!url || !url.startsWith(OAUTH_CALLBACK_URL)) return;
-        if (lastHandledUrl.current === url) return;
-        lastHandledUrl.current = url;
+    const handleOAuthUrl = React.useCallback(
+        async (url: string) => {
+            if (!url || !url.startsWith(OAUTH_CALLBACK_URL)) return;
+            if (lastHandledUrl.current === url) return;
+            lastHandledUrl.current = url;
 
-        try {
-            const parsed = new URL(url);
-            const provider = parsed.searchParams.get('provider');
-            const status = parsed.searchParams.get('status');
-            const code = parsed.searchParams.get('code');
-            const email = parsed.searchParams.get('email');
-            const accountEmail = parsed.searchParams.get('account_email');
+            try {
+                const parsed = new URL(url);
+                const provider = parsed.searchParams.get('provider');
+                const status = parsed.searchParams.get('status');
+                const code = parsed.searchParams.get('code');
+                const email = parsed.searchParams.get('email');
+                const accountEmail = parsed.searchParams.get('account_email');
 
-            if (provider && pendingProvider && provider !== pendingProvider) {
-                return;
-            }
+                if (
+                    provider &&
+                    pendingProvider &&
+                    provider !== pendingProvider
+                ) {
+                    return;
+                }
 
-            // If we got a code, exchange it for tokens using mobile endpoint
-            if (code && provider) {
-                await exchangeCodeForTokens(provider, code);
-                return;
-            }
+                // If we got a code, exchange it for tokens using mobile endpoint
+                if (code && provider) {
+                    await exchangeCodeForTokens(provider, code);
+                    return;
+                }
 
-            // Legacy flow: backend already handled tokens
-            if (status === 'ok' && provider) {
-                const labelEmail = accountEmail || email;
-                setAuthStatus(`Connected ${provider}${labelEmail ? ` (${labelEmail})` : ''}`);
+                // Legacy flow: backend already handled tokens
+                if (status === 'ok' && provider) {
+                    const labelEmail = accountEmail || email;
+                    setAuthStatus(
+                        `Connected ${provider}${
+                            labelEmail ? ` (${labelEmail})` : ''
+                        }`,
+                    );
+                    await getIntegrations();
+                } else {
+                    setAuthStatus(
+                        `OAuth failed${provider ? ` for ${provider}` : ''}`,
+                    );
+                }
+            } finally {
+                setPendingProvider(null);
+                setPendingCode(null);
                 await getIntegrations();
-            } else {
-                setAuthStatus(`OAuth failed${provider ? ` for ${provider}` : ''}`);
             }
-        } finally {
-            setPendingProvider(null);
-            setPendingCode(null);
-            await getIntegrations();
-        }
-    }, [pendingProvider, getIntegrations]);
+        },
+        [pendingProvider, getIntegrations],
+    );
 
     /**
      * Exchange OAuth code for tokens and save locally
      */
     const exchangeCodeForTokens = async (provider: string, code: string) => {
         try {
-            console.log(`[ConnectorsProvider] Exchanging code for tokens (${provider})...`);
+            console.log(
+                `[ConnectorsProvider] Exchanging code for tokens (${provider})...`,
+            );
 
             const apiUrl = getApiUrl();
             const token = authStore.getToken();
@@ -270,11 +323,14 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
-            const response = await fetch(`${apiUrl}/oauth/${provider}/callback-mobile`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ code }),
-            });
+            const response = await fetch(
+                `${apiUrl}/oauth/${provider}/callback-mobile`,
+                {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ code }),
+                },
+            );
 
             if (!response.ok) {
                 const error = await response.json().catch(() => ({}));
@@ -283,40 +339,76 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
             const data = await response.json();
 
-            console.log(`[ConnectorsProvider] Token exchange successful for ${provider}, saving credentials locally`);
+            console.log(
+                `[ConnectorsProvider] Token exchange successful for ${provider}`,
+            );
 
             // Получаем метаданные из реестра
             const metadata = getIntegrationMetadata(data.provider);
-            const displayName = metadata?.displayName || data.provider.charAt(0).toUpperCase() + data.provider.slice(1);
+            const displayName =
+                metadata?.displayName ||
+                data.provider.charAt(0).toUpperCase() + data.provider.slice(1);
 
-            // Save integration and credentials locally
-            // Для клиентских интеграций сохраняем метаданные из реестра
-            await integrationStorage.createIntegration({
-                provider: data.provider as LocalIntegration['provider'],
-                name: `${displayName} (${data.account_email})`,
-                enabled: true,
-                accountEmail: data.account_email,
-                storageType: metadata?.storageType,
-                supportsBackgroundTasks: metadata?.supportsBackgroundTasks,
-                systemEventListeners: metadata?.systemEventListeners,
-            }, {
-                accessToken: data.access_token,
-                refreshToken: data.refresh_token,
-                tokenExpiry: new Date(data.token_expiry * 1000),
-            });
+            // Для server-side интеграций токены хранятся на сервере, не сохраняем их локально
+            // Для client-only интеграций токены всё еще могут приходиться (future enhancement)
+            if (metadata?.storageType === 'server') {
+                // Server-side: сохраняем только метаданные без токенов
+                await integrationStorage.createIntegration({
+                    provider: data.provider as LocalIntegration['provider'],
+                    name: `${displayName} (${data.account_email})`,
+                    enabled: true,
+                    accountEmail: data.account_email,
+                    storageType: metadata?.storageType,
+                    // Server-side интеграции не поддерживают фоновые задачи на клиенте
+                    supportsBackgroundTasks: false,
+                    systemEventListeners: [],
+                });
+            } else {
+                // Client-only: сохраняем с токенами (если они есть в ответе)
+                await integrationStorage.createIntegration(
+                    {
+                        provider: data.provider as LocalIntegration['provider'],
+                        name: `${displayName} (${data.account_email})`,
+                        enabled: true,
+                        accountEmail: data.account_email,
+                        storageType: metadata?.storageType,
+                        supportsBackgroundTasks:
+                            metadata?.supportsBackgroundTasks,
+                        systemEventListeners: metadata?.systemEventListeners,
+                    },
+                    {
+                        accessToken: data.access_token,
+                        refreshToken: data.refresh_token,
+                        tokenExpiry: data.token_expiry
+                            ? new Date(data.token_expiry * 1000)
+                            : undefined,
+                    },
+                );
+            }
 
-            console.log(`[ConnectorsProvider] Integration saved locally: ${data.account_email}`);
+            console.log(
+                `[ConnectorsProvider] Integration saved locally: ${data.account_email}`,
+            );
             setAuthStatus(`Connected ${provider} (${data.account_email})`);
 
             await getIntegrations();
-            
-            // Регистрируем фоновые задачи для новой интеграции, если она поддерживает их
-            // Используем уже объявленную переменную metadata из строки 281
-            if (metadata?.supportsBackgroundTasks) {
-                const localIntegration = await integrationStorage.getIntegrationByEmail(provider, data.account_email);
+
+            // Регистрируем фоновые задачи только для client-only интеграций
+            if (
+                metadata?.storageType === 'client' &&
+                metadata?.supportsBackgroundTasks
+            ) {
+                const localIntegration =
+                    await integrationStorage.getIntegrationByEmail(
+                        provider,
+                        data.account_email,
+                    );
                 if (localIntegration) {
                     await refreshBackgroundTasks();
-                    await registerSystemEventListeners(localIntegration.id, provider);
+                    await registerSystemEventListeners(
+                        localIntegration.id,
+                        provider,
+                    );
                 }
             }
         } catch (e) {
@@ -327,97 +419,124 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
     };
 
     useEffect(() => {
-        const subscription = Linking.addEventListener('url', ({ url }) => handleOAuthUrl(url));
-        Linking.getInitialURL().then(initialUrl => {
-            if (initialUrl) {
-                handleOAuthUrl(initialUrl);
-            }
-        }).catch(() => { });
+        const subscription = Linking.addEventListener('url', ({ url }) =>
+            handleOAuthUrl(url),
+        );
+        Linking.getInitialURL()
+            .then(initialUrl => {
+                if (initialUrl) {
+                    handleOAuthUrl(initialUrl);
+                }
+            })
+            .catch(() => {});
 
         return () => {
             subscription.remove();
         };
     }, [handleOAuthUrl]);
 
-    const openOAuthFlow = React.useCallback(async (authUrl: string) => {
-        console.log('Opening OAuth flow', authUrl);
-        try {
-            const isAvailable = await InAppBrowser.isAvailable();
-            console.log('InAppBrowser available:', isAvailable);
-            if (isAvailable) {
-                const result = await InAppBrowser.openAuth(authUrl, OAUTH_CALLBACK_URL, {
-                    ephemeralWebSession: false,
-                    dismissButtonStyle: 'close',
-                    showTitle: false,
-                    enableDefaultShare: false,
-                });
-                if (result.type === 'success' && result.url) {
-                    await handleOAuthUrl(result.url);
-                }
-                if (result.type === 'cancel') {
-                    setAuthStatus('OAuth flow cancelled');
-                    setPendingProvider(null);
-                }
-                return;
-            }
-        } catch (e) {
-            console.warn('Failed to open OAuth flow in InAppBrowser', e);
-            console.log('Falling back to Linking.openURL');
+    const openOAuthFlow = React.useCallback(
+        async (authUrl: string) => {
+            console.log('Opening OAuth flow', authUrl);
             try {
-                await Linking.openURL(authUrl);
-            } catch (err) {
-                console.warn('Failed to open OAuth URL', err);
+                const isAvailable = await InAppBrowser.isAvailable();
+                console.log('InAppBrowser available:', isAvailable);
+                if (isAvailable) {
+                    const result = await InAppBrowser.openAuth(
+                        authUrl,
+                        OAUTH_CALLBACK_URL,
+                        {
+                            ephemeralWebSession: false,
+                            dismissButtonStyle: 'close',
+                            showTitle: false,
+                            enableDefaultShare: false,
+                        },
+                    );
+                    if (result.type === 'success' && result.url) {
+                        await handleOAuthUrl(result.url);
+                    }
+                    if (result.type === 'cancel') {
+                        setAuthStatus('OAuth flow cancelled');
+                        setPendingProvider(null);
+                    }
+                    return;
+                }
+            } catch (e) {
+                console.warn('Failed to open OAuth flow in InAppBrowser', e);
+                console.log('Falling back to Linking.openURL');
+                try {
+                    await Linking.openURL(authUrl);
+                } catch (err) {
+                    console.warn('Failed to open OAuth URL', err);
+                }
             }
-        }
-    }, [handleOAuthUrl]);
+        },
+        [handleOAuthUrl],
+    );
 
-    const startOAuth = React.useCallback(async (provider: string) => {
-        try {
-            setPendingProvider(provider);
-            const redirectUrl = await pluginsApi.startOAuthLogin(provider);
-            if (redirectUrl) {
-                await openOAuthFlow(redirectUrl);
+    const startOAuth = React.useCallback(
+        async (provider: string) => {
+            try {
+                setPendingProvider(provider);
+                const redirectUrl = await pluginsApi.startOAuthLogin(provider);
+                if (redirectUrl) {
+                    await openOAuthFlow(redirectUrl);
+                }
+            } catch (authError) {
+                console.warn('Failed to start OAuth login', authError);
+                setPendingProvider(null);
+                setAuthStatus('Failed to start OAuth login');
+                throw authError;
             }
-        } catch (authError) {
-            console.warn('Failed to start OAuth login', authError);
-            setPendingProvider(null);
-            setAuthStatus('Failed to start OAuth login');
-            throw authError;
-        }
-    }, [openOAuthFlow]);
- 
+        },
+        [openOAuthFlow],
+    );
+
     async function toggleTool(configID: string, enabled: boolean) {
-        const integration = configs.find(c => c.id === configID || c.provider === configID);
+        const integration = configs.find(
+            c => c.id === configID || c.provider === configID,
+        );
         if (!integration) {
             // For client-only integrations (authType === 'none'), create the record if it doesn't exist
             const metadata = getIntegrationMetadata(configID);
             if (metadata?.authType === 'none') {
                 try {
-                    await integrationStorage.createIntegration({
-                        provider: configID as any,
-                        name: metadata.displayName,
-                        enabled: enabled,
-                        storageType: metadata.storageType,
-                        supportsBackgroundTasks: metadata.supportsBackgroundTasks,
-                        systemEventListeners: metadata.systemEventListeners,
-                    }, { accessToken: '' });
+                    await integrationStorage.createIntegration(
+                        {
+                            provider: configID as any,
+                            name: metadata.displayName,
+                            enabled: enabled,
+                            storageType: metadata.storageType,
+                            supportsBackgroundTasks:
+                                metadata.supportsBackgroundTasks,
+                            systemEventListeners: metadata.systemEventListeners,
+                        },
+                        { accessToken: '' },
+                    );
                     await getIntegrations();
-                    console.log(`[ConnectorsProvider] Created client-only integration: ${configID}`);
+                    console.log(
+                        `[ConnectorsProvider] Created client-only integration: ${configID}`,
+                    );
                     return;
                 } catch (e) {
-                    console.warn(`Failed to create client-only integration ${configID}:`, e);
+                    console.warn(
+                        `Failed to create client-only integration ${configID}:`,
+                        e,
+                    );
                 }
             } else {
                 console.warn(`Integration not found for ID: ${configID}`);
             }
             return;
         }
- 
+
         try {
             // Update in local storage
-            await integrationStorage.updateIntegration(integration.id, { enabled });
+            await integrationStorage.updateIntegration(integration.id, {
+                enabled,
+            });
             await getIntegrations();
-            
+
             // Обновляем фоновые задачи при изменении состояния интеграции
             await refreshBackgroundTasks();
         } catch (e) {
@@ -425,121 +544,148 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         }
     }
 
-    const deleteIntegration = React.useCallback(async (id: string) => {
-        try {
-            // Delete from backend first if it's synced
-            const apiUrl = getApiUrl();
-            const token = authStore.getToken();
+    const deleteIntegration = React.useCallback(
+        async (id: string) => {
+            try {
+                // Delete from backend first if it's synced
+                const apiUrl = getApiUrl();
+                const token = authStore.getToken();
 
-            if (token) {
-                // We need the backend ID for this, but our local ID might be different if we generated it.
-                // However, with the new sync logic, we should try to match.
-                // But wait, our local ID is a UUID generated locally currently.
-                // The sync logic I added doesn't store the backend ID explicitly in a separate field, 
-                // it just tries to use it or generates a new one.
-                // Actually, if we look at syncFromBackend, I didn't enforce using backend ID.
-                // So we might have a problem deleting by ID if they don't match.
+                if (token) {
+                    // We need the backend ID for this, but our local ID might be different if we generated it.
+                    // However, with the new sync logic, we should try to match.
+                    // But wait, our local ID is a UUID generated locally currently.
+                    // The sync logic I added doesn't store the backend ID explicitly in a separate field,
+                    // it just tries to use it or generates a new one.
+                    // Actually, if we look at syncFromBackend, I didn't enforce using backend ID.
+                    // So we might have a problem deleting by ID if they don't match.
 
-                // Let's check if the ID matches a backend one. 
-                // If we can't match it easily, we might fail to delete on backend.
+                    // Let's check if the ID matches a backend one.
+                    // If we can't match it easily, we might fail to delete on backend.
 
-                // Better approach:
-                // 1. Get the local integration
-                // 2. Fetch backend integrations
-                // 3. Find the matching backend integration by provider + email
-                // 4. Delete using backend ID
+                    // Better approach:
+                    // 1. Get the local integration
+                    // 2. Fetch backend integrations
+                    // 3. Find the matching backend integration by provider + email
+                    // 4. Delete using backend ID
 
-                const integration = configs.find(c => c.id === id);
-                if (integration && integration.params?.account_email) {
-                    const response = await fetch(`${apiUrl}/integrations`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        const items: any[] = data.items || [];
-                        const backendInt = items.find((i: any) =>
-                            i.provider === integration.provider &&
-                            JSON.parse(i.params).account_email === integration.params!.account_email
-                        );
+                    const integration = configs.find(c => c.id === id);
+                    if (integration && integration.params?.account_email) {
+                        const response = await fetch(`${apiUrl}/integrations`, {
+                            headers: { Authorization: `Bearer ${token}` },
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            const items: any[] = data.items || [];
+                            const backendInt = items.find(
+                                (i: any) =>
+                                    i.provider === integration.provider &&
+                                    JSON.parse(i.params).account_email ===
+                                        integration.params!.account_email,
+                            );
 
-                        if (backendInt) {
-                            await fetch(`${apiUrl}/integrations/${backendInt.id}`, {
-                                method: 'DELETE',
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
+                            if (backendInt) {
+                                await fetch(
+                                    `${apiUrl}/integrations/${backendInt.id}`,
+                                    {
+                                        method: 'DELETE',
+                                        headers: {
+                                            Authorization: `Bearer ${token}`,
+                                        },
+                                    },
+                                );
+                            }
                         }
                     }
                 }
+
+                // Clean up plugin chats for this integration's provider
+                const integration = configs.find(c => c.id === id);
+                if (integration?.provider) {
+                    await pluginChatStorage.deletePluginChatsByPlugin(
+                        integration.provider,
+                    );
+                }
+
+                // Delete from local storage (also cleans up events, tasks, credentials, emails)
+                await integrationStorage.deleteIntegration(id);
+
+                // Обновляем фоновые задачи после удаления интеграции
+                await refreshBackgroundTasks();
+                await getIntegrations();
+            } catch (e) {
+                console.warn('Failed to delete integration', e);
             }
+        },
+        [getIntegrations, configs],
+    );
 
-            // Clean up plugin chats for this integration's provider
-            const integration = configs.find(c => c.id === id);
-            if (integration?.provider) {
-                await pluginChatStorage.deletePluginChatsByPlugin(integration.provider);
+    const connectTelegram = React.useCallback(
+        async (code: string) => {
+            try {
+                const apiUrl = getApiUrl();
+                const token = authStore.getToken();
+                if (!token) {
+                    throw new Error('Not authenticated');
+                }
+
+                const response = await fetch(`${apiUrl}/telegram/link`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ code }),
+                });
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || 'Failed to link Telegram');
+                }
+
+                const data = await response.json();
+                console.log(
+                    `[ConnectorsProvider] Telegram linked: ${data.display_name}`,
+                );
+
+                // Save as a local integration so it shows in sidebar
+                const metadata = getIntegrationMetadata('telegram');
+                const displayName = data.display_name || 'Telegram';
+
+                await integrationStorage.createIntegration(
+                    {
+                        provider: 'telegram' as any,
+                        name: `Telegram (${displayName})`,
+                        enabled: true,
+                        accountEmail: displayName,
+                        storageType: metadata?.storageType,
+                        supportsBackgroundTasks:
+                            metadata?.supportsBackgroundTasks,
+                        systemEventListeners: metadata?.systemEventListeners,
+                    },
+                    {
+                        accessToken: code,
+                        refreshToken: '',
+                        tokenExpiry: new Date(
+                            Date.now() + 365 * 24 * 60 * 60 * 1000,
+                        ),
+                    },
+                );
+
+                setAuthStatus(`Connected Telegram (${displayName})`);
+                await getIntegrations();
+            } catch (e) {
+                console.error('[ConnectorsProvider] Telegram link failed:', e);
+                setAuthStatus(
+                    e instanceof Error
+                        ? e.message
+                        : 'Failed to connect Telegram',
+                );
+                throw e;
             }
-
-            // Delete from local storage (also cleans up events, tasks, credentials, emails)
-            await integrationStorage.deleteIntegration(id);
-
-            // Обновляем фоновые задачи после удаления интеграции
-            await refreshBackgroundTasks();
-            await getIntegrations();
-        } catch (e) {
-            console.warn('Failed to delete integration', e);
-        }
-    }, [getIntegrations, configs]);
-
-    const connectTelegram = React.useCallback(async (code: string) => {
-        try {
-            const apiUrl = getApiUrl();
-            const token = authStore.getToken();
-            if (!token) {
-                throw new Error('Not authenticated');
-            }
-
-            const response = await fetch(`${apiUrl}/telegram/link`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({ code }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(error.error || 'Failed to link Telegram');
-            }
-
-            const data = await response.json();
-            console.log(`[ConnectorsProvider] Telegram linked: ${data.display_name}`);
-
-            // Save as a local integration so it shows in sidebar
-            const metadata = getIntegrationMetadata('telegram');
-            const displayName = data.display_name || 'Telegram';
-
-            await integrationStorage.createIntegration({
-                provider: 'telegram' as any,
-                name: `Telegram (${displayName})`,
-                enabled: true,
-                accountEmail: displayName,
-                storageType: metadata?.storageType,
-                supportsBackgroundTasks: metadata?.supportsBackgroundTasks,
-                systemEventListeners: metadata?.systemEventListeners,
-            }, {
-                accessToken: code,
-                refreshToken: '',
-                tokenExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            });
-
-            setAuthStatus(`Connected Telegram (${displayName})`);
-            await getIntegrations();
-        } catch (e) {
-            console.error('[ConnectorsProvider] Telegram link failed:', e);
-            setAuthStatus(e instanceof Error ? e.message : 'Failed to connect Telegram');
-            throw e;
-        }
-    }, [getIntegrations]);
+        },
+        [getIntegrations],
+    );
 
     const value: ConnectorContextType = {
         tools,
@@ -553,9 +699,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <ConnectorsContext.Provider
-            value={value}
-        >
+        <ConnectorsContext.Provider value={value}>
             {children}
         </ConnectorsContext.Provider>
     );

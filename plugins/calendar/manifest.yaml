@@ -4,9 +4,8 @@ description: Google Calendar integration for calendar management
 version: 1.0.0
 
 execution:
-  type: hybrid
+  type: server
   entry_points:
-    client: ./client/executor.ts
     server: ./server/tools.py
 
 auth:
@@ -56,11 +55,8 @@ methods:
       required: []
 
 background_tasks:
-  enabled: true
-  system_events:
-    - push_notifications
-    - app_lifecycle
+  enabled: false
 
 storage:
-  type: hybrid
+  type: server
   encrypted: true

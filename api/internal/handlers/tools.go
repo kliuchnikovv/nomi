@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/crypto"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -14,14 +15,16 @@ import (
 )
 
 type ToolsHandler struct {
-	store  *storage.Storage
-	logger *zap.Logger
+	store     *storage.Storage
+	logger    *zap.Logger
+	cryptoKey []byte
 }
 
-func NewToolsHandler(store *storage.Storage, logger *zap.Logger) *ToolsHandler {
+func NewToolsHandler(store *storage.Storage, logger *zap.Logger, cryptoKey []byte) *ToolsHandler {
 	return &ToolsHandler{
-		store:  store,
-		logger: logger,
+		store:     store,
+		logger:    logger,
+		cryptoKey: cryptoKey,
 	}
 }
 
@@ -165,9 +168,31 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		}
 		entry.accounts = append(entry.accounts, account)
 
-		// For server-side tools, store credentials per account id so Python can resolve them.
+		// For server-side tools, load credentials from oauth_tokens (encrypted)
 		if provider.StorageType == integrations.StorageTypeServer || provider.StorageType == integrations.StorageTypeHybrid {
-			entry.mergedParams[accountID] = rawParams
+			oauthToken, err := h.store.GetOAuthTokenByUserAndEmail(
+				c.Request.Context(), userID, integration.Provider, integration.AccountEmail,
+			)
+			if err != nil {
+				h.logger.Warn("oauth token not found for integration, skipping credentials",
+					zap.String("provider", integration.Provider),
+					zap.String("account_email", integration.AccountEmail),
+					zap.Error(err),
+				)
+			} else {
+				decrypted, err := crypto.Decrypt(h.cryptoKey, oauthToken.TokenEncrypted)
+				if err != nil {
+					h.logger.Warn("failed to decrypt oauth token",
+						zap.String("provider", integration.Provider),
+						zap.Error(err),
+					)
+				} else {
+					var tokenData map[string]interface{}
+					if err := json.Unmarshal(decrypted, &tokenData); err == nil {
+						entry.mergedParams[accountID] = tokenData
+					}
+				}
+			}
 		}
 	}
 

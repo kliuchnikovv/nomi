@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -50,15 +51,25 @@ func New(
 		modelsHandler      = handlers.NewModelsHandler(os.Getenv("GOOGLE_API_KEY"))
 		uploadHandler      = handlers.NewUploadHandler(ctr.Storage)
 		credentialsHandler = handlers.NewCredentialsHandler(logger, ctr.CredentialsStore)
+		cryptoKey          []byte
+	)
 
+	// Parse encryption key once
+	var err error
+	cryptoKey, err = hex.DecodeString(cfg.Token.EncryptionKey)
+	if err != nil || len(cryptoKey) != 32 {
+		logger.Fatal("invalid encryption_key in config: must be 64 hex chars (32 bytes)", zap.Error(err))
+	}
+
+	var (
 		mobileOAuthHandler = func() *handlers.MobileOAuthHandler {
-			h, err := handlers.NewMobileOAuthHandler(logger, cfg, ctr.Storage)
+			h, err := handlers.NewMobileOAuthHandler(logger, cfg, ctr.Storage, cryptoKey)
 			if err != nil {
 				logger.Fatal("failed to initialize mobile oauth handler", zap.Error(err))
 			}
 			return h
 		}()
-		toolsHandler        = handlers.NewToolsHandler(ctr.Storage, logger)
+		toolsHandler        = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey)
 		integrationsHandler = handlers.NewIntegrationsHandler(ctr.Storage, logger)
 	)
 
