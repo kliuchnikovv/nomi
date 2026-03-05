@@ -177,6 +177,21 @@ class RedisSession:
 
         await self._send_frame(frame)
 
+    async def _reconnect_redis(self):
+        """Reconnect to Redis by creating a fresh client."""
+        try:
+            if self.redis_client:
+                try:
+                    await self.redis_client.aclose()
+                except Exception:
+                    pass
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+            self.redis_client = redis.from_url(redis_url, decode_responses=True)
+            logger.info("[RedisSession] Reconnected to Redis")
+        except Exception as e:
+            logger.error("[RedisSession] Failed to reconnect to Redis: %s", e)
+            self.redis_client = None
+
     async def _send_frame(self, frame: Frame) -> int:
         data = frame.marshal()
         # Target ID: User ID if known, else Session ID (fallback)
@@ -187,6 +202,20 @@ class RedisSession:
         if self.redis_client:
             try:
                 await self.redis_client.publish(channel, payload_json)
+            except redis.exceptions.ConnectionError as e:
+                logger.warning(
+                    "[RedisSession] Publish failed (ConnectionError), reconnecting: %s", e
+                )
+                await self._reconnect_redis()
+                if self.redis_client:
+                    try:
+                        await self.redis_client.publish(channel, payload_json)
+                    except Exception as e2:
+                        logger.error(
+                            "[RedisSession] Publish failed after reconnect: %s",
+                            e2,
+                            exc_info=True,
+                        )
             except Exception as e:
                 logger.error(
                     "[RedisSession] Publish failed: %s",
@@ -197,32 +226,8 @@ class RedisSession:
                         "frame_op": frame.op,
                         "chat_id": self.chat_id,
                         "user_id": self.user_id,
-                        "trace_id": getattr(frame, "trace_id", None),
                     },
                 )
-                # Try to send error frame through alternative channel if this is not already an error frame
-                if frame.kind != Kind.ERROR:
-                    try:
-                        error_frame = make_error(
-                            self.next_id,
-                            "publish_failed",
-                            self.chat_id,
-                            f"Failed to publish frame to Redis: {str(e)}",
-                            http=500,
-                            details={
-                                "original_op": frame.op,
-                                "channel": channel,
-                                "error_type": type(e).__name__,
-                            },
-                        )
-                        # Try direct Redis publish as last resort
-                        if self.redis_client:
-                            alt_channel = f"chat:user:{self.user_id or self.session_id}"
-                            await self.redis_client.publish(
-                                alt_channel, json.dumps(error_frame.marshal())
-                            )
-                    except Exception:
-                        pass  # If we can't send error about error, at least we logged it
 
         self.next_id = frame.id + 1
         return self.next_id
