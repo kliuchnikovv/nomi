@@ -64,3 +64,28 @@ class ServerToolExecutor:
         else:
             result = method(**params)
         return str(result) if result is not None else ""
+
+    async def arun(
+        self,
+        tool_name: str,
+        method_name: str,
+        params: dict[str, Any],
+        credentials: dict[str, Any],
+    ) -> str:
+        logger.info("[Executor] tool=%s method=%s (async)", tool_name, method_name)
+
+        builder = _get_builder(tool_name)
+        if not builder:
+            raise ValueError(f"No executor registered for: {tool_name}")
+
+        toolkit = builder(credentials)
+
+        method = getattr(toolkit, method_name, None)
+        if not callable(method):
+            raise ValueError(f"Tool {tool_name} has no method: {method_name}")
+
+        if inspect.iscoroutinefunction(method):
+            result = await method(**params)
+        else:
+            result = method(**params)
+        return str(result) if result is not None else ""

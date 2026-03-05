@@ -160,7 +160,7 @@ export function useGiftedChatRenderers({
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
     const simpleStyles = useMemo(() => createSimpleTextStyles(theme), [theme]);
-    const { showToolCalls } = useChat();
+    const { showToolCalls, isRateLimited, availableModels, setSelectedModel, setIsRateLimited, setError } = useChat();
 
     // Stable handlers - use refs to avoid dependency changes
     const onSendRef = React.useRef(onSend);
@@ -274,17 +274,42 @@ export function useGiftedChatRenderers({
         [chatTheme, handleLongPress]
     );
 
+    const handleChangeModel = useCallback(() => {
+        const modelNames = availableModels.map(m => m.name);
+        ActionSheetIOS.showActionSheetWithOptions(
+            {
+                title: 'Выберите модель',
+                options: [...modelNames, 'Отмена'],
+                cancelButtonIndex: modelNames.length,
+                userInterfaceStyle: 'dark',
+            },
+            (buttonIndex) => {
+                if (buttonIndex < modelNames.length) {
+                    setSelectedModel(availableModels[buttonIndex].id, true);
+                    setIsRateLimited(false);
+                    setError(null);
+                }
+            }
+        );
+    }, [availableModels, setSelectedModel, setIsRateLimited, setError]);
+
     // Stable input toolbar
     const renderInputToolbar = useCallback(
         (_props: any) => {
             return (
                 <View>
-                    <ErrorBanner error={error} onRetry={onRetry} onDismiss={onDismissError} theme={chatTheme} />
+                    <ErrorBanner
+                        error={error}
+                        onRetry={onRetry}
+                        onDismiss={onDismissError}
+                        theme={chatTheme}
+                        onChangeModel={isRateLimited ? handleChangeModel : undefined}
+                    />
                     <ChatInput onSend={onSendRef.current} />
                 </View>
             );
         },
-        [error, onRetry, onDismissError, chatTheme]
+        [error, onRetry, onDismissError, chatTheme, isRateLimited, handleChangeModel]
     );
 
     // Stable message renderer

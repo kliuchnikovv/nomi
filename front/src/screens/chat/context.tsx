@@ -180,6 +180,7 @@ export function ChatProvider({
 
     // Error state management
     const [error, setError] = useState<string | null>(null);
+    const [isRateLimited, setIsRateLimited] = useState(false);
     const [lastFailedMessage, setLastFailedMessage] = useState<{
         text: string;
         attachments?: any[];
@@ -673,6 +674,7 @@ export function ChatProvider({
 
     const retryLastMessage = useCallback(() => {
         if (lastFailedMessage) {
+            setIsRateLimited(false);
             setError(null);
             sendStreamingMessage(
                 lastFailedMessage.text,
@@ -1063,6 +1065,7 @@ export function ChatProvider({
                 if (err?.error?.details) {
                     console.error('Error details:', err.error.details);
                 }
+                setIsRateLimited(err?.error?.isRateLimited === true);
                 setError(message);
             },
             onUnauthorized: async () => {
@@ -1263,6 +1266,8 @@ export function ChatProvider({
         error,
         setError,
         retryLastMessage,
+        isRateLimited,
+        setIsRateLimited,
         selectedTeamId,
         selectTeam,
         thinkingLevel,

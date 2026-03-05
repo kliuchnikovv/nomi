@@ -7,9 +7,10 @@ interface ErrorBannerProps {
     onRetry: () => void;
     onDismiss: () => void;
     theme: any;
+    onChangeModel?: () => void;
 }
 
-export function ErrorBanner({ error, onRetry, onDismiss, theme }: ErrorBannerProps) {
+export function ErrorBanner({ error, onRetry, onDismiss, theme, onChangeModel }: ErrorBannerProps) {
     if (!error) return null;
 
     return (
@@ -29,6 +30,17 @@ export function ErrorBanner({ error, onRetry, onDismiss, theme }: ErrorBannerPro
                             Повторить
                         </Text>
                     </TouchableOpacity>
+                    {onChangeModel && (
+                        <TouchableOpacity
+                            style={[styles.button, styles.changeModelButton, { backgroundColor: theme.errorButtonBackground }]}
+                            onPress={onChangeModel}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.buttonText, { color: theme.errorButtonText }]}>
+                                Сменить модель
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                     <TouchableOpacity
                         style={styles.dismissButton}
                         onPress={onDismiss}
@@ -75,6 +87,9 @@ const styles = StyleSheet.create({
     },
     retryButton: {
         // Additional retry button styles
+    },
+    changeModelButton: {
+        // Additional change model button styles
     },
     buttonText: {
         fontSize: 14,

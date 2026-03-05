@@ -53,6 +53,8 @@ export interface ChatContextType {
     error: string | null;
     setError: (error: string | null) => void;
     retryLastMessage: () => void;
+    isRateLimited: boolean;
+    setIsRateLimited: (value: boolean) => void;
     thinkingLevel: string;
     setThinkingLevel: (level: string) => void;
     stopGeneration: () => void;

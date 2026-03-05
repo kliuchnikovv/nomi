@@ -1980,6 +1980,18 @@ class RedisSession:
                     "raw_error": str(error_content)[:500],
                 }
 
+        # Detect rate limit errors
+        raw_content = str(error_content or "").lower()
+        is_rate_limited = (
+            "rate limit" in raw_content
+            or "ratelimit" in raw_content
+            or "429" in raw_content
+            or "FreeUsageLimitError" in str(error_content)
+            or "RateLimitError" in str(error_content)
+        )
+        if is_rate_limited:
+            error_code = "rate_limited"
+
         logger.error(
             "[RedisSession] RunErrorEvent received: %s",
             error_message,
@@ -1996,6 +2008,6 @@ class RedisSession:
             "type": "error",
             "message": error_message,
             "code": error_code,
-            "http": 500,
+            "http": 429 if is_rate_limited else 500,
             "details": error_details,
         }

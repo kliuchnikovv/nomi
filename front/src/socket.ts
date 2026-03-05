@@ -396,6 +396,7 @@ export class ChatSocket {
                                             'timeout': 'Превышено время ожидания',
                                             'not_found': 'Ресурс не найден',
                                             'not-found': 'Ресурс не найден',
+                                            'rate_limited': 'Превышен лимит запросов',
                                         };
                                         userMessage = errorMessages[errorCode] || errorMessage;
                                     }
@@ -407,6 +408,7 @@ export class ChatSocket {
                                             code: errorCode,
                                             message: userMessage,
                                             details: errorDetails,
+                                            isRateLimited: errorCode === 'rate_limited',
                                         },
                                         message: userMessage,
                                     });

@@ -60,7 +60,7 @@ async def _execute_for_all_accounts(
                 )
                 credentials = creds_map.get(account_id) or {}
 
-                server_result = executor.run(
+                server_result = await executor.arun(
                     decision.tool, decision.method, decision.params, credentials
                 )
                 results.append(
@@ -276,7 +276,7 @@ def build_discovery_tool(
                 )
 
         try:
-            result = _executor.run(
+            result = await _executor.arun(
                 decision.tool, decision.method, decision.params, credentials
             )
             return json.dumps({"type": "result", "result": result})
