@@ -144,6 +144,56 @@ class SafeGemini(Gemini):
 
         return filtered_messages
 
+    def _sanitize_tool_schemas(self, tools: list[dict]) -> list[dict]:
+        """Remove required[] entries that are not defined in properties.
+
+        Agno generates required[] from sig.parameters but properties only from
+        successfully-typed parameters, so they can diverge. Gemini rejects any
+        required entry that doesn't exist in properties.
+        """
+        sanitized = []
+        for tool in tools:
+            if tool.get("type") == "function":
+                func_info = tool.get("function", {})
+                params = func_info.get("parameters", {})
+                if "required" in params and "properties" in params:
+                    defined = set(params["properties"].keys())
+                    original = params["required"]
+                    filtered = [r for r in original if r in defined]
+                    if len(filtered) != len(original):
+                        removed = set(original) - set(filtered)
+                        logger.warning(
+                            "[SafeGemini] Dropping undefined required fields from '%s': %s",
+                            func_info.get("name", "?"),
+                            removed,
+                        )
+                        tool = {
+                            **tool,
+                            "function": {
+                                **func_info,
+                                "parameters": {**params, "required": filtered},
+                            },
+                        }
+            sanitized.append(tool)
+        return sanitized
+
+    def get_request_params(
+        self,
+        system_message=None,
+        response_format=None,
+        tools=None,
+        tool_choice=None,
+    ):
+        """Override to sanitize tool schemas before sending to Gemini."""
+        if tools:
+            tools = self._sanitize_tool_schemas(tools)
+        return super().get_request_params(
+            system_message=system_message,
+            response_format=response_format,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
