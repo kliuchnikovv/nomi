@@ -460,6 +460,23 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			})
 		}
 
+		// Add Client-only Plugins (execution.type: client)
+		// Stored only in local SQLite on device — never synced to server DB.
+		// Always included so Python can generate client proxy tools and route via client_action frames.
+		for _, manifest := range plugins.Manifests {
+			if manifest.Execution.Type != "client" {
+				continue
+			}
+			if !manifest.GetInclude() {
+				continue
+			}
+			tools = append(tools, map[string]interface{}{
+				"name":    manifest.Name,
+				"enabled": true,
+				"params":  map[string]interface{}{},
+			})
+		}
+
 		// Always fetch latest integrations from DB to get server-side tokens
 		var integrations []storage.Integration
 		if err := r.store.DB.Where("user_id = ? AND enabled = ?", r.initiatorID, true).Find(&integrations).Error; err != nil {
