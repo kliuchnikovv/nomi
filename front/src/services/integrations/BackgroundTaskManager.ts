@@ -33,7 +33,9 @@ function getTaskName(provider: string): string {
 
 function getBackgroundTaskForProvider(provider: string): ((integrationId: string) => Promise<void>) | undefined {
     registerClientPlugins();
-    return getBackgroundTask(provider);
+    const task = getBackgroundTask(provider);
+    console.log(`[BackgroundTaskManager] getBackgroundTaskForProvider(${provider}): ${task ? 'FOUND' : 'NOT FOUND'}`);
+    return task;
 }
 
 export function defineAllBackgroundTasks(): void {
@@ -117,7 +119,7 @@ export async function registerBackgroundTask(config: BackgroundTaskConfig): Prom
             startOnBoot: true,
         });
 
-        console.log(`[BackgroundTaskManager] Registered background task for ${provider}`);
+        console.log(`[BackgroundTaskManager] ✓ Registered background task for ${provider} (${taskName}) with interval ${interval}s`);
     } catch (error) {
         console.error(`[BackgroundTaskManager] Failed to register task for ${provider}:`, error);
     }
@@ -189,15 +191,25 @@ export async function initializeBackgroundTasks(): Promise<void> {
         await cleanupOrphanedTasks();
         
         const integrations = await integrationStorage.getIntegrations();
+        console.log(`[BackgroundTaskManager] Total integrations: ${integrations.length}`);
+
         const integrationsWithBackgroundTasks = integrations.filter(
             integration => {
                 const metadata = getIntegrationMetadata(integration.provider);
-                return integration.enabled && 
-                       metadata?.supportsBackgroundTasks === true &&
-                       metadata?.storageType === 'client';
+                const supportedTasks = metadata?.supportsBackgroundTasks === true;
+                const validStorage = metadata?.storageType === 'client' || metadata?.storageType === 'hybrid';
+                const enabled = integration.enabled;
+
+                if (enabled && supportedTasks && validStorage) {
+                    console.log(`[BackgroundTaskManager] ✓ ${integration.provider}: enabled=${enabled}, supportsTasks=${supportedTasks}, storageType=${metadata?.storageType}`);
+                    return true;
+                } else {
+                    console.log(`[BackgroundTaskManager] ✗ ${integration.provider}: enabled=${enabled}, supportsTasks=${supportedTasks}, storageType=${metadata?.storageType}`);
+                    return false;
+                }
             }
         );
-        
+
         console.log(`[BackgroundTaskManager] Found ${integrationsWithBackgroundTasks.length} integrations with background tasks`);
         
         for (const integration of integrationsWithBackgroundTasks) {

@@ -44,6 +44,7 @@ class GmailClient {
         try {
             // 1. Fetch unread emails
             const emails = await this.searchEmails(integrationId, 'is:unread', 10);
+            console.log(`[GmailClient] Fetched ${emails.length} unread emails from Gmail`);
 
             if (emails.length === 0) {
                 console.log('[GmailClient] No unread emails to process');
@@ -52,17 +53,24 @@ class GmailClient {
 
             // Process each email (limit to 5 to avoid performance issues)
             const emailsToProcess = emails.slice(0, 5);
-            console.log(`[GmailClient] Processing ${emailsToProcess.length} emails...`);
+            console.log(`[GmailClient] Processing ${emailsToProcess.length} emails (limit: 5)...`);
 
             // Check if Apple Intelligence is available
             const aiAvailable = AppleIntelligence.isAvailable();
+            console.log(`[GmailClient] Apple Intelligence available: ${aiAvailable}`);
+
+            let createdChats = 0;
+            let skippedChats = 0;
+            let failedChats = 0;
 
             for (const email of emailsToProcess) {
+                const emailStart = Date.now();
                 try {
                     // Check if chat already exists for this email
                     const existingChat = await pluginChatStorage.getPluginChat(email.gmailId);
                     if (existingChat) {
-                        console.log(`[GmailClient] Chat already exists for email ${email.gmailId}, skipping`);
+                        console.log(`[GmailClient] Chat already exists for email ${email.gmailId} (${email.subject}), skipping`);
+                        skippedChats++;
                         continue;
                     }
 
@@ -79,6 +87,8 @@ class GmailClient {
                             date: email.date?.toISOString(),
                         }
                     );
+
+                    console.log(`[GmailClient] Created chat ${chat.id} for email ${email.gmailId} from ${email.fromEmail}`);
 
                     // Create user message with email summary
                     const emailSummary = `New email from ${email.fromName || email.fromEmail}
@@ -105,7 +115,10 @@ Provide a concise analysis:
 Keep your response brief and actionable.`;
 
                         try {
+                            const aiStartTime = Date.now();
                             const analysis = await AppleIntelligence.generate(prompt);
+                            const aiDuration = Date.now() - aiStartTime;
+                            console.log(`[GmailClient] AI analysis completed for ${email.gmailId} in ${aiDuration}ms`);
                             await pluginChatStorage.addMessage(chat.id, 'assistant', analysis);
                         } catch (aiError) {
                             console.error(`[GmailClient] AI analysis failed for email ${email.gmailId}:`, aiError);
@@ -116,13 +129,16 @@ Keep your response brief and actionable.`;
                         await pluginChatStorage.addMessage(chat.id, 'assistant', 'Email loaded. Connect Apple Intelligence on iOS for AI-powered analysis.');
                     }
 
-                    console.log(`[GmailClient] Created chat for email: ${email.subject}`);
+                    createdChats++;
+                    const duration = Date.now() - emailStart;
+                    console.log(`[GmailClient] Created chat for email: ${email.subject} (${duration}ms)`);
                 } catch (e) {
+                    failedChats++;
                     console.error(`[GmailClient] Failed to process email ${email.gmailId}:`, e);
                 }
             }
 
-            console.log(`[GmailClient] Finished processing ${emailsToProcess.length} emails`);
+            console.log(`[GmailClient] Finished processing ${emailsToProcess.length} emails: ${createdChats} created, ${skippedChats} skipped, ${failedChats} failed`);
             return emailsToProcess;
         } catch (error) {
             console.error('[GmailClient] onWake error:', error);

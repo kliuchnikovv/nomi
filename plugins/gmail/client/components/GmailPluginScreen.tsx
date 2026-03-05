@@ -1,5 +1,5 @@
 /**
- * Gmail Plugin Screen - Shows AI-analyzed email chats
+ * Gmail Plugin Screen - Shows AI-analyzed email chats and background task activity log.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -10,36 +10,67 @@ import { Mail } from 'iconoir-react-native';
 import { pluginChatStorage, PluginChat } from '@genie/front/services/plugins/PluginChatStorage';
 import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
 import { contextStore } from '@genie/front/services/ContextStore';
+import { backgroundLogger, BackgroundRunLog, EmailAction } from '../backgroundLogger';
+
+// ─── Background Activity helpers ─────────────────────────────────────────────
+
+const ACTION_LABELS: Record<EmailAction, string> = {
+    reminder_created: '🔔 Reminder created',
+    already_seen: '⏭ Already seen',
+    not_important: '✉️ Not important',
+    reminder_failed: '❌ Reminder failed',
+    skipped_no_permission: '🔒 No permission',
+};
+
+function relativeTime(iso: string): string {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function runSummary(log: BackgroundRunLog): string {
+    const created = log.entries.filter(e => e.action === 'reminder_created').length;
+    const parts: string[] = [`${log.totalFound} found`];
+    if (created > 0) parts.push(`${created} reminder${created > 1 ? 's' : ''} 🔔`);
+    return parts.join(' · ');
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenProps) {
     const { theme } = useTheme();
     const [chats, setChats] = useState<PluginChat[]>([]);
+    const [runLogs, setRunLogs] = useState<BackgroundRunLog[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const loadChats = async () => {
+    const loadData = useCallback(async () => {
         try {
-            const data = await pluginChatStorage.getPluginChats('gmail', 'email_chat');
-            setChats(data);
+            const [chatData, logs] = await Promise.all([
+                pluginChatStorage.getPluginChats('gmail', 'email_chat'),
+                integrationId ? backgroundLogger.getLogs(integrationId) : Promise.resolve([]),
+            ]);
+            setChats(chatData);
+            setRunLogs(logs);
         } catch (error) {
-            console.error('[GmailPluginScreen] Failed to load chats:', error);
+            console.error('[GmailPluginScreen] Failed to load data:', error);
         } finally {
             setLoading(false);
         }
-    };
-
-    useEffect(() => {
-        loadChats();
-        // Refresh every 30 seconds to catch new background-processed emails
-        const interval = setInterval(loadChats, 30000);
-        return () => clearInterval(interval);
     }, [integrationId]);
 
-    const handleChatPress = useCallback(async (chat: PluginChat) => {
-        console.log('[GmailPluginScreen] handleChatPress called, chat:', chat.id);
+    useEffect(() => {
+        loadData();
+        const interval = setInterval(loadData, 30000);
+        return () => clearInterval(interval);
+    }, [loadData]);
 
+    const handleChatPress = useCallback(async (chat: PluginChat) => {
         try {
             const metadata = chat.data ? JSON.parse(chat.data) : {};
-
             contextStore.add({
                 id: chat.id,
                 sourceType: 'email',
@@ -52,17 +83,93 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
                     subject: chat.title,
                     body: metadata.body,
                     snippet: metadata.snippet,
-                    integrationId: integrationId,
+                    integrationId,
                 },
                 addedAt: Date.now(),
             });
-
-            console.log('[GmailPluginScreen] Email added to context, closing...');
             onClose?.(true);
         } catch (error) {
             console.error('[GmailPluginScreen] Error:', error);
         }
     }, [integrationId, onClose]);
+
+    const handleClearLogs = useCallback(async () => {
+        if (!integrationId) return;
+        await backgroundLogger.clearLogs(integrationId);
+        setRunLogs([]);
+    }, [integrationId]);
+
+    // ─── Background Activity section (header) ────────────────────────────────
+
+    const renderBackgroundActivity = () => {
+        const recentRuns = [...runLogs].reverse().slice(0, 5);
+
+        return (
+            <View style={[styles.activitySection, { borderColor: theme.border }]}>
+                <View style={styles.activityHeader}>
+                    <Text style={[styles.activityTitle, { color: theme.text }]}>
+                        Background Activity
+                    </Text>
+                    {recentRuns.length > 0 && (
+                        <Pressable onPress={handleClearLogs} hitSlop={8}>
+                            <Text style={[styles.clearBtn, { color: theme.textSecondary }]}>
+                                Clear
+                            </Text>
+                        </Pressable>
+                    )}
+                </View>
+
+                {recentRuns.length === 0 ? (
+                    <Text style={[styles.activityEmpty, { color: theme.textSecondary }]}>
+                        No background runs yet. Trigger one via Xcode → Debug → Simulate Background Fetch.
+                    </Text>
+                ) : (
+                    recentRuns.map((log, idx) => (
+                        <View
+                            key={log.timestamp}
+                            style={[
+                                styles.runCard,
+                                { backgroundColor: theme.card, borderColor: theme.border },
+                            ]}
+                        >
+                            <View style={styles.runHeader}>
+                                <Text style={[styles.runTime, { color: theme.textSecondary }]}>
+                                    {relativeTime(log.timestamp)}
+                                </Text>
+                                <Text style={[styles.runSummary, { color: theme.text }]}>
+                                    {runSummary(log)}
+                                </Text>
+                            </View>
+
+                            {/* Show per-email details for the latest run */}
+                            {idx === 0 && log.entries.length > 0 && (
+                                <View style={styles.entryList}>
+                                    {log.entries.map((entry, i) => (
+                                        <View key={i} style={styles.entryRow}>
+                                            <Text
+                                                style={[styles.entryAction, { color: theme.textSecondary }]}
+                                                numberOfLines={1}
+                                            >
+                                                {ACTION_LABELS[entry.action]}
+                                            </Text>
+                                            <Text
+                                                style={[styles.entrySubject, { color: theme.text }]}
+                                                numberOfLines={1}
+                                            >
+                                                {entry.subject}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+                        </View>
+                    ))
+                )}
+            </View>
+        );
+    };
+
+    // ─── Chat item ────────────────────────────────────────────────────────────
 
     const renderChatItem = ({ item }: { item: PluginChat }) => {
         const metadata = item.data ? JSON.parse(item.data) : {};
@@ -103,21 +210,26 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
         );
     };
 
+    // ─── Render ───────────────────────────────────────────────────────────────
+
+    if (loading) {
+        return (
+            <SharedPluginScreen title="Email Insights" onClose={onClose}>
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color={theme.accent} />
+                </View>
+            </SharedPluginScreen>
+        );
+    }
+
     return (
         <SharedPluginScreen title="Email Insights" onClose={onClose}>
-            <View style={styles.content}>
-                {loading ? (
-                    <View style={styles.center}>
-                        <ActivityIndicator size="large" color={theme.accent} />
-                    </View>
-                ) : chats.length > 0 ? (
-                    <FlatList
-                        data={chats}
-                        keyExtractor={(item) => item.id}
-                        renderItem={renderChatItem}
-                        contentContainerStyle={styles.listContent}
-                    />
-                ) : (
+            <FlatList
+                data={chats}
+                keyExtractor={(item) => item.id}
+                renderItem={renderChatItem}
+                ListHeaderComponent={renderBackgroundActivity()}
+                ListEmptyComponent={
                     <View style={styles.emptyState}>
                         <Text style={styles.emptyIcon}>📭</Text>
                         <Text style={[styles.emptyTitle, { color: theme.text }]}>
@@ -127,16 +239,14 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
                             When you receive unread emails, they will be automatically analyzed and appear here.
                         </Text>
                     </View>
-                )}
-            </View>
+                }
+                contentContainerStyle={styles.listContent}
+            />
         </SharedPluginScreen>
     );
 }
 
 const styles = StyleSheet.create({
-    content: {
-        flex: 1,
-    },
     center: {
         flex: 1,
         justifyContent: 'center',
@@ -144,7 +254,73 @@ const styles = StyleSheet.create({
     },
     listContent: {
         padding: 16,
+        flexGrow: 1,
     },
+    // ─── Background Activity ────────────────────────────────────────────────
+    activitySection: {
+        marginBottom: 20,
+        paddingBottom: 16,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    activityHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    activityTitle: {
+        fontSize: 13,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    clearBtn: {
+        fontSize: 13,
+    },
+    activityEmpty: {
+        fontSize: 13,
+        lineHeight: 18,
+    },
+    runCard: {
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 12,
+        marginBottom: 8,
+    },
+    runHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    runTime: {
+        fontSize: 11,
+        marginRight: 8,
+    },
+    runSummary: {
+        fontSize: 13,
+        fontWeight: '500',
+        flex: 1,
+        textAlign: 'right',
+    },
+    entryList: {
+        marginTop: 8,
+        gap: 4,
+    },
+    entryRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    entryAction: {
+        fontSize: 11,
+        width: 140,
+        flexShrink: 0,
+    },
+    entrySubject: {
+        fontSize: 12,
+        flex: 1,
+    },
+    // ─── Chat list ────────────────────────────────────────────────────────────
     chatItem: {
         flexDirection: 'row',
         padding: 16,
@@ -194,10 +370,10 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     emptyState: {
-        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 32,
+        paddingVertical: 40,
     },
     emptyIcon: {
         fontSize: 48,

@@ -5,12 +5,14 @@
  * 1. Syncs new unread emails and creates in-app plugin chats (via GmailClient.onWake).
  * 2. Analyzes returned emails for importance (subscriptions, payments, urgency).
  * 3. Creates iOS Reminders for important emails that haven't been processed yet.
+ * 4. Appends a structured run log so results are visible in the Gmail plugin screen.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { gmailClient } from '@genie/front/services/integrations/clients/GmailClient';
 import { IOSRemindersClient } from '@genie/front/services/integrations/clients/IOSRemindersClient';
-import { analyzeEmail } from './emailAnalyzer';
+import { analyzeEmailWithLog } from './emailAnalyzer';
+import { backgroundLogger, type EmailLogEntry } from './backgroundLogger';
 
 const seenKey = (integrationId: string) => `gmail_bg_seen_${integrationId}`;
 
@@ -22,60 +24,172 @@ async function getSeenIds(integrationId: string): Promise<Set<string>> {
 async function markSeen(integrationId: string, ids: string[]): Promise<void> {
     const existing = await getSeenIds(integrationId);
     ids.forEach(id => existing.add(id));
-    // Cap to avoid unbounded growth over time
     const trimmed = [...existing].slice(-1000);
     await AsyncStorage.setItem(seenKey(integrationId), JSON.stringify(trimmed));
 }
 
 export async function backgroundTask(integrationId: string): Promise<void> {
-    console.log(`[Gmail background] triggered for ${integrationId}`);
+    const startTime = Date.now();
+    console.log(`🔔 [Gmail background] =========================================`);
+    console.log(`🔔 [Gmail background] START: Background task triggered for ${integrationId}`);
+    console.log(`🔔 [Gmail background] Time: ${new Date().toISOString()}`);
 
     // 1. Sync emails and create in-app plugin chats
+    console.log(`🔔 [Gmail background] Step 1: Calling gmailClient.onWake()...`);
     const emails = await gmailClient.onWake(integrationId);
-    if (!emails.length) return;
+    const entries: EmailLogEntry[] = [];
+    console.log(`🔔 [Gmail background] Step 1 COMPLETE: Received ${emails.length} emails from onWake() in ${Date.now() - startTime}ms`);
 
-    // 2. Skip emails already processed for reminders
-    const seen = await getSeenIds(integrationId);
-    const fresh = emails.filter(e => !seen.has(e.gmailId));
-
-    if (!fresh.length) {
-        console.log('[Gmail background] All emails already processed, skipping reminders');
+    if (!emails.length) {
+        await backgroundLogger.append(integrationId, {
+            timestamp: new Date().toISOString(),
+            totalFound: 0,
+            entries: [],
+        });
         return;
     }
 
-    // 3. Analyze importance
-    const toRemind = fresh.filter(e => analyzeEmail(e).isImportant);
-    if (!toRemind.length) {
-        console.log('[Gmail background] No important emails found');
-        await markSeen(integrationId, fresh.map(e => e.gmailId));
-        return;
-    }
-
-    // 4. Create iOS Reminders (only if permission already granted — cannot prompt in background)
+    // 2. Check Reminders permission once up front (can't prompt in background)
     const remindersClient = new IOSRemindersClient();
     const permission = await remindersClient.checkPermissionStatus();
-    if (permission !== 'authorized') {
-        console.log('[Gmail background] Reminders permission not granted, skipping reminder creation');
-        await markSeen(integrationId, fresh.map(e => e.gmailId));
-        return;
-    }
 
-    for (const email of toRemind) {
-        const analysis = analyzeEmail(email);
+    const seen = await getSeenIds(integrationId);
+    const processedIds: string[] = [];
+
+    for (const email of emails) {
+        const subject = email.subject || '(No subject)';
+        const from = email.fromEmail || '';
+        const startTime = Date.now();
+
+        if (seen.has(email.gmailId)) {
+            entries.push({
+                gmailId: email.gmailId,
+                subject,
+                from,
+                date: email.date?.toISOString() || new Date().toISOString(),
+                snippet: email.snippet || '',
+                labels: email.labels || [],
+                action: 'already_seen',
+                durationMs: Date.now() - startTime,
+            });
+            continue;
+        }
+
+        processedIds.push(email.gmailId);
+        const analysis = analyzeEmailWithLog(email);
+
+        if (!analysis.isImportant) {
+            entries.push({
+                gmailId: email.gmailId,
+                subject,
+                from,
+                date: email.date?.toISOString() || new Date().toISOString(),
+                snippet: email.snippet || '',
+                labels: email.labels || [],
+                action: 'not_important',
+                analysis: {
+                    urgent: analysis.urgent,
+                    importantKeywords: analysis.matchedKeywords,
+                    hasGmailImportant: analysis.hasGmailImportant,
+                },
+                durationMs: Date.now() - startTime,
+            });
+            continue;
+        }
+
+        if (permission !== 'authorized') {
+            entries.push({
+                gmailId: email.gmailId,
+                subject,
+                from,
+                date: email.date?.toISOString() || new Date().toISOString(),
+                snippet: email.snippet || '',
+                labels: email.labels || [],
+                action: 'skipped_no_permission',
+                analysis: {
+                    urgent: analysis.urgent,
+                    importantKeywords: analysis.matchedKeywords,
+                    hasGmailImportant: analysis.hasGmailImportant,
+                },
+                durationMs: Date.now() - startTime,
+            });
+            continue;
+        }
+
         try {
-            await remindersClient.createReminder(
-                `📧 ${email.subject || '(No subject)'}`,
+            const reminderResult = await remindersClient.createReminder(
+                `📧 ${subject}`,
                 {
-                    notes: `From: ${email.fromEmail}\n${email.snippet ?? ''}`,
+                    notes: `From: ${from}\n${email.snippet ?? ''}`,
                     dueDate: analysis.dueDateISO,
                     priority: analysis.urgent ? 1 : 5,
                 }
             );
-            console.log(`[Gmail background] Created reminder for: ${email.subject}`);
+            entries.push({
+                gmailId: email.gmailId,
+                subject,
+                from,
+                date: email.date?.toISOString() || new Date().toISOString(),
+                snippet: email.snippet || '',
+                labels: email.labels || [],
+                action: 'reminder_created',
+                analysis: {
+                    urgent: analysis.urgent,
+                    importantKeywords: analysis.matchedKeywords,
+                    hasGmailImportant: analysis.hasGmailImportant,
+                },
+                reminderDetails: {
+                    dueDate: analysis.dueDateISO,
+                    priority: analysis.urgent ? 1 : 5,
+                    reminderId: reminderResult?.id,
+                },
+                durationMs: Date.now() - startTime,
+            });
+            console.log(`[Gmail background] Created reminder for: ${subject} (due: ${analysis.dueDateISO}, priority: ${analysis.urgent ? 1 : 5})`);
         } catch (e) {
+            entries.push({
+                gmailId: email.gmailId,
+                subject,
+                from,
+                date: email.date?.toISOString() || new Date().toISOString(),
+                snippet: email.snippet || '',
+                labels: email.labels || [],
+                action: 'reminder_failed',
+                analysis: {
+                    urgent: analysis.urgent,
+                    importantKeywords: analysis.matchedKeywords,
+                    hasGmailImportant: analysis.hasGmailImportant,
+                },
+                error: e instanceof Error ? e.message : String(e),
+                durationMs: Date.now() - startTime,
+            });
             console.warn(`[Gmail background] Failed to create reminder for ${email.gmailId}:`, e);
         }
     }
 
-    await markSeen(integrationId, fresh.map(e => e.gmailId));
+    await markSeen(integrationId, processedIds);
+    await backgroundLogger.append(integrationId, {
+        timestamp: new Date().toISOString(),
+        totalFound: emails.length,
+        entries,
+    });
+
+    const created = entries.filter(e => e.action === 'reminder_created').length;
+    const failed = entries.filter(e => e.action === 'reminder_failed').length;
+    const skipped = entries.filter(e => e.action === 'skipped_no_permission').length;
+    const notImportant = entries.filter(e => e.action === 'not_important').length;
+    const alreadySeen = entries.filter(e => e.action === 'already_seen').length;
+    const totalDuration = Date.now() - startTime;
+
+    console.log(`🔔 [Gmail background] =========================================`);
+    console.log(`🔔 [Gmail background] SUMMARY:`);
+    console.log(`🔔 [Gmail background]   Total emails: ${emails.length}`);
+    console.log(`🔔 [Gmail background]   Created reminders: ${created}`);
+    console.log(`🔔 [Gmail background]   Failed reminders: ${failed}`);
+    console.log(`🔔 [Gmail background]   No permission: ${skipped}`);
+    console.log(`🔔 [Gmail background]   Not important: ${notImportant}`);
+    console.log(`🔔 [Gmail background]   Already seen: ${alreadySeen}`);
+    console.log(`🔔 [Gmail background]   Total duration: ${totalDuration}ms`);
+    console.log(`🔔 [Gmail background] END: Background task completed`);
+    console.log(`🔔 [Gmail background] =========================================`);
 }
