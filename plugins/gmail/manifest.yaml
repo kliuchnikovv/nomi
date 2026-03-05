@@ -95,7 +95,7 @@ methods:
       required: [to, subject, body]
 
 background_tasks:
-  enabled: false
+  enabled: true
 
 tools:
   include: true

@@ -38,7 +38,7 @@ class GmailClient {
     /**
      * Called when the system wakes up the app in the background
      */
-    async onWake(integrationId: string): Promise<void> {
+    async onWake(integrationId: string): Promise<Email[]> {
         console.log(`[GmailClient] onWake triggered for ${integrationId}`);
 
         try {
@@ -47,7 +47,7 @@ class GmailClient {
 
             if (emails.length === 0) {
                 console.log('[GmailClient] No unread emails to process');
-                return;
+                return [];
             }
 
             // Process each email (limit to 5 to avoid performance issues)
@@ -123,8 +123,10 @@ Keep your response brief and actionable.`;
             }
 
             console.log(`[GmailClient] Finished processing ${emailsToProcess.length} emails`);
+            return emailsToProcess;
         } catch (error) {
             console.error('[GmailClient] onWake error:', error);
+            return [];
         }
     }
 
