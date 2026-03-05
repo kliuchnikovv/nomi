@@ -1361,7 +1361,7 @@ class RedisSession:
             real_agent = agent._agent
 
         # Load history to ensure we have the latest (including the bad state)
-        if hasattr(real_agent, "read_chat_history"):
+        if hasattr(real_agent, "read_chat_history") and callable(real_agent.read_chat_history):
             try:
                 if asyncio.iscoroutinefunction(real_agent.read_chat_history):
                     await real_agent.read_chat_history()
