@@ -284,5 +284,29 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		})
 	}
 
+	// Add Client-only Plugins (execution.type: client)
+	// Client-only integrations are stored in local SQLite on the device and never synced
+	// to the server DB. We auto-include them here so the discovery tool can route to them.
+	// Execution happens on the device via client_action WebSocket frames; permissions
+	// are checked at execution time by the client executor.
+	for _, manifest := range plugins.Manifests {
+		if manifest.Execution.Type != "client" {
+			continue
+		}
+		// Skip if include=false in manifest
+		if !manifest.GetInclude() {
+			continue
+		}
+		// Skip if this provider is already in providerMap (already added from integrations)
+		if _, exists := providerMap[manifest.Name]; exists {
+			continue
+		}
+		tools = append(tools, ToolConfig{
+			Name:    manifest.Name,
+			Enabled: true,
+			Params:  map[string]interface{}{},
+		})
+	}
+
 	c.JSON(http.StatusOK, tools)
 }
