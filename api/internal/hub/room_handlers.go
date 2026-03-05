@@ -688,15 +688,17 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			r.generationInProgress = false
 		} else {
 			r.generationInProgress = true
-			// Start generation timeout timer
+			// Start generation timeout timer — sends signal through a channel so the
+			// room select loop handles it (avoids concurrent access to r.clients).
 			if r.generationTimer != nil {
 				r.generationTimer.Stop()
 			}
+			timeoutCh := r.generationTimeoutCh
 			r.generationTimer = time.AfterFunc(10*time.Minute, func() {
-				r.logger.Warn("generation timeout reached, forcing stop")
-				r.generationInProgress = false
-				r.generationTimer = nil
-				r.sendGenerationTimeoutError()
+				select {
+				case timeoutCh <- struct{}{}:
+				default:
+				}
 			})
 		}
 

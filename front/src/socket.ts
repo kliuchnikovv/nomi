@@ -13,6 +13,8 @@ type Handlers = {
     onMessage?: (frame: Frame) => void;
     onMeta?: (meta: Frame) => void;
     onSignal?: (frame: Frame) => void;
+    // Called when socket reconnects after a previous connection (not the initial connect)
+    onReconnect?: () => void;
 };
 
 // Cap outbox size to prevent unbounded memory growth when socket is disconnected
@@ -34,6 +36,7 @@ export class ChatSocket {
     private isConnecting = false;
     private channel: 'chat' | 'user' = 'chat';
     private chatId: string | null = null;
+    private hasConnectedBefore = false;
 
     // private sentCommandFrame = false; // Command frames are per-message/chat context now?
     // Actually, team commands are sent once per session usually. But in a global socket, we might switch contexts.
@@ -277,6 +280,10 @@ export class ChatSocket {
                 this.reconnectDelay = 1000; // Reset backoff
                 this.touchActivity();
                 this.processOutbox(); // Replaced inline loop with method call
+                if (this.hasConnectedBefore) {
+                    this.handlers.onReconnect?.();
+                }
+                this.hasConnectedBefore = true;
             };
 
             // Performance optimization: batch streaming logs to reduce console spam

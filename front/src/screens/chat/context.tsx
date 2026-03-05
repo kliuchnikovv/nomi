@@ -134,7 +134,7 @@ export function ChatProvider({
     const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
-    const RESPONSE_TIMEOUT_MS = 60000; // 60 seconds
+    const RESPONSE_TIMEOUT_MS = 300_000; // 5 minutes — safety net if DONE/ERROR never arrives
 
     // Model selection state
     const [selectedModel, setSelectedModelInternal] = useState<string | null>(
@@ -243,6 +243,9 @@ export function ChatProvider({
     useEffect(() => {
         if (!activeChatID || activeChatID === emptyChatID) return;
         if (!token) return;
+        // Reset loading state from previous chat immediately (before animation)
+        setAssistantWorking(false);
+        setActiveAgentsCount(0);
         const task = InteractionManager.runAfterInteractions(() => {
             socket.setChannel('chat');
             socket.setChatId(activeChatID);
@@ -589,18 +592,19 @@ export function ChatProvider({
                 responseTimeoutRef.current = null;
             }
 
-            // Set timeout for response
-            // responseTimeoutRef.current = setTimeout(() => {
-            //     setAssistantWorking((current) => {
-            //         if (current) {
-            //             setActiveAgentsCount(0);
-            //             setError('Превышено время ожидания ответа. Попробуйте отправить сообщение снова.');
-            //             responseTimeoutRef.current = null;
-            //             return false;
-            //         }
-            //         return current;
-            //     });
-            // }, RESPONSE_TIMEOUT_MS);
+            // Safety-net timeout: if DONE/ERROR never arrives (e.g. connection lost),
+            // auto-clear assistantWorking so the UI doesn't stay stuck forever.
+            responseTimeoutRef.current = setTimeout(() => {
+                setAssistantWorking(current => {
+                    if (current) {
+                        setActiveAgentsCount(0);
+                        setError('Ответ не получен. Проверьте подключение и попробуйте снова.');
+                        responseTimeoutRef.current = null;
+                        return false;
+                    }
+                    return current;
+                });
+            }, RESPONSE_TIMEOUT_MS);
 
             const selectedEndpoint = availableModels.find(
                 m => m.id === (selectedModelRef.current ?? ''),
@@ -1087,6 +1091,19 @@ export function ChatProvider({
                     );
                     handleClientAction(payload);
                 }
+            },
+            onReconnect: () => {
+                // Socket reconnected after interruption — any in-progress generation was
+                // likely lost. Clear loading state so the UI doesn't stay stuck.
+                // The final message (if completed) is persisted in DB and will load on refresh.
+                if (responseTimeoutRef.current) {
+                    clearTimeout(responseTimeoutRef.current);
+                    responseTimeoutRef.current = null;
+                }
+                startTransition(() => {
+                    setAssistantWorking(false);
+                    setActiveAgentsCount(0);
+                });
             },
         });
 

@@ -43,6 +43,7 @@ type Room struct {
 	// Generation state - prevents room from closing while LLM is generating
 	generationInProgress bool
 	generationTimer      *time.Timer
+	generationTimeoutCh  chan struct{}
 
 	// Model for current generation (set when forwarding user message to Redis)
 	currentModelID string
@@ -53,21 +54,22 @@ type Room struct {
 
 func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string, mode string, command string) *Room {
 	return &Room{
-		ID:              id,
-		Type:            roomType,
-		hub:             hub,
-		logger:          logger.With(zap.String("room_id", id.String()), zap.String("type", string(roomType))),
-		store:           store,
-		initiatorID:     initiatorID,
-		clients:         make(map[*Client]bool),
-		ingress:         make(chan *ClientMessage),
-		broadcast:       make(chan Frame),
-		register:        make(chan *Client),
-		unregister:      make(chan *Client),
-		llmIngress:      make(chan Frame),
-		mode:            mode,
-		command:         command,
-		messageBuilders: make(map[uuid.UUID]*MessageBuilder),
+		ID:                  id,
+		Type:                roomType,
+		hub:                 hub,
+		logger:              logger.With(zap.String("room_id", id.String()), zap.String("type", string(roomType))),
+		store:               store,
+		initiatorID:         initiatorID,
+		clients:             make(map[*Client]bool),
+		ingress:             make(chan *ClientMessage),
+		broadcast:           make(chan Frame),
+		register:            make(chan *Client),
+		unregister:          make(chan *Client),
+		llmIngress:          make(chan Frame),
+		mode:                mode,
+		command:             command,
+		messageBuilders:     make(map[uuid.UUID]*MessageBuilder),
+		generationTimeoutCh: make(chan struct{}, 1),
 	}
 }
 
@@ -158,6 +160,15 @@ func (r *Room) Run() {
 			}
 			// If clients exist, reset timer (shouldn't happen if resetTimer works, but safety)
 			timer.Reset(idleTimeout)
+
+		case <-r.generationTimeoutCh:
+			// Handled in the room's goroutine to avoid races with r.clients and r.generationInProgress.
+			if r.generationInProgress {
+				r.logger.Warn("generation timeout reached, forcing stop")
+				r.generationInProgress = false
+				r.generationTimer = nil
+				r.sendGenerationTimeoutError()
+			}
 
 		}
 	}
