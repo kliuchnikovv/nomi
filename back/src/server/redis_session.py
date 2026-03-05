@@ -1482,11 +1482,6 @@ class RedisSession:
 
             # Log agent switching for multi-agent teams
             if agent_name and agent_name != current_agent_name:
-                logger.info(
-                    "[Team] Agent switched: %s → %s",
-                    current_agent_name or "Team Leader",
-                    agent_name,
-                )
                 # Send separator between different agent responses to prevent text gluing
                 if current_agent_name is not None:
                     yield {"type": "text", "content": "\n\n"}

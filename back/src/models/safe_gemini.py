@@ -70,13 +70,21 @@ class SafeGemini(Gemini):
             #     logger.info(
             #         f"[SafeGemini DEBUG] Tool Message: content_type={type(msg.content)} content={msg.content}"
             #     )
-                # if isinstance(msg.content, list):
-                #     for i, part in enumerate(msg.content):
-                #         logger.info(f"[SafeGemini DEBUG] Part {i}: {part}")
+            # if isinstance(msg.content, list):
+            #     for i, part in enumerate(msg.content):
+            #         logger.info(f"[SafeGemini DEBUG] Part {i}: {part}")
 
             # Check if message has content
             if msg.content is None:
-                # Skip messages with no content at all
+                # IMPORTANT: Never filter out system messages, even if they have None content
+                # This prevents "contents are required" errors when system messages are missing content
+                if msg.role == "system":
+                    logger.debug(
+                        "[SafeGemini] Keeping system message with None content"
+                    )
+                    filtered_messages.append(msg)
+                    continue
+                # Skip other messages with no content at all
                 logger.debug("[SafeGemini] Skipping message with None content")
                 continue
 
@@ -124,8 +132,16 @@ class SafeGemini(Gemini):
         if not filtered_messages and messages:
             # If all messages were filtered, keep messages with roles that should never be empty
             # (user, system) - even if they have minimal content
+            # IMPORTANT: Always keep system messages, even if content is None,
+            # to ensure the API has valid context
             for msg in messages:
-                if msg.role in ("user", "system") and msg.content is not None:
+                if msg.role == "system":
+                    filtered_messages.append(msg)
+                    logger.debug(
+                        "[SafeGemini] Kept %s message to prevent empty list", msg.role
+                    )
+                    break
+                if msg.role == "user" and msg.content is not None:
                     filtered_messages.append(msg)
                     logger.debug(
                         "[SafeGemini] Kept %s message to prevent empty list", msg.role

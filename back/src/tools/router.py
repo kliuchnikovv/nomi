@@ -6,7 +6,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -65,15 +66,9 @@ class RoutingDecision:
 class ToolRouter:
     def __init__(self, api_key: str | None = None):
         key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        genai.configure(api_key=key)
-        self._model = genai.GenerativeModel(
-            model_name=ROUTER_MODEL,
-            system_instruction=SYSTEM_PROMPT,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json",
-                temperature=0,
-            ),
-        )
+        self._client = genai.Client(api_key=key)
+        self._system_prompt = SYSTEM_PROMPT
+        self._model_name = ROUTER_MODEL
 
     def decide(
         self,
@@ -92,7 +87,15 @@ class ToolRouter:
         prompt = "\n\n".join(prompt_parts)
 
         try:
-            response = self._model.generate_content(prompt)
+            response = self._client.models.generate_content(
+                model=self._model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=self._system_prompt,
+                    temperature=0,
+                    response_mime_type="application/json",
+                ),
+            )
             raw = json.loads(response.text)
 
             # Handle list responses - use first element if valid
