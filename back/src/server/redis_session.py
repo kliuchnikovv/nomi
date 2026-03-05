@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import redis.asyncio as redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from agno.media import Image
 from src.agents.factory import AgentFactory
 from src.agents.souper import SouperAgent
@@ -202,7 +203,7 @@ class RedisSession:
         if self.redis_client:
             try:
                 await self.redis_client.publish(channel, payload_json)
-            except redis.exceptions.ConnectionError as e:
+            except RedisConnectionError as e:
                 logger.warning(
                     "[RedisSession] Publish failed (ConnectionError), reconnecting: %s", e
                 )
