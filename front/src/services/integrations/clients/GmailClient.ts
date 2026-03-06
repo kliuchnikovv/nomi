@@ -3,11 +3,13 @@
  * Direct Gmail API client that uses locally stored tokens
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tokenRefreshService } from '../tokenRefreshService';
 import { integrationStorage, Email } from '../IntegrationStorage';
 import { vectorStore } from '../../database/VectorStore';
 
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
+const lastRunKey = (integrationId: string) => `gmail_bg_lastrun_${integrationId}`;
 
 export interface GmailMessage {
     id: string;
@@ -42,8 +44,16 @@ class GmailClient {
         console.log(`[GmailClient] onWake triggered for ${integrationId}`);
 
         try {
-            // 1. Fetch unread emails
-            const emails = await this.searchEmails(integrationId, 'is:unread', 10);
+            // 1. Determine search window: since last successful run, or fallback to 1 hour ago
+            const rawTs = await AsyncStorage.getItem(lastRunKey(integrationId));
+            const afterEpoch = rawTs
+                ? parseInt(rawTs, 10)
+                : Math.floor((Date.now() - 3600 * 1000) / 1000);
+            const query = `is:unread after:${afterEpoch}`;
+            console.log(`[GmailClient] Search query: ${query}`);
+
+            // 2. Fetch unread emails since last run
+            const emails = await this.searchEmails(integrationId, query, 10);
             console.log(`[GmailClient] Fetched ${emails.length} unread emails from Gmail`);
 
             if (emails.length === 0) {
@@ -139,6 +149,10 @@ Keep your response brief and actionable.`;
             }
 
             console.log(`[GmailClient] Finished processing ${emailsToProcess.length} emails: ${createdChats} created, ${skippedChats} skipped, ${failedChats} failed`);
+
+            // Save last successful run timestamp
+            await AsyncStorage.setItem(lastRunKey(integrationId), String(Math.floor(Date.now() / 1000)));
+
             return emailsToProcess;
         } catch (error) {
             console.error('[GmailClient] onWake error:', error);

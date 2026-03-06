@@ -1,8 +1,10 @@
 import React, {
     createContext,
+    useCallback,
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from 'react';
 
@@ -59,28 +61,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.error('Failed to load auth data', e);
             } finally {
                 setIsLoading(false);
-                // Initialize apiClient with tokens loaded from storage to avoid race conditions
-                // Note: We use a reference that will be updated by closure in refreshToken/logout
-                // This is a workaround to avoid circular dependencies with useEffect hooks
-                setupApiClient({
-                    getToken: () => {
-                        // Use latest token from state
-                        return token;
-                    },
-                    refreshToken: async () => {
-                        // This will be called from apiClient and will refresh using current state
-                        return refreshToken();
-                    },
-                    logout: async () => {
-                        // Call logout function from this component
-                        await logout();
-                    },
-                });
             }
         };
 
         loadAuthData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Configure Google Sign-In
@@ -109,13 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(userData);
         setToken(tokenData);
         setRefreshTokenValue(refreshTokenData);
-
-        // Immediately rebind apiClient with the freshest token to avoid one-request gap
-        setupApiClient({
-            getToken: () => tokenData,
-            refreshToken: () => refreshToken(),
-            logout: () => logout(),
-        });
 
         if (userData) {
             await AsyncStorage.setItem('user', JSON.stringify(userData));
@@ -192,26 +169,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
-    async function logout() {
+    const logout = useCallback(async () => {
         await setAuthData(null, null, null);
-    }
+    }, []);
 
     // Latch to prevent multiple concurrent refresh requests
-    let refreshPromise: Promise<boolean> | null = null;
+    const refreshPromiseRef = useRef<Promise<boolean> | null>(null);
 
-    async function refreshToken(): Promise<boolean> {
-        if (refreshPromise) {
-            return refreshPromise;
+    const refreshToken = useCallback(async (): Promise<boolean> => {
+        if (refreshPromiseRef.current) {
+            return refreshPromiseRef.current;
         }
 
-        refreshPromise = (async () => {
+        refreshPromiseRef.current = (async () => {
             const currentRefreshToken =
                 refreshTokenValue ||
                 (await AsyncStorage.getItem('refreshToken'));
 
             if (!currentRefreshToken) {
                 await logout();
-                refreshPromise = null;
+                refreshPromiseRef.current = null;
                 return false;
             }
 
@@ -249,12 +226,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 console.warn('[Auth] Refresh failed (network error):', error);
                 return false;
             } finally {
-                refreshPromise = null;
+                refreshPromiseRef.current = null;
             }
         })();
 
-        return refreshPromise;
-    }
+        return refreshPromiseRef.current;
+    }, [refreshTokenValue, logout]);
 
     async function signInWithGoogle() {
         try {
@@ -443,6 +420,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(updatedUser);
         await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
     };
+
+    // Update apiClient whenever token changes to fix race condition with initial load
+    useEffect(() => {
+        setupApiClient({
+            getToken: () => token,
+            refreshToken: () => refreshToken(),
+            logout: () => logout(),
+        });
+    }, [token, refreshToken, logout]);
 
     const value: AuthContextType = {
         user,

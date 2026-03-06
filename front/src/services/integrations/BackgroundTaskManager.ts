@@ -7,11 +7,13 @@
 
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, AppStateStatus } from 'react-native';
 import { integrationStorage } from './IntegrationStorage';
 import { getIntegrationMetadata } from './registry';
 import { getBackgroundTask, getRegisteredClientPluginNames } from '../../plugins/clientRegistry';
 import { registerClientPlugins } from '../../plugins/registerClientPlugins';
+import { setupApiClient } from '../../apiClient';
 
 // Типы для фоновых задач
 export interface BackgroundTaskConfig {
@@ -21,14 +23,27 @@ export interface BackgroundTaskConfig {
     enabled: boolean;
 }
 
-// Реестр активных фоновых задач
-const activeTasks = new Map<string, BackgroundTaskConfig>();
+// Реестр активных фоновых задач (один провайдер может иметь несколько аккаунтов)
+const activeTasks = new Map<string, BackgroundTaskConfig[]>();
 
 // Имена задач для TaskManager
 const TASK_NAME_PREFIX = 'integration-background-';
 
 function getTaskName(provider: string): string {
     return `${TASK_NAME_PREFIX}${provider}`;
+}
+
+/**
+ * Load auth token from AsyncStorage and wire it into apiClient.
+ * Required when background tasks run outside the React lifecycle.
+ */
+async function bootstrapAuthForBackground(): Promise<void> {
+    const token = await AsyncStorage.getItem('token');
+    setupApiClient({
+        getToken: () => token,
+        refreshToken: async () => false,
+        logout: () => {},
+    });
 }
 
 function getBackgroundTaskForProvider(provider: string): ((integrationId: string) => Promise<void>) | undefined {
@@ -39,52 +54,69 @@ function getBackgroundTaskForProvider(provider: string): ((integrationId: string
 }
 
 export function defineAllBackgroundTasks(): void {
-    console.log('[BackgroundTaskManager] Defining all background tasks at module level...');
+    console.log('[BackgroundTaskManager] =========================================');
+    console.log('[BackgroundTaskManager] 📱 Defining all background tasks at module level...');
+    console.log('[BackgroundTaskManager] =========================================');
     registerClientPlugins();
 
     // Get providers dynamically from registered client plugins
     const providers = getRegisteredClientPluginNames();
-    console.log(`[BackgroundTaskManager] Found ${providers.length} registered plugins: ${providers.join(', ')}`);
+    console.log(`[BackgroundTaskManager] 📋 Found ${providers.length} registered plugins: ${providers.join(', ')}`);
 
     for (const provider of providers) {
         const taskName = getTaskName(provider);
 
         if (TaskManager.isTaskDefined(taskName)) {
-            console.log(`[BackgroundTaskManager] Task ${taskName} already defined, skipping`);
+            console.log(`[BackgroundTaskManager] ⏭️ Task ${taskName} already defined, skipping`);
             continue;
         }
 
+        console.log(`[BackgroundTaskManager] 📝 Defining background task: ${taskName} for provider: ${provider}`);
+
         TaskManager.defineTask(taskName, async ({ data: _data, error }: any) => {
+            console.log(`[BackgroundTaskManager] =========================================`);
+            console.log(`[BackgroundTaskManager] 🚀 BACKGROUND TASK EXECUTED: ${provider}`);
+            console.log(`[BackgroundTaskManager] =========================================`);
+
             if (error) {
-                console.error(`[BackgroundTaskManager] Background task error for ${provider}:`, error);
+                console.error(`[BackgroundTaskManager] ❌ Background task error for ${provider}:`, error);
                 return;
             }
 
             try {
-                console.log(`[BackgroundTaskManager] Executing background task for ${provider}`);
+                await bootstrapAuthForBackground();
 
-                const config = activeTasks.get(provider);
-                if (!config) {
-                    console.warn(`[BackgroundTaskManager] No active config for ${provider}, skipping...`);
+                console.log(`[BackgroundTaskManager] 🔍 Looking up configs for ${provider}...`);
+                const configs = activeTasks.get(provider);
+                if (!configs || configs.length === 0) {
+                    console.warn(`[BackgroundTaskManager] ⚠️ No active configs for ${provider}, skipping...`);
                     return;
                 }
+                console.log(`[BackgroundTaskManager] ✅ Found ${configs.length} account(s) for ${provider}`);
 
+                console.log(`[BackgroundTaskManager] 🔍 Getting background task function for ${provider}...`);
                 const taskFunction = getBackgroundTaskForProvider(provider);
                 if (!taskFunction) {
-                    console.warn(`[BackgroundTaskManager] No background task function for ${provider}`);
+                    console.warn(`[BackgroundTaskManager] ⚠️ No background task function for ${provider}`);
                     return;
                 }
 
-                await taskFunction(config.integrationId);
+                for (const config of configs) {
+                    console.log(`[BackgroundTaskManager] ✅ Calling task for integrationId: ${config.integrationId}`);
+                    await taskFunction(config.integrationId);
+                    console.log(`[BackgroundTaskManager] ✅ Background task completed for ${config.integrationId}`);
+                }
             } catch (err) {
-                console.error(`[BackgroundTaskManager] Background task failed for ${provider}:`, err);
+                console.error(`[BackgroundTaskManager] ❌ Background task failed for ${provider}:`, err);
             }
         });
 
-        console.log(`[BackgroundTaskManager] Defined background task: ${taskName}`);
+        console.log(`[BackgroundTaskManager] ✅ Defined background task: ${taskName}`);
     }
 
-    console.log('[BackgroundTaskManager] All background tasks defined');
+    console.log('[BackgroundTaskManager] =========================================');
+    console.log('[BackgroundTaskManager] ✅ All background tasks defined');
+    console.log('[BackgroundTaskManager] =========================================');
 }
 
 export async function registerBackgroundTask(config: BackgroundTaskConfig): Promise<void> {
@@ -103,13 +135,19 @@ export async function registerBackgroundTask(config: BackgroundTaskConfig): Prom
         return;
     }
     
-    activeTasks.set(provider, config);
+    const existing = activeTasks.get(provider) ?? [];
+    const idx = existing.findIndex(c => c.integrationId === config.integrationId);
+    if (idx >= 0) {
+        existing[idx] = config;
+    } else {
+        existing.push(config);
+    }
+    activeTasks.set(provider, existing);
 
     try {
         const isRegistered = await TaskManager.isTaskRegisteredAsync(taskName);
         if (isRegistered) {
-            console.log(`[BackgroundTaskManager] Task ${taskName} already registered`);
-            activeTasks.set(provider, config);
+            console.log(`[BackgroundTaskManager] Task ${taskName} already registered, updated config for ${config.integrationId}`);
             return;
         }
 
@@ -125,19 +163,33 @@ export async function registerBackgroundTask(config: BackgroundTaskConfig): Prom
     }
 }
 
-export async function unregisterBackgroundTask(provider: string): Promise<void> {
+export async function unregisterBackgroundTask(provider: string, integrationId?: string): Promise<void> {
     const taskName = getTaskName(provider);
-    
+
     if (!activeTasks.has(provider)) {
         console.log(`[BackgroundTaskManager] Task ${taskName} not in active tasks, skipping unregister`);
         return;
     }
 
+    if (integrationId) {
+        // Remove only this account; keep BackgroundFetch task if others remain
+        const remaining = (activeTasks.get(provider) ?? []).filter(c => c.integrationId !== integrationId);
+        if (remaining.length > 0) {
+            activeTasks.set(provider, remaining);
+            console.log(`[BackgroundTaskManager] Removed integrationId=${integrationId} from ${provider}, ${remaining.length} account(s) remaining`);
+            return;
+        }
+        // Last account removed — fall through to full unregister
+    }
+
+    // Delete FIRST — before any await — so a concurrent call sees has()=false and exits immediately,
+    // preventing the double-unregister race that causes a native E_TASK_NOT_FOUND crash.
+    activeTasks.delete(provider);
+
     try {
         const isRegistered = await TaskManager.isTaskRegisteredAsync(taskName);
         if (!isRegistered) {
             console.log(`[BackgroundTaskManager] Task ${taskName} not registered, skipping unregister`);
-            activeTasks.delete(provider);
             return;
         }
 
@@ -145,17 +197,48 @@ export async function unregisterBackgroundTask(provider: string): Promise<void> 
         console.log(`[BackgroundTaskManager] Unregistered background task for ${provider}`);
     } catch (error) {
         console.error(`[BackgroundTaskManager] Failed to unregister task ${provider}:`, error);
-    } finally {
-        activeTasks.delete(provider);
     }
 }
 
 export function getActiveTaskConfig(provider: string): BackgroundTaskConfig | undefined {
-    return activeTasks.get(provider);
+    return activeTasks.get(provider)?.[0];
 }
 
 export function isActive(provider: string): boolean {
-    return activeTasks.has(provider);
+    return (activeTasks.get(provider)?.length ?? 0) > 0;
+}
+
+/**
+ * Manually trigger a background task for testing purposes.
+ * This can be called from a debug screen or console to test background task execution.
+ */
+export async function manuallyTriggerBackgroundTask(provider: string): Promise<void> {
+    console.log(`[BackgroundTaskManager] =========================================`);
+    console.log(`[BackgroundTaskManager] 🧪 MANUALLY TRIGGERING: ${provider}`);
+    console.log(`[BackgroundTaskManager] =========================================`);
+
+    const configs = activeTasks.get(provider);
+    if (!configs || configs.length === 0) {
+        console.warn(`[BackgroundTaskManager] ❌ No active configs for ${provider}`);
+        return;
+    }
+
+    const taskFunction = getBackgroundTaskForProvider(provider);
+    if (!taskFunction) {
+        console.warn(`[BackgroundTaskManager] ❌ No background task function for ${provider}`);
+        return;
+    }
+
+    try {
+        await bootstrapAuthForBackground();
+        for (const config of configs) {
+            console.log(`[BackgroundTaskManager] 🧪 Running manual task for integrationId: ${config.integrationId}`);
+            await taskFunction(config.integrationId);
+        }
+        console.log(`[BackgroundTaskManager] ✅ Manual task completed for ${provider} (${configs.length} account(s))`);
+    } catch (err) {
+        console.error(`[BackgroundTaskManager] ❌ Manual task failed for ${provider}:`, err);
+    }
 }
 
 async function cleanupOrphanedTasks(): Promise<void> {
@@ -170,6 +253,14 @@ async function cleanupOrphanedTasks(): Promise<void> {
 
         for (const task of ourTasks) {
             try {
+                // Re-check registration status before unregistering — a concurrent call may have
+                // already unregistered this task, and calling unregisterTaskAsync on an unknown
+                // task throws a native NSException that JS try-catch cannot intercept.
+                const isStillRegistered = await TaskManager.isTaskRegisteredAsync(task.taskName);
+                if (!isStillRegistered) {
+                    console.log(`[BackgroundTaskManager] Orphaned task ${task.taskName} already unregistered, skipping`);
+                    continue;
+                }
                 console.log(`[BackgroundTaskManager] Attempting to unregister orphaned task: ${task.taskName}`);
                 await BackgroundFetch.unregisterTaskAsync(task.taskName);
                 console.log(`[BackgroundTaskManager] Successfully unregistered orphaned task: ${task.taskName}`);
@@ -185,13 +276,15 @@ async function cleanupOrphanedTasks(): Promise<void> {
 }
 
 export async function initializeBackgroundTasks(): Promise<void> {
-    console.log('[BackgroundTaskManager] Initializing background tasks...');
-    
+    console.log('[BackgroundTaskManager] =========================================');
+    console.log('[BackgroundTaskManager] 🚀 Initializing background tasks...');
+    console.log('[BackgroundTaskManager] =========================================');
+
     try {
         await cleanupOrphanedTasks();
-        
+
         const integrations = await integrationStorage.getIntegrations();
-        console.log(`[BackgroundTaskManager] Total integrations: ${integrations.length}`);
+        console.log(`[BackgroundTaskManager] 📦 Total integrations: ${integrations.length}`);
 
         const integrationsWithBackgroundTasks = integrations.filter(
             integration => {
@@ -201,23 +294,24 @@ export async function initializeBackgroundTasks(): Promise<void> {
                 const enabled = integration.enabled;
 
                 if (enabled && supportedTasks && validStorage) {
-                    console.log(`[BackgroundTaskManager] ✓ ${integration.provider}: enabled=${enabled}, supportsTasks=${supportedTasks}, storageType=${metadata?.storageType}`);
+                    console.log(`[BackgroundTaskManager] ✅ ${integration.provider}: enabled=${enabled}, supportsTasks=${supportedTasks}, storageType=${metadata?.storageType}`);
                     return true;
                 } else {
-                    console.log(`[BackgroundTaskManager] ✗ ${integration.provider}: enabled=${enabled}, supportsTasks=${supportedTasks}, storageType=${metadata?.storageType}`);
+                    console.log(`[BackgroundTaskManager] ❌ ${integration.provider}: enabled=${enabled}, supportsTasks=${supportedTasks}, storageType=${metadata?.storageType}`);
                     return false;
                 }
             }
         );
 
-        console.log(`[BackgroundTaskManager] Found ${integrationsWithBackgroundTasks.length} integrations with background tasks`);
-        
+        console.log(`[BackgroundTaskManager] 📋 Found ${integrationsWithBackgroundTasks.length} integrations with background tasks`);
+
         for (const integration of integrationsWithBackgroundTasks) {
             const metadata = getIntegrationMetadata(integration.provider);
             if (!metadata) continue;
-            
+
             const interval = 15 * 60;
-            
+            console.log(`[BackgroundTaskManager] 📝 Registering task for ${integration.provider} (${integration.id})...`);
+
             await registerBackgroundTask({
                 integrationId: integration.id,
                 provider: integration.provider,
@@ -225,18 +319,32 @@ export async function initializeBackgroundTasks(): Promise<void> {
                 enabled: integration.enabled,
             });
         }
-        
-        console.log('[BackgroundTaskManager] Background tasks initialized');
+
+        console.log('[BackgroundTaskManager] =========================================');
+        console.log('[BackgroundTaskManager] ✅ Background tasks initialized');
+        console.log('[BackgroundTaskManager] =========================================');
     } catch (error) {
-        console.error('[BackgroundTaskManager] Failed to initialize background tasks:', error);
+        console.error('[BackgroundTaskManager] ❌ Failed to initialize background tasks:', error);
     }
 }
 
+// Global mutex: prevents concurrent refreshes that would race in cleanupOrphanedTasks
+// and unregisterBackgroundTask, causing native E_TASK_NOT_FOUND crashes.
+let isRefreshing = false;
+
 export async function refreshBackgroundTasks(): Promise<void> {
+    if (isRefreshing) {
+        console.log('[BackgroundTaskManager] Refresh already in progress, skipping concurrent call');
+        return;
+    }
+    isRefreshing = true;
     console.log('[BackgroundTaskManager] Refreshing background tasks...');
-    
-    await stopAllBackgroundTasks();
-    await initializeBackgroundTasks();
+    try {
+        await stopAllBackgroundTasks();
+        await initializeBackgroundTasks();
+    } finally {
+        isRefreshing = false;
+    }
 }
 
 export async function stopAllBackgroundTasks(): Promise<void> {

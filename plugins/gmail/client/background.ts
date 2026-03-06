@@ -76,7 +76,7 @@ export async function backgroundTask(integrationId: string): Promise<void> {
         }
 
         processedIds.push(email.gmailId);
-        const analysis = analyzeEmailWithLog(email);
+        const analysis = await analyzeEmailWithLog(email);
 
         if (!analysis.isImportant) {
             entries.push({
@@ -91,6 +91,8 @@ export async function backgroundTask(integrationId: string): Promise<void> {
                     urgent: analysis.urgent,
                     importantKeywords: analysis.matchedKeywords,
                     hasGmailImportant: analysis.hasGmailImportant,
+                    analyzedByAI: analysis.analyzedByAI,
+                    actionHint: analysis.actionHint,
                 },
                 durationMs: Date.now() - startTime,
             });
@@ -110,6 +112,8 @@ export async function backgroundTask(integrationId: string): Promise<void> {
                     urgent: analysis.urgent,
                     importantKeywords: analysis.matchedKeywords,
                     hasGmailImportant: analysis.hasGmailImportant,
+                    analyzedByAI: analysis.analyzedByAI,
+                    actionHint: analysis.actionHint,
                 },
                 durationMs: Date.now() - startTime,
             });
@@ -117,12 +121,24 @@ export async function backgroundTask(integrationId: string): Promise<void> {
         }
 
         try {
+            const emailUrl = email.threadId
+                ? `https://mail.google.com/mail/u/0/#all/${email.threadId}`
+                : `https://mail.google.com/mail/u/0/#inbox/${email.gmailId}`;
+
+            const senderLabel = email.fromName ? `${email.fromName} <${from}>` : from;
+            const notes = [
+                analysis.actionHint,
+                `От: ${senderLabel}`,
+                email.snippet,
+            ].filter(Boolean).join('\n');
+
             const reminderResult = await remindersClient.createReminder(
                 `📧 ${subject}`,
                 {
-                    notes: `From: ${from}\n${email.snippet ?? ''}`,
+                    notes,
                     dueDate: analysis.dueDateISO,
-                    priority: analysis.urgent ? 1 : 5,
+                    priority: analysis.priority,
+                    url: emailUrl,
                 }
             );
             entries.push({
@@ -137,15 +153,17 @@ export async function backgroundTask(integrationId: string): Promise<void> {
                     urgent: analysis.urgent,
                     importantKeywords: analysis.matchedKeywords,
                     hasGmailImportant: analysis.hasGmailImportant,
+                    analyzedByAI: analysis.analyzedByAI,
+                    actionHint: analysis.actionHint,
                 },
                 reminderDetails: {
                     dueDate: analysis.dueDateISO,
-                    priority: analysis.urgent ? 1 : 5,
+                    priority: analysis.priority,
                     reminderId: reminderResult?.id,
                 },
                 durationMs: Date.now() - startTime,
             });
-            console.log(`[Gmail background] Created reminder for: ${subject} (due: ${analysis.dueDateISO}, priority: ${analysis.urgent ? 1 : 5})`);
+            console.log(`[Gmail background] Created reminder for: ${subject} (due: ${analysis.dueDateISO}, priority: ${analysis.priority}, hint: ${analysis.actionHint})`);
         } catch (e) {
             entries.push({
                 gmailId: email.gmailId,
@@ -159,6 +177,8 @@ export async function backgroundTask(integrationId: string): Promise<void> {
                     urgent: analysis.urgent,
                     importantKeywords: analysis.matchedKeywords,
                     hasGmailImportant: analysis.hasGmailImportant,
+                    analyzedByAI: analysis.analyzedByAI,
+                    actionHint: analysis.actionHint,
                 },
                 error: e instanceof Error ? e.message : String(e),
                 durationMs: Date.now() - startTime,

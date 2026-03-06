@@ -27,12 +27,13 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
 import { initDatabase } from './src/services/database/database';
-// BackgroundTaskManager: define all tasks at module level (required for React Native)
 import { defineAllBackgroundTasks } from './src/services/integrations/BackgroundTaskManager';
+import { registerClientPlugins } from './src/plugins/registerClientPlugins';
 import { socket } from './src/socket';
+import { initDebugUtils } from './src/debug/DebugUtils';
 
-// CRITICAL: Define all background tasks at module level (required for React Native/Expo)
-defineAllBackgroundTasks();
+// Initialize debug utilities
+initDebugUtils();
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -57,9 +58,13 @@ function App() {
                 console.log('[App] Database initialized');
                 console.log('[App] Local RAG logging enabled. You will see [Local RAG Search] and [Client Tool Executor] when the agent runs a local search (e.g. "search my emails" or "find in my notes").');
 
-                // Background tasks are already defined at module level
-                // ConnectorsProvider will register them for enabled integrations
-                console.log('[App] Background tasks will be registered by ConnectorsProvider for enabled integrations');
+                // IMPORTANT: wait for all plugins to register BEFORE defining background tasks.
+                // defineAllBackgroundTasks() reads the plugin handler map synchronously;
+                // if called before plugins load the map is empty and no tasks get defined.
+                setInitStatus('Registering plugins...');
+                await registerClientPlugins();
+                defineAllBackgroundTasks();
+                console.log('[App] Background tasks defined after plugin registration');
 
             } catch (e) {
                 console.error("Failed to initialize app:", e);

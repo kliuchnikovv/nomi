@@ -4,6 +4,7 @@
  */
 
 import { NativeModules, Platform } from 'react-native';
+import { authStore } from '../../../apiClient';
 
 const { IOSRemindersManager } = NativeModules;
 
@@ -140,6 +141,12 @@ class IOSRemindersClient {
         }
 
         try {
+            const token = authStore.getToken();
+            if (!token) {
+                console.warn('[IOSRemindersClient] No JWT token available, skipping RAG indexing');
+                return;
+            }
+
             const { VectorStore } = await import('@genie/front/services/database/VectorStore');
             const vectorStore = new VectorStore();
 

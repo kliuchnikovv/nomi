@@ -89,12 +89,15 @@ export function registerClientPlugins(): Promise<void> {
 
         // Gmail
         try {
+            console.log('[registerClientPlugins] Loading Gmail plugin...');
             const { gmailPlugin } = await import('@genie/plugin-gmail/client');
+            console.log('[registerClientPlugins] Gmail plugin loaded, loading background module...');
             const gmailBackgroundModule = await import(
                 '@genie/plugin-gmail/background'
             );
             const { backgroundTask: gmailBackgroundTask } =
                 gmailBackgroundModule;
+            console.log('[registerClientPlugins] Gmail backgroundTask loaded:', typeof gmailBackgroundTask);
             const { GmailMainScreen } = await import(
                 '@genie/plugin-gmail/components/GmailMainScreen'
             );
@@ -118,10 +121,10 @@ export function registerClientPlugins(): Promise<void> {
                 priority: 20,
                 Component: GmailPluginScreen,
             });
-            console.log('[registerClientPlugins] Gmail plugin registered');
+            console.log('[registerClientPlugins] ✅ Gmail plugin registered with background task');
         } catch (e) {
             console.warn(
-                '[registerClientPlugins] Failed to load Gmail plugin:',
+                '[registerClientPlugins] ❌ Failed to load Gmail plugin:',
                 e,
             );
         }

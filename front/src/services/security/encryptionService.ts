@@ -21,13 +21,18 @@ async function getOrCreateKey(): Promise<string> {
         return encryptionKey;
     }
 
+    // AFTER_FIRST_UNLOCK: key must be readable by background tasks
+    const keychainOptions: SecureStore.SecureStoreOptions = {
+        keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+    };
+
     // Try to get existing key
     let key = await SecureStore.getItemAsync(ENCRYPTION_KEY_ALIAS);
 
     if (!key) {
         // Generate a new random key (32 chars)
         key = generateRandomKey(32);
-        await SecureStore.setItemAsync(ENCRYPTION_KEY_ALIAS, key);
+        await SecureStore.setItemAsync(ENCRYPTION_KEY_ALIAS, key, keychainOptions);
     }
 
     encryptionKey = key;

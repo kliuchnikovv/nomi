@@ -8,7 +8,6 @@ import { emptyChatID, useMain } from './context';
 import { ChatProvider } from '../chat/context.tsx';
 import { AskUserProvider } from '../chat/AskUserContext';
 
-import { ConnectorsProvider } from '../settings/connectors/context';
 import { getClientPlugin } from '../../plugins/clientRegistry';
 
 function MainScreenContent() {
@@ -25,44 +24,42 @@ function MainScreenContent() {
     }
 
     return (
-        <ConnectorsProvider>
-            <AskUserProvider>
-                <View style={styles.root}>
-                    {PluginComponent ? (
-                        <ChatProvider
-                            activeChatID={emptyChatID}
-                            setActiveChatID={() => {}}
-                        >
-                            <View style={styles.content}>
-                                <PluginComponent
-                                    integrationId={activePluginIntegrationId ?? undefined}
-                                    onClose={(closeSidebar?: boolean) => {
-                                        if (closeSidebar) {
-                                            closePluginWithSidebar();
-                                        } else {
-                                            closePluginKeepSidebar();
-                                        }
-                                    }}
-                                />
-                            </View>
-                        </ChatProvider>
-                    ) : (
-                        <ChatProvider
-                            activeChatID={activeChatID ? activeChatID : emptyChatID}
-                            setActiveChatID={setActiveChatID}
-                        >
-                            <View style={styles.content}>
-                                <ChatScreen onSettingsPress={() => setSettingsOpen(true)} />
-                            </View>
-                        </ChatProvider>
-                    )}
-                    <SettingsModal
-                        visible={settingsOpen}
-                        onClose={() => setSettingsOpen(false)}
-                    />
-                </View>
-            </AskUserProvider>
-        </ConnectorsProvider>
+        <AskUserProvider>
+            <View style={styles.root}>
+                {PluginComponent ? (
+                    <ChatProvider
+                        activeChatID={emptyChatID}
+                        setActiveChatID={() => {}}
+                    >
+                        <View style={styles.content}>
+                            <PluginComponent
+                                integrationId={activePluginIntegrationId ?? undefined}
+                                onClose={(closeSidebar?: boolean) => {
+                                    if (closeSidebar) {
+                                        closePluginWithSidebar();
+                                    } else {
+                                        closePluginKeepSidebar();
+                                    }
+                                }}
+                            />
+                        </View>
+                    </ChatProvider>
+                ) : (
+                    <ChatProvider
+                        activeChatID={activeChatID ? activeChatID : emptyChatID}
+                        setActiveChatID={setActiveChatID}
+                    >
+                        <View style={styles.content}>
+                            <ChatScreen onSettingsPress={() => setSettingsOpen(true)} />
+                        </View>
+                    </ChatProvider>
+                )}
+                <SettingsModal
+                    visible={settingsOpen}
+                    onClose={() => setSettingsOpen(false)}
+                />
+            </View>
+        </AskUserProvider>
     );
 }
 

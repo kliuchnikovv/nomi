@@ -72,6 +72,17 @@
 	<string>Genie uses speech recognition to transcribe your voice messages</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>integration-background-gmail</string>
+		<string>integration-background-calendar</string>
+		<string>integration-background-github</string>
+		<string>integration-background-telegram</string>
+		<string>integration-background-ios_calendar</string>
+		<string>integration-background-ios_reminders</string>
+		<string>integration-background-ios_contacts</string>
+		<string>background-email-sync</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

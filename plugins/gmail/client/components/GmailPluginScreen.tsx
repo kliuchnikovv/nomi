@@ -11,6 +11,7 @@ import { pluginChatStorage, PluginChat } from '@genie/front/services/plugins/Plu
 import { SharedPluginScreen } from '@genie/front/plugins/components/SharedPluginScreen';
 import { contextStore } from '@genie/front/services/ContextStore';
 import { backgroundLogger, BackgroundRunLog, EmailAction } from '../backgroundLogger';
+import { backgroundTask } from '../background';
 
 // ─── Background Activity helpers ─────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
     const [chats, setChats] = useState<PluginChat[]>([]);
     const [runLogs, setRunLogs] = useState<BackgroundRunLog[]>([]);
     const [loading, setLoading] = useState(true);
+    const [running, setRunning] = useState(false);
 
     const loadData = useCallback(async () => {
         try {
@@ -99,6 +101,17 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
         setRunLogs([]);
     }, [integrationId]);
 
+    const handleRunNow = useCallback(async () => {
+        if (!integrationId || running) return;
+        setRunning(true);
+        try {
+            await backgroundTask(integrationId);
+            await loadData();
+        } finally {
+            setRunning(false);
+        }
+    }, [integrationId, running, loadData]);
+
     // ─── Background Activity section (header) ────────────────────────────────
 
     const renderBackgroundActivity = () => {
@@ -110,13 +123,26 @@ export function GmailPluginScreen({ integrationId, onClose }: PluginMainScreenPr
                     <Text style={[styles.activityTitle, { color: theme.text }]}>
                         Background Activity
                     </Text>
-                    {recentRuns.length > 0 && (
-                        <Pressable onPress={handleClearLogs} hitSlop={8}>
-                            <Text style={[styles.clearBtn, { color: theme.textSecondary }]}>
-                                Clear
-                            </Text>
+                    <View style={styles.activityActions}>
+                        <Pressable
+                            onPress={handleRunNow}
+                            disabled={running}
+                            hitSlop={8}
+                            style={[styles.runBtn, { backgroundColor: theme.accent + '18' }]}
+                        >
+                            {running
+                                ? <ActivityIndicator size="small" color={theme.accent} />
+                                : <Text style={[styles.runBtnText, { color: theme.accent }]}>▶ Run Now</Text>
+                            }
                         </Pressable>
-                    )}
+                        {recentRuns.length > 0 && (
+                            <Pressable onPress={handleClearLogs} hitSlop={8}>
+                                <Text style={[styles.clearBtn, { color: theme.textSecondary }]}>
+                                    Clear
+                                </Text>
+                            </Pressable>
+                        )}
+                    </View>
                 </View>
 
                 {recentRuns.length === 0 ? (
@@ -273,6 +299,23 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
+    },
+    activityActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    runBtn: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 6,
+        minWidth: 72,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    runBtnText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     clearBtn: {
         fontSize: 13,

@@ -16,6 +16,8 @@ export interface EmailAnalysisLog {
     urgent: boolean;
     importantKeywords: string[];
     hasGmailImportant: boolean;
+    analyzedByAI?: boolean;
+    actionHint?: string;
 }
 
 export interface ReminderDetailsLog {

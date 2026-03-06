@@ -24,7 +24,6 @@ import {
     INTEGRATION_REGISTRY,
 } from '../../../services/integrations/registry';
 import {
-    initializeBackgroundTasks,
     refreshBackgroundTasks,
     registerSystemEventListeners,
     initializeSystemEventListeners,
@@ -83,19 +82,11 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             });
     }, []);
 
-    // Initialize background tasks and system event listeners
+    // Initialize system event listeners once database is ready.
+    // Background tasks are initialized by getIntegrations() → refreshBackgroundTasks() below.
     useEffect(() => {
         if (dbReady) {
-            // Инициализируем обработчики системных событий
             initializeSystemEventListeners();
-
-            // Инициализируем фоновые задачи для активных интеграций
-            initializeBackgroundTasks().catch(e => {
-                console.error(
-                    '[ConnectorsProvider] Failed to initialize background tasks:',
-                    e,
-                );
-            });
         }
     }, [dbReady]);
 
@@ -220,14 +211,6 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 `[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`,
             );
 
-            // Обновляем фоновые задачи на основе текущего состояния интеграций
-            refreshBackgroundTasks().catch(e => {
-                console.error(
-                    '[ConnectorsProvider] Failed to refresh background tasks:',
-                    e,
-                );
-            });
-
             // Регистрируем обработчики системных событий для каждой интеграции
             for (const integration of localIntegrations) {
                 if (integration.enabled) {
@@ -251,6 +234,15 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             console.warn('Failed to load integrations', e);
             setConfigs([]);
             setTools([]);
+        } finally {
+            // Always refresh background tasks so they stay registered even if integration
+            // loading partially fails. refreshBackgroundTasks() has its own DB read.
+            refreshBackgroundTasks().catch(e => {
+                console.error(
+                    '[ConnectorsProvider] Failed to refresh background tasks:',
+                    e,
+                );
+            });
         }
     }, [dbReady]);
 
