@@ -3,7 +3,8 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header
+from fastapi.responses import JSONResponse
 
 from agno.os import AgentOS
 from starlette.middleware.sessions import SessionMiddleware
@@ -154,44 +155,34 @@ async def health_check():
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
 
-# Embeddings endpoint for local RAG
-@app.post("/embeddings")
-async def generate_embeddings(request: dict):
-    """
-    Generate embeddings for text using Gemini embedding model.
-    Used by frontend's local RAG store for on-device semantic search.
-    """
-    from typing import List
+@app.post("/rag/index")
+async def rag_index(
+    request: dict,
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+):
+    """Index a document from the device into the backend personal RAG store."""
+    if not x_user_id:
+        return JSONResponse({"error": "X-User-ID header is required"}, status_code=401)
 
-    # Handle both single text and batch texts
-    if "text" in request:
-        texts = [request["text"]]
-    elif "texts" in request:
-        texts = request["texts"]
-    else:
-        return {"error": "Missing 'text' or 'texts' in request body"}, 400
+    doc_id = request.get("id")
+    source_type = request.get("source_type")
+    content = request.get("content")
+    metadata = request.get("metadata") or {}
 
-    if not texts or len(texts) == 0:
-        return {"error": "No texts provided"}, 400
+    if not doc_id or not source_type or not content:
+        return JSONResponse({"error": "id, source_type, and content are required"}, status_code=400)
 
     try:
-        # Get embedder from container
-        embedder = container.embedder
-
-        # Generate embeddings
-        embeddings: List[List[float]] = []
-        for text in texts:
-            embedding = embedder.get_embedding(text)
-            embeddings.append(embedding)
-
-        # Return appropriate response format
-        if "text" in request:
-            return {"embedding": embeddings[0]}
-        else:
-            return {"embeddings": embeddings}
+        await container.knowledge.ainsert(
+            name=doc_id,
+            text_content=content,
+            metadata={"user_id": x_user_id, "source_type": source_type, **metadata},
+            upsert=True,
+        )
+        return {"ok": True}
     except Exception as e:
-        logging.error("Failed to generate embeddings: %s", e, exc_info=True)
-        return {"error": str(e)}, 500
+        logging.error("Failed to index document: %s", e, exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # Sessions for OAuth state (required for request.session)

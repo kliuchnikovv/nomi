@@ -4,7 +4,7 @@
  */
 
 import { NativeModules, Platform } from 'react-native';
-import { authStore } from '../../../apiClient';
+import { ragApi } from '../../../apiClient';
 
 const { IOSRemindersManager } = NativeModules;
 
@@ -132,7 +132,7 @@ class IOSRemindersClient {
     }
 
     /**
-     * Index reminders for RAG (Retrieval-Augmented Generation)
+     * Index reminders into backend RAG store
      */
     async indexForRAG(integrationId: string): Promise<void> {
         if (Platform.OS !== 'ios') {
@@ -141,15 +141,6 @@ class IOSRemindersClient {
         }
 
         try {
-            const token = authStore.getToken();
-            if (!token) {
-                console.warn('[IOSRemindersClient] No JWT token available, skipping RAG indexing');
-                return;
-            }
-
-            const { VectorStore } = await import('@genie/front/services/database/VectorStore');
-            const vectorStore = new VectorStore();
-
             const now = new Date();
             const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
@@ -162,55 +153,28 @@ class IOSRemindersClient {
             );
 
             for (const reminder of reminders) {
-                let content = `Reminder: ${reminder.title}. `;
-                if (reminder.notes) content += `Notes: ${reminder.notes}. `;
+                let content = `Reminder: ${reminder.title}.`;
+                if (reminder.notes) content += ` Notes: ${reminder.notes}.`;
                 if (reminder.dueDate) {
-                    const dueDate = new Date(reminder.dueDate).toLocaleString();
-                    content += `Due: ${dueDate}. `;
+                    content += ` Due: ${new Date(reminder.dueDate).toLocaleString()}.`;
                 }
-                if (reminder.list) content += `List: ${reminder.list}. `;
+                if (reminder.list) content += ` List: ${reminder.list}.`;
 
-                await vectorStore.addDocument({
+                await ragApi.index({
                     id: `ios_reminders_${integrationId}_${reminder.id}`,
-                    sourceType: 'ios_reminder',
+                    source_type: 'ios_reminder',
                     content,
                     metadata: {
                         integrationId,
                         reminderId: reminder.id,
-                        title: reminder.title,
-                        dueDate: reminder.dueDate,
-                        isCompleted: reminder.isCompleted,
-                        priority: reminder.priority,
-                        list: reminder.list
-                    }
+                        list: reminder.list,
+                    },
                 });
             }
 
             console.log(`[IOSRemindersClient] Indexed ${reminders.length} reminders for RAG`);
         } catch (error) {
             console.error('[IOSRemindersClient] indexForRAG error:', error);
-        }
-    }
-
-    /**
-     * Search in RAG indexed reminders
-     */
-    async searchInRAG(query: string, integrationId?: string): Promise<any[]> {
-        if (Platform.OS !== 'ios') {
-            return [];
-        }
-
-        try {
-            const { VectorStore } = await import('@genie/front/services/database/VectorStore');
-            const vectorStore = new VectorStore();
-
-            const sourceType = integrationId ? `ios_reminder_${integrationId}` : 'ios_reminder';
-            const results = await vectorStore.search(query, 5, sourceType);
-
-            return results;
-        } catch (error) {
-            console.error('[IOSRemindersClient] searchInRAG error:', error);
-            return [];
         }
     }
 

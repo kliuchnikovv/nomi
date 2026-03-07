@@ -6,7 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { tokenRefreshService } from '../tokenRefreshService';
 import { integrationStorage, Email } from '../IntegrationStorage';
-import { vectorStore } from '../../database/VectorStore';
+import { ragApi } from '../../../apiClient';
 
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const lastRunKey = (integrationId: string) => `gmail_bg_lastrun_${integrationId}`;
@@ -218,31 +218,18 @@ Keep your response brief and actionable.`;
             isRead: e.isRead,
         })));
 
-        // Index emails in VectorStore (per integration)
+        // Index emails in backend RAG store
         for (const email of emails) {
             try {
-                // Construct a meaningful text representation for the embedding
-                const content = `From: ${email.fromName || email.fromEmail}
-Subject: ${email.subject}
-Date: ${email.date ? new Date(email.date).toLocaleDateString() : 'Unknown'}
-
-${email.snippet || ''}
-${email.bodyText || ''}`;
-
-                // Use unique ID per integration to avoid conflicts between accounts
-                const docId = `${integrationId}_${email.gmailId}`;
-                
-                await vectorStore.addDocument({
-                    id: docId,
-                    sourceType: 'email',
-                    content: content,
+                const content = `From: ${email.fromName || email.fromEmail}. Subject: ${email.subject}. Date: ${email.date ? new Date(email.date).toLocaleDateString() : 'Unknown'}. ${email.snippet || ''}`;
+                await ragApi.index({
+                    id: `${integrationId}_${email.gmailId}`,
+                    source_type: 'email',
+                    content,
                     metadata: {
-                        integrationId: integrationId,
+                        integrationId,
                         gmailId: email.gmailId,
-                        subject: email.subject,
-                        from: email.fromEmail,
-                        date: email.date
-                    }
+                    },
                 });
             } catch (err) {
                 console.warn(`[GmailClient] Failed to index email ${email.gmailId}:`, err);

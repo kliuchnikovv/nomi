@@ -4,6 +4,7 @@
  */
 
 import { NativeModules, Platform } from 'react-native';
+import { ragApi } from '../../../apiClient';
 
 const { IOSContactsManager } = NativeModules;
 
@@ -178,7 +179,7 @@ class IOSContactsClient {
     }
 
     /**
-     * Index contacts for RAG (Retrieval-Augmented Generation)
+     * Index contacts into backend RAG store
      */
     async indexForRAG(integrationId: string): Promise<void> {
         if (Platform.OS !== 'ios') {
@@ -187,68 +188,27 @@ class IOSContactsClient {
         }
 
         try {
-            const { VectorStore } = await import('@genie/front/services/database/VectorStore');
-            const vectorStore = new VectorStore();
-
             const contacts = await this.searchContacts('', 500);
 
             for (const contact of contacts) {
                 const fullName = [contact.givenName, contact.familyName].filter(Boolean).join(' ');
+                let content = `Contact: ${fullName}.`;
+                if (contact.organization) content += ` Works at ${contact.organization}.`;
+                if (contact.jobTitle) content += ` Position: ${contact.jobTitle}.`;
+                if (contact.phoneNumbers.length > 0) content += ` Phones: ${contact.phoneNumbers.map(p => p.value).join(', ')}.`;
+                if (contact.emailAddresses.length > 0) content += ` Emails: ${contact.emailAddresses.map(e => e.value).join(', ')}.`;
 
-                let content = `Contact: ${fullName}. `;
-                if (contact.organization) content += `Works at ${contact.organization}. `;
-                if (contact.jobTitle) content += `Position: ${contact.jobTitle}. `;
-
-                if (contact.phoneNumbers.length > 0) {
-                    content += `Phones: ${contact.phoneNumbers.map(p => p.value).join(', ')}. `;
-                }
-                if (contact.emailAddresses.length > 0) {
-                    content += `Emails: ${contact.emailAddresses.map(e => e.value).join(', ')}. `;
-                }
-                if (contact.notes) content += `Notes: ${contact.notes}. `;
-
-                await vectorStore.addDocument({
+                await ragApi.index({
                     id: `ios_contacts_${integrationId}_${contact.id}`,
-                    sourceType: 'ios_contact',
+                    source_type: 'ios_contact',
                     content,
-                    metadata: {
-                        integrationId,
-                        contactId: contact.id,
-                        givenName: contact.givenName,
-                        familyName: contact.familyName,
-                        organization: contact.organization,
-                        jobTitle: contact.jobTitle,
-                        emailAddresses: contact.emailAddresses.map(e => e.value),
-                        phoneNumbers: contact.phoneNumbers.map(p => p.value)
-                    }
+                    metadata: { integrationId, contactId: contact.id },
                 });
             }
 
             console.log(`[IOSContactsClient] Indexed ${contacts.length} contacts for RAG`);
         } catch (error) {
             console.error('[IOSContactsClient] indexForRAG error:', error);
-        }
-    }
-
-    /**
-     * Search in RAG indexed contacts
-     */
-    async searchInRAG(query: string, integrationId?: string): Promise<any[]> {
-        if (Platform.OS !== 'ios') {
-            return [];
-        }
-
-        try {
-            const { VectorStore } = await import('@genie/front/services/database/VectorStore');
-            const vectorStore = new VectorStore();
-
-            const sourceType = integrationId ? `ios_contact_${integrationId}` : 'ios_contact';
-            const results = await vectorStore.search(query, 5, sourceType);
-
-            return results;
-        } catch (error) {
-            console.error('[IOSContactsClient] searchInRAG error:', error);
-            return [];
         }
     }
 

@@ -49,6 +49,7 @@ class SouperAgent(Agent):
         debug_mode: bool = False,
         thinking: str = "off",
         timezone: str | None = "UTC",
+        knowledge=None,
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
         # Handle None timezone by defaulting to UTC
@@ -66,6 +67,7 @@ class SouperAgent(Agent):
             reasoning=(thinking != "off"),
             model=model,
             tools=tools,
+            knowledge=knowledge,
             description="Souper is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
             instructions=instructions,
             add_history_to_context=True,

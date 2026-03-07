@@ -34,6 +34,7 @@ class Container:
         # Lazy-initialized dependencies
         self._agent_factory: AgentFactory | None = None
         self._redis_worker = None
+        self._knowledge = None
 
     @property
     def db(self) -> PostgresDb | None:
@@ -64,6 +65,26 @@ class Container:
         return self._config_client
 
     @property
+    def knowledge(self):
+        """Get shared Agno Knowledge instance (lazy initialization)."""
+        if self._knowledge is None:
+            from agno.knowledge import Knowledge
+            from agno.vectordb.pgvector import PgVector
+
+            db_url = self.config.db_dsn or ""
+            if db_url.startswith("postgres://"):
+                db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+            vector_db = PgVector(
+                table_name="personal_vectors",
+                db_url=db_url,
+                embedder=self.embedder,
+            )
+            self._knowledge = Knowledge(vector_db=vector_db)
+            logger.info("[Container] Knowledge initialized")
+        return self._knowledge
+
+    @property
     def agent_factory(self) -> AgentFactory:
         """Get AgentFactory instance (lazy initialization)."""
         if self._agent_factory is None:
@@ -74,6 +95,7 @@ class Container:
                 model=self.model,
                 config_client=self.config_client,
                 debug_mode=self.config.debug_mode,
+                knowledge=self.knowledge,
             )
             logger.info("[Container] AgentFactory initialized")
         return self._agent_factory

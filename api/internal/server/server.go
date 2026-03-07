@@ -126,6 +126,10 @@ func New(
 	// Plugins registry (manifest list for frontend/Python)
 	r.GET("/api/plugins", handlers.ListPlugins)
 
+	// RAG index — forward personal data indexing requests to Python backend
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.POST("/api/rag/index", wrapWithAuth(handlers.ProxyRagIndex(cfg, logger), authMiddleware))
+
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path
 	// Examples:

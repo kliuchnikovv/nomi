@@ -5,7 +5,7 @@
 
 import { NativeModules, Platform } from 'react-native';
 import { integrationStorage } from '../IntegrationStorage';
-import { VectorStore } from '../database/VectorStore';
+import { ragApi } from '../../../apiClient';
 
 const { IOSMailManager } = NativeModules;
 
@@ -257,22 +257,11 @@ class IMAPEmailClient {
     }
 
     /**
-     * Semantic search using RAG
+     * Semantic search using RAG (now performed server-side by the agent)
+     * @deprecated Search is handled server-side via Agno Knowledge
      */
-    async searchEmailsSemantic(query: string, integrationId: string): Promise<any[]> {
-        if (Platform.OS !== 'ios') {
-            return [];
-        }
-
-        try {
-            const vectorStore = new VectorStore();
-            const sourceType = `imap_email_${integrationId}`;
-            const results = await vectorStore.search(query, 5, sourceType);
-            return results;
-        } catch (error) {
-            console.error('[IMAPEmailClient] searchEmailsSemantic error:', error);
-            return [];
-        }
+    async searchEmailsSemantic(_query: string, _integrationId: string): Promise<any[]> {
+        return [];
     }
 
     /**
@@ -295,35 +284,7 @@ class IMAPEmailClient {
     }
 
     /**
-     * Get recent emails from cache
-     */
-    async getRecentEmails(integrationId: string, mailbox: string, limit: number = 20): Promise<Email[]> {
-        if (Platform.OS !== 'ios') {
-            return [];
-        }
-
-        try {
-            const vectorStore = new VectorStore();
-            const sourceType = `imap_email_${integrationId}`;
-            const results = await vectorStore.search('*', limit, sourceType);
-
-            return results.map(r => ({
-                uid: r.metadata?.uid || 0,
-                subject: r.metadata?.subject || '',
-                from: r.metadata?.from || '',
-                to: r.metadata?.to || [],
-                date: r.metadata?.date || new Date().toISOString(),
-                flags: r.metadata?.flags || [],
-                mailbox: r.metadata?.mailbox || mailbox
-            }));
-        } catch (error) {
-            console.error('[IMAPEmailClient] getRecentEmails error:', error);
-            return [];
-        }
-    }
-
-    /**
-     * Index emails for RAG
+     * Index emails into backend RAG store
      */
     private async indexEmailsForRAG(integrationId: string, emails: Email[]): Promise<void> {
         if (Platform.OS !== 'ios') {
@@ -331,32 +292,13 @@ class IMAPEmailClient {
         }
 
         try {
-            const vectorStore = new VectorStore();
-
             for (const email of emails) {
-                const body = email.body || await this.fetchEmailBody(integrationId, email.uid, email.mailbox);
-
-                let content = `Subject: ${email.subject}. `;
-                content += `From: ${email.from}. `;
-                content += `Date: ${email.date}. `;
-                if (body) {
-                    content += `Body: ${body.substring(0, 2000)}. `;
-                }
-
-                await vectorStore.addDocument({
+                const content = `Subject: ${email.subject}. From: ${email.from}. Date: ${email.date}.`;
+                await ragApi.index({
                     id: `imap_email_${integrationId}_${email.uid}`,
-                    sourceType: `imap_email_${integrationId}`,
+                    source_type: 'imap_email',
                     content,
-                    metadata: {
-                        integrationId,
-                        uid: email.uid,
-                        subject: email.subject,
-                        from: email.from,
-                        to: email.to.join(', '),
-                        date: email.date,
-                        flags: email.flags,
-                        mailbox: email.mailbox
-                    }
+                    metadata: { integrationId, uid: String(email.uid), mailbox: email.mailbox },
                 });
             }
 

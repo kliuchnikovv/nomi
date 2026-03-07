@@ -58,13 +58,14 @@ class AgentFactory:
         config_client: ToolConfigClient,
         *,
         debug_mode: bool = False,
+        knowledge: Knowledge | None = None,
     ):
         self._db = db
         self._model = model
         self._config_client = config_client
         self._debug_mode = debug_mode
         self._vector_db: PgVector | None = None  # Legacy; prefer _knowledge
-        self._knowledge: Knowledge | None = None  # Shared Agno Knowledge (lazy)
+        self._knowledge: Knowledge | None = knowledge  # Shared Agno Knowledge
 
     @property
     def config_client(self) -> ToolConfigClient:
@@ -515,6 +516,7 @@ class AgentFactory:
                 thinking=thinking,
                 user_id=rag_user_id,
                 timezone=timezone,
+                knowledge=self._knowledge,
             )
 
             # _attach_tool_context removed - ChatHistoryTool is disabled

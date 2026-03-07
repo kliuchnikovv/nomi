@@ -4,12 +4,24 @@ import { SidebarChatsResponse, SidebarChatMessagesResponse, SidebarResponse } fr
 // Helper to get current API URL (reads from cache, falls back to default)
 const API_URL = () => getApiUrl();
 
-// Хранилище для функций из AuthContext. Изначально пустое.
+// Stable module-level token — never wrapped in a stale React closure.
+// Set by setupApiClient on every auth state change, and by setAuthToken
+// from background tasks (which run outside the React lifecycle).
+let _token: string | null = null;
+
 export const authStore = {
-    getToken: (): string | null => null,
+    getToken: (): string | null => _token,
     refreshToken: (): Promise<boolean> => Promise.resolve(false),
     logout: (): void => { },
 };
+
+/**
+ * Set the auth token directly. Used by background tasks that run outside
+ * the React lifecycle, where the AuthProvider closure is not yet active.
+ */
+export function setAuthToken(token: string | null): void {
+    _token = token;
+}
 
 /**
  * Функция для инициализации. Будет вызвана один раз из AuthContext.
@@ -19,7 +31,7 @@ export function setupApiClient(authFunctions: {
     refreshToken: () => Promise<boolean>;
     logout: () => void;
 }) {
-    authStore.getToken = authFunctions.getToken;
+    _token = authFunctions.getToken();
     authStore.refreshToken = authFunctions.refreshToken;
     authStore.logout = authFunctions.logout;
 }
@@ -259,6 +271,15 @@ export const weatherApi = {
         );
         return response.json();
     },
+};
+
+export const ragApi = {
+    index: (doc: {
+        id: string;
+        source_type: string;
+        content: string;
+        metadata?: Record<string, any>;
+    }) => apiClient.post<{ ok: boolean }>(`${API_URL()}/rag/index`, doc),
 };
 
 export const credentialsApi = {

@@ -6,7 +6,7 @@
 import * as SQLite from 'expo-sqlite';
 
 const DATABASE_NAME = 'genie.db';
-const DATABASE_VERSION = 7;
+const DATABASE_VERSION = 8;
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -90,6 +90,9 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
     }
     if (currentVersion < 7) {
         await migrateV7(database);
+    }
+    if (currentVersion < 8) {
+        await migrateV8(database);
     }
 }
 
@@ -371,6 +374,18 @@ async function migrateV7(database: SQLite.SQLiteDatabase): Promise<void> {
         INSERT INTO migrations (version, applied_at) VALUES (7, ${Date.now()});
     `);
     console.log('[Database] Migration V7 applied');
+}
+
+/**
+ * Migration V8: Drop local vectors table (RAG moved to backend)
+ */
+async function migrateV8(database: SQLite.SQLiteDatabase): Promise<void> {
+    await database.execAsync(`
+        DROP TABLE IF EXISTS vectors;
+
+        INSERT INTO migrations (version, applied_at) VALUES (8, ${Date.now()});
+    `);
+    console.log('[Database] Migration V8 applied: vectors table removed');
 }
 
 /**

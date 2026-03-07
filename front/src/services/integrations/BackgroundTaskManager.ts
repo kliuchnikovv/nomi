@@ -13,7 +13,7 @@ import { integrationStorage } from './IntegrationStorage';
 import { getIntegrationMetadata } from './registry';
 import { getBackgroundTask, getRegisteredClientPluginNames } from '../../plugins/clientRegistry';
 import { registerClientPlugins } from '../../plugins/registerClientPlugins';
-import { setupApiClient } from '../../apiClient';
+import { setAuthToken } from '../../apiClient';
 
 // Типы для фоновых задач
 export interface BackgroundTaskConfig {
@@ -39,11 +39,7 @@ function getTaskName(provider: string): string {
  */
 async function bootstrapAuthForBackground(): Promise<void> {
     const token = await AsyncStorage.getItem('token');
-    setupApiClient({
-        getToken: () => token,
-        refreshToken: async () => false,
-        logout: () => {},
-    });
+    setAuthToken(token);
 }
 
 function getBackgroundTaskForProvider(provider: string): ((integrationId: string) => Promise<void>) | undefined {

@@ -4,6 +4,7 @@
  */
 
 import { NativeModules, Platform } from 'react-native';
+import { ragApi } from '../../../apiClient';
 
 const { IOSCalendarManager } = NativeModules;
 
@@ -121,8 +122,7 @@ class IOSCalendarClient {
     }
 
     /**
-     * Index events for RAG (Retrieval-Augmented Generation)
-     * Stores event data in VectorStore for semantic search
+     * Index events into backend RAG store
      */
     async indexForRAG(integrationId: string): Promise<void> {
         if (Platform.OS !== 'ios') {
@@ -131,9 +131,6 @@ class IOSCalendarClient {
         }
 
         try {
-            const { VectorStore } = await import('@genie/front/services/database/VectorStore');
-            const vectorStore = new VectorStore();
-
             const now = new Date();
             const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
             const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -145,55 +142,21 @@ class IOSCalendarClient {
             );
 
             for (const event of events) {
-                const startDate = new Date(event.start).toLocaleString();
-                const endDate = new Date(event.end).toLocaleString();
+                let content = `Event: ${event.title}. Date: ${new Date(event.start).toLocaleString()} - ${new Date(event.end).toLocaleString()}.`;
+                if (event.location) content += ` Location: ${event.location}.`;
+                if (event.notes) content += ` Notes: ${event.notes}.`;
 
-                let content = `Event: ${event.title}. `;
-                content += `Date: ${startDate} - ${endDate}. `;
-                if (event.location) content += `Location: ${event.location}. `;
-                if (event.notes) content += `Notes: ${event.notes}. `;
-
-                await vectorStore.addDocument({
+                await ragApi.index({
                     id: `ios_calendar_${integrationId}_${event.id}`,
-                    sourceType: 'ios_calendar_event',
+                    source_type: 'ios_calendar_event',
                     content,
-                    metadata: {
-                        integrationId,
-                        eventId: event.id,
-                        title: event.title,
-                        startDate: event.start,
-                        endDate: event.end,
-                        location: event.location,
-                        allDay: event.allDay
-                    }
+                    metadata: { integrationId, eventId: event.id },
                 });
             }
 
             console.log(`[IOSCalendarClient] Indexed ${events.length} events for RAG`);
         } catch (error) {
             console.error('[IOSCalendarClient] indexForRAG error:', error);
-        }
-    }
-
-    /**
-     * Search in RAG indexed calendar events
-     */
-    async searchInRAG(query: string, integrationId?: string): Promise<any[]> {
-        if (Platform.OS !== 'ios') {
-            return [];
-        }
-
-        try {
-            const { VectorStore } = await import('@genie/front/services/database/VectorStore');
-            const vectorStore = new VectorStore();
-
-            const sourceType = integrationId ? `ios_calendar_event_${integrationId}` : 'ios_calendar_event';
-            const results = await vectorStore.search(query, 5, sourceType);
-
-            return results;
-        } catch (error) {
-            console.error('[IOSCalendarClient] searchInRAG error:', error);
-            return [];
         }
     }
 
