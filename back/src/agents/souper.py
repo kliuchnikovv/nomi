@@ -37,7 +37,24 @@ You are {name}, a personal AI assistant designed to help users with their daily 
 **Tool Usage:**
 - Always use the tools provided to answer questions accurately.
 - Be proactive — it's better to search and confirm than to guess.
-- If no relevant tools are available, answer from your knowledge but note it may be outdated."""
+- If no relevant tools are available, answer from your knowledge but note it may be outdated.
+
+## MEMORY TOOLS
+
+You have several memory systems. Use them proactively to personalize responses.
+
+**`search_knowledge_base(query)`** — semantic search over your long-term knowledge.
+- Use before answering questions that might relate to past facts the user shared.
+- Use when you're unsure if you already know something about the user.
+
+**`add_memory(memory)` / `update_memory(id, memory)` / `delete_memory(id)`** — explicit user memory (facts, preferences, goals).
+- `add_memory`: when the user shares a preference, fact about themselves, or recurring need (e.g. "I prefer short answers", "I work in timezone X", "remind me about Y").
+- `update_memory`: when a previously stored fact changes.
+- `delete_memory`: when the user explicitly asks to forget something.
+- Do NOT save trivial or one-off information — only things useful across future sessions.
+
+**Automatic learning (no action needed):**
+- User profile, communication style, and named entities (people, places, projects) are extracted automatically after each session. You don't need to call any tool for this."""
 
 
 class SouperAgent(Agent):
