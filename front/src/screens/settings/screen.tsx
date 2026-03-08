@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, Switch, Text, View, ActivityIndicator } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Switch, Text, TextInput, View, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import ConnectorScreenDialog from './connectors/screen.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeName, themes } from '../../themes';
 import { initApiUrl } from '../../config';
+import { BotIdentity, botIdentityApi } from '../../apiClient';
 
 // Shared with plugins/gmail/client/emailAnalyzer.ts
 const EMAIL_ANALYSIS_MODE_KEY = '@genie_email_analysis_mode';
@@ -37,6 +38,13 @@ export default function SettingsModal({ visible, onClose }: Props) {
     const [locationLoading, setLocationLoading] = useState(false);
     const [emailAnalysisMode, setEmailAnalysisMode] = useState<EmailAnalysisMode>('device');
 
+    // Bot Identity
+    const [botIdentityExpanded, setBotIdentityExpanded] = useState(false);
+    const [botName, setBotName] = useState('Souper');
+    const [botInstructions, setBotInstructions] = useState('');
+    const [botTone, setBotTone] = useState<BotIdentity['tone']>('casual');
+    const [botIdentitySaving, setBotIdentitySaving] = useState(false);
+
     // Load current API URL and Briefing Time on mount
     useEffect(() => {
         initApiUrl();
@@ -52,6 +60,13 @@ export default function SettingsModal({ visible, onClose }: Props) {
                 setEmailAnalysisMode(mode);
             }
         });
+        botIdentityApi.get().then(identity => {
+            if (identity) {
+                setBotName(identity.name || 'Souper');
+                setBotInstructions(identity.instructions || '');
+                setBotTone(identity.tone || 'casual');
+            }
+        }).catch(() => { /* use defaults */ });
     }, [visible]);
 
     // Get current theme palette
@@ -107,7 +122,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
                             <Text style={styles.closeText}>Close</Text>
                         </Pressable>
                     </View>
-                    <View style={styles.body}>
+                    <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 32 }}>
                         {user && (
                             <View style={[styles.row, { marginBottom: 16 }]}>
                                 <Text style={styles.label}>User</Text>
@@ -231,6 +246,121 @@ export default function SettingsModal({ visible, onClose }: Props) {
                             />
                         </View>
 
+                        {/* Bot Identity Section */}
+                        <View style={{ marginBottom: 16 }}>
+                            <Pressable
+                                onPress={() => setBotIdentityExpanded(!botIdentityExpanded)}
+                                style={styles.themeHeader}
+                            >
+                                <View>
+                                    <Text style={styles.label}>Bot Identity</Text>
+                                    <Text style={styles.themeCurrentValue}>{botName}</Text>
+                                </View>
+                                <Text style={styles.chevron}>
+                                    {botIdentityExpanded ? '▼' : '▶'}
+                                </Text>
+                            </Pressable>
+                            {botIdentityExpanded && (
+                                <View style={{ marginTop: 12, gap: 12 }}>
+                                    <View>
+                                        <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 4 }}>Name</Text>
+                                        <TextInput
+                                            value={botName}
+                                            onChangeText={setBotName}
+                                            placeholder="Souper"
+                                            placeholderTextColor={theme.textSecondary}
+                                            style={{
+                                                borderWidth: 1,
+                                                borderColor: theme.border,
+                                                borderRadius: 8,
+                                                paddingHorizontal: 12,
+                                                paddingVertical: 8,
+                                                color: theme.text,
+                                                backgroundColor: theme.surface,
+                                                fontSize: 14,
+                                            }}
+                                        />
+                                    </View>
+                                    <View>
+                                        <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 4 }}>Instructions</Text>
+                                        <TextInput
+                                            value={botInstructions}
+                                            onChangeText={setBotInstructions}
+                                            placeholder="Describe how the bot should behave..."
+                                            placeholderTextColor={theme.textSecondary}
+                                            multiline
+                                            numberOfLines={4}
+                                            style={{
+                                                borderWidth: 1,
+                                                borderColor: theme.border,
+                                                borderRadius: 8,
+                                                paddingHorizontal: 12,
+                                                paddingVertical: 8,
+                                                color: theme.text,
+                                                backgroundColor: theme.surface,
+                                                fontSize: 14,
+                                                minHeight: 90,
+                                                textAlignVertical: 'top',
+                                            }}
+                                        />
+                                    </View>
+                                    <View>
+                                        <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 4 }}>Tone</Text>
+                                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                                            {(['formal', 'casual', 'playful'] as const).map(t => (
+                                                <Pressable
+                                                    key={t}
+                                                    onPress={() => setBotTone(t)}
+                                                    style={{
+                                                        flex: 1,
+                                                        paddingVertical: 8,
+                                                        borderRadius: 8,
+                                                        borderWidth: 1,
+                                                        borderColor: botTone === t ? theme.text : theme.border,
+                                                        backgroundColor: botTone === t ? theme.surface : 'transparent',
+                                                        alignItems: 'center',
+                                                    }}
+                                                >
+                                                    <Text style={{ color: botTone === t ? theme.text : theme.textSecondary, fontSize: 13, textTransform: 'capitalize' }}>
+                                                        {t}
+                                                    </Text>
+                                                </Pressable>
+                                            ))}
+                                        </View>
+                                    </View>
+                                    <Pressable
+                                        onPress={async () => {
+                                            setBotIdentitySaving(true);
+                                            try {
+                                                await botIdentityApi.update({ name: botName || 'Souper', instructions: botInstructions, tone: botTone });
+                                                Alert.alert('Saved', 'Bot identity updated.');
+                                                setBotIdentityExpanded(false);
+                                            } catch {
+                                                Alert.alert('Error', 'Failed to save bot identity.');
+                                            } finally {
+                                                setBotIdentitySaving(false);
+                                            }
+                                        }}
+                                        disabled={botIdentitySaving}
+                                        style={({ pressed }) => ({
+                                            backgroundColor: theme.surface,
+                                            borderWidth: 1,
+                                            borderColor: theme.border,
+                                            borderRadius: 8,
+                                            paddingVertical: 10,
+                                            alignItems: 'center',
+                                            opacity: pressed || botIdentitySaving ? 0.6 : 1,
+                                        })}
+                                    >
+                                        {botIdentitySaving
+                                            ? <ActivityIndicator size="small" color={theme.text} />
+                                            : <Text style={{ color: theme.text, fontWeight: '500' }}>Save</Text>
+                                        }
+                                    </Pressable>
+                                </View>
+                            )}
+                        </View>
+
                         <View>
                             <Pressable
                                 onPress={() => {
@@ -267,7 +397,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
                         >
                             <Text style={styles.logoutText}>Logout</Text>
                         </Pressable>
-                    </View>
+                    </ScrollView>
                     {connectorsOpen && (
                         <ConnectorScreenDialog
                             visible={true}

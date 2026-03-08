@@ -67,25 +67,51 @@ class SouperAgent(Agent):
         thinking: str = "off",
         timezone: str | None = "UTC",
         knowledge=None,
+        identity: dict | None = None,
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
+        # Resolve effective identity values
+        effective_name = (identity or {}).get("name") or name
+        custom_instructions = (identity or {}).get("instructions") or ""
+        tone = (identity or {}).get("tone") or "casual"
+
+        # Build base instructions with effective name substituted
+        base = BASE_INSTRUCTIONS.replace(f'"{name}"', f'"{effective_name}"').replace(
+            f"You are {name},", f"You are {effective_name},"
+        )
+
+        # Prepend user-defined custom instructions if provided
+        if custom_instructions.strip():
+            base = (
+                f"[User-defined identity]\n{custom_instructions.strip()}\n[End of user-defined identity]\n\n"
+                + base
+            )
+
+        # Apply tone modifier
+        tone_modifiers = {
+            "formal": "Always respond formally and concisely. Use professional language.",
+            "playful": "Respond in a friendly, playful manner. Feel free to be warm and casual.",
+        }
+        if tone in tone_modifiers:
+            base = base + f"\n\n**Tone:** {tone_modifiers[tone]}"
+
         # Handle None timezone by defaulting to UTC
         effective_timezone = timezone or "UTC"
         instructions = (
-            BASE_INSTRUCTIONS
+            base
             + f"\nCurrent time is: {datetime.now(ZoneInfo(effective_timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
         )
 
         super().__init__(
             db=db,
-            name=name,
+            name=effective_name,
             user_id=user_id,
             debug_mode=debug_mode,
             reasoning=(thinking != "off"),
             model=model,
             tools=tools,
             # knowledge=knowledge,
-            description="Souper is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
+            description=f"{effective_name} is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
             instructions=instructions,
             add_history_to_context=True,
             add_datetime_to_context=True,

@@ -652,6 +652,15 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			finalMap["auth_token"] = payload.AuthToken
 		}
 
+		// Inject bot identity so Python backend can customise agent name/instructions/tone
+		if botIdentity, err := r.store.GetBotIdentity(ctx, r.initiatorID); err == nil {
+			finalMap["bot_identity"] = map[string]interface{}{
+				"name":         botIdentity.Name,
+				"instructions": botIdentity.Instructions,
+				"tone":         botIdentity.Tone,
+			}
+		}
+
 		if len(messages) > 0 {
 			historyData := make([]map[string]interface{}, 0, len(messages))
 			for _, msg := range messages {

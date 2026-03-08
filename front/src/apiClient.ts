@@ -282,6 +282,19 @@ export const ragApi = {
     }) => apiClient.post<{ ok: boolean }>(`${API_URL()}/rag/index`, doc),
 };
 
+export interface BotIdentity {
+    user_id?: string;
+    name: string;
+    instructions: string;
+    tone: 'formal' | 'casual' | 'playful';
+}
+
+export const botIdentityApi = {
+    get: () => apiClient.get<BotIdentity>(`${API_URL()}/user/bot-identity`),
+    update: (body: Omit<BotIdentity, 'user_id'>) =>
+        apiClient.put<BotIdentity>(`${API_URL()}/user/bot-identity`, body),
+};
+
 export const emailApi = {
     analyze: (email: {
         subject: string;

@@ -71,6 +71,7 @@ func New(
 		}()
 		toolsHandler        = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey)
 		integrationsHandler = handlers.NewIntegrationsHandler(ctr.Storage, logger)
+		botIdentityHandler  = handlers.NewBotIdentityHandler(ctr.Storage, logger)
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -125,6 +126,10 @@ func New(
 
 	// Plugins registry (manifest list for frontend/Python)
 	r.GET("/api/plugins", handlers.ListPlugins)
+
+	// Bot Identity API — MUST be before the wildcard /api/:plugin/*path route
+	r.GET("/api/user/bot-identity", wrapWithAuth(botIdentityHandler.GetBotIdentity, authMiddleware))
+	r.PUT("/api/user/bot-identity", wrapWithAuth(botIdentityHandler.UpsertBotIdentity, authMiddleware))
 
 	// RAG index — forward personal data indexing requests to Python backend
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route

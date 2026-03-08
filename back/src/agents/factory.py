@@ -280,6 +280,7 @@ class AgentFactory:
         timezone_offset: str | None = None,
         endpoint: str | None = None,
         client_tool_runner: Callable[[str, str, dict], Awaitable[str]] | None = None,
+        bot_identity: dict | None = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -517,6 +518,7 @@ class AgentFactory:
                 user_id=rag_user_id,
                 timezone=timezone,
                 knowledge=self._knowledge,
+                identity=bot_identity,
             )
 
             # _attach_tool_context removed - ChatHistoryTool is disabled

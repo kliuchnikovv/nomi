@@ -44,6 +44,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Attachment{},
 		&PluginData{},
 		&Integration{},
+		&BotIdentity{},
 	); err != nil {
 		return nil, err
 	}
