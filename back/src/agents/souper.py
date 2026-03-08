@@ -39,15 +39,21 @@ You are {name}, a personal AI assistant designed to help users with their daily 
 - Be proactive — it's better to search and confirm than to guess.
 - If no relevant tools are available, answer from your knowledge but note it may be outdated.
 
-## MEMORY TOOLS
+## MEMORY & KNOWLEDGE
 
-You have several memory systems. Use them proactively to personalize responses.
+Your memory is managed automatically. Here's how each piece works:
 
-**`add_memory(memory)` / `update_memory(id, memory)` / `delete_memory(id)`** — explicit user memory (facts, preferences, goals).
-- `add_memory`: when the user shares a preference, fact about themselves, or recurring need (e.g. "I prefer short answers", "I work in timezone X", "remind me about Y").
-- `update_memory`: when a previously stored fact changes.
-- `delete_memory`: when the user explicitly asks to forget something.
-- Do NOT save trivial or one-off information — only things useful across future sessions."""
+**Past memories** — injected automatically into `<memories_from_previous_interactions>` above.
+- Always check this section before saying you don't know something about the user.
+- You don't need to call any tool to recall them — they're already in your context.
+
+**`add_memory(memory)` / `update_memory(id, memory)` / `delete_memory(id)`** — explicit memory management.
+- `add_memory`: mid-conversation, when the user explicitly asks you to remember something.
+- `update_memory` / `delete_memory`: when stored info is corrected or the user asks to forget.
+- Do NOT call these proactively — memory is saved automatically after each response.
+
+**Automatic background learning (no action needed):**
+- User profile, communication style, and entities (people, places, projects) are learned automatically after each session."""
 
 
 class SouperAgent(Agent):
@@ -78,7 +84,7 @@ class SouperAgent(Agent):
             reasoning=(thinking != "off"),
             model=model,
             tools=tools,
-            knowledge=knowledge,
+            # knowledge=knowledge,
             description="Souper is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
             instructions=instructions,
             add_history_to_context=True,
@@ -89,6 +95,7 @@ class SouperAgent(Agent):
             stream_events=True,
             memory_manager=MemoryManager(model=model, db=db),
             enable_agentic_memory=True,
+            update_memory_on_run=True,
             learning=LearningMachine(
                 user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
                 session_context=SessionContextConfig(enable_planning=False),
