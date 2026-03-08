@@ -271,25 +271,20 @@ All agents in Genie support built-in RAG:
 - `back/src/knowledge/user_knowledge.py` — `UserScopedKnowledge` wrapper for user isolation
 - `back/src/agents/factory.py` — Creates `UserScopedKnowledge` for all agents
 
-### 2. Project Knowledge Manager (`back/src/rag_service.py`)
+### 2. Built-in Agno `search_knowledge_base` Tool
 
-**Purpose:** Explicit project-scoped knowledge search via tools.
+**Purpose:** Automatic explicit search tool added by Agno when an agent has a `knowledge` base.
 
-**Features:**
-- Project-specific knowledge indexing (docs, structure, API endpoints, components, dependencies)
-- GitHub repository ingestion with structured summaries
-- Explicit search via `KnowledgeSearchTool` (complements automatic RAG)
+**How it works:**
+- Agno automatically registers a `search_knowledge_base(query: str)` function as a tool for any agent that has `knowledge` set and `search_knowledge=True`
+- The agent can call it explicitly during a run to search its knowledge base
+- With `knowledge_filters` (injected by `AgentRunWrapper`), results are scoped to the current user
 
-**Use Case:** When agents need to search specific project knowledge by `project_id`.
-
-**Example:**
-```python
-knowledge_tool = KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
-# Agent can explicitly call: knowledge_tool.search_knowledge(query="...", project_id="...")
-```
+**Use Case:** Agents call this automatically when they need to recall past facts or relevant context from memory. No manual wiring required.
 
 **Files:**
-- `back/src/rag_service.py` — `ProjectKnowledgeManager` and `KnowledgeSearchTool`
+- `back/.venv/.../agno/agent/agent.py` — Agno internals: `_get_search_knowledge_base_function()`
+- `back/src/agents/factory.py` — `AgentRunWrapper` injects `knowledge_filters={"user_id": rag_user_id}` at every run
 
 ### 3. Local/Personal RAG (`front/src/services/database/VectorStore.ts`)
 
@@ -327,10 +322,10 @@ knowledge_tool = KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
                           │ explicit search via tools
                           ▼
 ┌─────────────────────────────────────────────────────────┐
-│         KnowledgeSearchTool (Project RAG)               │
-│  - Project-specific knowledge                           │
-│  - GitHub repository ingestion                         │
-│  - Explicit tool calls                                 │
+│    search_knowledge_base (Agno built-in tool)           │
+│  - Auto-registered when agent has knowledge + RAG       │
+│  - Scoped to user via knowledge_filters                 │
+│  - Called explicitly by agent during runs               │
 └─────────────────────────────────────────────────────────┘
                           │
                           │ client_action
@@ -349,10 +344,10 @@ knowledge_tool = KnowledgeSearchTool(user_id=user_id, auth_token=auth_token)
    - Enable `search_knowledge=True` and `update_knowledge=True` for automatic memory
    - Works transparently — no explicit tool calls needed
 
-2. **Use KnowledgeSearchTool for Project-Specific Search:**
-   - When searching for project documentation, code structure, or API endpoints
-   - When you need to filter by `project_id`
-   - Complements automatic RAG, doesn't replace it
+2. **`search_knowledge_base` is automatic:**
+   - Agno registers it automatically when `knowledge` + `search_knowledge=True` are set
+   - Agents call it themselves during runs — no explicit wiring needed
+   - User isolation is handled by `knowledge_filters` injected via `AgentRunWrapper`
 
 3. **Use ClientRagTools for Private Data:**
    - When searching user's private emails, notes, or tasks
@@ -842,7 +837,7 @@ self.architect = ArchitectAgent(..., knowledge=knowledge)
 - Always use `UserScopedKnowledge` for user isolation (never use raw `Knowledge`)
 - Enable both `search_knowledge` and `update_knowledge` for full memory support
 - Memory works automatically — no explicit tool calls needed
-- `KnowledgeSearchTool` is for explicit project-specific search (complements automatic RAG)
+- `search_knowledge_base` is Agno's built-in tool — auto-registered, no manual wiring needed
 
 **Files:**
 - `back/src/agents/factory.py` — Agent factory with automatic knowledge creation

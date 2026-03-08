@@ -172,12 +172,11 @@ Genie uses a **3-layer hybrid RAG system**:
 - `back/src/knowledge/user_knowledge.py` — `UserKnowledgeAdapter` (injects user_id on insert)
 - `back/src/agents/factory.py` — Shared Knowledge, `AgentRunWrapper` (injects knowledge_filters at run), `get_knowledge()`
 
-#### 2. Project Knowledge Manager (Explicit Tool)
-- Project-specific docs, structure, APIs
-- GitHub repository ingestion
-- Explicit search via `KnowledgeSearchTool`
-
-**File:** `back/src/rag_service.py`
+#### 2. Built-in `search_knowledge_base` Tool (Agno)
+- Automatically registered by Agno when agent has `knowledge` + `search_knowledge=True`
+- Agent calls it during runs to recall relevant context from memory
+- User isolation handled by `knowledge_filters` injected via `AgentRunWrapper`
+- No manual wiring or separate file needed — it's part of Agno's agent runtime
 
 #### 3. Local/Personal RAG (Device)
 - Private data (emails, notes, tasks) on device

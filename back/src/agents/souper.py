@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from agno.db.postgres import PostgresDb
 from agno.agent import Agent
+from agno.memory.manager import MemoryManager
 from agno.models.base import Model
 from agno.tools import Toolkit, Function
 
@@ -76,6 +77,8 @@ class SouperAgent(Agent):
             store_tool_messages=True,
             stream=True,
             stream_events=True,
+            memory_manager=MemoryManager(model=model, db=db),
+            enable_agentic_memory=True,
             learning=LearningMachine(
                 user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
                 session_context=SessionContextConfig(enable_planning=False),
