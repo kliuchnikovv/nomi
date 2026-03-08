@@ -227,6 +227,21 @@ class PluginChatStorage {
     }
 
     /**
+     * Merge patch into a plugin chat's data JSON, identified by sourceId.
+     */
+    async updateChatData(sourceId: string, patch: Record<string, any>): Promise<void> {
+        const db = getDatabase();
+        const existing = await this.getPluginChat(sourceId);
+        const currentData = existing?.data ? JSON.parse(existing.data) : {};
+        const merged = { ...currentData, ...patch };
+        const now = Date.now();
+        await db.runAsync(
+            'UPDATE plugin_chats SET data = ?, updated_at = ? WHERE source_id = ?',
+            [JSON.stringify(merged), now, sourceId]
+        );
+    }
+
+    /**
      * Update a plugin chat's title
      */
     async updateChatTitle(chatId: string, title: string): Promise<void> {

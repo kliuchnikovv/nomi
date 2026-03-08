@@ -130,6 +130,10 @@ func New(
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.POST("/api/rag/index", wrapWithAuth(handlers.ProxyRagIndex(cfg, logger), authMiddleware))
 
+	// Email analysis — forward email importance analysis requests to Python backend (gpt-5-nano)
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.POST("/api/emails/analyze", wrapWithAuth(handlers.ProxyEmailAnalyze(cfg, logger), authMiddleware))
+
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path
 	// Examples:

@@ -282,6 +282,22 @@ export const ragApi = {
     }) => apiClient.post<{ ok: boolean }>(`${API_URL()}/rag/index`, doc),
 };
 
+export const emailApi = {
+    analyze: (email: {
+        subject: string;
+        snippet: string;
+        from_email: string;
+        from_name: string;
+        labels: string[];
+    }) => apiClient.post<{
+        is_important: boolean;
+        urgent: boolean;
+        priority: number;
+        action_hint: string;
+        due_date_iso: string;
+    }>(`${API_URL()}/emails/analyze`, email),
+};
+
 export const credentialsApi = {
     save: (provider: string, type: 'api_key' | 'custom', apiKey?: string, extra?: Record<string, any>) =>
         apiClient.post<{ ok: boolean }>(`${API_URL()}/credentials`, {

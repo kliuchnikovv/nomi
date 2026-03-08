@@ -1,15 +1,17 @@
 {
-  "name": "genie",
-  "displayName": "genie",
-  "expo": {
     "name": "genie",
-    "slug": "genie",
-    "ios": {
-      "infoPlist": {
-        "UIBackgroundModes": [
-          "fetch"
-        ]
-      }
+    "displayName": "genie",
+    "expo": {
+        "name": "genie",
+        "slug": "genie",
+        "ios": {
+            "infoPlist": {
+                "UIBackgroundModes": [
+                    "fetch",
+                    "processing",
+                    "remote-notification"
+                ]
+            }
+        }
     }
-  }
 }

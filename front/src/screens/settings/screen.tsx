@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, Text, View, ActivityIndicator } from 'react-native';
+import { Alert, Modal, Pressable, Switch, Text, View, ActivityIndicator } from 'react-native';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,10 @@ import ConnectorScreenDialog from './connectors/screen.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeName, themes } from '../../themes';
 import { initApiUrl } from '../../config';
+
+// Shared with plugins/gmail/client/emailAnalyzer.ts
+const EMAIL_ANALYSIS_MODE_KEY = '@genie_email_analysis_mode';
+type EmailAnalysisMode = 'device' | 'server';
 
 type Props = {
     visible: boolean;
@@ -31,6 +35,7 @@ export default function SettingsModal({ visible, onClose }: Props) {
     const [weatherLat, setWeatherLat] = useState('55.75');
     const [weatherLon, setWeatherLon] = useState('37.62');
     const [locationLoading, setLocationLoading] = useState(false);
+    const [emailAnalysisMode, setEmailAnalysisMode] = useState<EmailAnalysisMode>('device');
 
     // Load current API URL and Briefing Time on mount
     useEffect(() => {
@@ -40,6 +45,11 @@ export default function SettingsModal({ visible, onClose }: Props) {
                 const { lat, lon } = JSON.parse(loc);
                 setWeatherLat(String(lat));
                 setWeatherLon(String(lon));
+            }
+        });
+        AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
+            if (mode === 'server' || mode === 'device') {
+                setEmailAnalysisMode(mode);
             }
         });
     }, [visible]);
@@ -201,6 +211,24 @@ export default function SettingsModal({ visible, onClose }: Props) {
 
                                 </View>
                             )}
+                        </View>
+
+                        {/* Email Analysis Mode */}
+                        <View style={[styles.row, { marginBottom: 16 }]}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.label}>Email Analysis</Text>
+                                <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
+                                    {emailAnalysisMode === 'server' ? 'Server (gpt-5-nano)' : 'Device'}
+                                </Text>
+                            </View>
+                            <Switch
+                                value={emailAnalysisMode === 'server'}
+                                onValueChange={async (value: boolean) => {
+                                    const mode: EmailAnalysisMode = value ? 'server' : 'device';
+                                    setEmailAnalysisMode(mode);
+                                    await AsyncStorage.setItem(EMAIL_ANALYSIS_MODE_KEY, mode);
+                                }}
+                            />
                         </View>
 
                         <View>

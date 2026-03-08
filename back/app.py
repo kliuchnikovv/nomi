@@ -1,10 +1,13 @@
+import json
 import os
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from typing import Optional, Any
 
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from agno.os import AgentOS
 from starlette.middleware.sessions import SessionMiddleware
@@ -153,6 +156,78 @@ async def health_check():
     from datetime import datetime
 
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
+
+class EmailAnalyzeRequest(BaseModel):
+    subject: str = ""
+    snippet: str = ""
+    from_email: str = ""
+    from_name: str = ""
+    labels: list[str] = []
+
+
+class EmailAnalyzeResponse(BaseModel):
+    is_important: bool
+    urgent: bool
+    priority: int
+    action_hint: str
+    due_date_iso: str
+
+
+@app.post("/emails/analyze")
+async def analyze_email(
+    request: EmailAnalyzeRequest,
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+):
+    """Analyze email importance using gpt-5-nano and return reminder metadata."""
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="X-User-ID header is required")
+
+    labels_str = ", ".join(request.labels) if request.labels else "none"
+    prompt = f"""Analyze this email and determine if it requires user action.
+Subject: {request.subject}
+From: {request.from_name} <{request.from_email}>
+Snippet: {request.snippet}
+Labels: {labels_str}
+
+Reply with JSON only, no other text:
+{{"is_important": boolean, "urgent": boolean, "priority": 1 to 4, "action_hint": "one short sentence in same language as email", "due_date_hours": integer or null}}
+
+is_important = true ONLY for: payment due, invoice, subscription renewal, account verification, request needing reply, deadline, meeting invite.
+is_important = false for: CATEGORY_PROMOTIONS, CATEGORY_UPDATES, CATEGORY_SOCIAL, CATEGORY_FORUMS, newsletters, marketing, shipping updates, completed receipts.
+urgent = true only if requires action within hours.
+priority: 1=urgent (hours), 2=important (today), 3=moderate (days), 4=low.
+due_date_hours: hours from now until due, null if not time-sensitive."""
+
+    try:
+        from agno.agent import Agent
+        model = container.agent_factory.build_model("gpt-5-nano")
+        result = await Agent(model=model).arun(prompt)
+        text = result.content if result else ""
+        match = text[text.find("{"):text.rfind("}") + 1] if "{" in text else ""
+        data = json.loads(match) if match else {}
+    except Exception as e:
+        logging.error("Email analysis failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {e}")
+
+    urgent = bool(data.get("urgent", False))
+    due_date = datetime.utcnow()
+    hours = data.get("due_date_hours")
+    if hours and isinstance(hours, (int, float)) and hours > 0:
+        due_date += timedelta(hours=hours)
+    elif urgent:
+        due_date += timedelta(hours=4)
+    else:
+        due_date += timedelta(days=1)
+        due_date = due_date.replace(hour=9, minute=0, second=0, microsecond=0)
+
+    return EmailAnalyzeResponse(
+        is_important=bool(data.get("is_important", False)),
+        urgent=urgent,
+        priority=max(1, min(4, int(data.get("priority", 4)))),
+        action_hint=str(data.get("action_hint", "")),
+        due_date_iso=due_date.isoformat() + "Z",
+    )
 
 
 @app.post("/rag/index")

@@ -19,6 +19,25 @@ class IOSRemindersManager: NSObject {
         requestPermissions()
     }
 
+    private static let souperTasksListName = "SouperTasks"
+
+    private func souperTasksCalendar() -> EKCalendar? {
+        if let existing = eventStore.calendars(for: .reminder).first(where: { $0.title == Self.souperTasksListName }) {
+            return existing
+        }
+        let calendar = EKCalendar(for: .reminder, eventStore: eventStore)
+        calendar.title = Self.souperTasksListName
+        calendar.source = eventStore.defaultCalendarForNewReminders()?.source
+            ?? eventStore.sources.first(where: { $0.sourceType == .local })
+        do {
+            try eventStore.saveCalendar(calendar, commit: true)
+            return calendar
+        } catch {
+            print("[IOSRemindersManager] Failed to create SouperTasks list: \(error)")
+            return eventStore.defaultCalendarForNewReminders()
+        }
+    }
+
     private func requestPermissions() {
         switch EKEventStore.authorizationStatus(for: .reminder) {
         case .authorized:
@@ -116,7 +135,7 @@ class IOSRemindersManager: NSObject {
     }
 
     @objc
-    func createReminder(_ title: String, _ options: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func createReminder(_ title: String, options: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard EKEventStore.authorizationStatus(for: .reminder) == .authorized else {
             reject("PERMISSION_DENIED", "Reminders access not authorized", nil)
             return
@@ -148,6 +167,8 @@ class IOSRemindersManager: NSObject {
         if let calendarId = options["list"] as? String,
            let calendar = eventStore.calendar(withIdentifier: calendarId) {
             reminder.calendar = calendar
+        } else {
+            reminder.calendar = souperTasksCalendar()
         }
 
         do {
@@ -165,7 +186,7 @@ class IOSRemindersManager: NSObject {
     }
 
     @objc
-    func updateReminder(_ id: String, _ updates: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func updateReminder(_ id: String, updates: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard EKEventStore.authorizationStatus(for: .reminder) == .authorized else {
             reject("PERMISSION_DENIED", "Reminders access not authorized", nil)
             return

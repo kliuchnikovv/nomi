@@ -152,12 +152,19 @@ class IOSRemindersClient {
                 100
             );
 
+            const PRIORITY_LABEL: Record<number, string> = { 1: 'HIGH', 5: 'MEDIUM', 9: 'LOW' };
+
+            console.log(`[IOSRemindersClient] Indexing ${reminders.length} reminders:`);
             for (const reminder of reminders) {
+                const priorityLabel = PRIORITY_LABEL[reminder.priority] ?? (reminder.priority > 0 ? `p${reminder.priority}` : 'none');
+                const dueStr = reminder.dueDate ? new Date(reminder.dueDate).toLocaleString() : 'no due date';
+                console.log(
+                    `[IOSRemindersClient]   • [${priorityLabel}] "${reminder.title}" — due: ${dueStr}${reminder.list ? ` (${reminder.list})` : ''}`,
+                );
+
                 let content = `Reminder: ${reminder.title}.`;
                 if (reminder.notes) content += ` Notes: ${reminder.notes}.`;
-                if (reminder.dueDate) {
-                    content += ` Due: ${new Date(reminder.dueDate).toLocaleString()}.`;
-                }
+                if (reminder.dueDate) content += ` Due: ${new Date(reminder.dueDate).toLocaleString()}.`;
                 if (reminder.list) content += ` List: ${reminder.list}.`;
 
                 await ragApi.index({

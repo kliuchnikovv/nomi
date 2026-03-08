@@ -7,8 +7,13 @@
  * 2. Fall back to keyword matching if AI is unavailable or fails.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Email } from '@genie/front/services/integrations/IntegrationStorage';
 import { AppleIntelligence } from '@genie/front/services/ai/AppleIntelligence';
+import { emailApi } from '@genie/front/apiClient';
+
+export const EMAIL_ANALYSIS_MODE_KEY = '@genie_email_analysis_mode';
+export type EmailAnalysisMode = 'device' | 'server';
 
 export interface EmailAnalysis {
     isImportant: boolean;
@@ -22,6 +27,24 @@ export interface EmailAnalysisWithLog extends EmailAnalysis {
     matchedKeywords: string[];
     hasGmailImportant: boolean;
     analyzedByAI: boolean;
+}
+
+// ── Promotional label filter ─────────────────────────────────────────────────
+
+const PROMOTIONAL_LABELS = [
+    'CATEGORY_PROMOTIONS',
+    'CATEGORY_UPDATES',
+    'CATEGORY_SOCIAL',
+    'CATEGORY_FORUMS',
+];
+
+/**
+ * Returns true if Gmail has categorized this email as promotional/social/updates.
+ * These should never create reminders, regardless of content.
+ */
+export function isPromotionalEmail(email: Email): boolean {
+    const labels = email.labels ?? [];
+    return PROMOTIONAL_LABELS.some(l => labels.includes(l));
 }
 
 // ── Keyword fallback ────────────────────────────────────────────────────────
@@ -109,7 +132,7 @@ Reply with JSON only, no other text:
 {"requiresAction": boolean, "actionHint": "one short sentence in Russian of what to do, or null", "priority": 1 to 4}
 
 requiresAction = true ONLY for: payment due, account verification needed, subscription/renewal deadline, request that needs a reply, access revoked.
-requiresAction = false for: social media notifications, marketing, newsletters, order shipping updates, receipts for completed payments.
+requiresAction = false for: promotional ads ("recommended for you", "deals", "sale", "new listing"), newsletters, platform changelogs/digests, "new features" announcements, social media notifications, order shipping updates, receipts for completed payments.
 priority: 1=urgent (hours), 2=important (days), 3=moderate, 4=low.`;
 
     try {
@@ -132,8 +155,42 @@ priority: 1=urgent (hours), 2=important (days), 3=moderate, 4=low.`;
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
+async function analyzeOnServer(email: Email): Promise<EmailAnalysisWithLog | null> {
+    try {
+        const result = await emailApi.analyze({
+            subject: email.subject ?? '',
+            snippet: email.snippet ?? '',
+            from_email: email.fromEmail ?? '',
+            from_name: email.fromName ?? '',
+            labels: email.labels ?? [],
+        });
+        if (!result) return null;
+        return {
+            isImportant: result.is_important,
+            urgent: result.urgent,
+            dueDateISO: result.due_date_iso,
+            priority: result.priority,
+            actionHint: result.action_hint,
+            matchedKeywords: [],
+            hasGmailImportant: (email.labels ?? []).includes('IMPORTANT'),
+            analyzedByAI: true,
+        };
+    } catch (e) {
+        console.warn('[emailAnalyzer] Server analysis failed, falling back to device:', e);
+        return null;
+    }
+}
+
 export async function analyzeEmailWithLog(email: Email): Promise<EmailAnalysisWithLog> {
     const hasGmailImportant = (email.labels ?? []).includes('IMPORTANT');
+
+    const mode = (await AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY)) as EmailAnalysisMode | null;
+
+    if (mode === 'server') {
+        const serverResult = await analyzeOnServer(email);
+        if (serverResult) return serverResult;
+        // Fallback to device on error
+    }
 
     if (AppleIntelligence.isAvailable()) {
         const ai = await analyzeWithAI(email);

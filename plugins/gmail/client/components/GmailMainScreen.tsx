@@ -10,7 +10,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useTheme } from "@genie/front/context/ThemeContext";
-import { gmailClient } from "@genie/front/services/integrations/clients/GmailClient";
+import { gmailClient } from "../GmailClient";
 import { Email } from "@genie/front/services/integrations/IntegrationStorage";
 import { PluginMainScreenProps } from "@genie/front/plugins/types";
 import { integrationStorage } from "@genie/front/services/integrations/IntegrationStorage";

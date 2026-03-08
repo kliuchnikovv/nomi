@@ -4,12 +4,15 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { tokenRefreshService } from '../tokenRefreshService';
-import { integrationStorage, Email } from '../IntegrationStorage';
-import { ragApi } from '../../../apiClient';
+import { tokenRefreshService } from '@genie/front/services/integrations/tokenRefreshService';
+import { integrationStorage, Email } from '@genie/front/services/integrations/IntegrationStorage';
+import { ragApi } from '@genie/front/apiClient';
+import { AppleIntelligence } from '@genie/front/services/ai/AppleIntelligence';
+import { pluginChatStorage } from '@genie/front/services/plugins/PluginChatStorage';
 
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
-const lastRunKey = (integrationId: string) => `gmail_bg_lastrun_${integrationId}`;
+const lastRunKey = (integrationId: string) =>
+    `gmail_bg_lastrun_${integrationId}`;
 
 export interface GmailMessage {
     id: string;
@@ -33,9 +36,6 @@ export interface GmailListResponse {
     resultSizeEstimate?: number;
 }
 
-import { AppleIntelligence } from '../../ai/AppleIntelligence';
-import { pluginChatStorage } from '../../plugins/PluginChatStorage';
-
 class GmailClient {
     /**
      * Called when the system wakes up the app in the background
@@ -44,30 +44,57 @@ class GmailClient {
         console.log(`[GmailClient] onWake triggered for ${integrationId}`);
 
         try {
-            // 1. Determine search window: since last successful run, or fallback to 1 hour ago
-            const rawTs = await AsyncStorage.getItem(lastRunKey(integrationId));
-            const afterEpoch = rawTs
-                ? parseInt(rawTs, 10)
-                : Math.floor((Date.now() - 3600 * 1000) / 1000);
+            // 1. Determine search window: since last successful run, or fallback to 24 hours ago
+            // const rawTs = await AsyncStorage.getItem(lastRunKey(integrationId));
+            // const afterEpoch = rawTs
+            //     ? parseInt(rawTs, 10)
+            //     : Math.floor((Date.now() - 24 * 3600 * 1000) / 1000);
+            const afterEpoch = Math.floor(
+                (Date.now() - 24 * 3600 * 1000) / 1000,
+            );
             const query = `is:unread after:${afterEpoch}`;
             console.log(`[GmailClient] Search query: ${query}`);
 
             // 2. Fetch unread emails since last run
             const emails = await this.searchEmails(integrationId, query, 10);
-            console.log(`[GmailClient] Fetched ${emails.length} unread emails from Gmail`);
+            console.log(
+                `[GmailClient] Fetched ${emails.length} unread emails from Gmail`,
+            );
 
             if (emails.length === 0) {
                 console.log('[GmailClient] No unread emails to process');
                 return [];
             }
 
+            // Log details of fetched emails before processing
+            for (const email of emails) {
+                const labels = email.labels?.join(', ') || '';
+                const priority = labels.includes('IMPORTANT')
+                    ? 'IMPORTANT'
+                    : labels.includes('STARRED')
+                    ? 'STARRED'
+                    : 'normal';
+                const dateStr = email.date
+                    ? new Date(email.date).toLocaleString()
+                    : 'unknown';
+                console.log(
+                    `[GmailClient]   • [${priority}] "${email.subject}" from ${
+                        email.fromName || email.fromEmail
+                    } <${email.fromEmail}> (${dateStr})`,
+                );
+            }
+
             // Process each email (limit to 5 to avoid performance issues)
             const emailsToProcess = emails.slice(0, 5);
-            console.log(`[GmailClient] Processing ${emailsToProcess.length} emails (limit: 5)...`);
+            console.log(
+                `[GmailClient] Processing ${emailsToProcess.length} emails (limit: 5)...`,
+            );
 
             // Check if Apple Intelligence is available
             const aiAvailable = AppleIntelligence.isAvailable();
-            console.log(`[GmailClient] Apple Intelligence available: ${aiAvailable}`);
+            console.log(
+                `[GmailClient] Apple Intelligence available: ${aiAvailable}`,
+            );
 
             let createdChats = 0;
             let skippedChats = 0;
@@ -77,9 +104,13 @@ class GmailClient {
                 const emailStart = Date.now();
                 try {
                     // Check if chat already exists for this email
-                    const existingChat = await pluginChatStorage.getPluginChat(email.gmailId);
+                    const existingChat = await pluginChatStorage.getPluginChat(
+                        email.gmailId,
+                    );
                     if (existingChat) {
-                        console.log(`[GmailClient] Chat already exists for email ${email.gmailId} (${email.subject}), skipping`);
+                        console.log(
+                            `[GmailClient] Chat already exists for email ${email.gmailId} (${email.subject}), skipping`,
+                        );
                         skippedChats++;
                         continue;
                     }
@@ -95,19 +126,27 @@ class GmailClient {
                             from: email.fromEmail,
                             fromName: email.fromName,
                             date: email.date?.toISOString(),
-                        }
+                        },
                     );
 
-                    console.log(`[GmailClient] Created chat ${chat.id} for email ${email.gmailId} from ${email.fromEmail}`);
+                    console.log(
+                        `[GmailClient] Created chat ${chat.id} for email ${email.gmailId} from ${email.fromEmail}`,
+                    );
 
                     // Create user message with email summary
-                    const emailSummary = `New email from ${email.fromName || email.fromEmail}
+                    const emailSummary = `New email from ${
+                        email.fromName || email.fromEmail
+                    }
 
 Subject: ${email.subject || '(No subject)'}
 
 ${email.snippet || email.bodyText?.slice(0, 300) || '(No content)'}`;
 
-                    await pluginChatStorage.addMessage(chat.id, 'user', emailSummary);
+                    await pluginChatStorage.addMessage(
+                        chat.id,
+                        'user',
+                        emailSummary,
+                    );
 
                     // Only analyze with AI if available
                     if (aiAvailable) {
@@ -126,32 +165,63 @@ Keep your response brief and actionable.`;
 
                         try {
                             const aiStartTime = Date.now();
-                            const analysis = await AppleIntelligence.generate(prompt);
+                            const analysis = await AppleIntelligence.generate(
+                                prompt,
+                            );
                             const aiDuration = Date.now() - aiStartTime;
-                            console.log(`[GmailClient] AI analysis completed for ${email.gmailId} in ${aiDuration}ms`);
-                            await pluginChatStorage.addMessage(chat.id, 'assistant', analysis);
+                            console.log(
+                                `[GmailClient] AI analysis completed for ${email.gmailId} in ${aiDuration}ms`,
+                            );
+                            await pluginChatStorage.addMessage(
+                                chat.id,
+                                'assistant',
+                                analysis,
+                            );
                         } catch (aiError) {
-                            console.error(`[GmailClient] AI analysis failed for email ${email.gmailId}:`, aiError);
-                            await pluginChatStorage.addMessage(chat.id, 'assistant', 'Email loaded. Would you like me to analyze this email?');
+                            console.error(
+                                `[GmailClient] AI analysis failed for email ${email.gmailId}:`,
+                                aiError,
+                            );
+                            await pluginChatStorage.addMessage(
+                                chat.id,
+                                'assistant',
+                                'Email loaded. Would you like me to analyze this email?',
+                            );
                         }
                     } else {
-                        console.log('[GmailClient] Apple Intelligence not available, creating chat without analysis');
-                        await pluginChatStorage.addMessage(chat.id, 'assistant', 'Email loaded. Connect Apple Intelligence on iOS for AI-powered analysis.');
+                        console.log(
+                            '[GmailClient] Apple Intelligence not available, creating chat without analysis',
+                        );
+                        await pluginChatStorage.addMessage(
+                            chat.id,
+                            'assistant',
+                            'Email loaded. Connect Apple Intelligence on iOS for AI-powered analysis.',
+                        );
                     }
 
                     createdChats++;
                     const duration = Date.now() - emailStart;
-                    console.log(`[GmailClient] Created chat for email: ${email.subject} (${duration}ms)`);
+                    console.log(
+                        `[GmailClient] Created chat for email: ${email.subject} (${duration}ms)`,
+                    );
                 } catch (e) {
                     failedChats++;
-                    console.error(`[GmailClient] Failed to process email ${email.gmailId}:`, e);
+                    console.error(
+                        `[GmailClient] Failed to process email ${email.gmailId}:`,
+                        e,
+                    );
                 }
             }
 
-            console.log(`[GmailClient] Finished processing ${emailsToProcess.length} emails: ${createdChats} created, ${skippedChats} skipped, ${failedChats} failed`);
+            console.log(
+                `[GmailClient] Finished processing ${emailsToProcess.length} emails: ${createdChats} created, ${skippedChats} skipped, ${failedChats} failed`,
+            );
 
             // Save last successful run timestamp
-            await AsyncStorage.setItem(lastRunKey(integrationId), String(Math.floor(Date.now() / 1000)));
+            await AsyncStorage.setItem(
+                lastRunKey(integrationId),
+                String(Math.floor(Date.now() / 1000)),
+            );
 
             return emailsToProcess;
         } catch (error) {
@@ -160,27 +230,36 @@ Keep your response brief and actionable.`;
         }
     }
 
-    private async getLastSyncTimestamp(integrationId: string): Promise<number | null> {
+    private async getLastSyncTimestamp(
+        integrationId: string,
+    ): Promise<number | null> {
         // Placeholder: read from storage
         return null;
     }
 
     // ... existing methods ...
 
-    async syncEmails(integrationId: string, maxResults: number = 20): Promise<Email[]> {
-        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+    async syncEmails(
+        integrationId: string,
+        maxResults: number = 20,
+    ): Promise<Email[]> {
+        const accessToken = await tokenRefreshService.getValidToken(
+            integrationId,
+        );
 
         // Get list of message IDs
         const listResponse = await fetch(
-            `${GMAIL_API_BASE}/messages?maxResults=${maxResults}&labelIds=INBOX`,
+            `${GMAIL_API_BASE}/messages?maxResults=${maxResults}&labelIds=INBOX&labelIds=UNREAD`,
             {
                 headers: { Authorization: `Bearer ${accessToken}` },
-            }
+            },
         );
 
         if (!listResponse.ok) {
             const error = await listResponse.json().catch(() => ({}));
-            throw new Error(error.error?.message || 'Failed to list Gmail messages');
+            throw new Error(
+                error.error?.message || 'Failed to list Gmail messages',
+            );
         }
 
         const listData: GmailListResponse = await listResponse.json();
@@ -193,35 +272,75 @@ Keep your response brief and actionable.`;
         const emails: Email[] = [];
         for (const msg of listData.messages) {
             try {
-                const email = await this.fetchEmail(integrationId, msg.id, accessToken);
+                const email = await this.fetchEmail(
+                    integrationId,
+                    msg.id,
+                    accessToken,
+                );
                 if (email) {
                     emails.push(email);
                 }
             } catch (e) {
-                console.warn(`[GmailClient] Failed to fetch email ${msg.id}:`, e);
+                console.warn(
+                    `[GmailClient] Failed to fetch email ${msg.id}:`,
+                    e,
+                );
             }
         }
 
         // Cache the emails
-        await integrationStorage.cacheEmails(integrationId, emails.map(e => ({
-            gmailId: e.gmailId,
-            threadId: e.threadId,
-            subject: e.subject,
-            snippet: e.snippet,
-            fromEmail: e.fromEmail,
-            fromName: e.fromName,
-            toEmails: e.toEmails,
-            date: e.date,
-            labels: e.labels,
-            bodyText: e.bodyText,
-            bodyHtml: e.bodyHtml,
-            isRead: e.isRead,
-        })));
+        await integrationStorage.cacheEmails(
+            integrationId,
+            emails.map(e => ({
+                gmailId: e.gmailId,
+                threadId: e.threadId,
+                subject: e.subject,
+                snippet: e.snippet,
+                fromEmail: e.fromEmail,
+                fromName: e.fromName,
+                toEmails: e.toEmails,
+                date: e.date,
+                labels: e.labels,
+                bodyText: e.bodyText,
+                bodyHtml: e.bodyHtml,
+                isRead: e.isRead,
+            })),
+        );
+
+        // Log summary of fetched emails
+        const unread = emails.filter(e => !e.isRead);
+        console.log(
+            `[GmailClient] Synced ${emails.length} emails (${unread.length} unread):`,
+        );
+        for (const email of emails) {
+            const labels = email.labels?.join(', ') || '';
+            const flags = [
+                !email.isRead ? 'UNREAD' : 'read',
+                labels.includes('IMPORTANT') ? 'IMPORTANT' : null,
+                labels.includes('STARRED') ? 'STARRED' : null,
+            ]
+                .filter(Boolean)
+                .join(' | ');
+            const dateStr = email.date
+                ? new Date(email.date).toLocaleString()
+                : 'unknown date';
+            console.log(
+                `[GmailClient]   • [${flags}] "${email.subject}" from ${
+                    email.fromName || email.fromEmail
+                } (${dateStr}) — ${email.snippet?.slice(0, 80) || ''}`,
+            );
+        }
 
         // Index emails in backend RAG store
         for (const email of emails) {
             try {
-                const content = `From: ${email.fromName || email.fromEmail}. Subject: ${email.subject}. Date: ${email.date ? new Date(email.date).toLocaleDateString() : 'Unknown'}. ${email.snippet || ''}`;
+                const content = `From: ${
+                    email.fromName || email.fromEmail
+                }. Subject: ${email.subject}. Date: ${
+                    email.date
+                        ? new Date(email.date).toLocaleDateString()
+                        : 'Unknown'
+                }. ${email.snippet || ''}`;
                 await ragApi.index({
                     id: `${integrationId}_${email.gmailId}`,
                     source_type: 'email',
@@ -232,11 +351,12 @@ Keep your response brief and actionable.`;
                     },
                 });
             } catch (err) {
-                console.warn(`[GmailClient] Failed to index email ${email.gmailId}:`, err);
+                console.warn(
+                    `[GmailClient] Failed to index email ${email.gmailId}:`,
+                    err,
+                );
             }
         }
-
-        console.log(`[GmailClient] Synced ${emails.length} emails`);
 
         return emails;
     }
@@ -248,14 +368,16 @@ Keep your response brief and actionable.`;
     async syncAndAnalyze(
         integrationId: string,
         maxResults: number = 20,
-        onAsapDetected?: (emailId: string) => void
+        onAsapDetected?: (emailId: string) => void,
     ): Promise<Email[]> {
         const emails = await this.syncEmails(integrationId, maxResults);
 
         // Trigger background analysis for unread emails
-        this.analyzeNewEmailsInBackground(integrationId, onAsapDetected).catch(err => {
-            console.warn('[GmailClient] Background analysis failed:', err);
-        });
+        this.analyzeNewEmailsInBackground(integrationId, onAsapDetected).catch(
+            err => {
+                console.warn('[GmailClient] Background analysis failed:', err);
+            },
+        );
 
         return emails;
     }
@@ -265,23 +387,32 @@ Keep your response brief and actionable.`;
      */
     private async analyzeNewEmailsInBackground(
         integrationId: string,
-        onAsapDetected?: (emailId: string) => void
+        onAsapDetected?: (emailId: string) => void,
     ): Promise<void> {
         try {
             // Lazy import to avoid circular dependencies
-            const { briefingGenerator } = await import('../../briefing/BriefingGenerator');
+            const { briefingGenerator } = await import(
+                '@genie/front/services/briefing/BriefingGenerator'
+            );
 
             // Analyze unanalyzed emails (up to 5 at a time for performance)
-            const analyzed = await briefingGenerator.analyzeUnanalyzedEmails(5, integrationId);
+            const analyzed = await briefingGenerator.analyzeUnanalyzedEmails(
+                5,
+                integrationId,
+            );
 
             if (analyzed > 0 && onAsapDetected) {
                 // Check for new ASAP emails
-                const { integrationStorage } = await import('../IntegrationStorage');
+                const { integrationStorage } = await import(
+                    '@genie/front/services/integrations/IntegrationStorage'
+                );
                 const asapEmails = await integrationStorage.getAsapEmails();
 
                 for (const asap of asapEmails) {
                     // Inject into today's briefing
-                    const injected = await briefingGenerator.handleAsapEmail(asap.emailId);
+                    const injected = await briefingGenerator.handleAsapEmail(
+                        asap.emailId,
+                    );
                     if (injected) {
                         onAsapDetected(asap.emailId);
                     }
@@ -295,16 +426,22 @@ Keep your response brief and actionable.`;
     /**
      * Fetch a single email by ID
      */
-    async fetchEmail(integrationId: string, gmailId: string, accessToken?: string): Promise<Email | null> {
+    async fetchEmail(
+        integrationId: string,
+        gmailId: string,
+        accessToken?: string,
+    ): Promise<Email | null> {
         if (!accessToken) {
-            accessToken = await tokenRefreshService.getValidToken(integrationId);
+            accessToken = await tokenRefreshService.getValidToken(
+                integrationId,
+            );
         }
 
         const response = await fetch(
             `${GMAIL_API_BASE}/messages/${gmailId}?format=full`,
             {
                 headers: { Authorization: `Bearer ${accessToken}` },
-            }
+            },
         );
 
         if (!response.ok) {
@@ -321,16 +458,25 @@ Keep your response brief and actionable.`;
     /**
      * Get cached emails from local storage
      */
-    async getCachedEmails(integrationId: string, limit?: number): Promise<Email[]> {
+    async getCachedEmails(
+        integrationId: string,
+        limit?: number,
+    ): Promise<Email[]> {
         return integrationStorage.getCachedEmails(integrationId, limit);
     }
 
     /**
      * Get recent emails, using cache if available, syncing if not
      */
-    async getRecentEmails(integrationId: string, maxResults: number = 20): Promise<Email[]> {
+    async getRecentEmails(
+        integrationId: string,
+        maxResults: number = 20,
+    ): Promise<Email[]> {
         // First try to get from cache
-        const cached = await integrationStorage.getCachedEmails(integrationId, maxResults);
+        const cached = await integrationStorage.getCachedEmails(
+            integrationId,
+            maxResults,
+        );
 
         if (cached.length > 0) {
             // Return cached data and sync in background
@@ -351,7 +497,9 @@ Keep your response brief and actionable.`;
         const headers = msg.payload?.headers || [];
 
         const getHeader = (name: string): string | undefined => {
-            const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+            const header = headers.find(
+                h => h.name.toLowerCase() === name.toLowerCase(),
+            );
             return header?.value;
         };
 
@@ -361,10 +509,15 @@ Keep your response brief and actionable.`;
         const fromEmail = fromMatch?.[2] || from;
 
         const to = getHeader('To') || '';
-        const toEmails = to.split(',').map(e => e.trim()).filter(Boolean);
+        const toEmails = to
+            .split(',')
+            .map(e => e.trim())
+            .filter(Boolean);
 
         const date = getHeader('Date');
-        const internalDate = msg.internalDate ? new Date(parseInt(msg.internalDate, 10)) : undefined;
+        const internalDate = msg.internalDate
+            ? new Date(parseInt(msg.internalDate, 10))
+            : undefined;
 
         // Extract body
         let bodyText: string | undefined;
@@ -421,8 +574,15 @@ Keep your response brief and actionable.`;
     /**
      * Send an email
      */
-    async sendEmail(integrationId: string, to: string, subject: string, body: string): Promise<void> {
-        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+    async sendEmail(
+        integrationId: string,
+        to: string,
+        subject: string,
+        body: string,
+    ): Promise<void> {
+        const accessToken = await tokenRefreshService.getValidToken(
+            integrationId,
+        );
 
         // Create email message
         // Headers + Body need to be base64url encoded
@@ -436,24 +596,24 @@ Keep your response brief and actionable.`;
             'Content-Type: text/plain; charset="UTF-8"',
             'MIME-Version: 1.0',
             '',
-            utf8Body
+            utf8Body,
         ].join('\n');
 
-        const encodedMessage = btoa(message).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const encodedMessage = btoa(message)
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
 
-        const response = await fetch(
-            `${GMAIL_API_BASE}/messages/send`,
-            {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    raw: encodedMessage
-                })
-            }
-        );
+        const response = await fetch(`${GMAIL_API_BASE}/messages/send`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                raw: encodedMessage,
+            }),
+        });
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
@@ -462,23 +622,34 @@ Keep your response brief and actionable.`;
 
         console.log(`[GmailClient] Sent email to ${to}`);
     }
+
     /**
      * Search emails
      */
-    async searchEmails(integrationId: string, query: string, maxResults: number = 20): Promise<Email[]> {
-        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+    async searchEmails(
+        integrationId: string,
+        query: string,
+        maxResults: number = 20,
+    ): Promise<Email[]> {
+        const accessToken = await tokenRefreshService.getValidToken(
+            integrationId,
+        );
 
         // Get list of message IDs
         const listResponse = await fetch(
-            `${GMAIL_API_BASE}/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
+            `${GMAIL_API_BASE}/messages?maxResults=${maxResults}&q=${encodeURIComponent(
+                query,
+            )}`,
             {
                 headers: { Authorization: `Bearer ${accessToken}` },
-            }
+            },
         );
 
         if (!listResponse.ok) {
             const error = await listResponse.json().catch(() => ({}));
-            throw new Error(error.error?.message || 'Failed to search Gmail messages');
+            throw new Error(
+                error.error?.message || 'Failed to search Gmail messages',
+            );
         }
 
         const listData: GmailListResponse = await listResponse.json();
@@ -491,12 +662,19 @@ Keep your response brief and actionable.`;
         const emails: Email[] = [];
         for (const msg of listData.messages) {
             try {
-                const email = await this.fetchEmail(integrationId, msg.id, accessToken);
+                const email = await this.fetchEmail(
+                    integrationId,
+                    msg.id,
+                    accessToken,
+                );
                 if (email) {
                     emails.push(email);
                 }
             } catch (e) {
-                console.warn(`[GmailClient] Failed to fetch email ${msg.id}:`, e);
+                console.warn(
+                    `[GmailClient] Failed to fetch email ${msg.id}:`,
+                    e,
+                );
             }
         }
 
@@ -506,8 +684,15 @@ Keep your response brief and actionable.`;
     /**
      * Create a draft email
      */
-    async createDraft(integrationId: string, to: string, subject: string, body: string): Promise<void> {
-        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+    async createDraft(
+        integrationId: string,
+        to: string,
+        subject: string,
+        body: string,
+    ): Promise<void> {
+        const accessToken = await tokenRefreshService.getValidToken(
+            integrationId,
+        );
 
         const utf8Subject = unescape(encodeURIComponent(subject));
         const utf8Body = unescape(encodeURIComponent(body));
@@ -518,26 +703,26 @@ Keep your response brief and actionable.`;
             'Content-Type: text/plain; charset="UTF-8"',
             'MIME-Version: 1.0',
             '',
-            utf8Body
+            utf8Body,
         ].join('\n');
 
-        const encodedMessage = btoa(message).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const encodedMessage = btoa(message)
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
 
-        const response = await fetch(
-            `${GMAIL_API_BASE}/drafts`,
-            {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
+        const response = await fetch(`${GMAIL_API_BASE}/drafts`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: {
+                    raw: encodedMessage,
                 },
-                body: JSON.stringify({
-                    message: {
-                        raw: encodedMessage
-                    }
-                })
-            }
-        );
+            }),
+        });
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
@@ -550,11 +735,21 @@ Keep your response brief and actionable.`;
     /**
      * Reply to an email
      */
-    async replyToEmail(integrationId: string, messageId: string, body: string): Promise<void> {
-        const accessToken = await tokenRefreshService.getValidToken(integrationId);
+    async replyToEmail(
+        integrationId: string,
+        messageId: string,
+        body: string,
+    ): Promise<void> {
+        const accessToken = await tokenRefreshService.getValidToken(
+            integrationId,
+        );
 
         // First fetch the original message to get references and threadId
-        const original = await this.fetchEmail(integrationId, messageId, accessToken);
+        const original = await this.fetchEmail(
+            integrationId,
+            messageId,
+            accessToken,
+        );
         if (!original) {
             throw new Error('Original message not found');
         }
@@ -575,7 +770,9 @@ Keep your response brief and actionable.`;
         }
 
         // Add quoted text to body
-        const quotedBody = `\n\nOn ${original.date?.toLocaleString()}, ${original.fromName || original.fromEmail} wrote:\n> ${original.snippet}`;
+        const quotedBody = `\n\nOn ${original.date?.toLocaleString()}, ${
+            original.fromName || original.fromEmail
+        } wrote:\n> ${original.snippet}`;
         const fullBody = body + quotedBody;
 
         const utf8Subject = unescape(encodeURIComponent(subject));
@@ -595,25 +792,25 @@ Keep your response brief and actionable.`;
             'Content-Type: text/plain; charset="UTF-8"',
             'MIME-Version: 1.0',
             '',
-            utf8Body
+            utf8Body,
         ].join('\n');
 
-        const encodedMessage = btoa(message).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const encodedMessage = btoa(message)
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
 
-        const response = await fetch(
-            `${GMAIL_API_BASE}/messages/send`,
-            {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    raw: encodedMessage,
-                    threadId: original.threadId
-                })
-            }
-        );
+        const response = await fetch(`${GMAIL_API_BASE}/messages/send`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                raw: encodedMessage,
+                threadId: original.threadId,
+            }),
+        });
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
