@@ -4,6 +4,7 @@
  */
 
 import { NativeModules, Platform } from 'react-native';
+import { ragApi } from '../../../apiClient';
 
 const { IOSHealthManager } = NativeModules;
 
@@ -494,11 +495,11 @@ class IOSHealthClient {
         }
     }
 
-    // MARK: - RAG Integration (Phase 2 - stub for now)
+    // MARK: - RAG Integration
 
     /**
-     * Index health data for RAG semantic search
-     * Note: This is a stub for Phase 2 implementation
+     * Index the last 30 days of health data into the backend RAG store.
+     * Follows the same pattern as IOSCalendarClient, IOSRemindersClient, IOSContactsClient.
      */
     async indexForRAG(integrationId: string): Promise<void> {
         if (Platform.OS !== 'ios') {
@@ -506,24 +507,57 @@ class IOSHealthClient {
             return;
         }
 
-        // TODO: Phase 2 - Implement RAG indexing
-        // - Get daily summaries for past 30 days
-        // - Build natural language descriptions
-        // - Store in VectorStore with embeddings
-        console.log('[IOSHealthClient] RAG indexing not yet implemented (Phase 2)');
+        try {
+            const today = new Date();
+            let indexed = 0;
+            for (let i = 0; i < 30; i++) {
+                const d = new Date(today);
+                d.setDate(today.getDate() - i);
+                const date = d.toISOString().split('T')[0];
+
+                let summary: DailySummary;
+                try {
+                    summary = await this.getDailySummary(date);
+                } catch {
+                    continue; // skip days with no data or permission errors
+                }
+
+                const parts: string[] = [`Health summary for ${date}.`];
+                if (summary.activity) {
+                    const a = summary.activity;
+                    parts.push(`Activity: ${a.steps} steps, ${Math.round(a.distance)} m distance, ${Math.round(a.activeEnergy)} kcal active energy, ${a.exerciseMinutes} min exercise, ${a.standHours} stand hours.`);
+                }
+                if (summary.heart) {
+                    const h = summary.heart;
+                    parts.push(`Heart rate: avg ${h.avg} bpm${h.resting ? `, resting ${h.resting} bpm` : ''}, range ${h.min}–${h.max} bpm.`);
+                }
+                if (summary.sleep) {
+                    parts.push(`Sleep: ${summary.sleep.duration.toFixed(1)} hours (${summary.sleep.quality}).`);
+                }
+                if (summary.workouts?.length) {
+                    const wStr = summary.workouts.map(w => `${w.type} ${w.duration} min ${w.calories} kcal`).join(', ');
+                    parts.push(`Workouts: ${wStr}.`);
+                }
+
+                const content = parts.join(' ');
+                await ragApi.index({
+                    id: `ios_health_${integrationId}_${date}`,
+                    source_type: 'ios_health',
+                    content,
+                    metadata: { integration_id: integrationId, date },
+                });
+                indexed++;
+            }
+            console.log(`[IOSHealthClient] Indexed ${indexed} days of health data for RAG`);
+        } catch (error) {
+            console.error('[IOSHealthClient] indexForRAG error:', error);
+        }
     }
 
     /**
-     * Search indexed health data
-     * Note: This is a stub for Phase 2 implementation
+     * Search is handled on the backend via the search_knowledge_base tool.
      */
-    async searchInRAG(query: string, integrationId?: string): Promise<any[]> {
-        if (Platform.OS !== 'ios') {
-            return [];
-        }
-
-        // TODO: Phase 2 - Implement RAG search
-        console.log('[IOSHealthClient] RAG search not yet implemented (Phase 2)');
+    async searchInRAG(_query: string, _integrationId?: string): Promise<any[]> {
         return [];
     }
 

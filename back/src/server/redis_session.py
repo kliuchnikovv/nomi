@@ -666,6 +666,7 @@ class RedisSession:
                 db=db,
                 model=model,
                 knowledge=knowledge,
+                user_id=user_id,
                 debug_mode=getattr(self.agent_factory, "_debug_mode", False),
             )
             last_n = 5

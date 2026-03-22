@@ -110,7 +110,7 @@ class SouperAgent(Agent):
             reasoning=(thinking != "off"),
             model=model,
             tools=tools,
-            # knowledge=knowledge,
+            knowledge=knowledge,
             description=f"{effective_name} is your personal AI assistant with access to tools, knowledge, and integrations to help with your daily tasks.",
             instructions=instructions,
             add_history_to_context=True,
@@ -121,7 +121,6 @@ class SouperAgent(Agent):
             stream_events=True,
             memory_manager=MemoryManager(model=model, db=db),
             enable_agentic_memory=True,
-            update_memory_on_run=True,
             learning=LearningMachine(
                 user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
                 session_context=SessionContextConfig(enable_planning=False),

@@ -156,33 +156,32 @@ All integrations (Gmail, GitHub, Calendar, etc.) are centrally defined in **3 re
 - `back/src/tools/factory.py` — Filters client-only integrations from Python tools
 - `front/src/services/tools/ClientToolExecutor.ts` — Local tool execution
 
-### RAG (Retrieval-Augmented Generation)
+### Memory & RAG
 
-Genie uses a **3-layer hybrid RAG system**:
+Genie uses a **2-layer memory system**:
 
-#### 1. Built-in Agno RAG (Primary Memory)
-- **Shared Knowledge**: One Agno `Knowledge` (vector_db + optional contents_db) per process
-- **Search isolation**: `Agent.run(..., knowledge_filters={"user_id": user_id})` — Agno applies filters at run
-- **Storage isolation**: `UserKnowledgeAdapter` wraps Knowledge and injects `user_id` into metadata on `insert`/`insert_many` (for `update_knowledge`)
-- **Explicit store/delete**: Call `agent_factory.get_knowledge()` then `knowledge.insert(..., metadata={"user_id": user_id})` and `knowledge.remove_vectors_by_metadata(metadata={"user_id": user_id, ...})`
-- **Vector DB**: PostgreSQL with pgvector + Google Gemini embeddings (768d)
+#### 1. Vector Knowledge Store (`personal_vectors`)
+- **Shared Knowledge**: One Agno `Knowledge(vector_db=PgVector(...))` instance per process, table `personal_vectors`
+- **Indexing**: `/rag/index` endpoint (device → server), plus background `_extract_and_store_facts()` per message; device clients (`IOSCalendarClient`, `IOSRemindersClient`, `IOSContactsClient`, `IOSHealthClient`, `IMAPEmailClient`) call `ragApi.index()` directly
+- **User isolation**: `metadata={"user_id": user_id}` on every `knowledge.insert()` call
+- **Runtime filtering**: `AgentRunWrapper` injects `knowledge_filters={"user_id": rag_user_id}` into every `agent.run()`
+- **Search**: `search_knowledge_base` tool registered automatically by Agno; user isolation via `knowledge_filters`
+- **Vector DB**: PostgreSQL + pgvector + Google Gemini embeddings (768d)
 
 **Files:**
-- `back/src/knowledge/factory.py` — `build_knowledge_base()` (vector_db + contents_db), `build_contents_db()`
-- `back/src/knowledge/user_knowledge.py` — `UserKnowledgeAdapter` (injects user_id on insert)
-- `back/src/agents/factory.py` — Shared Knowledge, `AgentRunWrapper` (injects knowledge_filters at run), `get_knowledge()`
+- `back/src/core/container.py` — `Container.knowledge` (creates shared `Knowledge` instance)
+- `back/src/agents/factory.py` — `AgentFactory._knowledge`, `AgentRunWrapper` (injects `knowledge_filters` at run)
+- `back/src/server/redis_session.py` — `_extract_and_store_facts()`, `extracted_facts` from payload
+- `back/app.py` — `/rag/index` endpoint
+- `front/src/apiClient.ts` — `ragApi.index()` helper used by all device clients
 
-#### 2. Built-in `search_knowledge_base` Tool (Agno)
-- Automatically registered by Agno when agent has `knowledge` + `search_knowledge=True`
-- Agent calls it during runs to recall relevant context from memory
-- User isolation handled by `knowledge_filters` injected via `AgentRunWrapper`
-- No manual wiring or separate file needed — it's part of Agno's agent runtime
+#### 2. Agno Agentic Memory (MemoryManager + LearningMachine)
+- `MemoryManager(model=model, db=db)` — stores user memories in PostgreSQL via Agno
+- `enable_agentic_memory=True` — agent can call `add_memory`, `update_memory`, `delete_memory` tools
+- Memories injected into prompt as `<memories_from_previous_interactions>`
+- `LearningMachine`: auto-learns user profile and entity memory (namespaced `user:{user_id}:personal`) after each run
 
-#### 3. Local/Personal RAG (Device)
-- Private data (emails, notes, tasks) on device
-- Searched locally via `client_action` when agent calls `ClientRagTools.search()`
-
-**File:** `front/src/services/database/VectorStore.ts`
+**File:** `back/src/agents/souper.py`
 
 ### Agent Teams
 
