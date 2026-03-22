@@ -24,6 +24,7 @@ interface ChatStore {
     chats: Record<string, Message[]>;
     addMessage: (chatId: string, payload: any) => void;
     setMessages: (chatId: string, messages: Message[]) => void;
+    removeMessage: (chatId: string, messageId: string) => void;
     clearChat: (chatId: string) => void;
     flushPendingUpdates: (chatId: string) => void;
 }
@@ -147,6 +148,19 @@ export const useChatStore = create<ChatStore>()(
                         [chatId]: trimmed,
                     }),
                 }));
+            },
+
+            removeMessage: (chatId, messageId) => {
+                set((state) => {
+                    const messages = state.chats[chatId];
+                    if (!messages) return state;
+                    return {
+                        chats: {
+                            ...state.chats,
+                            [chatId]: messages.filter(m => m.id !== messageId),
+                        },
+                    };
+                });
             },
 
             clearChat: (chatId) => {

@@ -37,9 +37,27 @@ export async function generateChatTitle(firstMessage: string): Promise<string> {
     const { apple } = require('@react-native-ai/apple');
     const { generateText } = require('ai');
 
-    const prompt = `Generate a very short chat title (3 to 6 words) for this message. Use the same language as the message. Reply with only the title, no quotes.
+    const prompt = `You are a chat title generator. Create a concise title (3–5 words) capturing the core topic or goal — not a rephrasing of the message.
 
-Message: ${trimmed.slice(0, 500)}`;
+Rules:
+- Noun phrase, not a question or full sentence
+- Do NOT start with: I, Can, How, What, Please, Help, Write, Make
+- No punctuation at the end
+- Use the same language as the message
+- Reply with only the title, nothing else
+
+Examples:
+Message: "Can you help me write a Python script to parse CSV files?"
+Title: CSV File Parser in Python
+
+Message: "Что такое квантовые вычисления и как они работают?"
+Title: Квантовые вычисления
+
+Message: "I need to plan a birthday party for my 5-year-old daughter"
+Title: Children's Birthday Party Planning
+
+Message: ${trimmed.slice(0, 500)}
+Title:`;
 
     const resultPromise = generateText({
       model: apple(),
@@ -51,7 +69,9 @@ Message: ${trimmed.slice(0, 500)}`;
     );
 
     const result = await Promise.race([resultPromise, timeoutPromise]);
-    const title = (result as { text?: string })?.text?.trim();
+    const raw = (result as { text?: string })?.text?.trim() ?? '';
+    // Strip accidental "Title:" prefix if model echoes the prompt format
+    const title = raw.replace(/^title:\s*/i, '').trim();
     if (title && title.length > 0) {
       const truncated =
         title.length > TITLE_MAX_LENGTH

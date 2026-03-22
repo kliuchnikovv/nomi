@@ -99,6 +99,8 @@ export default function ChatInput(props: Props) {
         detailLevel,
         setDetailLevel,
         showToolCalls,
+        pendingInputText,
+        setPendingInputText,
     } = useChat();
     const { user, updateUser } = useAuth();
     const { activeChatID } = useMain();
@@ -152,6 +154,14 @@ export default function ChatInput(props: Props) {
         setAttachments([]);
         // Don't clear context when switching chats - context should persist across messages
     }, [activeChatID]);
+
+    // Restore message text to input when model is changed after an error
+    useEffect(() => {
+        if (pendingInputText !== null) {
+            setValue(pendingInputText);
+            setPendingInputText(null);
+        }
+    }, [pendingInputText, setPendingInputText]);
 
     // Listen for context item changes
     useEffect(() => {

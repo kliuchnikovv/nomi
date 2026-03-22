@@ -181,6 +181,7 @@ export function ChatProvider({
     // Error state management
     const [error, setError] = useState<string | null>(null);
     const [isRateLimited, setIsRateLimited] = useState(false);
+    const [pendingInputText, setPendingInputText] = useState<string | null>(null);
     const [lastFailedMessage, setLastFailedMessage] = useState<{
         text: string;
         attachments?: any[];
@@ -189,6 +190,20 @@ export function ChatProvider({
         thinking?: string;
         contextItems?: any[];
     } | null>(null);
+
+    // Helper: report error, remove the failed message from store, restore text to input
+    const reportMessageError = useCallback((errorMessage: string) => {
+        setError(errorMessage);
+        setLastFailedMessage(current => {
+            if (current) {
+                if (current.messageId && activeChatID) {
+                    useChatStore.getState().removeMessage(activeChatID, current.messageId);
+                }
+                setPendingInputText(current.text);
+            }
+            return null;
+        });
+    }, [activeChatID]);
 
     // Thinking mode state (persists within chat session)
     const [thinkingLevel, setThinkingLevel] = useState<string>('off');
@@ -598,7 +613,7 @@ export function ChatProvider({
                 setAssistantWorking(current => {
                     if (current) {
                         setActiveAgentsCount(0);
-                        setError('Ответ не получен. Проверьте подключение и попробуйте снова.');
+                        reportMessageError('Ответ не получен. Проверьте подключение и попробуйте снова.');
                         responseTimeoutRef.current = null;
                         return false;
                     }
@@ -1070,7 +1085,7 @@ export function ChatProvider({
                     console.error('Error details:', err.error.details);
                 }
                 setIsRateLimited(err?.error?.isRateLimited === true);
-                setError(message);
+                reportMessageError(message);
             },
             onUnauthorized: async () => {
                 return await refreshToken();
@@ -1112,7 +1127,7 @@ export function ChatProvider({
         return () => {
             socket.setHandlers({});
         };
-    }, [refreshToken, getChats, handleClientAction]);
+    }, [refreshToken, getChats, handleClientAction, reportMessageError]);
 
     // Clear "Assistant is thinking" when DONE is received on user channel (or any socket).
     useEffect(() => {
@@ -1299,6 +1314,10 @@ export function ChatProvider({
         detailLevel,
         setDetailLevel,
         activeAgentsCount,
+        pendingInputText,
+        setPendingInputText,
+        lastFailedMessage,
+        setLastFailedMessage,
     };
 
     return (

@@ -68,6 +68,10 @@ export interface ChatContextType {
     detailLevel: DetailLevel;
     setDetailLevel: (level: DetailLevel) => void;
     activeAgentsCount?: number;
+    pendingInputText: string | null;
+    setPendingInputText: (text: string | null) => void;
+    lastFailedMessage: { text: string; attachments?: any[]; messageId?: string; webSearch?: boolean; thinking?: string; contextItems?: any[] } | null;
+    setLastFailedMessage: (msg: { text: string; attachments?: any[]; messageId?: string; webSearch?: boolean; thinking?: string; contextItems?: any[] } | null) => void;
 }
 
 
