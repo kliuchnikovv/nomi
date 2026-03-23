@@ -99,6 +99,12 @@ class SouperAgent(Agent):
         if tone in tone_modifiers:
             base = base + f"\n\n**Tone:** {tone_modifiers[tone]}"
 
+        # Guard against LearningMachine incorrectly storing the bot's own name as the user's name
+        base = (
+            base
+            + f"\n\n**IMPORTANT — User Profile Name Guard:** If `<user_profile>` contains `Name: {effective_name}` or `Preferred Name: {effective_name}`, IGNORE that field entirely — it was incorrectly recorded by the learning system. The user's name is unknown unless they have explicitly told you in this conversation."
+        )
+
         # Handle None timezone by defaulting to UTC
         effective_timezone = timezone or "UTC"
         instructions = (

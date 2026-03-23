@@ -323,6 +323,18 @@ export function registerClientPlugins(): Promise<void> {
             );
         }
 
+        // Day Planner
+        try {
+            const { PlannerScreen } = await import('../screens/planner/PlannerScreen');
+            registerClientPlugin('planner', {
+                execute: async () => '',
+                MainComponent: PlannerScreen,
+            });
+            console.log('[registerClientPlugins] Day Planner registered');
+        } catch (e) {
+            console.warn('[registerClientPlugins] Failed to register Day Planner:', e);
+        }
+
         registered = true;
         registrationPromise = null;
         console.log('[registerClientPlugins] Plugin registration complete');

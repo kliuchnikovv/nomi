@@ -32,12 +32,17 @@ export async function generateChatTitle(firstMessage: string): Promise<string> {
   const trimmed = firstMessage.trim();
   if (!trimmed) return '';
 
+  // Skip AI generation for very short messages — no meaningful topic to extract
+  if (trimmed.length < 10) {
+    return fallbackTitle(firstMessage);
+  }
+
   try {
     console.log(LOG_TAG, 'Loading Apple FM and generating title...');
     const { apple } = require('@react-native-ai/apple');
     const { generateText } = require('ai');
 
-    const prompt = `You are a chat title generator. Create a concise title (3–5 words) capturing the core topic or goal — not a rephrasing of the message.
+    const prompt = `Create a concise title (3–5 words) for a chat based on this first message. Capture the core topic or goal.
 
 Rules:
 - Noun phrase, not a question or full sentence
@@ -72,7 +77,10 @@ Title:`;
     const raw = (result as { text?: string })?.text?.trim() ?? '';
     // Strip accidental "Title:" prefix if model echoes the prompt format
     const title = raw.replace(/^title:\s*/i, '').trim();
-    if (title && title.length > 0) {
+    // Reject titles that are clearly prompt artifacts
+    const PROMPT_ARTIFACTS = ['title generator', 'chat title'];
+    const isArtifact = PROMPT_ARTIFACTS.some(a => title.toLowerCase().includes(a));
+    if (title && title.length > 0 && !isArtifact) {
       const truncated =
         title.length > TITLE_MAX_LENGTH
           ? title.slice(0, TITLE_MAX_LENGTH) + '...'

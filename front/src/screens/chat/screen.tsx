@@ -516,6 +516,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                 )}
 
                 <View style={[styles.conversation, { zIndex: 0 }]}>
+                    {/* Show Dashboard when no messages AND it's a new chat placeholder, Chat when there are messages or it's a persisted chat */}
                     <ChatHeader
                         title={headerTitle}
                         subtitle={headerSubtitle}
@@ -530,26 +531,18 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                         activeAgentsCount={activeAgentsCount}
                         isWorking={assistantWorking}
                     />
-
-
-
-                    {/* Show Dashboard when no messages AND it's a new chat placeholder, Chat when there are messages or it's a persisted chat */}
                     {messages.length === 0 && !messagesLoading && activeChatID === '00000000-0000-0000-0000-000000000000' ? (
                         <KeyboardAvoidingView
                             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             style={{ flex: 1 }}
-                            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
                         >
-                            <View style={{ flex: 1 }}>
-                                <DashboardScreen
-                                    onNavigateToChat={handleSelectChat}
-                                    onNewChatPress={handleNewChat}
-                                    showHeader={false}
-                                />
-                            </View>
+                            <DashboardScreen
+                                onNavigateToChat={handleSelectChat}
+                            />
                             {renderInputToolbar({})}
                         </KeyboardAvoidingView>
                     ) : (
+                        <>
                         <KeyboardAvoidingView
                             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             style={{ flex: 1 }}
@@ -616,6 +609,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                                 }}
                             />
                         </KeyboardAvoidingView>
+                        </>
                     )}
 
                     {/* Edge Swipe Detector - Left */}

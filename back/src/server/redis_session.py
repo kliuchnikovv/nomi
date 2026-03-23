@@ -856,9 +856,16 @@ class RedisSession:
         )
         delivery_text_buffer: list[str] = []
 
+        # Determine session type for routing
+        session_type = payload.get("session_type", "chat")
+
         try:
-            # Stream agent events for real-time response
-            stream_iter = self._stream_agent_events(text, payload.get("attachments"))
+            # Route to planning workflow if session_type == "planning"
+            if session_type == "planning":
+                stream_iter = self._stream_planning_workflow(text, payload)
+            else:
+                # Stream agent events for real-time response
+                stream_iter = self._stream_agent_events(text, payload.get("attachments"))
             async for event in stream_iter:
                 if self.cancel_event.is_set():
                     break
@@ -1087,6 +1094,83 @@ class RedisSession:
                     },
                 )
             )
+
+    async def _stream_planning_workflow(
+        self, text: str, payload: dict[str, Any]
+    ) -> AsyncIterator[dict]:
+        """Stream events from the PlanningWorkflow for session_type='planning'."""
+        from src.workflows.models import PlanningInput, PlanTask
+        from src.workflows.planning import build_planning_workflow
+
+        planning_date: str = payload.get("planning_date", "")
+        timezone: str = payload.get("timezone", "UTC")
+        raw_tasks = payload.get("tasks") or []
+        tasks: list[PlanTask] = []
+        for t in raw_tasks:
+            if isinstance(t, dict):
+                try:
+                    tasks.append(PlanTask(**t))
+                except Exception:
+                    pass
+
+        user_id: str = self.user_id or self.session_id
+
+        planning_input = PlanningInput(
+            user_message=text,
+            chat_id=self.chat_id,
+            user_id=user_id,
+            planning_date=planning_date,
+            tasks=tasks,
+            timezone=timezone,
+        )
+
+        workflow = build_planning_workflow(
+            session_id=self.chat_id,
+            db=getattr(self.agent_factory, "_db", None),
+        )
+
+        logger.info(
+            "[PlanningWorkflow] Starting workflow: chat_id=%s status=%s",
+            self.chat_id,
+            workflow.session_state.get("status", "gathering"),
+        )
+
+        try:
+            # Run workflow synchronously (steps are a sync generator)
+            # Wrap in executor to avoid blocking the event loop
+            import asyncio
+            loop = asyncio.get_event_loop()
+            result_content: str = ""
+
+            def _run_sync() -> str:
+                output = workflow.run(
+                    input=text,
+                    additional_data={"planning_input": planning_input.model_dump()},
+                    stream=False,
+                )
+                return str(getattr(output, "content", "") or "")
+
+            result_content = await loop.run_in_executor(None, _run_sync)
+
+            if result_content:
+                yield {"type": "text", "content": result_content}
+
+            # Emit content_done to signal completion
+            self._last_run_completed_content = result_content
+            yield {"type": "content_done"}
+
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error(
+                "[PlanningWorkflow] Workflow error: %s", exc, exc_info=True
+            )
+            yield {
+                "type": "error",
+                "message": f"Planning workflow error: {exc}",
+                "code": "planning_error",
+                "http": 500,
+            }
 
     async def _stream_agent_events(
         self, text: str, attachments: list | None

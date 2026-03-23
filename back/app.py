@@ -230,6 +230,48 @@ due_date_hours: hours from now until due, null if not time-sensitive."""
     )
 
 
+@app.get("/planning/session/{chat_id}")
+async def get_planning_session(
+    chat_id: str,
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+) -> dict:
+    """Return the current planning session state for the given chat.
+
+    The session state is loaded from the PlanningWorkflow's persistent storage
+    (if a DB is configured) or returned as an empty dict if no session exists yet.
+    """
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="X-User-ID header is required")
+
+    try:
+        from src.workflows.planning import build_planning_workflow
+
+        workflow = build_planning_workflow(
+            session_id=chat_id,
+            db=container.db,
+        )
+        # Attempt to load persisted session state
+        try:
+            state = await workflow.aget_session_state(session_id=chat_id)
+        except Exception:
+            state = workflow.session_state or {}
+
+        return {
+            "chat_id": chat_id,
+            "user_id": x_user_id,
+            "session_state": state,
+            "status": state.get("status", "gathering"),
+            "planning_date": state.get("planning_date", ""),
+            "tasks": state.get("tasks", []),
+            "plan": state.get("plan", []),
+            "draft_plans": state.get("draft_plans", []),
+            "reminders_ids": state.get("reminders_ids", []),
+        }
+    except Exception as exc:
+        logging.error("Failed to load planning session: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to load session: {exc}")
+
+
 @app.post("/rag/index")
 async def rag_index(
     request: dict,
