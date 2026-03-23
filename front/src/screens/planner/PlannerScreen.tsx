@@ -252,7 +252,7 @@ export function PlannerScreen({ onClose }: PlannerScreenProps = {}) {
                 style={{ flex: 1, backgroundColor: theme.background }}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             >
-                <View style={[styles.header, { borderBottomColor: theme.border }]}>
+                <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 14 }]}>
                     {onClose && (
                         <TouchableOpacity onPress={() => onClose()} style={styles.backBtn} activeOpacity={0.7}>
                             <Ionicons name="chevron-back" size={22} color={theme.accent} />
@@ -292,7 +292,7 @@ export function PlannerScreen({ onClose }: PlannerScreenProps = {}) {
     if (phase === 'active' && plan) {
         return (
             <View style={{ flex: 1, backgroundColor: theme.background, paddingBottom: insets.bottom }}>
-                <View style={[styles.header, { borderBottomColor: theme.border }]}>
+                <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 14 }]}>
                     {onClose && (
                         <TouchableOpacity onPress={() => onClose()} style={styles.backBtn} activeOpacity={0.7}>
                             <Ionicons name="chevron-back" size={22} color={theme.accent} />
@@ -317,7 +317,7 @@ export function PlannerScreen({ onClose }: PlannerScreenProps = {}) {
             keyboardVerticalOffset={insets.top}
         >
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: theme.border }]}>
+            <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 14 }]}>
                 {onClose && (
                     <TouchableOpacity onPress={() => onClose()} style={styles.backBtn} activeOpacity={0.7}>
                         <Ionicons name="chevron-back" size={22} color={theme.accent} />
@@ -455,7 +455,7 @@ function createStyles(theme: any) {
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 16,
-            paddingVertical: 14,
+            paddingBottom: 14,
             borderBottomWidth: 1,
             gap: 8,
         },

@@ -139,6 +139,10 @@ func New(
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.POST("/api/emails/analyze", wrapWithAuth(handlers.ProxyEmailAnalyze(cfg, logger), authMiddleware))
 
+	// Planning session state — forward to Python backend
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.GET("/api/planning/session/:chat_id", wrapWithAuth(handlers.ProxyPlanningSession(cfg, logger), authMiddleware))
+
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path
 	// Examples:
