@@ -248,13 +248,9 @@ async def get_planning_session(
 
         workflow = build_planning_workflow(
             session_id=chat_id,
-            db=container.db,
+            db=None,  # skip: container.db is sync; Agno workflow expects async db
         )
-        # Attempt to load persisted session state
-        try:
-            state = await workflow.aget_session_state(session_id=chat_id)
-        except Exception:
-            state = workflow.session_state or {}
+        state = workflow.session_state or {}
 
         return {
             "chat_id": chat_id,

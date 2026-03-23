@@ -1126,7 +1126,7 @@ class RedisSession:
 
         workflow = build_planning_workflow(
             session_id=self.chat_id,
-            db=getattr(self.agent_factory, "_db", None),
+            db=None,  # skip: container.db is sync; Agno workflow expects async db
         )
 
         logger.info(

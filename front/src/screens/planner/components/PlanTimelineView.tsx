@@ -49,7 +49,7 @@ export function PlanTimelineView({ plan, onApprove, onRequestChange }: PlanTimel
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {plan.blocks.length === 0 ? (
+                {(plan.blocks ?? []).length === 0 ? (
                     <View style={styles.emptyState}>
                         <Ionicons name="calendar-outline" size={40} color={theme.textSecondary} />
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
@@ -57,7 +57,7 @@ export function PlanTimelineView({ plan, onApprove, onRequestChange }: PlanTimel
                         </Text>
                     </View>
                 ) : (
-                    plan.blocks.map((block) => (
+                    (plan.blocks ?? []).map((block) => (
                         <PlanBlockCard key={block.id} block={block} />
                     ))
                 )}
