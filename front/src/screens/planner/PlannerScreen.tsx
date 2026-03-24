@@ -136,10 +136,18 @@ export function PlannerScreen({ onClose }: PlannerScreenProps = {}) {
         });
         socket.connect();
 
+        // Send pending initial message (task list) once socket is set up
+        if (pendingMsgRef.current) {
+            const msg = pendingMsgRef.current;
+            pendingMsgRef.current = null;
+            // Small delay to let ws.onopen fire and process outbox
+            setTimeout(() => handleSendMessage(msg), 600);
+        }
+
         return () => {
             socket.setHandlers({});
         };
-    }, [chatId, token, handleFrame]);
+    }, [chatId, token, handleFrame, handleSendMessage]);
 
     // ---- Poll plan state when in planning phase ----
     useEffect(() => {
@@ -166,9 +174,19 @@ export function PlannerScreen({ onClose }: PlannerScreenProps = {}) {
         try {
             const dateStr = formatDateISO(planDate);
             const id = await createPlanningSession(dateStr, tasks);
+            // Build initial message with task list so Python receives full context
+            const taskLines = tasks.map(t => {
+                let line = `• ${t.title}`;
+                if (t.duration_min) line += ` (${t.duration_min} мин)`;
+                if (t.location) line += ` @ ${t.location}`;
+                if (t.notes) line += ` — ${t.notes}`;
+                return line;
+            }).join('\n');
+            const initialMessage = `Составь план на ${dateStr}.\n\nЗадачи:\n${taskLines}`;
+            pendingMsgRef.current = initialMessage;
+            setMessages([{ id: generateId(), role: 'user', text: initialMessage }]);
             setChatId(id);
             setPhase('planning');
-            setMessages([]);
         } catch (e: any) {
             setError(e?.message || 'Failed to start planning session');
         } finally {

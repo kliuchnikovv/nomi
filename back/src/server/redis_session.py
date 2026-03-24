@@ -856,8 +856,12 @@ class RedisSession:
         )
         delivery_text_buffer: list[str] = []
 
-        # Determine session type for routing
-        session_type = payload.get("session_type", "chat")
+        # Determine session type for routing.
+        # Go sets command["type"] = TeamID (e.g. "planning") which Python stores in command_desc.
+        session_type = (
+            (self.command_desc.get("type") if isinstance(self.command_desc, dict) else None)
+            or payload.get("session_type", "chat")
+        )
 
         try:
             # Route to planning workflow if session_type == "planning"

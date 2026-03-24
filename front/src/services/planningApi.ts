@@ -14,11 +14,7 @@ export async function createPlanningSession(date: string, tasks: PlanTask[]): Pr
             title: `Day Plan — ${date}`,
             model: 'gpt-5-nano',
             mode: 'agent',
-            type: 'planning',
-            metadata: {
-                tasks,
-                planning_date: date,
-            },
+            team_id: 'planning',
         },
     );
     if (!created?.id) {
