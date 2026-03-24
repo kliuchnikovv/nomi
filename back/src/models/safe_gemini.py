@@ -170,9 +170,11 @@ class SafeGemini(Gemini):
         """
         if not isinstance(prop_def, dict):
             return False
-        t = prop_def.get("type")
-        if t and t not in ("null", ""):
+        prop_type = prop_def.get("type")
+        # Type must be present and not null/empty string
+        if prop_type and prop_type not in ("null", ""):
             return True
+        # Has enum or other schema keywords
         return bool(
             prop_def.get("anyOf")
             or prop_def.get("oneOf")
@@ -197,7 +199,8 @@ class SafeGemini(Gemini):
                 if "required" in params:
                     properties = params.get("properties", {})
                     defined = {
-                        k for k, v in properties.items()
+                        k
+                        for k, v in properties.items()
                         if self._prop_has_valid_schema(v)
                     }
                     original = params["required"]
