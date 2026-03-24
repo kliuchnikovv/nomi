@@ -160,26 +160,52 @@ class SafeGemini(Gemini):
 
         return filtered_messages
 
-    def _sanitize_tool_schemas(self, tools: list[dict]) -> list[dict]:
-        """Remove required[] entries that are not defined in properties.
+    @staticmethod
+    def _prop_has_valid_schema(prop_def: dict) -> bool:
+        """Return True if a property schema will survive convert_schema with a usable type.
 
-        Agno generates required[] from sig.parameters but properties only from
-        successfully-typed parameters, so they can diverge. Gemini rejects any
-        required entry that doesn't exist in properties.
+        Properties that convert_schema maps to None (empty schema, no type, no anyOf/enum/$ref)
+        are left as Schema(type=None) by the fallback, and Gemini API treats those as
+        "not defined" even though the key exists in properties.
+        """
+        if not isinstance(prop_def, dict):
+            return False
+        t = prop_def.get("type")
+        if t and t not in ("null", ""):
+            return True
+        return bool(
+            prop_def.get("anyOf")
+            or prop_def.get("oneOf")
+            or prop_def.get("allOf")
+            or prop_def.get("enum")
+            or prop_def.get("$ref")
+        )
+
+    def _sanitize_tool_schemas(self, tools: list[dict]) -> list[dict]:
+        """Remove required[] entries that Gemini would reject.
+
+        Two cases handled:
+        1. Required field not present in properties at all.
+        2. Required field present but its schema is empty/untyped — convert_schema
+           returns None and the fallback Schema(type=None) is ignored by Gemini API.
         """
         sanitized = []
         for tool in tools:
             if tool.get("type") == "function":
                 func_info = tool.get("function", {})
                 params = func_info.get("parameters", {})
-                if "required" in params and "properties" in params:
-                    defined = set(params["properties"].keys())
+                if "required" in params:
+                    properties = params.get("properties", {})
+                    defined = {
+                        k for k, v in properties.items()
+                        if self._prop_has_valid_schema(v)
+                    }
                     original = params["required"]
                     filtered = [r for r in original if r in defined]
                     if len(filtered) != len(original):
                         removed = set(original) - set(filtered)
                         logger.warning(
-                            "[SafeGemini] Dropping undefined required fields from '%s': %s",
+                            "[SafeGemini] Dropping required fields from '%s': %s",
                             func_info.get("name", "?"),
                             removed,
                         )
