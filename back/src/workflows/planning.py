@@ -35,10 +35,10 @@ logger = logging.getLogger(__name__)
 
 def _build_model() -> Any:
     """Build the Gemini model used by planning agents."""
-    from agno.models.google import Gemini  # type: ignore[import]
+    from src.models.safe_gemini import SafeGemini
 
     api_key = os.getenv("GOOGLE_API_KEY", "")
-    return Gemini(id="gemini-2.0-flash", api_key=api_key)
+    return SafeGemini(id="gemini-2.0-flash", api_key=api_key)
 
 
 def _run_agent_text(system_prompt: str, user_prompt: str) -> str:
