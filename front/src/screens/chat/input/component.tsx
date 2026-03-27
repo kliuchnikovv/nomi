@@ -357,8 +357,40 @@ export default function ChatInput(props: Props) {
         [isPickerActive],
     );
 
+    const selectedModelName = useMemo(() => {
+        // If in team mode, we still show the model name in the input bar
+        // because the team name is now displayed in the header.
+        let name = '';
+        if (!selectedModel) {
+            name =
+                availableModels.length > 0
+                    ? availableModels[0].name || 'Auto context'
+                    : 'Auto context';
+        } else {
+            const explicit = availableModels.find(
+                m => m.id === selectedModel,
+            )?.name;
+            if (explicit) name = explicit;
+            else
+                name = selectedModel
+                    .split('-')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+        }
+        return name;
+    }, [availableModels, selectedModel]);
+
     const plusMenuItems: ContextMenuItem[] = useMemo(
         () => [
+            {
+                id: 'model',
+                label: `Model: ${selectedModelName}`,
+                icon: <CursorPointer width={20} height={20} color="#fff" />,
+                onPress: () => {
+                    setPlusMenuVisible(false);
+                    setTimeout(() => setModelMenuVisible(true), 300);
+                },
+            },
             {
                 id: 'files',
                 label: 'Files',
@@ -377,20 +409,19 @@ export default function ChatInput(props: Props) {
                 icon: <Camera width={20} height={20} color="#fff" />,
                 onPress: () => executeWithDelay(takePhoto),
             },
-
-            // Detail levels - single item to open sub-menu
             {
                 id: 'detail_level',
                 label: 'Detail Level',
                 icon: <Eye width={20} height={20} color={theme.accent} />,
                 onPress: () => {
                     setPlusMenuVisible(false);
-                    // Mini delay to ensure first menu closes before second opens (optional but smoother)
                     setTimeout(() => setDetailMenuVisible(true), 300);
                 },
             },
         ],
         [
+            selectedModelName,
+            setModelMenuVisible,
             pickDocument,
             pickImage,
             takePhoto,
@@ -561,28 +592,6 @@ export default function ChatInput(props: Props) {
     }, [selectedTeamId, selectTeam, theme.accent]);
 
     const [isKeyboardVisible, setKeyboardVisible] = useState(false);
-    const selectedModelName = useMemo(() => {
-        // If in team mode, we still show the model name in the input bar
-        // because the team name is now displayed in the header.
-        let name = '';
-        if (!selectedModel) {
-            name =
-                availableModels.length > 0
-                    ? availableModels[0].name || 'Auto context'
-                    : 'Auto context';
-        } else {
-            const explicit = availableModels.find(
-                m => m.id === selectedModel,
-            )?.name;
-            if (explicit) name = explicit;
-            else
-                name = selectedModel
-                    .split('-')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(' ');
-        }
-        return name;
-    }, [availableModels, selectedModel]);
     const isSendDisabled =
         ((value?.length ?? 0) === 0 &&
             attachments.length === 0 &&
@@ -756,42 +765,6 @@ export default function ChatInput(props: Props) {
                             ]}
                         >
                             <Plus width={24} height={24} color={theme.text} />
-                        </Pressable>
-
-                        <Pressable
-                            onPress={showModelPicker}
-                            style={({ pressed }) => [
-                                styles.modelButton,
-                                thinkingLevel !== 'off' && {
-                                    backgroundColor: `${palette.orange}30`,
-                                    borderColor: `${palette.orange}60`,
-                                },
-                                pressed && styles.modelButtonPressed,
-                            ]}
-                        >
-                            <View style={styles.modelButtonIcon}>
-                                <CursorPointer
-                                    width={16}
-                                    height={16}
-                                    color={
-                                        thinkingLevel !== 'off'
-                                            ? palette.orange
-                                            : theme.text
-                                    }
-                                />
-                            </View>
-                            <Text
-                                style={[
-                                    styles.modelButtonText,
-                                    thinkingLevel !== 'off' && {
-                                        color: palette.orange,
-                                    },
-                                ]}
-                                numberOfLines={1}
-                                ellipsizeMode="tail"
-                            >
-                                {selectedModelName}
-                            </Text>
                         </Pressable>
                     </View>
 
