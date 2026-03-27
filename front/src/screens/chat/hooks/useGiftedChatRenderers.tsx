@@ -226,38 +226,38 @@ export function useGiftedChatRenderers({
                         onLongPress={handleLongPress}
                         wrapperStyle={{
                             right: {
-                                backgroundColor: chatTheme.userBubble,
+                                backgroundColor: theme.accent,
                                 borderRadius: 18,
-                                borderBottomRightRadius: 6,
+                                borderBottomRightRadius: 4,
+                                borderBottomLeftRadius: 18,
                                 padding: 4,
-                                marginBottom: 0,
+                                marginBottom: 2,
                             },
                             left: {
-                                backgroundColor: chatTheme.background,
+                                backgroundColor: theme.surface,
                                 borderRadius: 18,
+                                borderBottomRightRadius: 18,
+                                borderBottomLeftRadius: 4,
                                 paddingVertical: 12,
                                 paddingHorizontal: 16,
-                                marginBottom: 0,
-                                width: '95%',
-                                flex: 1,
-                                alignSelf: 'stretch',
+                                marginBottom: 2,
                             },
                         }}
                         textStyle={{
                             right: {
-                                color: chatTheme.textPrimary,
+                                color: '#ffffff',
                                 fontSize: 16,
                                 lineHeight: 20,
                             },
                             left: {
-                                color: chatTheme.textPrimary,
+                                color: theme.text,
                                 fontSize: 16,
                                 lineHeight: 20,
                             },
                         }}
                         timeTextStyle={{
-                            right: { color: 'rgba(255, 255, 255, 0.6)' },
-                            left: { color: 'rgba(255, 255, 255, 0.6)' },
+                            right: { color: 'rgba(255,255,255,0.6)' },
+                            left: { color: theme.textSecondary },
                         }}
                         containerToNextStyle={{
                             right: { marginBottom: 4 },
@@ -271,7 +271,7 @@ export function useGiftedChatRenderers({
                 </View>
             );
         },
-        [chatTheme, handleLongPress]
+        [theme, handleLongPress]
     );
 
     const handleChangeModel = useCallback(() => {
