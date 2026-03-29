@@ -194,43 +194,8 @@ class AgentFactory:
                     base_url=base_url,
                 )
 
-        # Support OpenRouter models (base_url from config endpoint, no hardcoding)
-        elif (
-            provider_norm == "openrouter"
-            or provider_norm == "openrouter.ai"
-            or provider_norm == "openrouter_ai"
-        ) or (
-            "/" in model_name
-            and not model_name.startswith("gemini-")
-            and not model_name.startswith("gemma-")
-        ):
-            api_key = os.getenv("OPENROUTER_API_KEY")
-            if not api_key:
-                raise ValueError("OPENROUTER_API_KEY environment variable not set")
-
-            from agno.models.openai import OpenAIChat
-
-            # Prefer endpoint from config (payload)
-            if endpoint and endpoint.strip():
-                ep = endpoint.strip().rstrip("/")
-                if ep.endswith("chat/completions"):
-                    base_url = ep[: -len("chat/completions")].rstrip("/")
-                else:
-                    base_url = ep
-            else:
-                base_url = "https://openrouter.ai/api/v1"  # fallback for legacy configs
-            logger.info(
-                "[Factory] Creating OpenRouter model: %s (base_url=%s)",
-                model_name,
-                base_url,
-            )
-            return OpenAIChat(
-                id=model_name,
-                api_key=api_key,
-                base_url=base_url,
-            )
-
         # Support z.ai / GLM models (OpenAI-compatible API)
+        # Must come BEFORE OpenRouter check since both use similar patterns
         elif (
             provider_norm == "z.ai"
             or provider_norm == "z-ai"
@@ -257,6 +222,43 @@ class AgentFactory:
                 base_url,
             )
             return SafeOpenAI(
+                id=model_name,
+                api_key=api_key,
+                base_url=base_url,
+            )
+
+        # Support OpenRouter models (base_url from config endpoint, no hardcoding)
+        elif (
+            provider_norm == "openrouter"
+            or provider_norm == "openrouter.ai"
+            or provider_norm == "openrouter_ai"
+        ) or (
+            "/" in model_name
+            and not model_name.startswith("gemini-")
+            and not model_name.startswith("gemma-")
+            and not model_name.startswith("glm-")  # Exclude GLM (handled by z.ai)
+        ):
+            api_key = os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                raise ValueError("OPENROUTER_API_KEY environment variable not set")
+
+            from agno.models.openai import OpenAIChat
+
+            # Prefer endpoint from config (payload)
+            if endpoint and endpoint.strip():
+                ep = endpoint.strip().rstrip("/")
+                if ep.endswith("chat/completions"):
+                    base_url = ep[: -len("chat/completions")].rstrip("/")
+                else:
+                    base_url = ep
+            else:
+                base_url = "https://openrouter.ai/api/v1"  # fallback for legacy configs
+            logger.info(
+                "[Factory] Creating OpenRouter model: %s (base_url=%s)",
+                model_name,
+                base_url,
+            )
+            return OpenAIChat(
                 id=model_name,
                 api_key=api_key,
                 base_url=base_url,
