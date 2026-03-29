@@ -121,9 +121,23 @@ The user will see a modal dialog with predefined options and a text input field 
     return tool
 
 
+def _build_planning(_: dict[str, Any]) -> Toolkit:
+    """Build planning tools (patch_plan_document)."""
+    logger.info("[Planning] Building planning tools")
+    from src.tools.planning import PlanningTools
+
+    tool = PlanningTools()
+    tool.add_instructions = True
+    tool.instructions = """You have access to patch_plan_document tool.
+Use this to update the user's daily plan with times, locations, notes, or reorganize tasks.
+Always call this tool after analyzing the user's schedule to apply your recommendations."""
+    return tool
+
+
 TOOL_BUILDERS: dict[str, ToolBuilder] = {
     "web_search": _build_web_search,
     "user_interaction": _build_user_interaction,
+    "planning": _build_planning,
 }
 
 

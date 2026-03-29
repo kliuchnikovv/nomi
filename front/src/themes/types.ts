@@ -1,4 +1,4 @@
-export type ThemeName = 'tokyoNight' | 'oneDark' | 'visualStudioLight' | 'serikaDark' | 'retroSunset' | 'retroPastel' | 'deepOcean';
+export type ThemeName = 'tokyoNight' | 'oneDark' | 'visualStudioLight' | 'serikaDark' | 'retroSunset' | 'retroPastel' | 'deepOcean' | 'darkMinimal';
 
 export type ThemePalette = {
     red: string;
@@ -56,9 +56,26 @@ export type ThemeColors = {
     blockquoteBorder?: string;
 };
 
+export type ThemeEffects = {
+    cardShadowRaised: object;
+    cardShadowInset: object;
+    cardBorderRadius: number;
+    cardPadding: number;
+    glassBackground: string;
+    glassBorderColor: string;
+    glassBorderWidth: number;
+    blurIntensity: number;
+    blurTint: string;
+    buttonShadowRaised: object;
+    buttonShadowPressed: object;
+    iconBgBackground: string;
+    iconBgBorderColor: string;
+};
+
 export type ThemeDescriptor = {
     id: ThemeName;
     name: string;
     palette: ThemePalette;
     colors: ThemeColors;
+    effects?: ThemeEffects;
 };

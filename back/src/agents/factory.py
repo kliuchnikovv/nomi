@@ -482,6 +482,18 @@ class AgentFactory:
             except Exception as e:
                 logger.warning("[Factory] Failed to add user_interaction tool: %s", e)
 
+        # Add planning tool (patch_plan_document) - available to all agents with client_tool_runner
+        if client_tool_runner:
+            try:
+                from src.tools.planning import PlanningTools
+
+                planning_tool = PlanningTools()
+                planning_tool.client_tool_runner = client_tool_runner
+                tools = list(tools) + [planning_tool]
+                logger.info("[Factory] Added planning tool (patch_plan_document)")
+            except Exception as e:
+                logger.warning("[Factory] Failed to add planning tool: %s", e)
+
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs
 

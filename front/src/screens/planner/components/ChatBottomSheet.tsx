@@ -5,12 +5,12 @@ import {
     TextInput,
     TouchableOpacity,
     StyleSheet,
-    KeyboardAvoidingView,
     Platform,
 } from 'react-native';
 import BottomSheet, {
     BottomSheetView,
     BottomSheetFlatList,
+    BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
 import { useTheme } from '../../../context/ThemeContext';
 import { usePlannerChat, ChatMessage } from '../hooks/usePlannerChat';
@@ -22,20 +22,22 @@ import { usePlannerChat, ChatMessage } from '../hooks/usePlannerChat';
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    date: string; // YYYY-MM-DD — passed through to usePlannerChat context if needed
+    date: string;
+    /** If set, automatically sent as first message when chat opens */
+    autoSendMessage?: string | null;
+    onAutoSendHandled?: () => void;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function ChatBottomSheet({ isOpen, onClose, date: _date }: Props) {
+export function ChatBottomSheet({ isOpen, onClose, date: _date, autoSendMessage, onAutoSendHandled }: Props) {
     const { theme } = useTheme();
     const bottomSheetRef = useRef<BottomSheet>(null);
-    const snapPoints = ['40%', '80%'];
+    const snapPoints = ['45%', '85%'];
 
     const { messages, sendMessage, isConnected } = usePlannerChat();
-
     const [inputText, setInputText] = useState('');
 
     // Sync open/close state → bottom sheet index
@@ -47,12 +49,17 @@ export function ChatBottomSheet({ isOpen, onClose, date: _date }: Props) {
         }
     }, [isOpen]);
 
-    // Called when bottom sheet is closed by swipe
+    // Auto-send planning prompt when chat opens and socket is ready
+    useEffect(() => {
+        if (isOpen && isConnected && autoSendMessage) {
+            sendMessage(autoSendMessage);
+            onAutoSendHandled?.();
+        }
+    }, [isOpen, isConnected, autoSendMessage]);
+
     const handleSheetChanges = useCallback(
         (index: number) => {
-            if (index === -1) {
-                onClose();
-            }
+            if (index === -1) onClose();
         },
         [onClose],
     );
@@ -79,12 +86,7 @@ export function ChatBottomSheet({ isOpen, onClose, date: _date }: Props) {
                         : [styles.assistantBubble, { backgroundColor: theme.surface }],
                 ]}
             >
-                <Text
-                    style={[
-                        styles.bubbleText,
-                        { color: isUser ? '#FFFFFF' : theme.textPrimary },
-                    ]}
-                >
+                <Text style={[styles.bubbleText, { color: isUser ? '#FFFFFF' : theme.textPrimary }]}>
                     {item.text}
                 </Text>
             </View>
@@ -97,6 +99,9 @@ export function ChatBottomSheet({ isOpen, onClose, date: _date }: Props) {
             index={-1}
             snapPoints={snapPoints}
             enablePanDownToClose
+            keyboardBehavior="interactive"
+            keyboardBlurBehavior="restore"
+            android_keyboardInputMode="adjustResize"
             onChange={handleSheetChanges}
             handleComponent={() => (
                 <View style={styles.handleContainer}>
@@ -105,14 +110,10 @@ export function ChatBottomSheet({ isOpen, onClose, date: _date }: Props) {
             )}
             backgroundStyle={{ backgroundColor: theme.background }}
         >
-            <BottomSheetView style={styles.container}>
+            <BottomSheetView>
+            <View style={styles.container}>
                 {/* Header */}
-                <View
-                    style={[
-                        styles.header,
-                        { borderBottomColor: theme.border },
-                    ]}
-                >
+                <View style={[styles.header, { borderBottomColor: theme.border }]}>
                     <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
                         ✦ Genie
                     </Text>
@@ -140,65 +141,49 @@ export function ChatBottomSheet({ isOpen, onClose, date: _date }: Props) {
                     renderItem={renderMessage}
                     contentContainerStyle={styles.messageList}
                     ListEmptyComponent={
-                        <Text
-                            style={[
-                                styles.emptyText,
-                                { color: theme.textSecondary },
-                            ]}
-                        >
+                        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                             Спроси Genie про этот день…
                         </Text>
                     }
                 />
 
-                {/* Input bar */}
-                <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    keyboardVerticalOffset={8}
+                {/* Input bar — uses BottomSheetTextInput for proper keyboard handling */}
+                <View
+                    style={[
+                        styles.inputBar,
+                        { borderTopColor: theme.border, backgroundColor: theme.background },
+                    ]}
                 >
-                    <View
-                        style={[
-                            styles.inputBar,
+                    <BottomSheetTextInput
+                        style={StyleSheet.flatten([
+                            styles.textInput,
                             {
-                                borderTopColor: theme.border,
-                                backgroundColor: theme.background,
+                                color: theme.textPrimary,
+                                backgroundColor: theme.surface,
+                                borderColor: theme.border,
                             },
+                        ])}
+                        placeholder="Написать Genie…"
+                        placeholderTextColor={theme.textSecondary}
+                        value={inputText}
+                        onChangeText={setInputText}
+                        returnKeyType="send"
+                        onSubmitEditing={handleSend}
+                        blurOnSubmit={false}
+                    />
+                    <TouchableOpacity
+                        onPress={handleSend}
+                        disabled={!inputText.trim()}
+                        activeOpacity={0.7}
+                        style={[
+                            styles.sendBtn,
+                            { backgroundColor: inputText.trim() ? '#007AFF' : theme.border },
                         ]}
                     >
-                        <TextInput
-                            style={[
-                                styles.textInput,
-                                {
-                                    color: theme.textPrimary,
-                                    backgroundColor: theme.surface,
-                                    borderColor: theme.border,
-                                },
-                            ]}
-                            placeholder="Написать Genie…"
-                            placeholderTextColor={theme.textSecondary}
-                            value={inputText}
-                            onChangeText={setInputText}
-                            returnKeyType="send"
-                            onSubmitEditing={handleSend}
-                            blurOnSubmit={false}
-                        />
-                        <TouchableOpacity
-                            onPress={handleSend}
-                            disabled={!inputText.trim()}
-                            activeOpacity={0.7}
-                            style={[
-                                styles.sendBtn,
-                                {
-                                    backgroundColor: inputText.trim()
-                                        ? '#007AFF'
-                                        : theme.border,
-                                },
-                            ]}
-                        >
-                            <Text style={styles.sendBtnIcon}>↑</Text>
-                        </TouchableOpacity>
-                    </View>
-                </KeyboardAvoidingView>
+                        <Text style={styles.sendBtnIcon}>↑</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
             </BottomSheetView>
         </BottomSheet>
     );

@@ -4,14 +4,14 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    PanResponder,
     Animated,
     StyleSheet,
     Platform,
+    Keyboard,
     NativeSyntheticEvent,
     TextInputKeyPressEventData,
 } from 'react-native';
-import type { GestureResponderEvent, PanResponderGestureState } from 'react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useTheme } from '../../../context/ThemeContext';
 import { PlanItem } from '../types';
 import { PlanChipBadge } from './PlanChipBadge';
@@ -26,7 +26,7 @@ interface Props {
     onChipRemove: (chipId: string) => void;
     drag: () => void;
     isActive: boolean;
-    inputRef?: React.RefObject<TextInput>;
+    inputRef?: (ref: TextInput | null) => void;
 }
 
 export function PlanItemRow({
@@ -55,26 +55,15 @@ export function PlanItemRow({
         }).start();
     }
 
-    // PanResponder on checkbox for swipe-to-indent
-    const panResponder = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: (_: GestureResponderEvent, gs: PanResponderGestureState) =>
-                Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
-            onPanResponderRelease: (_: GestureResponderEvent, gs: PanResponderGestureState) => {
-                if (gs.dx > 20) {
-                    onIndent(1);
-                } else if (gs.dx < -20) {
-                    onIndent(-1);
-                }
-            },
-        }),
-    ).current;
-
     const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
         if (e.nativeEvent.key === 'Backspace' && item.text === '') {
             onDelete();
         }
+    };
+
+    const handleLongPress = () => {
+        Keyboard.dismiss();
+        drag();
     };
 
     const checkboxBg = item.checked ? '#34C759' : 'transparent';
@@ -92,26 +81,38 @@ export function PlanItemRow({
                 },
             ]}
         >
-            {/* Checkbox — also handles long-press for drag and swipe for indent */}
-            <TouchableOpacity
-                onPress={onCheck}
-                onLongPress={drag}
-                delayLongPress={200}
-                style={[
-                    styles.checkbox,
-                    {
-                        backgroundColor: checkboxBg,
-                        borderColor: checkboxBorder,
-                        borderWidth: isActive ? 2 : 1.5,
-                    },
-                ]}
-                {...panResponder.panHandlers}
-                activeOpacity={0.7}
+            {/* Checkbox — long-press for drag, wrapped in PanGestureHandler for swipe-to-indent */}
+            <PanGestureHandler
+                activeOffsetX={[-15, 15]}
+                failOffsetY={[-15, 15]}
+                onHandlerStateChange={(e) => {
+                    if (e.nativeEvent.state === State.END) {
+                        const { translationX, translationY } = e.nativeEvent;
+                        if (Math.abs(translationX) > Math.abs(translationY) && Math.abs(translationX) > 20) {
+                            onIndent(translationX > 0 ? 1 : -1);
+                        }
+                    }
+                }}
             >
-                {item.checked && (
-                    <Text style={styles.checkmark}>✓</Text>
-                )}
-            </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={onCheck}
+                    onLongPress={handleLongPress}
+                    delayLongPress={200}
+                    style={[
+                        styles.checkbox,
+                        {
+                            backgroundColor: checkboxBg,
+                            borderColor: checkboxBorder,
+                            borderWidth: isActive ? 2 : 1.5,
+                        },
+                    ]}
+                    activeOpacity={0.7}
+                >
+                    {item.checked && (
+                        <Text style={styles.checkmark}>✓</Text>
+                    )}
+                </TouchableOpacity>
+            </PanGestureHandler>
 
             {/* Content: text input + chips */}
             <View style={styles.content}>
@@ -126,10 +127,10 @@ export function PlanItemRow({
                     ]}
                     value={item.text}
                     onChangeText={onTextChange}
-                    placeholder={item.placeholder ?? 'Task…'}
+                    placeholder={item.placeholder ?? 'Задача…'}
                     placeholderTextColor={theme.textSecondary}
                     multiline={false}
-                    returnKeyType="done"
+                    returnKeyType="next"
                     onSubmitEditing={onAddAfter}
                     onKeyPress={handleKeyPress}
                     blurOnSubmit={false}
@@ -164,6 +165,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 8,
         elevation: 6,
+        borderWidth: 1.5,
+        borderColor: '#007AFF',
+        borderRadius: 8,
     },
     checkbox: {
         width: 20,
@@ -189,7 +193,6 @@ const styles = StyleSheet.create({
         fontSize: 15,
         lineHeight: 22,
         paddingVertical: 0,
-        // Remove default Android underline
         ...Platform.select({ android: { includeFontPadding: false } }),
     },
     chipsRow: {

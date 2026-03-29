@@ -50,7 +50,7 @@ export interface UsePlanDocumentResult {
   document: PlanDocument | null;
   items: PlanItem[];
   loading: boolean;
-  addItem: (afterId?: string) => void;
+  addItem: (afterId?: string) => string;
   removeItem: (id: string) => void;
   updateItem: (id: string, changes: Partial<PlanItem>) => void;
   moveItem: (fromIndex: number, toIndex: number) => void;
@@ -181,16 +181,16 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
   // ---------------------------------------------------------------------------
 
   const addItem = useCallback(
-    (afterId?: string) => {
+    (afterId?: string): string => {
       const newItem: PlanItem = {
         id: generateId(),
         text: '',
         depth: 0,
         checked: false,
         chips: [],
-        isNew: true,
       };
       mutate(prev => insertAfter(prev, newItem, afterId));
+      return newItem.id;
     },
     [mutate],
   );

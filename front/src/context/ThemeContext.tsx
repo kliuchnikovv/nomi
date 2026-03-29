@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { defaultThemeName, themes, ThemeName, ThemeColors, ThemePalette } from '../themes';
+import { defaultThemeName, themes, ThemeName, ThemeColors, ThemeEffects, ThemePalette } from '../themes';
 
 interface ThemeContextType {
     theme: ThemeColors;
     palette: ThemePalette;
+    effects: ThemeEffects | undefined;
     themeName: ThemeName;
     setTheme: (name: ThemeName) => void;
 }
@@ -40,6 +41,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const value = {
         theme: themes[themeName].colors,
         palette: themes[themeName].palette,
+        effects: themes[themeName].effects,
         themeName,
         setTheme,
     };

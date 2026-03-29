@@ -5,6 +5,7 @@ import { tokyoNightTheme } from './tokyoNight';
 import { visualStudioLightTheme } from './visualStudioLight';
 import { retroPastelTheme } from './retroPastel';
 import { deepOceanTheme } from './deepOcean';
+import { darkMinimalTheme } from './darkMinimal';
 import { ThemeDescriptor, ThemeName } from './types';
 
 export const themes: Record<ThemeName, ThemeDescriptor> = {
@@ -15,6 +16,7 @@ export const themes: Record<ThemeName, ThemeDescriptor> = {
     retroSunset: retroSunsetTheme,
     retroPastel: retroPastelTheme,
     deepOcean: deepOceanTheme,
+    darkMinimal: darkMinimalTheme,
 };
 
 export const defaultThemeName: ThemeName = 'retroSunset';
@@ -23,4 +25,4 @@ export const activeTheme = themes[defaultThemeName];
 export const theme = activeTheme.colors;
 export const palette = activeTheme.palette;
 
-export type { ThemeColors, ThemeDescriptor, ThemeName, ThemePalette } from './types';
+export type { ThemeColors, ThemeDescriptor, ThemeEffects, ThemeName, ThemePalette } from './types';

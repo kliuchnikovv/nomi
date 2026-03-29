@@ -1,30 +1,10 @@
-/**
- * usePlannerChat — manages a dedicated "Planner" chat session for AI interaction
- * from the planner screen.
- *
- * Strategy:
- *  1. On mount, list all chats and look for one with title === 'Planner' and mode === 'agent'.
- *  2. If not found, create it via POST /api/chats.
- *  3. Connect the global ChatSocket to that chat's room.
- *  4. Subscribe to incoming frames and expose a sendMessage helper.
- *
- * The hook reuses the existing `socket` singleton (same as ChatProvider) but
- * does NOT depend on ChatProvider/MainProvider being mounted — it is self-contained
- * so it can be used from PlannerScreen without wrapping the whole app.
- *
- * NOTE: Because the global `socket` singleton is shared with the rest of the app,
- * calling this hook while a regular ChatScreen is active will hijack the socket
- * connection. For a future improvement, consider using a separate ChatSocket
- * instance here (TODO: dedicate a socket instance per screen).
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../../../apiClient';
 import { getApiUrl } from '../../../config';
-import { socket } from '../../../socket';
+import { ChatSocket } from '../../../socket';
 import { authStore } from '../../../apiClient';
-import { Chat } from '../../main/models';
-import { Frame } from '../../main/models';
+import { Chat, Frame } from '../../main/models';
+import { callApplyPatches } from '../planDocumentRegistry';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,7 +27,10 @@ export interface UsePlannerChatResult {
 // ---------------------------------------------------------------------------
 
 function generateId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
 }
 
 const PLANNER_CHAT_TITLE = 'Planner';
@@ -61,20 +44,24 @@ export function usePlannerChat(): UsePlannerChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const chatIdRef = useRef<string | null>(null);
-
-  // Buffer for streaming text accumulation per message id
-  const streamBufferRef = useRef<Record<string, string>>({});
+  const chatModelRef = useRef<string | null>(null);
+  // Dedicated socket instance — does NOT share with the main chat screen
+  const wsRef = useRef<ChatSocket | null>(null);
+  // Poll connection status periodically
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ---------------------------------------------------------------------------
-  // Find or create Planner chat
+  // Find or create Planner chat, then connect dedicated socket
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
     let cancelled = false;
+    const ws = new ChatSocket();
+    wsRef.current = ws;
 
     async function bootstrap() {
       try {
-        // 1. List chats
+        // 1. List chats, look for existing Planner chat
         const chats = await apiClient.get<Chat[]>(`${getApiUrl()}/chats`);
         if (cancelled) return;
 
@@ -89,12 +76,7 @@ export function usePlannerChat(): UsePlannerChatResult {
         if (!plannerChat) {
           const created = await apiClient.post<{ id: string }>(
             `${getApiUrl()}/chats`,
-            {
-              title: PLANNER_CHAT_TITLE,
-              mode: PLANNER_CHAT_MODE,
-              model: 'gpt-5-nano',
-              team_id: null,
-            },
+            { title: PLANNER_CHAT_TITLE, mode: PLANNER_CHAT_MODE, model: 'glm-4.7', team_id: null },
           );
           if (cancelled) return;
           if (!created?.id) {
@@ -102,56 +84,60 @@ export function usePlannerChat(): UsePlannerChatResult {
             return;
           }
           chatIdRef.current = created.id;
+          chatModelRef.current = 'glm-4.7';
         } else {
           chatIdRef.current = plannerChat.id;
+          chatModelRef.current = plannerChat.model || 'glm-4.7';
         }
 
-        // 3. Connect socket to this chat room
+        if (cancelled) return;
+
+        // 3. Connect dedicated socket
         const token = authStore.getToken();
         if (!token) {
-          console.warn('[usePlannerChat] No auth token, skipping socket connect');
+          console.warn('[usePlannerChat] No auth token');
           return;
         }
 
-        socket.setChannel('chat');
-        socket.setChatId(chatIdRef.current);
-        socket.setToken(token);
+        ws.setChannel('chat');
+        ws.setChatId(chatIdRef.current);
+        ws.setToken(token);
 
-        socket.setHandlers({
+        ws.setHandlers({
           onMessage: (frame: Frame) => {
             if (!frame.payload) return;
-            const { type, message, delta } = frame.payload;
-
-            // Only handle text payloads
-            if (type !== 'text') return;
-
-            // Streaming delta or complete message
-            const content: string = delta ?? message ?? '';
-            if (!content) return;
-
+            const { type, message, delta, actions } = frame.payload;
             const frameId = String(frame.id || generateId());
 
-            setMessages(prev => {
-              // If last message is an in-progress assistant message with this id, append
-              const last = prev[prev.length - 1];
-              if (last && last.role === 'assistant' && last.id === frameId) {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  ...last,
-                  text: last.text + content,
-                };
-                return updated;
+            // Handle text responses (streaming + complete)
+            if (type === 'text') {
+              const content: string = delta ?? message ?? '';
+              if (!content) return;
+
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'assistant' && last.id === frameId) {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = { ...last, text: last.text + content };
+                  return updated;
+                }
+                return [...prev, { id: frameId, role: 'assistant', text: content }];
+              });
+            }
+
+            // Handle client_action (patch_plan_document tool calls)
+            if (type === 'client_action' && actions) {
+              for (const action of actions) {
+                if (action.tool === 'patch_plan_document') {
+                  const patches = action.params?.patches ?? [];
+                  const summary = action.params?.summary;
+                  console.log('[usePlannerChat] Applying patches:', patches, summary);
+                  callApplyPatches(patches, summary);
+                }
               }
-              // Otherwise start a new assistant message
-              return [
-                ...prev,
-                { id: frameId, role: 'assistant', text: content },
-              ];
-            });
+            }
           },
-          onDone: () => {
-            // Nothing extra to do — streaming is complete
-          },
+          onDone: () => {},
           onError: (err: any) => {
             console.warn('[usePlannerChat] socket error:', err);
           },
@@ -160,11 +146,24 @@ export function usePlannerChat(): UsePlannerChatResult {
           },
         });
 
-        if (!socket.isReady()) {
-          socket.connect();
-        }
+        ws.connect();
 
-        setIsConnected(socket.isReady());
+        // Poll connection status periodically until connected
+        pollTimerRef.current = setInterval(() => {
+          if (cancelled) {
+            if (pollTimerRef.current) {
+              clearInterval(pollTimerRef.current);
+              pollTimerRef.current = null;
+            }
+            return;
+          }
+          const ready = ws.isReady();
+          setIsConnected(ready);
+          if (ready && pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
+        }, 500);
       } catch (err) {
         console.error('[usePlannerChat] bootstrap error:', err);
       }
@@ -172,15 +171,14 @@ export function usePlannerChat(): UsePlannerChatResult {
 
     bootstrap();
 
-    // Poll connection state briefly after connect attempt
-    const pollTimer = setTimeout(() => {
-      setIsConnected(socket.isReady());
-    }, 1500);
-
     return () => {
       cancelled = true;
-      clearTimeout(pollTimer);
-      // Do not close socket on unmount — it's shared with the rest of the app
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      ws.close();
+      wsRef.current = null;
     };
   }, []);
 
@@ -193,7 +191,8 @@ export function usePlannerChat(): UsePlannerChatResult {
     if (!trimmed) return;
 
     const chatId = chatIdRef.current;
-    if (!chatId) {
+    const ws = wsRef.current;
+    if (!chatId || !ws) {
       console.warn('[usePlannerChat] sendMessage called before chat is ready');
       return;
     }
@@ -201,21 +200,18 @@ export function usePlannerChat(): UsePlannerChatResult {
     const msgId = generateId();
     const sessionId = `planner_${Date.now()}`;
 
-    // Optimistically append user message to local list
-    setMessages(prev => [
-      ...prev,
-      { id: msgId, role: 'user', text: trimmed },
-    ]);
+    setMessages(prev => [...prev, { id: msgId, role: 'user', text: trimmed }]);
 
-    socket.sendMessage(
+    ws.sendMessage(
       trimmed,
       chatId,
       sessionId,
       msgId,
-      /* attachmentIDs */ [],
-      /* webSearch */ false,
-      /* thinking */ undefined,
-      /* role */ 'user',
+      [],
+      false,
+      undefined,
+      undefined,
+      chatModelRef.current || undefined,
     );
   }, []);
 

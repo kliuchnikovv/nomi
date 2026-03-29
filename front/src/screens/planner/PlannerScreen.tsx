@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
+    TextInput,
     ActivityIndicator,
     StyleSheet,
     SafeAreaView,
     TouchableOpacity,
+    TouchableWithoutFeedback,
+    Keyboard,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import DraggableFlatList, {
@@ -36,6 +39,38 @@ function addDays(date: string, n: number): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function buildPlanningPrompt(items: PlanItem[]): string {
+    const uncheckedItems = items.filter(i => !i.checked);
+
+    if (uncheckedItems.length === 0) {
+        return 'У меня пока нет задач. Можешь посоветовать что мне запланировать на сегодня?';
+    }
+
+    const tasksList = uncheckedItems.map((item, idx) => {
+        const indent = '  '.repeat(item.depth);
+        const chips = item.chips.map(c => `[${c.type}: ${c.value}]`).join(' ');
+        return `${idx + 1}. ID:${item.id} ${indent}${item.text} ${chips}`.trim();
+    }).join('\n');
+
+    return `Помоги спланировать мой день.
+
+Вот мой список задач:
+${tasksList}
+
+ВАЖНО: Используй инструмент patch_plan_document чтобы:
+1. Расставить ориентировочное время для каждой задачи (добавь chip type="time")
+2. Указать места если нужно (chip type="location")
+3. Добавить заметки с переходами между задачами (chip type="note")
+4. Оптимизировать порядок задач при необходимости
+
+Формат чипов:
+- time: "09:00-10:00" или "14:30"
+- location: "офис", "дом", "кафе Центральный"
+- note: "15 мин на дорогу метро", "позвонить клиенту перед встречей"
+
+Пожалуйста, проанализируй мой список и вызови patch_plan_document с улучшениями.`;
+}
+
 // ---------------------------------------------------------------------------
 // PlannerScreen
 // ---------------------------------------------------------------------------
@@ -43,10 +78,11 @@ function addDays(date: string, n: number): string {
 export function PlannerScreen() {
     const { theme } = useTheme();
 
-    // Date state
     const [date, setDate] = useState<string>(today);
+    const [chatOpen, setChatOpen] = useState(false);
+    const [planDayPrompt, setPlanDayPrompt] = useState<string | null>(null);
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
 
-    // Plan document hook
     const {
         items,
         loading,
@@ -61,16 +97,74 @@ export function PlannerScreen() {
         clearBanner,
     } = usePlanDocument(date);
 
-    // Register applyPatches in the global registry so ClientToolExecutor can call it
+    // Register applyPatches so ClientToolExecutor can call it
     useEffect(() => {
         registerApplyPatches(applyPatches);
-        return () => {
-            unregisterApplyPatches();
-        };
+        return () => { unregisterApplyPatches(); };
     }, [applyPatches]);
 
-    // Chat bottom sheet state
-    const [chatOpen, setChatOpen] = useState(false);
+    // Track keyboard visibility
+    useEffect(() => {
+        const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+        const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+        return () => { show.remove(); hide.remove(); };
+    }, []);
+
+    // ---------------------------------------------------------------------------
+    // Input focus management
+    // ---------------------------------------------------------------------------
+
+    // Map from item.id → TextInput ref
+    const itemInputRefsMap = useRef<Map<string, TextInput>>(new Map());
+    const pendingFocusIdRef = useRef<string | null>(null);
+
+    const registerInputRef = useCallback((id: string, ref: TextInput | null) => {
+        if (ref) itemInputRefsMap.current.set(id, ref);
+        else itemInputRefsMap.current.delete(id);
+    }, []);
+
+    // After every render, check if there's a pending focus target
+    useEffect(() => {
+        const id = pendingFocusIdRef.current;
+        if (!id) return;
+        const ref = itemInputRefsMap.current.get(id);
+        if (ref) {
+            ref.focus();
+            pendingFocusIdRef.current = null;
+        }
+    });
+
+    // When loading finishes and list is empty, add first item and focus it
+    const initialItemAddedRef = useRef(false);
+    useEffect(() => {
+        if (!loading && items.length === 0 && !initialItemAddedRef.current) {
+            initialItemAddedRef.current = true;
+            const id = addItem();
+            pendingFocusIdRef.current = id;
+        }
+    }, [loading, items.length]);
+
+    // Reset flag when date changes
+    useEffect(() => {
+        initialItemAddedRef.current = false;
+    }, [date]);
+
+    // Add item after existing one and focus new item
+    const handleAddAfter = useCallback((afterId?: string) => {
+        const newId = addItem(afterId);
+        pendingFocusIdRef.current = newId;
+    }, [addItem]);
+
+    // ---------------------------------------------------------------------------
+    // Planning day trigger
+    // ---------------------------------------------------------------------------
+
+    const handlePlanDay = useCallback(() => {
+        if (items.length === 0) return;
+        const prompt = buildPlanningPrompt(items);
+        setPlanDayPrompt(prompt);
+        setChatOpen(true);
+    }, [items]);
 
     // ---------------------------------------------------------------------------
     // Render item for DraggableFlatList
@@ -83,14 +177,13 @@ export function PlannerScreen() {
             onTextChange={(text) => updateItem(item.id, { text })}
             onIndent={(delta) => indentItem(item.id, delta)}
             onDelete={() => removeItem(item.id)}
-            onAddAfter={() => addItem(item.id)}
+            onAddAfter={() => handleAddAfter(item.id)}
             onChipRemove={(chipId) =>
-                updateItem(item.id, {
-                    chips: item.chips.filter((c) => c.id !== chipId),
-                })
+                updateItem(item.id, { chips: item.chips.filter(c => c.id !== chipId) })
             }
             drag={drag}
             isActive={isActive}
+            inputRef={(ref) => registerInputRef(item.id, ref)}
         />
     );
 
@@ -100,10 +193,10 @@ export function PlannerScreen() {
 
     return (
         <PlanDocumentContext.Provider value={{ applyPatches }}>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-                <SafeAreaView
-                    style={[styles.root, { backgroundColor: theme.background }]}
-                >
+            <GestureHandlerRootView>
+            <View style={{ flex: 1 }}>
+                <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
+
                     {/* Date navigation header */}
                     <DocumentHeader
                         date={date}
@@ -111,59 +204,69 @@ export function PlannerScreen() {
                         onNext={() => setDate(addDays(date, 1))}
                     />
 
-                    {/* Content */}
-                    {loading ? (
-                        <View style={styles.loadingCenter}>
-                            <ActivityIndicator size="large" color="#007AFF" />
+                    {/* List — tap outside items dismisses keyboard */}
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                        <View style={styles.listWrapper}>
+                            {loading ? (
+                                <View style={styles.loadingCenter}>
+                                    <ActivityIndicator size="large" color="#007AFF" />
+                                </View>
+                            ) : (
+                                <DraggableFlatList
+                                    data={items}
+                                    keyExtractor={(item) => item.id}
+                                    renderItem={renderItem}
+                                    onDragEnd={({ from, to }) => moveItem(from, to)}
+                                    contentContainerStyle={styles.listContent}
+                                    keyboardShouldPersistTaps="handled"
+                                    // Tapping below the last item adds a new one
+                                    ListFooterComponent={
+                                        <TouchableWithoutFeedback onPress={() => handleAddAfter(items[items.length - 1]?.id)}>
+                                            <View style={styles.listFooter} />
+                                        </TouchableWithoutFeedback>
+                                    }
+                                />
+                            )}
                         </View>
-                    ) : items.length === 0 ? (
-                        <View style={styles.emptyCenter}>
-                            <Text
-                                style={[
-                                    styles.emptyText,
-                                    { color: theme.textSecondary },
-                                ]}
-                            >
-                                Нажми + Пункт чтобы начать
-                            </Text>
-                        </View>
-                    ) : (
-                        <DraggableFlatList
-                            data={items}
-                            keyExtractor={(item) => item.id}
-                            renderItem={renderItem}
-                            onDragEnd={({ from, to }) => moveItem(from, to)}
-                            contentContainerStyle={styles.listContent}
-                        />
-                    )}
+                    </TouchableWithoutFeedback>
 
                     {/* Bottom action bar */}
                     <View
                         style={[
                             styles.bottomBar,
-                            {
-                                borderTopColor: theme.border,
-                                backgroundColor: theme.background,
-                            },
+                            { borderTopColor: theme.border, backgroundColor: theme.background },
                         ]}
                     >
-                        {/* + Пункт */}
+                        {/* Скрыть клавиатуру — только когда она видна */}
+                        {keyboardVisible && (
+                            <TouchableOpacity
+                                onPress={Keyboard.dismiss}
+                                style={[styles.bottomBtn, styles.dismissBtn, { borderColor: theme.border }]}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.bottomBtnText, { color: theme.textSecondary }]}>
+                                    ↓
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {/* Запланировать день */}
                         <TouchableOpacity
-                            onPress={() => addItem()}
+                            onPress={handlePlanDay}
+                            disabled={items.length === 0}
                             style={[
                                 styles.bottomBtn,
-                                { backgroundColor: theme.surface, borderColor: theme.border },
+                                styles.planBtn,
+                                { opacity: items.length === 0 ? 0.4 : 1 },
                             ]}
                             activeOpacity={0.7}
                         >
-                            <Text
-                                style={[styles.bottomBtnText, { color: theme.textPrimary }]}
-                            >
-                                ＋ Пункт
+                            <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>
+                                🗓 Запланировать
                             </Text>
                         </TouchableOpacity>
 
-                        {/* ✦ Спросить */}
+                        {/* Спросить Genie */}
                         <TouchableOpacity
                             onPress={() => setChatOpen(true)}
                             style={[styles.bottomBtn, styles.genieBtn]}
@@ -175,19 +278,19 @@ export function PlannerScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    {/* AI edit banner (slides up from bottom) */}
-                    <AIEditBanner
-                        message={bannerMessage}
-                        onDismiss={clearBanner}
-                    />
+                    {/* AI edit banner */}
+                    <AIEditBanner message={bannerMessage} onDismiss={clearBanner} />
 
                     {/* Chat bottom sheet */}
                     <ChatBottomSheet
                         isOpen={chatOpen}
                         onClose={() => setChatOpen(false)}
                         date={date}
+                        autoSendMessage={planDayPrompt}
+                        onAutoSendHandled={() => setPlanDayPrompt(null)}
                     />
                 </SafeAreaView>
+            </View>
             </GestureHandlerRootView>
         </PlanDocumentContext.Provider>
     );
@@ -201,31 +304,24 @@ const styles = StyleSheet.create({
     root: {
         flex: 1,
     },
+    listWrapper: {
+        flex: 1,
+    },
     loadingCenter: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    emptyCenter: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 32,
-    },
-    emptyText: {
-        fontSize: 16,
-        textAlign: 'center',
-    },
     listContent: {
-        paddingBottom: 80,
+        paddingTop: 8,
+        paddingBottom: 16,
+    },
+    listFooter: {
+        height: 120,
     },
     bottomBar: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
         flexDirection: 'row',
-        gap: 10,
+        gap: 8,
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderTopWidth: StyleSheet.hairlineWidth,
@@ -236,14 +332,20 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    dismissBtn: {
+        flex: 0,
+        width: 40,
         borderWidth: 1,
+    },
+    planBtn: {
+        backgroundColor: '#5856D6',
     },
     genieBtn: {
         backgroundColor: '#007AFF',
-        borderColor: '#007AFF',
     },
     bottomBtnText: {
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
 });

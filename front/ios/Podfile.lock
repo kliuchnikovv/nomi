@@ -80,6 +80,8 @@ PODS:
     - ExpoModulesCore
   - ExpoBackgroundFetch (13.0.6):
     - ExpoModulesCore
+  - ExpoBlur (55.0.10):
+    - ExpoModulesCore
   - ExpoCrypto (15.0.8):
     - ExpoModulesCore
   - ExpoFileSystem (19.0.21):
@@ -3180,6 +3182,7 @@ DEPENDENCIES:
   - "ExpoAdapterGoogleSignIn (from `../../node_modules/@react-native-google-signin/google-signin/expo/ios`)"
   - ExpoAsset (from `../../node_modules/expo-asset/ios`)
   - ExpoBackgroundFetch (from `../../node_modules/expo-background-fetch/ios`)
+  - ExpoBlur (from `../../node_modules/expo-blur/ios`)
   - ExpoCrypto (from `../../node_modules/expo-crypto/ios`)
   - ExpoFileSystem (from `../../node_modules/expo-file-system/ios`)
   - ExpoFont (from `../../node_modules/expo-font/ios`)
@@ -3312,6 +3315,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-asset/ios"
   ExpoBackgroundFetch:
     :path: "../../node_modules/expo-background-fetch/ios"
+  ExpoBlur:
+    :path: "../../node_modules/expo-blur/ios"
   ExpoCrypto:
     :path: "../../node_modules/expo-crypto/ios"
   ExpoFileSystem:
@@ -3525,6 +3530,7 @@ SPEC CHECKSUMS:
   ExpoAdapterGoogleSignIn: 21ff1daeef3d21cb0b45772d8029102cc728d6b1
   ExpoAsset: f867e55ceb428aab99e1e8c082b5aee7c159ea18
   ExpoBackgroundFetch: 72d9978cf6addacc6fb5e211ef99f74146a52d76
+  ExpoBlur: 8508f5b62611b228eee65f242563ac70856eb4bd
   ExpoCrypto: b6105ebaa15d6b38a811e71e43b52cd934945322
   ExpoFileSystem: 858a44267a3e6e9057e0888ad7c7cfbf55d52063
   ExpoFont: f543ce20a228dd702813668b1a07b46f51878d47
