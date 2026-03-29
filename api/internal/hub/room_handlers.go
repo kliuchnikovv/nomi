@@ -216,7 +216,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		return
 	}
 
-	// Parse Payload
 	var payload UserMessagePayload
 	if err := json.Unmarshal(frame.Payload, &payload); err != nil {
 		r.logger.Warn("failed to parse user payload", zap.Error(err))

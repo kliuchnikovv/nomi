@@ -160,14 +160,8 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
             `${getApiUrl()}/plan-documents?date=${date}`,
           );
         } catch (err: any) {
-          // If 404, we create a new document below
-          const is404 =
-            err?.message?.includes('404') ||
-            err?.message?.includes('not found') ||
-            err?.message?.toLowerCase?.().includes('not found');
-          if (!is404) {
-            throw err;
-          }
+          // Any GET failure (404, network error, redirect loop) → fall through to create
+          console.warn('[usePlanDocument] GET failed, will attempt create:', err?.message);
         }
 
         if (!doc) {

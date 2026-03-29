@@ -44,9 +44,7 @@ export function ChatBottomSheet({
     const { theme } = useTheme();
     const { top: topInset } = useSafeAreaInsets();
     const bottomSheetRef = useRef<BottomSheet>(null);
-    const flatListRef = useRef<any>(null);
     const snapPoints = ['45%', '85%'];
-    const initialScrollDoneRef = useRef(false);
 
     const { messages, sendMessage, isConnected } = usePlannerChat();
     const [inputText, setInputText] = useState('');
@@ -67,19 +65,6 @@ export function ChatBottomSheet({
             onAutoSendHandled?.();
         }
     }, [isOpen, isConnected, autoSendMessage]);
-
-    // Scroll to bottom: instant on initial history load, animated for new messages
-    useEffect(() => {
-        if (messages.length === 0) return;
-        if (!initialScrollDoneRef.current) {
-            // History just loaded — defer until after layout
-            return;
-        }
-        // New message arrived while chat is open
-        setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-        }, 50);
-    }, [messages.length]);
 
     const handleSheetChanges = useCallback(
         (index: number) => {
@@ -158,20 +143,14 @@ export function ChatBottomSheet({
                     </TouchableOpacity>
                 </View>
 
-                {/* Messages */}
+                {/* Messages — inverted so newest is always at bottom without programmatic scroll */}
                 <BottomSheetFlatList
-                    ref={flatListRef}
-                    data={messages}
+                    data={[...messages].reverse()}
                     keyExtractor={(item: ChatMessage) => item.id}
                     renderItem={renderMessage}
                     style={styles.messagesList}
                     contentContainerStyle={styles.messageList}
-                    onLayout={() => {
-                        if (!initialScrollDoneRef.current && messages.length > 0) {
-                            initialScrollDoneRef.current = true;
-                            flatListRef.current?.scrollToEnd({ animated: false });
-                        }
-                    }}
+                    inverted
                     ListEmptyComponent={
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                             Спроси Genie про этот день…
