@@ -5,7 +5,7 @@ import SettingsModal from '../settings/screen';
 export function SettingsTabScreen() {
     return (
         <View style={{ flex: 1 }}>
-            <SettingsModal visible={true} onClose={() => {}} />
+            <SettingsModal visible={true} onClose={() => {}} renderAsScreen={true} />
         </View>
     );
 }

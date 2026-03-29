@@ -3189,7 +3189,7 @@ DEPENDENCIES:
   - ExpoNetwork (from `../../node_modules/expo-network/ios`)
   - ExpoSecureStore (from `../../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../../node_modules/expo-sharing/ios`)
-  - ExpoSQLite (from `../../node_modules/expo-sqlite/ios`)
+  - ExpoSQLite (from `../node_modules/expo-sqlite/ios`)
   - EXTaskManager (from `../../node_modules/expo-task-manager/ios`)
   - fast_float (from `../../node_modules/react-native/third-party-podspecs/fast_float.podspec`)
   - FBLazyVector (from `../../node_modules/react-native/Libraries/FBLazyVector`)
@@ -3331,7 +3331,7 @@ EXTERNAL SOURCES:
   ExpoSharing:
     :path: "../../node_modules/expo-sharing/ios"
   ExpoSQLite:
-    :path: "../../node_modules/expo-sqlite/ios"
+    :path: "../node_modules/expo-sqlite/ios"
   EXTaskManager:
     :path: "../../node_modules/expo-task-manager/ios"
   fast_float:

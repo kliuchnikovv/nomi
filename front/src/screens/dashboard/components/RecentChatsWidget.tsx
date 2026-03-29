@@ -1,13 +1,12 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../context/ThemeContext';
 import { useMain } from '../../main/context';
 import { Chat } from '../../main/models';
-
-interface RecentChatsWidgetProps {
-    onNavigateToChat: (chatId: string) => void;
-}
+import type { RootTabParamList } from '../../../navigation/types';
+import type { NavigationProp } from '@react-navigation/native';
 
 const ICON_MAP: Record<string, string> = {
     d20: 'dice',
@@ -33,7 +32,8 @@ function formatRelativeTime(timestamp: number | string | null | undefined): stri
     return `${Math.floor(diffH / 24)}d`;
 }
 
-export function RecentChatsWidget({ onNavigateToChat }: RecentChatsWidgetProps) {
+export function RecentChatsWidget() {
+    const navigation = useNavigation<NavigationProp<RootTabParamList>>();
     const { theme } = useTheme();
     const { chats } = useMain();
 
@@ -58,7 +58,7 @@ export function RecentChatsWidget({ onNavigateToChat }: RecentChatsWidgetProps) 
                     <TouchableOpacity
                         key={chat.id}
                         style={styles.row}
-                        onPress={() => onNavigateToChat(chat.id)}
+                        onPress={() => navigation.navigate('Chat', { screen: 'ChatDetail', params: { chatId: chat.id } })}
                         activeOpacity={0.7}
                     >
                         <View style={[styles.iconBg, { backgroundColor: theme.background }]}>

@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../auth/context';
 import { useMain } from '../main/context';
@@ -9,10 +11,8 @@ import { WeatherWidget } from './components/WeatherWidget';
 import { DateWidget } from './components/DateWidget';
 import { RecentChatsWidget } from './components/RecentChatsWidget';
 import { PlaceholderWidget } from './components/PlaceholderWidget';
-
-interface DashboardScreenProps {
-    onNavigateToChat: (chatId: string) => void;
-}
+import type { RootTabParamList } from '../../navigation/types';
+import type { NavigationProp } from '@react-navigation/native';
 
 function getGreeting(name?: string) {
     const hour = new Date().getHours();
@@ -20,16 +20,18 @@ function getGreeting(name?: string) {
     return name ? `${base}, ${name}!` : `${base}!`;
 }
 
-export const DashboardScreen = ({ onNavigateToChat }: DashboardScreenProps) => {
+export const DashboardScreen = () => {
+    const navigation = useNavigation<NavigationProp<RootTabParamList>>();
     const { theme } = useTheme();
     const { user } = useAuth();
     const { setActivePluginView } = useMain();
+    const insets = useSafeAreaInsets();
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <ScrollView
                 style={styles.scroll}
-                contentContainerStyle={styles.content}
+                contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
                 showsVerticalScrollIndicator={false}
             >
                 {/* Greeting header */}
@@ -49,7 +51,7 @@ export const DashboardScreen = ({ onNavigateToChat }: DashboardScreenProps) => {
                 {/* Plan My Day card */}
                 <TouchableOpacity
                     style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                    onPress={() => setActivePluginView('planner')}
+                    onPress={() => navigation.navigate('Planning')}
                     activeOpacity={0.8}
                 >
                     <View style={[styles.planIconBg, { backgroundColor: theme.accent }]}>
@@ -65,7 +67,7 @@ export const DashboardScreen = ({ onNavigateToChat }: DashboardScreenProps) => {
                 </TouchableOpacity>
 
                 {/* Row 2: Recent Chats (full width) */}
-                <RecentChatsWidget onNavigateToChat={onNavigateToChat} />
+                <RecentChatsWidget />
 
                 {/* Row 3: Placeholder full */}
                 <PlaceholderWidget size="full" />

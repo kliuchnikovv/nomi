@@ -270,16 +270,9 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setActiveChatID(emptyChatID);
     }
 
-    // Close plugin view and keep sidebar open
-    function closePluginKeepSidebar() {
+    // Close plugin view
+    function closePlugin() {
         setActivePluginView(null);
-        setRightSidebarVisible(true);
-    }
-
-    // Close plugin view and sidebar
-    function closePluginWithSidebar() {
-        setActivePluginView(null);
-        setRightSidebarVisible(false);
     }
 
     // Export pending mode for chat context to use
@@ -307,8 +300,6 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setActivePluginIntegrationId,
         rightSidebarVisible,
         setRightSidebarVisible,
-        closePluginKeepSidebar,
-        closePluginWithSidebar,
     };
 
     return (

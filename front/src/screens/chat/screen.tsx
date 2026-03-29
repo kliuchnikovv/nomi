@@ -536,9 +536,7 @@ export default function ChatScreen({ onSettingsPress }: { onSettingsPress?: () =
                             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             style={{ flex: 1 }}
                         >
-                            <DashboardScreen
-                                onNavigateToChat={handleSelectChat}
-                            />
+                            <DashboardScreen />
                             {renderInputToolbar({})}
                         </KeyboardAvoidingView>
                     ) : (

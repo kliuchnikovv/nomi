@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePluginChats } from '../integrationsSidebar/context';
 import { useTheme } from '../../context/ThemeContext';
-import { Plugin } from '../integrationsSidebar/models';
+import { Plugin, PluginChat } from '../integrationsSidebar/models';
 import { useMain } from '../main/context';
 import { PluginIcon } from '../../components/PluginIcon';
 import { INTEGRATION_REGISTRY } from '../../services/integrations/registry';
@@ -34,7 +34,7 @@ function PluginSection({
 
     return (
         <Pressable
-            style={({ pressed }) => [
+            style={({ pressed }: { pressed: boolean }) => [
                 styles.pluginItem,
                 { backgroundColor: theme.surface, borderColor: theme.border },
                 pressed && { opacity: 0.7 },
@@ -97,7 +97,7 @@ export function IntegrationsScreen() {
             ) : (
                 <FlatList
                     data={sortedPlugins}
-                    keyExtractor={(plugin) => plugin.id}
+                    keyExtractor={(plugin: Plugin) => plugin.id}
                     style={styles.list}
                     contentContainerStyle={[styles.listContent, plugins.length === 0 && { flex: 1 }]}
                     refreshControl={
@@ -116,10 +116,10 @@ export function IntegrationsScreen() {
                             </Text>
                         </View>
                     }
-                    renderItem={({ item: plugin }) => (
+                    renderItem={({ item: plugin }: { item: Plugin }) => (
                         <PluginSection
                             plugin={plugin}
-                            totalUnread={plugin.chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0)}
+                            totalUnread={plugin.chats.reduce((sum: number, chat: PluginChat) => sum + (chat.unreadCount || 0), 0)}
                             onPress={() => handlePluginPress(plugin)}
                         />
                     )}

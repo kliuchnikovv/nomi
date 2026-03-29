@@ -9,18 +9,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View, Text, AppState, AppStateStatus } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import ChatLayout from './src/screens/main/screen.tsx';
-import {
-    SafeAreaProvider,
-    useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MainProvider } from './src/screens/main/context';
 import * as PCPModel from './src/screens/integrationsSidebar/PluginChatsProviderImpl';
 const { PluginChatsProvider } = PCPModel;
 
-import { AuthScreen } from './src/screens/auth/screen.tsx';
-import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 import { AuthProvider, useAuth } from './src/screens/auth/context.tsx';
 
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -31,6 +26,8 @@ import { defineAllBackgroundTasks } from './src/services/integrations/Background
 import { registerClientPlugins } from './src/plugins/registerClientPlugins';
 import { socket } from './src/socket';
 import { initDebugUtils } from './src/debug/DebugUtils';
+import { AppNavigator } from './src/navigation/AppNavigator';
+import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 
 // Initialize debug utilities
 initDebugUtils();
@@ -130,7 +127,9 @@ function App() {
                             <PluginChatsProvider>
                                 <ConnectorsProvider>
                                     <MainProvider>
-                                        <AppContent />
+                                        <NavigationContainer>
+                                            <AppContent />
+                                        </NavigationContainer>
                                     </MainProvider>
                                 </ConnectorsProvider>
                             </PluginChatsProvider>
@@ -143,14 +142,7 @@ function App() {
 }
 
 function AppContent() {
-    const insets = useSafeAreaInsets();
     const { isAuthenticated, isLoading, token } = useAuth();
-    const { theme } = useTheme();
-
-    const containerStyle = useMemo(() => ({
-        flex: 1,
-        backgroundColor: theme.background,
-    }), [theme.background]);
 
     // Global Socket Lifecycle - Auth Token Management
     useEffect(() => {
@@ -167,14 +159,10 @@ function AppContent() {
     }, [token]);
 
     if (isLoading) {
-        return <View style={containerStyle} />;
+        return null;
     }
 
-    return (
-        <View style={containerStyle}>
-            {isAuthenticated ? <ChatLayout /> : <AuthScreen />}
-        </View>
-    );
+    return <AppNavigator />;
 }
 
 export default App;

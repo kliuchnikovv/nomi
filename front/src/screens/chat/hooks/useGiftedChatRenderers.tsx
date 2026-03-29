@@ -297,7 +297,7 @@ export function useGiftedChatRenderers({
     const renderInputToolbar = useCallback(
         (_props: any) => {
             return (
-                <View>
+                <View style={{ backgroundColor: theme.background }}>
                     <ErrorBanner
                         error={error}
                         onRetry={onRetry}
@@ -309,7 +309,7 @@ export function useGiftedChatRenderers({
                 </View>
             );
         },
-        [error, onRetry, onDismissError, chatTheme, isRateLimited, handleChangeModel]
+        [error, onRetry, onDismissError, chatTheme, isRateLimited, handleChangeModel, theme.background]
     );
 
     // Stable message renderer

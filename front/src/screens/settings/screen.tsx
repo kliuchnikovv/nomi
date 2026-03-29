@@ -19,15 +19,18 @@ type EmailAnalysisMode = 'device' | 'server';
 type Props = {
     visible: boolean;
     onClose: () => void;
+    renderAsScreen?: boolean;
 };
 
-export default function SettingsModal({ visible, onClose }: Props) {
+export default function SettingsModal({ visible, onClose, renderAsScreen }: Props) {
     const { logout, user } = useAuth();
     const { themeName, setTheme, theme } = useTheme();
     const insets = useSafeAreaInsets();
     const paddingStyle = useMemo(
-        () => ({ paddingTop: insets.top, paddingBottom: insets.bottom }),
-        [insets.top, insets.bottom],
+        () => renderAsScreen
+            ? { paddingTop: insets.top }
+            : { paddingTop: insets.top, paddingBottom: insets.bottom },
+        [insets.top, insets.bottom, renderAsScreen],
     );
 
     const [connectorsOpen, setConnectorsOpen] = useState(false);
@@ -107,23 +110,18 @@ export default function SettingsModal({ visible, onClose }: Props) {
         ([key, descriptor]) => ({ label: descriptor.name, value: key as ThemeName })
     );
 
-    return (
-        <>
-            <Modal
-                visible={visible}
-                animationType="slide"
-                transparent={false}
-                onRequestClose={handleClose}
-            >
-                <View style={[styles.root, paddingStyle]}>
-                    <View style={styles.header}>
-                        <Text style={styles.title}>Settings</Text>
-                        <Pressable onPress={handleClose} style={styles.closeBtn}>
-                            <Text style={styles.closeText}>Close</Text>
-                        </Pressable>
-                    </View>
-                    <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 32 }}>
-                        {user && (
+    const content = (
+        <View style={[styles.root, paddingStyle]}>
+            <View style={styles.header}>
+                <Text style={styles.title}>Settings</Text>
+                {!renderAsScreen && (
+                    <Pressable onPress={handleClose} style={styles.closeBtn}>
+                        <Text style={styles.closeText}>Close</Text>
+                    </Pressable>
+                )}
+            </View>
+            <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 32 }}>
+                {user && (
                             <View style={[styles.row, { marginBottom: 16 }]}>
                                 <Text style={styles.label}>User</Text>
                                 <Text style={styles.value}>
@@ -405,6 +403,21 @@ export default function SettingsModal({ visible, onClose }: Props) {
                         />
                     )}
                 </View>
+    );
+
+    if (renderAsScreen) {
+        return content;
+    }
+
+    return (
+        <>
+            <Modal
+                visible={visible}
+                animationType="slide"
+                transparent={false}
+                onRequestClose={handleClose}
+            >
+                {content}
             </Modal>
         </>
     );

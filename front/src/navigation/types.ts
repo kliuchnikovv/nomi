@@ -1,7 +1,23 @@
 // src/navigation/types.ts
 
-export type RootDrawerParamList = {
-  Chat: undefined; // Ваш основной экран чата
-  Settings: undefined; // Экран настроек
-  // Sidebar: undefined; // Sidebar не является отдельным Drawer.Screen
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
+// Auth stack
+export type AuthStackParamList = {
+  Auth: undefined;
+};
+
+// Chat nested stack (inside the Chat tab)
+export type ChatStackParamList = {
+  ChatList: undefined;
+  ChatDetail: { chatId: string };
+};
+
+// Main bottom tab navigator
+export type RootTabParamList = {
+  Dashboard: undefined;
+  Planning: undefined;
+  Chat: NavigatorScreenParams<ChatStackParamList>; // Chat tab contains ChatStack
+  Integrations: undefined;
+  Settings: undefined;
 };
