@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/kliuchnikovv/genie-api/internal/models"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"gorm.io/datatypes"
@@ -26,11 +28,19 @@ func NewPlanDocumentsHandler(store *storage.Storage, logger *zap.Logger) *PlanDo
 	}
 }
 
-// storageDocToModel converts a storage.PlanDocument to the API response model.
-func storageDocToModel(doc *storage.PlanDocument) *models.PlanDocument {
-	return &models.PlanDocument{
+// planDocumentResponse is the API response for a plan document (excludes user_id).
+type planDocumentResponse struct {
+	ID        string          `json:"id"`
+	Date      string          `json:"date"`
+	Items     json.RawMessage `json:"items"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+// storageToPlanDocumentResponse converts a storage.PlanDocument to the API response.
+func storageToPlanDocumentResponse(doc *storage.PlanDocument) *planDocumentResponse {
+	return &planDocumentResponse{
 		ID:        doc.ID.String(),
-		UserID:    doc.UserID.String(),
 		Date:      doc.Date,
 		Items:     []byte(doc.Items),
 		CreatedAt: doc.CreatedAt,
@@ -49,6 +59,11 @@ func (h *PlanDocumentsHandler) GetPlanDocument(c *gin.Context) {
 		return
 	}
 
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date must be in YYYY-MM-DD format"})
+		return
+	}
+
 	doc, err := h.store.GetPlanDocument(c.Request.Context(), userID, date)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -64,13 +79,13 @@ func (h *PlanDocumentsHandler) GetPlanDocument(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, storageDocToModel(doc))
+	c.JSON(http.StatusOK, storageToPlanDocumentResponse(doc))
 }
 
 // createPlanDocumentRequest is the request body for creating a plan document.
 type createPlanDocumentRequest struct {
-	Date  string          `json:"date" binding:"required"`
-	Items datatypes.JSON  `json:"items"`
+	Date  string         `json:"date" binding:"required"`
+	Items datatypes.JSON `json:"items"`
 }
 
 // CreatePlanDocument creates a new plan document for the authenticated user.
@@ -81,6 +96,11 @@ func (h *PlanDocumentsHandler) CreatePlanDocument(c *gin.Context) {
 	var req createPlanDocumentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := time.Parse("2006-01-02", req.Date); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "date must be in YYYY-MM-DD format"})
 		return
 	}
 
@@ -95,6 +115,11 @@ func (h *PlanDocumentsHandler) CreatePlanDocument(c *gin.Context) {
 		Items:  items,
 	})
 	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "23505") || strings.Contains(errMsg, "duplicate key") {
+			c.JSON(http.StatusConflict, gin.H{"error": "plan document for this date already exists"})
+			return
+		}
 		h.logger.Error("failed to create plan document",
 			zap.String("user_id", userID.String()),
 			zap.String("date", req.Date),
@@ -104,7 +129,7 @@ func (h *PlanDocumentsHandler) CreatePlanDocument(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, storageDocToModel(doc))
+	c.JSON(http.StatusCreated, storageToPlanDocumentResponse(doc))
 }
 
 // patchPlanDocumentRequest is the request body for patching a plan document.
@@ -146,5 +171,5 @@ func (h *PlanDocumentsHandler) PatchPlanDocument(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, storageDocToModel(doc))
+	c.JSON(http.StatusOK, storageToPlanDocumentResponse(doc))
 }
