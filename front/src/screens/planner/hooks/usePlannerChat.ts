@@ -115,10 +115,13 @@ export function usePlannerChat(): UsePlannerChatResult {
           }
           chatIdRef.current = plannerChat.id;
 
-          // 4. Load chat history
+          // 4. Load today's messages only
           try {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            const since = startOfDay.toISOString();
             const history = await apiClient.get<{ id: string; role: string; text: string }[]>(
-              `${getApiUrl()}/chats/${plannerChat.id}/messages`,
+              `${getApiUrl()}/chats/${plannerChat.id}/messages?if_modified_since=${encodeURIComponent(since)}`,
             );
             if (!cancelled && Array.isArray(history)) {
               const mapped: ChatMessage[] = history

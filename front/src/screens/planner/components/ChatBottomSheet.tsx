@@ -10,6 +10,7 @@ import BottomSheet, {
     BottomSheetFlatList,
     BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
 import { usePlannerChat, ChatMessage } from '../hooks/usePlannerChat';
 
@@ -41,9 +42,11 @@ export function ChatBottomSheet({
     onAutoSendHandled,
 }: Props) {
     const { theme } = useTheme();
+    const { top: topInset } = useSafeAreaInsets();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const flatListRef = useRef<any>(null);
     const snapPoints = ['45%', '85%'];
+    const initialScrollDoneRef = useRef(false);
 
     const { messages, sendMessage, isConnected } = usePlannerChat();
     const [inputText, setInputText] = useState('');
@@ -65,13 +68,17 @@ export function ChatBottomSheet({
         }
     }, [isOpen, isConnected, autoSendMessage]);
 
-    // Auto-scroll to latest message when messages change
+    // Scroll to bottom: instant on initial history load, animated for new messages
     useEffect(() => {
-        if (messages.length > 0) {
-            setTimeout(() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-            }, 50);
+        if (messages.length === 0) return;
+        if (!initialScrollDoneRef.current) {
+            // History just loaded — defer until after layout
+            return;
         }
+        // New message arrived while chat is open
+        setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+        }, 50);
     }, [messages.length]);
 
     const handleSheetChanges = useCallback(
@@ -115,6 +122,7 @@ export function ChatBottomSheet({
             ref={bottomSheetRef}
             index={-1}
             snapPoints={snapPoints}
+            topInset={topInset}
             enablePanDownToClose
             keyboardBehavior="interactive"
             keyboardBlurBehavior="restore"
@@ -158,9 +166,12 @@ export function ChatBottomSheet({
                     renderItem={renderMessage}
                     style={styles.messagesList}
                     contentContainerStyle={styles.messageList}
-                    onContentSizeChange={() =>
-                        flatListRef.current?.scrollToEnd({ animated: false })
-                    }
+                    onLayout={() => {
+                        if (!initialScrollDoneRef.current && messages.length > 0) {
+                            initialScrollDoneRef.current = true;
+                            flatListRef.current?.scrollToEnd({ animated: false });
+                        }
+                    }}
                     ListEmptyComponent={
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                             Спроси Genie про этот день…
