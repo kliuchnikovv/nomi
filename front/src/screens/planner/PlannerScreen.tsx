@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -15,6 +15,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { PlanItem } from './types';
 import { usePlanDocument } from './hooks/usePlanDocument';
 import { PlanDocumentContext } from './PlanDocumentContext';
+import { registerApplyPatches, unregisterApplyPatches } from './planDocumentRegistry';
 import { DocumentHeader } from './components/DocumentHeader';
 import { PlanItemRow } from './components/PlanItemRow';
 import { AIEditBanner } from './components/AIEditBanner';
@@ -59,6 +60,14 @@ export function PlannerScreen() {
         bannerMessage,
         clearBanner,
     } = usePlanDocument(date);
+
+    // Register applyPatches in the global registry so ClientToolExecutor can call it
+    useEffect(() => {
+        registerApplyPatches(applyPatches);
+        return () => {
+            unregisterApplyPatches();
+        };
+    }, [applyPatches]);
 
     // Chat bottom sheet state
     const [chatOpen, setChatOpen] = useState(false);

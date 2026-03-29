@@ -1,6 +1,7 @@
 import { getIntegrationMetadata } from '../integrations/registry';
 import { getClientPluginHandler, getClientPlugin } from '../../plugins/clientRegistry';
 import { registerClientPlugins } from '../../plugins/registerClientPlugins';
+import { callApplyPatches } from '../../screens/planner/planDocumentRegistry';
 
 export interface ClientToolAction {
     tool: string;
@@ -25,6 +26,14 @@ export class ClientToolExecutor {
         // Special handling for ask_user tool (built-in, not an integration)
         if (action.tool === 'ask_user') {
             return await this.executeAskUserAction(action.method, action.params);
+        }
+
+        // Special handling for patch_plan_document (built-in, planner screen)
+        if (action.tool === 'patch_plan_document') {
+            const patches = action.params?.patches as any[];
+            const summary = action.params?.summary as string | undefined;
+            callApplyPatches(patches ?? [], summary);
+            return 'ok';
         }
 
         const metadata = getIntegrationMetadata(action.tool);
