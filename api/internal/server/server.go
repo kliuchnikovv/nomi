@@ -69,9 +69,10 @@ func New(
 			}
 			return h
 		}()
-		toolsHandler        = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey)
-		integrationsHandler = handlers.NewIntegrationsHandler(ctr.Storage, logger)
-		botIdentityHandler  = handlers.NewBotIdentityHandler(ctr.Storage, logger)
+		toolsHandler         = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey)
+		integrationsHandler  = handlers.NewIntegrationsHandler(ctr.Storage, logger)
+		botIdentityHandler   = handlers.NewBotIdentityHandler(ctr.Storage, logger)
+		planDocumentsHandler = handlers.NewPlanDocumentsHandler(ctr.Storage, logger)
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -142,6 +143,12 @@ func New(
 	// Planning session state — forward to Python backend
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.GET("/api/planning/session/:chat_id", wrapWithAuth(handlers.ProxyPlanningSession(cfg, logger), authMiddleware))
+
+	// Plan Documents API
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.GET("/api/plan-documents", wrapWithAuth(planDocumentsHandler.GetPlanDocument, authMiddleware))
+	r.POST("/api/plan-documents", wrapWithAuth(planDocumentsHandler.CreatePlanDocument, authMiddleware))
+	r.PATCH("/api/plan-documents/:id", wrapWithAuth(planDocumentsHandler.PatchPlanDocument, authMiddleware))
 
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path
