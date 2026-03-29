@@ -105,9 +105,13 @@ export function usePlannerChat(): UsePlannerChatResult {
           }
           chatIdRef.current = created.id;
         } else {
-          // Update model on server if changed
+          // Update model on server if changed (server uses PUT, not PATCH)
           if (plannerChat.model !== model) {
-            await apiClient.patch(`${getApiUrl()}/chats/${plannerChat.id}`, { model });
+            try {
+              await apiClient.put(`${getApiUrl()}/chats/${plannerChat.id}`, { model });
+            } catch {
+              // Non-critical — continue with bootstrap even if model update fails
+            }
           }
           chatIdRef.current = plannerChat.id;
 
