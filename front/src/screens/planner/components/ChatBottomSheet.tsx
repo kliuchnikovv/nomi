@@ -7,7 +7,6 @@ import {
     Platform,
 } from 'react-native';
 import BottomSheet, {
-    BottomSheetView,
     BottomSheetFlatList,
     BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
@@ -128,7 +127,6 @@ export function ChatBottomSheet({
             )}
             backgroundStyle={{ backgroundColor: theme.background }}
         >
-            <BottomSheetView>
             <View style={styles.container}>
                 {/* Header */}
                 <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -158,6 +156,7 @@ export function ChatBottomSheet({
                     data={messages}
                     keyExtractor={(item: ChatMessage) => item.id}
                     renderItem={renderMessage}
+                    style={styles.messagesList}
                     contentContainerStyle={styles.messageList}
                     onContentSizeChange={() =>
                         flatListRef.current?.scrollToEnd({ animated: false })
@@ -206,7 +205,6 @@ export function ChatBottomSheet({
                     </TouchableOpacity>
                 </View>
             </View>
-            </BottomSheetView>
         </BottomSheet>
     );
 }
@@ -228,6 +226,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#8E8E93',
     },
     container: {
+        flex: 1,
+    },
+    messagesList: {
         flex: 1,
     },
     header: {
