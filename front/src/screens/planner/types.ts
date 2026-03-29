@@ -10,7 +10,7 @@ export interface PlanChip {
 export interface PlanItem {
   id: string;
   text: string;
-  depth: number;        // 0 | 1 | 2
+  depth: 0 | 1 | 2;
   checked: boolean;
   chips: PlanChip[];
   placeholder?: string;
