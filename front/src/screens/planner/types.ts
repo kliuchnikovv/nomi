@@ -1,34 +1,26 @@
-export interface PlanTask {
-    id: string;
-    title: string;
-    location?: string;
-    duration_min?: number;
-    notes?: string;
+export type ChipType = 'time' | 'location' | 'link' | 'note';
+
+export interface PlanChip {
+  id: string;
+  type: ChipType;
+  value: string;
+  isNew?: boolean;
 }
 
-export type PlanBlockType = 'task' | 'travel' | 'buffer' | 'break';
-
-export interface PlanBlock {
-    id: string;
-    title: string;
-    start: string; // "HH:MM"
-    end: string;   // "HH:MM"
-    duration_min: number;
-    location?: string;
-    travel_before_min: number;
-    type: PlanBlockType;
-    task_id?: string;
-    notes?: string;
+export interface PlanItem {
+  id: string;
+  text: string;
+  depth: 0 | 1 | 2;
+  checked: boolean;
+  chips: PlanChip[];
+  placeholder?: string;
+  isNew?: boolean;
 }
 
-export type PlanStatus = 'gathering' | 'building' | 'review' | 'committed' | 'replanning';
-
-export interface DayPlan {
-    id: string;
-    chat_id: string;
-    planning_date: string; // "YYYY-MM-DD"
-    tasks: PlanTask[];
-    blocks: PlanBlock[];
-    reminders_ids: string[];
-    status: PlanStatus;
+export interface PlanDocument {
+  id: string;
+  date: string;         // YYYY-MM-DD
+  items: PlanItem[];
+  createdAt: string;
+  updatedAt: string;
 }

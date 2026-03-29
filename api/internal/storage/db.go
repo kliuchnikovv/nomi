@@ -45,6 +45,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&PluginData{},
 		&Integration{},
 		&BotIdentity{},
+		&PlanDocument{},
 	); err != nil {
 		return nil, err
 	}
