@@ -1,582 +1,240 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
-    TextInput,
-    TouchableOpacity,
-    ScrollView,
-    KeyboardAvoidingView,
-    Platform,
     ActivityIndicator,
     StyleSheet,
+    SafeAreaView,
+    TouchableOpacity,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import DraggableFlatList, {
+    RenderItemParams,
+} from 'react-native-draggable-flatlist';
 import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../auth/context';
-import { socket } from '../../socket';
-import { getApiUrl } from '../../config';
-import { apiClient } from '../../apiClient';
-import { PlanTask, DayPlan } from './types';
-import { TaskInputView } from './components/TaskInputView';
-import { PlanTimelineView } from './components/PlanTimelineView';
-import { createPlanningSession, getPlanningState } from '../../services/planningApi';
+import { PlanItem } from './types';
+import { usePlanDocument } from './hooks/usePlanDocument';
+import { PlanDocumentContext } from './PlanDocumentContext';
+import { DocumentHeader } from './components/DocumentHeader';
+import { PlanItemRow } from './components/PlanItemRow';
+import { AIEditBanner } from './components/AIEditBanner';
+import { ChatBottomSheet } from './components/ChatBottomSheet';
 
-type Phase = 'input' | 'planning' | 'active';
+// ---------------------------------------------------------------------------
+// Date helpers
+// ---------------------------------------------------------------------------
 
-export interface PlannerScreenProps {
-    onClose?: (closeSidebar?: boolean) => void;
+function today(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function generateId(): string {
-    return `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 8)}`;
+function addDays(date: string, n: number): string {
+    const d = new Date(date + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function formatDateISO(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
+// ---------------------------------------------------------------------------
+// PlannerScreen
+// ---------------------------------------------------------------------------
 
-interface ChatMessage {
-    id: string;
-    role: 'user' | 'assistant';
-    text: string;
-}
-
-export function PlannerScreen({ onClose }: PlannerScreenProps = {}) {
+export function PlannerScreen() {
     const { theme } = useTheme();
-    const { user, token } = useAuth();
-    const insets = useSafeAreaInsets();
 
-    const [phase, setPhase] = useState<Phase>('input');
-    const [tasks, setTasks] = useState<PlanTask[]>([]);
-    const [planDate, setPlanDate] = useState(new Date());
-    const [chatId, setChatId] = useState<string | null>(null);
-    const [plan, setPlan] = useState<DayPlan | null>(null);
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [inputText, setInputText] = useState('');
-    const [isWorking, setIsWorking] = useState(false);
-    const [timelineCollapsed, setTimelineCollapsed] = useState(true);
-    const [sessionLoading, setSessionLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    // Date state
+    const [date, setDate] = useState<string>(today);
 
-    const messagesScrollRef = useRef<ScrollView>(null);
-    const pendingMsgRef = useRef<string | null>(null);
+    // Plan document hook
+    const {
+        items,
+        loading,
+        addItem,
+        removeItem,
+        updateItem,
+        moveItem,
+        indentItem,
+        toggleChecked,
+        applyPatches,
+        bannerMessage,
+        clearBanner,
+    } = usePlanDocument(date);
 
-    // ---- WebSocket frame handling ----
-    const handleFrame = useCallback((frame: any) => {
-        const { kind, op, payload } = frame;
+    // Chat bottom sheet state
+    const [chatOpen, setChatOpen] = useState(false);
 
-        if (op === 'done') {
-            setIsWorking(false);
-            return;
-        }
+    // ---------------------------------------------------------------------------
+    // Render item for DraggableFlatList
+    // ---------------------------------------------------------------------------
 
-        if (kind === 'error') {
-            setIsWorking(false);
-            setError(payload?.message || 'Something went wrong');
-            return;
-        }
-
-        if (!payload) return;
-
-        // Accumulate text tokens into the latest assistant message
-        if (payload.type === 'text' && payload.message) {
-            setMessages(prev => {
-                if (prev.length > 0 && prev[prev.length - 1].role === 'assistant') {
-                    const updated = [...prev];
-                    updated[updated.length - 1] = {
-                        ...updated[updated.length - 1],
-                        text: updated[updated.length - 1].text + payload.message,
-                    };
-                    return updated;
-                }
-                return [
-                    ...prev,
-                    { id: generateId(), role: 'assistant', text: payload.message },
-                ];
-            });
-        }
-
-        // Plan data embedded in a frame (custom type from backend)
-        if (payload.type === 'plan_update' && payload.plan) {
-            const incoming: DayPlan = payload.plan;
-            setPlan(incoming);
-            if (incoming.status === 'committed') {
-                setPhase('active');
-                setTimelineCollapsed(false);
-            } else if (incoming.status === 'review') {
-                setTimelineCollapsed(false);
+    const renderItem = ({ item, drag, isActive }: RenderItemParams<PlanItem>) => (
+        <PlanItemRow
+            item={item}
+            onCheck={() => toggleChecked(item.id)}
+            onTextChange={(text) => updateItem(item.id, { text })}
+            onIndent={(delta) => indentItem(item.id, delta)}
+            onDelete={() => removeItem(item.id)}
+            onAddAfter={() => addItem(item.id)}
+            onChipRemove={(chipId) =>
+                updateItem(item.id, {
+                    chips: item.chips.filter((c) => c.id !== chipId),
+                })
             }
-        }
-    }, []);
+            drag={drag}
+            isActive={isActive}
+        />
+    );
 
-    // ---- Connect socket when chatId is set ----
-    useEffect(() => {
-        if (!chatId || !token) return;
+    // ---------------------------------------------------------------------------
+    // Render
+    // ---------------------------------------------------------------------------
 
-        socket.setChatId(chatId);
-        socket.setChannel('chat');
-        socket.setHandlers({
-            onMessage: handleFrame,
-            onDone: handleFrame,
-            onError: (err) => {
-                console.error('[PlannerScreen] socket error', err);
-                setIsWorking(false);
-                setError('Connection error');
-            },
-            onReconnect: () => {
-                // Poll plan state on reconnect
-                getPlanningState(chatId).then(p => {
-                    if (p) setPlan(p);
-                });
-            },
-        });
-        socket.connect();
-
-        // Send pending initial message (task list) once socket is set up
-        if (pendingMsgRef.current) {
-            const msg = pendingMsgRef.current;
-            pendingMsgRef.current = null;
-            // Small delay to let ws.onopen fire and process outbox
-            setTimeout(() => handleSendMessage(msg), 600);
-        }
-
-        return () => {
-            socket.setHandlers({});
-        };
-    }, [chatId, token, handleFrame, handleSendMessage]);
-
-    // ---- Poll plan state when in planning phase ----
-    useEffect(() => {
-        if (!chatId || phase !== 'planning') return;
-        const timer = setInterval(async () => {
-            const p = await getPlanningState(chatId);
-            if (p) {
-                setPlan(p);
-                if (p.status === 'committed') {
-                    setPhase('active');
-                    setTimelineCollapsed(false);
-                    clearInterval(timer);
-                }
-            }
-        }, 4000);
-        return () => clearInterval(timer);
-    }, [chatId, phase]);
-
-    // ---- Start planning session ----
-    const handleStartPlanning = useCallback(async () => {
-        if (tasks.length === 0) return;
-        setSessionLoading(true);
-        setError(null);
-        try {
-            const dateStr = formatDateISO(planDate);
-            const id = await createPlanningSession(dateStr, tasks);
-            // Build initial message with task list so Python receives full context
-            const taskLines = tasks.map(t => {
-                let line = `• ${t.title}`;
-                if (t.duration_min) line += ` (${t.duration_min} мин)`;
-                if (t.location) line += ` @ ${t.location}`;
-                if (t.notes) line += ` — ${t.notes}`;
-                return line;
-            }).join('\n');
-            const initialMessage = `Составь план на ${dateStr}.\n\nЗадачи:\n${taskLines}`;
-            pendingMsgRef.current = initialMessage;
-            setMessages([{ id: generateId(), role: 'user', text: initialMessage }]);
-            setChatId(id);
-            setPhase('planning');
-        } catch (e: any) {
-            setError(e?.message || 'Failed to start planning session');
-        } finally {
-            setSessionLoading(false);
-        }
-    }, [tasks, planDate]);
-
-    // ---- Send a message ----
-    const handleSendMessage = useCallback(async (text: string) => {
-        const trimmed = text.trim();
-        if (!trimmed || !chatId || !user) return;
-
-        setInputText('');
-        setIsWorking(true);
-        setError(null);
-
-        const userMsg: ChatMessage = { id: generateId(), role: 'user', text: trimmed };
-        setMessages(prev => [...prev, userMsg]);
-
-        // Create message on server, then send over socket
-        try {
-            const created = await apiClient.post<{ id: string }>(
-                `${getApiUrl()}/chats/${chatId}/messages`,
-                {
-                    chat_id: chatId,
-                    role: 'user',
-                    text: trimmed,
-                    model: 'gpt-5-nano',
-                },
-            );
-            const messageId = created?.id;
-            const sessionId = `planner-${Date.now()}`;
-
-            socket.sendMessage(
-                trimmed,
-                chatId,
-                sessionId,
-                messageId,
-                undefined, // attachmentIDs
-                undefined, // webSearch
-                undefined, // thinking
-                'user',
-                undefined, // model
-                undefined, // provider
-                undefined, // tools
-                user.id,
-                undefined, // endpoint
-                token ?? undefined,
-            );
-        } catch (e: any) {
-            setIsWorking(false);
-            setError(e?.message || 'Failed to send message');
-        }
-    }, [chatId, user, token]);
-
-    // ---- Approve plan ----
-    const handleApprove = useCallback(() => {
-        handleSendMessage('Approve the plan and save to my reminders.');
-    }, [handleSendMessage]);
-
-    // ---- Report change ----
-    const handleRequestChange = useCallback((change: string) => {
-        handleSendMessage(change);
-    }, [handleSendMessage]);
-
-    // ---- Scroll to bottom on new messages ----
-    useEffect(() => {
-        if (messages.length > 0) {
-            setTimeout(() => {
-                messagesScrollRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-        }
-    }, [messages]);
-
-    const styles = createStyles(theme);
-
-    // ==================== PHASE: INPUT ====================
-    if (phase === 'input') {
-        return (
-            <KeyboardAvoidingView
-                style={{ flex: 1, backgroundColor: theme.background }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
-                <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 14 }]}>
-                    {onClose && (
-                        <TouchableOpacity onPress={() => onClose()} style={styles.backBtn} activeOpacity={0.7}>
-                            <Ionicons name="chevron-back" size={22} color={theme.accent} />
-                        </TouchableOpacity>
-                    )}
-                    <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Plan My Day</Text>
-                </View>
-                {error && (
-                    <View style={[styles.errorBanner, { backgroundColor: theme.error ?? '#c0392b' }]}>
-                        <Text style={styles.errorText}>{error}</Text>
-                        <TouchableOpacity onPress={() => setError(null)}>
-                            <Ionicons name="close" size={16} color="#fff" />
-                        </TouchableOpacity>
-                    </View>
-                )}
-                {sessionLoading ? (
-                    <View style={styles.loadingCenter}>
-                        <ActivityIndicator size="large" color={theme.accent} />
-                        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-                            Creating planning session...
-                        </Text>
-                    </View>
-                ) : (
-                    <TaskInputView
-                        tasks={tasks}
-                        onTasksChange={setTasks}
-                        onStartPlanning={handleStartPlanning}
-                        date={planDate}
-                        onDateChange={setPlanDate}
-                    />
-                )}
-            </KeyboardAvoidingView>
-        );
-    }
-
-    // ==================== PHASE: ACTIVE ====================
-    if (phase === 'active' && plan) {
-        return (
-            <View style={{ flex: 1, backgroundColor: theme.background, paddingBottom: insets.bottom }}>
-                <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 14 }]}>
-                    {onClose && (
-                        <TouchableOpacity onPress={() => onClose()} style={styles.backBtn} activeOpacity={0.7}>
-                            <Ionicons name="chevron-back" size={22} color={theme.accent} />
-                        </TouchableOpacity>
-                    )}
-                    <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Today's Plan</Text>
-                </View>
-                <PlanTimelineView
-                    plan={plan}
-                    onApprove={handleApprove}
-                    onRequestChange={handleRequestChange}
-                />
-            </View>
-        );
-    }
-
-    // ==================== PHASE: PLANNING ====================
     return (
-        <KeyboardAvoidingView
-            style={{ flex: 1, backgroundColor: theme.background }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={insets.top}
-        >
-            {/* Header */}
-            <View style={[styles.header, { borderBottomColor: theme.border, paddingTop: insets.top + 14 }]}>
-                {onClose && (
-                    <TouchableOpacity onPress={() => onClose()} style={styles.backBtn} activeOpacity={0.7}>
-                        <Ionicons name="chevron-back" size={22} color={theme.accent} />
-                    </TouchableOpacity>
-                )}
-                <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>Planning...</Text>
-                {isWorking && (
-                    <ActivityIndicator size="small" color={theme.accent} style={{ marginLeft: 8 }} />
-                )}
-            </View>
+        <PlanDocumentContext.Provider value={{ applyPatches }}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+                <SafeAreaView
+                    style={[styles.root, { backgroundColor: theme.background }]}
+                >
+                    {/* Date navigation header */}
+                    <DocumentHeader
+                        date={date}
+                        onPrev={() => setDate(addDays(date, -1))}
+                        onNext={() => setDate(addDays(date, 1))}
+                    />
 
-            {/* Error banner */}
-            {error && (
-                <View style={[styles.errorBanner, { backgroundColor: theme.error ?? '#c0392b' }]}>
-                    <Text style={styles.errorText}>{error}</Text>
-                    <TouchableOpacity onPress={() => setError(null)}>
-                        <Ionicons name="close" size={16} color="#fff" />
-                    </TouchableOpacity>
-                </View>
-            )}
+                    {/* Content */}
+                    {loading ? (
+                        <View style={styles.loadingCenter}>
+                            <ActivityIndicator size="large" color="#007AFF" />
+                        </View>
+                    ) : items.length === 0 ? (
+                        <View style={styles.emptyCenter}>
+                            <Text
+                                style={[
+                                    styles.emptyText,
+                                    { color: theme.textSecondary },
+                                ]}
+                            >
+                                Нажми + Пункт чтобы начать
+                            </Text>
+                        </View>
+                    ) : (
+                        <DraggableFlatList
+                            data={items}
+                            keyExtractor={(item) => item.id}
+                            renderItem={renderItem}
+                            onDragEnd={({ from, to }) => moveItem(from, to)}
+                            contentContainerStyle={styles.listContent}
+                        />
+                    )}
 
-            {/* Chat messages */}
-            <ScrollView
-                ref={messagesScrollRef}
-                style={styles.messageList}
-                contentContainerStyle={styles.messageListContent}
-                keyboardShouldPersistTaps="handled"
-            >
-                {messages.map((msg) => (
+                    {/* Bottom action bar */}
                     <View
-                        key={msg.id}
                         style={[
-                            styles.messageBubble,
-                            msg.role === 'user' ? styles.userBubble : styles.assistantBubble,
+                            styles.bottomBar,
                             {
-                                backgroundColor:
-                                    msg.role === 'user'
-                                        ? theme.accent
-                                        : theme.surface,
-                                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                                borderTopColor: theme.border,
+                                backgroundColor: theme.background,
                             },
                         ]}
                     >
-                        <Text
+                        {/* + Пункт */}
+                        <TouchableOpacity
+                            onPress={() => addItem()}
                             style={[
-                                styles.messageText,
-                                {
-                                    color: msg.role === 'user' ? '#fff' : theme.textPrimary,
-                                },
+                                styles.bottomBtn,
+                                { backgroundColor: theme.surface, borderColor: theme.border },
                             ]}
+                            activeOpacity={0.7}
                         >
-                            {msg.text}
-                        </Text>
-                    </View>
-                ))}
-                {isWorking && messages.length === 0 && (
-                    <View style={[styles.messageBubble, styles.assistantBubble, { backgroundColor: theme.surface, alignSelf: 'flex-start' }]}>
-                        <ActivityIndicator size="small" color={theme.accent} />
-                    </View>
-                )}
-            </ScrollView>
-
-            {/* Collapsible timeline */}
-            {plan && (
-                <View style={[styles.timelinePanel, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
-                    <TouchableOpacity
-                        style={[styles.timelineToggle, { borderBottomColor: theme.border }]}
-                        onPress={() => setTimelineCollapsed(prev => !prev)}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="calendar-outline" size={16} color={theme.accent} />
-                        <Text style={[styles.timelineToggleText, { color: theme.textPrimary }]}>
-                            Day Plan
-                        </Text>
-                        <View style={[styles.statusBadge, { backgroundColor: theme.surface }]}>
-                            <Text style={[styles.statusBadgeText, { color: theme.textSecondary }]}>
-                                {plan.status}
+                            <Text
+                                style={[styles.bottomBtnText, { color: theme.textPrimary }]}
+                            >
+                                ＋ Пункт
                             </Text>
-                        </View>
-                        <Ionicons
-                            name={timelineCollapsed ? 'chevron-up' : 'chevron-down'}
-                            size={16}
-                            color={theme.textSecondary}
-                            style={{ marginLeft: 'auto' }}
-                        />
-                    </TouchableOpacity>
+                        </TouchableOpacity>
 
-                    {!timelineCollapsed && (
-                        <View style={styles.timelineContent}>
-                            <PlanTimelineView
-                                plan={plan}
-                                onApprove={handleApprove}
-                                onRequestChange={handleRequestChange}
-                            />
-                        </View>
-                    )}
-                </View>
-            )}
+                        {/* ✦ Спросить */}
+                        <TouchableOpacity
+                            onPress={() => setChatOpen(true)}
+                            style={[styles.bottomBtn, styles.genieBtn]}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>
+                                ✦ Спросить
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
 
-            {/* Input bar */}
-            <View style={[styles.inputBar, { borderTopColor: theme.border, backgroundColor: theme.surface, paddingBottom: insets.bottom || 8 }]}>
-                <TextInput
-                    style={[styles.textInput, { color: theme.textPrimary }]}
-                    placeholder="Type a message..."
-                    placeholderTextColor={theme.textSecondary}
-                    value={inputText}
-                    onChangeText={setInputText}
-                    multiline
-                    maxLength={2000}
-                    returnKeyType="send"
-                    onSubmitEditing={() => handleSendMessage(inputText)}
-                />
-                <TouchableOpacity
-                    onPress={() => handleSendMessage(inputText)}
-                    disabled={!inputText.trim() || isWorking}
-                    activeOpacity={0.7}
-                    style={[
-                        styles.sendButton,
-                        {
-                            backgroundColor:
-                                inputText.trim() && !isWorking ? theme.accent : theme.border,
-                        },
-                    ]}
-                >
-                    <Ionicons name="arrow-up" size={18} color="#fff" />
-                </TouchableOpacity>
-            </View>
-        </KeyboardAvoidingView>
+                    {/* AI edit banner (slides up from bottom) */}
+                    <AIEditBanner
+                        message={bannerMessage}
+                        onDismiss={clearBanner}
+                    />
+
+                    {/* Chat bottom sheet */}
+                    <ChatBottomSheet
+                        isOpen={chatOpen}
+                        onClose={() => setChatOpen(false)}
+                        date={date}
+                    />
+                </SafeAreaView>
+            </GestureHandlerRootView>
+        </PlanDocumentContext.Provider>
     );
 }
 
-function createStyles(theme: any) {
-    return StyleSheet.create({
-        header: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingBottom: 14,
-            borderBottomWidth: 1,
-            gap: 8,
-        },
-        headerTitle: {
-            fontSize: 18,
-            fontWeight: '700',
-            flex: 1,
-        },
-        backBtn: {
-            padding: 2,
-        },
-        errorBanner: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-        },
-        errorText: {
-            color: '#fff',
-            fontSize: 14,
-            flex: 1,
-        },
-        loadingCenter: {
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 12,
-        },
-        loadingText: {
-            fontSize: 14,
-        },
-        messageList: {
-            flex: 1,
-        },
-        messageListContent: {
-            padding: 16,
-            gap: 8,
-        },
-        messageBubble: {
-            maxWidth: '80%',
-            borderRadius: 14,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-        },
-        userBubble: {
-            borderBottomRightRadius: 4,
-        },
-        assistantBubble: {
-            borderBottomLeftRadius: 4,
-        },
-        messageText: {
-            fontSize: 15,
-            lineHeight: 22,
-        },
-        timelinePanel: {
-            borderTopWidth: 1,
-            maxHeight: 380,
-        },
-        timelineToggle: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            gap: 8,
-            borderBottomWidth: 1,
-        },
-        timelineToggleText: {
-            fontSize: 14,
-            fontWeight: '600',
-        },
-        statusBadge: {
-            borderRadius: 6,
-            paddingHorizontal: 8,
-            paddingVertical: 2,
-        },
-        statusBadgeText: {
-            fontSize: 11,
-            fontWeight: '500',
-        },
-        timelineContent: {
-            flex: 1,
-        },
-        inputBar: {
-            flexDirection: 'row',
-            alignItems: 'flex-end',
-            paddingHorizontal: 12,
-            paddingTop: 8,
-            gap: 8,
-            borderTopWidth: 1,
-        },
-        textInput: {
-            flex: 1,
-            fontSize: 15,
-            maxHeight: 100,
-            minHeight: 36,
-        },
-        sendButton: {
-            width: 34,
-            height: 34,
-            borderRadius: 17,
-            justifyContent: 'center',
-            alignItems: 'center',
-        },
-    });
-}
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+const styles = StyleSheet.create({
+    root: {
+        flex: 1,
+    },
+    loadingCenter: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    emptyCenter: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 32,
+    },
+    emptyText: {
+        fontSize: 16,
+        textAlign: 'center',
+    },
+    listContent: {
+        paddingBottom: 80,
+    },
+    bottomBar: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        gap: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    bottomBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+    },
+    genieBtn: {
+        backgroundColor: '#007AFF',
+        borderColor: '#007AFF',
+    },
+    bottomBtnText: {
+        fontSize: 15,
+        fontWeight: '600',
+    },
+});
