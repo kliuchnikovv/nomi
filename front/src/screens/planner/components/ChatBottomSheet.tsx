@@ -136,7 +136,7 @@ export function ChatBottomSheet({ isOpen, onClose, date: _date }: Props) {
                 {/* Messages */}
                 <BottomSheetFlatList
                     data={messages}
-                    keyExtractor={item => item.id}
+                    keyExtractor={(item: ChatMessage) => item.id}
                     renderItem={renderMessage}
                     contentContainerStyle={styles.messageList}
                     ListEmptyComponent={

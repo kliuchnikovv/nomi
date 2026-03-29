@@ -11,6 +11,7 @@ import {
     NativeSyntheticEvent,
     TextInputKeyPressEventData,
 } from 'react-native';
+import type { GestureResponderEvent, PanResponderGestureState } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { PlanItem } from '../types';
 import { PlanChipBadge } from './PlanChipBadge';
@@ -58,9 +59,9 @@ export function PlanItemRow({
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: (_, gs) =>
+            onMoveShouldSetPanResponder: (_: GestureResponderEvent, gs: PanResponderGestureState) =>
                 Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy),
-            onPanResponderRelease: (_, gs) => {
+            onPanResponderRelease: (_: GestureResponderEvent, gs: PanResponderGestureState) => {
                 if (gs.dx > 20) {
                     onIndent(1);
                 } else if (gs.dx < -20) {
