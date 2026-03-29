@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
-    TextInput,
     TouchableOpacity,
     StyleSheet,
     Platform,
@@ -25,6 +24,8 @@ interface Props {
     date: string;
     /** If set, automatically sent as first message when chat opens */
     autoSendMessage?: string | null;
+    /** Whether to enable web search for the auto-send message */
+    autoSendWebSearch?: boolean;
     onAutoSendHandled?: () => void;
 }
 
@@ -32,9 +33,17 @@ interface Props {
 // Component
 // ---------------------------------------------------------------------------
 
-export function ChatBottomSheet({ isOpen, onClose, date: _date, autoSendMessage, onAutoSendHandled }: Props) {
+export function ChatBottomSheet({
+    isOpen,
+    onClose,
+    date: _date,
+    autoSendMessage,
+    autoSendWebSearch,
+    onAutoSendHandled,
+}: Props) {
     const { theme } = useTheme();
     const bottomSheetRef = useRef<BottomSheet>(null);
+    const flatListRef = useRef<any>(null);
     const snapPoints = ['45%', '85%'];
 
     const { messages, sendMessage, isConnected } = usePlannerChat();
@@ -52,10 +61,19 @@ export function ChatBottomSheet({ isOpen, onClose, date: _date, autoSendMessage,
     // Auto-send planning prompt when chat opens and socket is ready
     useEffect(() => {
         if (isOpen && isConnected && autoSendMessage) {
-            sendMessage(autoSendMessage);
+            sendMessage(autoSendMessage, { webSearch: autoSendWebSearch ?? false });
             onAutoSendHandled?.();
         }
     }, [isOpen, isConnected, autoSendMessage]);
+
+    // Auto-scroll to latest message when messages change
+    useEffect(() => {
+        if (messages.length > 0) {
+            setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+            }, 50);
+        }
+    }, [messages.length]);
 
     const handleSheetChanges = useCallback(
         (index: number) => {
@@ -136,10 +154,14 @@ export function ChatBottomSheet({ isOpen, onClose, date: _date, autoSendMessage,
 
                 {/* Messages */}
                 <BottomSheetFlatList
+                    ref={flatListRef}
                     data={messages}
                     keyExtractor={(item: ChatMessage) => item.id}
                     renderItem={renderMessage}
                     contentContainerStyle={styles.messageList}
+                    onContentSizeChange={() =>
+                        flatListRef.current?.scrollToEnd({ animated: false })
+                    }
                     ListEmptyComponent={
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                             Спроси Genie про этот день…

@@ -10,11 +10,17 @@ import ConnectorScreenDialog from './connectors/screen.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { ThemeName, themes } from '../../themes';
 import { initApiUrl } from '../../config';
-import { BotIdentity, botIdentityApi } from '../../apiClient';
+import { BotIdentity, botIdentityApi, modelsApi } from '../../apiClient';
+import { ModelDetail } from '../../types/Model';
 
 // Shared with plugins/gmail/client/emailAnalyzer.ts
 const EMAIL_ANALYSIS_MODE_KEY = '@genie_email_analysis_mode';
 type EmailAnalysisMode = 'device' | 'server';
+
+export const PLANNER_MODEL_KEY = '@genie_planner_model';
+export const PLANNER_PROVIDER_KEY = '@genie_planner_provider';
+const PLANNER_MODEL_DEFAULT = 'glm-4.7';
+const PLANNER_PROVIDER_DEFAULT = 'z.ai';
 
 type Props = {
     visible: boolean;
@@ -40,6 +46,11 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
     const [weatherLon, setWeatherLon] = useState('37.62');
     const [locationLoading, setLocationLoading] = useState(false);
     const [emailAnalysisMode, setEmailAnalysisMode] = useState<EmailAnalysisMode>('device');
+
+    // Planner model
+    const [plannerModelExpanded, setPlannerModelExpanded] = useState(false);
+    const [plannerModelId, setPlannerModelId] = useState(PLANNER_MODEL_DEFAULT);
+    const [availableModels, setAvailableModels] = useState<ModelDetail[]>([]);
 
     // Bot Identity
     const [botIdentityExpanded, setBotIdentityExpanded] = useState(false);
@@ -70,6 +81,12 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
                 setBotTone(identity.tone || 'casual');
             }
         }).catch(() => { /* use defaults */ });
+        AsyncStorage.getItem(PLANNER_MODEL_KEY).then(m => {
+            if (m) setPlannerModelId(m);
+        });
+        modelsApi.getModels().then(models => {
+            setAvailableModels(models.filter(m => m.supports_tools));
+        }).catch(() => { /* leave empty */ });
     }, [visible]);
 
     // Get current theme palette
@@ -242,6 +259,53 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
                                     await AsyncStorage.setItem(EMAIL_ANALYSIS_MODE_KEY, mode);
                                 }}
                             />
+                        </View>
+
+                        {/* Planner Model Section */}
+                        <View style={{ marginBottom: 16 }}>
+                            <Pressable
+                                onPress={() => setPlannerModelExpanded(!plannerModelExpanded)}
+                                style={styles.themeHeader}
+                            >
+                                <View>
+                                    <Text style={styles.label}>Planner Model</Text>
+                                    <Text style={styles.themeCurrentValue}>
+                                        {availableModels.find(m => m.id === plannerModelId)?.name ?? plannerModelId}
+                                    </Text>
+                                </View>
+                                <Text style={styles.chevron}>
+                                    {plannerModelExpanded ? '▼' : '▶'}
+                                </Text>
+                            </Pressable>
+                            {plannerModelExpanded && (
+                                <View style={{ marginTop: 12 }}>
+                                    {availableModels.map(m => (
+                                        <Pressable
+                                            key={m.id}
+                                            onPress={async () => {
+                                                setPlannerModelId(m.id);
+                                                await AsyncStorage.setItem(PLANNER_MODEL_KEY, m.id);
+                                                await AsyncStorage.setItem(PLANNER_PROVIDER_KEY, m.provider ?? PLANNER_PROVIDER_DEFAULT);
+                                                setPlannerModelExpanded(false);
+                                            }}
+                                            style={[
+                                                styles.themeOption,
+                                                plannerModelId === m.id
+                                                    ? styles.themeOptionSelected
+                                                    : styles.themeOptionUnselected,
+                                            ]}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.themeOptionText}>{m.name}</Text>
+                                                <Text style={{ fontSize: 11, color: theme.textSecondary }}>{m.provider}</Text>
+                                            </View>
+                                            {plannerModelId === m.id && (
+                                                <Text style={styles.themeCheckmark}>✓</Text>
+                                            )}
+                                        </Pressable>
+                                    ))}
+                                </View>
+                            )}
                         </View>
 
                         {/* Bot Identity Section */}

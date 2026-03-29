@@ -39,36 +39,41 @@ function addDays(date: string, n: number): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function buildPlanningPrompt(items: PlanItem[]): string {
+function currentTimeStr(): string {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function buildPlanningPrompt(items: PlanItem[], date: string): string {
     const uncheckedItems = items.filter(i => !i.checked);
 
     if (uncheckedItems.length === 0) {
-        return 'У меня пока нет задач. Можешь посоветовать что мне запланировать на сегодня?';
+        return `У меня пока нет задач на ${date}. Можешь посоветовать что мне запланировать?`;
     }
 
     const tasksList = uncheckedItems.map((item, idx) => {
         const indent = '  '.repeat(item.depth);
-        const chips = item.chips.map(c => `[${c.type}: ${c.value}]`).join(' ');
-        return `${idx + 1}. ID:${item.id} ${indent}${item.text} ${chips}`.trim();
+        const existingChips = item.chips.map(c => `[${c.type}: ${c.value}]`).join(' ');
+        return `${idx + 1}. ID:${item.id} ${indent}${item.text}${existingChips ? ' ' + existingChips : ''}`.trim();
     }).join('\n');
 
-    return `Помоги спланировать мой день.
+    return `Помоги составить план дня. Сейчас ${currentTimeStr()}, дата: ${date}.
 
-Вот мой список задач:
+Список задач:
 ${tasksList}
 
-ВАЖНО: Используй инструмент patch_plan_document чтобы:
-1. Расставить ориентировочное время для каждой задачи (добавь chip type="time")
-2. Указать места если нужно (chip type="location")
-3. Добавить заметки с переходами между задачами (chip type="note")
-4. Оптимизировать порядок задач при необходимости
+Для каждой задачи, у которой ещё нет нужного чипа, определи и добавь:
+- time: конкретный интервал "HH:MM-HH:MM" с учётом длительности (например "09:00-10:30")
+- location: конкретное место или адрес (например "ул. Ленина 5", "дом", "супермаркет Перекрёсток")
+- note: важные заметки (время в дороге, подготовка, звонки)
 
-Формат чипов:
-- time: "09:00-10:00" или "14:30"
-- location: "офис", "дом", "кафе Центральный"
-- note: "15 мин на дорогу метро", "позвонить клиенту перед встречей"
+Правила:
+1. Не дублируй чипы, которые уже есть у задачи (они показаны в скобках)
+2. Учитывай уже расставленное время при планировании остальных задач
+3. Если нужно — используй поиск в интернете чтобы уточнить часы работы места или время в пути
+4. Расставь задачи в реалистичном порядке дня
 
-Пожалуйста, проанализируй мой список и вызови patch_plan_document с улучшениями.`;
+Используй инструмент patch_plan_document чтобы применить все изменения одним вызовом.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +86,7 @@ export function PlannerScreen() {
     const [date, setDate] = useState<string>(today);
     const [chatOpen, setChatOpen] = useState(false);
     const [planDayPrompt, setPlanDayPrompt] = useState<string | null>(null);
+    const [planDayWebSearch, setPlanDayWebSearch] = useState(false);
     const [keyboardVisible, setKeyboardVisible] = useState(false);
 
     const {
@@ -161,10 +167,11 @@ export function PlannerScreen() {
 
     const handlePlanDay = useCallback(() => {
         if (items.length === 0) return;
-        const prompt = buildPlanningPrompt(items);
+        const prompt = buildPlanningPrompt(items, date);
         setPlanDayPrompt(prompt);
+        setPlanDayWebSearch(true);
         setChatOpen(true);
-    }, [items]);
+    }, [items, date]);
 
     // ---------------------------------------------------------------------------
     // Render item for DraggableFlatList
@@ -287,7 +294,11 @@ export function PlannerScreen() {
                         onClose={() => setChatOpen(false)}
                         date={date}
                         autoSendMessage={planDayPrompt}
-                        onAutoSendHandled={() => setPlanDayPrompt(null)}
+                        autoSendWebSearch={planDayWebSearch}
+                        onAutoSendHandled={() => {
+                            setPlanDayPrompt(null);
+                            setPlanDayWebSearch(false);
+                        }}
                     />
                 </SafeAreaView>
             </View>

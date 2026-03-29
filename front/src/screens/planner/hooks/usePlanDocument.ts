@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { apiClient } from '../../../apiClient';
 import { getApiUrl } from '../../../config';
 import { PlanChip, PlanDocument, PlanItem } from '../types';
@@ -78,32 +79,69 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
   // Debounce timer ref for server sync
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Latest items waiting to be synced (updated on every mutation)
+  const pendingSyncItemsRef = useRef<PlanItem[] | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Core sync function (called by debounce and AppState flush)
+  // ---------------------------------------------------------------------------
+
+  const syncNow = useCallback(async (itemsToSync: PlanItem[]) => {
+    const docId = documentIdRef.current;
+    if (!docId) return;
+    try {
+      const updated = await apiClient.patch<PlanDocument>(
+        `${getApiUrl()}/plan-documents/${docId}`,
+        { items: itemsToSync },
+      );
+      if (updated) {
+        setDocument(updated);
+      }
+    } catch (err) {
+      console.warn('[usePlanDocument] sync error:', err);
+    }
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Server sync (debounced, 500 ms)
   // ---------------------------------------------------------------------------
 
   const scheduleSync = useCallback((nextItems: PlanItem[]) => {
+    pendingSyncItemsRef.current = nextItems;
     if (syncTimerRef.current) {
       clearTimeout(syncTimerRef.current);
     }
-    syncTimerRef.current = setTimeout(async () => {
-      const docId = documentIdRef.current;
-      if (!docId) return;
-      try {
-        const updated = await apiClient.patch<PlanDocument>(
-          `${getApiUrl()}/plan-documents/${docId}`,
-          { items: nextItems },
-        );
-        if (updated) {
-          setDocument(updated);
-          // Do NOT replace local items — server items are the source of truth only
-          // after a full reload, not after a debounced sync.
-        }
-      } catch (err) {
-        console.warn('[usePlanDocument] sync error:', err);
+    syncTimerRef.current = setTimeout(() => {
+      const items = pendingSyncItemsRef.current;
+      if (items) {
+        pendingSyncItemsRef.current = null;
+        syncNow(items);
       }
+      syncTimerRef.current = null;
     }, 500);
-  }, []);
+  }, [syncNow]);
+
+  // ---------------------------------------------------------------------------
+  // AppState listener — flush pending sync when app goes to background
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener(
+      'change',
+      (nextState: AppStateStatus) => {
+        if (nextState === 'background' || nextState === 'inactive') {
+          const items = pendingSyncItemsRef.current;
+          if (items && syncTimerRef.current) {
+            clearTimeout(syncTimerRef.current);
+            syncTimerRef.current = null;
+            pendingSyncItemsRef.current = null;
+            syncNow(items);
+          }
+        }
+      },
+    );
+    return () => subscription.remove();
+  }, [syncNow]);
 
   // ---------------------------------------------------------------------------
   // Load or create document on mount / date change
@@ -155,11 +193,16 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
     load();
     return () => {
       cancelled = true;
-      if (syncTimerRef.current) {
+      // Flush any pending sync before unmounting (e.g. date navigation)
+      const items = pendingSyncItemsRef.current;
+      if (items && syncTimerRef.current) {
         clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+        pendingSyncItemsRef.current = null;
+        syncNow(items);
       }
     };
-  }, [date]);
+  }, [date, syncNow]);
 
   // ---------------------------------------------------------------------------
   // Mutation helpers — update local state immediately then schedule server sync
