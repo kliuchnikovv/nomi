@@ -1,0 +1,145 @@
+import React, { useEffect, useRef } from 'react';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    Animated,
+} from 'react-native';
+import { PlanChip, ChipType } from '../types';
+
+interface ChipStyle {
+    bg: string;
+    text: string;
+    icon: string;
+}
+
+const CHIP_STYLES: Record<ChipType, ChipStyle> = {
+    time:     { bg: '#E8F4FF', text: '#007AFF', icon: '🕐' },
+    location: { bg: '#FFF0E8', text: '#FF6B00', icon: '📍' },
+    link:     { bg: '#F0FFF0', text: '#34C759', icon: '🔗' },
+    note:     { bg: '#F5F0FF', text: '#9B59B6', icon: '📝' },
+};
+
+interface Props {
+    chip: PlanChip;
+    onRemove?: () => void;
+}
+
+export function PlanChipBadge({ chip, onRemove }: Props) {
+    const glowAnim = useRef(new Animated.Value(0)).current;
+
+    const isPlaceholder =
+        chip.value.startsWith('[') && chip.value.endsWith(']');
+
+    useEffect(() => {
+        if (!chip.isNew) return;
+
+        const pulse = Animated.loop(
+            Animated.sequence([
+                Animated.timing(glowAnim, {
+                    toValue: 1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(glowAnim, {
+                    toValue: 0,
+                    duration: 400,
+                    useNativeDriver: true,
+                }),
+            ]),
+            { iterations: 2 },
+        );
+        pulse.start();
+        return () => pulse.stop();
+    }, [chip.isNew, glowAnim]);
+
+    const chipStyle = CHIP_STYLES[chip.type];
+
+    const borderOpacity = glowAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 1],
+    });
+
+    if (isPlaceholder) {
+        return (
+            <View style={[styles.pill, styles.placeholderPill]}>
+                <Text style={styles.icon}>{chipStyle.icon}</Text>
+                <Text style={[styles.valueText, styles.placeholderText, { color: '#FF6B00' }]}>
+                    {chip.value}
+                </Text>
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.wrapper}>
+            <Animated.View
+                style={[
+                    styles.glowBorder,
+                    { opacity: borderOpacity },
+                ]}
+            />
+            <View style={[styles.pill, { backgroundColor: chipStyle.bg }]}>
+                <Text style={styles.icon}>{chipStyle.icon}</Text>
+                <Text style={[styles.valueText, { color: chipStyle.text }]}>
+                    {chip.value}
+                </Text>
+                {onRemove && (
+                    <TouchableOpacity
+                        onPress={onRemove}
+                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                        style={styles.removeBtn}
+                    >
+                        <Text style={[styles.removeText, { color: chipStyle.text }]}>×</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    wrapper: {
+        position: 'relative',
+    },
+    glowBorder: {
+        position: 'absolute',
+        inset: -2,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#007AFF',
+    },
+    pill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+        gap: 4,
+    },
+    placeholderPill: {
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: '#FF6B00',
+        backgroundColor: 'transparent',
+    },
+    icon: {
+        fontSize: 11,
+    },
+    valueText: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    placeholderText: {
+        fontStyle: 'italic',
+    },
+    removeBtn: {
+        marginLeft: 2,
+    },
+    removeText: {
+        fontSize: 14,
+        fontWeight: '600',
+        lineHeight: 16,
+    },
+});
