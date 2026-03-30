@@ -22,7 +22,7 @@ import { registerApplyPatches, unregisterApplyPatches } from './planDocumentRegi
 import { DocumentHeader } from './components/DocumentHeader';
 import { PlanItemRow } from './components/PlanItemRow';
 import { AIEditBanner } from './components/AIEditBanner';
-import { ChatBottomSheet } from './components/ChatBottomSheet';
+import { usePlannerChat } from './hooks/usePlannerChat';
 
 // ---------------------------------------------------------------------------
 // Date helpers
@@ -84,10 +84,8 @@ export function PlannerScreen() {
     const { theme } = useTheme();
 
     const [date, setDate] = useState<string>(today);
-    const [chatOpen, setChatOpen] = useState(false);
-    const [planDayPrompt, setPlanDayPrompt] = useState<string | null>(null);
-    const [planDayWebSearch, setPlanDayWebSearch] = useState(false);
     const [keyboardVisible, setKeyboardVisible] = useState(false);
+    const [planning, setPlanning] = useState(false);
 
     const {
         items,
@@ -99,9 +97,12 @@ export function PlannerScreen() {
         indentItem,
         toggleChecked,
         applyPatches,
+        flushSync,
         bannerMessage,
         clearBanner,
     } = usePlanDocument(date);
+
+    const { sendMessage } = usePlannerChat();
 
     // Register applyPatches so ClientToolExecutor can call it
     useEffect(() => {
@@ -165,13 +166,18 @@ export function PlannerScreen() {
     // Planning day trigger
     // ---------------------------------------------------------------------------
 
-    const handlePlanDay = useCallback(() => {
-        if (items.length === 0) return;
-        const prompt = buildPlanningPrompt(items, date);
-        setPlanDayPrompt(prompt);
-        setPlanDayWebSearch(true);
-        setChatOpen(true);
-    }, [items, date]);
+    const handlePlanDay = useCallback(async () => {
+        if (items.length === 0 || planning) return;
+        setPlanning(true);
+        try {
+            // Persist current state to server before sending to AI
+            await flushSync();
+            const prompt = buildPlanningPrompt(items, date);
+            sendMessage(prompt, { webSearch: true });
+        } finally {
+            setPlanning(false);
+        }
+    }, [items, date, planning, flushSync, sendMessage]);
 
     // ---------------------------------------------------------------------------
     // Render item for DraggableFlatList
@@ -260,46 +266,22 @@ export function PlannerScreen() {
                         {/* Запланировать день */}
                         <TouchableOpacity
                             onPress={handlePlanDay}
-                            disabled={items.length === 0}
+                            disabled={items.length === 0 || planning}
                             style={[
                                 styles.bottomBtn,
                                 styles.planBtn,
-                                { opacity: items.length === 0 ? 0.4 : 1 },
+                                { opacity: items.length === 0 || planning ? 0.4 : 1 },
                             ]}
                             activeOpacity={0.7}
                         >
                             <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>
-                                🗓 Запланировать
-                            </Text>
-                        </TouchableOpacity>
-
-                        {/* Спросить Genie */}
-                        <TouchableOpacity
-                            onPress={() => setChatOpen(true)}
-                            style={[styles.bottomBtn, styles.genieBtn]}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>
-                                ✦ Спросить
+                                {planning ? '⏳ Сохраняем…' : '🗓 Запланировать'}
                             </Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* AI edit banner */}
                     <AIEditBanner message={bannerMessage} onDismiss={clearBanner} />
-
-                    {/* Chat bottom sheet */}
-                    <ChatBottomSheet
-                        isOpen={chatOpen}
-                        onClose={() => setChatOpen(false)}
-                        date={date}
-                        autoSendMessage={planDayPrompt}
-                        autoSendWebSearch={planDayWebSearch}
-                        onAutoSendHandled={() => {
-                            setPlanDayPrompt(null);
-                            setPlanDayWebSearch(false);
-                        }}
-                    />
                 </SafeAreaView>
             </View>
             </GestureHandlerRootView>
@@ -351,9 +333,6 @@ const styles = StyleSheet.create({
     },
     planBtn: {
         backgroundColor: '#5856D6',
-    },
-    genieBtn: {
-        backgroundColor: '#007AFF',
     },
     bottomBtnText: {
         fontSize: 14,

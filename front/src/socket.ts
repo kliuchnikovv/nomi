@@ -125,6 +125,13 @@ export class ChatSocket {
         this.open();
     }
 
+    /** Connect once — no auto-reconnect on server close (e.g. for short-lived sessions). */
+    connectOnce() {
+        this.isIntentionallyClosed = false;
+        this.shouldReconnect = false;
+        this.open();
+    }
+
     /**
      * Push a message to the outbox, dropping the oldest if the cap is exceeded.
      */
@@ -206,7 +213,7 @@ export class ChatSocket {
 
         // Safety: ensure we want to be connected
         this.isIntentionallyClosed = false;
-        this.shouldReconnect = true;
+        // Do NOT override shouldReconnect here — it is set by connect() or connectOnce() before open()
 
         if (this.ws) {
             try {

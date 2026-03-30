@@ -14,7 +14,8 @@ export type PatchOp =
   | { op: 'update_chip'; item_id: string; chip: PlanChip }
   | { op: 'add_item'; item: PlanItem; after_id?: string }
   | { op: 'remove_item'; item_id: string }
-  | { op: 'update_item'; item_id: string; changes: Partial<PlanItem> };
+  | { op: 'update_item'; item_id: string; changes: Partial<PlanItem> }
+  | { op: 'move_to_date'; item_id: string; target_date: string };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,6 +59,8 @@ export interface UsePlanDocumentResult {
   indentItem: (id: string, delta: -1 | 1) => void;
   toggleChecked: (id: string) => void;
   applyPatches: (patches: PatchOp[], bannerText?: string) => void;
+  /** Immediately flush any pending debounced sync to the server */
+  flushSync: () => Promise<void>;
   bannerMessage: string | null;
   clearBanner: () => void;
   setBannerMessage: (msg: string | null) => void;
@@ -321,15 +324,16 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
               break;
             }
             case 'add_chip': {
-              next = next.map(i =>
-                i.id === patch.item_id
-                  ? {
-                      ...i,
-                      chips: [...i.chips, { ...patch.chip, isNew: true }],
-                      isNew: true,
-                    }
-                  : i,
-              );
+              next = next.map(i => {
+                if (i.id !== patch.item_id) return i;
+                // Skip if chip of the same type already exists
+                if (i.chips.some(c => c.type === patch.chip.type)) return i;
+                return {
+                  ...i,
+                  chips: [...i.chips, { ...patch.chip, isNew: true }],
+                  isNew: true,
+                };
+              });
               break;
             }
             case 'remove_chip': {
@@ -359,6 +363,11 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
               );
               break;
             }
+            case 'move_to_date': {
+              // Remove from current document; the item will be created on target date server-side
+              next = next.filter(i => i.id !== patch.item_id);
+              break;
+            }
           }
         }
 
@@ -371,6 +380,20 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
     },
     [mutate],
   );
+
+  // ---------------------------------------------------------------------------
+  // flushSync — cancel debounce and sync immediately
+  // ---------------------------------------------------------------------------
+
+  const flushSync = useCallback(async () => {
+    const pending = pendingSyncItemsRef.current;
+    if (pending && syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+      pendingSyncItemsRef.current = null;
+      await syncNow(pending);
+    }
+  }, [syncNow]);
 
   // ---------------------------------------------------------------------------
   // Banner helpers
@@ -389,6 +412,7 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
     indentItem,
     toggleChecked,
     applyPatches,
+    flushSync,
     bannerMessage,
     clearBanner,
     setBannerMessage,

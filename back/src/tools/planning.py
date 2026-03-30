@@ -29,6 +29,7 @@ class PlanningTools(Toolkit):
                 - For remove_chip: {"op": "remove_chip", "item_id": "...", "chip_id": "..."}
                 - For update_chip: {"op": "update_chip", "item_id": "...", "chip": {...}}
                 - For update_item: {"op": "update_item", "item_id": "...", "changes": {...}}
+                - For move_to_date: {"op": "move_to_date", "item_id": "...", "target_date": "YYYY-MM-DD"}
 
                 Chip types:
                 - time: "09:00-10:00", "14:30", "morning", "afternoon"

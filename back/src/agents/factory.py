@@ -10,6 +10,7 @@ from agno.models.base import Model
 from agno.vectordb.pgvector import PgVector
 
 from src.agents.souper import SouperAgent
+from src.agents.planner import build_planner_agent
 from src.models.safe_gemini import SafeGemini
 
 from src.tools.config import ToolConfigClient
@@ -523,17 +524,26 @@ class AgentFactory:
                     list_id,
                 )
 
-            agent = SouperAgent(
-                db=self._db,
-                model=model,
-                tools=tools,
-                debug_mode=self._debug_mode,
-                thinking=thinking,
-                user_id=rag_user_id,
-                timezone=timezone,
-                knowledge=self._knowledge,
-                identity=bot_identity,
-            )
+            if agent_type and agent_type.lower() == "planner":
+                agent = build_planner_agent(
+                    model=model,
+                    tools=tools,
+                    timezone=timezone,
+                    debug_mode=self._debug_mode,
+                )
+                logger.info("[Factory] Built PlannerAgent for agent_type=planner")
+            else:
+                agent = SouperAgent(
+                    db=self._db,
+                    model=model,
+                    tools=tools,
+                    debug_mode=self._debug_mode,
+                    thinking=thinking,
+                    user_id=rag_user_id,
+                    timezone=timezone,
+                    knowledge=self._knowledge,
+                    identity=bot_identity,
+                )
 
             # _attach_tool_context removed - ChatHistoryTool is disabled
             # self._attach_tool_context(agent, tools)

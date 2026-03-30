@@ -77,7 +77,11 @@ export function MainProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            setChats(data);
+            // Hide internal system chats (Planner) from the chat list
+            const visibleChats = data.filter(
+                c => !(c.title === 'Planner' && c.mode === 'agent'),
+            );
+            setChats(visibleChats);
             if (data.length === 0) {
                 setActiveChatID(prev => {
                     if (preserveActiveChat && prev) {
