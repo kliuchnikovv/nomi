@@ -538,6 +538,8 @@ class AgentFactory:
                     tools=tools,
                     timezone=timezone,
                     debug_mode=self._debug_mode,
+                    db=self._db,
+                    session_id=session_id,
                 )
                 logger.info("[Factory] Built PlannerAgent for agent_type=planner")
             else:

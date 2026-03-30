@@ -49,6 +49,8 @@ def build_planner_agent(
     tools: list,
     timezone: str | None = None,
     debug_mode: bool = False,
+    db=None,
+    session_id: str | None = None,
 ) -> Agent:
     """Build a lightweight planning agent."""
     tz = timezone or "UTC"
@@ -57,6 +59,7 @@ def build_planner_agent(
 
     return Agent(
         name="Planner",
+        session_id=session_id,
         model=model,
         tools=tools,
         instructions=instructions,
@@ -68,4 +71,5 @@ def build_planner_agent(
         stream_events=True,
         debug_mode=debug_mode,
         telemetry=False,
+        db=db,
     )
