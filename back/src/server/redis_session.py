@@ -684,6 +684,23 @@ class RedisSession:
             )
             response = await memoriser.arun(prompt, stream=False)
             content = getattr(response, "content", None) or ""
+            # If the model returned an error message instead of facts, skip entirely
+            content_lower = content.lower()
+            if any(
+                kw in content_lower
+                for kw in (
+                    "rate limit",
+                    "ratelimit",
+                    "429",
+                    "too many requests",
+                    "freeusagelimit",
+                    "error code",
+                    "please try again",
+                    "exceeded",
+                )
+            ):
+                logger.debug("[RedisSession] Skipping fact extraction — response looks like an error")
+                return
             if isinstance(content, str):
                 for line in content.splitlines():
                     fact = line.strip()
