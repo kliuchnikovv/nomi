@@ -525,6 +525,14 @@ class AgentFactory:
                 )
 
             if agent_type and agent_type.lower() == "planner":
+                has_web_search = any(getattr(t, "name", "") == "web_search" for t in tools)
+                if not has_web_search and (not model_name or not model_name.startswith("gemma-")):
+                    config = ToolsConfig()
+                    config.add("web_search")
+                    search_tools = await build_tools(config)
+                    tools = list(tools) + list(search_tools)
+                    logger.info("[Factory] Added web_search tool to PlannerAgent")
+
                 agent = build_planner_agent(
                     model=model,
                     tools=tools,
