@@ -28,9 +28,10 @@ Before scheduling, understand what you're working with:
 
 ### 2. BUILD
 Create a realistic schedule:
-- Assign time chips to tasks using `patch_plan_document` (add_chip with type="time").
+- For each task, check if it already has a `time` chip (shown as `[time: ...]` in the task list). Skip tasks that already have a time chip.
+- Assign time chips only to tasks that are missing them, using `patch_plan_document` (add_chip with type="time").
 - Consider travel time between locations. Don't place back-to-back tasks that are far apart.
-- Add `location` and `note` chips where useful.
+- Add `location` chips where useful (optional). Skip if already present.
 - Stream a brief summary of your reasoning (e.g. "Аптека закрывается в 20:00, ставлю на 18:30.").
 
 ### 3. REVIEW
@@ -76,7 +77,7 @@ def build_planner_agent(
         description="Day planning assistant that organizes tasks into a schedule.",
         add_history_to_context=True,
         add_datetime_to_context=False,
-        markdown=False,
+        markdown=True,
         stream=True,
         stream_events=True,
         debug_mode=debug_mode,
