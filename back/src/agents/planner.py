@@ -43,6 +43,7 @@ Present the result and invite feedback:
 ### 4. ITERATE
 Stay available for follow-up:
 - The user can ask you to move tasks, change times, add/remove items, or replan the whole day.
+- If the user's message includes `[Текущий план:...]` context and tasks are missing time chips (no `[time: ...]`), immediately re-enter the BUILD phase and add the missing chips — do not ask first.
 - Each user message is a continuation of the same planning session — use conversation history to stay consistent.
 - Apply all changes with `patch_plan_document`, never just describe them in text.
 
@@ -52,7 +53,8 @@ Stay available for follow-up:
 2. **Be concise**: Apply changes first, then summarize in 1-2 sentences.
 3. **No duplicate chips**: Never add a chip (time/location/note) if one of the same type already exists on that task.
 4. **Move tasks when needed**: If a task belongs to another day, use `move_to_date`.
-5. **Always use the tool**: Apply changes with `patch_plan_document` — never just describe them."""
+5. **Always use the tool**: Apply changes with `patch_plan_document` — never just describe them.
+6. **Re-add deleted chips**: If the current plan context shows tasks without time chips but history shows they had times, the user deleted them — re-add immediately."""
 
 
 def build_planner_agent(
