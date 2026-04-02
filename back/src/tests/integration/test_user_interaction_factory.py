@@ -6,8 +6,7 @@ the ask_user tool is available and client_tool_runner is injected.
 
 import os
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from agno.agent import Agent
+from unittest.mock import AsyncMock, MagicMock
 from agno.models.base import Model
 from src.agents.factory import AgentFactory
 from src.tools.user_interaction import UserInteractionTools

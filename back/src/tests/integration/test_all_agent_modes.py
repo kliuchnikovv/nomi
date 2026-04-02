@@ -10,7 +10,6 @@ This test verifies that ask_user is properly added to:
 import os
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from agno.agent import Agent
 from agno.models.base import Model
 from src.agents.factory import AgentFactory
 from src.tools.user_interaction import UserInteractionTools
@@ -241,10 +240,8 @@ async def test_user_interaction_in_default_mode():
 
     # Find UserInteractionTools
     tools = agent.tools if agent.tools else []
-    user_interaction_tool = None
     for tool in tools:
         if isinstance(tool, UserInteractionTools):
-            user_interaction_tool = tool
             break
 
     # In default mode, there are no tools fetched from config

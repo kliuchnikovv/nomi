@@ -834,8 +834,10 @@ class RedisSession:
             # Clear context items if not provided (user removed them)
             self.context_items = []
 
-        # Run memory extraction in background (does not block response)
-        if payload.get("role") != "system":
+        # Run memory extraction in background (does not block response).
+        # Only when ENABLE_MEMORY=true to avoid extra LLM calls and storing noise.
+        _enable_memory = getattr(self.agent_factory, "_enable_memory", False)
+        if _enable_memory and payload.get("role") != "system":
             asyncio.create_task(self._extract_and_store_facts(text))
 
         # If we have history and the agent supports it, we might want to load it.
@@ -873,20 +875,12 @@ class RedisSession:
         )
         delivery_text_buffer: list[str] = []
 
-        # Determine session type for routing.
-        # Go sets command["type"] = TeamID (e.g. "planning") which Python stores in command_desc.
-        session_type = (
-            (self.command_desc.get("type") if isinstance(self.command_desc, dict) else None)
-            or payload.get("session_type", "chat")
-        )
-
         try:
-            # Route to planning workflow if session_type == "planning"
-            if session_type == "planning":
-                stream_iter = self._stream_planning_workflow(text, payload)
-            else:
-                # Stream agent events for real-time response
-                stream_iter = self._stream_agent_events(text, payload.get("attachments"))
+            # Stream agent events for real-time response.
+            # Both regular chat and planner (command.type="planner" / session_type="planning")
+            # use the same agent streaming path — PlannerAgent is selected by AgentFactory
+            # based on command_desc["type"] == "planner".
+            stream_iter = self._stream_agent_events(text, payload.get("attachments"))
             async for event in stream_iter:
                 if self.cancel_event.is_set():
                     break
@@ -1115,83 +1109,6 @@ class RedisSession:
                     },
                 )
             )
-
-    async def _stream_planning_workflow(
-        self, text: str, payload: dict[str, Any]
-    ) -> AsyncIterator[dict]:
-        """Stream events from the PlanningWorkflow for session_type='planning'."""
-        from src.workflows.models import PlanningInput, PlanTask
-        from src.workflows.planning import build_planning_workflow
-
-        planning_date: str = payload.get("planning_date", "")
-        timezone: str = payload.get("timezone", "UTC")
-        raw_tasks = payload.get("tasks") or []
-        tasks: list[PlanTask] = []
-        for t in raw_tasks:
-            if isinstance(t, dict):
-                try:
-                    tasks.append(PlanTask(**t))
-                except Exception:
-                    pass
-
-        user_id: str = self.user_id or self.session_id
-
-        planning_input = PlanningInput(
-            user_message=text,
-            chat_id=self.chat_id,
-            user_id=user_id,
-            planning_date=planning_date,
-            tasks=tasks,
-            timezone=timezone,
-        )
-
-        workflow = build_planning_workflow(
-            session_id=self.chat_id,
-            db=None,  # skip: container.db is sync; Agno workflow expects async db
-        )
-
-        logger.info(
-            "[PlanningWorkflow] Starting workflow: chat_id=%s status=%s",
-            self.chat_id,
-            workflow.session_state.get("status", "gathering"),
-        )
-
-        try:
-            # Run workflow synchronously (steps are a sync generator)
-            # Wrap in executor to avoid blocking the event loop
-            import asyncio
-            loop = asyncio.get_event_loop()
-            result_content: str = ""
-
-            def _run_sync() -> str:
-                output = workflow.run(
-                    input=text,
-                    additional_data={"planning_input": planning_input.model_dump()},
-                    stream=False,
-                )
-                return str(getattr(output, "content", "") or "")
-
-            result_content = await loop.run_in_executor(None, _run_sync)
-
-            if result_content:
-                yield {"type": "text", "content": result_content}
-
-            # Emit content_done to signal completion
-            self._last_run_completed_content = result_content
-            yield {"type": "content_done"}
-
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            logger.error(
-                "[PlanningWorkflow] Workflow error: %s", exc, exc_info=True
-            )
-            yield {
-                "type": "error",
-                "message": f"Planning workflow error: {exc}",
-                "code": "planning_error",
-                "http": 500,
-            }
 
     async def _stream_agent_events(
         self, text: str, attachments: list | None
