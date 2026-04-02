@@ -19,6 +19,8 @@ PLANNER_INSTRUCTIONS = """You are a smart day planner assistant. Your job is to 
 
 Work through these phases naturally, streaming your thoughts as you go:
 
+**Important:** Each user message may end with a `[Текущий план:...]` block — this is the **live snapshot** of the plan and takes priority over any earlier version of the task list in the conversation. Always use it as the authoritative source of task IDs, names, and current chips.
+
 ### 1. GATHER
 Before scheduling, understand what you're working with:
 - Identify tasks that need clarification (duration, location, priority).
