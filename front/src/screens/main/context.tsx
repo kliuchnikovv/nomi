@@ -30,7 +30,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     const [chats, setChats] = useState<Chat[]>([]);
     const [chatsLoading, setChatsLoading] = useState(false);
     const [activeChatID, setActiveChatID] = useState<string | null>(null);
-    const [sidebarFilter, setSidebarFilter] = useState<string>('all');
+    const [sidebarFilter, setSidebarFilter] = useState<string>('agent');
     const [activePluginView, setActivePluginView] = useState<string | null>(null);
     const [activePluginIntegrationId, setActivePluginIntegrationId] = useState<string | null>(null);
     const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
@@ -77,11 +77,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
-            // Hide internal system chats (Planner) from the chat list
-            const visibleChats = data.filter(
-                c => !(c.title === 'Planner' && c.mode === 'agent'),
-            );
-            setChats(visibleChats);
+            setChats(data);
             if (data.length === 0) {
                 setActiveChatID(prev => {
                     if (preserveActiveChat && prev) {
@@ -255,7 +251,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
         }
 
         // Use current filter as the default mode/team for the new chat
-        if (sidebarFilter === 'all' || sidebarFilter === 'agent') {
+        if (sidebarFilter === 'all' || sidebarFilter === 'agent' || sidebarFilter === 'planner') {
             setPendingChatMode({ mode: 'agent', teamId: null });
         } else {
             setPendingChatMode({ mode: 'team', teamId: sidebarFilter });
@@ -317,7 +313,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
 function alertError(message: string) {
     try {
-        Alert.alert('Ошибка', message);
+        Alert.alert('Error', message);
     } catch {
         if (Platform.OS === 'android') {
             try { ToastAndroid.show(message, ToastAndroid.LONG); } catch { }

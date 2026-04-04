@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/context.tsx';
 import { createStyles } from './styles.tsx';
+import { NavArrowDown, Check } from 'iconoir-react-native';
 
 import ConnectorScreenDialog from './connectors/screen.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
@@ -158,9 +159,7 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
                                         {themesList.find(t => t.value === themeName)?.label}
                                     </Text>
                                 </View>
-                                <Text style={styles.chevron}>
-                                    {themeExpanded ? '▼' : '▶'}
-                                </Text>
+                                <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: themeExpanded ? '0deg' : '-90deg' }] }} />
                             </Pressable>
                             {themeExpanded && (
                                 <View style={{ marginTop: 12 }}>
@@ -182,7 +181,7 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
                                                 {t.label}
                                             </Text>
                                             {themeName === t.value && (
-                                                <Text style={styles.themeCheckmark}>✓</Text>
+                                                <Check width={16} height={16} color={theme.primary} />
                                             )}
                                         </Pressable>
                                     ))}
@@ -202,9 +201,7 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
                                         {weatherLat}, {weatherLon}
                                     </Text>
                                 </View>
-                                <Text style={styles.chevron}>
-                                    {weatherExpanded ? '▼' : '▶'}
-                                </Text>
+                                    <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: weatherExpanded ? '0deg' : '-90deg' }] }} />
                             </Pressable>
                             {weatherExpanded && (
                                 <View style={{ marginTop: 12, gap: 8 }}>
@@ -273,9 +270,7 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
                                         {availableModels.find(m => m.id === plannerModelId)?.name ?? plannerModelId}
                                     </Text>
                                 </View>
-                                <Text style={styles.chevron}>
-                                    {plannerModelExpanded ? '▼' : '▶'}
-                                </Text>
+                                <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: plannerModelExpanded ? '0deg' : '-90deg' }] }} />
                             </Pressable>
                             {plannerModelExpanded && (
                                 <View style={{ marginTop: 12 }}>
@@ -300,7 +295,7 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
                                                 <Text style={{ fontSize: 11, color: theme.textSecondary }}>{m.provider}</Text>
                                             </View>
                                             {plannerModelId === m.id && (
-                                                <Text style={styles.themeCheckmark}>✓</Text>
+                                                <Check width={16} height={16} color={theme.primary} />
                                             )}
                                         </Pressable>
                                     ))}
@@ -318,9 +313,7 @@ export default function SettingsModal({ visible, onClose, renderAsScreen }: Prop
                                     <Text style={styles.label}>Bot Identity</Text>
                                     <Text style={styles.themeCurrentValue}>{botName}</Text>
                                 </View>
-                                <Text style={styles.chevron}>
-                                    {botIdentityExpanded ? '▼' : '▶'}
-                                </Text>
+                                <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: botIdentityExpanded ? '0deg' : '-90deg' }] }} />
                             </Pressable>
                             {botIdentityExpanded && (
                                 <View style={{ marginTop: 12, gap: 12 }}>

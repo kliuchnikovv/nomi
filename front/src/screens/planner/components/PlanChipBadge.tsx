@@ -6,19 +6,26 @@ import {
     StyleSheet,
     Animated,
 } from 'react-native';
+import { Clock, MapPin, Link, EditPencil } from 'iconoir-react-native';
 import { PlanChip, ChipType } from '../types';
 
 interface ChipStyle {
     bg: string;
     text: string;
-    icon: string;
 }
 
 const CHIP_STYLES: Record<ChipType, ChipStyle> = {
-    time:     { bg: '#E8F4FF', text: '#007AFF', icon: '🕐' },
-    location: { bg: '#FFF0E8', text: '#FF6B00', icon: '📍' },
-    link:     { bg: '#F0FFF0', text: '#34C759', icon: '🔗' },
-    note:     { bg: '#F5F0FF', text: '#9B59B6', icon: '📝' },
+    time:     { bg: '#E8F4FF', text: '#007AFF' },
+    location: { bg: '#FFF0E8', text: '#FF6B00' },
+    link:     { bg: '#F0FFF0', text: '#34C759' },
+    note:     { bg: '#F5F0FF', text: '#9B59B6' },
+};
+
+const CHIP_ICONS: Record<ChipType, React.FC<{ width: number; height: number; color: string }>> = {
+    time: Clock,
+    location: MapPin,
+    link: Link,
+    note: EditPencil,
 };
 
 interface Props {
@@ -55,6 +62,7 @@ export function PlanChipBadge({ chip, onRemove }: Props) {
     }, [chip.isNew, glowAnim]);
 
     const chipStyle = CHIP_STYLES[chip.type];
+    const IconComponent = CHIP_ICONS[chip.type];
 
     const borderOpacity = glowAnim.interpolate({
         inputRange: [0, 1],
@@ -64,7 +72,7 @@ export function PlanChipBadge({ chip, onRemove }: Props) {
     if (isPlaceholder) {
         return (
             <View style={[styles.pill, styles.placeholderPill]}>
-                <Text style={styles.icon}>{chipStyle.icon}</Text>
+                <IconComponent width={12} height={12} color="#FF6B00" />
                 <Text style={[styles.valueText, styles.placeholderText, { color: '#FF6B00' }]}>
                     {chip.value}
                 </Text>
@@ -81,7 +89,7 @@ export function PlanChipBadge({ chip, onRemove }: Props) {
                 ]}
             />
             <View style={[styles.pill, { backgroundColor: chipStyle.bg }]}>
-                <Text style={styles.icon}>{chipStyle.icon}</Text>
+                <IconComponent width={12} height={12} color={chipStyle.text} />
                 <Text style={[styles.valueText, { color: chipStyle.text }]}>
                     {chip.value}
                 </Text>
@@ -123,9 +131,6 @@ const styles = StyleSheet.create({
         borderStyle: 'dashed',
         borderColor: '#FF6B00',
         backgroundColor: 'transparent',
-    },
-    icon: {
-        fontSize: 11,
     },
     valueText: {
         fontSize: 12,

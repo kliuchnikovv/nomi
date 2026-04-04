@@ -3,6 +3,7 @@ import { Linking, View, Text, ActionSheetIOS, Pressable, StyleSheet, Animated } 
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
+import { NavArrowDown } from 'iconoir-react-native';
 import { createChatTheme } from '../theme';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ThemeColors } from '../../../themes/types';
@@ -115,7 +116,7 @@ const SystemMessageBubble = memo(function SystemMessageBubble({ text, theme }: {
                     style={({ pressed }) => [dynamicStyles.toolCallsHeader, pressed && { opacity: 0.7 }]}
                 >
                     <Text style={dynamicStyles.toolCallsHeaderText}>System Activity</Text>
-                    <Text style={dynamicStyles.toolCallsExpandIcon}>{expanded ? '▼' : '▶'}</Text>
+                    <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }} />
                 </Pressable>
                 {expanded && (
                     <View style={dynamicStyles.toolCallsList}>
@@ -278,8 +279,8 @@ export function useGiftedChatRenderers({
         const modelNames = availableModels.map(m => m.name);
         ActionSheetIOS.showActionSheetWithOptions(
             {
-                title: 'Выберите модель',
-                options: [...modelNames, 'Отмена'],
+                title: 'Select model',
+                options: [...modelNames, 'Cancel'],
                 cancelButtonIndex: modelNames.length,
                 userInterfaceStyle: 'dark',
             },

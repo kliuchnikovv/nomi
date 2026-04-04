@@ -4,7 +4,9 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
+    View,
 } from 'react-native';
+import { Spark } from 'iconoir-react-native';
 
 const BANNER_HEIGHT = 52;
 
@@ -66,16 +68,18 @@ export function AIEditBanner({ message, onDismiss }: Props) {
             ]}
             pointerEvents={message !== null ? 'auto' : 'none'}
         >
-            <TouchableOpacity
-                style={styles.inner}
-                onPress={slideDown}
-                activeOpacity={0.85}
-            >
-                <Text style={styles.text}>
-                    {'✦ '}
-                    {message ?? ''}
-                </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.inner}
+                    onPress={slideDown}
+                    activeOpacity={0.85}
+                >
+                    <View style={styles.textContainer}>
+                        <Spark width={14} height={14} color="#FFFFFF" />
+                        <Text style={styles.text}>
+                            {message ?? ''}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
         </Animated.View>
     );
 }
@@ -99,6 +103,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 16,
+    },
+    textContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
     },
     text: {
         color: '#FFFFFF',

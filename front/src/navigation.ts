@@ -1,5 +1,5 @@
 export type RootDrawerParamList = {
-    Chat: undefined; // Ваш основной экран чата
-    Sidebar: undefined; // Пример другого экрана, который может быть в сайдбаре
-    // ... другие экраны, которые должны быть доступны через сайдбар
+    Chat: undefined; // Your main chat screen
+    Sidebar: undefined; // Example of another screen that can be in the sidebar
+    // ... other screens that should be accessible via sidebar
 };

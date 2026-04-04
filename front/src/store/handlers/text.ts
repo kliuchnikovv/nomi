@@ -36,14 +36,14 @@ export const handleTextPayload: MessageHandler = (payload, prevMessages, message
     }
 
     // Handle cumulative stream: backend may send full text-so-far instead of delta.
-    // Append only the new suffix to avoid "ПрПриветивет"-style duplication.
+    // Append only the new suffix to avoid "HeHelloWorldlloWorld"-style duplication.
     let effectiveDelta = newText;
     if (currentText.length > 0) {
         if (newText.startsWith(currentText) && newText.length > currentText.length) {
             effectiveDelta = newText.slice(currentText.length);
             console.log('[handleTextPayload 🔍 Cumulative stream] Extracted delta:', effectiveDelta.substring(0, 30));
         } else {
-            // Overlap: newText may start with suffix of currentText (e.g. "Привет" + "ивет!!").
+            // Overlap: newText may start with suffix of currentText (e.g. "Hello" + "lo!!").
             // Append only the non-overlapping tail.
             // Cap overlap scan at 200 chars to avoid O(n²) for very long texts.
             const maxOverlap = Math.min(currentText.length, newText.length, 200);

@@ -132,7 +132,7 @@ const StreamingTextPart = memo(function StreamingTextPart({
                         {documentData.msg}
                     </Markdown>
                 </Pressable>
-                <DocumentBlock title="Детали" content={documentData.content} />
+                <DocumentBlock title="Details" content={documentData.content} />
             </View>
         );
     }

@@ -55,8 +55,8 @@ Examples:
 Message: "Can you help me write a Python script to parse CSV files?"
 Title: CSV File Parser in Python
 
-Message: "Что такое квантовые вычисления и как они работают?"
-Title: Квантовые вычисления
+Message: "What are quantum computers and how do they work?"
+Title: Quantum Computing
 
 Message: "I need to plan a birthday party for my 5-year-old daughter"
 Title: Children's Birthday Party Planning

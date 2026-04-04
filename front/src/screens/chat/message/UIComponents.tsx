@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { useChat } from '../context';
+import { Check } from 'iconoir-react-native';
 
 interface PollProps {
     question: string;
@@ -63,7 +64,7 @@ export function PollComponent({ question, options, allowMultiple }: PollProps) {
                         ]}>
                             {option}
                         </Text>
-                        {isSelected && <Text style={{ color: theme.primary }}>✓</Text>}
+                        {isSelected && <Check width={16} height={16} color={theme.primary} />}
                     </Pressable>
                 );
             })}

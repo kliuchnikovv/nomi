@@ -1,12 +1,12 @@
 import { credentialsApi } from '../apiClient';
 
 /**
- * CredentialsManager - управление API ключами и credentials для серверных плагинов.
+ * CredentialsManager - manages API keys and credentials for server plugins.
  * 
- * Основная логика:
- * - Проверяет наличие credentials в Redis (через /api/credentials/:provider/check)
- * - Отправляет credentials только если их нет (через /api/credentials)
- * - Автоматически обновляет TTL при каждом использовании
+ * Core logic:
+ * - Checks if credentials exist in Redis (via /api/credentials/:provider/check)
+ * - Sends credentials only if they don't exist (via /api/credentials)
+ * - Automatically refreshes TTL on each use
  */
 
 export interface CredentialConfig {
@@ -30,7 +30,7 @@ export class CredentialsManager {
     }
 
     /**
-     * Сохранить credentials на сервере (Redis с TTL 1 час)
+     * Save credentials on the server (Redis with 1-hour TTL)
      */
     async saveCredentials(config: CredentialConfig): Promise<boolean> {
         try {
@@ -54,8 +54,8 @@ export class CredentialsManager {
     }
 
     /**
-     * Проверить наличие credentials на сервере
-     * Кеширует результат на 5 минут
+     * Check if credentials exist on the server.
+     * Caches the result for 5 minutes.
      */
     async checkCredentials(provider: string, force = false): Promise<boolean> {
         // Check cache
@@ -82,8 +82,8 @@ export class CredentialsManager {
     }
 
     /**
-     * Проверить несколько провайдеров сразу
-     * Возвращает список тех, у кого нет credentials
+     * Check multiple providers at once.
+     * Returns a list of those that don't have credentials.
      */
     async checkMultipleProviders(providers: string[]): Promise<string[]> {
         try {
@@ -108,7 +108,7 @@ export class CredentialsManager {
     }
 
     /**
-     * Удалить credentials с сервера
+     * Delete credentials from the server
      */
     async deleteCredentials(provider: string): Promise<boolean> {
         try {
@@ -127,7 +127,7 @@ export class CredentialsManager {
     }
 
     /**
-     * Получить список всех провайдеров с credentials
+     * Get a list of all providers with credentials
      */
     async listProviders(): Promise<string[]> {
         try {
@@ -140,24 +140,24 @@ export class CredentialsManager {
     }
 
     /**
-     * Убедиться, что credentials существуют - отправить если нужно
-     * Используется перед отправкой сообщения на сервер
+     * Ensure credentials exist — send if needed.
+     * Used before sending a message to the server.
      */
     async ensureCredentials(config: CredentialConfig): Promise<boolean> {
-        // Сначала проверяем, есть ли уже
+        // First check if they already exist
         const exists = await this.checkCredentials(config.provider);
         if (exists) {
             console.log(`[CredentialsManager] Credentials for ${config.provider} already exist on server`);
             return true;
         }
 
-        // Если нет - отправляем
+        // If not — send them
         console.log(`[CredentialsManager] Credentials for ${config.provider} not found, sending...`);
         return await this.saveCredentials(config);
     }
 
     /**
-     * Проверить кеш
+     * Check cache
      */
     private isCached(provider: string): boolean {
         if (!this.cachedProviders.has(provider)) {
@@ -174,7 +174,7 @@ export class CredentialsManager {
     }
 
     /**
-     * Очистить кеш для провайдера
+     * Clear cache for a provider
      */
     invalidateCache(provider?: string) {
         if (provider) {

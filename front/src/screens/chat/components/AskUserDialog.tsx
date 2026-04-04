@@ -128,7 +128,7 @@ export const AskUserDialog: React.FC<AskUserDialogProps> = ({
                     borderColor: isCustom ? theme.accent : theme.border,
                   },
                 ]}
-                placeholder="Или введите свой вариант..."
+                placeholder="Or enter your own option..."
                 placeholderTextColor={theme.textSecondary}
                 value={customInput}
                 onChangeText={setCustomInput}
@@ -151,7 +151,7 @@ export const AskUserDialog: React.FC<AskUserDialogProps> = ({
                 <Text
                   style={[styles.buttonText, { color: theme.textSecondary }]}
                 >
-                  Отмена
+                  Cancel
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -168,7 +168,7 @@ export const AskUserDialog: React.FC<AskUserDialogProps> = ({
                 onPress={handleSubmit}
                 disabled={!selectedOption && !customInput.trim()}
               >
-                <Text style={styles.submitButtonText}>Отправить</Text>
+                <Text style={styles.submitButtonText}>Send</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -27,7 +27,7 @@ export function ErrorBanner({ error, onRetry, onDismiss, theme, onChangeModel }:
                     >
                         <RefreshDouble width={16} height={16} color={theme.errorButtonText} />
                         <Text style={[styles.buttonText, { color: theme.errorButtonText }]}>
-                            Повторить
+                            Retry
                         </Text>
                     </TouchableOpacity>
                     {onChangeModel && (
@@ -37,7 +37,7 @@ export function ErrorBanner({ error, onRetry, onDismiss, theme, onChangeModel }:
                             activeOpacity={0.7}
                         >
                             <Text style={[styles.buttonText, { color: theme.errorButtonText }]}>
-                                Сменить модель
+                                Change model
                             </Text>
                         </TouchableOpacity>
                     )}

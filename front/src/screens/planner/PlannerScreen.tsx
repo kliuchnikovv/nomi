@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ChatBubble, Calendar as CalendarIcon } from 'iconoir-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { PlanItem } from './types';
 import { PlanDocumentContext } from './PlanDocumentContext';
@@ -203,7 +204,7 @@ export function PlannerScreen() {
                                             activeOpacity={0.5}
                                         >
                                             <Text style={[styles.addRowText, { color: theme.textSecondary }]}>
-                                                + Задача
+                                                + Task
                                             </Text>
                                         </TouchableOpacity>
                                     }
@@ -223,7 +224,7 @@ export function PlannerScreen() {
                                     activeOpacity={0.7}
                                 >
                                     <Text style={[styles.bottomBtnText, { color: theme.textPrimary }]}>
-                                        💬 Чат
+                                        <ChatBubble width={16} height={16} color={theme.textPrimary} /> Chat
                                     </Text>
                                 </TouchableOpacity>
 
@@ -233,7 +234,7 @@ export function PlannerScreen() {
                                     activeOpacity={0.7}
                                 >
                                     <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>
-                                        🗓 Запланировать
+                                        <CalendarIcon width={16} height={16} color="#FFFFFF" /> Plan
                                     </Text>
                                 </TouchableOpacity>
                             </View>

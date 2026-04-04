@@ -71,9 +71,20 @@ class IOSCalendarClient {
             throw new Error('IOSCalendarManager is not available.');
         }
 
+        if (typeof IOSCalendarManager.createEvent !== 'function') {
+            throw new Error(
+                `IOSCalendarManager.createEvent is not available. ` +
+                `Make sure you are using a development build with native modules enabled.`
+            );
+        }
+
         const event = await IOSCalendarManager.createEvent(title, start, end, options);
-        return event;
-    }
+ {
+            if (!IOSCalendarManager) {
+                throw new Error('IOSCalendarManager.createEvent is not available. Make sure you are using a development build with native modules.');
+            }
+            const event = await IOSCalendarManager.createEvent(title, start, end, options);
+        return event;    }
 
     /**
      * Update an existing event

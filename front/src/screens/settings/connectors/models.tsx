@@ -66,9 +66,9 @@ export type Integration = {
     name: string;
     provider: string;
     connected: boolean;
-    storageType?: StorageType; // Тип хранения данных
-    supportsBackgroundTasks?: boolean; // Поддерживает ли фоновые процессы
-    systemEventListeners?: string[]; // Список системных событий
+    storageType?: StorageType; // Data storage type
+    supportsBackgroundTasks?: boolean; // Whether background processes are supported
+    systemEventListeners?: string[]; // List of system events
     info?: Record<string, any>;
     state?: Record<string, any>;
     params?: Record<string, any>;

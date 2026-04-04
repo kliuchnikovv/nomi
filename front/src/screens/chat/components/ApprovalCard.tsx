@@ -3,6 +3,7 @@ import { View, Text, Pressable, ActivityIndicator, StyleSheet, Alert } from 'rea
 import { useTheme } from '../../../context/ThemeContext';
 import { apiClient } from '../../../apiClient';
 import { ThemeColors, ThemePalette } from '../../../themes';
+import { CheckCircle, Undo } from 'iconoir-react-native';
 
 type Props = {
     taskId: string;
@@ -56,7 +57,7 @@ export default function ApprovalCard({ taskId, nextStatus, onApprove, onReject }
     if (actionTaken === 'approved') {
         return (
             <View style={[styles.container, styles.approvedContainer]}>
-                <Text style={styles.statusText}>Approved ✅</Text>
+                <Text style={styles.statusText}>Approved <CheckCircle width={16} height={16} color={theme.textPrimary} /></Text>
             </View>
         );
     }
@@ -64,7 +65,7 @@ export default function ApprovalCard({ taskId, nextStatus, onApprove, onReject }
     if (actionTaken === 'rejected') {
         return (
             <View style={[styles.container, styles.rejectedContainer]}>
-                <Text style={styles.statusText}>Changes Requested ↩️</Text>
+                <Text style={styles.statusText}>Changes Requested <Undo width={16} height={16} color={theme.textPrimary} /></Text>
             </View>
         );
     }

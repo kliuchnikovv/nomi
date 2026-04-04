@@ -14,6 +14,12 @@ import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
 import { useMain } from '../../main/context';
 
+const PLANNER_TITLE_PREFIX = 'Planner';
+
+function isPlannerChat(c: Chat): boolean {
+    return c.mode === 'agent' && (c.title || '').startsWith(PLANNER_TITLE_PREFIX);
+}
+
 
 const pad = (value: number) => value.toString().padStart(2, '0');
 
@@ -80,8 +86,8 @@ function ChatListContent({
 
     const filters = useMemo(() => {
         const list: { id: string; title: string; color?: string }[] = [
-            { id: 'all', title: 'All', color: theme.accent },
             { id: 'agent', title: 'Genie', color: theme.success || '#9ECE6A' },
+            { id: 'planner', title: 'Planner', color: '#FF9E64' },
         ];
         AVAILABLE_TEAMS.forEach(t => {
             let color = theme.info;
@@ -92,6 +98,7 @@ function ChatListContent({
             }
             list.push({ id: t.id, title: t.name, color });
         });
+        list.push({ id: 'all', title: 'All', color: theme.accent });
         return list;
     }, [theme]);
 
@@ -99,9 +106,10 @@ function ChatListContent({
         let data = chats;
 
         if (sidebarFilter === 'agent') {
-            data = chats.filter(c => !c.mode || c.mode === 'agent');
+            data = chats.filter(c => (!c.mode || c.mode === 'agent') && !isPlannerChat(c));
+        } else if (sidebarFilter === 'planner') {
+            data = chats.filter(c => isPlannerChat(c));
         } else if (sidebarFilter !== 'all') {
-            // Team filter
             data = chats.filter(c => c.mode === 'team' && c.team_id === sidebarFilter);
         }
 
@@ -124,7 +132,9 @@ function ChatListContent({
             if (!activeChat) return;
 
             let requiredFilter = 'all';
-            if (!activeChat.mode || activeChat.mode === 'agent') {
+            if (isPlannerChat(activeChat)) {
+                requiredFilter = 'planner';
+            } else if (!activeChat.mode || activeChat.mode === 'agent') {
                 requiredFilter = 'agent';
             } else if (activeChat.mode === 'team' && activeChat.team_id) {
                 requiredFilter = activeChat.team_id;
@@ -152,7 +162,7 @@ function ChatListContent({
             // We should split this logic? 
             // Or let the re-render handle the scroll?
             // If we set state, we return.
-            if (activeChat.mode === 'agent' && effectiveFilter !== 'agent' && effectiveFilter !== 'all') return;
+            if (activeChat.mode === 'agent' && effectiveFilter !== 'agent' && effectiveFilter !== 'all' && effectiveFilter !== 'planner') return;
             // Simplified: If we changed filter, return and let the next render (triggered by state change) handle scrolling? 
             // BUT this effect won't run again if deps [isOpen, activeChatID] don't change.
             // So we need a separate effect for scrolling?
@@ -248,7 +258,7 @@ function ChatListContent({
             return;
         }
 
-        if (sidebarFilter === 'all' || sidebarFilter === 'agent') {
+        if (sidebarFilter === 'all' || sidebarFilter === 'agent' || sidebarFilter === 'planner') {
             onNewChatWithMode('agent', null);
         } else {
             // Check if this is an individual agent (not a team)
@@ -272,10 +282,12 @@ function ChatListContent({
         let category: string | null = null;
         let categoryColor: string | null = null;
         if (sidebarFilter === 'all') {
-            if (item.mode === 'team') {
+            if (isPlannerChat(item)) {
+                category = 'Planner';
+                categoryColor = '#FF9E64';
+            } else if (item.mode === 'team') {
                 const team = AVAILABLE_TEAMS.find(t => t.id === item.team_id);
                 category = team?.name || 'Team';
-                // Assign distinct colors per team
                 switch (item.team_id) {
                     case 'dnd_team':
                         categoryColor = theme.accent || '#BB9AF7';
@@ -284,7 +296,7 @@ function ChatListContent({
                         categoryColor = theme.info || '#7DCFFF';
                 }
             } else {
-                category = 'Agent';
+                category = 'Genie';
                 categoryColor = theme.success || '#9ECE6A';
             }
         }

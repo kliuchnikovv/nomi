@@ -1,6 +1,6 @@
 /**
- * Реестр интеграций для Frontend.
- * Источник: plugins/registry.generated.ts (из манифестов плагинов).
+ * Integration registry for Frontend.
+ * Source: plugins/registry.generated.ts (from plugin manifests).
  */
 
 import type { IntegrationMetadata } from '../../plugins/registry.generated';
@@ -10,14 +10,14 @@ export type { IntegrationMetadata, StorageType } from '../../plugins/registry.ge
 export const INTEGRATION_REGISTRY = REGISTRY;
 
 /**
- * Получить метаданные интеграции по ID.
+ * Get integration metadata by ID.
  */
 export function getIntegrationMetadata(id: string): IntegrationMetadata | undefined {
     return REGISTRY[id.toLowerCase()];
 }
 
 /**
- * Получить все клиентские интеграции (ClientOnly).
+ * Get all client-only integrations.
  */
 export function getClientOnlyIntegrations() {
     return Object.values(REGISTRY).filter(
@@ -26,7 +26,7 @@ export function getClientOnlyIntegrations() {
 }
 
 /**
- * Получить все серверные интеграции.
+ * Get all server integrations.
  */
 export function getServerIntegrations() {
     return Object.values(REGISTRY).filter(
@@ -35,7 +35,7 @@ export function getServerIntegrations() {
 }
 
 /**
- * Проверить, является ли интеграция клиентской.
+ * Check if an integration is client-only.
  */
 export function isClientOnly(integrationId: string): boolean {
     const metadata = getIntegrationMetadata(integrationId);
@@ -43,7 +43,7 @@ export function isClientOnly(integrationId: string): boolean {
 }
 
 /**
- * Получить все интеграции, поддерживающие фоновые задачи.
+ * Get all integrations that support background tasks.
  */
 export function getIntegrationsWithBackgroundTasks() {
     return Object.values(REGISTRY).filter(
@@ -52,7 +52,7 @@ export function getIntegrationsWithBackgroundTasks() {
 }
 
 /**
- * Проверить, является ли интеграция серверной (server или hybrid).
+ * Check if an integration is server-side (server or hybrid).
  */
 export function isServer(integrationId: string): boolean {
     const metadata = getIntegrationMetadata(integrationId);
@@ -60,7 +60,7 @@ export function isServer(integrationId: string): boolean {
 }
 
 /**
- * Проверить, поддерживает ли интеграция фоновые задачи.
+ * Check if an integration supports background tasks.
  */
 export function supportsBackgroundTasks(integrationId: string): boolean {
     const metadata = getIntegrationMetadata(integrationId);
@@ -68,14 +68,14 @@ export function supportsBackgroundTasks(integrationId: string): boolean {
 }
 
 /**
- * Получить все доступные интеграции.
+ * Get all available integrations.
  */
 export function getAllIntegrations() {
     return Object.values(REGISTRY);
 }
 
 /**
- * Получить интеграции по категории.
+ * Get integrations by category.
  */
 export function getIntegrationsByCategory(category: string) {
     return Object.values(REGISTRY).filter(

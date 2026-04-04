@@ -8,10 +8,10 @@ interface Props {
     onNext: () => void;
 }
 
-const WEEKDAYS_RU = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-const MONTHS_RU = [
-    'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
-    'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек',
+const WEEKDAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS_EN = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
 function todayString(): string {
@@ -33,14 +33,14 @@ function shiftDateString(base: string, delta: number): string {
 
 function getLabel(date: string): string {
     const today = todayString();
-    if (date === today) return 'Сегодня';
-    if (date === shiftDateString(today, -1)) return 'Вчера';
-    if (date === shiftDateString(today, 1)) return 'Завтра';
+    if (date === today) return 'Today';
+    if (date === shiftDateString(today, -1)) return 'Yesterday';
+    if (date === shiftDateString(today, 1)) return 'Tomorrow';
 
     const d = new Date(`${date}T00:00:00`);
-    const weekday = WEEKDAYS_RU[d.getDay()];
+    const weekday = WEEKDAYS_EN[d.getDay()];
     const day = d.getDate();
-    const month = MONTHS_RU[d.getMonth()];
+    const month = MONTHS_EN[d.getMonth()];
     return `${weekday}, ${day} ${month}`;
 }
 

@@ -388,7 +388,7 @@ export class ChatSocket {
                             case 'error':
                                 const errorInfo = frame.error || frame.payload?.error || frame.payload;
                                 const errorCode = errorInfo?.code || frame.payload?.code;
-                                const errorMessage = errorInfo?.message || frame.payload?.message || 'Произошла ошибка';
+                                const errorMessage = errorInfo?.message || frame.payload?.message || 'An error occurred';
                                 const errorDetails = errorInfo?.details || frame.payload?.details;
 
                                 if (errorDetails) {
@@ -410,23 +410,23 @@ export class ChatSocket {
                                     let userMessage = errorMessage;
                                     if (errorCode) {
                                         const errorMessages: Record<string, string> = {
-                                            'parse_failed': 'Ошибка обработки сообщения',
-                                            'save_failed': 'Ошибка сохранения данных',
-                                            'redis_failed': 'Ошибка соединения с сервером',
-                                            'marshal_failed': 'Ошибка обработки ответа',
-                                            'dispatch_failed': 'Ошибка сохранения ответа',
-                                            'attachment_failed': 'Ошибка загрузки вложений',
-                                            'agent_failed': 'Ошибка выполнения задачи',
-                                            'agent_error': 'Ошибка выполнения задачи',
-                                            'agent_not_found': 'Агент не найден',
-                                            'task_failed': 'Ошибка обработки запроса',
-                                            'worker_error': 'Ошибка сервера',
-                                            'build_failed': 'Ошибка инициализации',
-                                            'stream_failed': 'Ошибка генерации ответа',
-                                            'timeout': 'Превышено время ожидания',
-                                            'not_found': 'Ресурс не найден',
-                                            'not-found': 'Ресурс не найден',
-                                            'rate_limited': 'Превышен лимит запросов',
+                                            'parse_failed': 'Error processing message',
+                                            'save_failed': 'Error saving data',
+                                            'redis_failed': 'Error connecting to server',
+                                            'marshal_failed': 'Error processing response',
+                                            'dispatch_failed': 'Error saving response',
+                                            'attachment_failed': 'Error uploading attachments',
+                                            'agent_failed': 'Error executing task',
+                                            'agent_error': 'Error executing task',
+                                            'agent_not_found': 'Agent not found',
+                                            'task_failed': 'Error processing request',
+                                            'worker_error': 'Server error',
+                                            'build_failed': 'Initialization error',
+                                            'stream_failed': 'Error generating response',
+                                            'timeout': 'Timeout exceeded',
+                                            'not_found': 'Resource not found',
+                                            'not-found': 'Resource not found',
+                                            'rate_limited': 'Rate limit exceeded',
                                         };
                                         userMessage = errorMessages[errorCode] || errorMessage;
                                     }

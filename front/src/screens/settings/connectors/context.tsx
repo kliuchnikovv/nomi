@@ -116,8 +116,8 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             const data = await response.json();
             const items: any[] = data.items || data || [];
 
-            // Умная синхронизация: синхронизируем только серверные интеграции
-            // Клиентские интеграции загружаются только из локального SQLite
+            // Smart sync: only sync server integrations
+            // Client integrations are loaded only from local SQLite
             for (const item of items) {
                 const provider = item.provider || item.Provider;
                 if (!item || !provider) {
@@ -127,7 +127,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                     );
                     continue;
                 }
-                // Проверяем через реестр, является ли это серверной интеграцией
+                // Check via registry if this is a server integration
                 if (!isServer(provider)) {
                     console.log(
                         `[ConnectorsProvider] Skipping client-only integration: ${provider} (stored locally)`,
@@ -135,14 +135,14 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                     continue;
                 }
 
-                // Серверные интеграции синхронизируются для отображения метаданных
-                // Но токены не синхронизируются (они остаются на сервере)
+                // Server integrations are synced for metadata display
+                // But tokens are not synced (they stay on the server)
                 console.log(
                     `[ConnectorsProvider] Server integration found: ${provider} (metadata only)`,
                 );
 
-                // Можно добавить логику для синхронизации метаданных серверных интеграций
-                // если это необходимо для UI
+                // Can add logic for syncing server integration metadata
+                // if needed for UI
             }
         } catch (e) {
             console.warn('Failed to sync from backend', e);
@@ -164,7 +164,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             const toolsList: Tool[] = [];
 
             for (const p of localIntegrations) {
-                // Получаем метаданные из реестра
+                // Get metadata from registry
                 const metadata = getIntegrationMetadata(p.provider);
 
                 // Fetch credentials
@@ -183,7 +183,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                         );
                 }
 
-                // Добавляем метаданные из реестра
+                // Add metadata from registry
                 normalized.push({
                     id: p.id,
                     name: p.name,
@@ -211,7 +211,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 `[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`,
             );
 
-            // Регистрируем обработчики системных событий для каждой интеграции
+            // Register system event handlers for each integration
             for (const integration of localIntegrations) {
                 if (integration.enabled) {
                     const metadata = getIntegrationMetadata(
@@ -335,28 +335,28 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 `[ConnectorsProvider] Token exchange successful for ${provider}`,
             );
 
-            // Получаем метаданные из реестра
+            // Get metadata from registry
             const metadata = getIntegrationMetadata(data.provider);
             const displayName =
                 metadata?.displayName ||
                 data.provider.charAt(0).toUpperCase() + data.provider.slice(1);
 
-            // Для server-side интеграций токены хранятся на сервере, не сохраняем их локально
-            // Для client-only интеграций токены всё еще могут приходиться (future enhancement)
+            // For server-side integrations, tokens are stored on the server — don't save locally
+            // For client-only integrations, tokens may still be present (future enhancement)
             if (metadata?.storageType === 'server') {
-                // Server-side: сохраняем только метаданные без токенов
+                // Server-side: save only metadata without tokens
                 await integrationStorage.createIntegration({
                     provider: data.provider as LocalIntegration['provider'],
                     name: `${displayName} (${data.account_email})`,
                     enabled: true,
                     accountEmail: data.account_email,
                     storageType: metadata?.storageType,
-                    // Server-side интеграции не поддерживают фоновые задачи на клиенте
+                    // Server-side integrations don't support background tasks on the client
                     supportsBackgroundTasks: false,
                     systemEventListeners: [],
                 });
             } else {
-                // Client-only: сохраняем с токенами (если они есть в ответе)
+                // Client-only: save with tokens (if present in response)
                 await integrationStorage.createIntegration(
                     {
                         provider: data.provider as LocalIntegration['provider'],
@@ -385,7 +385,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
             await getIntegrations();
 
-            // Регистрируем фоновые задачи только для client-only интеграций
+            // Register background tasks only for client-only integrations
             if (
                 metadata?.storageType === 'client' &&
                 metadata?.supportsBackgroundTasks
@@ -529,7 +529,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             });
             await getIntegrations();
 
-            // Обновляем фоновые задачи при изменении состояния интеграции
+            // Update background tasks when integration state changes
             await refreshBackgroundTasks();
         } catch (e) {
             console.warn('Failed to update integration', e);
@@ -602,7 +602,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 // Delete from local storage (also cleans up events, tasks, credentials, emails)
                 await integrationStorage.deleteIntegration(id);
 
-                // Обновляем фоновые задачи после удаления интеграции
+                // Update background tasks after removing integration
                 await refreshBackgroundTasks();
                 await getIntegrations();
             } catch (e) {

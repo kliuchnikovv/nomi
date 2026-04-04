@@ -3,7 +3,7 @@ import { View, Text, SectionList, Pressable, Linking } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { calendarClient } from '../../../services/integrations/clients/CalendarClient';
 import { ExtractedEvent, Integration } from '../../../services/integrations/IntegrationStorage';
-import { Calendar, Plus } from 'iconoir-react-native';
+import { Calendar, Plus, MapPin } from 'iconoir-react-native';
 
 interface CalendarSidebarProps {
     integration: Integration;
@@ -112,7 +112,7 @@ export function CalendarSidebar({ integration, scrollEnabled = true }: CalendarS
                             </Text>
                             {item.location && (
                                 <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>
-                                    📍 {item.location}
+                                    <MapPin width={12} height={12} color={theme.textSecondary} /> {item.location}
                                 </Text>
                             )}
                         </View>

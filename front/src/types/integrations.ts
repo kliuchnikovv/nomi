@@ -46,9 +46,9 @@ export interface Integration {
     status: 'connected' | 'disconnected' | 'error';
     created_at: string;
     updated_at: string;
-    storageType?: StorageType; // Тип хранения данных
-    supportsBackgroundTasks?: boolean; // Поддерживает ли фоновые процессы
-    systemEventListeners?: string[]; // Список системных событий
+    storageType?: StorageType; // Data storage type
+    supportsBackgroundTasks?: boolean; // Whether background processes are supported
+    systemEventListeners?: string[]; // List of system events
 }
 
 export interface Tool {

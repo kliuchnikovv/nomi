@@ -5,13 +5,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { useMain } from '../../main/context';
+import { emptyChatID, useMain } from '../../main/context';
 import { useTheme } from '../../../context/ThemeContext';
 import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
 import type { ChatStackParamList } from '../../../navigation/types';
 
 type NavProp = NativeStackNavigationProp<ChatStackParamList, 'ChatList'>;
+
+const PLANNER_TITLE_PREFIX = 'Planner';
+
+function isPlannerChat(c: Chat): boolean {
+    return c.mode === 'agent' && (c.title || '').startsWith(PLANNER_TITLE_PREFIX);
+}
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -41,19 +47,22 @@ export function ChatListScreen() {
 
     const filters = useMemo(() => {
         const list: { id: string; title: string; color: string }[] = [
-            { id: 'all', title: 'All', color: theme.accent },
             { id: 'agent', title: 'Genie', color: theme.success || '#9ECE6A' },
+            { id: 'planner', title: 'Planner', color: '#FF9E64' },
         ];
         AVAILABLE_TEAMS.forEach(t => {
             list.push({ id: t.id, title: t.name, color: theme.info || '#7DCFFF' });
         });
+        list.push({ id: 'all', title: 'All', color: theme.accent });
         return list;
     }, [theme]);
 
     const filteredChats = useMemo(() => {
         let data = chats;
         if (sidebarFilter === 'agent') {
-            data = chats.filter(c => !c.mode || c.mode === 'agent');
+            data = chats.filter(c => (!c.mode || c.mode === 'agent') && !isPlannerChat(c));
+        } else if (sidebarFilter === 'planner') {
+            data = chats.filter(c => isPlannerChat(c));
         } else if (sidebarFilter !== 'all') {
             data = chats.filter(c => c.mode === 'team' && c.team_id === sidebarFilter);
         }
@@ -72,7 +81,7 @@ export function ChatListScreen() {
     }, [setActiveChatID, navigation]);
 
     const handleNewChat = useCallback(() => {
-        if (sidebarFilter === 'all' || sidebarFilter === 'agent') {
+        if (sidebarFilter === 'all' || sidebarFilter === 'agent' || sidebarFilter === 'planner') {
             createNewChatWithMode('agent', null);
         } else {
             const entry = AVAILABLE_TEAMS.find(t => t.id === sidebarFilter);
@@ -82,7 +91,8 @@ export function ChatListScreen() {
                 createNewChatWithMode('team', sidebarFilter);
             }
         }
-    }, [createNewChatWithMode, sidebarFilter]);
+        navigation.navigate('ChatDetail', { chatId: emptyChatID });
+    }, [createNewChatWithMode, sidebarFilter, navigation]);
 
     const handleLongPress = useCallback((chatId: string, title: string) => {
         ActionSheetIOS.showActionSheetWithOptions(
@@ -105,7 +115,10 @@ export function ChatListScreen() {
         let badgeLabel: string | null = null;
         let badgeColor = theme.accent;
         if (sidebarFilter === 'all') {
-            if (item.mode === 'team') {
+            if (isPlannerChat(item)) {
+                badgeLabel = 'Planner';
+                badgeColor = '#FF9E64';
+            } else if (item.mode === 'team') {
                 const team = AVAILABLE_TEAMS.find(t => t.id === item.team_id);
                 badgeLabel = team?.name || 'Team';
                 badgeColor = theme.info || '#7DCFFF';
@@ -122,7 +135,7 @@ export function ChatListScreen() {
                 onLongPress={() => handleLongPress(item.id, item.title || 'Untitled')}
             >
                 <View style={[styles.iconCircle, { backgroundColor: theme.surface }]}>
-                    <Ionicons name={item.mode === 'team' ? 'people' : 'sparkles'} size={16} color={theme.accent} />
+                    <Ionicons name={isPlannerChat(item) ? 'calendar' : item.mode === 'team' ? 'people' : 'sparkles'} size={16} color={theme.accent} />
                 </View>
                 <View style={styles.itemContent}>
                     <View style={styles.itemRow}>

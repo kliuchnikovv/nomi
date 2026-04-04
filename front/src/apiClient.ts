@@ -24,7 +24,7 @@ export function setAuthToken(token: string | null): void {
 }
 
 /**
- * Функция для инициализации. Будет вызвана один раз из AuthContext.
+ * Initialization function. Will be called once from AuthContext.
  */
 export function setupApiClient(authFunctions: {
     getToken: () => string | null;

@@ -106,7 +106,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
       // Aggregate text from all content_parts (text, reasoning, member_response)
       let text = m.text === " " ? "" : (m.text ?? "");
       // Strip the invisible plan context block that was appended for the AI backend
-      const ctxIdx = text.indexOf('\n\n[Текущий план:');
+      const ctxIdx = text.indexOf('\n\n[Current plan:');
       if (ctxIdx !== -1) {
         text = text.slice(0, ctxIdx);
       }

@@ -48,7 +48,7 @@ export interface InboxPaginatedResponse {
     total_pages: number;
 }
 
-// Модели для чатов плагинов
+// Models for plugin chats
 export interface PluginChat {
     id: string;
     pluginId: string;

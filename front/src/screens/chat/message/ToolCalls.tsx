@@ -5,6 +5,7 @@ import { createStyles, createMarkdownStyles } from './dynamicStyles';
 import Markdown from 'react-native-markdown-display';
 import { createMarkdownRules } from './markdownRules';
 import Clipboard from '@react-native-clipboard/clipboard';
+import { Brain, NavArrowDown } from 'iconoir-react-native';
 
 export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
     const [expanded, setExpanded] = useState(false);
@@ -28,7 +29,7 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
                     Tool calls
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
-                    {expanded ? '▼' : '▶'}
+                    <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }} />
                 </Text>
             </Pressable>
             {expanded && (
@@ -98,7 +99,7 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
                     {toolCall.name === 'delegate_task_to_member' ? 'Delegating...' : toolCall.name}
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
-                    {expanded ? '▼' : '▶'}
+                    <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }} />
                 </Text>
             </Pressable>
             {expanded && (
@@ -161,7 +162,7 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
                     Thinking...
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
-                    {expanded ? '▼' : '▶'}
+                    <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }} />
                 </Text>
             </Pressable>
             {expanded && (
@@ -201,10 +202,10 @@ export function AgentThinkingBlock({ agentName, text }: { agentName: string; tex
                 ]}
             >
                 <Text style={styles.agentThinkingHeaderText}>
-                    🧠 Размышления
+                    <Brain width={16} height={16} color={theme.textSecondary} /> Thinking
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
-                    {expanded ? '▼' : '▶'}
+                    <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }} />
                 </Text>
             </Pressable>
             {expanded && (
@@ -240,7 +241,7 @@ export function CollapsibleSteps({ children, defaultExpanded = false }: { childr
                     Details
                 </Text>
                 <Text style={styles.toolCallsExpandIcon}>
-                    {expanded ? '▼' : '▶'}
+                    <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }} />
                 </Text>
             </Pressable>
             {expanded && (

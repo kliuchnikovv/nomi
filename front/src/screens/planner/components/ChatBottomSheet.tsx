@@ -8,6 +8,7 @@ import {
     Animated,
     FlatList,
 } from 'react-native';
+import { Spark } from 'iconoir-react-native';
 import Markdown from 'react-native-markdown-display';
 import BottomSheet, {
     BottomSheetFlatList,
@@ -243,9 +244,12 @@ export function ChatBottomSheet({
             <View style={styles.container}>
                 {/* Header */}
                 <View style={[styles.header, { borderBottomColor: theme.border }]}>
-                    <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
-                        ✦ Genie
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Spark width={18} height={18} color={theme.textPrimary} />
+                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
+                            Genie
+                        </Text>
+                    </View>
                     {!isConnected && (
                         <Text style={[styles.connectingLabel, { color: theme.textSecondary }]}>
                             connecting...
@@ -301,7 +305,7 @@ export function ChatBottomSheet({
                                 borderColor: theme.border,
                             },
                         ])}
-                        placeholder="Написать Genie…"
+                        placeholder="Message Genie…"
                         placeholderTextColor={theme.textSecondary}
                         value={inputText}
                         onChangeText={setInputText}

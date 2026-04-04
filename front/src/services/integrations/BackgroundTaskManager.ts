@@ -1,8 +1,8 @@
 /**
- * BackgroundTaskManager - Управление фоновыми процессами для клиентских интеграций.
+ * BackgroundTaskManager - Manages background processes for client integrations.
  * 
- * Автоматически регистрирует и управляет фоновыми задачами на основе реестра интеграций.
- * Поддерживает периодические задачи и обработку системных событий.
+ * Automatically registers and manages background tasks based on the integration registry.
+ * Supports periodic tasks and system event handling.
  */
 
 import * as TaskManager from 'expo-task-manager';
@@ -15,7 +15,7 @@ import { getBackgroundTask, getRegisteredClientPluginNames } from '../../plugins
 import { registerClientPlugins } from '../../plugins/registerClientPlugins';
 import { setAuthToken } from '../../apiClient';
 
-// Типы для фоновых задач
+// Types for background tasks
 export interface BackgroundTaskConfig {
     integrationId: string;
     provider: string;
@@ -23,10 +23,10 @@ export interface BackgroundTaskConfig {
     enabled: boolean;
 }
 
-// Реестр активных фоновых задач (один провайдер может иметь несколько аккаунтов)
+// Registry of active background tasks (one provider may have multiple accounts)
 const activeTasks = new Map<string, BackgroundTaskConfig[]>();
 
-// Имена задач для TaskManager
+// Task names for TaskManager
 const TASK_NAME_PREFIX = 'integration-background-';
 
 function getTaskName(provider: string): string {

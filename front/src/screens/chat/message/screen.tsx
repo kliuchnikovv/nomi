@@ -131,8 +131,9 @@ export default function MessageScreen(props: Props) {
         <View style={containerStylesByType[props.message.role]}>
             {props.message.agent_id && (
                 <View style={styles.agentLabel}>
+                    {getAgentIcon(props.message.agent_id, theme.textSecondary)}
                     <Text style={styles.agentLabelText}>
-                        {getAgentIcon(props.message.agent_id)} {props.message.agent_id}
+                        {props.message.agent_id}
                     </Text>
                 </View>
             )}

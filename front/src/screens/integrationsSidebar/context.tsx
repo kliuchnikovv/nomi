@@ -33,20 +33,20 @@ export const usePluginChats = () => {
     return context;
 };
 
-// Для обратной совместимости
+// For backwards compatibility
 export const useInbox = () => {
     const context = useContext(PluginChatsContext);
     if (!context) {
         throw new Error('useInbox must be used within PluginChatsProvider');
     }
-    // Вычисляем общее количество непрочитанных чатов
+    // Calculate total number of unread chats
     const unreadCount = useMemo(() => {
         return context.plugins.reduce((total, plugin) => {
             return total + plugin.chats.reduce((sum, chat) => sum + chat.unreadCount, 0);
         }, 0);
     }, [context.plugins]);
 
-    // Возвращаем совместимый интерфейс
+    // Return a compatible interface
     return {
         messages: [] as InboxMessage[],
         loading: context.loading,

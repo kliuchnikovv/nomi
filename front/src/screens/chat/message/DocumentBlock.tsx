@@ -3,6 +3,7 @@ import { View, Text, Pressable } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useTheme } from '../../../context/ThemeContext';
 import { createStyles, createMarkdownStyles } from './dynamicStyles';
+import { NavArrowDown } from 'iconoir-react-native';
 
 interface DocumentBlockProps {
     title: string;
@@ -42,7 +43,7 @@ export const DocumentBlock: React.FC<DocumentBlockProps> = ({ title, content }) 
                 onPress={() => setExpanded(!expanded)}
             >
                 <Text style={styles.documentTitle}>{title}</Text>
-                <Text style={styles.documentChevron}>{expanded ? '▲' : '▼'}</Text>
+                <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }} />
             </Pressable>
 
             {expanded && (

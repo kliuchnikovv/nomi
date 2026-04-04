@@ -535,7 +535,7 @@ export function ChatProvider({
                     console.error(
                         'Failed to resolve chat id before sending message',
                     );
-                    setError('Не удалось создать чат');
+                    setError('Failed to create chat');
                     return;
                 }
 
@@ -552,7 +552,7 @@ export function ChatProvider({
                         console.error(
                             'Failed to create message before sending via WebSocket',
                         );
-                        setError('Не удалось создать сообщение');
+                        setError('Failed to create message');
                         return;
                     }
                     setCurrentMessageID(messageID!);
@@ -597,7 +597,7 @@ export function ChatProvider({
             // Use Global Socket
             if (!chatIdToUse || !messageID) {
                 setAssistantWorking(false);
-                setError('Ошибка отправки сообщения');
+                setError('Error sending message');
                 return;
             }
 
@@ -613,7 +613,7 @@ export function ChatProvider({
                 setAssistantWorking(current => {
                     if (current) {
                         setActiveAgentsCount(0);
-                        reportMessageError('Ответ не получен. Проверьте подключение и попробуйте снова.');
+                        reportMessageError('No response received. Check your connection and try again.');
                         responseTimeoutRef.current = null;
                         return false;
                     }
@@ -875,7 +875,7 @@ export function ChatProvider({
                 clearPendingChatMode?.();
             } else {
                 modeToUse =
-                    sidebarFilter === 'all' || sidebarFilter === 'agent'
+                    sidebarFilter === 'all' || sidebarFilter === 'agent' || sidebarFilter === 'planner'
                         ? 'agent'
                         : 'team';
                 teamIdToUse = modeToUse === 'team' ? sidebarFilter : null;
@@ -1072,7 +1072,7 @@ export function ChatProvider({
                     setActiveAgentsCount(0);
                 });
                 // Extract error message from frame
-                let message = 'Ошибка соединения';
+                let message = 'Connection error';
                 if (err?.error?.message) {
                     message = err.error.message;
                 } else if (err?.message) {
