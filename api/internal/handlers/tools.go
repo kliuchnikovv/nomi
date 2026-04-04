@@ -227,10 +227,13 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 					var tokenData map[string]interface{}
 					if err := json.Unmarshal(decrypted, &tokenData); err == nil {
 						entry.mergedParams[accountID] = tokenData
+						atVal, _ := tokenData["access_token"].(string)
 						h.logger.Info("loaded credentials for integration",
 							zap.String("provider", integration.Provider),
 							zap.String("account_id", accountID),
 							zap.Bool("has_access_token", tokenData["access_token"] != nil),
+							zap.String("access_token_preview", atVal[:min(len(atVal), 20)]),
+							zap.Bool("access_token_empty", atVal == ""),
 						)
 					} else {
 						h.logger.Warn("failed to unmarshal oauth token",
