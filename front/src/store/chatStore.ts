@@ -24,6 +24,7 @@ interface ChatStore {
     chats: Record<string, Message[]>;
     addMessage: (chatId: string, payload: any) => void;
     setMessages: (chatId: string, messages: Message[]) => void;
+    mergeMessages: (chatId: string, incoming: Message[]) => void;
     removeMessage: (chatId: string, messageId: string) => void;
     clearChat: (chatId: string) => void;
     flushPendingUpdates: (chatId: string) => void;
@@ -76,7 +77,7 @@ function trimMessages(messages: Message[], limit: number): Message[] {
 
 // Flush accumulated streaming updates for a chat
 function flushPendingUpdates(
-    chatId: string, 
+    chatId: string,
     set: (fn: (state: { chats: Record<string, Message[]> }) => { chats: Record<string, Message[]> }) => void
 ) {
     // Clear any pending timer
@@ -150,6 +151,25 @@ export const useChatStore = create<ChatStore>()(
                 }));
             },
 
+            mergeMessages: (chatId, incoming) => {
+                if (!incoming || incoming.length === 0) return;
+                touchChatAccess(chatId);
+                set((state) => {
+                    const existing = state.chats[chatId] ?? [];
+                    const existingIds = new Set(existing.map((m) => m.id));
+                    const toAdd = incoming.filter((m) => !existingIds.has(m.id));
+                    if (toAdd.length === 0) return state;
+                    // History messages (toAdd) are older — prepend before in-flight existing messages
+                    const merged = trimMessages([...toAdd, ...existing], MAX_MESSAGES_PER_CHAT);
+                    return {
+                        chats: evictOldChats({
+                            ...state.chats,
+                            [chatId]: merged,
+                        }),
+                    };
+                });
+            },
+
             removeMessage: (chatId, messageId) => {
                 set((state) => {
                     const messages = state.chats[chatId];
@@ -177,7 +197,7 @@ export const useChatStore = create<ChatStore>()(
                 if (lruIdx !== -1) {
                     chatAccessOrder.splice(lruIdx, 1);
                 }
-                
+
                 set((state) => {
                     const newChats = { ...state.chats };
                     delete newChats[chatId];
@@ -194,10 +214,10 @@ export const useChatStore = create<ChatStore>()(
 
             addMessage: (chatId, payload) => {
                 // Check if this is a streaming text chunk that should be throttled
-                const isStreamingChunk = payload?.type === 'text' && 
-                                         payload?.delta && 
-                                         !payload?.done;
-                
+                const isStreamingChunk = payload?.type === 'text' &&
+                    payload?.delta &&
+                    !payload?.done;
+
                 if (isStreamingChunk) {
                     // Accumulate streaming chunks and throttle updates
                     if (!pendingUpdates.has(chatId)) {
@@ -211,7 +231,7 @@ export const useChatStore = create<ChatStore>()(
                     const now = Date.now();
                     const lastFlush = lastFlushTime.get(chatId) || 0;
                     const timeSinceLastFlush = now - lastFlush;
-                    
+
                     // Calculate accumulated text length since last flush
                     const accumulatedLength = pendingUpdates.get(chatId)!
                         .reduce((sum, u) => sum + (u.payload.delta?.length || 0), 0);
@@ -236,6 +256,7 @@ export const useChatStore = create<ChatStore>()(
                     flushPendingUpdates(chatId, set);
                 }
 
+                /*
                 console.log('[ChatStore 📥 addMessage]', {
                     chatId,
                     payload_type: payload?.type,
@@ -244,31 +265,36 @@ export const useChatStore = create<ChatStore>()(
                     payload_role: payload?.role,
                     payload_message_preview: payload?.message?.substring(0, 50)
                 });
+                */
                 touchChatAccess(chatId);
                 startTransition(() => {
                     set((state) => {
                         const currentMessages = state.chats[chatId] || [];
+                        /*
                         console.log('[ChatStore 📋 Before]', {
                             chatId,
                             messageCount: currentMessages.length,
                             messageIds: currentMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`)
                         });
+                        */
                         let newMessages = onReceivedMessage(payload, currentMessages, chatId);
 
                         if (newMessages === currentMessages) {
-                            console.log('[ChatStore ⏭️  Skip] No changes, returning previous state');
+                            // console.log('[ChatStore ⏭️  Skip] No changes, returning previous state');
                             return state;
                         }
 
                         // Trim messages if they exceed the limit
                         newMessages = trimMessages(newMessages, MAX_MESSAGES_PER_CHAT);
 
+                        /*
                         console.log('[ChatStore 📋 After]', {
                             chatId,
                             messageCount: newMessages.length,
                             messageIds: newMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`),
                             added: newMessages.length - currentMessages.length
                         });
+                        */
                         return {
                             chats: evictOldChats({
                                 ...state.chats,
@@ -406,7 +432,7 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         payload_type: payload.type,
         messageIdx
     });
-    
+
     // Dispatch to handler for assistant messages
     return dispatchPayload(payload, newMessages, messageIdx);
 }
