@@ -250,6 +250,25 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 
 		if entry.provider.StorageType == integrations.StorageTypeServer || entry.provider.StorageType == integrations.StorageTypeHybrid {
 			params["credentials"] = entry.mergedParams
+			h.logger.Info("sending credentials for provider",
+				zap.String("provider", providerName),
+				zap.Int("num_accounts", len(entry.accounts)),
+				zap.Int("num_credential_entries", len(entry.mergedParams)),
+				zap.Strings("account_ids", func() []string {
+					ids := make([]string, 0, len(entry.accounts))
+					for _, a := range entry.accounts {
+						ids = append(ids, a.ID)
+					}
+					return ids
+				}()),
+				zap.Strings("credential_keys", func() []string {
+					keys := make([]string, 0, len(entry.mergedParams))
+					for k := range entry.mergedParams {
+						keys = append(keys, k)
+					}
+					return keys
+				}()),
+			)
 		}
 
 		tools = append(tools, ToolConfig{

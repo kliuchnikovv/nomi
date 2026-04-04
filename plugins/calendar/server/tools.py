@@ -224,6 +224,14 @@ class CalendarTools(Toolkit):
 
 def build(params: Dict[str, Any]) -> Toolkit:
     """Build Calendar tools from parameters."""
+    logger.info("Calendar build() called with params keys: %s", list(params.keys()))
+    logger.info("Calendar params.get('creds') type: %s", type(params.get("creds")))
+    if isinstance(params.get("creds"), dict):
+        logger.info("Calendar creds keys: %s", list(params["creds"].keys()))
+        logger.info(
+            "Calendar creds has access_token: %s", "access_token" in params["creds"]
+        )
+
     creds_data = (
         params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
     )

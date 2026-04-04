@@ -225,7 +225,22 @@ async def build(config: ToolsConfig) -> list[Toolkit]:
                         continue
                     account_creds = credentials.get(account_id)
                     if not account_creds or not isinstance(account_creds, dict):
+                        logger.warning(
+                            "[Tools] No credentials dict for account %s in tool '%s' (credentials keys: %s)",
+                            account_id,
+                            item.name,
+                            list(credentials.keys())
+                            if isinstance(credentials, dict)
+                            else "N/A",
+                        )
                         continue
+                    logger.info(
+                        "[Tools] Building tool '%s' for account %s, creds keys: %s, has_access_token: %s",
+                        item.name,
+                        account_id,
+                        list(account_creds.keys()),
+                        "access_token" in account_creds,
+                    )
                     try:
                         account_creds["account_id"] = (
                             account_id  # Inject account_id into params
