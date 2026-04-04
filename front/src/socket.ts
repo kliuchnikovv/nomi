@@ -38,6 +38,7 @@ export class ChatSocket {
     private isConnecting = false;
     private channel: 'chat' | 'user' = 'chat';
     private chatId: string | null = null;
+    private connectedChatId: string | null = null;
     private hasConnectedBefore = false;
 
     // private sentCommandFrame = false; // Command frames are per-message/chat context now?
@@ -72,7 +73,15 @@ export class ChatSocket {
     }
 
     setChatId(chatId: string | null) {
+        const changed = chatId !== null && this.connectedChatId !== null && chatId !== this.connectedChatId;
         this.chatId = chatId;
+        if (changed && this.isReady() && this.channel === 'chat') {
+            console.log('[Socket] chatId changed, reconnecting from', this.connectedChatId, 'to', chatId);
+            this.isIntentionallyClosed = false;
+            this.shouldReconnect = true;
+            this.close();
+            this.open();
+        }
     }
 
     setHandlers(h: Handlers) {
@@ -282,8 +291,8 @@ export class ChatSocket {
                     readyState: ws.readyState,
                     url: wsUrl.substring(0, 50) + '...'
                 });
-                // Mark that connection was successfully established
                 (ws as any)._wasConnected = true;
+                this.connectedChatId = this.chatId;
                 clearTimeout(connectionTimeout);
                 this.isConnecting = false;
                 this.reconnectDelay = 1000; // Reset backoff
@@ -690,6 +699,7 @@ export class ChatSocket {
             this.ws?.close();
         } catch { }
         this.ws = null;
+        this.connectedChatId = null;
         this.outbox = [];
     }
 }

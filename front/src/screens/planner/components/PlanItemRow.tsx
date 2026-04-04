@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -44,6 +44,13 @@ export function PlanItemRow({
     const { theme } = useTheme();
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
+    // Local text state — drives the TextInput. Keeps display in sync even when
+    // React Native doesn't propagate value prop changes to a recently-focused input.
+    const [localText, setLocalText] = useState(item.text);
+    useEffect(() => {
+        setLocalText(item.text);
+    }, [item.text]);
+
     // Animate scale when drag becomes active/inactive
     const prevActiveRef = useRef(isActive);
     if (prevActiveRef.current !== isActive) {
@@ -56,8 +63,23 @@ export function PlanItemRow({
     }
 
     const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-        if (e.nativeEvent.key === 'Backspace' && item.text === '') {
+        if (e.nativeEvent.key === 'Backspace' && localText === '') {
             onDelete();
+        }
+    };
+
+    const handleTextChange = (text: string) => {
+        const newlineIndex = text.indexOf('\n');
+        if (newlineIndex !== -1) {
+            const trimmed = text.slice(0, newlineIndex);
+            setLocalText(trimmed);
+            onTextChange(trimmed);
+            // Defer list mutation so iOS finishes processing the text event first,
+            // preventing NSMutableRLEArray out-of-bounds crash.
+            setTimeout(onAddAfter, 0);
+        } else {
+            setLocalText(text);
+            onTextChange(text);
         }
     };
 
@@ -75,13 +97,13 @@ export function PlanItemRow({
                 styles.rowContainer,
                 {
                     paddingLeft: item.depth * 28 + 12,
-                    paddingRight: 12,
+                    paddingRight: 4,
                     transform: [{ scale: scaleAnim }],
                     ...(isActive && styles.activeRow),
                 },
             ]}
         >
-            {/* Checkbox — long-press for drag, wrapped in PanGestureHandler for swipe-to-indent */}
+            {/* Checkbox — tap to check, swipe to indent */}
             <PanGestureHandler
                 activeOffsetX={[-15, 15]}
                 failOffsetY={[-15, 15]}
@@ -96,8 +118,6 @@ export function PlanItemRow({
             >
                 <TouchableOpacity
                     onPress={onCheck}
-                    onLongPress={handleLongPress}
-                    delayLongPress={200}
                     style={[
                         styles.checkbox,
                         {
@@ -125,13 +145,12 @@ export function PlanItemRow({
                             textDecorationLine: item.checked ? 'line-through' : 'none',
                         },
                     ]}
-                    value={item.text}
-                    onChangeText={onTextChange}
+                    value={localText}
+                    onChangeText={handleTextChange}
                     placeholder={item.placeholder ?? 'Задача…'}
                     placeholderTextColor={theme.textSecondary}
-                    multiline={false}
-                    returnKeyType="next"
-                    onSubmitEditing={onAddAfter}
+                    multiline={true}
+                    scrollEnabled={false}
                     onKeyPress={handleKeyPress}
                     blurOnSubmit={false}
                 />
@@ -148,6 +167,16 @@ export function PlanItemRow({
                     </View>
                 )}
             </View>
+
+            {/* Drag handle — long-press to reorder */}
+            <TouchableOpacity
+                onLongPress={handleLongPress}
+                delayLongPress={200}
+                style={styles.dragHandle}
+                activeOpacity={0.4}
+            >
+                <Text style={[styles.dragHandleIcon, { color: theme.textSecondary }]}>⠿</Text>
+            </TouchableOpacity>
         </Animated.View>
     );
 }
@@ -199,5 +228,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 4,
+    },
+    dragHandle: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        alignSelf: 'center',
+    },
+    dragHandleIcon: {
+        fontSize: 18,
+        opacity: 0.4,
     },
 });

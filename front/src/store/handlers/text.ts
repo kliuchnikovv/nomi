@@ -5,16 +5,16 @@ export const handleTextPayload: MessageHandler = (payload, prevMessages, message
     const newMessages = [...prevMessages];
     const rawText = payload.delta || payload.message || '';
     // Skip whitespace-only deltas (Python sends "\n\n" as separators between tool calls)
-    const newText = rawText.trim() ? rawText : '';
+    const newText = rawText;
     console.log('[handleTextPayload 📝]', {
         messageIdx,
         message_id: prevMessages[messageIdx]?.id,
         newTextLength: newText.length,
-        newTextPreview: newText.substring(0, 50),
+        newTextPreview: JSON.stringify(newText),
         ix: payload.ix,
         currentTextLength: prevMessages[messageIdx]?.text?.length
     });
-    
+
     if (!newText || !newMessages[messageIdx]) {
         console.log('[handleTextPayload ⏭️  Skip] No text or message not found');
         return newMessages;
