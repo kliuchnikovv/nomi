@@ -1,18 +1,23 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     View,
     Text,
     TouchableOpacity,
     StyleSheet,
     Platform,
+    Animated,
+    FlatList,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import BottomSheet, {
     BottomSheetFlatList,
     BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
-import { usePlannerChat, ChatMessage } from '../hooks/usePlannerChat';
+import { ChatMessage, usePlannerChat } from '../hooks/usePlannerChat';
+import { Frame } from '../../main/models';
+import { PlanItem } from '../types';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -22,11 +27,64 @@ interface Props {
     isOpen: boolean;
     onClose: () => void;
     date: string;
-    /** If set, automatically sent as first message when chat opens */
-    autoSendMessage?: string | null;
+    /** Current plan items — appended as invisible context to every user message */
+    items?: PlanItem[];
+    /** If true, automatically build and send the planning prompt when chat opens and socket is ready */
+    autoSend?: boolean;
     /** Whether to enable web search for the auto-send message */
     autoSendWebSearch?: boolean;
     onAutoSendHandled?: () => void;
+}
+
+function currentTimeStr(): string {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function buildPlanningPrompt(items: PlanItem[], date: string): string {
+    const namedItems = items.filter(i => !i.checked && i.text.trim() !== '');
+    if (namedItems.length === 0) {
+        return `У меня пока нет задач на ${date}. Можешь посоветовать что мне запланировать?`;
+    }
+    const tasksList = namedItems.map((item, idx) => {
+        const indent = '  '.repeat(item.depth);
+        const existingChips = item.chips.map(c => `[${c.type}: ${c.value}]`).join(' ');
+        return `${idx + 1}. ID:${item.id} ${indent}${item.text}${existingChips ? ' ' + existingChips : ''}`.trim();
+    }).join('\n');
+    return `Помоги составить план дня на ${date} (сейчас ${currentTimeStr()}):\n\n${tasksList}`;
+}
+
+function buildPlanContext(items: PlanItem[]): string {
+    const lines = items.filter(i => !i.checked && i.text.trim() !== '').map(i => {
+        const chips = i.chips.map(c => `[${c.type}:${c.id} ${c.value}]`).join(' ');
+        return `ID:${i.id} ${i.text}${chips ? ' ' + chips : ''}`;
+    });
+    return `[Текущий план:\n${lines.join('\n')}]`;
+}
+
+// ---------------------------------------------------------------------------
+// ThinkingIndicator
+// ---------------------------------------------------------------------------
+
+function ThinkingIndicator() {
+    const opacity = useRef(new Animated.Value(0.4)).current;
+
+    useEffect(() => {
+        const anim = Animated.loop(
+            Animated.sequence([
+                Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+                Animated.timing(opacity, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+            ]),
+        );
+        anim.start();
+        return () => anim.stop();
+    }, [opacity]);
+
+    return (
+        <Animated.View style={[styles.bubble, styles.assistantBubble, { opacity, alignSelf: 'flex-start' }]}>
+            <Text style={styles.thinkingDots}>···</Text>
+        </Animated.View>
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -36,8 +94,9 @@ interface Props {
 export function ChatBottomSheet({
     isOpen,
     onClose,
-    date: _date,
-    autoSendMessage,
+    date,
+    items,
+    autoSend,
     autoSendWebSearch,
     onAutoSendHandled,
 }: Props) {
@@ -46,8 +105,9 @@ export function ChatBottomSheet({
     const bottomSheetRef = useRef<BottomSheet>(null);
     const snapPoints = ['45%', '85%'];
 
-    const { messages, sendMessage, isConnected } = usePlannerChat();
+    const { messages, sendMessage, isConnected, isThinking, replyToAskUser } = usePlannerChat(date);
     const [inputText, setInputText] = useState('');
+    const listRef = useRef<FlatList<ChatMessage | 'thinking'>>(null);
 
     // Sync open/close state → bottom sheet index
     useEffect(() => {
@@ -59,48 +119,110 @@ export function ChatBottomSheet({
     }, [isOpen]);
 
     // Auto-send planning prompt when chat opens and socket is ready
+    const autoSentRef = useRef(false);
+    // Keep items ref always current so auto-send uses the latest items even if they
+    // finish loading after isConnected becomes true
+    const itemsRef = useRef(items);
     useEffect(() => {
-        if (isOpen && isConnected && autoSendMessage) {
-            sendMessage(autoSendMessage, { webSearch: autoSendWebSearch ?? false });
+        itemsRef.current = items;
+    });
+
+    useEffect(() => {
+        if (isOpen && isConnected && autoSend && !autoSentRef.current) {
+            autoSentRef.current = true;
+            const prompt = buildPlanningPrompt(itemsRef.current ?? [], date);
+            sendMessage(prompt, { webSearch: autoSendWebSearch ?? false });
             onAutoSendHandled?.();
         }
-    }, [isOpen, isConnected, autoSendMessage]);
+    }, [isOpen, isConnected, autoSend, date, sendMessage, onAutoSendHandled, autoSendWebSearch]);
+
+    // Reset auto-send flag when trigger resets
+    useEffect(() => {
+        if (!autoSend) {
+            autoSentRef.current = false;
+        }
+    }, [autoSend]);
+
+    const listData = useMemo(() =>
+        [...messages, ...(isThinking ? ['thinking' as const] : [])],
+        [messages, isThinking]
+    );
+
+    // Scroll to bottom whenever the list grows (new messages, initial load)
+    const scrollToBottom = useCallback((animated: boolean) => {
+        listRef.current?.scrollToEnd({ animated });
+    }, []);
 
     const handleSheetChanges = useCallback(
         (index: number) => {
-            if (index === -1) onClose();
+            if (index === -1) {
+                onClose();
+            } else {
+                // Sheet just opened or expanded — scroll to latest message after animation settles
+                setTimeout(() => scrollToBottom(false), 150);
+            }
         },
-        [onClose],
+        [onClose, scrollToBottom],
     );
 
     const handleSend = useCallback(() => {
         const text = inputText.trim();
         if (!text) return;
-        sendMessage(text);
+        // Append current plan state so agent always knows which chips exist (skip if all items are empty)
+        const namedItems = items ? items.filter(i => !i.checked && i.text.trim() !== '') : [];
+        const context = namedItems.length > 0 ? buildPlanContext(items!) : undefined;
+        sendMessage(text, { context });
         setInputText('');
-    }, [inputText, sendMessage]);
+    }, [inputText, sendMessage, items]);
 
     // ---------------------------------------------------------------------------
-    // Render
+    // Render item
     // ---------------------------------------------------------------------------
 
     const renderMessage = ({ item }: { item: ChatMessage }) => {
         const isUser = item.role === 'user';
+        const emptyText = !item.text || item.text.trim().length === 0;
+        const hasOptions = item.askUser && item.askUser.options.length > 0;
+        
+        // Hide empty assistant bubbles that are just silent tool calls (not streaming, no text, no options)
+        if (!isUser && emptyText && !hasOptions && !item.isStreaming) {
+            return null;
+        }
+
+        const textColor = isUser ? '#FFFFFF' : theme.textPrimary;
         return (
             <View
                 style={[
                     styles.bubble,
                     isUser
-                        ? [styles.userBubble, { backgroundColor: '#007AFF' }]
+                        ? [styles.userBubble, { backgroundColor: '#5856D6' }]
                         : [styles.assistantBubble, { backgroundColor: theme.surface }],
                 ]}
             >
-                <Text style={[styles.bubbleText, { color: isUser ? '#FFFFFF' : theme.textPrimary }]}>
-                    {item.text}
-                </Text>
+                <Markdown style={markdownStyles(textColor)}>
+                    {item.text + (item.isStreaming ? ' ▍' : '')}
+                </Markdown>
+
+                {/* Quick-reply options from ask_user */}
+                {item.askUser && item.askUser.options.length > 0 && (
+                    <View style={styles.optionsContainer}>
+                        {item.askUser.options.map(opt => (
+                            <TouchableOpacity
+                                key={opt}
+                                style={styles.optionChip}
+                                onPress={() => replyToAskUser(item.askUser!.callId, opt)}
+                                activeOpacity={0.75}
+                            >
+                                <Text style={styles.optionText}>{opt}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
             </View>
         );
     };
+
+
 
     return (
         <BottomSheet
@@ -109,7 +231,7 @@ export function ChatBottomSheet({
             snapPoints={snapPoints}
             topInset={topInset}
             enablePanDownToClose
-            keyboardBehavior="interactive"
+            keyboardBehavior="fillParent"
             keyboardBlurBehavior="restore"
             android_keyboardInputMode="adjustResize"
             onChange={handleSheetChanges}
@@ -143,14 +265,21 @@ export function ChatBottomSheet({
                     </TouchableOpacity>
                 </View>
 
-                {/* Messages — inverted so newest is always at bottom without programmatic scroll */}
+                {/* Messages */}
                 <BottomSheetFlatList
-                    data={[...messages].reverse()}
-                    keyExtractor={(item: ChatMessage) => item.id}
-                    renderItem={renderMessage}
+                    ref={listRef as any}
+                    data={listData}
+                    keyExtractor={(item: ChatMessage | 'thinking', idx: number) =>
+                        item === 'thinking' ? 'thinking' : (item as ChatMessage).id ?? String(idx)
+                    }
+                    renderItem={({ item }: { item: ChatMessage | 'thinking' }) => {
+                        if (item === 'thinking') return <ThinkingIndicator />;
+                        return renderMessage({ item: item as ChatMessage });
+                    }}
                     style={styles.messagesList}
-                    contentContainerStyle={styles.messageList}
-                    inverted
+                    contentContainerStyle={styles.messageListContent}
+                    keyboardShouldPersistTaps="handled"
+                    onContentSizeChange={() => scrollToBottom(false)}
                     ListEmptyComponent={
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                             Спроси Genie про этот день…
@@ -158,7 +287,7 @@ export function ChatBottomSheet({
                     }
                 />
 
-                {/* Input bar — uses BottomSheetTextInput for proper keyboard handling */}
+                {/* Input bar */}
                 <View
                     style={[
                         styles.inputBar,
@@ -188,7 +317,7 @@ export function ChatBottomSheet({
                         activeOpacity={0.7}
                         style={[
                             styles.sendBtn,
-                            { backgroundColor: inputText.trim() ? '#007AFF' : theme.border },
+                            { backgroundColor: inputText.trim() ? '#5856D6' : theme.border },
                         ]}
                     >
                         <Text style={styles.sendBtnIcon}>↑</Text>
@@ -197,6 +326,26 @@ export function ChatBottomSheet({
             </View>
         </BottomSheet>
     );
+}
+
+// ---------------------------------------------------------------------------
+// Markdown styles (dynamic — depends on text color)
+// ---------------------------------------------------------------------------
+
+function markdownStyles(color: string) {
+    return {
+        body: { color, fontSize: 15, lineHeight: 22 },
+        paragraph: { marginTop: 0, marginBottom: 4 },
+        bullet_list: { marginTop: 0, marginBottom: 4 },
+        ordered_list: { marginTop: 0, marginBottom: 4 },
+        list_item: { marginBottom: 2 },
+        // Ensure list item content wraps instead of expanding the bubble width
+        bullet_list_content: { flex: 1, flexShrink: 1 },
+        ordered_list_content: { flex: 1, flexShrink: 1 },
+        strong: { fontWeight: '700' as const, color },
+        em: { fontStyle: 'italic' as const, color },
+        code_inline: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, color },
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -243,14 +392,14 @@ const styles = StyleSheet.create({
     closeBtnText: {
         fontSize: 14,
     },
-    messageList: {
+    messageListContent: {
         padding: 12,
         gap: 8,
         flexGrow: 1,
     },
     bubble: {
         maxWidth: '80%',
-        borderRadius: 14,
+        borderRadius: 16,
         paddingHorizontal: 12,
         paddingVertical: 8,
         marginBottom: 6,
@@ -263,10 +412,26 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
         borderBottomLeftRadius: 4,
     },
-    bubbleText: {
-        fontSize: 15,
-        lineHeight: 22,
+    thinkingDots: {
+        fontSize: 18,
+        color: '#8E8E93',
+        letterSpacing: 2,
     },
+    optionsContainer: {
+        marginTop: 8,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+    },
+    optionChip: {
+        backgroundColor: '#EEF0FF',
+        borderRadius: 12,
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderWidth: 1,
+        borderColor: '#5856D6',
+    },
+    optionText: { color: '#5856D6', fontSize: 13, fontWeight: '500' },
     emptyText: {
         textAlign: 'center',
         marginTop: 32,
