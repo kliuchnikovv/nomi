@@ -240,9 +240,17 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
         const { call_id: callId, params: actionParams } = p;
         const patches = actionParams?.patches ?? [];
         const summary = actionParams?.summary;
-        callApplyPatches(patches, summary);
+        // Apply patches in try-catch so a patch error never blocks the tool result
+        try {
+          callApplyPatches(patches, summary);
+        } catch (e) {
+          console.error('[usePlannerChat] callApplyPatches error:', e);
+        }
+        // Always send result — backend waits for this before continuing
         if (callId) {
-          sendClientToolResult(chatId, callId, 'ok').catch(() => {});
+          sendClientToolResult(chatId, callId, 'ok').catch((e) => {
+            console.error('[usePlannerChat] sendClientToolResult failed:', e);
+          });
         }
       }
 

@@ -352,6 +352,7 @@ export class ChatSocket {
                                     useChatStore.getState().addMessage(chatId, frame.payload);
                                     // Route client_action frames to per-chatId planner store
                                     if (frame.payload?.type === 'client_action') {
+                                        console.log('[socket] client_action received, chatId=', chatId, 'tool=', frame.payload?.tool, 'call_id=', frame.payload?.call_id);
                                         emitPlannerAction(chatId, frame.payload);
                                     }
                                 }
