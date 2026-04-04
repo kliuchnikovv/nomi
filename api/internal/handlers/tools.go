@@ -259,6 +259,35 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		})
 	}
 
+	// Build a map of OAuth config key → first available decrypted credentials.
+	// This lets server plugins that share an OAuth provider (e.g. calendar + gmail
+	// both use oauth_config_key "google") reuse credentials from an already-enabled
+	// integration even when the plugin itself has no dedicated integration entry.
+	oauthKeyCredentials := make(map[string]map[string]interface{})
+	for _, integration := range userIntegrations {
+		provider, ok := integrations.GetProvider(integration.Provider)
+		if !ok || provider.OAuthConfigKey == "" {
+			continue
+		}
+		if _, alreadyFound := oauthKeyCredentials[provider.OAuthConfigKey]; alreadyFound {
+			continue
+		}
+		oauthToken, err := h.store.GetOAuthTokenByUserAndEmail(
+			c.Request.Context(), userID, integration.Provider, integration.AccountEmail,
+		)
+		if err != nil {
+			continue
+		}
+		decrypted, err := crypto.Decrypt(h.cryptoKey, oauthToken.TokenEncrypted)
+		if err != nil {
+			continue
+		}
+		var tokenData map[string]interface{}
+		if err := json.Unmarshal(decrypted, &tokenData); err == nil {
+			oauthKeyCredentials[provider.OAuthConfigKey] = tokenData
+		}
+	}
+
 	// Add Server Plugins (execution.type: server or hybrid)
 	// Only add if not already present from integrations (to avoid overwriting credentials)
 	for _, manifest := range plugins.Manifests {
@@ -277,6 +306,15 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		if manifest.Execution.Type == "server" {
 			toolParams["user_id"] = userID.String()
 		}
+
+		// If the plugin uses a shared OAuth provider, try to inject credentials from
+		// any integration that already has a valid token for that OAuth config key.
+		if def, ok := integrations.GetProvider(manifest.Name); ok && def.OAuthConfigKey != "" {
+			if creds, found := oauthKeyCredentials[def.OAuthConfigKey]; found {
+				toolParams["creds"] = creds
+			}
+		}
+
 		tools = append(tools, ToolConfig{
 			Name:    manifest.Name,
 			Enabled: true,
