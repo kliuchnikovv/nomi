@@ -45,4 +45,14 @@ describe('plannerActionStore', () => {
     unsub1();
     unsub2();
   });
+
+  it('does not remove current handler when a replaced subscription unsubscribes', () => {
+    const received: any[] = [];
+    const unsub1 = subscribePlannerAction('chat-A', () => {});
+    const unsub2 = subscribePlannerAction('chat-A', (p) => received.push(p));
+    unsub1(); // should be a no-op since unsub1's handler was replaced
+    emitPlannerAction('chat-A', { tool: 'patch_plan_document' });
+    expect(received).toHaveLength(1);
+    unsub2();
+  });
 });

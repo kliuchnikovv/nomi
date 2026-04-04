@@ -13,7 +13,9 @@ const listeners = new Map<string, Handler>();
 export function subscribePlannerAction(chatId: string, fn: Handler): () => void {
   listeners.set(chatId, fn);
   return () => {
-    listeners.delete(chatId);
+    if (listeners.get(chatId) === fn) {
+      listeners.delete(chatId);
+    }
   };
 }
 
