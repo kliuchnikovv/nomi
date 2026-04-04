@@ -37,7 +37,7 @@ class IOSCalendarManager: NSObject {
     }
 
     @objc
-    func getEvents(_ startDate: String, _ endDate: String, _ limit: Int, _ calendar: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func getEvents(_ startDate: String, endDate endDateStr: String, limit: Int, calendar calendarName: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard EKEventStore.authorizationStatus(for: .event) == .authorized else {
             reject("PERMISSION_DENIED", "Calendar access not authorized", nil)
             return
@@ -45,7 +45,7 @@ class IOSCalendarManager: NSObject {
 
         let dateFormatter = ISO8601DateFormatter()
         guard let start = dateFormatter.date(from: startDate),
-              let end = dateFormatter.date(from: endDate) else {
+              let end = dateFormatter.date(from: endDateStr) else {
             reject("INVALID_DATE", "Invalid date format. Use ISO8601 format.", nil)
             return
         }
@@ -84,15 +84,14 @@ class IOSCalendarManager: NSObject {
     }
 
     @objc
-    func createEvent(_ title: String, _ start: String, _ end: String, _ options: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func createEvent(_ title: String, start startStr: String, end endStr: String, options: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard EKEventStore.authorizationStatus(for: .event) == .authorized else {
             reject("PERMISSION_DENIED", "Calendar access not authorized", nil)
             return
         }
 
-        let dateFormatter = ISO8601DateFormatter()
-        guard let startDate = dateFormatter.date(from: start),
-              let endDate = dateFormatter.date(from: end) else {
+        guard let startDate = ISO8601DateFormatter().date(from: startStr),
+              let endDate = ISO8601DateFormatter().date(from: endStr) else {
             reject("INVALID_DATE", "Invalid date format. Use ISO8601 format.", nil)
             return
         }
@@ -135,7 +134,7 @@ class IOSCalendarManager: NSObject {
     }
 
     @objc
-    func updateEvent(_ id: String, _ updates: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func updateEvent(_ id: String, updates: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard EKEventStore.authorizationStatus(for: .event) == .authorized else {
             reject("PERMISSION_DENIED", "Calendar access not authorized", nil)
             return

@@ -223,9 +223,10 @@ export function PlannerScreen() {
                                     style={[styles.bottomBtn, styles.chatBtn, { borderColor: theme.border }]}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={[styles.bottomBtnText, { color: theme.textPrimary }]}>
-                                        <ChatBubble width={16} height={16} color={theme.textPrimary} /> Chat
-                                    </Text>
+                                    <View style={styles.bottomBtnContent}>
+                                        <ChatBubble width={16} height={16} color={theme.textPrimary} />
+                                        <Text style={[styles.bottomBtnText, { color: theme.textPrimary }]}>Chat</Text>
+                                    </View>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
@@ -233,9 +234,10 @@ export function PlannerScreen() {
                                     style={[styles.bottomBtn, styles.planBtn]}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>
-                                        <CalendarIcon width={16} height={16} color="#FFFFFF" /> Plan
-                                    </Text>
+                                    <View style={styles.bottomBtnContent}>
+                                        <CalendarIcon width={16} height={16} color="#FFFFFF" />
+                                        <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>Plan</Text>
+                                    </View>
                                 </TouchableOpacity>
                             </View>
 
@@ -296,6 +298,11 @@ const styles = StyleSheet.create({
     },
     planBtn: {
         backgroundColor: '#5856D6',
+    },
+    bottomBtnContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
     },
     bottomBtnText: {
         fontSize: 14,

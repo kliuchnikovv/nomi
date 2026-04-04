@@ -37,14 +37,21 @@ class IOSCalendarClient {
         startDate: string,
         endDate: string,
         limit: number = 20,
-        calendar?: string
+        calendar?: string,
     ): Promise<CalendarEvent[]> {
         if (!IOSCalendarManager) {
-            throw new Error('IOSCalendarManager is not available. Make sure iOS native module is properly linked.');
+            throw new Error(
+                'IOSCalendarManager is not available. Make sure iOS native module is properly linked.',
+            );
         }
 
         try {
-            const events: CalendarEvent[] = await IOSCalendarManager.getEvents(startDate, endDate, limit, calendar || '');
+            const events: CalendarEvent[] = await IOSCalendarManager.getEvents(
+                startDate,
+                endDate,
+                limit,
+                calendar || '',
+            );
             return events;
         } catch (error) {
             console.error('[IOSCalendarClient] getEvents error:', error);
@@ -65,26 +72,15 @@ class IOSCalendarClient {
             notes?: string;
             url?: string;
             calendar?: string;
-        } = {}
+        } = {},
     ): Promise<CalendarEvent> {
         if (!IOSCalendarManager) {
             throw new Error('IOSCalendarManager is not available.');
         }
 
-        if (typeof IOSCalendarManager.createEvent !== 'function') {
-            throw new Error(
-                `IOSCalendarManager.createEvent is not available. ` +
-                `Make sure you are using a development build with native modules enabled.`
-            );
-        }
-
         const event = await IOSCalendarManager.createEvent(title, start, end, options);
- {
-            if (!IOSCalendarManager) {
-                throw new Error('IOSCalendarManager.createEvent is not available. Make sure you are using a development build with native modules.');
-            }
-            const event = await IOSCalendarManager.createEvent(title, start, end, options);
-        return event;    }
+        return event;
+    }
 
     /**
      * Update an existing event
@@ -99,7 +95,7 @@ class IOSCalendarClient {
             location?: string;
             notes?: string;
             url?: string;
-        }
+        },
     ): Promise<CalendarEvent> {
         if (!IOSCalendarManager) {
             throw new Error('IOSCalendarManager is not available.');
@@ -143,17 +139,23 @@ class IOSCalendarClient {
 
         try {
             const now = new Date();
-            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            const thirtyDaysAgo = new Date(
+                now.getTime() - 30 * 24 * 60 * 60 * 1000,
+            );
+            const thirtyDaysLater = new Date(
+                now.getTime() + 30 * 24 * 60 * 60 * 1000,
+            );
 
             const events = await this.getEvents(
                 thirtyDaysAgo.toISOString(),
                 thirtyDaysLater.toISOString(),
-                100
+                100,
             );
 
             for (const event of events) {
-                let content = `Event: ${event.title}. Date: ${new Date(event.start).toLocaleString()} - ${new Date(event.end).toLocaleString()}.`;
+                let content = `Event: ${event.title}. Date: ${new Date(
+                    event.start,
+                ).toLocaleString()} - ${new Date(event.end).toLocaleString()}.`;
                 if (event.location) content += ` Location: ${event.location}.`;
                 if (event.notes) content += ` Notes: ${event.notes}.`;
 
@@ -165,7 +167,9 @@ class IOSCalendarClient {
                 });
             }
 
-            console.log(`[IOSCalendarClient] Indexed ${events.length} events for RAG`);
+            console.log(
+                `[IOSCalendarClient] Indexed ${events.length} events for RAG`,
+            );
         } catch (error) {
             console.error('[IOSCalendarClient] indexForRAG error:', error);
         }

@@ -138,7 +138,7 @@ class IOSContactsManager: NSObject {
     }
 
     @objc
-    func searchContacts(_ query: String, _ limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func searchContacts(_ query: String, limit: Int, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         requestPermissions { granted in
             guard granted else {
                 reject("PERMISSION_DENIED", "Contacts access not authorized", nil)
@@ -309,7 +309,7 @@ class IOSContactsManager: NSObject {
     }
 
     @objc
-    func updateContact(_ id: String, _ updates: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func updateContact(_ id: String, updates: [String: Any], resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         requestPermissions { granted in
             guard granted else {
                 reject("PERMISSION_DENIED", "Contacts access not authorized", nil)

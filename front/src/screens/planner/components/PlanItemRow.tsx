@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
-    Text,
     TextInput,
     TouchableOpacity,
     Animated,
@@ -9,7 +8,6 @@ import {
     Platform,
     Keyboard,
 } from 'react-native';
-import { Check } from 'iconoir-react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useTheme } from '../../../context/ThemeContext';
 import { PlanItem } from '../types';
@@ -42,10 +40,10 @@ export function PlanItemRow({
 }: Props) {
     const { theme } = useTheme();
     const scaleAnim = useRef(new Animated.Value(1)).current;
-
-    // Local text state keeps display in sync even when React Native doesn't
-    // propagate value prop changes to a recently-focused input.
     const [localText, setLocalText] = useState(item.text);
+    // Tracks whether indent was already fired for this gesture (prevent double-fire)
+    const indentFired = useRef(false);
+
     useEffect(() => {
         setLocalText(item.text);
     }, [item.text]);
@@ -87,74 +85,73 @@ export function PlanItemRow({
         drag();
     };
 
-    // Separate time chip (shown inline before text) from other chips (shown below)
+    // Fire indent as soon as horizontal threshold is crossed during the active gesture —
+    // more reliable than waiting for State.END which may never arrive if DraggableFlatList
+    // cancels the gesture first.
+    const onGestureEvent = (e: any) => {
+        const { translationX, translationY } = e.nativeEvent;
+        if (
+            !indentFired.current &&
+            Math.abs(translationX) > 30 &&
+            Math.abs(translationX) > Math.abs(translationY) * 2
+        ) {
+            indentFired.current = true;
+            onIndent(translationX > 0 ? 1 : -1);
+        }
+    };
+
+    const onHandlerStateChange = (e: any) => {
+        const { state, translationX, translationY } = e.nativeEvent;
+        if (state === State.BEGAN) {
+            indentFired.current = false;
+        } else if (state === State.END && !indentFired.current) {
+            // Fallback: if onGestureEvent never fired, try from final translation
+            if (Math.abs(translationX) > 20 && Math.abs(translationX) > Math.abs(translationY)) {
+                onIndent(translationX > 0 ? 1 : -1);
+            }
+        }
+    };
+
     const timeChip = item.chips.find(c => c.type === 'time');
     const otherChips = item.chips.filter(c => c.type !== 'time');
-
-    const checkboxBg = item.checked ? '#34C759' : 'transparent';
-    const checkboxBorder = isActive ? '#007AFF' : item.checked ? '#34C759' : theme.border;
 
     return (
         <Animated.View
             style={[
                 styles.rowContainer,
                 {
-                    paddingRight: 4,
                     transform: [{ scale: scaleAnim }],
                     ...(isActive && styles.activeRow),
                 },
             ]}
         >
-            {/* Drag handle — left edge, fixed position.
-                Swipe left/right  → change indent depth.
-                Long-press        → reorder via DraggableFlatList. */}
+            {/* Single dot — tap = check/uncheck, long-press = drag, swipe L/R = indent */}
             <PanGestureHandler
-                activeOffsetX={[-20, 20]}
-                failOffsetY={[-10, 10]}
-                onHandlerStateChange={(e) => {
-                    if (e.nativeEvent.state === State.END) {
-                        const { translationX, translationY } = e.nativeEvent;
-                        if (
-                            Math.abs(translationX) > Math.abs(translationY) &&
-                            Math.abs(translationX) > 20
-                        ) {
-                            onIndent(translationX > 0 ? 1 : -1);
-                        }
-                    }
-                }}
+                activeOffsetX={[-5, 5]}
+                failOffsetY={[-25, 25]}
+                onGestureEvent={onGestureEvent}
+                onHandlerStateChange={onHandlerStateChange}
             >
                 <TouchableOpacity
+                    onPress={onCheck}
                     onLongPress={handleLongPress}
                     delayLongPress={200}
-                    style={styles.dragHandle}
-                    activeOpacity={0.4}
+                    style={styles.dotArea}
+                    activeOpacity={0.6}
                 >
-                    <Text style={[styles.dragHandleIcon, { color: theme.textSecondary }]}>⠿</Text>
+                    <View
+                        style={[
+                            styles.dot,
+                            { backgroundColor: item.checked ? '#34C759' : theme.border },
+                        ]}
+                    />
                 </TouchableOpacity>
             </PanGestureHandler>
 
-            {/* Indented content — shifts right with depth */}
+            {/* Indented content — shifts right with nesting depth */}
             <View style={[styles.indentedContent, { marginLeft: item.depth * 24 }]}>
-                {/* Checkbox — tap to check */}
-                <TouchableOpacity
-                    onPress={onCheck}
-                    style={[
-                        styles.checkbox,
-                        {
-                            backgroundColor: checkboxBg,
-                            borderColor: checkboxBorder,
-                            borderWidth: isActive ? 2 : 1.5,
-                        },
-                    ]}
-                    activeOpacity={0.7}
-                >
-                    {item.checked && (
-                        <Check width={14} height={14} color="#007AFF" />
-                    )}
-                </TouchableOpacity>
-
-                {/* Content: time chip + text on one row, other chips below */}
                 <View style={styles.content}>
+                    {/* Time chip (inline) + text on one line, other chips below */}
                     <View style={styles.textRow}>
                         {timeChip && (
                             <PlanChipBadge
@@ -202,9 +199,10 @@ export function PlanItemRow({
 const styles = StyleSheet.create({
     rowContainer: {
         flexDirection: 'row',
-        alignItems: 'center',   // vertically center all left-side controls
+        alignItems: 'flex-start',
         paddingVertical: 6,
         paddingLeft: 4,
+        paddingRight: 12,
         backgroundColor: 'transparent',
     },
     activeRow: {
@@ -217,28 +215,19 @@ const styles = StyleSheet.create({
         borderColor: '#007AFF',
         borderRadius: 8,
     },
-    dragHandle: {
-        paddingHorizontal: 4,
-        paddingVertical: 6,
+    dotArea: {
+        width: 32,
+        paddingTop: 7,   // aligns dot center with the first text line (~12px from content top)
+        alignItems: 'center',
         flexShrink: 0,
     },
-    dragHandleIcon: {
-        fontSize: 18,
-        opacity: 0.35,
+    dot: {
+        width: 9,
+        height: 9,
+        borderRadius: 4.5,
     },
     indentedContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
         flex: 1,
-    },
-    checkbox: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 8,
-        flexShrink: 0,
     },
     content: {
         flex: 1,
@@ -262,6 +251,5 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 4,
-        marginLeft: 0,
     },
 });

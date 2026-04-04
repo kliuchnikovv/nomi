@@ -244,7 +244,7 @@ export function ChatBottomSheet({
             <View style={styles.container}>
                 {/* Header */}
                 <View style={[styles.header, { borderBottomColor: theme.border }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                         <Spark width={18} height={18} color={theme.textPrimary} />
                         <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
                             Genie

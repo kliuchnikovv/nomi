@@ -42,7 +42,7 @@ Work through these four steps IN ORDER. Complete each before the next.
 - "Позвонить маме в 18:00" → "Позвонить маме"
 Skip only if all task names are already clean.
 
-**Step 4 — Sort by time** (MANDATORY): Call `patch_plan_document` once more with a single `reorder_items` patch, listing ALL item IDs in ascending start-time order. Compare start times numerically ("08:00" < "09:30" < "13:50" < "21:00"). Items without a time chip go last in their original order.
+**Step 4 — Sort by time** (MANDATORY): Call `patch_plan_document` with a single `reorder_items` patch, listing ALL item IDs in ascending start-time order. The item ID is the value after `ID:` in each line of `[Current plan:...]` — e.g., for `ID:abc123 Проснуться [time:t1 08:00-09:00]` the item ID is `abc123`. Include every item ID. Compare start times numerically ("08:00" < "09:30" < "13:50" < "21:00"). Items without a time chip go last in their original order.
 
 Stream brief reasoning while working (e.g. "Аптека закрывается в 20:00, ставлю на 18:30.").
 
