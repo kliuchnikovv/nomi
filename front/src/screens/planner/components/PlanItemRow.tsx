@@ -8,10 +8,8 @@ import {
     StyleSheet,
     Platform,
     Keyboard,
-    NativeSyntheticEvent,
-    TextInputKeyPressEventData,
 } from 'react-native';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import { Check } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { PlanItem } from '../types';
 import { PlanChipBadge } from './PlanChipBadge';
@@ -44,14 +42,14 @@ export function PlanItemRow({
     const { theme } = useTheme();
     const scaleAnim = useRef(new Animated.Value(1)).current;
 
-    // Local text state — drives the TextInput. Keeps display in sync even when
-    // React Native doesn't propagate value prop changes to a recently-focused input.
+    // Local text state keeps display in sync even when React Native doesn't
+    // propagate value prop changes to a recently-focused input.
     const [localText, setLocalText] = useState(item.text);
     useEffect(() => {
         setLocalText(item.text);
     }, [item.text]);
 
-    // Animate scale when drag becomes active/inactive
+    // Animate scale when drag becomes active / inactive
     const prevActiveRef = useRef(isActive);
     if (prevActiveRef.current !== isActive) {
         prevActiveRef.current = isActive;
@@ -62,7 +60,7 @@ export function PlanItemRow({
         }).start();
     }
 
-    const handleKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+    const handleKeyPress = (e: any) => {
         if (e.nativeEvent.key === 'Backspace' && localText === '') {
             onDelete();
         }
@@ -88,6 +86,10 @@ export function PlanItemRow({
         drag();
     };
 
+    // Separate time chip (shown inline before text) from other chips (shown below)
+    const timeChip = item.chips.find(c => c.type === 'time');
+    const otherChips = item.chips.filter(c => c.type !== 'time');
+
     const checkboxBg = item.checked ? '#34C759' : 'transparent';
     const checkboxBorder = isActive ? '#007AFF' : item.checked ? '#34C759' : theme.border;
 
@@ -96,26 +98,25 @@ export function PlanItemRow({
             style={[
                 styles.rowContainer,
                 {
-                    paddingLeft: item.depth * 28 + 12,
                     paddingRight: 4,
                     transform: [{ scale: scaleAnim }],
                     ...(isActive && styles.activeRow),
                 },
             ]}
         >
-            {/* Checkbox — tap to check, swipe to indent */}
-            <PanGestureHandler
-                activeOffsetX={[-15, 15]}
-                failOffsetY={[-15, 15]}
-                onHandlerStateChange={(e) => {
-                    if (e.nativeEvent.state === State.END) {
-                        const { translationX, translationY } = e.nativeEvent;
-                        if (Math.abs(translationX) > Math.abs(translationY) && Math.abs(translationX) > 20) {
-                            onIndent(translationX > 0 ? 1 : -1);
-                        }
-                    }
-                }}
+            {/* Drag handle — fixed at left edge, not affected by indent depth */}
+            <TouchableOpacity
+                onLongPress={handleLongPress}
+                delayLongPress={200}
+                style={styles.dragHandle}
+                activeOpacity={0.4}
             >
+                <Text style={[styles.dragHandleIcon, { color: theme.textSecondary }]}>⠿</Text>
+            </TouchableOpacity>
+
+            {/* Indented content — shifts right with depth */}
+            <View style={[styles.indentedContent, { marginLeft: item.depth * 24 }]}>
+                {/* Checkbox — tap to check */}
                 <TouchableOpacity
                     onPress={onCheck}
                     style={[
@@ -129,54 +130,72 @@ export function PlanItemRow({
                     activeOpacity={0.7}
                 >
                     {item.checked && (
-                        <Text style={styles.checkmark}>✓</Text>
+                        <Check width={14} height={14} color="#007AFF" />
                     )}
                 </TouchableOpacity>
-            </PanGestureHandler>
 
-            {/* Content: text input + chips */}
-            <View style={styles.content}>
-                <TextInput
-                    ref={inputRef}
-                    style={[
-                        styles.textInput,
-                        {
-                            color: item.checked ? theme.textSecondary : theme.textPrimary,
-                            textDecorationLine: item.checked ? 'line-through' : 'none',
-                        },
-                    ]}
-                    value={localText}
-                    onChangeText={handleTextChange}
-                    placeholder={item.placeholder ?? 'Задача…'}
-                    placeholderTextColor={theme.textSecondary}
-                    multiline={true}
-                    scrollEnabled={false}
-                    onKeyPress={handleKeyPress}
-                    blurOnSubmit={false}
-                />
+                {/* Indent buttons — dedent (‹) and indent (›) */}
+                <View style={styles.indentButtons}>
+                    <TouchableOpacity
+                        onPress={() => onIndent(-1)}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        style={[styles.indentBtn, item.depth === 0 && styles.indentBtnDisabled]}
+                        disabled={item.depth === 0}
+                    >
+                        <Text style={[styles.indentBtnText, { color: theme.textSecondary }]}>‹</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => onIndent(1)}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        style={[styles.indentBtn, item.depth >= 2 && styles.indentBtnDisabled]}
+                        disabled={item.depth >= 2}
+                    >
+                        <Text style={[styles.indentBtnText, { color: theme.textSecondary }]}>›</Text>
+                    </TouchableOpacity>
+                </View>
 
-                {item.chips.length > 0 && (
-                    <View style={styles.chipsRow}>
-                        {item.chips.map(chip => (
+                {/* Content: time chip + text on one row, other chips below */}
+                <View style={styles.content}>
+                    <View style={styles.textRow}>
+                        {timeChip && (
                             <PlanChipBadge
-                                key={chip.id}
-                                chip={chip}
-                                onRemove={() => onChipRemove(chip.id)}
+                                chip={timeChip}
+                                onRemove={() => onChipRemove(timeChip.id)}
                             />
-                        ))}
+                        )}
+                        <TextInput
+                            ref={inputRef}
+                            style={[
+                                styles.textInput,
+                                {
+                                    color: item.checked ? theme.textSecondary : theme.textPrimary,
+                                    textDecorationLine: item.checked ? 'line-through' : 'none',
+                                },
+                            ]}
+                            value={localText}
+                            onChangeText={handleTextChange}
+                            placeholder={item.placeholder ?? 'Task…'}
+                            placeholderTextColor={theme.textSecondary}
+                            multiline={true}
+                            scrollEnabled={false}
+                            onKeyPress={handleKeyPress}
+                            blurOnSubmit={false}
+                        />
                     </View>
-                )}
-            </View>
 
-            {/* Drag handle — long-press to reorder */}
-            <TouchableOpacity
-                onLongPress={handleLongPress}
-                delayLongPress={200}
-                style={styles.dragHandle}
-                activeOpacity={0.4}
-            >
-                <Text style={[styles.dragHandleIcon, { color: theme.textSecondary }]}>⠿</Text>
-            </TouchableOpacity>
+                    {otherChips.length > 0 && (
+                        <View style={styles.chipsRow}>
+                            {otherChips.map(chip => (
+                                <PlanChipBadge
+                                    key={chip.id}
+                                    chip={chip}
+                                    onRemove={() => onChipRemove(chip.id)}
+                                />
+                            ))}
+                        </View>
+                    )}
+                </View>
+            </View>
         </Animated.View>
     );
 }
@@ -186,6 +205,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
         paddingVertical: 6,
+        paddingLeft: 4,
         backgroundColor: 'transparent',
     },
     activeRow: {
@@ -198,6 +218,21 @@ const styles = StyleSheet.create({
         borderColor: '#007AFF',
         borderRadius: 8,
     },
+    dragHandle: {
+        paddingHorizontal: 4,
+        paddingVertical: 4,
+        alignSelf: 'center',
+        flexShrink: 0,
+    },
+    dragHandleIcon: {
+        fontSize: 18,
+        opacity: 0.4,
+    },
+    indentedContent: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        flex: 1,
+    },
     checkbox: {
         width: 20,
         height: 20,
@@ -205,20 +240,39 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: Platform.OS === 'ios' ? 2 : 3,
-        marginRight: 10,
+        marginRight: 4,
         flexShrink: 0,
     },
-    checkmark: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '700',
-        lineHeight: 14,
+    indentButtons: {
+        flexDirection: 'row',
+        alignSelf: 'center',
+        marginRight: 4,
+    },
+    indentBtn: {
+        padding: 2,
+    },
+    indentBtnDisabled: {
+        opacity: 0.15,
+    },
+    indentBtnText: {
+        fontSize: 16,
+        fontWeight: '600',
+        opacity: 0.5,
+        lineHeight: 20,
     },
     content: {
         flex: 1,
         gap: 4,
     },
+    textRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 4,
+    },
     textInput: {
+        flex: 1,
+        minWidth: 60,
         fontSize: 15,
         lineHeight: 22,
         paddingVertical: 0,
@@ -228,14 +282,5 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 4,
-    },
-    dragHandle: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        alignSelf: 'center',
-    },
-    dragHandleIcon: {
-        fontSize: 18,
-        opacity: 0.4,
     },
 });

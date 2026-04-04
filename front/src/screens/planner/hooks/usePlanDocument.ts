@@ -15,7 +15,8 @@ export type PatchOp =
   | { op: 'add_item'; item: PlanItem; after_id?: string }
   | { op: 'remove_item'; item_id: string }
   | { op: 'update_item'; item_id: string; changes: Partial<PlanItem> }
-  | { op: 'move_to_date'; item_id: string; target_date: string };
+  | { op: 'move_to_date'; item_id: string; target_date: string }
+  | { op: 'reorder_items'; ids: string[] };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -372,6 +373,14 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
             case 'move_to_date': {
               // Remove from current document; the item will be created on target date server-side
               next = next.filter(i => i.id !== patch.item_id);
+              break;
+            }
+            case 'reorder_items': {
+              const idOrder = patch.ids;
+              const map = new Map(next.map(i => [i.id, i]));
+              const reordered = idOrder.map(id => map.get(id)).filter(Boolean) as PlanItem[];
+              const rest = next.filter(i => !idOrder.includes(i.id));
+              next = [...reordered, ...rest];
               break;
             }
           }

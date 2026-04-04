@@ -30,6 +30,8 @@ class PlanningTools(Toolkit):
                 - For update_chip: {"op": "update_chip", "item_id": "...", "chip": {...}}
                 - For update_item: {"op": "update_item", "item_id": "...", "changes": {...}}
                 - For move_to_date: {"op": "move_to_date", "item_id": "...", "target_date": "YYYY-MM-DD"}
+                - For reorder_items: {"op": "reorder_items", "ids": ["id1", "id2", ...]}
+                  — Reorders items to match the given array (ascending by start time). Use as the final patch after all chips are assigned.
 
                 Chip types:
                 - time: "09:00-10:00", "14:30", "morning", "afternoon"

@@ -34,7 +34,9 @@ Create a realistic schedule:
 - Otherwise, check if each task already has a `time` chip (shown as `[time: ...]`). Skip tasks that already have a time chip.
 - Assign time chips using `patch_plan_document` (add_chip with type="time").
 - Consider travel time between locations. Don't place back-to-back tasks that are far apart.
-- Add `location` chips where useful (optional). Skip if already present.
+- **Extract locations**: If a task name contains a city or place (e.g. "Барселона", "Сабиха", "офис", "аэропорт"), add a `location` chip with that value. Skip if already present.
+- **Clean up text**: After assigning chips, use `update_item` to rephrase task names — remove embedded time ranges and simplify. Examples: "Перелет с 13:50 до 17:30 - барселона - сабиха гекчен" → "Перелет Барселона → Сабиха"; "Встреча в 15:00 с Иваном" → "Встреча с Иваном". Only rephrase if the text clearly contains redundant timing or location data already captured in chips.
+- **Sort by time**: After assigning all chips and rephrasing, call `patch_plan_document` with a single `reorder_items` patch listing ALL item IDs sorted by their start time ascending (e.g. "08:00" < "09:30" < "13:50"). Items without a time chip go last, preserving their original relative order.
 - Stream a brief summary of your reasoning (e.g. "Аптека закрывается в 20:00, ставлю на 18:30.").
 
 ### 3. REVIEW
@@ -57,7 +59,7 @@ Stay available for follow-up:
 2. **Always write text**: After every action (tool call or not), write at least 1 sentence confirming what was done or asking a follow-up. Never respond with only tool calls and no text.
 3. **No duplicate chips**: Never add a chip (time/location/note) if one of the same type already exists on that task — UNLESS the user explicitly asked to replan, in which case update all time chips.
 4. **Move tasks when needed**: If a task belongs to another day, use `move_to_date`.
-5. **Always use the tool**: Apply changes with `patch_plan_document` — never just describe them.
+5. **Always use the tool**: Apply changes with `patch_plan_document` — never just describe them. Use `reorder_items` as the final patch call to sort all tasks by ascending start time.
 6. **Re-add deleted chips**: If the current plan context shows tasks without time chips but history shows they had times, the user deleted them — re-add immediately."""
 
 
