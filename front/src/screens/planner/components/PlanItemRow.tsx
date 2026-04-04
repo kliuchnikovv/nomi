@@ -10,6 +10,7 @@ import {
     Keyboard,
 } from 'react-native';
 import { Check } from 'iconoir-react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useTheme } from '../../../context/ThemeContext';
 import { PlanItem } from '../types';
 import { PlanChipBadge } from './PlanChipBadge';
@@ -104,15 +105,33 @@ export function PlanItemRow({
                 },
             ]}
         >
-            {/* Drag handle — fixed at left edge, not affected by indent depth */}
-            <TouchableOpacity
-                onLongPress={handleLongPress}
-                delayLongPress={200}
-                style={styles.dragHandle}
-                activeOpacity={0.4}
+            {/* Drag handle — left edge, fixed position.
+                Swipe left/right  → change indent depth.
+                Long-press        → reorder via DraggableFlatList. */}
+            <PanGestureHandler
+                activeOffsetX={[-20, 20]}
+                failOffsetY={[-10, 10]}
+                onHandlerStateChange={(e) => {
+                    if (e.nativeEvent.state === State.END) {
+                        const { translationX, translationY } = e.nativeEvent;
+                        if (
+                            Math.abs(translationX) > Math.abs(translationY) &&
+                            Math.abs(translationX) > 20
+                        ) {
+                            onIndent(translationX > 0 ? 1 : -1);
+                        }
+                    }
+                }}
             >
-                <Text style={[styles.dragHandleIcon, { color: theme.textSecondary }]}>⠿</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                    onLongPress={handleLongPress}
+                    delayLongPress={200}
+                    style={styles.dragHandle}
+                    activeOpacity={0.4}
+                >
+                    <Text style={[styles.dragHandleIcon, { color: theme.textSecondary }]}>⠿</Text>
+                </TouchableOpacity>
+            </PanGestureHandler>
 
             {/* Indented content — shifts right with depth */}
             <View style={[styles.indentedContent, { marginLeft: item.depth * 24 }]}>
@@ -133,26 +152,6 @@ export function PlanItemRow({
                         <Check width={14} height={14} color="#007AFF" />
                     )}
                 </TouchableOpacity>
-
-                {/* Indent buttons — dedent (‹) and indent (›) */}
-                <View style={styles.indentButtons}>
-                    <TouchableOpacity
-                        onPress={() => onIndent(-1)}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        style={[styles.indentBtn, item.depth === 0 && styles.indentBtnDisabled]}
-                        disabled={item.depth === 0}
-                    >
-                        <Text style={[styles.indentBtnText, { color: theme.textSecondary }]}>‹</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => onIndent(1)}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        style={[styles.indentBtn, item.depth >= 2 && styles.indentBtnDisabled]}
-                        disabled={item.depth >= 2}
-                    >
-                        <Text style={[styles.indentBtnText, { color: theme.textSecondary }]}>›</Text>
-                    </TouchableOpacity>
-                </View>
 
                 {/* Content: time chip + text on one row, other chips below */}
                 <View style={styles.content}>
@@ -203,7 +202,7 @@ export function PlanItemRow({
 const styles = StyleSheet.create({
     rowContainer: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',   // vertically center all left-side controls
         paddingVertical: 6,
         paddingLeft: 4,
         backgroundColor: 'transparent',
@@ -220,17 +219,16 @@ const styles = StyleSheet.create({
     },
     dragHandle: {
         paddingHorizontal: 4,
-        paddingVertical: 4,
-        alignSelf: 'center',
+        paddingVertical: 6,
         flexShrink: 0,
     },
     dragHandleIcon: {
         fontSize: 18,
-        opacity: 0.4,
+        opacity: 0.35,
     },
     indentedContent: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         flex: 1,
     },
     checkbox: {
@@ -239,26 +237,8 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: Platform.OS === 'ios' ? 2 : 3,
-        marginRight: 4,
+        marginRight: 8,
         flexShrink: 0,
-    },
-    indentButtons: {
-        flexDirection: 'row',
-        alignSelf: 'center',
-        marginRight: 4,
-    },
-    indentBtn: {
-        padding: 2,
-    },
-    indentBtnDisabled: {
-        opacity: 0.15,
-    },
-    indentBtnText: {
-        fontSize: 16,
-        fontWeight: '600',
-        opacity: 0.5,
-        lineHeight: 20,
     },
     content: {
         flex: 1,
@@ -282,5 +262,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 4,
+        marginLeft: 0,
     },
 });
