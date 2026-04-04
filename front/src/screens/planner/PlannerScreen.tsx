@@ -180,13 +180,14 @@ export function PlannerScreen() {
                             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                             style={{ flex: 1 }}
                         >
-                            <DocumentHeader
-                                date={date}
-                                onPrev={() => setDate(shiftDate(date, -1))}
-                                onNext={() => setDate(shiftDate(date, 1))}
-                            />
-
+                            {/* Header + list fill all available space above the bottom bar */}
                             <View style={{ flex: 1 }}>
+                                <DocumentHeader
+                                    date={date}
+                                    onPrev={() => setDate(shiftDate(date, -1))}
+                                    onNext={() => setDate(shiftDate(date, 1))}
+                                />
+
                                 <DraggableFlatList
                                     data={items}
                                     keyExtractor={(item) => item.id}
@@ -209,7 +210,7 @@ export function PlannerScreen() {
                                 />
                             </View>
 
-                            {/* Bottom action bar */}
+                            {/* Bottom action bar — sits below the flex:1 area, gets pushed up by keyboard */}
                             <View
                                 style={[
                                     styles.bottomBar,
@@ -266,7 +267,6 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     listContent: {
-        flexGrow: 1,
         paddingBottom: 8,
     },
     addRow: {
