@@ -1,6 +1,8 @@
 import { Frame } from './screens/main/models';
 import { useChatStore } from './store/chatStore';
 import { emitGenerationDone } from './store/generationDoneStore';
+import { emitPlannerAction } from './store/plannerActionStore';
+import { emitChatError } from './store/chatErrorStore';
 import { getApiUrl } from './config';
 
 type Handlers = {
@@ -348,6 +350,10 @@ export class ChatSocket {
                             if (chatId) {
                                 if (op === 'message' && frame.kind === 'data') {
                                     useChatStore.getState().addMessage(chatId, frame.payload);
+                                    // Route client_action frames to per-chatId planner store
+                                    if (frame.payload?.type === 'client_action') {
+                                        emitPlannerAction(chatId, frame.payload);
+                                    }
                                 }
 
                                 // Notify listeners
@@ -414,6 +420,12 @@ export class ChatSocket {
                                         };
                                         userMessage = errorMessages[errorCode] || errorMessage;
                                     }
+
+                                    emitChatError(this.chatId ?? '', {
+                                        code: errorCode,
+                                        message: userMessage,
+                                        details: errorDetails,
+                                    });
 
                                     // Pass enhanced error object to handler
                                     this.handlers.onError?.({
