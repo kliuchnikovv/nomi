@@ -1,6 +1,8 @@
 package container
 
 import (
+	"encoding/hex"
+
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/credentials"
@@ -57,7 +59,8 @@ func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
 	authService := services.NewAuthService(userRepo, tokenManager, store)
 
 	// Initialize Hub
-	hubInstance := hub.NewHub(store, logger, cfg.LLM.BaseURL)
+	cryptoKey, _ := hex.DecodeString(cfg.Token.EncryptionKey)
+	hubInstance := hub.NewHub(store, logger, cfg.LLM.BaseURL, cryptoKey)
 	go hubInstance.Run()
 
 	// Initialize credentials store with Redis from Hub

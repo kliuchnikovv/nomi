@@ -26,6 +26,7 @@ type Hub struct {
 	logger     *zap.Logger
 	llmBaseURL string
 	redis      *redis.Client
+	cryptoKey  []byte
 
 	upgrader websocket.Upgrader
 
@@ -33,7 +34,7 @@ type Hub struct {
 	streamingMap map[string]bool // model ID -> streaming
 }
 
-func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub {
+func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string, cryptoKey []byte) *Hub {
 	// Initialize Redis
 	redisAddr := os.Getenv("REDIS_URL")
 	if redisAddr == "" {
@@ -68,6 +69,7 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string) *Hub 
 		logger:     logger.With(zap.String("component", "hub")),
 		llmBaseURL: llmBaseURL,
 		redis:      rClient,
+		cryptoKey:  cryptoKey,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true

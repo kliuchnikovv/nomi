@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
+	"github.com/kliuchnikovv/genie-api/internal/crypto"
 	intgr "github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -488,6 +489,67 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			var paramsMap map[string]interface{}
 			if err := json.Unmarshal([]byte(integ.Params), &paramsMap); err == nil {
 				dbIntegrations[integ.Provider] = paramsMap
+			}
+		}
+
+		// Load OAuth tokens and merge into dbIntegrations for server-side providers.
+		// This ensures credentials (access_token, refresh_token) are included in the
+		// tools payload sent to Python via Redis.
+		oauthKeyCredentials := make(map[string]map[string]interface{})
+		for _, integ := range integrations {
+			provider, ok := intgr.GetProvider(integ.Provider)
+			if !ok || provider.OAuthConfigKey == "" {
+				continue
+			}
+			if _, alreadyFound := oauthKeyCredentials[provider.OAuthConfigKey]; alreadyFound {
+				continue
+			}
+			oauthToken, err := r.store.GetOAuthTokenByUserAndEmail(
+				context.Background(), r.initiatorID, integ.Provider, integ.AccountEmail,
+			)
+			if err != nil {
+				r.logger.Debug("oauth token not found for integration",
+					zap.String("provider", integ.Provider),
+					zap.String("account_email", integ.AccountEmail),
+				)
+				continue
+			}
+			decrypted, err := crypto.Decrypt(r.hub.cryptoKey, oauthToken.TokenEncrypted)
+			if err != nil {
+				r.logger.Warn("failed to decrypt oauth token",
+					zap.String("provider", integ.Provider),
+					zap.Error(err),
+				)
+				continue
+			}
+			var tokenData map[string]interface{}
+			if err := json.Unmarshal(decrypted, &tokenData); err == nil {
+				oauthKeyCredentials[provider.OAuthConfigKey] = tokenData
+				r.logger.Info("loaded oauth credentials for redis bundling",
+					zap.String("provider", integ.Provider),
+					zap.String("oauth_key", provider.OAuthConfigKey),
+					zap.Bool("has_access_token", tokenData["access_token"] != nil),
+				)
+			}
+		}
+
+		// Inject shared OAuth credentials into server-side integrations that lack them
+		for providerName, params := range dbIntegrations {
+			provider, ok := intgr.GetProvider(providerName)
+			if !ok || provider.OAuthConfigKey == "" {
+				continue
+			}
+			if params["access_token"] != nil {
+				continue // Already has credentials
+			}
+			if creds, found := oauthKeyCredentials[provider.OAuthConfigKey]; found {
+				for k, v := range creds {
+					params[k] = v
+				}
+				r.logger.Info("injected shared oauth credentials into provider",
+					zap.String("provider", providerName),
+					zap.String("oauth_key", provider.OAuthConfigKey),
+				)
 			}
 		}
 
