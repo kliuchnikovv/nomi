@@ -48,7 +48,7 @@ function buildPlanningPrompt(items: PlanItem[], date: string): string {
     }
     const tasksList = namedItems.map((item, idx) => {
         const indent = '  '.repeat(item.depth);
-        const existingChips = item.chips.map(c => `[${c.type}: ${c.value}]`).join(' ');
+        const existingChips = item.chips.map(c => `[${c.type}:${c.id} ${c.value}]`).join(' ');
         return `${idx + 1}. ID:${item.id} ${indent}${item.text}${existingChips ? ' ' + existingChips : ''}`.trim();
     }).join('\n');
     return `Помоги составить план дня на ${date} (сейчас ${currentTimeStr()}):\n\n${tasksList}`;
