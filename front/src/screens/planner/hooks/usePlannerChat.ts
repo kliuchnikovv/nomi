@@ -342,7 +342,8 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
 
       const userMsgId = generateId();
       setLocalMessages(prev => [
-        ...prev,
+        // Remove the ask_user prompt (it was answered) then append the user reply
+        ...prev.filter(m => m.askUser?.callId !== callId),
         { id: userMsgId, role: 'user', text: trimmed, created_at: Date.now() },
       ]);
       setIsThinking(true);
