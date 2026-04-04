@@ -2,27 +2,25 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
-    TextInput,
-    ActivityIndicator,
     StyleSheet,
     SafeAreaView,
+    KeyboardAvoidingView,
+    Platform,
     TouchableOpacity,
-    TouchableWithoutFeedback,
+    TextInput,
     Keyboard,
 } from 'react-native';
+import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import DraggableFlatList, {
-    RenderItemParams,
-} from 'react-native-draggable-flatlist';
 import { useTheme } from '../../context/ThemeContext';
 import { PlanItem } from './types';
-import { usePlanDocument } from './hooks/usePlanDocument';
 import { PlanDocumentContext } from './PlanDocumentContext';
 import { registerApplyPatches, unregisterApplyPatches } from './planDocumentRegistry';
-import { DocumentHeader } from './components/DocumentHeader';
+import { usePlanDocument } from './hooks/usePlanDocument';
 import { PlanItemRow } from './components/PlanItemRow';
 import { AIEditBanner } from './components/AIEditBanner';
-import { usePlannerChat } from './hooks/usePlannerChat';
+import { ChatBottomSheet } from './components/ChatBottomSheet';
+import { DocumentHeader } from './components/DocumentHeader';
 
 // ---------------------------------------------------------------------------
 // Date helpers
@@ -33,47 +31,10 @@ function today(): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function addDays(date: string, n: number): string {
+function shiftDate(date: string, delta: number): string {
     const d = new Date(date + 'T00:00:00');
-    d.setDate(d.getDate() + n);
+    d.setDate(d.getDate() + delta);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function currentTimeStr(): string {
-    const d = new Date();
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function buildPlanningPrompt(items: PlanItem[], date: string): string {
-    const uncheckedItems = items.filter(i => !i.checked);
-
-    if (uncheckedItems.length === 0) {
-        return `У меня пока нет задач на ${date}. Можешь посоветовать что мне запланировать?`;
-    }
-
-    const tasksList = uncheckedItems.map((item, idx) => {
-        const indent = '  '.repeat(item.depth);
-        const existingChips = item.chips.map(c => `[${c.type}: ${c.value}]`).join(' ');
-        return `${idx + 1}. ID:${item.id} ${indent}${item.text}${existingChips ? ' ' + existingChips : ''}`.trim();
-    }).join('\n');
-
-    return `Помоги составить план дня. Сейчас ${currentTimeStr()}, дата: ${date}.
-
-Список задач:
-${tasksList}
-
-Для каждой задачи, у которой ещё нет нужного чипа, определи и добавь:
-- time: конкретный интервал "HH:MM-HH:MM" с учётом длительности (например "09:00-10:30")
-- location: конкретное место или адрес (например "ул. Ленина 5", "дом", "супермаркет Перекрёсток")
-- note: важные заметки (время в дороге, подготовка, звонки)
-
-Правила:
-1. Не дублируй чипы, которые уже есть у задачи (они показаны в скобках)
-2. Учитывай уже расставленное время при планировании остальных задач
-3. Если нужно — используй поиск в интернете чтобы уточнить часы работы места или время в пути
-4. Расставь задачи в реалистичном порядке дня
-
-Используй инструмент patch_plan_document чтобы применить все изменения одним вызовом.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,10 +43,7 @@ ${tasksList}
 
 export function PlannerScreen() {
     const { theme } = useTheme();
-
-    const [date, setDate] = useState<string>(today);
-    const [keyboardVisible, setKeyboardVisible] = useState(false);
-    const [planning, setPlanning] = useState(false);
+    const [date, setDate] = useState(today());
 
     const {
         items,
@@ -102,26 +60,22 @@ export function PlannerScreen() {
         clearBanner,
     } = usePlanDocument(date);
 
-    const { sendMessage } = usePlannerChat();
+    const [chatOpen, setChatOpen] = useState(false);
+    const [autoSendTrigger, setAutoSendTrigger] = useState(false);
 
-    // Register applyPatches so ClientToolExecutor can call it
+    // ---------------------------------------------------------------------------
+    // Register applyPatches in registry
+    // ---------------------------------------------------------------------------
+
     useEffect(() => {
         registerApplyPatches(applyPatches);
         return () => { unregisterApplyPatches(); };
     }, [applyPatches]);
 
-    // Track keyboard visibility
-    useEffect(() => {
-        const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-        const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
-        return () => { show.remove(); hide.remove(); };
-    }, []);
-
     // ---------------------------------------------------------------------------
     // Input focus management
     // ---------------------------------------------------------------------------
 
-    // Map from item.id → TextInput ref
     const itemInputRefsMap = useRef<Map<string, TextInput>>(new Map());
     const pendingFocusIdRef = useRef<string | null>(null);
 
@@ -130,7 +84,6 @@ export function PlannerScreen() {
         else itemInputRefsMap.current.delete(id);
     }, []);
 
-    // After every render, check if there's a pending focus target
     useEffect(() => {
         const id = pendingFocusIdRef.current;
         if (!id) return;
@@ -141,8 +94,13 @@ export function PlannerScreen() {
         }
     });
 
-    // When loading finishes and list is empty, add first item and focus it
+    // Reset auto-add flag whenever we navigate to a different date
     const initialItemAddedRef = useRef(false);
+    useEffect(() => {
+        initialItemAddedRef.current = false;
+    }, [date]);
+
+    // Auto-add first item when the day is empty
     useEffect(() => {
         if (!loading && items.length === 0 && !initialItemAddedRef.current) {
             initialItemAddedRef.current = true;
@@ -151,54 +109,63 @@ export function PlannerScreen() {
         }
     }, [loading, items.length]);
 
-    // Reset flag when date changes
-    useEffect(() => {
-        initialItemAddedRef.current = false;
-    }, [date]);
+    // ---------------------------------------------------------------------------
+    // Item handlers
+    // ---------------------------------------------------------------------------
 
-    // Add item after existing one and focus new item
+    const handleRemoveItem = useCallback((id: string) => {
+        const idx = items.findIndex(i => i.id === id);
+        if (idx > 0) {
+            pendingFocusIdRef.current = items[idx - 1].id;
+        }
+        removeItem(id);
+    }, [items, removeItem]);
+
     const handleAddAfter = useCallback((afterId?: string) => {
+        const lastItem = items[items.length - 1];
+        if (lastItem && lastItem.text.trim() === '') {
+            pendingFocusIdRef.current = lastItem.id;
+            return;
+        }
         const newId = addItem(afterId);
         pendingFocusIdRef.current = newId;
-    }, [addItem]);
+    }, [items, addItem]);
 
     // ---------------------------------------------------------------------------
-    // Planning day trigger
+    // "Plan day" — opens chat with auto-prompt
     // ---------------------------------------------------------------------------
 
     const handlePlanDay = useCallback(async () => {
-        if (items.length === 0 || planning) return;
-        setPlanning(true);
-        try {
-            // Persist current state to server before sending to AI
-            await flushSync();
-            const prompt = buildPlanningPrompt(items, date);
-            sendMessage(prompt, { webSearch: true });
-        } finally {
-            setPlanning(false);
-        }
-    }, [items, date, planning, flushSync, sendMessage]);
+        const namedItems = items.filter(i => i.text.trim() !== '');
+        if (namedItems.length === 0) return;
+        Keyboard.dismiss();
+        await flushSync();
+        setAutoSendTrigger(true);
+        setChatOpen(true);
+    }, [items, flushSync]);
 
     // ---------------------------------------------------------------------------
-    // Render item for DraggableFlatList
+    // Render item
     // ---------------------------------------------------------------------------
 
-    const renderItem = ({ item, drag, isActive }: RenderItemParams<PlanItem>) => (
-        <PlanItemRow
-            item={item}
-            onCheck={() => toggleChecked(item.id)}
-            onTextChange={(text) => updateItem(item.id, { text })}
-            onIndent={(delta) => indentItem(item.id, delta)}
-            onDelete={() => removeItem(item.id)}
-            onAddAfter={() => handleAddAfter(item.id)}
-            onChipRemove={(chipId) =>
-                updateItem(item.id, { chips: item.chips.filter(c => c.id !== chipId) })
-            }
-            drag={drag}
-            isActive={isActive}
-            inputRef={(ref) => registerInputRef(item.id, ref)}
-        />
-    );
+    const renderItem = useCallback(({ item, drag, isActive }: RenderItemParams<PlanItem>) => (
+        <ScaleDecorator>
+            <PlanItemRow
+                item={item}
+                onCheck={() => toggleChecked(item.id)}
+                onTextChange={(text) => updateItem(item.id, { text })}
+                onIndent={(delta) => indentItem(item.id, delta)}
+                onDelete={() => handleRemoveItem(item.id)}
+                onAddAfter={() => handleAddAfter(item.id)}
+                onChipRemove={(chipId) =>
+                    updateItem(item.id, { chips: item.chips.filter(c => c.id !== chipId) })
+                }
+                drag={drag}
+                isActive={isActive}
+                inputRef={(ref) => registerInputRef(item.id, ref)}
+            />
+        </ScaleDecorator>
+    ), [toggleChecked, updateItem, indentItem, handleRemoveItem, handleAddAfter, registerInputRef]);
 
     // ---------------------------------------------------------------------------
     // Render
@@ -206,84 +173,85 @@ export function PlannerScreen() {
 
     return (
         <PlanDocumentContext.Provider value={{ applyPatches }}>
-            <GestureHandlerRootView>
-            <View style={{ flex: 1 }}>
-                <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
+                <View style={{ flex: 1, backgroundColor: theme.background }}>
+                    <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
+                        <KeyboardAvoidingView
+                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                            style={{ flex: 1 }}
+                        >
+                            <DocumentHeader
+                                date={date}
+                                onPrev={() => setDate(shiftDate(date, -1))}
+                                onNext={() => setDate(shiftDate(date, 1))}
+                            />
 
-                    {/* Date navigation header */}
-                    <DocumentHeader
-                        date={date}
-                        onPrev={() => setDate(addDays(date, -1))}
-                        onNext={() => setDate(addDays(date, 1))}
-                    />
-
-                    {/* List — tap outside items dismisses keyboard */}
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View style={styles.listWrapper}>
-                            {loading ? (
-                                <View style={styles.loadingCenter}>
-                                    <ActivityIndicator size="large" color="#007AFF" />
-                                </View>
-                            ) : (
+                            <View style={{ flex: 1 }}>
                                 <DraggableFlatList
                                     data={items}
                                     keyExtractor={(item) => item.id}
                                     renderItem={renderItem}
                                     onDragEnd={({ from, to }) => moveItem(from, to)}
+                                    style={{ flex: 1 }}
                                     contentContainerStyle={styles.listContent}
                                     keyboardShouldPersistTaps="handled"
-                                    // Tapping below the last item adds a new one
                                     ListFooterComponent={
-                                        <TouchableWithoutFeedback onPress={() => handleAddAfter(items[items.length - 1]?.id)}>
-                                            <View style={styles.listFooter} />
-                                        </TouchableWithoutFeedback>
+                                        <TouchableOpacity
+                                            onPress={() => handleAddAfter(items[items.length - 1]?.id)}
+                                            style={styles.addRow}
+                                            activeOpacity={0.5}
+                                        >
+                                            <Text style={[styles.addRowText, { color: theme.textSecondary }]}>
+                                                + Задача
+                                            </Text>
+                                        </TouchableOpacity>
                                     }
                                 />
-                            )}
-                        </View>
-                    </TouchableWithoutFeedback>
+                            </View>
 
-                    {/* Bottom action bar */}
-                    <View
-                        style={[
-                            styles.bottomBar,
-                            { borderTopColor: theme.border, backgroundColor: theme.background },
-                        ]}
-                    >
-                        {/* Скрыть клавиатуру — только когда она видна */}
-                        {keyboardVisible && (
-                            <TouchableOpacity
-                                onPress={Keyboard.dismiss}
-                                style={[styles.bottomBtn, styles.dismissBtn, { borderColor: theme.border }]}
-                                activeOpacity={0.7}
+                            {/* Bottom action bar */}
+                            <View
+                                style={[
+                                    styles.bottomBar,
+                                    { borderTopColor: theme.border, backgroundColor: theme.background },
+                                ]}
                             >
-                                <Text style={[styles.bottomBtnText, { color: theme.textSecondary }]}>
-                                    ↓
-                                </Text>
-                            </TouchableOpacity>
-                        )}
+                                <TouchableOpacity
+                                    onPress={() => { Keyboard.dismiss(); setChatOpen(true); }}
+                                    style={[styles.bottomBtn, styles.chatBtn, { borderColor: theme.border }]}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.bottomBtnText, { color: theme.textPrimary }]}>
+                                        💬 Чат
+                                    </Text>
+                                </TouchableOpacity>
 
-                        {/* Запланировать день */}
-                        <TouchableOpacity
-                            onPress={handlePlanDay}
-                            disabled={items.length === 0 || planning}
-                            style={[
-                                styles.bottomBtn,
-                                styles.planBtn,
-                                { opacity: items.length === 0 || planning ? 0.4 : 1 },
-                            ]}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>
-                                {planning ? '⏳ Сохраняем…' : '🗓 Запланировать'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                                <TouchableOpacity
+                                    onPress={handlePlanDay}
+                                    style={[styles.bottomBtn, styles.planBtn]}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>
+                                        🗓 Запланировать
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
 
-                    {/* AI edit banner */}
-                    <AIEditBanner message={bannerMessage} onDismiss={clearBanner} />
-                </SafeAreaView>
-            </View>
+                            {/* AI edit banner */}
+                            <AIEditBanner message={bannerMessage} onDismiss={clearBanner} />
+                        </KeyboardAvoidingView>
+                    </SafeAreaView>
+
+                    <ChatBottomSheet
+                        isOpen={chatOpen}
+                        onClose={() => setChatOpen(false)}
+                        date={date}
+                        items={items}
+                        autoSend={autoSendTrigger}
+                        autoSendWebSearch={true}
+                        onAutoSendHandled={() => setAutoSendTrigger(false)}
+                    />
+                </View>
             </GestureHandlerRootView>
         </PlanDocumentContext.Provider>
     );
@@ -297,20 +265,16 @@ const styles = StyleSheet.create({
     root: {
         flex: 1,
     },
-    listWrapper: {
-        flex: 1,
-    },
-    loadingCenter: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
     listContent: {
-        paddingTop: 8,
-        paddingBottom: 16,
+        flexGrow: 1,
+        paddingBottom: 8,
     },
-    listFooter: {
-        height: 120,
+    addRow: {
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+    },
+    addRowText: {
+        fontSize: 15,
     },
     bottomBar: {
         flexDirection: 'row',
@@ -326,9 +290,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    dismissBtn: {
-        flex: 0,
-        width: 40,
+    chatBtn: {
         borderWidth: 1,
     },
     planBtn: {
