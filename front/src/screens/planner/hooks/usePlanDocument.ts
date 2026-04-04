@@ -326,11 +326,17 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
             case 'add_chip': {
               next = next.map(i => {
                 if (i.id !== patch.item_id) return i;
-                // Skip if chip of the same type already exists
-                if (i.chips.some(c => c.type === patch.chip.type)) return i;
+                const existingIdx = i.chips.findIndex(c => c.type === patch.chip.type);
+                if (existingIdx !== -1) {
+                  // Upsert: update existing chip of same type, preserve original id
+                  const chips = [...i.chips];
+                  chips[existingIdx] = { ...patch.chip, id: i.chips[existingIdx].id, isNew: true };
+                  return { ...i, chips, isNew: true };
+                }
                 return {
                   ...i,
-                  chips: [...i.chips, { ...patch.chip, isNew: true }],
+                  // Always generate a fresh id so AI-provided ids ("1", "2") never collide
+                  chips: [...i.chips, { ...patch.chip, id: generateId(), isNew: true }],
                   isNew: true,
                 };
               });
