@@ -46,13 +46,10 @@ function buildPlanningPrompt(items: PlanItem[], date: string): string {
     if (namedItems.length === 0) {
         return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now) — I have no tasks yet. Please suggest something.`;
     }
-    // Use [Текущий план:] format — the planner agent recognises this block and immediately
-    // starts scheduling tasks that are missing time chips, without asking first.
-    const planLines = namedItems.map(i => {
-        const chips = i.chips.map(c => `[${c.type}:${c.id} ${c.value}]`).join(' ');
-        return `ID:${i.id} ${i.text}${chips ? ' ' + chips : ''}`;
-    }).join('\n');
-    return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now).\n\n[Текущий план:\n${planLines}]`;
+    // Strip all chips so the agent always replans from scratch, ignoring any previously
+    // assigned times. The [Replan: true] header makes the intent explicit.
+    const planLines = namedItems.map(i => `ID:${i.id} ${i.text}`).join('\n');
+    return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now). Please replan ALL tasks from scratch — ignore any previously assigned times.\n\n[Current plan:\n${planLines}]`;
 }
 
 function buildPlanContext(items: PlanItem[]): string {
