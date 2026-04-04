@@ -247,40 +247,6 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		}
 	}
 
-	for providerName, entry := range providerMap {
-		params := make(map[string]interface{})
-		params["accounts"] = entry.accounts
-
-		if entry.provider.StorageType == integrations.StorageTypeServer || entry.provider.StorageType == integrations.StorageTypeHybrid {
-			params["credentials"] = entry.mergedParams
-			h.logger.Info("sending credentials for provider",
-				zap.String("provider", providerName),
-				zap.Int("num_accounts", len(entry.accounts)),
-				zap.Int("num_credential_entries", len(entry.mergedParams)),
-				zap.Strings("account_ids", func() []string {
-					ids := make([]string, 0, len(entry.accounts))
-					for _, a := range entry.accounts {
-						ids = append(ids, a.ID)
-					}
-					return ids
-				}()),
-				zap.Strings("credential_keys", func() []string {
-					keys := make([]string, 0, len(entry.mergedParams))
-					for k := range entry.mergedParams {
-						keys = append(keys, k)
-					}
-					return keys
-				}()),
-			)
-		}
-
-		tools = append(tools, ToolConfig{
-			Name:    providerName,
-			Enabled: true,
-			Params:  params,
-		})
-	}
-
 	// Build a map of OAuth config key → first available decrypted credentials.
 	// This lets server plugins that share an OAuth provider (e.g. calendar + gmail
 	// both use oauth_config_key "google") reuse credentials from an already-enabled
@@ -308,6 +274,53 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		if err := json.Unmarshal(decrypted, &tokenData); err == nil {
 			oauthKeyCredentials[provider.OAuthConfigKey] = tokenData
 		}
+	}
+
+	for providerName, entry := range providerMap {
+		params := make(map[string]interface{})
+		params["accounts"] = entry.accounts
+
+		if entry.provider.StorageType == integrations.StorageTypeServer || entry.provider.StorageType == integrations.StorageTypeHybrid {
+			// If credentials weren't loaded via oauth_tokens (e.g. token lookup failed),
+			// try falling back to shared OAuth key credentials (e.g. calendar → google).
+			if len(entry.mergedParams) == 0 && entry.provider.OAuthConfigKey != "" {
+				if sharedCreds, found := oauthKeyCredentials[entry.provider.OAuthConfigKey]; found {
+					for _, account := range entry.accounts {
+						entry.mergedParams[account.ID] = sharedCreds
+					}
+					h.logger.Info("using shared OAuth credentials for provider",
+						zap.String("provider", providerName),
+						zap.String("oauth_key", entry.provider.OAuthConfigKey),
+					)
+				}
+			}
+			params["credentials"] = entry.mergedParams
+			h.logger.Info("sending credentials for provider",
+				zap.String("provider", providerName),
+				zap.Int("num_accounts", len(entry.accounts)),
+				zap.Int("num_credential_entries", len(entry.mergedParams)),
+				zap.Strings("account_ids", func() []string {
+					ids := make([]string, 0, len(entry.accounts))
+					for _, a := range entry.accounts {
+						ids = append(ids, a.ID)
+					}
+					return ids
+				}()),
+				zap.Strings("credential_keys", func() []string {
+					keys := make([]string, 0, len(entry.mergedParams))
+					for k := range entry.mergedParams {
+						keys = append(keys, k)
+					}
+					return keys
+				}()),
+			)
+		}
+
+		tools = append(tools, ToolConfig{
+			Name:    providerName,
+			Enabled: true,
+			Params:  params,
+		})
 	}
 
 	// Add Server Plugins (execution.type: server or hybrid)
