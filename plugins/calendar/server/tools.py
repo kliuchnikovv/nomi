@@ -236,6 +236,21 @@ def build(params: Dict[str, Any]) -> Toolkit:
         params.get("creds", {}) if isinstance(params.get("creds"), dict) else params
     )
 
+    raw_at = creds_data.get("access_token")
+    raw_token = creds_data.get("token")
+    raw_params_at = params.get("access_token")
+    raw_cal_at = params.get("calendar_access_token")
+    logger.info(
+        "Calendar access_token lookups: creds_data.get='%.20s'(type=%s), token='%.20s'(type=%s), params.get='%.20s'(type=%s), calendar_access_token=%s",
+        str(raw_at)[:20] if raw_at else "EMPTY",
+        type(raw_at).__name__,
+        str(raw_token)[:20] if raw_token else "EMPTY",
+        type(raw_token).__name__,
+        str(raw_params_at)[:20] if raw_params_at else "EMPTY",
+        type(raw_params_at).__name__,
+        str(raw_cal_at)[:20] if raw_cal_at else "EMPTY",
+    )
+
     access_token = (
         creds_data.get("access_token")
         or creds_data.get("token")
