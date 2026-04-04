@@ -30,6 +30,7 @@ func NewToolsHandler(store *storage.Storage, logger *zap.Logger, cryptoKey []byt
 
 // ListTools returns the list of enabled tools for the current session/user
 func (h *ToolsHandler) ListTools(c *gin.Context) {
+	h.logger.Info("=== ListTools START ===")
 	sessionID := c.Query("session_id")
 	userIDStr := c.Query("user_id") // Add support for direct user_id lookup
 
@@ -381,5 +382,35 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		})
 	}
 
+	// Log final tools list
+	for _, t := range tools {
+		h.logger.Info("final tool in response",
+			zap.String("name", t.Name),
+			zap.Bool("enabled", t.Enabled),
+			zap.Strings("params_keys", func() []string {
+				keys := make([]string, 0, len(t.Params))
+				for k := range t.Params {
+					keys = append(keys, k)
+				}
+				return keys
+			}()),
+		)
+		if creds, ok := t.Params["credentials"].(map[string]interface{}); ok {
+			for accID, accCreds := range creds {
+				if cm, ok := accCreds.(map[string]interface{}); ok {
+					at, _ := cm["access_token"].(string)
+					h.logger.Info("final tool credentials",
+						zap.String("tool", t.Name),
+						zap.String("account_id", accID),
+						zap.Bool("has_access_token", cm["access_token"] != nil),
+						zap.String("access_token_preview", at[:min(len(at), 20)]),
+						zap.Bool("access_token_empty", at == ""),
+					)
+				}
+			}
+		}
+	}
+
+	h.logger.Info("=== ListTools END ===", zap.Int("total_tools", len(tools)))
 	c.JSON(http.StatusOK, tools)
 }
