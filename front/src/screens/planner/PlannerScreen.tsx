@@ -193,7 +193,7 @@ export function PlannerScreen() {
                                     keyExtractor={(item) => item.id}
                                     renderItem={renderItem}
                                     onDragEnd={({ from, to }) => moveItem(from, to)}
-                                    style={{ flex: 1 }}
+                                    containerStyle={{ flex: 1 }}
                                     contentContainerStyle={styles.listContent}
                                     keyboardShouldPersistTaps="handled"
                                     ListFooterComponent={

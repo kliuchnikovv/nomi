@@ -36,22 +36,23 @@ interface Props {
     onAutoSendHandled?: () => void;
 }
 
-function currentTimeStr(): string {
+function currentDateTimeStr(): string {
     const d = new Date();
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getFullYear())} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function buildPlanningPrompt(items: PlanItem[], date: string): string {
     const namedItems = items.filter(i => !i.checked && i.text.trim() !== '');
     if (namedItems.length === 0) {
-        return `У меня пока нет задач на ${date}. Можешь посоветовать что мне запланировать?`;
+        return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now) — I have no tasks yet. Please suggest something.`;
     }
-    const tasksList = namedItems.map((item, idx) => {
-        const indent = '  '.repeat(item.depth);
-        const existingChips = item.chips.map(c => `[${c.type}:${c.id} ${c.value}]`).join(' ');
-        return `${idx + 1}. ID:${item.id} ${indent}${item.text}${existingChips ? ' ' + existingChips : ''}`.trim();
+    // Use [Текущий план:] format — the planner agent recognises this block and immediately
+    // starts scheduling tasks that are missing time chips, without asking first.
+    const planLines = namedItems.map(i => {
+        const chips = i.chips.map(c => `[${c.type}:${c.id} ${c.value}]`).join(' ');
+        return `ID:${i.id} ${i.text}${chips ? ' ' + chips : ''}`;
     }).join('\n');
-    return `Помоги составить план дня на ${date} (сейчас ${currentTimeStr()}):\n\n${tasksList}`;
+    return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now).\n\n[Текущий план:\n${planLines}]`;
 }
 
 function buildPlanContext(items: PlanItem[]): string {
@@ -59,7 +60,7 @@ function buildPlanContext(items: PlanItem[]): string {
         const chips = i.chips.map(c => `[${c.type}:${c.id} ${c.value}]`).join(' ');
         return `ID:${i.id} ${i.text}${chips ? ' ' + chips : ''}`;
     });
-    return `[Текущий план:\n${lines.join('\n')}]`;
+    return `[Current plan:\n${lines.join('\n')}]`;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,7 +184,7 @@ export function ChatBottomSheet({
         const isUser = item.role === 'user';
         const emptyText = !item.text || item.text.trim().length === 0;
         const hasOptions = item.askUser && item.askUser.options.length > 0;
-        
+
         // Hide empty assistant bubbles that are just silent tool calls (not streaming, no text, no options)
         if (!isUser && emptyText && !hasOptions && !item.isStreaming) {
             return null;
@@ -250,7 +251,7 @@ export function ChatBottomSheet({
                     </Text>
                     {!isConnected && (
                         <Text style={[styles.connectingLabel, { color: theme.textSecondary }]}>
-                            подключение...
+                            connecting...
                         </Text>
                     )}
                     <TouchableOpacity
@@ -260,7 +261,7 @@ export function ChatBottomSheet({
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                         <Text style={[styles.closeBtnText, { color: theme.textSecondary }]}>
-                            Закрыть
+                            Close
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -282,7 +283,7 @@ export function ChatBottomSheet({
                     onContentSizeChange={() => scrollToBottom(false)}
                     ListEmptyComponent={
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                            Спроси Genie про этот день…
+                            Ask Genie about this day…
                         </Text>
                     }
                 />
