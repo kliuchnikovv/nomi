@@ -45,6 +45,23 @@ function insertAfter(items: PlanItem[], newItem: PlanItem, afterId?: string): Pl
   return next;
 }
 
+// Parse "HH:MM" or "HH:MM-HH:MM" → minutes since midnight (or Infinity if none)
+function parseStartMinutes(value: string): number {
+  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return Infinity;
+  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+}
+
+function sortByTime(items: PlanItem[]): PlanItem[] {
+  return [...items].sort((a, b) => {
+    const aTime = a.chips.find(c => c.type === 'time');
+    const bTime = b.chips.find(c => c.type === 'time');
+    const aMin = aTime ? parseStartMinutes(aTime.value) : Infinity;
+    const bMin = bTime ? parseStartMinutes(bTime.value) : Infinity;
+    return aMin - bMin;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Hook return type
 // ---------------------------------------------------------------------------
@@ -304,8 +321,10 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
     (patches: PatchOp[], bannerText?: string) => {
       mutate(prev => {
         let next = [...prev];
+        let hadTimeChip = false;
 
         for (const patch of patches) {
+          if (patch.op === 'add_chip' && patch.chip?.type === 'time') hadTimeChip = true;
           switch (patch.op) {
             case 'add_item': {
               const newItem: PlanItem = { ...patch.item, isNew: true };
@@ -387,6 +406,12 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
               break;
             }
           }
+        }
+
+        // Auto-sort by time after any batch that assigned time chips,
+        // regardless of whether the agent sent a reorder_items patch.
+        if (hadTimeChip) {
+          next = sortByTime(next);
         }
 
         return next;
