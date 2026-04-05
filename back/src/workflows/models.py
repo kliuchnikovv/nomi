@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class PlanStatus:
+class PlanStatus(str, Enum):
     EXTRACT    = "extract"
     RECON      = "recon"
     CLUSTER    = "cluster"
@@ -19,7 +20,7 @@ class PlanStatus:
 
 @dataclass
 class StageResult:
-    output: dict
+    output: dict[str, Any]
     pending_questions: list[str] = field(default_factory=list)
     is_complete: bool = True
 
@@ -28,8 +29,8 @@ class StageResult:
 class Cluster:
     location: str
     context_type: str  # "home" | "hotel" | "place" | "transit" | "none"
-    coords: tuple[float, float] | None
-    task_ids: list[str]
+    coords: tuple[float, float] | None = None
+    task_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -45,9 +46,9 @@ class TravelBlock:
 class PlanTask(BaseModel):
     id: str
     title: str
-    location: Optional[str] = None
-    duration_min: Optional[int] = None
-    notes: Optional[str] = None
+    location: str | None = None
+    duration_min: int | None = None
+    notes: str | None = None
 
 
 class PlanningInput(BaseModel):
@@ -56,5 +57,5 @@ class PlanningInput(BaseModel):
     user_id: str
     planning_date: str
     tasks: list[PlanTask] = Field(default_factory=list)
-    session_state: dict = Field(default_factory=dict)
+    session_state: dict[str, Any] = Field(default_factory=dict)
     timezone: str = "UTC"

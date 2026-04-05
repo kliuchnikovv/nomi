@@ -18,6 +18,12 @@ def test_stage_result_defaults():
     assert r.is_complete is True
 
 
+def test_cluster_defaults():
+    c = Cluster(location="gym", context_type="place")
+    assert c.coords is None
+    assert c.task_ids == []
+
+
 def test_travel_block():
     tb = TravelBlock(
         from_location="gym",
