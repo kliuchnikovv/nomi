@@ -492,76 +492,46 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
-		// Load OAuth tokens and merge into dbIntegrations for server-side providers.
-		// This ensures credentials (access_token, refresh_token) are included in the
-		// tools payload sent to Python via Redis.
-		oauthKeyCredentials := make(map[string]map[string]interface{})
+		// Load OAuth tokens per provider.
+		// Each provider uses its own credentials — no fallback to shared tokens.
+		providerCredentials := make(map[string]map[string]interface{})
 		for _, integ := range integrations {
 			provider, ok := intgr.GetProvider(integ.Provider)
 			if !ok || provider.OAuthConfigKey == "" {
 				continue
 			}
-			if _, alreadyFound := oauthKeyCredentials[provider.OAuthConfigKey]; alreadyFound {
+			if _, exists := providerCredentials[integ.Provider]; exists {
 				continue
 			}
 			oauthToken, err := r.store.GetOAuthTokenByUserAndEmail(
 				context.Background(), r.initiatorID, integ.Provider, integ.AccountEmail,
 			)
 			if err != nil {
-				r.logger.Debug("oauth token not found for integration",
-					zap.String("provider", integ.Provider),
-					zap.String("account_email", integ.AccountEmail),
-				)
 				continue
 			}
 			decrypted, err := crypto.Decrypt(r.hub.cryptoKey, oauthToken.TokenEncrypted)
 			if err != nil {
-				r.logger.Warn("failed to decrypt oauth token",
-					zap.String("provider", integ.Provider),
-					zap.Error(err),
-				)
 				continue
 			}
 			var tokenData map[string]interface{}
-			if err := json.Unmarshal(decrypted, &tokenData); err == nil {
-				oauthKeyCredentials[provider.OAuthConfigKey] = tokenData
-				atRaw := tokenData["access_token"]
-				atStr, _ := atRaw.(string)
-				r.logger.Info("loaded oauth credentials for redis bundling",
-					zap.String("provider", integ.Provider),
-					zap.String("oauth_key", provider.OAuthConfigKey),
-					zap.Bool("has_access_token", atRaw != nil),
-					zap.String("access_token_preview", func() string {
-						if atStr == "" {
-							return "EMPTY"
-						}
-						if len(atStr) > 20 {
-							return atStr[:20]
-						}
-						return atStr
-					}()),
-					zap.String("raw_decrypted", string(decrypted)[:min(len(decrypted), 200)]),
-				)
-			}
-		}
-
-		// Inject shared OAuth credentials into server-side integrations that lack them
-		for providerName, params := range dbIntegrations {
-			provider, ok := intgr.GetProvider(providerName)
-			if !ok || provider.OAuthConfigKey == "" {
+			if err := json.Unmarshal(decrypted, &tokenData); err != nil {
 				continue
 			}
-			if at, ok := params["access_token"].(string); ok && at != "" {
-				continue // Already has valid credentials
+			atStr, _ := tokenData["access_token"].(string)
+			if atStr == "" {
+				continue
 			}
-			if creds, found := oauthKeyCredentials[provider.OAuthConfigKey]; found {
-				for k, v := range creds {
-					params[k] = v
-				}
-				r.logger.Info("injected shared oauth credentials into provider",
-					zap.String("provider", providerName),
-					zap.String("oauth_key", provider.OAuthConfigKey),
-				)
+			providerCredentials[integ.Provider] = tokenData
+		}
+
+		// Inject provider credentials into server-side integrations that lack them
+		for providerName, params := range dbIntegrations {
+			providerCreds, hasCreds := providerCredentials[providerName]
+			if !hasCreds {
+				continue
+			}
+			for k, v := range providerCreds {
+				params[k] = v
 			}
 		}
 
@@ -663,29 +633,23 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 					}
 				}
 
-				// Inject shared OAuth credentials into client-sent tools that lack them
+				// Inject provider credentials into client-sent tools
 				for providerName, entry := range providerMap {
-					provider, ok := intgr.GetProvider(providerName)
-					if !ok || provider.OAuthConfigKey == "" {
-						continue
-					}
-					creds, found := oauthKeyCredentials[provider.OAuthConfigKey]
-					if !found {
+					providerCreds, hasCreds := providerCredentials[providerName]
+					if !hasCreds {
 						continue
 					}
 					for accID, accParams := range entry.mergedParams {
 						if cm, ok := accParams.(map[string]interface{}); ok {
 							if at, ok := cm["access_token"].(string); ok && at != "" {
-								continue // Already has valid token
+								continue
 							}
-							// Inject shared credentials
-							for k, v := range creds {
+							for k, v := range providerCreds {
 								cm[k] = v
 							}
-							r.logger.Info("injected shared oauth credentials into client-sent tool",
+							r.logger.Info("injected provider credentials into client-sent tool",
 								zap.String("provider", providerName),
 								zap.String("account_id", accID),
-								zap.String("oauth_key", provider.OAuthConfigKey),
 							)
 						}
 					}

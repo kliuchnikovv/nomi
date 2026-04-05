@@ -248,53 +248,11 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		}
 	}
 
-	// Build a map of OAuth config key → first available decrypted credentials.
-	// This lets server plugins that share an OAuth provider (e.g. calendar + gmail
-	// both use oauth_config_key "google") reuse credentials from an already-enabled
-	// integration even when the plugin itself has no dedicated integration entry.
-	oauthKeyCredentials := make(map[string]map[string]interface{})
-	for _, integration := range userIntegrations {
-		provider, ok := integrations.GetProvider(integration.Provider)
-		if !ok || provider.OAuthConfigKey == "" {
-			continue
-		}
-		if _, alreadyFound := oauthKeyCredentials[provider.OAuthConfigKey]; alreadyFound {
-			continue
-		}
-		oauthToken, err := h.store.GetOAuthTokenByUserAndEmail(
-			c.Request.Context(), userID, integration.Provider, integration.AccountEmail,
-		)
-		if err != nil {
-			continue
-		}
-		decrypted, err := crypto.Decrypt(h.cryptoKey, oauthToken.TokenEncrypted)
-		if err != nil {
-			continue
-		}
-		var tokenData map[string]interface{}
-		if err := json.Unmarshal(decrypted, &tokenData); err == nil {
-			oauthKeyCredentials[provider.OAuthConfigKey] = tokenData
-		}
-	}
-
 	for providerName, entry := range providerMap {
 		params := make(map[string]interface{})
 		params["accounts"] = entry.accounts
 
 		if entry.provider.StorageType == integrations.StorageTypeServer || entry.provider.StorageType == integrations.StorageTypeHybrid {
-			// If credentials weren't loaded via oauth_tokens (e.g. token lookup failed),
-			// try falling back to shared OAuth key credentials (e.g. calendar → google).
-			if len(entry.mergedParams) == 0 && entry.provider.OAuthConfigKey != "" {
-				if sharedCreds, found := oauthKeyCredentials[entry.provider.OAuthConfigKey]; found {
-					for _, account := range entry.accounts {
-						entry.mergedParams[account.ID] = sharedCreds
-					}
-					h.logger.Info("using shared OAuth credentials for provider",
-						zap.String("provider", providerName),
-						zap.String("oauth_key", entry.provider.OAuthConfigKey),
-					)
-				}
-			}
 			params["credentials"] = entry.mergedParams
 			h.logger.Info("sending credentials for provider",
 				zap.String("provider", providerName),
@@ -341,14 +299,6 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		toolParams := map[string]interface{}{}
 		if manifest.Execution.Type == "server" {
 			toolParams["user_id"] = userID.String()
-		}
-
-		// If the plugin uses a shared OAuth provider, try to inject credentials from
-		// any integration that already has a valid token for that OAuth config key.
-		if def, ok := integrations.GetProvider(manifest.Name); ok && def.OAuthConfigKey != "" {
-			if creds, found := oauthKeyCredentials[def.OAuthConfigKey]; found {
-				toolParams["creds"] = creds
-			}
 		}
 
 		tools = append(tools, ToolConfig{
