@@ -6,7 +6,6 @@ import {
     StyleSheet,
     Platform,
     Animated,
-    FlatList,
 } from 'react-native';
 import { Spark } from 'iconoir-react-native';
 import Markdown from 'react-native-markdown-display';
@@ -102,13 +101,12 @@ export function ChatBottomSheet({
     onAutoSendHandled,
 }: Props) {
     const { theme } = useTheme();
-    const { top: topInset } = useSafeAreaInsets();
+    const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const snapPoints = ['55%', '92%'];
 
     const { messages, sendMessage, isConnected, isThinking, replyToAskUser, hasMore, loadMore } = usePlannerChat(date);
     const [inputText, setInputText] = useState('');
-    const listRef = useRef<FlatList<ChatMessage | 'thinking'>>(null);
 
     // Sync open/close state → bottom sheet index
     useEffect(() => {
@@ -144,26 +142,22 @@ export function ChatBottomSheet({
         }
     }, [autoSend]);
 
-    const listData = useMemo(() =>
-        [...messages, ...(isThinking ? ['thinking' as const] : [])],
-        [messages, isThinking]
-    );
-
-    // Scroll to bottom whenever the list grows (new messages, initial load)
-    const scrollToBottom = useCallback((animated: boolean) => {
-        listRef.current?.scrollToEnd({ animated });
-    }, []);
+    // For inverted FlatList: newest at index 0 (renders at visual bottom)
+    const listData = useMemo(() => {
+        const data: (ChatMessage | 'thinking')[] = [
+            ...(isThinking ? ['thinking' as const] : []),
+            ...messages,
+        ];
+        return data.reverse();
+    }, [messages, isThinking]);
 
     const handleSheetChanges = useCallback(
         (index: number) => {
             if (index === -1) {
                 onClose();
-            } else {
-                // Sheet opened or expanded — wait for animation to settle then scroll to latest
-                setTimeout(() => scrollToBottom(false), 350);
             }
         },
-        [onClose, scrollToBottom],
+        [onClose],
     );
 
     const handleSend = useCallback(() => {
@@ -227,7 +221,7 @@ export function ChatBottomSheet({
 
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
-            <BottomSheetFooter {...props}>
+            <BottomSheetFooter {...props} bottomInset={bottomInset}>
                 <View
                     style={[
                         styles.inputBar,
@@ -265,7 +259,7 @@ export function ChatBottomSheet({
                 </View>
             </BottomSheetFooter>
         ),
-        [theme, inputText, handleSend],
+        [theme, inputText, handleSend, bottomInset],
     );
 
     return (
@@ -315,7 +309,6 @@ export function ChatBottomSheet({
 
                 {/* Messages */}
                 <BottomSheetFlatList
-                    ref={listRef as any}
                     data={listData}
                     keyExtractor={(item: ChatMessage | 'thinking', idx: number) =>
                         item === 'thinking' ? 'thinking' : (item as ChatMessage).id ?? String(idx)
@@ -327,9 +320,8 @@ export function ChatBottomSheet({
                     style={styles.messagesList}
                     contentContainerStyle={styles.messageListContent}
                     keyboardShouldPersistTaps="handled"
-                    onLayout={() => scrollToBottom(false)}
-                    onContentSizeChange={() => scrollToBottom(false)}
-                    ListHeaderComponent={
+                    inverted
+                    ListFooterComponent={
                         hasMore ? (
                             <TouchableOpacity
                                 onPress={loadMore}
