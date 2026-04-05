@@ -341,6 +341,20 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		ClientSecret: oauthConfig.ClientSecret,
 		TokenType:    token.TokenType,
 	}
+	h.logger.Info("saving oauth token payload",
+		zap.String("provider", providerName),
+		zap.String("client_id_prefix", func() string {
+			if oauthConfig.ClientID == "" {
+				return "EMPTY"
+			}
+			if len(oauthConfig.ClientID) > 20 {
+				return oauthConfig.ClientID[:20]
+			}
+			return oauthConfig.ClientID
+		}()),
+		zap.Bool("has_client_secret", oauthConfig.ClientSecret != ""),
+		zap.Bool("has_refresh_token", token.RefreshToken != ""),
+	)
 	// Determine token_uri by provider
 	if providerName == "github" {
 		payload.TokenURI = "https://github.com/login/oauth/access_token"
