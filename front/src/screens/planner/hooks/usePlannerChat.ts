@@ -24,6 +24,7 @@ const PLANNER_CHAT_TITLE = 'Planner';
 const PLANNER_CHAT_MODE = 'agent';
 const DEFAULT_MODEL = 'glm-4.7';
 const DEFAULT_PROVIDER = 'z.ai';
+const PAGE_SIZE = 8;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -76,6 +77,8 @@ export interface UsePlannerChatResult {
   messages: ChatMessage[];
   isConnected: boolean;
   isThinking: boolean;
+  hasMore: boolean;
+  loadMore: () => void;
   sendMessage: (text: string, options?: { webSearch?: boolean; context?: string }) => void;
   replyToAskUser: (callId: string, answer: string) => void;
 }
@@ -89,6 +92,8 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  // Pagination: how many messages to show (grows as user loads more)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const chatModelRef = useRef<string>(DEFAULT_MODEL);
   const chatProviderRef = useRef<string>(DEFAULT_PROVIDER);
@@ -100,7 +105,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
   );
 
   // Convert store Message[] → ChatMessage[] for display
-  const messages: ChatMessage[] = useMemo(() => {
+  const allMessages: ChatMessage[] = useMemo(() => {
     // 2. Convert to UI format
     const allStoreMessages: ChatMessage[] = storeMessages.map((m) => {
       // Aggregate text from all content_parts (text, reasoning, member_response)
@@ -129,7 +134,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
         id: m.id,
         role: (m.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
         text,
-        isStreaming: false, // Default, will set for last one below
+        isStreaming: false,
         created_at: m.created_at,
         metadata: m.metadata,
       };
@@ -147,16 +152,30 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
       return timeA - timeB;
     });
 
-    // 5. Final pass for streaming cursor on absolute last assistant message
-    if (isThinking && combined.length > 0) {
-      const lastMsg = combined[combined.length - 1];
+    return combined;
+  }, [storeMessages, localMessages]);
+
+  // Paginated view — last `visibleCount` messages
+  const messages: ChatMessage[] = useMemo(() => {
+    const start = Math.max(0, allMessages.length - visibleCount);
+    const sliced = allMessages.slice(start);
+
+    // Final pass for streaming cursor on absolute last assistant message
+    if (isThinking && sliced.length > 0) {
+      const lastMsg = sliced[sliced.length - 1];
       if (lastMsg.role === 'assistant') {
         lastMsg.isStreaming = true;
       }
     }
 
-    return combined;
-  }, [storeMessages, localMessages, isThinking]);
+    return sliced;
+  }, [allMessages, visibleCount, isThinking]);
+
+  const hasMore = allMessages.length > visibleCount;
+
+  const loadMore = useCallback(() => {
+    setVisibleCount(prev => prev + PAGE_SIZE);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Bootstrap — find or create the "Planner" chat & load HISTORY
@@ -170,6 +189,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
     setLocalMessages([]);
     setIsThinking(false);
     setIsConnected(false);
+    setVisibleCount(PAGE_SIZE);
     bootstrappedRef.current = false;
 
     async function bootstrap() {
@@ -303,6 +323,8 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
       const userMsgId = generateId();
       // Store only the visible text locally; context is invisible to the user
       setLocalMessages(prev => [...prev, { id: userMsgId, role: 'user', text: trimmed, created_at: Date.now() }]);
+      // Ensure the new message is always visible
+      setVisibleCount(prev => prev + 2);
       setIsThinking(true);
 
       const token = authStore.getToken();
@@ -391,5 +413,5 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
     [chatId, date],
   );
 
-  return { messages, isConnected, isThinking, sendMessage, replyToAskUser };
+  return { messages, isConnected, isThinking, hasMore, loadMore, sendMessage, replyToAskUser };
 }

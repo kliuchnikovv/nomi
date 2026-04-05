@@ -12,8 +12,10 @@ import { Spark } from 'iconoir-react-native';
 import Markdown from 'react-native-markdown-display';
 import BottomSheet, {
     BottomSheetFlatList,
+    BottomSheetFooter,
     BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
+import type { BottomSheetFooterProps } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
 import { ChatMessage, usePlannerChat } from '../hooks/usePlannerChat';
@@ -104,7 +106,7 @@ export function ChatBottomSheet({
     const bottomSheetRef = useRef<BottomSheet>(null);
     const snapPoints = ['55%', '92%'];
 
-    const { messages, sendMessage, isConnected, isThinking, replyToAskUser } = usePlannerChat(date);
+    const { messages, sendMessage, isConnected, isThinking, replyToAskUser, hasMore, loadMore } = usePlannerChat(date);
     const [inputText, setInputText] = useState('');
     const listRef = useRef<FlatList<ChatMessage | 'thinking'>>(null);
 
@@ -223,6 +225,49 @@ export function ChatBottomSheet({
 
 
 
+    const renderFooter = useCallback(
+        (props: BottomSheetFooterProps) => (
+            <BottomSheetFooter {...props}>
+                <View
+                    style={[
+                        styles.inputBar,
+                        { borderTopColor: theme.border, backgroundColor: theme.background },
+                    ]}
+                >
+                    <BottomSheetTextInput
+                        style={StyleSheet.flatten([
+                            styles.textInput,
+                            {
+                                color: theme.textPrimary,
+                                backgroundColor: theme.surface,
+                                borderColor: theme.border,
+                            },
+                        ])}
+                        placeholder="Message Genie…"
+                        placeholderTextColor={theme.textSecondary}
+                        value={inputText}
+                        onChangeText={setInputText}
+                        returnKeyType="send"
+                        onSubmitEditing={handleSend}
+                        blurOnSubmit={false}
+                    />
+                    <TouchableOpacity
+                        onPress={handleSend}
+                        disabled={!inputText.trim()}
+                        activeOpacity={0.7}
+                        style={[
+                            styles.sendBtn,
+                            { backgroundColor: inputText.trim() ? '#5856D6' : theme.border },
+                        ]}
+                    >
+                        <Text style={styles.sendBtnIcon}>↑</Text>
+                    </TouchableOpacity>
+                </View>
+            </BottomSheetFooter>
+        ),
+        [theme, inputText, handleSend],
+    );
+
     return (
         <BottomSheet
             ref={bottomSheetRef}
@@ -234,6 +279,7 @@ export function ChatBottomSheet({
             keyboardBlurBehavior="restore"
             android_keyboardInputMode="adjustResize"
             onChange={handleSheetChanges}
+            footerComponent={renderFooter}
             handleComponent={() => (
                 <View style={styles.handleContainer}>
                     <View style={styles.handle} />
@@ -283,49 +329,25 @@ export function ChatBottomSheet({
                     keyboardShouldPersistTaps="handled"
                     onLayout={() => scrollToBottom(false)}
                     onContentSizeChange={() => scrollToBottom(false)}
+                    ListHeaderComponent={
+                        hasMore ? (
+                            <TouchableOpacity
+                                onPress={loadMore}
+                                style={styles.loadMoreBtn}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.loadMoreText, { color: theme.textSecondary }]}>
+                                    Load more
+                                </Text>
+                            </TouchableOpacity>
+                        ) : null
+                    }
                     ListEmptyComponent={
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                             Ask Genie about this day…
                         </Text>
                     }
                 />
-
-                {/* Input bar */}
-                <View
-                    style={[
-                        styles.inputBar,
-                        { borderTopColor: theme.border, backgroundColor: theme.background },
-                    ]}
-                >
-                    <BottomSheetTextInput
-                        style={StyleSheet.flatten([
-                            styles.textInput,
-                            {
-                                color: theme.textPrimary,
-                                backgroundColor: theme.surface,
-                                borderColor: theme.border,
-                            },
-                        ])}
-                        placeholder="Message Genie…"
-                        placeholderTextColor={theme.textSecondary}
-                        value={inputText}
-                        onChangeText={setInputText}
-                        returnKeyType="send"
-                        onSubmitEditing={handleSend}
-                        blurOnSubmit={false}
-                    />
-                    <TouchableOpacity
-                        onPress={handleSend}
-                        disabled={!inputText.trim()}
-                        activeOpacity={0.7}
-                        style={[
-                            styles.sendBtn,
-                            { backgroundColor: inputText.trim() ? '#5856D6' : theme.border },
-                        ]}
-                    >
-                        <Text style={styles.sendBtnIcon}>↑</Text>
-                    </TouchableOpacity>
-                </View>
             </View>
         </BottomSheet>
     );
@@ -435,6 +457,18 @@ const styles = StyleSheet.create({
         borderColor: '#5856D6',
     },
     optionText: { color: '#5856D6', fontSize: 13, fontWeight: '500' },
+    loadMoreBtn: {
+        alignSelf: 'center',
+        paddingVertical: 6,
+        paddingHorizontal: 16,
+        marginBottom: 8,
+        borderRadius: 14,
+        backgroundColor: 'transparent',
+    },
+    loadMoreText: {
+        fontSize: 13,
+        fontWeight: '500',
+    },
     emptyText: {
         textAlign: 'center',
         marginTop: 32,
