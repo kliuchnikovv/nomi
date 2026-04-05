@@ -3,8 +3,8 @@ Google Calendar tools for hybrid plugin (server-side execution).
 Provides calendar events reading and management functionality.
 """
 
-import asyncio
 import logging
+import os
 from typing import Any, Dict, List, Optional, Union
 
 from agno.tools import Toolkit
@@ -22,6 +22,8 @@ class CalendarTools(Toolkit):
         client_id: Optional[str] = None,
         client_secret: Optional[str] = None,
         token_uri: Optional[str] = None,
+        user_id: Optional[str] = None,
+        account_email: Optional[str] = None,
     ):
         super().__init__(name="calendar_tools")
         self.access_token = access_token
@@ -29,13 +31,14 @@ class CalendarTools(Toolkit):
         self.client_id = client_id
         self.client_secret = client_secret
         self.token_uri = token_uri or "https://oauth2.googleapis.com/token"
+        self.user_id = user_id
+        self.account_email = account_email
         self.base_url = "https://www.googleapis.com/calendar/v3"
         self.headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
         }
 
-        # Register tools
         self.register(self.get_upcoming_events)
         self.register(self.create_event)
         self.register(self.list_calendars)
@@ -46,6 +49,45 @@ class CalendarTools(Toolkit):
             "Authorization": f"Bearer {self.access_token}",
             "Accept": "application/json",
         }
+
+    async def _persist_access_token(self, new_access_token: str) -> None:
+        """Persist the refreshed access token via Go API."""
+        api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+        if not self.user_id or not self.account_email or not api_url:
+            logger.debug(
+                "Skipping token persistence: missing user_id=%s, account_email=%s, or api_url",
+                bool(self.user_id),
+                bool(self.account_email),
+            )
+            return
+
+        try:
+            import aiohttp
+
+            async with aiohttp.ClientSession() as session:
+                url = f"{api_url}/api/oauth/calendar/update-token"
+                body = {
+                    "user_id": self.user_id,
+                    "account_email": self.account_email,
+                    "access_token": new_access_token,
+                }
+                async with session.post(
+                    url, json=body, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        logger.info(
+                            "Persisted refreshed calendar token for user=%s",
+                            self.user_id,
+                        )
+                    else:
+                        text = await resp.text()
+                        logger.warning(
+                            "Failed to persist refreshed token: status=%d, body=%s",
+                            resp.status,
+                            text[:200],
+                        )
+        except Exception as e:
+            logger.warning("Failed to persist refreshed token: %s", e)
 
     async def _refresh_access_token(self) -> bool:
         """Refresh the access token using refresh token."""
@@ -80,11 +122,20 @@ class CalendarTools(Toolkit):
                         response_text[:300],
                     )
                     if response.status != 200:
-                        logger.error(
-                            "Failed to refresh token: %s - %s",
-                            response.status,
-                            response_text,
-                        )
+                        if "invalid_grant" in response_text:
+                            logger.error(
+                                "Google Calendar token expired (invalid_grant). "
+                                "User must reconnect Google Calendar in Settings. "
+                                "user_id=%s, account_email=%s",
+                                self.user_id,
+                                self.account_email,
+                            )
+                        else:
+                            logger.error(
+                                "Failed to refresh token: %s - %s",
+                                response.status,
+                                response_text,
+                            )
                         return False
 
                     result = await response.json()
@@ -95,6 +146,7 @@ class CalendarTools(Toolkit):
                         logger.info(
                             "Successfully refreshed Google Calendar access token"
                         )
+                        await self._persist_access_token(new_access_token)
                         return True
 
                     logger.error("Refresh response missing access_token")
@@ -137,7 +189,7 @@ class CalendarTools(Toolkit):
                     else:
                         error_text = await response.text()
                         raise Exception(
-                            f"Google Calendar API error: 401 - Token refresh failed - {error_text}"
+                            "Google Calendar: token expired. Please reconnect your Google Calendar in Settings."
                         )
 
                 if response.status >= 400:
@@ -283,13 +335,22 @@ def build(params: Dict[str, Any]) -> Toolkit:
     client_id = creds_data.get("client_id") or params.get("client_id")
     client_secret = creds_data.get("client_secret") or params.get("client_secret")
     token_uri = creds_data.get("token_uri") or params.get("token_uri")
+    user_id = creds_data.get("user_id") or params.get("user_id")
+    account_email = (
+        creds_data.get("account_email")
+        or creds_data.get("display_name")
+        or params.get("account_email")
+        or params.get("display_name")
+    )
 
     logger.info(
-        "Building Calendar tools: access_token=%s, refresh_token=%s, client_id=%s, client_secret=%s",
+        "Building Calendar tools: access_token=%s, refresh_token=%s, client_id=%s, client_secret=%s, user_id=%s, account_email=%s",
         access_token[:20] if access_token else "EMPTY",
         refresh_token[:20] if refresh_token else "EMPTY",
         client_id[:20] if client_id else "EMPTY",
         "PRESENT" if client_secret else "EMPTY",
+        user_id,
+        account_email,
     )
     return CalendarTools(
         access_token=access_token,
@@ -297,4 +358,6 @@ def build(params: Dict[str, Any]) -> Toolkit:
         client_id=client_id,
         client_secret=client_secret,
         token_uri=token_uri,
+        user_id=user_id,
+        account_email=account_email,
     )
