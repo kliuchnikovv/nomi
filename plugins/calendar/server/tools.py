@@ -63,21 +63,27 @@ class CalendarTools(Toolkit):
         }
 
         logger.info(
-            "Attempting token refresh: token_uri=%s, client_id=%s, refresh_token=%s",
+            "Attempting token refresh: token_uri=%s, client_id=%s, refresh_token=%s, refresh_token_len=%d",
             self.token_uri,
             self.client_id[:20] if self.client_id else "EMPTY",
-            self.refresh_token[:20] if self.refresh_token else "EMPTY",
+            self.refresh_token[:40] if self.refresh_token else "EMPTY",
+            len(self.refresh_token) if self.refresh_token else 0,
         )
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.token_uri, data=data) as response:
+                    response_text = await response.text()
+                    logger.info(
+                        "Token refresh response: status=%d, body=%s",
+                        response.status,
+                        response_text[:300],
+                    )
                     if response.status != 200:
-                        error_text = await response.text()
                         logger.error(
                             "Failed to refresh token: %s - %s",
                             response.status,
-                            error_text,
+                            response_text,
                         )
                         return False
 
