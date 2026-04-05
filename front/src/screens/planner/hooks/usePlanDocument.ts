@@ -62,6 +62,21 @@ function sortByTime(items: PlanItem[]): PlanItem[] {
   });
 }
 
+// Strip embedded time ranges like "с 13:50 до 17:30", "21:00 - 00:00",
+// "в 15:00" etc. from item text so the title stays clean after time chip is added.
+function stripTimeFromText(text: string): string {
+  let t = text;
+  // "с HH:MM до HH:MM" (Russian "from X to Y")
+  t = t.replace(/\s*с\s+\d{1,2}:\d{2}\s+до\s+\d{1,2}:\d{2}/gi, '');
+  // "HH:MM - HH:MM" or "HH:MM – HH:MM"
+  t = t.replace(/\s*\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}/g, '');
+  // standalone "в HH:MM" (Russian "at X")
+  t = t.replace(/\s*в\s+\d{1,2}:\d{2}/gi, '');
+  // leading/trailing separators left after removal
+  t = t.replace(/^[\s\-–,]+|[\s\-–,]+$/g, '').trim();
+  return t || text; // never return empty string
+}
+
 // ---------------------------------------------------------------------------
 // Hook return type
 // ---------------------------------------------------------------------------
@@ -347,14 +362,17 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
               next = next.map(i => {
                 if (i.id !== patch.item_id) return i;
                 const existingIdx = i.chips.findIndex(c => c.type === patch.chip.type);
+                // Auto-clean text when a time chip is added (strip embedded time ranges)
+                const cleanText = patch.chip.type === 'time' ? stripTimeFromText(i.text) : i.text;
                 if (existingIdx !== -1) {
                   // Upsert: update existing chip of same type, preserve original id
                   const chips = [...i.chips];
                   chips[existingIdx] = { ...patch.chip, id: i.chips[existingIdx].id, isNew: true };
-                  return { ...i, chips, isNew: true };
+                  return { ...i, text: cleanText, chips, isNew: true };
                 }
                 return {
                   ...i,
+                  text: cleanText,
                   // Always generate a fresh id so AI-provided ids ("1", "2") never collide
                   chips: [...i.chips, { ...patch.chip, id: generateId(), isNew: true }],
                   isNew: true,

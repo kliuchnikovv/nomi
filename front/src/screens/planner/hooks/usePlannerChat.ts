@@ -240,6 +240,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
         const { call_id: callId, params: actionParams } = p;
         const patches = actionParams?.patches ?? [];
         const summary = actionParams?.summary;
+        console.log('[usePlannerChat] patch_plan_document call_id:', callId, 'ops:', patches.map((x: any) => x.op), 'summary:', summary);
         // Apply patches in try-catch so a patch error never blocks the tool result
         try {
           callApplyPatches(patches, summary);

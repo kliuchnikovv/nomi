@@ -34,13 +34,17 @@ export function unregisterItemMapping(itemIds: string[]) {
 }
 
 export function callApplyPatches(patches: PatchOp[], bannerText?: string) {
+    console.log('[registry] callApplyPatches ops:', patches.map(p => p.op), 'fallback set:', !!_fallbackApply);
     // Group patches by their target apply function
     const groups = new Map<ApplyFn, PatchOp[]>();
 
     for (const patch of patches) {
         const itemId = 'item_id' in patch ? patch.item_id : ('item' in patch ? (patch as any).item?.id : undefined);
         const fn = (itemId && _itemToApply.get(itemId)) ?? _fallbackApply;
-        if (!fn) continue;
+        if (!fn) {
+            console.warn('[registry] no apply fn for patch', patch.op, 'itemId:', itemId);
+            continue;
+        }
         if (!groups.has(fn)) groups.set(fn, []);
         groups.get(fn)!.push(patch);
     }
