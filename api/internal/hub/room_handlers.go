@@ -551,8 +551,8 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			if !ok || provider.OAuthConfigKey == "" {
 				continue
 			}
-			if params["access_token"] != nil {
-				continue // Already has credentials
+			if at, ok := params["access_token"].(string); ok && at != "" {
+				continue // Already has valid credentials
 			}
 			if creds, found := oauthKeyCredentials[provider.OAuthConfigKey]; found {
 				for k, v := range creds {
