@@ -226,6 +226,21 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		return
 	}
 
+	h.logger.Info("oauth token exchange result",
+		zap.String("provider", providerName),
+		zap.Bool("has_access_token", token.AccessToken != ""),
+		zap.String("access_token_preview", func() string {
+			if token.AccessToken == "" {
+				return "EMPTY"
+			}
+			if len(token.AccessToken) > 20 {
+				return token.AccessToken[:20]
+			}
+			return token.AccessToken
+		}()),
+		zap.Bool("has_refresh_token", token.RefreshToken != ""),
+	)
+
 	var accountEmail string
 	var displayName string
 
