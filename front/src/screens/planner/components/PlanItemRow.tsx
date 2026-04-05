@@ -85,15 +85,15 @@ export function PlanItemRow({
         drag();
     };
 
-    // Fire indent as soon as horizontal threshold is crossed during the active gesture —
-    // more reliable than waiting for State.END which may never arrive if DraggableFlatList
-    // cancels the gesture first.
+    // Fire indent as soon as horizontal threshold is crossed during the active gesture.
+    // Keep the direction check loose (just abs(X) > abs(Y)) so left swipes are not filtered
+    // out by the tighter *2 requirement.
     const onGestureEvent = (e: any) => {
         const { translationX, translationY } = e.nativeEvent;
         if (
             !indentFired.current &&
-            Math.abs(translationX) > 30 &&
-            Math.abs(translationX) > Math.abs(translationY) * 2
+            Math.abs(translationX) > 20 &&
+            Math.abs(translationX) > Math.abs(translationY)
         ) {
             indentFired.current = true;
             onIndent(translationX > 0 ? 1 : -1);
@@ -101,14 +101,9 @@ export function PlanItemRow({
     };
 
     const onHandlerStateChange = (e: any) => {
-        const { state, translationX, translationY } = e.nativeEvent;
+        const { state } = e.nativeEvent;
         if (state === State.BEGAN) {
             indentFired.current = false;
-        } else if (state === State.END && !indentFired.current) {
-            // Fallback: if onGestureEvent never fired, try from final translation
-            if (Math.abs(translationX) > 20 && Math.abs(translationX) > Math.abs(translationY)) {
-                onIndent(translationX > 0 ? 1 : -1);
-            }
         }
     };
 
@@ -127,8 +122,8 @@ export function PlanItemRow({
         >
             {/* Single dot — tap = check/uncheck, long-press = drag, swipe L/R = indent */}
             <PanGestureHandler
-                activeOffsetX={[-5, 5]}
-                failOffsetY={[-25, 25]}
+                activeOffsetX={[-8, 8]}
+                failOffsetY={[-20, 20]}
                 onGestureEvent={onGestureEvent}
                 onHandlerStateChange={onHandlerStateChange}
             >
@@ -235,7 +230,7 @@ const styles = StyleSheet.create({
     },
     textRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',  // chip and text both start at the top, so dot aligns with line 1
         flexWrap: 'wrap',
         gap: 4,
     },

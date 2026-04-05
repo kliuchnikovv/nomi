@@ -377,8 +377,11 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
             }
             case 'reorder_items': {
               const idOrder = patch.ids;
+              const knownIds = next.map(i => i.id);
+              const matched = idOrder.filter((id: string) => knownIds.includes(id));
+              console.log('[usePlanDocument] reorder_items received ids:', idOrder, 'known ids:', knownIds, 'matched:', matched);
               const map = new Map(next.map(i => [i.id, i]));
-              const reordered = idOrder.map(id => map.get(id)).filter(Boolean) as PlanItem[];
+              const reordered = idOrder.map((id: string) => map.get(id)).filter(Boolean) as PlanItem[];
               const rest = next.filter(i => !idOrder.includes(i.id));
               next = [...reordered, ...rest];
               break;
