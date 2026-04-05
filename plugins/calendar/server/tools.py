@@ -62,6 +62,13 @@ class CalendarTools(Toolkit):
             "grant_type": "refresh_token",
         }
 
+        logger.info(
+            "Attempting token refresh: token_uri=%s, client_id=%s, refresh_token=%s",
+            self.token_uri,
+            self.client_id[:20] if self.client_id else "EMPTY",
+            self.refresh_token[:20] if self.refresh_token else "EMPTY",
+        )
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.token_uri, data=data) as response:
