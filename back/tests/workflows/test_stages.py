@@ -52,6 +52,7 @@ def test_extract_graceful_fallback_on_bad_json():
         result = _run_extract_stage(SAMPLE_TASKS, {})
     assert isinstance(result, StageResult)
     assert result.output["extracted_tasks"] == SAMPLE_TASKS
+    assert result.is_complete is False
 
 
 # ── RECON ─────────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -35,6 +36,8 @@ def _run_agent_text(system_prompt: str, user_prompt: str) -> str:
         )
         result = agent.run(user_prompt, stream=False)
         return str(getattr(result, "content", "") or "")
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
         logger.warning("[PlanningWorkflow] LLM call failed: %s", exc)
         return ""
@@ -73,8 +76,9 @@ def _run_extract_stage(tasks: list[dict], context: dict) -> StageResult:
     )
     try:
         start = raw.find("{")
-        end = raw.rfind("}") + 1
-        data = json.loads(raw[start:end])
+        if start == -1:
+            raise ValueError("no JSON object found")
+        data = json.loads(raw[start:])
         questions = data.get("pending_questions", [])
         return StageResult(
             output={"extracted_tasks": data.get("tasks", tasks)},
@@ -82,7 +86,8 @@ def _run_extract_stage(tasks: list[dict], context: dict) -> StageResult:
             is_complete=len(questions) == 0,
         )
     except Exception:
-        return StageResult(output={"extracted_tasks": tasks})
+        logger.warning("[PlanningWorkflow] EXTRACT: failed to parse LLM response, using raw tasks")
+        return StageResult(output={"extracted_tasks": tasks}, is_complete=False)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -105,7 +110,10 @@ def _run_recon_stage(
         if not loc or ctx in _SKIP_CONTEXT_TYPES or loc in locations:
             continue
 
-        coords = ors_client.geocode(loc)
+        try:
+            coords = ors_client.geocode(loc)
+        except Exception:
+            coords = None
         hours = ""
         try:
             hours = search_place_hours(loc, planning_date)[:300]
