@@ -698,6 +698,34 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 		payload.Tools = tools
 
+		// Log final tools payload before sending to Redis
+		for _, t := range tools {
+			if tMap, ok := t.(map[string]interface{}); ok {
+				name, _ := tMap["name"].(string)
+				params, _ := tMap["params"].(map[string]interface{})
+				creds, _ := params["credentials"].(map[string]interface{})
+				for accID, accCreds := range creds {
+					if cm, ok := accCreds.(map[string]interface{}); ok {
+						at, _ := cm["access_token"].(string)
+						r.logger.Info("tool credentials in redis payload",
+							zap.String("tool", name),
+							zap.String("account_id", accID),
+							zap.Bool("has_access_token", cm["access_token"] != nil),
+							zap.String("access_token_preview", func() string {
+								if at == "" {
+									return "EMPTY"
+								}
+								if len(at) > 20 {
+									return at[:20]
+								}
+								return at
+							}()),
+						)
+					}
+				}
+			}
+		}
+
 		// 5.2 Fetch and Bundle Chat History
 		messages, err := r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
 		if err != nil {
