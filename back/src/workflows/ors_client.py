@@ -32,8 +32,15 @@ def geocode(address: str) -> tuple[float, float] | None:
         features = resp.json().get("features", [])
         if not features:
             return None
-        coords = features[0]["geometry"]["coordinates"]  # [lon, lat]
+        geometry = features[0].get("geometry", {})
+        coords = geometry.get("coordinates", [])
+        if len(coords) < 2:
+            logger.warning("[ORS] Unexpected coordinates format for %r", address)
+            return None
         return (float(coords[0]), float(coords[1]))
+    except httpx.TimeoutException:
+        logger.warning("[ORS] Request timed out for %r", address)
+        return None
     except Exception as exc:
         logger.warning("[ORS] Geocode failed for %r: %s", address, exc)
         return None
@@ -50,6 +57,9 @@ def get_travel_time(
     Returns 30 as fallback if the request fails or returns no routes.
     """
     api_key = os.getenv("ORS_API_KEY", "")
+    if not api_key:
+        logger.debug("[ORS] ORS_API_KEY not set, skipping routing")
+        return 30
 
     try:
         resp = httpx.post(
@@ -64,6 +74,9 @@ def get_travel_time(
             return 30
         duration_sec = routes[0]["summary"]["duration"]
         return max(1, round(duration_sec / 60))
+    except httpx.TimeoutException:
+        logger.warning("[ORS] Routing request timed out (%s → %s)", origin, destination)
+        return 30
     except Exception as exc:
         logger.warning("[ORS] Routing failed (%s → %s, %s): %s", origin, destination, profile, exc)
         return 30

@@ -1,5 +1,5 @@
 from unittest.mock import patch, MagicMock
-import pytest
+import httpx
 from src.workflows import ors_client
 
 
@@ -78,3 +78,23 @@ def test_get_travel_time_fallback_on_empty_routes():
             result = ors_client.get_travel_time((0.0, 0.0), (1.0, 1.0))
 
     assert result == 30  # fallback default
+
+
+def test_get_travel_time_returns_30_without_api_key():
+    with patch.dict("os.environ", {}, clear=True):
+        result = ors_client.get_travel_time((0.0, 0.0), (1.0, 1.0))
+    assert result == 30
+
+
+def test_geocode_returns_none_on_http_error():
+    with patch("src.workflows.ors_client.httpx.get", side_effect=httpx.ConnectError("connection refused")):
+        with patch.dict("os.environ", {"ORS_API_KEY": "test-key"}):
+            result = ors_client.geocode("Moscow")
+    assert result is None
+
+
+def test_get_travel_time_returns_30_on_http_error():
+    with patch("src.workflows.ors_client.httpx.post", side_effect=httpx.ConnectError("connection refused")):
+        with patch.dict("os.environ", {"ORS_API_KEY": "test-key"}):
+            result = ors_client.get_travel_time((0.0, 0.0), (1.0, 1.0))
+    assert result == 30
