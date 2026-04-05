@@ -271,7 +271,13 @@ def build(params: Dict[str, Any]) -> Toolkit:
     client_secret = creds_data.get("client_secret") or params.get("client_secret")
     token_uri = creds_data.get("token_uri") or params.get("token_uri")
 
-    logger.info("Building Calendar tools with access token")
+    logger.info(
+        "Building Calendar tools: access_token=%s, refresh_token=%s, client_id=%s, client_secret=%s",
+        access_token[:20] if access_token else "EMPTY",
+        refresh_token[:20] if refresh_token else "EMPTY",
+        client_id[:20] if client_id else "EMPTY",
+        "PRESENT" if client_secret else "EMPTY",
+    )
     return CalendarTools(
         access_token=access_token,
         refresh_token=refresh_token,
