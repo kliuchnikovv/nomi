@@ -176,7 +176,8 @@ func New(
 	r.GET("/api/oauth/:provider/callback", mobileOAuthHandler.Callback) // Web callback from Google, redirects to app
 	r.POST("/api/oauth/:provider/login", wrapWithAuth(mobileOAuthHandler.Login, authMiddleware))
 	r.POST("/api/oauth/:provider/callback-mobile", wrapWithAuth(mobileOAuthHandler.CallbackMobile, authMiddleware))
-	r.POST("/api/oauth/refresh", mobileOAuthHandler.RefreshToken) // No auth needed, uses refresh_token
+	r.POST("/api/oauth/refresh", mobileOAuthHandler.RefreshToken)                     // No auth needed, uses refresh_token
+	r.POST("/api/oauth/:provider/update-token", mobileOAuthHandler.UpdateStoredToken) // Internal: persist refreshed token from Python
 
 	// Credentials API - for API keys and custom credentials (stored in Redis)
 	r.POST("/api/credentials", wrapWithAuth(credentialsHandler.Save, authMiddleware))

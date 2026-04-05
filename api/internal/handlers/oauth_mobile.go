@@ -12,6 +12,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/crypto"
@@ -494,4 +495,88 @@ func userFromCtxMobile(ctx context.Context) (*storage.User, error) {
 		return nil, errors.New("user not found in context")
 	}
 	return user, nil
+}
+
+// UpdateStoredToken updates the access_token in the encrypted oauth_tokens record.
+// Called by Python backend after a successful token refresh to persist the new token.
+// POST /api/oauth/:provider/update-token
+func (h *MobileOAuthHandler) UpdateStoredToken(c *gin.Context) {
+	ctx := c.Request.Context()
+	providerName := c.Param("provider")
+
+	var req struct {
+		UserID       string `json:"user_id"`
+		AccountEmail string `json:"account_email"`
+		AccessToken  string `json:"access_token"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if req.UserID == "" || req.AccountEmail == "" || req.AccessToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id, account_email, and access_token are required"})
+		return
+	}
+
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
+		return
+	}
+
+	oauthToken, err := h.storage.GetOAuthTokenByUserAndEmail(ctx, userID, providerName, req.AccountEmail)
+	if err != nil {
+		h.logger.Warn("oauth token not found for update",
+			zap.String("provider", providerName),
+			zap.String("account_email", req.AccountEmail),
+			zap.Error(err),
+		)
+		c.JSON(http.StatusNotFound, gin.H{"error": "oauth token not found"})
+		return
+	}
+
+	decrypted, err := crypto.Decrypt(h.cryptoKey, oauthToken.TokenEncrypted)
+	if err != nil {
+		h.logger.Error("failed to decrypt token for update", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decrypt token"})
+		return
+	}
+
+	var tokenData map[string]interface{}
+	if err := json.Unmarshal(decrypted, &tokenData); err != nil {
+		h.logger.Error("failed to parse token data for update", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse token data"})
+		return
+	}
+
+	tokenData["access_token"] = req.AccessToken
+
+	updatedJSON, err := json.Marshal(tokenData)
+	if err != nil {
+		h.logger.Error("failed to marshal updated token data", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token"})
+		return
+	}
+
+	encrypted, err := crypto.Encrypt(h.cryptoKey, updatedJSON)
+	if err != nil {
+		h.logger.Error("failed to encrypt updated token", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update token"})
+		return
+	}
+
+	oauthToken.TokenEncrypted = encrypted
+	if err := h.storage.UpdateOAuthToken(ctx, oauthToken); err != nil {
+		h.logger.Error("failed to update oauth token in db", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save updated token"})
+		return
+	}
+
+	h.logger.Info("successfully updated stored oauth token",
+		zap.String("provider", providerName),
+		zap.String("account_email", req.AccountEmail),
+	)
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

@@ -227,6 +227,9 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 				} else {
 					var tokenData map[string]interface{}
 					if err := json.Unmarshal(decrypted, &tokenData); err == nil {
+						tokenData["user_id"] = userID.String()
+						tokenData["provider"] = integration.Provider
+						tokenData["account_email"] = integration.AccountEmail
 						entry.mergedParams[accountID] = tokenData
 						atVal, _ := tokenData["access_token"].(string)
 						h.logger.Info("loaded credentials for integration",
