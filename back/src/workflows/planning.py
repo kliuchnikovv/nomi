@@ -161,7 +161,7 @@ Return ONLY valid JSON:
 
 
 def _run_cluster_stage(
-    extracted_tasks: list,
+    extracted_tasks: list[dict],
     locations: dict,
 ) -> StageResult:
     prompt_input = json.dumps(
@@ -179,6 +179,8 @@ def _run_cluster_stage(
             pending_questions=data.get("pending_questions", []),
             is_complete=True,
         )
+    except asyncio.CancelledError:
+        raise
     except Exception:
         logger.warning("[PlanningWorkflow] CLUSTER: failed to parse LLM response, using fallback")
         # Fallback: one cluster per task
@@ -205,12 +207,12 @@ _PROFILE_MAP = {
 
 
 def _run_route_stage(
-    clusters: list,
+    clusters: list[dict],
     locations: dict,
     transport_mode: str,
 ) -> StageResult:
     profile = _PROFILE_MAP.get(transport_mode, "foot-walking")
-    travel_blocks: list = []
+    travel_blocks: list[dict] = []
 
     for i in range(len(clusters) - 1):
         src_loc = clusters[i].get("location", "")

@@ -92,7 +92,6 @@ def test_recon_complete_when_transport_known():
     assert result.pending_questions == []
 
 
-# append to test_stages.py
 from src.workflows.planning import _run_cluster_stage, _run_route_stage
 
 # ── CLUSTER ───────────────────────────────────────────────────────────────────
@@ -117,6 +116,7 @@ CLUSTER_LLM_RESPONSE = json.dumps({
 LOCATIONS = {
     "gym": {"coords": (37.60, 55.75), "hours": "7am-10pm"},
     "office": {"coords": (37.62, 55.76), "hours": "9am-6pm"},
+    "home": {"coords": (37.61, 55.74), "hours": ""},
 }
 
 
