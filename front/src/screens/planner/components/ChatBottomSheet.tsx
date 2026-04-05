@@ -6,6 +6,7 @@ import {
     StyleSheet,
     Platform,
     Animated,
+    FlatList,
 } from 'react-native';
 import { Spark } from 'iconoir-react-native';
 import Markdown from 'react-native-markdown-display';
@@ -18,8 +19,11 @@ import type { BottomSheetFooterProps } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
 import { ChatMessage, usePlannerChat } from '../hooks/usePlannerChat';
-import { Frame } from '../../main/models';
 import { PlanItem } from '../types';
+
+// Height of the input bar — used to add matching top-padding to the inverted
+// FlatList so the newest message is never hidden behind the footer.
+const INPUT_BAR_HEIGHT = 56;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -48,8 +52,6 @@ function buildPlanningPrompt(items: PlanItem[], date: string): string {
     if (namedItems.length === 0) {
         return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now) — I have no tasks yet. Please suggest something.`;
     }
-    // Strip all chips so the agent always replans from scratch, ignoring any previously
-    // assigned times. The [Replan: true] header makes the intent explicit.
     const planLines = namedItems.map(i => `ID:${i.id} ${i.text}`).join('\n');
     return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now). Please replan ALL tasks from scratch — ignore any previously assigned times.\n\n[Current plan:\n${planLines}]`;
 }
@@ -101,7 +103,7 @@ export function ChatBottomSheet({
     onAutoSendHandled,
 }: Props) {
     const { theme } = useTheme();
-    const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
+    const { top: topInset } = useSafeAreaInsets();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const snapPoints = ['55%', '92%'];
 
@@ -119,8 +121,6 @@ export function ChatBottomSheet({
 
     // Auto-send planning prompt when chat opens and socket is ready
     const autoSentRef = useRef(false);
-    // Keep items ref always current so auto-send uses the latest items even if they
-    // finish loading after isConnected becomes true
     const itemsRef = useRef(items);
     useEffect(() => {
         itemsRef.current = items;
@@ -163,7 +163,6 @@ export function ChatBottomSheet({
     const handleSend = useCallback(() => {
         const text = inputText.trim();
         if (!text) return;
-        // Append current plan state so agent always knows which chips exist (skip if all items are empty)
         const namedItems = items ? items.filter(i => !i.checked && i.text.trim() !== '') : [];
         const context = namedItems.length > 0 ? buildPlanContext(items!) : undefined;
         sendMessage(text, { context });
@@ -171,57 +170,15 @@ export function ChatBottomSheet({
     }, [inputText, sendMessage, items]);
 
     // ---------------------------------------------------------------------------
-    // Render item
+    // Footer — always-visible input bar
     // ---------------------------------------------------------------------------
-
-    const renderMessage = ({ item }: { item: ChatMessage }) => {
-        const isUser = item.role === 'user';
-        const emptyText = !item.text || item.text.trim().length === 0;
-        const hasOptions = item.askUser && item.askUser.options.length > 0;
-
-        // Hide empty assistant bubbles that are just silent tool calls (not streaming, no text, no options)
-        if (!isUser && emptyText && !hasOptions && !item.isStreaming) {
-            return null;
-        }
-
-        const textColor = isUser ? '#FFFFFF' : theme.textPrimary;
-        return (
-            <View
-                style={[
-                    styles.bubble,
-                    isUser
-                        ? [styles.userBubble, { backgroundColor: '#5856D6' }]
-                        : [styles.assistantBubble, { backgroundColor: theme.surface }],
-                ]}
-            >
-                <Markdown style={markdownStyles(textColor)}>
-                    {item.text + (item.isStreaming ? ' ▍' : '')}
-                </Markdown>
-
-                {/* Quick-reply options from ask_user */}
-                {item.askUser && item.askUser.options.length > 0 && (
-                    <View style={styles.optionsContainer}>
-                        {item.askUser.options.map(opt => (
-                            <TouchableOpacity
-                                key={opt}
-                                style={styles.optionChip}
-                                onPress={() => replyToAskUser(item.askUser!.callId, opt)}
-                                activeOpacity={0.75}
-                            >
-                                <Text style={styles.optionText}>{opt}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                )}
-            </View>
-        );
-    };
-
-
 
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
-            <BottomSheetFooter {...props} bottomInset={bottomInset}>
+            // No bottomInset: the footer sits flush at the sheet's visual bottom.
+            // The FlatList's contentContainerStyle.paddingTop compensates for
+            // the footer height so the newest message is never hidden beneath it.
+            <BottomSheetFooter {...props}>
                 <View
                     style={[
                         styles.inputBar,
@@ -259,8 +216,53 @@ export function ChatBottomSheet({
                 </View>
             </BottomSheetFooter>
         ),
-        [theme, inputText, handleSend, bottomInset],
+        [theme, inputText, handleSend],
     );
+
+    // ---------------------------------------------------------------------------
+    // Render item
+    // ---------------------------------------------------------------------------
+
+    const renderMessage = ({ item }: { item: ChatMessage }) => {
+        const isUser = item.role === 'user';
+        const emptyText = !item.text || item.text.trim().length === 0;
+        const hasOptions = item.askUser && item.askUser.options.length > 0;
+
+        if (!isUser && emptyText && !hasOptions && !item.isStreaming) {
+            return null;
+        }
+
+        const textColor = isUser ? '#FFFFFF' : theme.textPrimary;
+        return (
+            <View
+                style={[
+                    styles.bubble,
+                    isUser
+                        ? [styles.userBubble, { backgroundColor: '#5856D6' }]
+                        : [styles.assistantBubble, { backgroundColor: theme.surface }],
+                ]}
+            >
+                <Markdown style={markdownStyles(textColor)}>
+                    {item.text + (item.isStreaming ? ' ▍' : '')}
+                </Markdown>
+
+                {item.askUser && item.askUser.options.length > 0 && (
+                    <View style={styles.optionsContainer}>
+                        {item.askUser.options.map(opt => (
+                            <TouchableOpacity
+                                key={opt}
+                                style={styles.optionChip}
+                                onPress={() => replyToAskUser(item.askUser!.callId, opt)}
+                                activeOpacity={0.75}
+                            >
+                                <Text style={styles.optionText}>{opt}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+            </View>
+        );
+    };
 
     return (
         <BottomSheet
@@ -356,7 +358,6 @@ function markdownStyles(color: string) {
         bullet_list: { marginTop: 0, marginBottom: 4 },
         ordered_list: { marginTop: 0, marginBottom: 4 },
         list_item: { marginBottom: 2 },
-        // Ensure list item content wraps instead of expanding the bubble width
         bullet_list_content: { flex: 1, flexShrink: 1 },
         ordered_list_content: { flex: 1, flexShrink: 1 },
         strong: { fontWeight: '700' as const, color },
@@ -410,7 +411,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     messageListContent: {
-        padding: 12,
+        paddingTop: INPUT_BAR_HEIGHT + 12, // visual bottom: clears footer + normal gap
+        paddingBottom: 12,                 // visual top: space before oldest message
+        paddingHorizontal: 12,
         gap: 8,
         flexGrow: 1,
     },
@@ -455,7 +458,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         marginBottom: 8,
         borderRadius: 14,
-        backgroundColor: 'transparent',
     },
     loadMoreText: {
         fontSize: 13,
