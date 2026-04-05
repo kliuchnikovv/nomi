@@ -92,7 +92,7 @@ export function PlanItemRow({
         const { translationX, translationY } = e.nativeEvent;
         if (
             !indentFired.current &&
-            Math.abs(translationX) > 10 && // TODO:
+            Math.abs(translationX) > 5 && // TODO:
             Math.abs(translationX) > Math.abs(translationY)
         ) {
             indentFired.current = true;
@@ -138,8 +138,14 @@ export function PlanItemRow({
                         style={[
                             styles.dot,
                             item.checked
-                                ? { backgroundColor: '#34C759', borderColor: '#34C759' }
-                                : { backgroundColor: 'transparent', borderColor: theme.border },
+                                ? {
+                                      backgroundColor: '#34C759',
+                                      borderColor: '#34C759',
+                                  }
+                                : {
+                                      backgroundColor: 'transparent',
+                                      borderColor: theme.border,
+                                  },
                         ]}
                     />
                 </TouchableOpacity>
@@ -149,7 +155,7 @@ export function PlanItemRow({
             <View
                 style={[
                     styles.indentedContent,
-                    { marginLeft: item.depth * 24 },
+                    { marginLeft: item.depth * 12 },
                 ]}
             >
                 <View style={styles.content}>
@@ -223,7 +229,7 @@ const styles = StyleSheet.create({
     },
     dotArea: {
         width: 32,
-        paddingTop: 2,   // aligns circle center with the first text line
+        paddingTop: 2, // aligns circle center with the first text line
         alignItems: 'center',
         flexShrink: 0,
     },
