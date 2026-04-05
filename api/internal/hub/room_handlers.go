@@ -525,10 +525,22 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			var tokenData map[string]interface{}
 			if err := json.Unmarshal(decrypted, &tokenData); err == nil {
 				oauthKeyCredentials[provider.OAuthConfigKey] = tokenData
+				atRaw := tokenData["access_token"]
+				atStr, _ := atRaw.(string)
 				r.logger.Info("loaded oauth credentials for redis bundling",
 					zap.String("provider", integ.Provider),
 					zap.String("oauth_key", provider.OAuthConfigKey),
-					zap.Bool("has_access_token", tokenData["access_token"] != nil),
+					zap.Bool("has_access_token", atRaw != nil),
+					zap.String("access_token_preview", func() string {
+						if atStr == "" {
+							return "EMPTY"
+						}
+						if len(atStr) > 20 {
+							return atStr[:20]
+						}
+						return atStr
+					}()),
+					zap.String("raw_decrypted", string(decrypted)[:min(len(decrypted), 200)]),
 				)
 			}
 		}
