@@ -133,3 +133,125 @@ def _run_recon_stage(
         pending_questions=pending_questions,
         is_complete=transport_mode is not None,
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CLUSTER stage
+# ──────────────────────────────────────────────────────────────────────────────
+
+_CLUSTER_PROMPT = """You are grouping tasks into location clusters for efficient day planning.
+
+Rules:
+- Group tasks at the same or nearby location into one cluster
+- Tasks with context_type "home" or "hotel" are PREFERRED at start/end of day,
+  but can appear mid-day if explicitly planned (e.g. "return home for lunch",
+  "pick up documents at hotel")
+- Never merge tasks with incompatible contexts (e.g. wake-up and sleep cannot be combined)
+- Tasks without a location attach to the nearest cluster by time
+- Order clusters to minimize total travel distance
+
+Return ONLY valid JSON:
+{
+  "clusters": [
+    {"location": "home", "context_type": "home", "task_ids": ["t1", "t2"]},
+    {"location": "gym", "context_type": "place", "task_ids": ["t3"]}
+  ],
+  "pending_questions": []
+}"""
+
+
+def _run_cluster_stage(
+    extracted_tasks: list,
+    locations: dict,
+) -> StageResult:
+    prompt_input = json.dumps(
+        {"tasks": extracted_tasks, "locations": locations},
+        ensure_ascii=False,
+    )
+    raw = _run_agent_text(_CLUSTER_PROMPT, prompt_input)
+    try:
+        start = raw.find("{")
+        if start == -1:
+            raise ValueError("no JSON object found")
+        data = json.loads(raw[start:])
+        return StageResult(
+            output={"clusters": data.get("clusters", [])},
+            pending_questions=data.get("pending_questions", []),
+            is_complete=True,
+        )
+    except Exception:
+        logger.warning("[PlanningWorkflow] CLUSTER: failed to parse LLM response, using fallback")
+        # Fallback: one cluster per task
+        clusters = [
+            {
+                "location": t.get("location", ""),
+                "context_type": t.get("context_type", "none"),
+                "task_ids": [t["id"]],
+            }
+            for t in extracted_tasks
+        ]
+        return StageResult(output={"clusters": clusters}, is_complete=True)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ROUTE stage
+# ──────────────────────────────────────────────────────────────────────────────
+
+_PROFILE_MAP = {
+    "walking": "foot-walking",
+    "car": "driving-car",
+    "cycling": "cycling-regular",
+}
+
+
+def _run_route_stage(
+    clusters: list,
+    locations: dict,
+    transport_mode: str,
+) -> StageResult:
+    profile = _PROFILE_MAP.get(transport_mode, "foot-walking")
+    travel_blocks: list = []
+
+    for i in range(len(clusters) - 1):
+        src_loc = clusters[i].get("location", "")
+        dst_loc = clusters[i + 1].get("location", "")
+
+        if not src_loc or not dst_loc or src_loc == dst_loc:
+            continue
+
+        src_coords = locations.get(src_loc, {}).get("coords")
+        dst_coords = locations.get(dst_loc, {}).get("coords")
+        duration_min = 30  # default fallback
+
+        if src_coords and dst_coords:
+            try:
+                duration_min = ors_client.get_travel_time(src_coords, dst_coords, profile)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("[PlanningWorkflow] ROUTE: ORS failed for %s→%s: %s", src_loc, dst_loc, exc)
+        else:
+            try:
+                ddg_result = search_route_time_text(src_loc, dst_loc)
+                parsed = _run_agent_text(
+                    "Extract travel time in minutes from the text. Return only an integer number, nothing else.",
+                    ddg_result[:300],
+                )
+                parsed = parsed.strip()
+                if parsed.isdigit():
+                    duration_min = int(parsed)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                pass
+
+        travel_blocks.append({
+            "from_location": src_loc,
+            "to_location": dst_loc,
+            "duration_min": duration_min,
+            "mode": profile,
+            "title": f"Выдвинуться в {dst_loc}",
+            "insert_before_cluster_index": i + 1,
+        })
+
+    return StageResult(output={"travel_blocks": travel_blocks})
