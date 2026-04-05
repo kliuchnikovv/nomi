@@ -21,8 +21,8 @@ import { useTheme } from '../../../context/ThemeContext';
 import { ChatMessage, usePlannerChat } from '../hooks/usePlannerChat';
 import { PlanItem } from '../types';
 
-// Height of the input bar — used to add matching top-padding to the inverted
-// FlatList so the newest message is never hidden behind the footer.
+// Space reserved at the bottom of the FlatList content so the newest
+// message is never hidden behind the absolutely-positioned footer.
 const INPUT_BAR_HEIGHT = 56;
 
 // ---------------------------------------------------------------------------
@@ -33,14 +33,80 @@ interface Props {
     isOpen: boolean;
     onClose: () => void;
     date: string;
-    /** Current plan items — appended as invisible context to every user message */
     items?: PlanItem[];
-    /** If true, automatically build and send the planning prompt when chat opens and socket is ready */
     autoSend?: boolean;
-    /** Whether to enable web search for the auto-send message */
     autoSendWebSearch?: boolean;
     onAutoSendHandled?: () => void;
 }
+
+// ---------------------------------------------------------------------------
+// Stable footer — defined OUTSIDE the parent so its identity never changes.
+// Keyboard dismissal was caused by renderFooter changing reference on every
+// keystroke (inputText in deps) → BottomSheet saw a new component type →
+// unmount+remount → TextInput lost focus. Moving input state here and
+// receiving only a stable onSend ref breaks that cycle.
+// ---------------------------------------------------------------------------
+
+interface FooterContentProps {
+    theme: any;
+    onSend: React.MutableRefObject<(text: string) => void>;
+}
+
+const ChatFooterContent = React.memo(function ChatFooterContent({
+    theme,
+    onSend,
+}: FooterContentProps) {
+    const [text, setText] = useState('');
+
+    const handleSend = () => {
+        const t = text.trim();
+        if (!t) return;
+        onSend.current(t);
+        setText('');
+    };
+
+    return (
+        <View
+            style={[
+                styles.inputBar,
+                { borderTopColor: theme.border, backgroundColor: theme.background },
+            ]}
+        >
+            <BottomSheetTextInput
+                style={StyleSheet.flatten([
+                    styles.textInput,
+                    {
+                        color: theme.textPrimary,
+                        backgroundColor: theme.surface,
+                        borderColor: theme.border,
+                    },
+                ])}
+                placeholder="Message Genie…"
+                placeholderTextColor={theme.textSecondary}
+                value={text}
+                onChangeText={setText}
+                returnKeyType="send"
+                onSubmitEditing={handleSend}
+                blurOnSubmit={false}
+            />
+            <TouchableOpacity
+                onPress={handleSend}
+                disabled={!text.trim()}
+                activeOpacity={0.7}
+                style={[
+                    styles.sendBtn,
+                    { backgroundColor: text.trim() ? '#5856D6' : theme.border },
+                ]}
+            >
+                <Text style={styles.sendBtnIcon}>↑</Text>
+            </TouchableOpacity>
+        </View>
+    );
+});
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function currentDateTimeStr(): string {
     const d = new Date();
@@ -105,12 +171,23 @@ export function ChatBottomSheet({
     const { theme } = useTheme();
     const { top: topInset } = useSafeAreaInsets();
     const bottomSheetRef = useRef<BottomSheet>(null);
+    const listRef = useRef<FlatList<ChatMessage | 'thinking'>>(null);
     const snapPoints = ['55%', '92%'];
 
     const { messages, sendMessage, isConnected, isThinking, replyToAskUser, hasMore, loadMore } = usePlannerChat(date);
-    const [inputText, setInputText] = useState('');
 
-    // Sync open/close state → bottom sheet index
+    // Stable send ref — ChatFooterContent reads this ref so renderFooter
+    // never needs to change identity when items/sendMessage change.
+    const onSendRef = useRef<(text: string) => void>(() => { });
+    useEffect(() => {
+        onSendRef.current = (text: string) => {
+            const namedItems = items ? items.filter(i => !i.checked && i.text.trim() !== '') : [];
+            const context = namedItems.length > 0 ? buildPlanContext(items!) : undefined;
+            sendMessage(text, { context });
+        };
+    }, [items, sendMessage]);
+
+    // Sync open/close → sheet index
     useEffect(() => {
         if (isOpen) {
             bottomSheetRef.current?.snapToIndex(0);
@@ -119,12 +196,10 @@ export function ChatBottomSheet({
         }
     }, [isOpen]);
 
-    // Auto-send planning prompt when chat opens and socket is ready
+    // Auto-send
     const autoSentRef = useRef(false);
     const itemsRef = useRef(items);
-    useEffect(() => {
-        itemsRef.current = items;
-    });
+    useEffect(() => { itemsRef.current = items; });
 
     useEffect(() => {
         if (isOpen && isConnected && autoSend && !autoSentRef.current) {
@@ -135,88 +210,49 @@ export function ChatBottomSheet({
         }
     }, [isOpen, isConnected, autoSend, date, sendMessage, onAutoSendHandled, autoSendWebSearch]);
 
-    // Reset auto-send flag when trigger resets
     useEffect(() => {
-        if (!autoSend) {
-            autoSentRef.current = false;
-        }
+        if (!autoSend) autoSentRef.current = false;
     }, [autoSend]);
 
-    // For inverted FlatList: newest at index 0 (renders at visual bottom)
-    const listData = useMemo(() => {
-        const data: (ChatMessage | 'thinking')[] = [
-            ...(isThinking ? ['thinking' as const] : []),
-            ...messages,
-        ];
-        return data.reverse();
-    }, [messages, isThinking]);
+    // Natural order: oldest → newest; FlatList scrolls to end (bottom = newest)
+    const listData = useMemo(() =>
+        [...messages, ...(isThinking ? ['thinking' as const] : [])],
+        [messages, isThinking],
+    );
 
+    // Scroll to bottom helpers
+    const scrollToBottom = useCallback((animated: boolean) => {
+        listRef.current?.scrollToEnd({ animated });
+    }, []);
+
+    // Scroll to bottom whenever new content arrives
+    useEffect(() => {
+        scrollToBottom(true);
+    }, [listData.length, scrollToBottom]);
+
+    // Scroll to bottom (non-animated) when the sheet opens or expands
     const handleSheetChanges = useCallback(
         (index: number) => {
             if (index === -1) {
                 onClose();
+            } else {
+                setTimeout(() => scrollToBottom(false), 300);
             }
         },
-        [onClose],
+        [onClose, scrollToBottom],
     );
 
-    const handleSend = useCallback(() => {
-        const text = inputText.trim();
-        if (!text) return;
-        const namedItems = items ? items.filter(i => !i.checked && i.text.trim() !== '') : [];
-        const context = namedItems.length > 0 ? buildPlanContext(items!) : undefined;
-        sendMessage(text, { context });
-        setInputText('');
-    }, [inputText, sendMessage, items]);
-
     // ---------------------------------------------------------------------------
-    // Footer — always-visible input bar
+    // Footer — stable reference: only depends on theme (never changes during typing)
     // ---------------------------------------------------------------------------
 
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
-            // No bottomInset: the footer sits flush at the sheet's visual bottom.
-            // The FlatList's contentContainerStyle.paddingTop compensates for
-            // the footer height so the newest message is never hidden beneath it.
             <BottomSheetFooter {...props}>
-                <View
-                    style={[
-                        styles.inputBar,
-                        { borderTopColor: theme.border, backgroundColor: theme.background },
-                    ]}
-                >
-                    <BottomSheetTextInput
-                        style={StyleSheet.flatten([
-                            styles.textInput,
-                            {
-                                color: theme.textPrimary,
-                                backgroundColor: theme.surface,
-                                borderColor: theme.border,
-                            },
-                        ])}
-                        placeholder="Message Genie…"
-                        placeholderTextColor={theme.textSecondary}
-                        value={inputText}
-                        onChangeText={setInputText}
-                        returnKeyType="send"
-                        onSubmitEditing={handleSend}
-                        blurOnSubmit={false}
-                    />
-                    <TouchableOpacity
-                        onPress={handleSend}
-                        disabled={!inputText.trim()}
-                        activeOpacity={0.7}
-                        style={[
-                            styles.sendBtn,
-                            { backgroundColor: inputText.trim() ? '#5856D6' : theme.border },
-                        ]}
-                    >
-                        <Text style={styles.sendBtnIcon}>↑</Text>
-                    </TouchableOpacity>
-                </View>
+                <ChatFooterContent theme={theme} onSend={onSendRef} />
             </BottomSheetFooter>
         ),
-        [theme, inputText, handleSend],
+        [theme], // theme changes on dark/light toggle only — acceptable remount
     );
 
     // ---------------------------------------------------------------------------
@@ -311,6 +347,7 @@ export function ChatBottomSheet({
 
                 {/* Messages */}
                 <BottomSheetFlatList
+                    ref={listRef as any}
                     data={listData}
                     keyExtractor={(item: ChatMessage | 'thinking', idx: number) =>
                         item === 'thinking' ? 'thinking' : (item as ChatMessage).id ?? String(idx)
@@ -322,8 +359,9 @@ export function ChatBottomSheet({
                     style={styles.messagesList}
                     contentContainerStyle={styles.messageListContent}
                     keyboardShouldPersistTaps="handled"
-                    inverted
-                    ListFooterComponent={
+                    onLayout={() => scrollToBottom(false)}
+                    onContentSizeChange={() => scrollToBottom(false)}
+                    ListHeaderComponent={
                         hasMore ? (
                             <TouchableOpacity
                                 onPress={loadMore}
@@ -348,7 +386,7 @@ export function ChatBottomSheet({
 }
 
 // ---------------------------------------------------------------------------
-// Markdown styles (dynamic — depends on text color)
+// Markdown styles
 // ---------------------------------------------------------------------------
 
 function markdownStyles(color: string) {
@@ -411,9 +449,11 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     messageListContent: {
-        paddingTop: INPUT_BAR_HEIGHT + 12, // visual bottom: clears footer + normal gap
-        paddingBottom: 12,                 // visual top: space before oldest message
+        paddingTop: 12,
         paddingHorizontal: 12,
+        // Extra bottom padding reserves space for the absolutely-positioned
+        // footer so the last message is never hidden behind the input bar.
+        paddingBottom: INPUT_BAR_HEIGHT + 12,
         gap: 8,
         flexGrow: 1,
     },
