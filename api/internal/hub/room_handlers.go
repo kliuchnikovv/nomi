@@ -663,6 +663,34 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 					}
 				}
 
+				// Inject shared OAuth credentials into client-sent tools that lack them
+				for providerName, entry := range providerMap {
+					provider, ok := intgr.GetProvider(providerName)
+					if !ok || provider.OAuthConfigKey == "" {
+						continue
+					}
+					creds, found := oauthKeyCredentials[provider.OAuthConfigKey]
+					if !found {
+						continue
+					}
+					for accID, accParams := range entry.mergedParams {
+						if cm, ok := accParams.(map[string]interface{}); ok {
+							if at, ok := cm["access_token"].(string); ok && at != "" {
+								continue // Already has valid token
+							}
+							// Inject shared credentials
+							for k, v := range creds {
+								cm[k] = v
+							}
+							r.logger.Info("injected shared oauth credentials into client-sent tool",
+								zap.String("provider", providerName),
+								zap.String("account_id", accID),
+								zap.String("oauth_key", provider.OAuthConfigKey),
+							)
+						}
+					}
+				}
+
 				// Build tools from grouped entries
 				for providerName, entry := range providerMap {
 					toolItem := map[string]interface{}{
