@@ -92,7 +92,7 @@ export function PlanItemRow({
         const { translationX, translationY } = e.nativeEvent;
         if (
             !indentFired.current &&
-            Math.abs(translationX) > 20 &&
+            Math.abs(translationX) > 10 && // TODO:
             Math.abs(translationX) > Math.abs(translationY)
         ) {
             indentFired.current = true;
@@ -137,14 +137,21 @@ export function PlanItemRow({
                     <View
                         style={[
                             styles.dot,
-                            { backgroundColor: item.checked ? '#34C759' : theme.border },
+                            item.checked
+                                ? { backgroundColor: '#34C759', borderColor: '#34C759' }
+                                : { backgroundColor: 'transparent', borderColor: theme.border },
                         ]}
                     />
                 </TouchableOpacity>
             </PanGestureHandler>
 
             {/* Indented content — shifts right with nesting depth */}
-            <View style={[styles.indentedContent, { marginLeft: item.depth * 24 }]}>
+            <View
+                style={[
+                    styles.indentedContent,
+                    { marginLeft: item.depth * 24 },
+                ]}
+            >
                 <View style={styles.content}>
                     {/* Time chip (inline) + text on one line, other chips below */}
                     <View style={styles.textRow}>
@@ -159,8 +166,12 @@ export function PlanItemRow({
                             style={[
                                 styles.textInput,
                                 {
-                                    color: item.checked ? theme.textSecondary : theme.textPrimary,
-                                    textDecorationLine: item.checked ? 'line-through' : 'none',
+                                    color: item.checked
+                                        ? theme.textSecondary
+                                        : theme.textPrimary,
+                                    textDecorationLine: item.checked
+                                        ? 'line-through'
+                                        : 'none',
                                 },
                             ]}
                             value={localText}
@@ -212,14 +223,15 @@ const styles = StyleSheet.create({
     },
     dotArea: {
         width: 32,
-        paddingTop: 7,   // aligns dot center with the first text line (~12px from content top)
+        paddingTop: 2,   // aligns circle center with the first text line
         alignItems: 'center',
         flexShrink: 0,
     },
     dot: {
-        width: 9,
-        height: 9,
-        borderRadius: 4.5,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 1.5,
     },
     indentedContent: {
         flex: 1,
@@ -230,7 +242,7 @@ const styles = StyleSheet.create({
     },
     textRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',  // chip and text both start at the top, so dot aligns with line 1
+        alignItems: 'flex-start', // chip and text both start at the top, so dot aligns with line 1
         flexWrap: 'wrap',
         gap: 4,
     },

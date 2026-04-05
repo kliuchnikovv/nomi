@@ -102,7 +102,7 @@ export function ChatBottomSheet({
     const { theme } = useTheme();
     const { top: topInset } = useSafeAreaInsets();
     const bottomSheetRef = useRef<BottomSheet>(null);
-    const snapPoints = ['45%', '85%'];
+    const snapPoints = ['55%', '92%'];
 
     const { messages, sendMessage, isConnected, isThinking, replyToAskUser } = usePlannerChat(date);
     const [inputText, setInputText] = useState('');
@@ -157,8 +157,8 @@ export function ChatBottomSheet({
             if (index === -1) {
                 onClose();
             } else {
-                // Sheet just opened or expanded — scroll to latest message after animation settles
-                setTimeout(() => scrollToBottom(false), 150);
+                // Sheet opened or expanded — wait for animation to settle then scroll to latest
+                setTimeout(() => scrollToBottom(false), 350);
             }
         },
         [onClose, scrollToBottom],
@@ -281,6 +281,7 @@ export function ChatBottomSheet({
                     style={styles.messagesList}
                     contentContainerStyle={styles.messageListContent}
                     keyboardShouldPersistTaps="handled"
+                    onLayout={() => scrollToBottom(false)}
                     onContentSizeChange={() => scrollToBottom(false)}
                     ListEmptyComponent={
                         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>

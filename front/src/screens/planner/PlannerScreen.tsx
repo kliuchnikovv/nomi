@@ -197,17 +197,7 @@ export function PlannerScreen() {
                                     containerStyle={{ flex: 1 }}
                                     contentContainerStyle={styles.listContent}
                                     keyboardShouldPersistTaps="handled"
-                                    ListFooterComponent={
-                                        <TouchableOpacity
-                                            onPress={() => handleAddAfter(items[items.length - 1]?.id)}
-                                            style={styles.addRow}
-                                            activeOpacity={0.5}
-                                        >
-                                            <Text style={[styles.addRowText, { color: theme.textSecondary }]}>
-                                                + Task
-                                            </Text>
-                                        </TouchableOpacity>
-                                    }
+                                    ListFooterComponent={<View style={styles.listFooter} />}
                                 />
                             </View>
 
@@ -272,12 +262,8 @@ const styles = StyleSheet.create({
     listContent: {
         paddingBottom: 8,
     },
-    addRow: {
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-    },
-    addRowText: {
-        fontSize: 15,
+    listFooter: {
+        height: 8,
     },
     bottomBar: {
         flexDirection: 'row',
