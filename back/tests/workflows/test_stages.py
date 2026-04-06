@@ -177,3 +177,46 @@ def test_route_travel_block_title_format():
         result = _run_route_stage(CLUSTERS[:2], LOCATIONS, "walking")
     block = result.output["travel_blocks"][0]
     assert "gym" in block["title"].lower() or "gym" in block["to_location"]
+
+
+from src.workflows.planning import _run_build_stage
+
+# ── BUILD ─────────────────────────────────────────────────────────────────────
+
+BUILD_LLM_RESPONSE = json.dumps({
+    "patches": [
+        {"op": "add_item", "item": {"id": "travel-1", "text": "Выдвинуться в gym", "depth": 0, "checked": False, "chips": []}},
+        {"op": "add_chip", "item_id": "t1", "chip": {"type": "time", "value": "09:00-09:30", "id": "c1"}},
+        {"op": "add_chip", "item_id": "t2", "chip": {"type": "time", "value": "10:00-11:00", "id": "c2"}},
+        {"op": "reorder_items", "ids": ["t1", "travel-1", "t2"]},
+    ],
+    "summary": "Added times and travel task",
+})
+
+
+def test_build_stores_patches_in_output():
+    with patch("src.workflows.planning._run_agent_text", return_value=BUILD_LLM_RESPONSE):
+        result = _run_build_stage(
+            tasks=EXTRACTED_FOR_CLUSTER,
+            clusters=CLUSTERS,
+            travel_blocks=[{"title": "Выдвинуться в gym", "from_location": "home", "to_location": "gym", "duration_min": 20, "mode": "foot-walking", "insert_before_cluster_index": 1}],
+            locations=LOCATIONS,
+            planning_date="2026-04-05",
+            timezone="Europe/Moscow",
+        )
+    assert "patches" in result.output
+    assert len(result.output["patches"]) == 4
+    assert result.output["summary"] == "Added times and travel task"
+
+
+def test_build_returns_empty_patches_on_bad_json():
+    with patch("src.workflows.planning._run_agent_text", return_value="not json"):
+        result = _run_build_stage(
+            tasks=EXTRACTED_FOR_CLUSTER,
+            clusters=CLUSTERS,
+            travel_blocks=[],
+            locations=LOCATIONS,
+            planning_date="2026-04-05",
+            timezone="UTC",
+        )
+    assert result.output.get("patches") == []

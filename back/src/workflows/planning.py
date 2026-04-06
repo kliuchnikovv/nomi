@@ -257,3 +257,72 @@ def _run_route_stage(
         })
 
     return StageResult(output={"travel_blocks": travel_blocks})
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BUILD stage
+# ──────────────────────────────────────────────────────────────────────────────
+
+_BUILD_PROMPT = """You are building the final day schedule by applying structured patches.
+
+Given clusters, travel blocks, task metadata, and planning date, produce a patch list
+that transforms the raw task list into a fully scheduled day.
+
+Apply patches in this STRICT order:
+1. add_item — insert each travel task (one per travel block, place it before the destination cluster)
+2. add_chip (type=time) — assign "HH:MM-HH:MM" time ranges to ALL tasks and travel tasks
+3. add_chip (type=location) — add location chips to tasks that have a known location
+4. add_chip (type=note) — add note chips with useful comments (travel time, opening hours)
+5. update_item — strip embedded times/locations from task text if they are now captured in chips
+6. reorder_items — include ALL item ids sorted by start time (this MUST be the last patch)
+
+For reorder_items, include ALL item IDs (original + newly added travel items).
+Use specific time ranges only — never "morning" or "evening".
+
+Return ONLY valid JSON:
+{
+  "patches": [
+    {"op": "add_item", "item": {"id": "...", "text": "Выдвинуться в gym", "depth": 0, "checked": false, "chips": []}},
+    {"op": "add_chip", "item_id": "...", "chip": {"type": "time", "value": "09:00-10:00", "id": "..."}},
+    {"op": "reorder_items", "ids": ["id1", "id2", "id3"]}
+  ],
+  "summary": "Added times and travel tasks"
+}"""
+
+
+def _run_build_stage(
+    tasks: list[dict],
+    clusters: list[dict],
+    travel_blocks: list[dict],
+    locations: dict,
+    planning_date: str,
+    timezone: str,
+) -> StageResult:
+    context = {
+        "planning_date": planning_date,
+        "timezone": timezone,
+        "tasks": tasks,
+        "clusters": clusters,
+        "travel_blocks": travel_blocks,
+        "locations": {
+            k: {"hours": v.get("hours", "")}
+            for k, v in locations.items()
+        },
+    }
+    raw = _run_agent_text(_BUILD_PROMPT, json.dumps(context, ensure_ascii=False))
+    try:
+        start = raw.find("{")
+        if start == -1:
+            raise ValueError("no JSON object found")
+        data = json.loads(raw[start:])
+        return StageResult(
+            output={
+                "patches": data.get("patches", []),
+                "summary": data.get("summary", "Расписание построено"),
+            }
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("[PlanningWorkflow] BUILD parse failed: %s", exc)
+        return StageResult(output={"patches": [], "summary": "Расписание построено"})
