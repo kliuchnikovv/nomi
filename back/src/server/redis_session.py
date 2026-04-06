@@ -341,9 +341,17 @@ class RedisSession:
 
         emitted: list[str] = []
         idx = 0
+        logger.info(
+            "[PlannerWorkflow] Starting workflow with status=%s",
+            session_state.get("status"),
+        )
         try:
             # _planning_steps is a sync generator — iterate directly
             for step in _run_planning_steps(workflow, execution_input):
+                logger.info(
+                    "[PlannerWorkflow] Step yielded: %s",
+                    step.step_name if hasattr(step, "step_name") else "unknown",
+                )
                 if self.cancel_event.is_set():
                     break
                 chunk = step.content if hasattr(step, "content") else None
