@@ -155,7 +155,7 @@ export function PlanItemRow({
             <View
                 style={[
                     styles.indentedContent,
-                    { marginLeft: item.depth * 12 },
+                    { marginLeft: item.depth * 24 },
                 ]}
             >
                 <View style={styles.content}>
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
         paddingVertical: 6,
-        paddingLeft: 16,
+        paddingLeft: 8,
         paddingRight: 12,
         backgroundColor: 'transparent',
     },

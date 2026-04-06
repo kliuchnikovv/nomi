@@ -769,7 +769,7 @@ export default function ChatInput(props: Props) {
                     </View>
 
                     <View style={styles.rightActions}>
-                        {assistantWorking && chatMode === 'agent' ? (
+                        {assistantWorking ? (
                             <Pressable
                                 onPress={stopGeneration}
                                 style={({ pressed }) => [

@@ -9,6 +9,7 @@ This is required because the tool executor expects sync methods.
 import asyncio
 import base64
 import logging
+import os
 from typing import Any, Dict, List, Optional, Union
 
 from agno.tools import Toolkit
@@ -26,6 +27,8 @@ class GmailTools(Toolkit):
         client_id: Optional[str] = None,
         client_secret: Optional[str] = None,
         token_uri: Optional[str] = None,
+        user_id: Optional[str] = None,
+        account_email: Optional[str] = None,
     ):
         super().__init__(name="gmail_tools")
         self.access_token = access_token
@@ -33,13 +36,14 @@ class GmailTools(Toolkit):
         self.client_id = client_id
         self.client_secret = client_secret
         self.token_uri = token_uri or "https://oauth2.googleapis.com/token"
+        self.user_id = user_id
+        self.account_email = account_email
         self.base_url = "https://gmail.googleapis.com/gmail/v1"
         self.headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
         }
 
-        # Register tools
         self.register(self.get_recent_emails)
         self.register(self.search_emails)
         self.register(self.get_email)
@@ -53,6 +57,45 @@ class GmailTools(Toolkit):
             "Authorization": f"Bearer {self.access_token}",
             "Accept": "application/json",
         }
+
+    async def _persist_access_token(self, new_access_token: str) -> None:
+        """Persist the refreshed access token via Go API."""
+        api_url = os.getenv("GO_API_URL", "http://localhost:8080")
+        if not self.user_id or not self.account_email or not api_url:
+            logger.debug(
+                "Skipping token persistence: missing user_id=%s, account_email=%s, or api_url",
+                bool(self.user_id),
+                bool(self.account_email),
+            )
+            return
+
+        try:
+            import aiohttp
+
+            async with aiohttp.ClientSession() as session:
+                url = f"{api_url}/api/oauth/gmail/update-token"
+                body = {
+                    "user_id": self.user_id,
+                    "account_email": self.account_email,
+                    "access_token": new_access_token,
+                }
+                async with session.post(
+                    url, json=body, timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
+                    if resp.status == 200:
+                        logger.info(
+                            "Persisted refreshed gmail token for user=%s",
+                            self.user_id,
+                        )
+                    else:
+                        text = await resp.text()
+                        logger.warning(
+                            "Failed to persist refreshed token: status=%d, body=%s",
+                            resp.status,
+                            text[:200],
+                        )
+        except Exception as e:
+            logger.warning("Failed to persist refreshed token: %s", e)
 
     async def _async_refresh_access_token(self) -> bool:
         """Refresh the access token using refresh token."""
@@ -72,13 +115,22 @@ class GmailTools(Toolkit):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(self.token_uri, data=data) as response:
+                    response_text = await response.text()
                     if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(
-                            "Failed to refresh token: %s - %s",
-                            response.status,
-                            error_text,
-                        )
+                        if "invalid_grant" in response_text:
+                            logger.error(
+                                "Gmail token expired (invalid_grant). "
+                                "User must reconnect Gmail in Settings. "
+                                "user_id=%s, account_email=%s",
+                                self.user_id,
+                                self.account_email,
+                            )
+                        else:
+                            logger.error(
+                                "Failed to refresh token: %s - %s",
+                                response.status,
+                                response_text,
+                            )
                         return False
 
                     result = await response.json()
@@ -87,6 +139,7 @@ class GmailTools(Toolkit):
                         self.access_token = new_access_token
                         self._update_headers()
                         logger.info("Successfully refreshed Gmail access token")
+                        await self._persist_access_token(new_access_token)
                         return True
 
                     logger.error("Refresh response missing access_token")
@@ -123,9 +176,8 @@ class GmailTools(Toolkit):
                                 return {}
                             return await retry_response.json()
                     else:
-                        error_text = await response.text()
                         raise Exception(
-                            f"Gmail API error: 401 - Token refresh failed - {error_text}"
+                            "Gmail: token expired. Please reconnect your Gmail in Settings."
                         )
 
                 if response.status >= 400:
@@ -146,11 +198,8 @@ class GmailTools(Toolkit):
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # We're in an async context - need to run in a separate thread
-                # to avoid "event loop is already running" issues
                 import concurrent.futures
 
-                # Create a new thread with its own event loop
                 def run_in_thread():
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
@@ -169,7 +218,6 @@ class GmailTools(Toolkit):
                     self._async_make_request(method, endpoint, data)
                 )
         except RuntimeError:
-            # No event loop, create one
             return asyncio.run(self._async_make_request(method, endpoint, data))
 
     def search_emails(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
@@ -182,14 +230,12 @@ class GmailTools(Toolkit):
         Returns:
             List of email objects with id, threadId, labels
         """
-        # First get message list
         params = f"?q={query}&maxResults={max_results}"
         result = self._make_request("GET", f"users/me/messages{params}")
 
         if not isinstance(result, dict) or "messages" not in result:
             return []
 
-        # Get full message details for each
         messages = result.get("messages", [])
         full_messages = []
 
@@ -217,14 +263,12 @@ class GmailTools(Toolkit):
         if not isinstance(result, dict) or "messages" not in result:
             return []
 
-        # Get message details in lightweight format (metadata only)
         messages = result.get("messages", [])
         full_messages = []
 
         for msg in messages[:limit]:
             msg_id = msg.get("id")
             if msg_id:
-                # Use metadata format for faster loading
                 full_msg = self._make_request(
                     "GET", f"users/me/messages/{msg_id}?format=metadata"
                 )
@@ -267,7 +311,6 @@ class GmailTools(Toolkit):
         Returns:
             Sent message details
         """
-        # Build email content
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
@@ -280,14 +323,11 @@ class GmailTools(Toolkit):
         if bcc:
             msg["bcc"] = bcc
 
-        # Add body
         content_type = "html" if html else "plain"
         msg.attach(MIMEText(body, content_type))
 
-        # Encode to base64 URL-safe
         raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
 
-        # Send via API
         data = {"raw": raw_message}
         result = self._make_request("POST", "users/me/messages/send", data)
 
@@ -313,7 +353,6 @@ class GmailTools(Toolkit):
         Returns:
             Sent message details
         """
-        # Get original message to retrieve thread ID and headers
         original_msg = self.get_email(message_id)
         if not original_msg:
             raise ValueError(f"Message {message_id} not found")
@@ -322,17 +361,14 @@ class GmailTools(Toolkit):
         if not thread_id:
             raise ValueError(f"Thread ID not found for message {message_id}")
 
-        # Extract headers from original message
         headers = original_msg.get("payload", {}).get("headers", [])
         headers_dict = {h["name"]: h["value"] for h in headers}
 
-        # Determine references and in-reply-to
         references = headers_dict.get("References", "")
         message_id_header = headers_dict.get("Message-ID", "")
         subject = headers_dict.get("Subject", "")
         from_addr = headers_dict.get("From", "")
 
-        # Build reply email
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
@@ -349,18 +385,14 @@ class GmailTools(Toolkit):
         if bcc:
             msg["bcc"] = bcc
 
-        # Reply to original sender
         if from_addr:
             msg["To"] = from_addr
 
-        # Add body
         content_type = "html" if html else "plain"
         msg.attach(MIMEText(body, content_type))
 
-        # Encode to base64 URL-safe
         raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
 
-        # Send via API
         data = {"raw": raw_message, "threadId": thread_id}
         result = self._make_request("POST", "users/me/messages/send", data)
 
@@ -388,7 +420,6 @@ class GmailTools(Toolkit):
         Returns:
             Created draft details with id
         """
-        # Build email content
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
@@ -401,14 +432,11 @@ class GmailTools(Toolkit):
         if bcc:
             msg["bcc"] = bcc
 
-        # Add body
         content_type = "html" if html else "plain"
         msg.attach(MIMEText(body, content_type))
 
-        # Encode to base64 URL-safe
         raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
 
-        # Create draft via API
         data = {"message": {"raw": raw_message}}
         result = self._make_request("POST", "users/me/drafts", data)
 
@@ -416,21 +444,7 @@ class GmailTools(Toolkit):
 
 
 def build(params: Dict[str, Any]) -> Toolkit:
-    """Build Gmail tools from parameters.
-
-    Expected params:
-        - access_token: Gmail OAuth access token
-        - refresh_token: Optional refresh token
-        - client_id: Optional client ID for token refresh
-        - client_secret: Optional client secret for token refresh
-        - token_uri: Optional token URI for token refresh
-
-    Args:
-        params: Configuration parameters
-
-    Returns:
-        Configured GmailTools instance
-    """
+    """Build Gmail tools from parameters."""
     logger.info(
         "[GmailBuild] ==================== BUILDING GMAIL TOOLS ===================="
     )
@@ -440,7 +454,6 @@ def build(params: Dict[str, Any]) -> Toolkit:
         list(params.keys()) if isinstance(params, dict) else "not a dict",
     )
 
-    # Mask sensitive data
     masked_params = {}
     if isinstance(params, dict):
         for k, v in params.items():
@@ -456,7 +469,6 @@ def build(params: Dict[str, Any]) -> Toolkit:
                 masked_params[k] = v
     logger.info("[GmailBuild] params (masked): %s", masked_params)
 
-    # Support nested creds dict
     has_creds_key = isinstance(params.get("creds"), dict)
     logger.info("[GmailBuild] Has 'creds' key: %s", has_creds_key)
 
@@ -503,12 +515,29 @@ def build(params: Dict[str, Any]) -> Toolkit:
     client_id = creds_data.get("client_id") or params.get("client_id")
     client_secret = creds_data.get("client_secret") or params.get("client_secret")
     token_uri = creds_data.get("token_uri") or params.get("token_uri")
+    user_id = creds_data.get("user_id") or params.get("user_id")
+    account_email = (
+        creds_data.get("account_email")
+        or creds_data.get("display_name")
+        or params.get("account_email")
+        or params.get("display_name")
+    )
 
-    logger.info("Building Gmail tools with access token")
+    logger.info(
+        "Building Gmail tools: access_token=%s, refresh_token=%s, client_id=%s, client_secret=%s, user_id=%s, account_email=%s",
+        access_token[:20] if access_token else "EMPTY",
+        refresh_token[:20] if refresh_token else "EMPTY",
+        client_id[:20] if client_id else "EMPTY",
+        "PRESENT" if client_secret else "EMPTY",
+        user_id,
+        account_email,
+    )
     return GmailTools(
         access_token=access_token,
         refresh_token=refresh_token,
         client_id=client_id,
         client_secret=client_secret,
         token_uri=token_uri,
+        user_id=user_id,
+        account_email=account_email,
     )
