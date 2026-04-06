@@ -16,6 +16,10 @@ from agno.tools import Toolkit
 
 logger = logging.getLogger(__name__)
 
+# Maximum size for tool output strings (5MB, well below the 10MB API limit)
+MAX_TOOL_OUTPUT_SIZE = 5 * 1024 * 1024  # 5 MB
+TRUNCATION_NOTICE = "\n\n[TRUNCATED: content exceeded maximum size limit]"
+
 
 class GmailTools(Toolkit):
     """Gmail integration tools for email management (server-side)."""
@@ -220,12 +224,16 @@ class GmailTools(Toolkit):
         except RuntimeError:
             return asyncio.run(self._async_make_request(method, endpoint, data))
 
-    def search_emails(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+    def search_emails(
+        self, query: str, max_results: int = 10, include_body: bool = True
+    ) -> List[Dict[str, Any]]:
         """Search emails in Gmail.
 
         Args:
             query: Gmail search query (same syntax as Gmail search box)
             max_results: Maximum number of emails to return
+            include_body: Whether to fetch full body content (default: True).
+                When False, uses format=metadata (smaller response).
 
         Returns:
             List of email objects with id, threadId, labels
@@ -242,17 +250,28 @@ class GmailTools(Toolkit):
         for msg in messages[:max_results]:
             msg_id = msg.get("id")
             if msg_id:
-                full_msg = self._make_request("GET", f"users/me/messages/{msg_id}")
+                if include_body:
+                    full_msg = self._make_request("GET", f"users/me/messages/{msg_id}")
+                else:
+                    full_msg = self._make_request(
+                        "GET", f"users/me/messages/{msg_id}?format=metadata"
+                    )
                 if isinstance(full_msg, dict):
+                    if include_body:
+                        full_msg = self._truncate_if_needed(full_msg)
                     full_messages.append(full_msg)
 
         return full_messages
 
-    def get_recent_emails(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_recent_emails(
+        self, limit: int = 10, include_body: bool = False
+    ) -> List[Dict[str, Any]]:
         """Get recent emails from the user's Gmail inbox.
 
         Args:
             limit: Maximum number of emails to return
+            include_body: Whether to fetch full body content (default: False).
+                When False, uses format=metadata (smaller response, recommended).
 
         Returns:
             List of email objects with id, threadId, snippet, headers
@@ -269,25 +288,153 @@ class GmailTools(Toolkit):
         for msg in messages[:limit]:
             msg_id = msg.get("id")
             if msg_id:
-                full_msg = self._make_request(
-                    "GET", f"users/me/messages/{msg_id}?format=metadata"
-                )
+                if include_body:
+                    full_msg = self._make_request("GET", f"users/me/messages/{msg_id}")
+                else:
+                    full_msg = self._make_request(
+                        "GET", f"users/me/messages/{msg_id}?format=metadata"
+                    )
                 if isinstance(full_msg, dict):
+                    if include_body:
+                        full_msg = self._truncate_if_needed(full_msg)
                     full_messages.append(full_msg)
 
         return full_messages
 
-    def get_email(self, message_id: str) -> Dict[str, Any]:
-        """Get full email content by message ID.
+    def _truncate_if_needed(self, data: Any) -> Any:
+        """Truncate large data structures to stay within API limits.
+
+        Recursively processes dicts and lists, truncating string values
+        that exceed the maximum size.
+        """
+        import json
+
+        # Check current size
+        try:
+            size = len(json.dumps(data, ensure_ascii=False))
+        except (TypeError, ValueError):
+            return data
+
+        if size <= MAX_TOOL_OUTPUT_SIZE:
+            return data
+
+        # Truncate string values in payload parts
+        if isinstance(data, dict):
+            payload = data.get("payload", {})
+            if payload:
+                parts = payload.get("parts", [])
+                for part in parts:
+                    if isinstance(part, dict):
+                        body = part.get("body", {})
+                        if isinstance(body, dict):
+                            body_data = body.get("data", "")
+                            if isinstance(body_data, str) and len(body_data) > 100000:
+                                body["data"] = body_data[:100000] + TRUNCATION_NOTICE
+                        body_snippet = body.get("snippet", "")
+                        if isinstance(body_snippet, str) and len(body_snippet) > 5000:
+                            body["snippet"] = body_snippet[:5000] + TRUNCATION_NOTICE
+
+                # Also handle single part messages
+                if "body" in payload and "data" in payload["body"]:
+                    body_data = payload["body"]["data"]
+                    if isinstance(body_data, str) and len(body_data) > 100000:
+                        payload["body"]["data"] = body_data[:100000] + TRUNCATION_NOTICE
+
+        # Final check - if still too large, serialize and truncate
+        try:
+            size = len(json.dumps(data, ensure_ascii=False))
+        except (TypeError, ValueError):
+            return data
+
+        if size > MAX_TOOL_OUTPUT_SIZE:
+            json_str = json.dumps(data, ensure_ascii=False)
+            json_str = json_str[:MAX_TOOL_OUTPUT_SIZE] + TRUNCATION_NOTICE
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                return {
+                    "error": "Email content too large to display",
+                    "truncated": True,
+                }
+
+        return data
+
+    def get_email(
+        self,
+        message_id: str,
+        include_body: bool = True,
+        max_body_length: int = 50000,
+    ) -> Dict[str, Any]:
+        """Get email content by message ID.
 
         Args:
             message_id: Gmail message ID
+            include_body: Whether to fetch the full body (default: True).
+                When False, returns only headers and metadata (much smaller response).
+            max_body_length: Maximum characters for body text when include_body=True.
+                Body exceeding this limit will be truncated.
 
         Returns:
-            Full email object with headers, body, attachments
+            Email object with headers, optionally body and attachments
         """
-        result = self._make_request("GET", f"users/me/messages/{message_id}")
-        return result if isinstance(result, dict) else {}
+        if include_body:
+            result = self._make_request("GET", f"users/me/messages/{message_id}")
+        else:
+            result = self._make_request(
+                "GET", f"users/me/messages/{message_id}?format=metadata"
+            )
+
+        if not isinstance(result, dict):
+            return {}
+
+        if include_body:
+            result = self._truncate_if_needed(result)
+
+            # Also truncate plain text body at the top level for readability
+            self._truncate_body_text(result, max_body_length)
+
+        return result
+
+    def _truncate_body_text(self, data: Dict[str, Any], max_length: int) -> None:
+        """Truncate body text in-place to keep responses readable but bounded."""
+        if not isinstance(data, dict):
+            return
+
+        payload = data.get("payload", {})
+        if not isinstance(payload, dict):
+            return
+
+        def _truncate_parts(parts):
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                body = part.get("body", {})
+                if isinstance(body, dict):
+                    snippet = body.get("snippet", "")
+                    if isinstance(snippet, str) and len(snippet) > max_length:
+                        body["snippet"] = snippet[:max_length] + TRUNCATION_NOTICE
+
+                    # Truncate attachment size info
+                    if (
+                        "size" in body
+                        and isinstance(body["size"], int)
+                        and body["size"] > max_body_length * 10
+                    ):
+                        body["data"] = TRUNCATION_NOTICE
+
+                # Recurse into nested parts
+                if "parts" in part:
+                    _truncate_parts(part["parts"])
+
+        if "parts" in payload:
+            _truncate_parts(payload["parts"])
+
+        # Single-part message
+        if "body" in payload and isinstance(payload["body"], dict):
+            body = payload["body"]
+            snippet = body.get("snippet", "")
+            if isinstance(snippet, str) and len(snippet) > max_length:
+                body["snippet"] = snippet[:max_length] + TRUNCATION_NOTICE
 
     def send_email(
         self,
