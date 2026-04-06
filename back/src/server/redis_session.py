@@ -17,6 +17,10 @@ from src.constants import Redis as RedisConstants
 from src.server.models import Frame, Op, Kind
 from src.server.utils import make_meta, make_error, make_done, make_data
 from src.tools.models import ToolSpec
+from src.workflows.models import PlanStatus
+from src.workflows.planning import build_planning_workflow
+from src.workflows.planning import PlanningInput as WorkflowPlanningInput
+from src.workflows.planning import _planning_steps as _run_planning_steps
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +236,142 @@ class RedisSession:
 
         self.next_id = frame.id + 1
         return self.next_id
+
+    @staticmethod
+    def _should_use_workflow(session_state: dict) -> bool:
+        """Return True if the planner should use the multi-stage workflow.
+
+        Returns False only when the plan is already built (ITERATE status),
+        where the lightweight planner agent handles incremental edits.
+        """
+        status = session_state.get("status", "")
+        return status != PlanStatus.ITERATE
+
+    async def _load_planner_session_state(self) -> dict:
+        """Load persisted workflow session_state for this chat from Redis."""
+        try:
+            key = f"planner_state:{self.chat_id}"
+            raw = await self.redis_client.get(key)
+            if raw:
+                return json.loads(raw)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+        return {}
+
+    async def _save_planner_session_state(self, state: dict) -> None:
+        """Persist workflow session_state to Redis (TTL: 24h)."""
+        try:
+            key = f"planner_state:{self.chat_id}"
+            await self.redis_client.set(key, json.dumps(state, default=str), ex=86400)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("[PlannerSession] Failed to save state: %s", exc)
+
+    async def _run_planning_workflow_steps(
+        self,
+        user_message: str,
+        payload: dict,
+        session_state: dict,
+        msg_chat_id: str,
+        message_id: str,
+    ) -> list[str]:
+        """Run the planning workflow, stream StepOutput content as text frames.
+
+        Returns the list of text chunks emitted (for delivery handler).
+        Applies plan_patches to the mobile client if BUILD stage completed.
+        """
+        from agno.workflow.types import WorkflowExecutionInput
+        from src.workflows.models import PlanTask
+
+        # Build PlanningInput from payload
+        raw_tasks = payload.get("tasks", [])
+        tasks = [PlanTask(**t) if isinstance(t, dict) else t for t in raw_tasks]
+        planning_input = WorkflowPlanningInput(
+            user_message=user_message,
+            chat_id=self.chat_id,
+            user_id=self.user_id or "",
+            planning_date=payload.get("planning_date", ""),
+            tasks=tasks,
+            session_state=session_state,
+            timezone=payload.get("timezone", "UTC"),
+        )
+
+        workflow = build_planning_workflow(
+            session_id=self.chat_id,
+            session_state=session_state,
+        )
+
+        execution_input = WorkflowExecutionInput(
+            input=user_message,
+            additional_data={"planning_input": planning_input},
+        )
+
+        emitted: list[str] = []
+        idx = 0
+        try:
+            # _planning_steps is a sync generator — iterate directly
+            for step in _run_planning_steps(workflow, execution_input):
+                if self.cancel_event.is_set():
+                    break
+                chunk = step.content if hasattr(step, "content") else None
+                if chunk:
+                    chunk = str(chunk)
+                    emitted.append(chunk)
+                    await self._send_frame(
+                        make_data(
+                            self.next_id,
+                            Op.MESSAGE,
+                            msg_chat_id,
+                            {
+                                "ix": idx,
+                                "eof": False,
+                                "message": chunk,
+                                "message_id": message_id,
+                            },
+                        )
+                    )
+                    idx += 1
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error(
+                "[PlannerWorkflow] Error running workflow: %s", exc, exc_info=True
+            )
+            fallback = "Произошла ошибка при планировании. Попробуй ещё раз."
+            emitted.append(fallback)
+            await self._send_frame(
+                make_data(
+                    self.next_id,
+                    Op.MESSAGE,
+                    msg_chat_id,
+                    {"ix": idx, "eof": False, "message": fallback, "message_id": message_id},
+                )
+            )
+
+        # Apply plan_patches if BUILD stage generated them
+        new_state = workflow.session_state or {}
+        if "plan_patches" in new_state:
+            patch_data = new_state.pop("plan_patches")
+            try:
+                await self._send_client_action_and_wait(
+                    "patch_plan_document",
+                    "edit",
+                    patch_data,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.error(
+                    "[PlannerWorkflow] Failed to apply plan patches: %s", exc
+                )
+
+        # Persist updated session_state
+        await self._save_planner_session_state(new_state)
+
+        return emitted
 
     async def _send_client_action_and_wait(
         self, plugin: str, method: str, params: dict[str, Any]
@@ -876,188 +1016,211 @@ class RedisSession:
         delivery_text_buffer: list[str] = []
 
         try:
-            # Stream agent events for real-time response.
-            # Both regular chat and planner (command.type="planner" / session_type="planning")
-            # use the same agent streaming path — PlannerAgent is selected by AgentFactory
-            # based on command_desc["type"] == "planner".
-            stream_iter = self._stream_agent_events(text, payload.get("attachments"))
-            async for event in stream_iter:
-                if self.cancel_event.is_set():
-                    break
+            # For planner chats in workflow stages (not ITERATE), use the multi-stage
+            # planning workflow. In ITERATE status, fall through to the regular planner agent.
+            is_planner = (
+                isinstance(self.command_desc, dict)
+                and self.command_desc.get("type", "").lower() == "planner"
+            )
+            used_workflow = False
 
-                evt_type = event.get("type")
-
-                if evt_type == "content_done":
-                    # Content generation is complete — send DONE immediately
-                    # without waiting for learning/memory background tasks.
-                    done_payload: dict[str, Any] = {"message_id": message_id}
-                    completed_content = getattr(
-                        self, "_last_run_completed_content", None
+            if is_planner:
+                planner_state = await self._load_planner_session_state()
+                if self._should_use_workflow(planner_state):
+                    used_workflow = True
+                    await self._run_planning_workflow_steps(
+                        user_message=text,
+                        payload=payload,
+                        session_state=planner_state,
+                        msg_chat_id=msg_chat_id,
+                        message_id=message_id,
                     )
-                    if completed_content is not None:
-                        done_payload["content"] = str(completed_content)
-                    await self._send_frame(
-                        make_done(self.next_id, msg_chat_id, done_payload)
-                    )
-                    done_sent = True
+                    # Workflow manages its own done frame below — skip agent path
+                    if not done_sent:
+                        await self._send_frame(
+                            make_done(self.next_id, msg_chat_id, {"message_id": message_id})
+                        )
+                        done_sent = True
 
-                    # Deliver to external channel via plugin delivery handler
-                    if delivery_handler:
-                        full_text = "".join(delivery_text_buffer)
-                        if not full_text and completed_content:
-                            full_text = str(completed_content)
-                        if full_text:
-                            await delivery_handler.deliver(
-                                full_text, self._delivery_context
-                            )
+            if not used_workflow:
+                stream_iter = self._stream_agent_events(text, payload.get("attachments"))
+                async for event in stream_iter:
+                    if self.cancel_event.is_set():
+                        break
 
-                    # Drain the remaining stream in background so learning/memory
-                    # tasks can finish without blocking the client.
-                    async def _drain_remaining(it):
-                        try:
-                            async for ev in it:
-                                # Process RunCompleted to capture final content
-                                ev_type = (
-                                    ev.get("type") if isinstance(ev, dict) else None
+                    evt_type = event.get("type")
+
+                    if evt_type == "content_done":
+                        # Content generation is complete — send DONE immediately
+                        # without waiting for learning/memory background tasks.
+                        done_payload: dict[str, Any] = {"message_id": message_id}
+                        completed_content = getattr(
+                            self, "_last_run_completed_content", None
+                        )
+                        if completed_content is not None:
+                            done_payload["content"] = str(completed_content)
+                        await self._send_frame(
+                            make_done(self.next_id, msg_chat_id, done_payload)
+                        )
+                        done_sent = True
+
+                        # Deliver to external channel via plugin delivery handler
+                        if delivery_handler:
+                            full_text = "".join(delivery_text_buffer)
+                            if not full_text and completed_content:
+                                full_text = str(completed_content)
+                            if full_text:
+                                await delivery_handler.deliver(
+                                    full_text, self._delivery_context
                                 )
-                                if ev_type == "text" and ev.get("content"):
-                                    # Late text after content_done — update stored content
-                                    pass
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception as e:
-                            logger.warning(
-                                "[RedisSession] Error draining post-done stream: %s", e
-                            )
 
-                    asyncio.create_task(_drain_remaining(stream_iter))
-                    break
+                        # Drain the remaining stream in background so learning/memory
+                        # tasks can finish without blocking the client.
+                        async def _drain_remaining(it):
+                            try:
+                                async for ev in it:
+                                    # Process RunCompleted to capture final content
+                                    ev_type = (
+                                        ev.get("type") if isinstance(ev, dict) else None
+                                    )
+                                    if ev_type == "text" and ev.get("content"):
+                                        # Late text after content_done — update stored content
+                                        pass
+                            except asyncio.CancelledError:
+                                raise
+                            except Exception as e:
+                                logger.warning(
+                                    "[RedisSession] Error draining post-done stream: %s", e
+                                )
 
-                elif evt_type == "text":
-                    chunk = event.get("content", "")
-                    agent_name = event.get("agent_name")
-                    if chunk:
-                        if delivery_handler and delivery_handler.should_buffer():
-                            delivery_text_buffer.append(chunk)
-                        payload_data = {
-                            "ix": idx,
-                            "eof": False,
-                            "message": chunk,
-                            "message_id": message_id,
-                        }
-                        if agent_name:
-                            payload_data["agent_name"] = agent_name
-                        await self._send_frame(
-                            make_data(
-                                self.next_id, Op.MESSAGE, msg_chat_id, payload_data
-                            )
-                        )
-                        idx += 1
+                        asyncio.create_task(_drain_remaining(stream_iter))
+                        break
 
-                elif evt_type == "member_response":
-                    chunk = event.get("content", "")
-                    if chunk:
-                        if delivery_handler and delivery_handler.should_buffer():
-                            delivery_text_buffer.append(chunk)
-                        # Send as a regular message part, but you might want to mark it
-                        # so the frontend knows who sent it.
-                        payload_data = {
-                            "ix": idx,
-                            "eof": False,
-                            "message": chunk,
-                            "message_id": message_id,
-                            "agent_name": event.get("agent_name"),  # Pass agent name
-                            "type": "member_response",
-                        }
-                        await self._send_frame(
-                            make_data(
-                                self.next_id, Op.MESSAGE, msg_chat_id, payload_data
-                            )
-                        )
-                        idx += 1
-
-                elif evt_type == "tool_call":
-                    tool_data = event.get("tool", {})
-                    safe_tool = {
-                        "name": getattr(tool_data, "tool_name", "unknown")
-                        if hasattr(tool_data, "tool_name")
-                        else tool_data.get("name", "unknown"),
-                        "arguments": getattr(tool_data, "tool_args", {})
-                        if hasattr(tool_data, "tool_args")
-                        else tool_data.get("arguments", {}),
-                        "result": getattr(tool_data, "result", None)
-                        if hasattr(tool_data, "result")
-                        else tool_data.get("result", None),
-                    }
-
-                    # Handle mock/legacy
-                    if hasattr(tool_data, "name") and not isinstance(tool_data, dict):
-                        safe_tool["name"] = tool_data.name
-
-                    # Handle suggest_actions
-                    # ... (Omitting complex suggestion logic for MVP, can add if needed)
-
-                    await self._send_frame(
-                        make_data(
-                            self.next_id,
-                            Op.MESSAGE,
-                            msg_chat_id,
-                            {
-                                "type": "tool_call",
-                                "tool": safe_tool,
+                    elif evt_type == "text":
+                        chunk = event.get("content", "")
+                        agent_name = event.get("agent_name")
+                        if chunk:
+                            if delivery_handler and delivery_handler.should_buffer():
+                                delivery_text_buffer.append(chunk)
+                            payload_data = {
+                                "ix": idx,
+                                "eof": False,
+                                "message": chunk,
                                 "message_id": message_id,
-                                "agent_name": event.get("agent_name"),
+                            }
+                            if agent_name:
+                                payload_data["agent_name"] = agent_name
+                            await self._send_frame(
+                                make_data(
+                                    self.next_id, Op.MESSAGE, msg_chat_id, payload_data
+                                )
+                            )
+                            idx += 1
+
+                    elif evt_type == "member_response":
+                        chunk = event.get("content", "")
+                        if chunk:
+                            if delivery_handler and delivery_handler.should_buffer():
+                                delivery_text_buffer.append(chunk)
+                            # Send as a regular message part, but you might want to mark it
+                            # so the frontend knows who sent it.
+                            payload_data = {
+                                "ix": idx,
+                                "eof": False,
+                                "message": chunk,
+                                "message_id": message_id,
+                                "agent_name": event.get("agent_name"),  # Pass agent name
+                                "type": "member_response",
+                            }
+                            await self._send_frame(
+                                make_data(
+                                    self.next_id, Op.MESSAGE, msg_chat_id, payload_data
+                                )
+                            )
+                            idx += 1
+
+                    elif evt_type == "tool_call":
+                        tool_data = event.get("tool", {})
+                        safe_tool = {
+                            "name": getattr(tool_data, "tool_name", "unknown")
+                            if hasattr(tool_data, "tool_name")
+                            else tool_data.get("name", "unknown"),
+                            "arguments": getattr(tool_data, "tool_args", {})
+                            if hasattr(tool_data, "tool_args")
+                            else tool_data.get("arguments", {}),
+                            "result": getattr(tool_data, "result", None)
+                            if hasattr(tool_data, "result")
+                            else tool_data.get("result", None),
+                        }
+
+                        # Handle mock/legacy
+                        if hasattr(tool_data, "name") and not isinstance(tool_data, dict):
+                            safe_tool["name"] = tool_data.name
+
+                        # Handle suggest_actions
+                        # ... (Omitting complex suggestion logic for MVP, can add if needed)
+
+                        await self._send_frame(
+                            make_data(
+                                self.next_id,
+                                Op.MESSAGE,
+                                msg_chat_id,
+                                {
+                                    "type": "tool_call",
+                                    "tool": safe_tool,
+                                    "message_id": message_id,
+                                    "agent_name": event.get("agent_name"),
+                                },
+                            )
+                        )
+
+                    elif evt_type == "reasoning":
+                        content = event.get("content", "")
+                        agent_name = event.get("agent_name")
+                        if content:
+                            payload_data = {
+                                "type": "reasoning",
+                                "content": content,
+                                "message_id": message_id,
+                            }
+                            if agent_name:
+                                payload_data["agent_name"] = agent_name
+                            await self._send_frame(
+                                make_data(
+                                    self.next_id, Op.MESSAGE, msg_chat_id, payload_data
+                                )
+                            )
+
+                    elif evt_type == "error":
+                        # Handle agent errors (e.g., RunErrorEvent from Agno)
+                        error_message = event.get("message", "Agent execution failed")
+                        error_code = event.get("code", "agent_error")
+                        error_details = event.get("details", {})
+                        error_http = event.get("http", 500)
+
+                        logger.error(
+                            "[RedisSession] Agent error event: %s",
+                            error_message,
+                            extra={
+                                "chat_id": msg_chat_id,
+                                "user_id": self.user_id,
+                                "error_code": error_code,
+                                "error_details": error_details,
                             },
                         )
-                    )
 
-                elif evt_type == "reasoning":
-                    content = event.get("content", "")
-                    agent_name = event.get("agent_name")
-                    if content:
-                        payload_data = {
-                            "type": "reasoning",
-                            "content": content,
-                            "message_id": message_id,
-                        }
-                        if agent_name:
-                            payload_data["agent_name"] = agent_name
                         await self._send_frame(
-                            make_data(
-                                self.next_id, Op.MESSAGE, msg_chat_id, payload_data
+                            make_error(
+                                self.next_id,
+                                error_code,
+                                msg_chat_id,
+                                error_message,
+                                http=error_http,
+                                details=error_details,
                             )
                         )
-
-                elif evt_type == "error":
-                    # Handle agent errors (e.g., RunErrorEvent from Agno)
-                    error_message = event.get("message", "Agent execution failed")
-                    error_code = event.get("code", "agent_error")
-                    error_details = event.get("details", {})
-                    error_http = event.get("http", 500)
-
-                    logger.error(
-                        "[RedisSession] Agent error event: %s",
-                        error_message,
-                        extra={
-                            "chat_id": msg_chat_id,
-                            "user_id": self.user_id,
-                            "error_code": error_code,
-                            "error_details": error_details,
-                        },
-                    )
-
-                    await self._send_frame(
-                        make_error(
-                            self.next_id,
-                            error_code,
-                            msg_chat_id,
-                            error_message,
-                            http=error_http,
-                            details=error_details,
-                        )
-                    )
-                    # Don't send done frame after error - error frame is terminal
-                    return
+                        # Don't send done frame after error - error frame is terminal
+                        return
 
             # Fallback: if content_done was never received (e.g. older Agno
             # version or non-streaming agent), send DONE after the stream ends.
