@@ -25,6 +25,30 @@ from src.workflows.planning import _planning_steps as _run_planning_steps
 logger = logging.getLogger(__name__)
 
 
+def _parse_tasks_from_message(message: str) -> list[dict]:
+    """Parse task items from message text.
+
+    Expected format: "ID:xxx Task description" or "[Current plan:\nID:xxx Task...]"
+    Returns list of {"id": "...", "text": "..."} dicts.
+    """
+    import re
+
+    tasks = []
+    # Match patterns like "ID:abc123 Task text" - stop at newline or end
+    pattern = r"ID:(\S+)\s+([^\n]+)"
+    matches = re.findall(pattern, message)
+    for task_id, task_text in matches:
+        task_text = task_text.strip()
+        # Strip trailing chips like [time:xxx 09:00-10:00], [location:...], or closing brackets
+        task_text = re.sub(r"\s*\[time:\S+\s+[^]]+\]$", "", task_text)
+        task_text = re.sub(r"\s*\[location:\S+\s+[^]]+\]$", "", task_text)
+        task_text = re.sub(r"\s*\]+$", "", task_text)
+        task_text = task_text.strip()
+        if task_text:
+            tasks.append({"id": task_id, "text": task_text})
+    return tasks
+
+
 class RedisSession:
     def __init__(
         self,
@@ -209,7 +233,8 @@ class RedisSession:
                 await self.redis_client.publish(channel, payload_json)
             except RedisConnectionError as e:
                 logger.warning(
-                    "[RedisSession] Publish failed (ConnectionError), reconnecting: %s", e
+                    "[RedisSession] Publish failed (ConnectionError), reconnecting: %s",
+                    e,
                 )
                 await self._reconnect_redis()
                 if self.redis_client:
@@ -288,6 +313,11 @@ class RedisSession:
 
         # Build PlanningInput from payload
         raw_tasks = payload.get("tasks", [])
+
+        # If no tasks in payload, try to parse from message text
+        if not raw_tasks and user_message:
+            raw_tasks = _parse_tasks_from_message(user_message)
+
         tasks = [PlanTask(**t) if isinstance(t, dict) else t for t in raw_tasks]
         planning_input = WorkflowPlanningInput(
             user_message=user_message,
@@ -347,7 +377,12 @@ class RedisSession:
                     self.next_id,
                     Op.MESSAGE,
                     msg_chat_id,
-                    {"ix": idx, "eof": False, "message": fallback, "message_id": message_id},
+                    {
+                        "ix": idx,
+                        "eof": False,
+                        "message": fallback,
+                        "message_id": message_id,
+                    },
                 )
             )
 
@@ -364,9 +399,7 @@ class RedisSession:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.error(
-                    "[PlannerWorkflow] Failed to apply plan patches: %s", exc
-                )
+                logger.error("[PlannerWorkflow] Failed to apply plan patches: %s", exc)
 
         # Persist updated session_state
         await self._save_planner_session_state(new_state)
@@ -839,7 +872,9 @@ class RedisSession:
                     "exceeded",
                 )
             ):
-                logger.debug("[RedisSession] Skipping fact extraction — response looks like an error")
+                logger.debug(
+                    "[RedisSession] Skipping fact extraction — response looks like an error"
+                )
                 return
             if isinstance(content, str):
                 for line in content.splitlines():
@@ -1044,12 +1079,16 @@ class RedisSession:
                     # Workflow manages its own done frame below — skip agent path
                     if not done_sent:
                         await self._send_frame(
-                            make_done(self.next_id, msg_chat_id, {"message_id": message_id})
+                            make_done(
+                                self.next_id, msg_chat_id, {"message_id": message_id}
+                            )
                         )
                         done_sent = True
 
             if not used_workflow:
-                stream_iter = self._stream_agent_events(text, payload.get("attachments"))
+                stream_iter = self._stream_agent_events(
+                    text, payload.get("attachments")
+                )
                 async for event in stream_iter:
                     if self.cancel_event.is_set():
                         break
@@ -1096,7 +1135,8 @@ class RedisSession:
                                 raise
                             except Exception as e:
                                 logger.warning(
-                                    "[RedisSession] Error draining post-done stream: %s", e
+                                    "[RedisSession] Error draining post-done stream: %s",
+                                    e,
                                 )
 
                         asyncio.create_task(_drain_remaining(stream_iter))
@@ -1135,7 +1175,9 @@ class RedisSession:
                                 "eof": False,
                                 "message": chunk,
                                 "message_id": message_id,
-                                "agent_name": event.get("agent_name"),  # Pass agent name
+                                "agent_name": event.get(
+                                    "agent_name"
+                                ),  # Pass agent name
                                 "type": "member_response",
                             }
                             await self._send_frame(
@@ -1160,7 +1202,9 @@ class RedisSession:
                         }
 
                         # Handle mock/legacy
-                        if hasattr(tool_data, "name") and not isinstance(tool_data, dict):
+                        if hasattr(tool_data, "name") and not isinstance(
+                            tool_data, dict
+                        ):
                             safe_tool["name"] = tool_data.name
 
                         # Handle suggest_actions
@@ -1561,7 +1605,9 @@ class RedisSession:
             real_agent = agent._agent
 
         # Load history to ensure we have the latest (including the bad state)
-        if hasattr(real_agent, "read_chat_history") and callable(real_agent.read_chat_history):
+        if hasattr(real_agent, "read_chat_history") and callable(
+            real_agent.read_chat_history
+        ):
             try:
                 if asyncio.iscoroutinefunction(real_agent.read_chat_history):
                     await real_agent.read_chat_history()

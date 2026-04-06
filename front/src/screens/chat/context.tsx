@@ -134,6 +134,8 @@ export function ChatProvider({
     const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
+    const generatingForChatRef = useRef<string | null>(null);
+    const skipReconnectResetRef = useRef(false);
     const RESPONSE_TIMEOUT_MS = 300_000; // 5 minutes — safety net if DONE/ERROR never arrives
 
     // Model selection state
@@ -258,20 +260,24 @@ export function ChatProvider({
     useEffect(() => {
         if (!activeChatID || activeChatID === emptyChatID) return;
         if (!token) return;
-        // Reset loading state from previous chat immediately (before animation)
-        setAssistantWorking(false);
-        setActiveAgentsCount(0);
-        const task = InteractionManager.runAfterInteractions(() => {
-            socket.setChannel('chat');
-            socket.setChatId(activeChatID);
-            if (socket.isReady()) {
-                socket.close();
-            }
-            if (!socket.isReady()) {
-                socket.connect();
-            }
-        });
-        return () => task.cancel();
+        // Reset loading state from previous chat immediately (before animation),
+        // but skip if we're actively generating (e.g. new chat created during sendStreamingMessage)
+        const isGenerating = generatingForChatRef.current !== null;
+        console.log('[ChatContext] useEffect activeChatID changed:', activeChatID, 'isGenerating=', isGenerating);
+        skipReconnectResetRef.current = isGenerating;
+        if (!isGenerating) {
+            setAssistantWorking(false);
+            setActiveAgentsCount(0);
+        }
+        // Directly run socket setup without InteractionManager to avoid async issues
+        socket.setChannel('chat');
+        socket.setChatId(activeChatID);
+        if (socket.isReady()) {
+            socket.close();
+        }
+        if (!socket.isReady()) {
+            socket.connect();
+        }
     }, [activeChatID, token]);
 
     const [selectedTeamId, setSelectedTeamId] = useState<string | null>(
@@ -487,6 +493,10 @@ export function ChatProvider({
             let messageID: string | undefined = reuseMessageId;
             const timestamp = Date.now();
 
+            // Mark that we're about to generate — must be set BEFORE any await that
+            // might trigger setActiveChatID (e.g. createChat), so the useEffect guard sees it.
+            generatingForChatRef.current = chatIdToUse || 'pending';
+
             if (pluginThreadMeta) {
                 // Plugin mode
                 chatIdToUse = `plugin_${pluginThreadMeta.provider}_${pluginThreadMeta.chatId}`;
@@ -592,10 +602,13 @@ export function ChatProvider({
 
             const sessionId = `sess_${timestamp}`;
 
+            generatingForChatRef.current = chatIdToUse;
+            console.log('[ChatContext] Setting assistantWorking=true, chatId=', chatIdToUse);
             setAssistantWorking(true);
 
             // Use Global Socket
             if (!chatIdToUse || !messageID) {
+                generatingForChatRef.current = null;
                 setAssistantWorking(false);
                 setError('Error sending message');
                 return;
@@ -610,6 +623,7 @@ export function ChatProvider({
             // Safety-net timeout: if DONE/ERROR never arrives (e.g. connection lost),
             // auto-clear assistantWorking so the UI doesn't stay stuck forever.
             responseTimeoutRef.current = setTimeout(() => {
+                generatingForChatRef.current = null;
                 setAssistantWorking(current => {
                     if (current) {
                         setActiveAgentsCount(0);
@@ -1047,6 +1061,7 @@ export function ChatProvider({
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
                 }
+                generatingForChatRef.current = null;
                 // Mark as low-priority transition so in-flight gestures aren't interrupted
                 startTransition(() => {
                     setAssistantWorking(false);
@@ -1067,6 +1082,7 @@ export function ChatProvider({
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
                 }
+                generatingForChatRef.current = null;
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
@@ -1108,6 +1124,12 @@ export function ChatProvider({
                 }
             },
             onReconnect: () => {
+                // Skip reset if this reconnect was triggered by chat creation
+                // during active generation (sendStreamingMessage flow)
+                if (skipReconnectResetRef.current) {
+                    skipReconnectResetRef.current = false;
+                    return;
+                }
                 // Socket reconnected after interruption — any in-progress generation was
                 // likely lost. Clear loading state so the UI doesn't stay stuck.
                 // The final message (if completed) is persisted in DB and will load on refresh.
@@ -1139,6 +1161,7 @@ export function ChatProvider({
                 }
                 // Flush final streaming state before transitioning UI
                 useChatStore.getState().flushPendingUpdates(chatId);
+                generatingForChatRef.current = null;
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
@@ -1272,6 +1295,7 @@ export function ChatProvider({
         if (activeChatID) {
             socket.sendStop(activeChatID);
         }
+        generatingForChatRef.current = null;
         setAssistantWorking(false);
     }, [activeChatID]);
 
