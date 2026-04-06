@@ -486,6 +486,7 @@ def _planning_steps(
 
     # ── CLUSTER ───────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.CLUSTER:
+        logger.info("[PlanningWorkflow] Running CLUSTER stage")
         extracted = state.get("extract_output", {}).get("extracted_tasks", tasks)
         locations = state.get("recon_output", {}).get("locations", {})
         result = _run_cluster_stage(extracted, locations)
@@ -497,20 +498,24 @@ def _planning_steps(
             return
         state["cluster_output"] = result.output
         state["status"] = PlanStatus.ROUTE
+        logger.info("[PlanningWorkflow] CLUSTER done, moving to ROUTE")
         return
 
     # ── ROUTE ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.ROUTE:
+        logger.info("[PlanningWorkflow] Running ROUTE stage")
         clusters = state.get("cluster_output", {}).get("clusters", [])
         locations = state.get("recon_output", {}).get("locations", {})
         transport = state.get("recon_output", {}).get("transport_mode", "walking")
         result = _run_route_stage(clusters, locations, transport)
         state["route_output"] = result.output
         state["status"] = PlanStatus.BUILD
+        logger.info("[PlanningWorkflow] ROUTE done, moving to BUILD")
         return
 
     # ── BUILD ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.BUILD:
+        logger.info("[PlanningWorkflow] Running BUILD stage")
         extracted = state.get("extract_output", {}).get("extracted_tasks", tasks)
         clusters = state.get("cluster_output", {}).get("clusters", [])
         travel_blocks = state.get("route_output", {}).get("travel_blocks", [])
