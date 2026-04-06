@@ -52,3 +52,18 @@ def make_done(id: int, chat_id: str | None, payload: dict | None = None, **kw) -
         payload=payload,
         **kw,
     )
+
+
+def make_signal(id: int, op: Op, chat_id: str | None, payload: dict, **kw) -> Frame:
+    return Frame(
+        id=id, ts=now(), kind=Kind.SIGNAL, op=op, chat_id=chat_id, payload=payload, **kw
+    )
+
+
+def make_generation_status(id: int, chat_id: str | None, status: str | None) -> Frame:
+    return make_signal(
+        id,
+        Op.SIGNAL,
+        chat_id,
+        {"type": "generation_status", "status": status},
+    )
