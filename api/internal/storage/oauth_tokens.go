@@ -30,6 +30,22 @@ func (OAuthToken) TableName() string {
 
 func (s *Storage) SaveOAuthToken(ctx context.Context, token *OAuthToken) error {
 	now := time.Now().UTC()
+
+	var existing OAuthToken
+	err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND provider = ? AND account_email = ? AND deleted_at IS NULL",
+			token.UserID, token.Provider, token.AccountEmail).
+		First(&existing).Error
+
+	if err == nil {
+		existing.TokenEncrypted = token.TokenEncrypted
+		existing.Scopes = token.Scopes
+		existing.ExternalUserID = token.ExternalUserID
+		existing.UpdatedAt = now
+		existing.Version++
+		return s.DB.WithContext(ctx).Save(&existing).Error
+	}
+
 	if token.ID == uuid.Nil {
 		token.ID = uuid.New()
 		token.CreatedAt = now
