@@ -61,6 +61,7 @@ type LocalAttachment = {
     uri: string;
     type: 'image' | 'file';
     mimeType: string;
+    file_type?: string;
     name: string;
     loading: boolean;
 };

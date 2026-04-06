@@ -334,7 +334,7 @@ class AgentFactory:
                 config.add("knowledge_search", **params)
                 config_used = config
                 try:
-                    tools = await build_tools(config)
+                    tools = await build_tools(config, user_id=user_id)
                     logger.info("[Factory] Built %d tools for ListAgent", len(tools))
                 except Exception as e:
                     logger.warning("[Factory] Failed to build list tools: %s", e)
@@ -362,7 +362,7 @@ class AgentFactory:
                         tools_config.add("web_search")
                         logger.info("[Factory] Added web search tool")
 
-                    tools = await build_tools(tools_config)
+                    tools = await build_tools(tools_config, user_id=user_id)
                 except Exception as e:
                     logger.warning(
                         "[Factory] Failed to fetch tools for user %s: %s", user_id, e
@@ -401,8 +401,7 @@ class AgentFactory:
                     logger.info("[WS] Added web search tool (always enabled)")
 
                 config_used = config
-                tools = await build_tools(config)
-
+                tools = await build_tools(config, user_id=user_id)
             # Add client proxy tools from plugin manifests (round-trip: model -> device -> result)
             if client_tool_runner and config_used and config_used.entries:
                 try:
@@ -525,8 +524,12 @@ class AgentFactory:
                 )
 
             if agent_type and agent_type.lower() == "planner":
-                has_web_search = any(getattr(t, "name", "") == "web_search" for t in tools)
-                if not has_web_search and (not model_name or not model_name.startswith("gemma-")):
+                has_web_search = any(
+                    getattr(t, "name", "") == "web_search" for t in tools
+                )
+                if not has_web_search and (
+                    not model_name or not model_name.startswith("gemma-")
+                ):
                     config = ToolsConfig()
                     config.add("web_search")
                     search_tools = await build_tools(config)

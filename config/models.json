@@ -12,6 +12,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://opencode.ai/zen/v1/responses"
     },
@@ -27,6 +28,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://opencode.ai/zen/v1/chat/completions"
     },
@@ -42,6 +44,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://openrouter.ai/api/v1"
     },
@@ -57,6 +60,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://openrouter.ai/api/v1"
     },
@@ -87,6 +91,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -102,6 +107,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -117,6 +123,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -132,6 +139,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -147,6 +155,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -162,6 +171,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -177,6 +187,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },

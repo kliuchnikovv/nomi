@@ -217,6 +217,34 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		return
 	}
 
+	// Handle stop operation - cancel generation
+	if frame.Operation == StopOperation {
+		r.logger.Info("stop operation received, cancelling generation")
+		r.generationInProgress = false
+		if r.generationTimer != nil {
+			r.generationTimer.Stop()
+			r.generationTimer = nil
+		}
+		// Broadcast stop signal to all clients
+		stopFrame := Frame{
+			ID:        0,
+			ChatID:    r.ID,
+			Kind:      SignalKind,
+			Operation: StopOperation,
+			Timestamp: time.Now().UTC(),
+			Payload:   json.RawMessage(`{"type": "stopped"}`),
+		}
+		b, _ := json.Marshal(stopFrame)
+		b = append(b, '\n')
+		for client := range r.clients {
+			select {
+			case client.send <- b:
+			default:
+			}
+		}
+		return
+	}
+
 	var payload UserMessagePayload
 	if err := json.Unmarshal(frame.Payload, &payload); err != nil {
 		r.logger.Warn("failed to parse user payload", zap.Error(err))

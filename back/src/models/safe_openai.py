@@ -83,11 +83,8 @@ class SafeOpenAI(OpenAIChat):
                 system_converted += 1
                 logger.debug("[SafeOpenAI] Converted 'system' to 'user' role")
             elif msg.role == "tool":
-                tool_filtered += 1
-                logger.debug(
-                    "[SafeOpenAI] Filtered out 'tool' role message (tool_call_id=%s)",
-                    getattr(msg, "tool_call_id", "unknown"),
-                )
+                # Don't filter tool messages - model needs tool results to avoid infinite loops
+                normalized_messages.append(msg)
             elif msg.role == "assistant" and has_tool_calls:
                 new_msg = Message(
                     role="assistant",

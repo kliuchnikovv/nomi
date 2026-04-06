@@ -14,6 +14,7 @@ export interface ModelDetail {
     supports_streaming: boolean;
     supports_tools: boolean;
     supports_thinking?: boolean;
+    supports_vision?: boolean;
 }
 
 

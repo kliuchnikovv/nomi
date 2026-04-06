@@ -35,6 +35,7 @@ const (
 	PongOperation       Operation = "pong"
 	SignalOperation     Operation = "signal"
 	StoreFactsOperation Operation = "store_facts"
+	StopOperation       Operation = "stop"
 )
 
 type Frame struct {

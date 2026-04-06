@@ -15,7 +15,13 @@ from src.agents.factory import AgentFactory
 from src.agents.souper import SouperAgent
 from src.constants import Redis as RedisConstants
 from src.server.models import Frame, Op, Kind
-from src.server.utils import make_meta, make_error, make_done, make_data, make_generation_status
+from src.server.utils import (
+    make_meta,
+    make_error,
+    make_done,
+    make_data,
+    make_generation_status,
+)
 from src.tools.models import ToolSpec
 from src.workflows.models import PlanStatus
 from src.workflows.planning import build_planning_workflow

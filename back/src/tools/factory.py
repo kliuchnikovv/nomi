@@ -146,7 +146,7 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
     TOOL_BUILDERS[name] = builder
 
 
-async def build(config: ToolsConfig) -> list[Toolkit]:
+async def build(config: ToolsConfig, user_id: str | None = None) -> list[Toolkit]:
     tools: list[Toolkit] = []
     logger.debug(
         "[Tools] Building tools from config with %d entries", len(config.entries)
@@ -248,6 +248,10 @@ async def build(config: ToolsConfig) -> list[Toolkit]:
                         account_creds["display_name"] = (
                             account.get("display_name") or account_id[:8]
                         )  # Also inject display_name
+                        if user_id and "user_id" not in account_creds:
+                            account_creds["user_id"] = user_id
+                        if "provider" not in account_creds:
+                            account_creds["provider"] = item.name
                         tool = builder(account_creds)
                         # Give the toolkit a unique name so LLM can select the right account.
                         display = account.get("display_name") or account_id[:8]
