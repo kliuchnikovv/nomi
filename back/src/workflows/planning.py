@@ -6,10 +6,13 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Iterator
+
+from agno.workflow import Workflow
+from agno.workflow.types import WorkflowExecutionInput, StepOutput
 
 from . import ors_client
-from .models import StageResult
+from .models import PlanStatus, PlanningInput, StageResult
 from .tools import search_place_hours, search_route_time_text, search_weather  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -326,3 +329,211 @@ def _run_build_stage(
     except Exception as exc:
         logger.warning("[PlanningWorkflow] BUILD parse failed: %s", exc)
         return StageResult(output={"patches": [], "summary": "Расписание построено"})
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Clarification helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+_STAGE_SEQUENCE = [
+    PlanStatus.EXTRACT,
+    PlanStatus.RECON,
+    PlanStatus.CLUSTER,
+    PlanStatus.ROUTE,
+    PlanStatus.BUILD,
+    PlanStatus.REVIEW,
+]
+
+_NEXT_STAGE = {a: b for a, b in zip(_STAGE_SEQUENCE, _STAGE_SEQUENCE[1:])}
+
+
+def _handle_clarifying(
+    state: dict,
+    user_message: str,
+) -> tuple[str | None, bool]:
+    """Process a user reply during the clarification phase.
+
+    Returns (next_question_or_none, should_return_to_stage).
+    """
+    state.setdefault("clarification_answers", [])
+    state["clarification_answers"].append(user_message)
+
+    questions: list[str] = state.get("pending_questions", [])
+    if questions:
+        next_q = questions.pop(0)
+        state["pending_questions"] = questions
+        return next_q, False
+
+    # All questions answered — return to pending stage
+    pending = state.get("pending_stage", PlanStatus.EXTRACT)
+    state["status"] = pending
+    state[f"{pending}_clarified"] = True
+    return None, True
+
+
+def _infer_transport(user_message: str, clarification_answers: list[str]) -> str | None:
+    """Infer transport mode from user message or clarification answers. Returns None if unclear."""
+    all_text = " ".join([user_message] + clarification_answers).lower()
+    if any(w in all_text for w in ("машин", "авто", "автомобил", "car", "drive")):
+        return "car"
+    if any(w in all_text for w in ("велосипед", "вело", "bike", "cycling")):
+        return "cycling"
+    if any(w in all_text for w in ("пешком", "пеш", "walk", "пешеход")):
+        return "walking"
+    return None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Main workflow steps callable
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _planning_steps(
+    workflow: Workflow,
+    execution_input: WorkflowExecutionInput,
+    **kwargs: Any,
+) -> Iterator[StepOutput]:
+    if workflow.session_state is None:
+        workflow.session_state = {}
+    state: dict = workflow.session_state
+
+    # Parse input
+    user_message: str = ""
+    if execution_input.input:
+        user_message = str(execution_input.input)
+
+    planning_input: PlanningInput | None = None
+    if execution_input.additional_data and "planning_input" in execution_input.additional_data:
+        raw = execution_input.additional_data["planning_input"]
+        planning_input = raw if isinstance(raw, PlanningInput) else PlanningInput(**raw)
+
+    if planning_input:
+        if planning_input.tasks:
+            state["tasks"] = [t.model_dump() for t in planning_input.tasks]
+        state.setdefault("planning_date", planning_input.planning_date)
+        state.setdefault("timezone", planning_input.timezone)
+
+    tasks: list[dict] = state.get("tasks", [])
+    planning_date: str = state.get("planning_date", "")
+    timezone: str = state.get("timezone", "UTC")
+    status: str = state.get("status", PlanStatus.EXTRACT)
+
+    logger.info("[PlanningWorkflow] status=%s tasks=%d", status, len(tasks))
+
+    # ── CLARIFYING ────────────────────────────────────────────────────────────
+    if status == PlanStatus.CLARIFYING:
+        next_q, back_to_stage = _handle_clarifying(state, user_message)
+        if not back_to_stage and next_q:
+            yield StepOutput(step_name="clarify", content=next_q)
+            return
+        # Fall through to re-run the stage (status updated by _handle_clarifying)
+        status = state.get("status", PlanStatus.EXTRACT)
+
+    # ── EXTRACT ───────────────────────────────────────────────────────────────
+    if state.get("status", PlanStatus.EXTRACT) == PlanStatus.EXTRACT:
+        result = _run_extract_stage(tasks, {"clarifications": state.get("clarification_answers", [])})
+        if result.pending_questions and not state.get("extract_clarified"):
+            state["pending_questions"] = result.pending_questions[1:]
+            state["pending_stage"] = PlanStatus.EXTRACT
+            state["status"] = PlanStatus.CLARIFYING
+            yield StepOutput(step_name="clarify", content=result.pending_questions[0])
+            return
+        state["extract_output"] = result.output
+        state["status"] = PlanStatus.RECON
+        return
+
+    # ── RECON ─────────────────────────────────────────────────────────────────
+    if state.get("status") == PlanStatus.RECON:
+        extracted = state.get("extract_output", {}).get("extracted_tasks", tasks)
+        transport = state.get("recon_output", {}).get("transport_mode") or _infer_transport(
+            user_message, state.get("clarification_answers", [])
+        )
+        result = _run_recon_stage(extracted, planning_date, transport)
+        if result.pending_questions and not state.get("recon_clarified"):
+            state["pending_questions"] = result.pending_questions[1:]
+            state["pending_stage"] = PlanStatus.RECON
+            state["status"] = PlanStatus.CLARIFYING
+            yield StepOutput(step_name="clarify", content=result.pending_questions[0])
+            return
+        state["recon_output"] = result.output
+        state["status"] = PlanStatus.CLUSTER
+        return
+
+    # ── CLUSTER ───────────────────────────────────────────────────────────────
+    if state.get("status") == PlanStatus.CLUSTER:
+        extracted = state.get("extract_output", {}).get("extracted_tasks", tasks)
+        locations = state.get("recon_output", {}).get("locations", {})
+        result = _run_cluster_stage(extracted, locations)
+        if result.pending_questions and not state.get("cluster_clarified"):
+            state["pending_questions"] = result.pending_questions[1:]
+            state["pending_stage"] = PlanStatus.CLUSTER
+            state["status"] = PlanStatus.CLARIFYING
+            yield StepOutput(step_name="clarify", content=result.pending_questions[0])
+            return
+        state["cluster_output"] = result.output
+        state["status"] = PlanStatus.ROUTE
+        return
+
+    # ── ROUTE ─────────────────────────────────────────────────────────────────
+    if state.get("status") == PlanStatus.ROUTE:
+        clusters = state.get("cluster_output", {}).get("clusters", [])
+        locations = state.get("recon_output", {}).get("locations", {})
+        transport = state.get("recon_output", {}).get("transport_mode", "walking")
+        result = _run_route_stage(clusters, locations, transport)
+        state["route_output"] = result.output
+        state["status"] = PlanStatus.BUILD
+        return
+
+    # ── BUILD ─────────────────────────────────────────────────────────────────
+    if state.get("status") == PlanStatus.BUILD:
+        extracted = state.get("extract_output", {}).get("extracted_tasks", tasks)
+        clusters = state.get("cluster_output", {}).get("clusters", [])
+        travel_blocks = state.get("route_output", {}).get("travel_blocks", [])
+        locations = state.get("recon_output", {}).get("locations", {})
+        result = _run_build_stage(extracted, clusters, travel_blocks, locations, planning_date, timezone)
+        state["plan_patches"] = {
+            "patches": result.output.get("patches", []),
+            "summary": result.output.get("summary", "Расписание готово"),
+        }
+        state["status"] = PlanStatus.REVIEW
+        yield StepOutput(step_name="build", content="Расписание построено! Проверь план.")
+        return
+
+    # ── REVIEW ────────────────────────────────────────────────────────────────
+    if state.get("status") == PlanStatus.REVIEW:
+        state["status"] = PlanStatus.ITERATE
+        yield StepOutput(
+            step_name="review",
+            content="Готово! Можешь попросить изменить любую задачу, переставить время или добавить новую.",
+        )
+        return
+
+    # ── ITERATE / FALLBACK ────────────────────────────────────────────────────
+    yield StepOutput(
+        step_name="iterate",
+        content="Чем могу помочь с планом? Можешь попросить перенести задачу, изменить время или переделать весь план.",
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Public factory
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def build_planning_workflow(
+    session_id: str,
+    session_state: dict | None = None,
+    db: Any | None = None,
+) -> Workflow:
+    """Create and return the day planner Agno Workflow."""
+    return Workflow(
+        name="DayPlannerWorkflow",
+        description="Multi-stage day planner: extract → recon → cluster → route → build → review",
+        steps=_planning_steps,  # type: ignore[arg-type]
+        session_id=session_id,
+        session_state=session_state or {},
+        db=db,
+        stream=True,
+        stream_events=False,
+        telemetry=False,
+    )
