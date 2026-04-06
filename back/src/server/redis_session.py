@@ -1028,13 +1028,19 @@ class RedisSession:
                 planner_state = await self._load_planner_session_state()
                 if self._should_use_workflow(planner_state):
                     used_workflow = True
-                    await self._run_planning_workflow_steps(
+                    workflow_chunks = await self._run_planning_workflow_steps(
                         user_message=text,
                         payload=payload,
                         session_state=planner_state,
                         msg_chat_id=msg_chat_id,
                         message_id=message_id,
                     )
+                    if delivery_handler and workflow_chunks:
+                        full_text = "".join(workflow_chunks)
+                        if full_text:
+                            await delivery_handler.deliver(
+                                full_text, self._delivery_context
+                            )
                     # Workflow manages its own done frame below — skip agent path
                     if not done_sent:
                         await self._send_frame(
