@@ -133,7 +133,7 @@ class SouperAgent(Agent):
             enable_agentic_memory=True,
             learning=LearningMachine(
                 user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
-                session_context=SessionContextConfig(enable_planning=False),
+                session_context=None,
                 entity_memory=EntityMemoryConfig(
                     mode=LearningMode.ALWAYS,
                     namespace=f"user:{user_id}:personal",
