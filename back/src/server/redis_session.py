@@ -29,7 +29,7 @@ def _parse_tasks_from_message(message: str) -> list[dict]:
     """Parse task items from message text.
 
     Expected format: "ID:xxx Task description" or "[Current plan:\nID:xxx Task...]"
-    Returns list of {"id": "...", "text": "..."} dicts.
+    Returns list of {"id": "...", "title": "..."} dicts (matches PlanTask schema).
     """
     import re
 
@@ -45,7 +45,7 @@ def _parse_tasks_from_message(message: str) -> list[dict]:
         task_text = re.sub(r"\s*\]+$", "", task_text)
         task_text = task_text.strip()
         if task_text:
-            tasks.append({"id": task_id, "text": task_text})
+            tasks.append({"id": task_id, "title": task_text})
     return tasks
 
 
