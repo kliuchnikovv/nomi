@@ -44,22 +44,23 @@ def test_build_planner_agent_tools_passed_through():
     assert mock_tool in agent.tools
 
 
-def test_system_prompt_contains_phases():
-    """Prompt must guide the agent through gather/build/review/iterate phases."""
-    for phase in ("GATHER", "BUILD", "REVIEW", "ITERATE"):
-        assert phase in PLANNER_INSTRUCTIONS, f"Phase '{phase}' missing from PLANNER_INSTRUCTIONS"
+def test_system_prompt_contains_iterate_mode():
+    """Prompt must describe the agent as being in ITERATE mode."""
+    assert "ITERATE" in PLANNER_INSTRUCTIONS
 
 
 def test_system_prompt_mentions_patch_tool():
     assert "patch_plan_document" in PLANNER_INSTRUCTIONS
 
 
-def test_system_prompt_mentions_ask_user():
-    assert "ask_user" in PLANNER_INSTRUCTIONS
+def test_system_prompt_no_rebuild_from_scratch():
+    """Simplified prompt must prevent full replanning — that is handled by the workflow."""
+    assert "do NOT rebuild from scratch" in PLANNER_INSTRUCTIONS
 
 
-def test_system_prompt_mentions_web_search():
-    assert "web_search" in PLANNER_INSTRUCTIONS
+def test_system_prompt_mentions_replan_redirect():
+    """Agent must redirect full replan requests to /replan command."""
+    assert "/replan" in PLANNER_INSTRUCTIONS
 
 
 def test_build_planner_agent_injects_current_datetime():
