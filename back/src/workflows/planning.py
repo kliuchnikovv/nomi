@@ -454,12 +454,13 @@ def _planning_steps(
         if not back_to_stage and next_q:
             yield StepOutput(step_name="clarify", content=next_q)
             return
-        # Returned to a stage - continue workflow (don't return, fall through)
+        # Returned to a stage - continue workflow
         if back_to_stage:
             pending = state.get("pending_stage", PlanStatus.EXTRACT)
             logger.info(
                 "[PlanningWorkflow] Returning from clarification to %s", pending
             )
+            yield StepOutput(step_name="continue", content="Хорошо, продолжаю...")
         status = state.get("status", PlanStatus.EXTRACT)
 
     # ── EXTRACT ───────────────────────────────────────────────────────────────
