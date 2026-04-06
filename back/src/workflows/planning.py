@@ -18,6 +18,28 @@ from .tools import search_place_hours, search_route_time_text, search_weather  #
 logger = logging.getLogger(__name__)
 
 
+def _extract_json(text: str) -> dict:
+    """Extract and parse JSON from LLM response that may contain multiple JSON objects."""
+    start = text.find("{")
+    if start == -1:
+        raise ValueError("no JSON object found")
+
+    # Find matching closing brace - handle nested objects
+    depth = 0
+    end = start
+    for i, c in enumerate(text[start:], start):
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    json_str = text[start:end]
+    return json.loads(json_str)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # LLM helper
 # ──────────────────────────────────────────────────────────────────────────────
@@ -80,10 +102,7 @@ def _run_extract_stage(tasks: list[dict], context: dict) -> StageResult:
         f"Tasks: {tasks_json}\nAdditional context: {json.dumps(context, ensure_ascii=False)}",
     )
     try:
-        start = raw.find("{")
-        if start == -1:
-            raise ValueError("no JSON object found")
-        data = json.loads(raw[start:])
+        data = _extract_json(raw)
         questions = data.get("pending_questions", [])
         return StageResult(
             output={"extracted_tasks": data.get("tasks", tasks)},
@@ -177,10 +196,7 @@ def _run_cluster_stage(
     )
     raw = _run_agent_text(_CLUSTER_PROMPT, prompt_input)
     try:
-        start = raw.find("{")
-        if start == -1:
-            raise ValueError("no JSON object found")
-        data = json.loads(raw[start:])
+        data = _extract_json(raw)
         return StageResult(
             output={"clusters": data.get("clusters", [])},
             pending_questions=data.get("pending_questions", []),
@@ -326,10 +342,7 @@ def _run_build_stage(
     }
     raw = _run_agent_text(_BUILD_PROMPT, json.dumps(context, ensure_ascii=False))
     try:
-        start = raw.find("{")
-        if start == -1:
-            raise ValueError("no JSON object found")
-        data = json.loads(raw[start:])
+        data = _extract_json(raw)
         return StageResult(
             output={
                 "patches": data.get("patches", []),
