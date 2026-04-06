@@ -371,6 +371,17 @@ _STAGE_SEQUENCE = [
 
 _NEXT_STAGE = {a: b for a, b in zip(_STAGE_SEQUENCE, _STAGE_SEQUENCE[1:])}
 
+STAGE_STATUS_TEXT: dict[str, str] = {
+    PlanStatus.EXTRACT: "Analyzing tasks...",
+    PlanStatus.RECON: "Looking up locations...",
+    PlanStatus.CLUSTER: "Grouping by area...",
+    PlanStatus.ROUTE: "Calculating routes...",
+    PlanStatus.BUILD: "Building schedule...",
+    PlanStatus.REVIEW: "Building schedule...",
+    PlanStatus.ITERATE: "Updating plan...",
+    PlanStatus.CLARIFYING: "Clarifying details...",
+}
+
 
 def _handle_clarifying(
     state: dict,
