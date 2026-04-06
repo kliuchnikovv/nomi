@@ -18,6 +18,7 @@ import { createStyles, createMarkdownStyles } from '../message/dynamicStyles';
 import { createMarkdownRules } from '../message/markdownRules';
 import { useChat } from '../context';
 import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
+import { GenerationStatusBar } from '../components/GenerationStatusBar';
 
 // Stable markdown rules - don't recreate on every render
 const stableMarkdownRules = createMarkdownRules(() => {
@@ -161,7 +162,7 @@ export function useGiftedChatRenderers({
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
     const simpleStyles = useMemo(() => createSimpleTextStyles(theme), [theme]);
-    const { showToolCalls, isRateLimited, availableModels, setSelectedModel, setIsRateLimited, setError } = useChat();
+    const { showToolCalls, isRateLimited, availableModels, setSelectedModel, setIsRateLimited, setError, generationStatus } = useChat();
 
     // Stable handlers - use refs to avoid dependency changes
     const onSendRef = React.useRef(onSend);
@@ -299,6 +300,7 @@ export function useGiftedChatRenderers({
         (_props: any) => {
             return (
                 <View style={{ backgroundColor: theme.background }}>
+                    <GenerationStatusBar status={generationStatus} theme={theme} />
                     <ErrorBanner
                         error={error}
                         onRetry={onRetry}
@@ -310,7 +312,7 @@ export function useGiftedChatRenderers({
                 </View>
             );
         },
-        [error, onRetry, onDismissError, chatTheme, isRateLimited, handleChangeModel, theme.background]
+        [error, onRetry, onDismissError, chatTheme, isRateLimited, handleChangeModel, theme.background, generationStatus, theme]
     );
 
     // Stable message renderer
