@@ -131,6 +131,7 @@ export function ChatProvider({
     const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
     const [teamCommand, setTeamCommand] = useState<any>(null);
     const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
+    const [generationStatus, setGenerationStatus] = useState<string | null>(null);
     const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
@@ -1066,14 +1067,21 @@ export function ChatProvider({
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
+                    setGenerationStatus(null);
                 });
             },
-            onSignal: (payload: any) => {
+            onSignal: (frame: any) => {
+                const signalPayload = frame?.payload;
                 if (
-                    payload.type === 'system_status' &&
-                    typeof payload.active_agents_count === 'number'
+                    signalPayload?.type === 'system_status' &&
+                    typeof signalPayload?.active_agents_count === 'number'
                 ) {
-                    setActiveAgentsCount(payload.active_agents_count);
+                    setActiveAgentsCount(signalPayload.active_agents_count);
+                }
+                if (signalPayload?.type === 'generation_status') {
+                    startTransition(() => {
+                        setGenerationStatus(signalPayload.status ?? null);
+                    });
                 }
             },
             onError: (err: any) => {
@@ -1086,6 +1094,7 @@ export function ChatProvider({
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
+                    setGenerationStatus(null);
                 });
                 // Extract error message from frame
                 let message = 'Connection error';
@@ -1140,6 +1149,7 @@ export function ChatProvider({
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
+                    setGenerationStatus(null);
                 });
             },
         });
@@ -1165,6 +1175,7 @@ export function ChatProvider({
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
+                    setGenerationStatus(null);
                 });
             }
         });
@@ -1342,6 +1353,7 @@ export function ChatProvider({
         setPendingInputText,
         lastFailedMessage,
         setLastFailedMessage,
+        generationStatus,
     };
 
     return (

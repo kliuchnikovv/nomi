@@ -72,6 +72,7 @@ export interface ChatContextType {
     setPendingInputText: (text: string | null) => void;
     lastFailedMessage: { text: string; attachments?: any[]; messageId?: string; webSearch?: boolean; thinking?: string; contextItems?: any[] } | null;
     setLastFailedMessage: (msg: { text: string; attachments?: any[]; messageId?: string; webSearch?: boolean; thinking?: string; contextItems?: any[] } | null) => void;
+    generationStatus: string | null;
 }
 
 
