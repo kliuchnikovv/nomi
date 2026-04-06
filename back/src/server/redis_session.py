@@ -263,12 +263,16 @@ class RedisSession:
         return self.next_id
 
     @staticmethod
-    def _should_use_workflow(session_state: dict) -> bool:
+    def _should_use_workflow(session_state: dict, user_message: str = "") -> bool:
         """Return True if the planner should use the multi-stage workflow.
 
         Returns False only when the plan is already built (ITERATE status),
         where the lightweight planner agent handles incremental edits.
+        Returns True for /replan command to force full workflow restart.
         """
+        # Check for /replan command - force workflow restart
+        if user_message.strip().lower().startswith("/replan"):
+            return True
         status = session_state.get("status", "")
         return status != PlanStatus.ITERATE
 
@@ -1069,7 +1073,11 @@ class RedisSession:
 
             if is_planner:
                 planner_state = await self._load_planner_session_state()
-                if self._should_use_workflow(planner_state):
+                is_replan = text.strip().lower().startswith("/replan")
+                if is_replan:
+                    # Reset session state for full replan
+                    planner_state = {}
+                if self._should_use_workflow(planner_state, text):
                     used_workflow = True
                     workflow_chunks = await self._run_planning_workflow_steps(
                         user_message=text,
