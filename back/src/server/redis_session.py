@@ -15,12 +15,13 @@ from src.agents.factory import AgentFactory
 from src.agents.souper import SouperAgent
 from src.constants import Redis as RedisConstants
 from src.server.models import Frame, Op, Kind
-from src.server.utils import make_meta, make_error, make_done, make_data
+from src.server.utils import make_meta, make_error, make_done, make_data, make_generation_status
 from src.tools.models import ToolSpec
 from src.workflows.models import PlanStatus
 from src.workflows.planning import build_planning_workflow
 from src.workflows.planning import PlanningInput as WorkflowPlanningInput
 from src.workflows.planning import _planning_steps as _run_planning_steps
+from src.workflows.planning import STAGE_STATUS_TEXT
 
 logger = logging.getLogger(__name__)
 
@@ -1079,6 +1080,12 @@ class RedisSession:
                     planner_state = {}
                 if self._should_use_workflow(planner_state, text):
                     used_workflow = True
+                    # Emit planning stage status before running
+                    current_stage = planner_state.get("status", "extract")
+                    stage_text = STAGE_STATUS_TEXT.get(current_stage, "Planning...")
+                    await self._send_frame(
+                        make_generation_status(self.next_id, msg_chat_id, stage_text)
+                    )
                     workflow_chunks = await self._run_planning_workflow_steps(
                         user_message=text,
                         payload=payload,
@@ -1102,6 +1109,9 @@ class RedisSession:
                         done_sent = True
 
             if not used_workflow:
+                await self._send_frame(
+                    make_generation_status(self.next_id, msg_chat_id, "Thinking...")
+                )
                 stream_iter = self._stream_agent_events(
                     text, payload.get("attachments")
                 )
