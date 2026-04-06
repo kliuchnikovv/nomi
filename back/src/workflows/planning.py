@@ -25,12 +25,14 @@ logger = logging.getLogger(__name__)
 
 def _build_model() -> Any:
     from src.models.safe_gemini import SafeGemini
+
     return SafeGemini(id="gemini-2.0-flash", api_key=os.getenv("GOOGLE_API_KEY", ""))
 
 
 def _run_agent_text(system_prompt: str, user_prompt: str) -> str:
     try:
         from agno.agent import Agent
+
         agent = Agent(
             model=_build_model(),
             instructions=system_prompt,
@@ -89,7 +91,9 @@ def _run_extract_stage(tasks: list[dict], context: dict) -> StageResult:
             is_complete=len(questions) == 0,
         )
     except Exception:
-        logger.warning("[PlanningWorkflow] EXTRACT: failed to parse LLM response, using raw tasks")
+        logger.warning(
+            "[PlanningWorkflow] EXTRACT: failed to parse LLM response, using raw tasks"
+        )
         return StageResult(output={"extracted_tasks": tasks}, is_complete=False)
 
 
@@ -185,7 +189,9 @@ def _run_cluster_stage(
     except asyncio.CancelledError:
         raise
     except Exception:
-        logger.warning("[PlanningWorkflow] CLUSTER: failed to parse LLM response, using fallback")
+        logger.warning(
+            "[PlanningWorkflow] CLUSTER: failed to parse LLM response, using fallback"
+        )
         # Fallback: one cluster per task
         clusters = [
             {
@@ -230,11 +236,18 @@ def _run_route_stage(
 
         if src_coords and dst_coords:
             try:
-                duration_min = ors_client.get_travel_time(src_coords, dst_coords, profile)
+                duration_min = ors_client.get_travel_time(
+                    src_coords, dst_coords, profile
+                )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.warning("[PlanningWorkflow] ROUTE: ORS failed for %s→%s: %s", src_loc, dst_loc, exc)
+                logger.warning(
+                    "[PlanningWorkflow] ROUTE: ORS failed for %s→%s: %s",
+                    src_loc,
+                    dst_loc,
+                    exc,
+                )
         else:
             try:
                 ddg_result = search_route_time_text(src_loc, dst_loc)
@@ -250,14 +263,16 @@ def _run_route_stage(
             except Exception:
                 pass
 
-        travel_blocks.append({
-            "from_location": src_loc,
-            "to_location": dst_loc,
-            "duration_min": duration_min,
-            "mode": profile,
-            "title": f"Выдвинуться в {dst_loc}",
-            "insert_before_cluster_index": i + 1,
-        })
+        travel_blocks.append(
+            {
+                "from_location": src_loc,
+                "to_location": dst_loc,
+                "duration_min": duration_min,
+                "mode": profile,
+                "title": f"Выдвинуться в {dst_loc}",
+                "insert_before_cluster_index": i + 1,
+            }
+        )
 
     return StageResult(output={"travel_blocks": travel_blocks})
 
@@ -307,10 +322,7 @@ def _run_build_stage(
         "tasks": tasks,
         "clusters": clusters,
         "travel_blocks": travel_blocks,
-        "locations": {
-            k: {"hours": v.get("hours", "")}
-            for k, v in locations.items()
-        },
+        "locations": {k: {"hours": v.get("hours", "")} for k, v in locations.items()},
     }
     raw = _run_agent_text(_BUILD_PROMPT, json.dumps(context, ensure_ascii=False))
     try:
@@ -403,7 +415,10 @@ def _planning_steps(
         user_message = str(execution_input.input)
 
     planning_input: PlanningInput | None = None
-    if execution_input.additional_data and "planning_input" in execution_input.additional_data:
+    if (
+        execution_input.additional_data
+        and "planning_input" in execution_input.additional_data
+    ):
         raw = execution_input.additional_data["planning_input"]
         planning_input = raw if isinstance(raw, PlanningInput) else PlanningInput(**raw)
 
@@ -426,12 +441,20 @@ def _planning_steps(
         if not back_to_stage and next_q:
             yield StepOutput(step_name="clarify", content=next_q)
             return
-        # Fall through to re-run the stage (status updated by _handle_clarifying)
+        # Returned to a stage - continue workflow (don't return, fall through)
+        if back_to_stage:
+            pending = state.get("pending_stage", PlanStatus.EXTRACT)
+            logger.info(
+                "[PlanningWorkflow] Returning from clarification to %s", pending
+            )
         status = state.get("status", PlanStatus.EXTRACT)
 
     # ── EXTRACT ───────────────────────────────────────────────────────────────
     if state.get("status", PlanStatus.EXTRACT) == PlanStatus.EXTRACT:
-        result = _run_extract_stage(tasks, {"clarifications": state.get("clarification_answers", [])})
+        logger.info("[PlanningWorkflow] Running EXTRACT stage")
+        result = _run_extract_stage(
+            tasks, {"clarifications": state.get("clarification_answers", [])}
+        )
         if result.pending_questions and not state.get("extract_clarified"):
             state["pending_questions"] = result.pending_questions[1:]
             state["pending_stage"] = PlanStatus.EXTRACT
@@ -440,14 +463,16 @@ def _planning_steps(
             return
         state["extract_output"] = result.output
         state["status"] = PlanStatus.RECON
+        logger.info("[PlanningWorkflow] EXTRACT done, moving to RECON")
         return
 
     # ── RECON ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.RECON:
+        logger.info("[PlanningWorkflow] Running RECON stage")
         extracted = state.get("extract_output", {}).get("extracted_tasks", tasks)
-        transport = state.get("recon_output", {}).get("transport_mode") or _infer_transport(
-            user_message, state.get("clarification_answers", [])
-        )
+        transport = state.get("recon_output", {}).get(
+            "transport_mode"
+        ) or _infer_transport(user_message, state.get("clarification_answers", []))
         result = _run_recon_stage(extracted, planning_date, transport)
         if result.pending_questions and not state.get("recon_clarified"):
             state["pending_questions"] = result.pending_questions[1:]
@@ -490,13 +515,17 @@ def _planning_steps(
         clusters = state.get("cluster_output", {}).get("clusters", [])
         travel_blocks = state.get("route_output", {}).get("travel_blocks", [])
         locations = state.get("recon_output", {}).get("locations", {})
-        result = _run_build_stage(extracted, clusters, travel_blocks, locations, planning_date, timezone)
+        result = _run_build_stage(
+            extracted, clusters, travel_blocks, locations, planning_date, timezone
+        )
         state["plan_patches"] = {
             "patches": result.output.get("patches", []),
             "summary": result.output.get("summary", "Расписание готово"),
         }
         state["status"] = PlanStatus.REVIEW
-        yield StepOutput(step_name="build", content="Расписание построено! Проверь план.")
+        yield StepOutput(
+            step_name="build", content="Расписание построено! Проверь план."
+        )
         return
 
     # ── REVIEW ────────────────────────────────────────────────────────────────
