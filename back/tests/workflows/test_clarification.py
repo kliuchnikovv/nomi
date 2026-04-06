@@ -1,9 +1,8 @@
-import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from agno.workflow import Workflow
 from agno.workflow.types import WorkflowExecutionInput
 
-from src.workflows.planning import _planning_steps, build_planning_workflow
+from src.workflows.planning import _planning_steps
 from src.workflows.models import PlanStatus, PlanningInput, PlanTask, StageResult
 
 
@@ -35,7 +34,7 @@ def test_extract_stage_fires_first_on_new_session():
             output={"extracted_tasks": [{"id": "t1"}]},
             pending_questions=[],
         )
-        steps = list(_planning_steps(wf, _make_input("план на день")))
+        list(_planning_steps(wf, _make_input("план на день")))
     mock_extract.assert_called_once()
     assert wf.session_state["status"] == PlanStatus.RECON
 

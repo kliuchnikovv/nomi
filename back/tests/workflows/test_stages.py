@@ -1,6 +1,6 @@
 import json
 from unittest.mock import patch
-from src.workflows.planning import _run_extract_stage, _run_recon_stage
+from src.workflows.planning import _run_extract_stage, _run_recon_stage, _run_cluster_stage, _run_route_stage, _run_build_stage
 from src.workflows.models import StageResult
 
 
@@ -92,8 +92,6 @@ def test_recon_complete_when_transport_known():
     assert result.pending_questions == []
 
 
-from src.workflows.planning import _run_cluster_stage, _run_route_stage
-
 # ── CLUSTER ───────────────────────────────────────────────────────────────────
 
 EXTRACTED_FOR_CLUSTER = [
@@ -178,8 +176,6 @@ def test_route_travel_block_title_format():
     block = result.output["travel_blocks"][0]
     assert "gym" in block["title"].lower() or "gym" in block["to_location"]
 
-
-from src.workflows.planning import _run_build_stage
 
 # ── BUILD ─────────────────────────────────────────────────────────────────────
 
