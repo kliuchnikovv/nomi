@@ -490,7 +490,6 @@ def _planning_steps(
         state["status"] = PlanStatus.RECON
         logger.info("[PlanningWorkflow] EXTRACT done, moving to RECON")
         yield StepOutput(step_name="extract", content="Анализирую задачи...")
-        return
 
     # ── RECON ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.RECON:
@@ -509,7 +508,6 @@ def _planning_steps(
         state["recon_output"] = result.output
         state["status"] = PlanStatus.CLUSTER
         yield StepOutput(step_name="recon", content="Уточняю локации...")
-        return
 
     # ── CLUSTER ───────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.CLUSTER:
@@ -527,7 +525,6 @@ def _planning_steps(
         state["status"] = PlanStatus.ROUTE
         logger.info("[PlanningWorkflow] CLUSTER done, moving to ROUTE")
         yield StepOutput(step_name="cluster", content="Группирую задачи по локациям...")
-        return
 
     # ── ROUTE ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.ROUTE:
@@ -540,7 +537,6 @@ def _planning_steps(
         state["status"] = PlanStatus.BUILD
         logger.info("[PlanningWorkflow] ROUTE done, moving to BUILD")
         yield StepOutput(step_name="route", content="Рассчитываю маршрут...")
-        return
 
     # ── BUILD ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.BUILD:
