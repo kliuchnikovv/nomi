@@ -302,9 +302,12 @@ _BUILD_PROMPT = """You are building the final day schedule by applying structure
 Given clusters, travel blocks, task metadata, and planning date, produce a patch list
 that transforms the raw task list into a fully scheduled day.
 
+IMPORTANT: If a task already has a time hint in its text (e.g., "Встреча в 14:00"), 
+KEEP that exact time. Only assign times to tasks that don't have explicit times.
+
 Apply patches in this STRICT order:
 1. add_item — insert each travel task (one per travel block, place it before the destination cluster)
-2. add_chip (type=time) — assign "HH:MM-HH:MM" time ranges to ALL tasks and travel tasks
+2. add_chip (type=time) — assign "HH:MM-HH:MM" time ranges to ALL tasks and travel tasks that DON'T already have explicit times in their text
 3. add_chip (type=location) — add location chips to tasks that have a known location
 4. add_chip (type=note) — add note chips with useful comments (travel time, opening hours)
 5. update_item — strip embedded times/locations from task text if they are now captured in chips
