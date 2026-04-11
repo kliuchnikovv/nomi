@@ -9,7 +9,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View, Text, AppState, AppStateStatus } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MainProvider } from './src/screens/main/context';
@@ -31,6 +31,22 @@ import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 
 // Initialize debug utilities
 initDebugUtils();
+
+function ThemedNavigationContainer({ children }: { children: React.ReactNode }) {
+    const { theme } = useTheme();
+    const navTheme = {
+        ...DarkTheme,
+        colors: {
+            ...DarkTheme.colors,
+            background: theme.background,
+            card: theme.surface,
+            text: theme.text,
+            border: theme.border,
+            primary: theme.accent,
+        },
+    };
+    return <NavigationContainer theme={navTheme}>{children}</NavigationContainer>;
+}
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
@@ -127,9 +143,9 @@ function App() {
                             <PluginChatsProvider>
                                 <ConnectorsProvider>
                                     <MainProvider>
-                                        <NavigationContainer>
+                                        <ThemedNavigationContainer>
                                             <AppContent />
-                                        </NavigationContainer>
+                                        </ThemedNavigationContainer>
                                     </MainProvider>
                                 </ConnectorsProvider>
                             </PluginChatsProvider>

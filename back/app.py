@@ -118,12 +118,19 @@ async def lifespan(app: FastAPI):
     print("[Lifespan] Starting up...")
 
     logging.warning("[Lifespan] Loading plugins...")
+    startup_hooks = []
     try:
         load_plugins()
-        register_plugin_routes(app)
+        startup_hooks = register_plugin_routes(app)
         logging.warning("[Lifespan] Plugins loaded and routes registered successfully")
     except Exception as e:
         logging.error("[Lifespan] Failed to load plugins: %s", e, exc_info=True)
+
+    for hook in startup_hooks:
+        try:
+            await hook()
+        except Exception as e:
+            logging.error("[Lifespan] Plugin startup hook %s failed: %s", hook.__name__, e, exc_info=True)
 
     logging.warning("[Lifespan] Initializing Redis Worker...")
     try:

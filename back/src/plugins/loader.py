@@ -184,8 +184,13 @@ def is_server_side_plugin(name: str) -> bool:
     return exec_type in ("server", "hybrid")
 
 
-def register_plugin_routes(app) -> None:
-    """Scan loaded plugins for routes.py and auto-register FastAPI routers."""
+def register_plugin_routes(app) -> list:
+    """Scan loaded plugins for routes.py and auto-register FastAPI routers.
+
+    Returns a list of async startup coroutine functions collected from plugins
+    (any module-level ``startup`` async function). The caller must await each one.
+    """
+    startup_hooks = []
     for m in _manifests:
         name = m.get("name", "")
         routes_module_name = f"plugins.{name}.server.routes"
@@ -195,7 +200,11 @@ def register_plugin_routes(app) -> None:
             if router is not None:
                 app.include_router(router)
                 logger.info("registered plugin routes: %s", name)
+            startup_fn = getattr(mod, "startup", None)
+            if callable(startup_fn):
+                startup_hooks.append(startup_fn)
         except ImportError:
             pass  # Plugin has no routes module
         except Exception as e:
             logger.warning("failed to register plugin routes for %s: %s", name, e)
+    return startup_hooks
