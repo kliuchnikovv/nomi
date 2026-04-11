@@ -251,26 +251,16 @@ func isValidJSON(data []byte) bool {
 }
 
 // ProxyWebhooks forwards public webhook requests to Python plugins (no auth).
-// Route: /api/webhooks/{plugin}/*path -> /api/plugins/{plugin}/webhook/*path
+// Route: /api/webhooks/{plugin}/*path -> /api/plugins/{plugin}/*path
 func ProxyWebhooks(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Extract plugin name and path from URL
-		// /api/webhooks/telegram -> plugin="telegram", path="webhook"
-		path := c.Param("path")
-		if path == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Webhook path is required"})
+		pluginName := c.Param("plugin")
+		if pluginName == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Plugin name is required"})
 			return
 		}
 
-		// Split path into plugin name and resource path
-		parts := strings.Split(path, "/")
-		if len(parts) < 1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid webhook path"})
-			return
-		}
-
-		pluginName := parts[0]
-		resourcePath := strings.Join(parts[1:], "/")
+		resourcePath := strings.TrimPrefix(c.Param("path"), "/")
 
 		targetURL := cfg.LLM.BaseURL
 		if targetURL == "" {

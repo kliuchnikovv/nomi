@@ -130,7 +130,7 @@ class TelegramService:
             )
             return False
 
-        webhook_url = f"{base_url}/api/webhooks/telegram"
+        webhook_url = f"{base_url}/api/webhooks/telegram/webhook"
         try:
             await self._call_api("setWebhook", {"url": webhook_url})
             logger.info("Telegram webhook registered: %s", webhook_url)
