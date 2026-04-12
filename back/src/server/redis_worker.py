@@ -58,36 +58,25 @@ class RedisWorker:
                     Redis.CHANNEL_STORE_FACTS,
                 )
 
-                # Wait for subscription confirmation to avoid race condition
-                # where messages arrive before subscription is ready
-                subscription_ready = False
-                timeout = 5.0  # seconds
-                start_time = asyncio.get_event_loop().time()
-
-                async for message in self.pubsub.listen():
-                    # Check for subscription confirmation messages
-                    if message["type"] in ("psubscribe", "subscribe"):
+                # Wait for subscription confirmations using get_message() with timeout
+                # to avoid aclose() hang when breaking out of async for pubsub.listen()
+                confirmed = 0
+                deadline = asyncio.get_event_loop().time() + 5.0
+                while confirmed < 3 and asyncio.get_event_loop().time() < deadline:
+                    message = await self.pubsub.get_message(
+                        ignore_subscribe_messages=False, timeout=1.0
+                    )
+                    if message and message["type"] in ("psubscribe", "subscribe"):
+                        confirmed += 1
                         logger.info(
                             "[RedisWorker] Subscription confirmed: %s",
                             message.get("channel") or message.get("pattern"),
                         )
-                        # Break after all expected subscriptions are confirmed
-                        # We expect: 1 psubscribe (request pattern) + 2 subscribe (jules, facts)
-                        if message["data"] >= 3:  # subscription count
-                            subscription_ready = True
-                            break
 
-                    # Timeout protection
-                    if asyncio.get_event_loop().time() - start_time > timeout:
-                        logger.warning(
-                            "[RedisWorker] Subscription confirmation timeout, proceeding anyway"
-                        )
-                        subscription_ready = True
-                        break
-
-                if not subscription_ready:
+                if confirmed < 3:
                     logger.warning(
-                        "[RedisWorker] Subscriptions may not be fully ready, but proceeding"
+                        "[RedisWorker] Subscriptions may not be fully ready (%d/3), proceeding anyway",
+                        confirmed,
                     )
 
                 logger.warning(

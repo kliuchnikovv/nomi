@@ -292,9 +292,11 @@ async def rag_index(
 app.add_middleware(SessionMiddleware, secret_key=config.session_secret)
 
 if __name__ == "__main__":
+    _port = int(os.getenv("PORT", 7777))
+    logging.warning("[Startup] Listening on port %d", _port)
     agent_os.serve(
         app="app:app",
         reload=True,
         host=os.getenv("HOST", "0.0.0.0"),
-        port=int(os.getenv("PORT", 7777)),
+        port=_port,
     )
