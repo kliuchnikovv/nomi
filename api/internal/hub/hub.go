@@ -117,51 +117,70 @@ func (h *Hub) PublishClientToolResult(ctx context.Context, sessionID, callID, re
 }
 
 func (h *Hub) subscribeRedis() {
-	ctx := context.Background()
-	// Subscribe to all user channels
-	pubsub := h.redis.PSubscribe(ctx, "chat:user:*")
-	defer pubsub.Close()
+	const reconnectDelay = 2 * time.Second
+	const maxReconnectDelay = 30 * time.Second
 
-	ch := pubsub.Channel()
+	delay := reconnectDelay
 
-	h.logger.Info("started redis subscription", zap.String("pattern", "chat:user:*"))
+	for {
+		ctx := context.Background()
+		pubsub := h.redis.PSubscribe(ctx, "chat:user:*")
+		ch := pubsub.Channel()
 
-	for msg := range ch {
-		// msg.Channel is the full channel name, e.g. "chat:user:123-456..."
-		// msg.Payload is the JSON string
+		h.logger.Info("started redis subscription", zap.String("pattern", "chat:user:*"))
 
-		h.logger.Info("REDIS RECEIVED",
-			zap.String("channel", msg.Channel),
-			zap.Int("len", len(msg.Payload)),
+		for msg := range ch {
+			// Reset delay on successful message (connection is healthy)
+			delay = reconnectDelay
+
+			h.logger.Info("REDIS RECEIVED",
+				zap.String("channel", msg.Channel),
+				zap.Int("len", len(msg.Payload)),
+			)
+
+			// Extract userID from channel
+			// Format: chat:user:<uuid>
+			var userIDStr string
+			if len(msg.Channel) > 10 { // "chat:user:" is 10 chars
+				userIDStr = msg.Channel[10:]
+			}
+
+			userID, err := uuid.Parse(userIDStr)
+			if err != nil {
+				h.logger.Warn("invalid user id in redis channel", zap.String("channel", msg.Channel), zap.String("id_part", userIDStr))
+				continue
+			}
+
+			h.logger.Info("parsed user id from redis channel", zap.String("user_id", userID.String()))
+
+			var frame Frame
+			if err := json.Unmarshal([]byte(msg.Payload), &frame); err != nil {
+				h.logger.Warn("failed to parse redis message payload", zap.Error(err))
+				continue
+			}
+
+			h.BroadcastToUser(userID, frame)
+		}
+
+		// Channel closed — Redis connection lost or pubsub error.
+		pubsub.Close()
+
+		h.logger.Error("redis subscription disconnected, reconnecting",
+			zap.Duration("delay", delay),
 		)
 
-		// Extract userID from channel
-		// Format: chat:user:<uuid>
-		var userIDStr string
-		if len(msg.Channel) > 10 { // "chat:user:" is 10 chars
-			userIDStr = msg.Channel[10:]
+		time.Sleep(delay)
+		delay = delay * 2
+		if delay > maxReconnectDelay {
+			delay = maxReconnectDelay
 		}
 
-		userID, err := uuid.Parse(userIDStr)
-		if err != nil {
-			h.logger.Warn("invalid user id in redis channel", zap.String("channel", msg.Channel), zap.String("id_part", userIDStr))
-			continue
+		// Try to ping Redis before re-subscribing
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if _, err := h.redis.Ping(pingCtx).Result(); err != nil {
+			h.logger.Error("redis ping failed during reconnect", zap.Error(err))
 		}
-
-		h.logger.Info("parsed user id from redis channel", zap.String("user_id", userID.String()))
-
-		// Parse frame to validate it
-		// We expect the payload to be a JSON string of Frame or just arbitrary JSON
-		// For now, let's assume it's a valid JSON that the frontend can handle
-		// Or we can try to parse into Frame to be safe
-		var frame Frame
-		if err := json.Unmarshal([]byte(msg.Payload), &frame); err != nil {
-			h.logger.Warn("failed to parse redis message payload", zap.Error(err))
-			continue
-		}
-
-		// Broadcast to user's connected clients
-		h.BroadcastToUser(userID, frame)
+		pingCancel()
 	}
 }
 

@@ -466,7 +466,8 @@ class RedisSession:
 
             # Send client_action frame
             # Extract integration_id from params if present (for multi-account support)
-            integration_id = params.pop("integration_id", None)
+            # Use .get() to avoid mutating the caller's dict.
+            integration_id = params.get("integration_id")
             payload_data = {
                 "type": "client_action",
                 "call_id": call_id,
@@ -1717,10 +1718,11 @@ class RedisSession:
             async for event in self._process_async_stream(result):
                 yield event
         elif hasattr(result, "__iter__") and not isinstance(result, (str, bytes)):
-            # Sync iterator fallback
+            # Sync iterator fallback — yield each item as a text event
             for ev in result:
-                # Simplified sync handling
-                pass
+                chunk = str(ev) if ev is not None else ""
+                if chunk:
+                    yield {"type": "text", "content": chunk}
         else:
             # Single value fallback
             chunk = str(result)

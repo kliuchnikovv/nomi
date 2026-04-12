@@ -722,52 +722,12 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		for _, t := range tools {
 			if tMap, ok := t.(map[string]interface{}); ok {
 				name, _ := tMap["name"].(string)
-				params, _ := tMap["params"].(map[string]interface{})
-				creds, _ := params["credentials"].(map[string]interface{})
-				r.logger.Info("tools in redis payload",
+				r.logger.Info("tool included in redis payload",
 					zap.String("tool", name),
-					zap.Int("num_accounts", len(creds)),
 				)
-				for accID, accCreds := range creds {
-					if cm, ok := accCreds.(map[string]interface{}); ok {
-						r.logger.Info("tool credentials detail",
-							zap.String("tool", name),
-							zap.String("account_id", accID),
-							zap.Bool("has_access_token", cm["access_token"] != nil),
-							zap.Bool("has_refresh_token", cm["refresh_token"] != nil),
-						)
-					}
-				}
 			}
 		}
 
-		// Log final tools payload before sending to Redis
-		for _, t := range tools {
-			if tMap, ok := t.(map[string]interface{}); ok {
-				name, _ := tMap["name"].(string)
-				params, _ := tMap["params"].(map[string]interface{})
-				creds, _ := params["credentials"].(map[string]interface{})
-				for accID, accCreds := range creds {
-					if cm, ok := accCreds.(map[string]interface{}); ok {
-						at, _ := cm["access_token"].(string)
-						r.logger.Info("tool credentials in redis payload",
-							zap.String("tool", name),
-							zap.String("account_id", accID),
-							zap.Bool("has_access_token", cm["access_token"] != nil),
-							zap.String("access_token_preview", func() string {
-								if at == "" {
-									return "EMPTY"
-								}
-								if len(at) > 20 {
-									return at[:20]
-								}
-								return at
-							}()),
-						)
-					}
-				}
-			}
-		}
 
 		// 5.2 Fetch and Bundle Chat History
 		messages, err := r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)

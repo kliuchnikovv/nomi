@@ -174,42 +174,15 @@ func (r *Room) Run() {
 	}
 }
 
-// sendGenerationTimeoutError sends a timeout error to all clients
+// sendGenerationTimeoutError sends a timeout error to all clients using
+// the same ErrorInfo-based format as sendErrorFrame so the frontend can
+// parse it uniformly via err.error.message.
 func (r *Room) sendGenerationTimeoutError() {
-	payload := map[string]interface{}{
-		"code":    "GENERATION_TIMEOUT",
-		"message": "Generation timed out after 10 minutes. Please try again.",
-		"type":    "timeout",
-	}
-
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		r.logger.Error("failed to marshal timeout payload", zap.Error(err))
-		return
-	}
-
-	errorFrame := Frame{
-		ID:        int(time.Now().Unix()),
-		Kind:      SignalKind,
-		Operation: ErrorOperation,
-		ChatID:    r.ID,
-		TraceID:   uuid.New().String(),
-		Timestamp: time.Now(),
-		Payload:   json.RawMessage(payloadBytes),
-	}
-
-	frameBytes, err := json.Marshal(errorFrame)
-	if err != nil {
-		r.logger.Error("failed to marshal timeout error frame", zap.Error(err))
-		return
-	}
-
-	for client := range r.clients {
-		select {
-		case client.send <- frameBytes:
-		default:
-			close(client.send)
-			delete(r.clients, client)
-		}
-	}
+	r.sendErrorFrame(
+		ErrorCodeTimeout,
+		"Generation timed out after 10 minutes. Please try again.",
+		nil, // no underlying error
+		uuid.New().String(),
+		map[string]interface{}{"type": "timeout"},
+	)
 }
