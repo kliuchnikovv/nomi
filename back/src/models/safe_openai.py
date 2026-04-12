@@ -136,6 +136,16 @@ class SafeOpenAI(OpenAIChat):
 
         return normalized_messages
 
+    def _format_tools(self, tools):
+        """Override to strip 'strict' field from tool definitions.
+        z.ai GLM rejects tool schemas that include 'strict: true' (error 1214).
+        """
+        tool_dicts = super()._format_tools(tools)
+        for tool in tool_dicts:
+            if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
+                tool["function"].pop("strict", None)
+        return tool_dicts
+
     def invoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
         logger.info("[SafeOpenAI] invoke() called with %d messages", len(messages))
         normalized = self._normalize_messages(messages)

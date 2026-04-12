@@ -905,6 +905,25 @@ class RedisSession:
                         fact = fact.lstrip("-*•0123456789. ")
                     if fact:
                         try:
+                            # Skip if a near-identical fact already exists for this user
+                            existing = knowledge.search(
+                                query=fact,
+                                filters={"user_id": user_id},
+                                num_documents=1,
+                            )
+                            if existing:
+                                top = existing[0]
+                                top_content = getattr(top, "content", "") or ""
+                                # Normalise both strings for comparison
+                                def _norm(s: str) -> str:
+                                    import re
+                                    return re.sub(r"\s+", " ", s.lower().strip())
+                                if _norm(top_content) == _norm(fact):
+                                    logger.debug(
+                                        "[RedisSession] Skipping duplicate fact: %s",
+                                        fact[:80],
+                                    )
+                                    continue
                             knowledge.insert(
                                 text_content=fact,
                                 metadata={"user_id": user_id},
@@ -1170,6 +1189,8 @@ class RedisSession:
                                     "[RedisSession] Error draining post-done stream: %s",
                                     e,
                                 )
+                            # Deduplicate after learning/memory tasks have had a chance to run
+                            await self._dedup_user_memories()
 
                         asyncio.create_task(_drain_remaining(stream_iter))
                         break
@@ -1628,6 +1649,50 @@ class RedisSession:
                 logger.error("[RedisSession] Failed to send error frame: %s", send_err)
 
         return result
+
+    async def _dedup_user_memories(self) -> None:
+        """Remove exact-duplicate agentic memories for the current user.
+
+        The MemoryManager LLM sometimes adds the same memory on successive runs
+        (e.g., "User is currently in Barcelona" dozens of times). This method
+        reads all stored UserMemory rows, keeps the first occurrence of each
+        normalised text, and deletes the rest. Runs as a background task.
+        """
+        if not self.user_id:
+            return
+        try:
+            db = getattr(self.agent_factory, "_db", None)
+            if db is None:
+                return
+
+            all_memories = db.get_user_memories(user_id=self.user_id)
+            if not all_memories or len(all_memories) < 2:
+                return
+
+            import re
+
+            def _norm(s: str) -> str:
+                return re.sub(r"\s+", " ", (s or "").lower().strip())
+
+            seen: set[str] = set()
+            to_delete: list[str] = []
+            for mem in all_memories:
+                key = _norm(mem.memory or "")
+                if key in seen:
+                    if mem.memory_id:
+                        to_delete.append(mem.memory_id)
+                else:
+                    seen.add(key)
+
+            if to_delete:
+                db.delete_user_memories(to_delete, user_id=self.user_id)
+                logger.info(
+                    "[RedisSession] Removed %d duplicate memories for user %s",
+                    len(to_delete),
+                    self.user_id,
+                )
+        except Exception as e:
+            logger.warning("[RedisSession] Memory deduplication failed: %s", e)
 
     async def _repair_dangling_tool_calls(self, agent: Any) -> bool:
         """Repairs dangling tool calls in agent history."""

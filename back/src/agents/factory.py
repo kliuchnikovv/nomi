@@ -169,14 +169,14 @@ class AgentFactory:
 
             # Send model name without opencode/ prefix — API expects e.g. "big-pickle" or "gpt-5-nano"
             if use_responses_api:
-                from agno.models.openai import OpenAIResponses
+                from src.models.safe_openai_responses import SafeOpenAIResponses
 
                 logger.info(
                     "[Factory] Creating OpenCode model (Responses API): %s (base_url=%s)",
                     model_name,
                     base_url,
                 )
-                return OpenAIResponses(
+                return SafeOpenAIResponses(
                     id=model_name,
                     api_key=api_key,
                     base_url=base_url,
