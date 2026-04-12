@@ -31,8 +31,7 @@ class RedisWorker:
         self.pending_client_tool_results: dict[str, asyncio.Future] = {}
 
     async def start(self):
-        """Start the Redis worker with exponential backoff retry."""
-        # Mask password in logs
+        """Connect to Redis, subscribe to channels, then launch the message loop as a background task."""
         safe_url = self.redis_url
         if "@" in safe_url:
             safe_url = f"{safe_url.split('@')[-1]}"
@@ -40,69 +39,76 @@ class RedisWorker:
         logger.warning("[RedisWorker] Starting... URL: ...@%s", safe_url)
         self.running = True
 
+        self.redis = redis.from_url(self.redis_url, decode_responses=True)
+        self.pubsub = self.redis.pubsub()
+
+        await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
+        await self.pubsub.subscribe(
+            Redis.CHANNEL_JULES_MONITOR,
+            Redis.CHANNEL_STORE_FACTS,
+        )
+
+        # Wait for subscription confirmations with get_message() to avoid
+        # blocking aclose() when breaking from async-for pubsub.listen()
+        confirmed = 0
+        deadline = asyncio.get_event_loop().time() + 5.0
+        while confirmed < 3 and asyncio.get_event_loop().time() < deadline:
+            message = await self.pubsub.get_message(
+                ignore_subscribe_messages=False, timeout=1.0
+            )
+            if message and message["type"] in ("psubscribe", "subscribe"):
+                confirmed += 1
+                logger.info(
+                    "[RedisWorker] Subscription confirmed: %s",
+                    message.get("channel") or message.get("pattern"),
+                )
+
+        if confirmed < 3:
+            logger.warning(
+                "[RedisWorker] Subscriptions may not be fully ready (%d/3), proceeding anyway",
+                confirmed,
+            )
+
+        logger.warning(
+            "[RedisWorker] Successfully subscribed to %s, %s, %s",
+            Redis.CHANNEL_REQUEST.format("*"),
+            Redis.CHANNEL_JULES_MONITOR,
+            Redis.CHANNEL_STORE_FACTS,
+        )
+
+        # Launch message loop as a background task so start() returns immediately
+        asyncio.create_task(self._run_loop())
+
+    async def _run_loop(self):
+        """Background task: run message loop with exponential backoff reconnect."""
         base_delay = 2.0
         max_delay = 60.0
         delay = base_delay
 
         while self.running:
             try:
-                self.redis = redis.from_url(self.redis_url, decode_responses=True)
-                self.pubsub = self.redis.pubsub()
-
-                # Subscribe to chat requests, store_facts, jules monitoring
-                # NOTE: We do NOT subscribe to a global client_tool_result channel anymore.
-                # Instead, each session subscribes to its own per-session channel.
-                await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
-                await self.pubsub.subscribe(
-                    Redis.CHANNEL_JULES_MONITOR,
-                    Redis.CHANNEL_STORE_FACTS,
-                )
-
-                # Wait for subscription confirmations using get_message() with timeout
-                # to avoid aclose() hang when breaking out of async for pubsub.listen()
-                confirmed = 0
-                deadline = asyncio.get_event_loop().time() + 5.0
-                while confirmed < 3 and asyncio.get_event_loop().time() < deadline:
-                    message = await self.pubsub.get_message(
-                        ignore_subscribe_messages=False, timeout=1.0
-                    )
-                    if message and message["type"] in ("psubscribe", "subscribe"):
-                        confirmed += 1
-                        logger.info(
-                            "[RedisWorker] Subscription confirmed: %s",
-                            message.get("channel") or message.get("pattern"),
-                        )
-
-                if confirmed < 3:
-                    logger.warning(
-                        "[RedisWorker] Subscriptions may not be fully ready (%d/3), proceeding anyway",
-                        confirmed,
-                    )
-
-                logger.warning(
-                    "[RedisWorker] Successfully subscribed to %s, %s, %s",
-                    Redis.CHANNEL_REQUEST.format("*"),
-                    Redis.CHANNEL_JULES_MONITOR,
-                    Redis.CHANNEL_STORE_FACTS,
-                )
-                delay = base_delay  # reset on success
                 await self._process_messages()
-                # If _process_messages returns normally, Redis disconnected
                 logger.error("[RedisWorker] Message loop exited, reconnecting in %.1fs...", delay)
-
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
-                logger.error(
-                    "[RedisWorker] Failed: %s, retrying in %.1fs...",
-                    e,
-                    delay,
-                    exc_info=True,
-                )
+                logger.error("[RedisWorker] Failed: %s, reconnecting in %.1fs...", e, delay, exc_info=True)
 
             if not self.running:
                 break
 
             await asyncio.sleep(delay)
             delay = min(delay * 2, max_delay)
+
+            # Reconnect pubsub on error
+            try:
+                self.redis = redis.from_url(self.redis_url, decode_responses=True)
+                self.pubsub = self.redis.pubsub()
+                await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
+                await self.pubsub.subscribe(Redis.CHANNEL_JULES_MONITOR, Redis.CHANNEL_STORE_FACTS)
+                delay = base_delay
+            except Exception as e:
+                logger.error("[RedisWorker] Reconnect failed: %s", e, exc_info=True)
 
     async def _process_messages(self):
         """Process messages from Redis pub/sub."""
