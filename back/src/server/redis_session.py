@@ -973,9 +973,8 @@ class RedisSession:
         # 1. Check and update chat history
         incoming_history = payload.get("history")
         if incoming_history:
-            # Wrap in dict to match _parse_history expectation or change _parse_history
-            # The Go side sends "History": [...] which arrives as payload["history"] = [...]
-            # _parse_history expects {"history": [...]} or just the payload if it contains "history"
+            # Replace history on each message to avoid duplication across reused sessions
+            self.chat_history = []
             self._parse_history(payload)
 
         # 2. Check and update tools/commands
@@ -1454,7 +1453,7 @@ class RedisSession:
                     content = h["content"]
                     history_lines.append(f"{role}: {content}")
 
-                history_context = "\\n".join(history_lines)
+                history_context = "\n".join(history_lines)
 
                 # Format with clear instructions that this IS conversation
                 context_parts.append(
