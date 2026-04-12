@@ -40,13 +40,11 @@ class TelegramService:
         """Load available models from models.json config."""
         import pathlib
 
-        # Repo root: plugins/telegram/server/service.py -> 4 levels up
-        repo_root = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+        # Use env var for config path to avoid path traversal outside plugin dir
+        config_path = os.getenv("MODELS_CONFIG_PATH", "/app/config/models.json")
 
-        # Try multiple possible paths for models.json
         possible_paths = [
-            pathlib.Path("/app/config/models.json"),  # Docker/container path
-            repo_root / "config" / "models.json",  # Dev: repo root / config
+            pathlib.Path(config_path),
         ]
 
         for path in possible_paths:

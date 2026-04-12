@@ -53,10 +53,9 @@ async def get_sandbox_status(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     service = get_service()
-    cache_key = f"{user_id}:"
 
     # Get sandbox ID from cache
-    sandbox_id = service._sandbox_cache.get(cache_key)
+    sandbox_id = service.get_cached_sandbox_id(user_id)
     if not sandbox_id:
         raise HTTPException(status_code=404, detail="No sandbox found")
 
@@ -78,9 +77,8 @@ async def destroy_sandbox(request: Request, delete_pvc: bool = False) -> Dict[st
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     service = get_service()
-    cache_key = f"{user_id}:"
 
-    sandbox_id = service._sandbox_cache.get(cache_key)
+    sandbox_id = service.get_cached_sandbox_id(user_id)
     if not sandbox_id:
         raise HTTPException(status_code=404, detail="No sandbox found")
 

@@ -1,19 +1,23 @@
 """
 Simple test script for GmailTools plugin.
-Run from the plugins/gmail/server directory.
+Run from the repo root: python -m plugins.gmail.server.test_tools
 """
 
 import sys
 import os
+
+# Ensure the repo root is on sys.path so package imports work
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+from plugins.gmail.server.tools import GmailTools, build
 
 def test_gmail_tools_basic():
     """Test basic GmailTools functionality without real credentials."""
     print("=" * 60)
     print("Testing GmailTools (without real credentials)")
     print("=" * 60)
-
-    # Import from current directory
-    from tools import GmailTools
 
     # Create instance with fake token (will fail on API calls, but structure is correct)
     tools = GmailTools(
@@ -54,8 +58,6 @@ def test_build_function():
     print("\n" + "=" * 60)
     print("Testing build() function")
     print("=" * 60)
-
-    from tools import build
 
     # Test with various credential formats
     test_cases = [
@@ -108,8 +110,6 @@ def test_sync_wrapper():
     print("\n" + "=" * 60)
     print("Testing sync wrapper for async operations")
     print("=" * 60)
-
-    from tools import GmailTools
 
     tools = GmailTools(
         access_token="fake_token",

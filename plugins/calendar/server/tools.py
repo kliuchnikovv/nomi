@@ -105,10 +105,9 @@ class CalendarTools(Toolkit):
         }
 
         logger.info(
-            "Attempting token refresh: token_uri=%s, client_id=%s, refresh_token=%s, refresh_token_len=%d",
+            "Attempting token refresh: token_uri=%s, client_id=%s, refresh_token_len=%d",
             self.token_uri,
-            self.client_id[:20] if self.client_id else "EMPTY",
-            self.refresh_token[:40] if self.refresh_token else "EMPTY",
+            bool(self.client_id),
             len(self.refresh_token) if self.refresh_token else 0,
         )
 
@@ -306,14 +305,11 @@ def build(params: Dict[str, Any]) -> Toolkit:
     raw_params_at = params.get("access_token")
     raw_cal_at = params.get("calendar_access_token")
     logger.info(
-        "Calendar access_token lookups: creds_data.get='%.20s'(type=%s), token='%.20s'(type=%s), params.get='%.20s'(type=%s), calendar_access_token=%s",
-        str(raw_at)[:20] if raw_at else "EMPTY",
-        type(raw_at).__name__,
-        str(raw_token)[:20] if raw_token else "EMPTY",
-        type(raw_token).__name__,
-        str(raw_params_at)[:20] if raw_params_at else "EMPTY",
-        type(raw_params_at).__name__,
-        str(raw_cal_at)[:20] if raw_cal_at else "EMPTY",
+        "Calendar access_token lookups: creds_data.get=%s, token=%s, params.get=%s, calendar_access_token=%s",
+        bool(raw_at),
+        bool(raw_token),
+        bool(raw_params_at),
+        bool(raw_cal_at),
     )
 
     access_token = (
@@ -345,9 +341,9 @@ def build(params: Dict[str, Any]) -> Toolkit:
 
     logger.info(
         "Building Calendar tools: access_token=%s, refresh_token=%s, client_id=%s, client_secret=%s, user_id=%s, account_email=%s",
-        access_token[:20] if access_token else "EMPTY",
-        refresh_token[:20] if refresh_token else "EMPTY",
-        client_id[:20] if client_id else "EMPTY",
+        bool(access_token),
+        bool(refresh_token),
+        bool(client_id),
         "PRESENT" if client_secret else "EMPTY",
         user_id,
         account_email,
