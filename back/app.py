@@ -94,28 +94,48 @@ def _init_logging():
 
 _init_logging()
 
+logging.warning("[Startup] Python service initializing...")
+
 # Инициализация конфигурации и контейнера
-config = Config.from_env()
-container = Container(config=config)
+try:
+    logging.warning("[Startup] Loading config...")
+    config = Config.from_env()
+    logging.warning("[Startup] Config loaded: debug=%s", config.debug_mode)
+except Exception as e:
+    logging.critical("[Startup] FAILED to load config: %s", e, exc_info=True)
+    raise
+
+try:
+    logging.warning("[Startup] Creating container...")
+    container = Container(config=config)
+    logging.warning("[Startup] Container created")
+except Exception as e:
+    logging.critical("[Startup] FAILED to create container: %s", e, exc_info=True)
+    raise
 
 # Инициализация AgentOS для совместимости с существующим кодом
-agent_os = AgentOS(
-    agents=[
-        SouperAgent(
-            db=container.db,
-            model=container.model,
-            debug_mode=config.debug_mode,
-        ),
-    ],
-)
-global app
-app = agent_os.get_app()
+try:
+    logging.warning("[Startup] Creating SouperAgent...")
+    souper = SouperAgent(
+        db=container.db,
+        model=container.model,
+        debug_mode=config.debug_mode,
+    )
+    logging.warning("[Startup] SouperAgent created")
+    logging.warning("[Startup] Creating AgentOS app...")
+    agent_os = AgentOS(agents=[souper])
+    global app
+    app = agent_os.get_app()
+    logging.warning("[Startup] AgentOS app created")
+except Exception as e:
+    logging.critical("[Startup] FAILED to create AgentOS/SouperAgent: %s", e, exc_info=True)
+    raise
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print("[Lifespan] Starting up...")
+    logging.warning("[Lifespan] Starting up...")
 
     logging.warning("[Lifespan] Loading plugins...")
     startup_hooks = []
@@ -128,24 +148,24 @@ async def lifespan(app: FastAPI):
 
     for hook in startup_hooks:
         try:
+            logging.warning("[Lifespan] Running startup hook: %s", hook.__name__)
             await hook()
+            logging.warning("[Lifespan] Startup hook done: %s", hook.__name__)
         except Exception as e:
             logging.error("[Lifespan] Plugin startup hook %s failed: %s", hook.__name__, e, exc_info=True)
 
     logging.warning("[Lifespan] Initializing Redis Worker...")
     try:
-        # Используем redis_worker из container
         redis_worker = container.redis_worker
         await redis_worker.start()
         logging.warning("[Lifespan] Redis Worker started successfully")
     except Exception as e:
-        print(f"[Lifespan] Error starting Redis Worker: {e}")
-        logging.error(f"[Lifespan] Failed to start Redis Worker: {e}", exc_info=True)
+        logging.error("[Lifespan] Failed to start Redis Worker: %s", e, exc_info=True)
 
+    logging.warning("[Lifespan] Startup complete — ready to serve requests")
     yield
 
     # Shutdown
-    print("[Lifespan] Shutting down...")
     logging.warning("[Lifespan] Shutting down resources...")
     await container.close()
 
