@@ -1,10 +1,21 @@
 """
 SafeOpenAIResponses wrapper for the OpenAI Responses API.
 
-When sessions are reused across model switches (e.g., from z.ai GLM to gpt-5-nano),
-the stored tool call IDs may be plain UUIDs instead of the "fc_"-prefixed IDs that
-the Responses API requires. This wrapper remaps any non-compliant IDs before the
-request is built, preventing the "Expected an ID that begins with 'fc'" 400 error.
+Two problems are handled here:
+
+1. Tool call ID remapping
+   When sessions are reused across model switches (e.g., from z.ai GLM to gpt-5-nano),
+   the stored tool call IDs may be plain UUIDs instead of the "fc_"-prefixed IDs that
+   the Responses API requires. This wrapper remaps any non-compliant IDs before the
+   request is built, preventing the "Expected an ID that begins with 'fc'" 400 error.
+
+2. Unsupported reasoning parameters
+   agno's OpenAIResponses treats any model whose ID starts with "gpt-5" as a reasoning
+   model, which causes it to send "reasoning": {} and "store": true in every request.
+   OpenCode's Responses API (and most OpenAI-compatible providers) do not support these
+   parameters and return 400 Bad Request. This wrapper suppresses that behaviour by
+   overriding _using_reasoning_model() to return False and strips the empty "reasoning"
+   dict from outgoing request params.
 """
 
 import logging
@@ -18,14 +29,46 @@ logger = logging.getLogger(__name__)
 
 class SafeOpenAIResponses(OpenAIResponses):
     """
-    OpenAI Responses API wrapper that normalises tool call IDs.
-
-    The Responses API requires all function_call `id` values to start with "fc".
-    When Agno replays a session that was previously driven by a Chat Completions
-    model (e.g., z.ai GLM), the stored tool call IDs are plain UUIDs. This class
-    remaps them in-place before calling the parent formatter so the API never sees
-    a non-compliant ID.
+    OpenAI Responses API wrapper that:
+    - Normalises tool call IDs to the required "fc_" prefix.
+    - Suppresses reasoning-model-specific parameters unsupported by OpenCode.
     """
+
+    # ── Reasoning model behaviour ─────────────────────────────────────────────
+
+    def _using_reasoning_model(self) -> bool:
+        """Always return False so agno does not inject store/reasoning params.
+
+        agno defaults to treating any model whose ID starts with "gpt-5" as a
+        reasoning model and sends `store: true` plus `reasoning: {}`. OpenCode's
+        Responses API does not support these fields.
+        """
+        return False
+
+    def get_request_params(
+        self,
+        messages=None,
+        response_format=None,
+        tools=None,
+        tool_choice=None,
+    ) -> Dict[str, Any]:
+        params = super().get_request_params(
+            messages=messages,
+            response_format=response_format,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+        # Strip "reasoning" if it is empty (agno always injects {} when unset).
+        if params.get("reasoning") == {}:
+            del params["reasoning"]
+            logger.debug("[SafeOpenAIResponses] Removed empty 'reasoning' param")
+        # Strip "store" unless the caller explicitly configured it.
+        if "store" in params and self.store is None:
+            del params["store"]
+            logger.debug("[SafeOpenAIResponses] Removed auto-injected 'store' param")
+        return params
+
+    # ── Tool call ID remapping ────────────────────────────────────────────────
 
     def _remap_tool_call_ids(self, messages: List[Message]) -> None:
         """Mutate messages in-place, adding 'fc_' prefix to any tool call ID that lacks it."""
