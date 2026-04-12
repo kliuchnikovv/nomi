@@ -123,7 +123,7 @@ export const imapEmailPlugin: ClientPluginHandler = {
                 if (result.success) {
                     return `Moved email ${uid} from ${mailbox} to ${destinationMailbox}`;
                 }
-                return `Failed to move email: ${result}`;
+                return `Failed to move email: ${result.message || JSON.stringify(result)}`;
             }
 
             case 'archive_email': {

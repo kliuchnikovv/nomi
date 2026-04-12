@@ -418,7 +418,7 @@ class GmailTools(Toolkit):
                     if (
                         "size" in body
                         and isinstance(body["size"], int)
-                        and body["size"] > max_body_length * 10
+                        and body["size"] > max_length * 10
                     ):
                         body["data"] = TRUNCATION_NOTICE
 
@@ -672,9 +672,9 @@ def build(params: Dict[str, Any]) -> Toolkit:
 
     logger.info(
         "Building Gmail tools: access_token=%s, refresh_token=%s, client_id=%s, client_secret=%s, user_id=%s, account_email=%s",
-        access_token[:20] if access_token else "EMPTY",
-        refresh_token[:20] if refresh_token else "EMPTY",
-        client_id[:20] if client_id else "EMPTY",
+        bool(access_token),
+        bool(refresh_token),
+        bool(client_id),
         "PRESENT" if client_secret else "EMPTY",
         user_id,
         account_email,

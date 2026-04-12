@@ -4,6 +4,7 @@ Provides isolated Linux environment for code execution.
 """
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from agno.tools import Toolkit
@@ -72,7 +73,9 @@ class SandboxTools(Toolkit):
             Dict with stdout, stderr, and exit_code
         """
         if working_dir:
-            # Change to working directory first
+            # Sanitize working_dir to prevent shell injection
+            if not re.match(r'^[a-zA-Z0-9_./-]+$', working_dir):
+                raise ValueError(f"Invalid working_dir: {working_dir!r}")
             command = ["sh", "-c", f"cd {working_dir} && {' '.join(command)}"]
 
         result = await self._exec_with_retry(command, timeout)

@@ -116,8 +116,12 @@ class SandboxService:
 
     async def exec_stream(
         self, sandbox_id: str, command: list, timeout: int = 60
-    ) -> aiohttp.StreamReader:
-        """Execute a command with streaming output."""
+    ):
+        """Execute a command with streaming output.
+
+        Returns a tuple of (stream_reader, cleanup_coro).
+        The caller MUST await cleanup_coro after consuming the stream to close the session.
+        """
         session = aiohttp.ClientSession()
         url = f"{self.base_url}/api/sandboxes/{sandbox_id}/exec"
         payload = {"command": command, "timeout": timeout, "stream": True}
@@ -127,7 +131,11 @@ class SandboxService:
                 url, json=payload, headers=self._get_headers()
             )
             if response.status == 200:
-                return response.content
+
+                async def _cleanup():
+                    await session.close()
+
+                return response.content, _cleanup
             elif response.status == 404:
                 await session.close()
                 raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
@@ -225,6 +233,11 @@ class SandboxService:
         cache_key = f"{user_id}:{project_id}"
         if cache_key in self._sandbox_cache:
             del self._sandbox_cache[cache_key]
+
+    def get_cached_sandbox_id(self, user_id: str, project_id: str = "") -> Optional[str]:
+        """Get the cached sandbox ID for a user, or None if not cached."""
+        cache_key = f"{user_id}:{project_id}"
+        return self._sandbox_cache.get(cache_key)
 
 
 class SandboxNotFoundError(Exception):
