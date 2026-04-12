@@ -421,6 +421,22 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		return fmt.Errorf("upsert requires a valid message ID")
 	}
 
+	// Verify the chat belongs to the user before writing
+	var count int64
+	s.DB.WithContext(ctx).Model(&Chat{}).
+		Where("id = ? AND user_id = ?", m.ChatID, userID).
+		Count(&count)
+	if count == 0 {
+		return fmt.Errorf("chat %s does not belong to user %s", m.ChatID, userID)
+	}
+
+	now := time.Now()
+	// Preserve original CreatedAt if provided; only set on first insert.
+	createdAt := now
+	if !m.CreatedAt.IsZero() {
+		createdAt = m.CreatedAt
+	}
+
 	messageModel := &Message{
 		ID:        m.ID,
 		ChatID:    m.ChatID,
@@ -428,8 +444,8 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		Role:      string(m.Role),
 		Text:      m.Text,
 		Reasoning: m.Reasoning,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: createdAt,
+		UpdatedAt: now,
 	}
 
 	// Update model if provided
@@ -463,7 +479,7 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 
 	// Use OnConflict to handle race conditions between Create and Update.
 	// We only update fields that should be changed during an upsert.
-	// We don't update user_id or chat_id to prevent accidental reassignment.
+	// We don't update user_id, chat_id, or created_at to prevent accidental reassignment.
 	err := s.DB.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{

@@ -31,7 +31,7 @@ class RedisWorker:
         self.pending_client_tool_results: dict[str, asyncio.Future] = {}
 
     async def start(self):
-        """Start the Redis worker."""
+        """Start the Redis worker with exponential backoff retry."""
         # Mask password in logs
         safe_url = self.redis_url
         if "@" in safe_url:
@@ -40,62 +40,80 @@ class RedisWorker:
         logger.warning("[RedisWorker] Starting... URL: ...@%s", safe_url)
         self.running = True
 
-        try:
-            self.redis = redis.from_url(self.redis_url, decode_responses=True)
-            self.pubsub = self.redis.pubsub()
+        base_delay = 2.0
+        max_delay = 60.0
+        delay = base_delay
 
-            # Subscribe to chat requests, store_facts, jules monitoring
-            # NOTE: We do NOT subscribe to a global client_tool_result channel anymore.
-            # Instead, each session subscribes to its own per-session channel.
-            await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
-            await self.pubsub.subscribe(
-                Redis.CHANNEL_JULES_MONITOR,
-                Redis.CHANNEL_STORE_FACTS,
-            )
+        while self.running:
+            try:
+                self.redis = redis.from_url(self.redis_url, decode_responses=True)
+                self.pubsub = self.redis.pubsub()
 
-            # Wait for subscription confirmation to avoid race condition
-            # where messages arrive before subscription is ready
-            subscription_ready = False
-            timeout = 5.0  # seconds
-            start_time = asyncio.get_event_loop().time()
+                # Subscribe to chat requests, store_facts, jules monitoring
+                # NOTE: We do NOT subscribe to a global client_tool_result channel anymore.
+                # Instead, each session subscribes to its own per-session channel.
+                await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
+                await self.pubsub.subscribe(
+                    Redis.CHANNEL_JULES_MONITOR,
+                    Redis.CHANNEL_STORE_FACTS,
+                )
 
-            async for message in self.pubsub.listen():
-                # Check for subscription confirmation messages
-                if message["type"] in ("psubscribe", "subscribe"):
-                    logger.info(
-                        "[RedisWorker] Subscription confirmed: %s",
-                        message.get("channel") or message.get("pattern"),
-                    )
-                    # Break after all expected subscriptions are confirmed
-                    # We expect: 1 psubscribe (request pattern) + 2 subscribe (jules, facts)
-                    if message["data"] >= 3:  # subscription count
+                # Wait for subscription confirmation to avoid race condition
+                # where messages arrive before subscription is ready
+                subscription_ready = False
+                timeout = 5.0  # seconds
+                start_time = asyncio.get_event_loop().time()
+
+                async for message in self.pubsub.listen():
+                    # Check for subscription confirmation messages
+                    if message["type"] in ("psubscribe", "subscribe"):
+                        logger.info(
+                            "[RedisWorker] Subscription confirmed: %s",
+                            message.get("channel") or message.get("pattern"),
+                        )
+                        # Break after all expected subscriptions are confirmed
+                        # We expect: 1 psubscribe (request pattern) + 2 subscribe (jules, facts)
+                        if message["data"] >= 3:  # subscription count
+                            subscription_ready = True
+                            break
+
+                    # Timeout protection
+                    if asyncio.get_event_loop().time() - start_time > timeout:
+                        logger.warning(
+                            "[RedisWorker] Subscription confirmation timeout, proceeding anyway"
+                        )
                         subscription_ready = True
                         break
 
-                # Timeout protection
-                if asyncio.get_event_loop().time() - start_time > timeout:
+                if not subscription_ready:
                     logger.warning(
-                        "[RedisWorker] Subscription confirmation timeout, proceeding anyway"
+                        "[RedisWorker] Subscriptions may not be fully ready, but proceeding"
                     )
-                    subscription_ready = True
-                    break
 
-            if not subscription_ready:
                 logger.warning(
-                    "[RedisWorker] Subscriptions may not be fully ready, but proceeding"
+                    "[RedisWorker] Successfully subscribed to %s, %s, %s",
+                    Redis.CHANNEL_REQUEST.format("*"),
+                    Redis.CHANNEL_JULES_MONITOR,
+                    Redis.CHANNEL_STORE_FACTS,
+                )
+                delay = base_delay  # reset on success
+                await self._process_messages()
+                # If _process_messages returns normally, Redis disconnected
+                logger.error("[RedisWorker] Message loop exited, reconnecting in %.1fs...", delay)
+
+            except Exception as e:
+                logger.error(
+                    "[RedisWorker] Failed: %s, retrying in %.1fs...",
+                    e,
+                    delay,
+                    exc_info=True,
                 )
 
-            logger.warning(
-                "[RedisWorker] Successfully subscribed to %s, %s, %s",
-                Redis.CHANNEL_REQUEST.format("*"),
-                Redis.CHANNEL_JULES_MONITOR,
-                Redis.CHANNEL_STORE_FACTS,
-            )
-            asyncio.create_task(self._process_messages())
+            if not self.running:
+                break
 
-        except Exception as e:
-            logger.error("[RedisWorker] Failed to start: %s", e, exc_info=True)
-            # Retry logic could go here
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, max_delay)
 
     async def _process_messages(self):
         """Process messages from Redis pub/sub."""
@@ -332,36 +350,34 @@ class RedisWorker:
             return
 
         try:
-            # Extract user_id from raw_data if possible
-            try:
-                raw_payload = json.loads(raw_data)
-                frame_payload = raw_payload.get("payload", {})
-                user_id = frame_payload.get("user_id") or frame_payload.get("sender")
-                trace_id = raw_payload.get("trace_id")
-                if user_id:
-                    error_code = (
-                        "parse_failed"
-                        if isinstance(error, json.JSONDecodeError)
-                        else "worker_error"
-                    )
-                    error_frame = make_error(
-                        0,
-                        error_code,
-                        chat_id,
-                        f"Failed to parse request JSON: {str(error)}"
-                        if isinstance(error, json.JSONDecodeError)
-                        else f"Worker processing failed: {str(error)}",
-                        http=400 if isinstance(error, json.JSONDecodeError) else 500,
-                        details={
-                            "error_type": type(error).__name__,
-                            "chat_id": chat_id,
-                            "trace_id": trace_id,
-                        },
-                        trace_id=trace_id,
-                    )
-                    channel = Redis.CHANNEL_USER.format(user_id)
-                    await self.redis.publish(channel, json.dumps(error_frame.marshal()))
-            except Exception:
-                pass  # If we can't send error, at least we logged it
-        except Exception:
-            pass
+            raw_payload = json.loads(raw_data)
+            frame_payload = raw_payload.get("payload", {})
+            user_id = frame_payload.get("user_id") or frame_payload.get("sender")
+            trace_id = raw_payload.get("trace_id")
+            if user_id:
+                error_code = (
+                    "parse_failed"
+                    if isinstance(error, json.JSONDecodeError)
+                    else "worker_error"
+                )
+                error_frame = make_error(
+                    0,
+                    error_code,
+                    chat_id,
+                    f"Failed to parse request JSON: {str(error)}"
+                    if isinstance(error, json.JSONDecodeError)
+                    else f"Worker processing failed: {str(error)}",
+                    http=400 if isinstance(error, json.JSONDecodeError) else 500,
+                    details={
+                        "error_type": type(error).__name__,
+                        "chat_id": chat_id,
+                        "trace_id": trace_id,
+                    },
+                    trace_id=trace_id,
+                )
+                channel = Redis.CHANNEL_USER.format(user_id)
+                await self.redis.publish(channel, json.dumps(error_frame.marshal()))
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            logger.debug("[RedisWorker] Cannot extract user_id from malformed data: %s", e)
+        except Exception as e:
+            logger.warning("[RedisWorker] Failed to send parse error frame: %s", e)

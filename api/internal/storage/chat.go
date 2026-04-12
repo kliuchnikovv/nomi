@@ -152,6 +152,20 @@ func (s *Storage) TouchChatActivity(ctx context.Context, chatID uuid.UUID, at ti
 }
 
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {
+	// Delete attachments linked to messages in this chat (scoped by user)
+	if err := s.DB.WithContext(ctx).
+		Where("message_id IN (SELECT id FROM messages WHERE chat_id = ? AND user_id = ?) AND user_id = ?", chatID, userID, userID).
+		Delete(&Attachment{}).Error; err != nil {
+		return err
+	}
+
+	// Delete messages first (cascade)
+	if err := s.DB.WithContext(ctx).
+		Where("chat_id = ? AND user_id = ?", chatID, userID).
+		Delete(&Message{}).Error; err != nil {
+		return err
+	}
+
 	result := s.DB.WithContext(ctx).Where("id = ? AND user_id = ?", chatID, userID).Delete(&Chat{})
 	if result.Error != nil {
 		return result.Error

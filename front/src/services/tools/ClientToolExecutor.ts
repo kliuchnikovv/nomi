@@ -19,10 +19,6 @@ export class ClientToolExecutor {
 
         console.log(`[ClientToolExecutor] Executing ${action.tool}.${action.method}`, action.params);
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:18',message:'ClientToolExecutor.execute called',data:{tool:action.tool,method:action.method,params:action.params},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-
         // Special handling for ask_user tool (built-in, not an integration)
         if (action.tool === 'ask_user') {
             return await this.executeAskUserAction(action.method, action.params);
@@ -41,45 +37,30 @@ export class ClientToolExecutor {
             throw new Error(`Tool ${action.tool} is not a client-side tool. It should be executed on the server.`);
         }
 
-        try {
-            let handler = getClientPluginHandler(action.tool);
-            let resolvedIntegrationId = action.integration_id;
+        let handler = getClientPluginHandler(action.tool);
+        let resolvedIntegrationId = action.integration_id;
 
-            // If no exact match and we have integration_id, try fallback to base provider
-            // e.g., "gmail_uuid123_send_email" -> fallback to "gmail"
-            if (!handler && action.integration_id) {
-                // Extract base provider name from tool name (e.g., "gmail" from "gmail_uuid123_send_email")
-                const toolBase = action.tool.split('_')[0];
-                handler = getClientPluginHandler(toolBase);
-                if (handler) {
-                    console.log(`[ClientToolExecutor] Falling back to base provider "${toolBase}" for integration ${action.integration_id}`);
-                }
-            }
-
+        // If no exact match and we have integration_id, try fallback to base provider
+        // e.g., "gmail_uuid123_send_email" -> fallback to "gmail"
+        if (!handler && action.integration_id) {
+            const toolBase = action.tool.split('_')[0];
+            handler = getClientPluginHandler(toolBase);
             if (handler) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:38',message:'Handler found, executing',data:{tool:action.tool,method:action.method,integrationId:resolvedIntegrationId},timestamp:Date.now()})}).catch(()=>{});
-
-                // Pass integration_id in params to handler
-                const paramsWithIntegration = {
-                    ...action.params,
-                    integration_id: resolvedIntegrationId,
-                };
-                const result = await handler.execute(action.method, paramsWithIntegration);
-
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/services/tools/ClientToolExecutor.ts:51',message:'Handler execution completed',data:{tool:action.tool,method:action.method,resultLength:result?.length},timestamp:Date.now()})}).catch(()=>{});
-
-                return result;
+                console.log(`[ClientToolExecutor] Falling back to base provider "${toolBase}" for integration ${action.integration_id}`);
             }
-            if (metadata) {
-                throw new Error(`Tool ${action.tool} is registered but not implemented in ClientToolExecutor`);
-            }
-            throw new Error(`Unknown tool: ${action.tool}`);
-        } catch (error: any) {
-            console.error(`[ClientToolExecutor] Execution failed:`, error);
-            return `Error executing default.${action.tool}.${action.method}: ${error.message || String(error)}`;
         }
+
+        if (handler) {
+            const paramsWithIntegration = {
+                ...action.params,
+                integration_id: resolvedIntegrationId,
+            };
+            return await handler.execute(action.method, paramsWithIntegration);
+        }
+        if (metadata) {
+            throw new Error(`Tool ${action.tool} is registered but not implemented in ClientToolExecutor`);
+        }
+        throw new Error(`Unknown tool: ${action.tool}`);
     }
 
     private async executeAskUserAction(method: string, params: Record<string, any>): Promise<string> {
@@ -94,18 +75,10 @@ export class ClientToolExecutor {
         // Access the global AskUser dialog function (set by ChatProvider)
         const askUserDialog = (globalThis as any).__askUserDialog;
         if (!askUserDialog) {
-            console.error('[ClientToolExecutor] AskUser dialog not available');
-            return 'Error: AskUser dialog not available';
+            throw new Error('AskUser dialog not available');
         }
 
-        try {
-            const response = await askUserDialog(question, options || []);
-            console.log('[ClientToolExecutor] User responded:', response);
-            return response;
-        } catch (error: any) {
-            console.error('[ClientToolExecutor] AskUser error:', error);
-            return `Error: ${error.message || String(error)}`;
-        }
+        return await askUserDialog(question, options || []);
     }
 
 }
