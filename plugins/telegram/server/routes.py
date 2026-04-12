@@ -108,6 +108,23 @@ async def link_with_code(request: Request, body: LinkRequest) -> Dict[str, Any]:
     }
 
 
+# ─── Unlink (authenticated via X-User-ID) ────────────
+
+@router.delete("/unlink")
+async def unlink(request: Request) -> Dict[str, Any]:
+    """Deactivate the Telegram linked account for the authenticated user."""
+    user_id = request.headers.get("X-User-ID")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    service = get_service()
+    deactivated = await service.deactivate_link(user_id)
+    if not deactivated:
+        raise HTTPException(status_code=404, detail="No linked Telegram account found")
+
+    return {"ok": True}
+
+
 # ─── Status check (authenticated via X-User-ID) ─────
 
 @router.get("/status")

@@ -211,12 +211,13 @@ class TelegramService:
                 user_id,
             )
             if existing:
-                # Update info and ensure telegram_chat_id is current
+                # Update info, restore active=True on re-link
                 old_data = json.loads(existing["data"])
                 old_data["username"] = username
                 old_data["first_name"] = first_name
                 old_data["telegram_chat_id"] = telegram_chat_id
                 old_data["telegram_user_id"] = telegram_user_id
+                old_data["active"] = True
                 await conn.execute(
                     "UPDATE plugin_data SET data = $1::jsonb, user_id = $2::uuid, updated_at = NOW() WHERE id = $3",
                     json.dumps(old_data),
@@ -260,6 +261,31 @@ class TelegramService:
                 "username": username,
                 "first_name": first_name,
             }
+        finally:
+            await conn.close()
+
+    async def deactivate_link(self, user_id: str) -> bool:
+        """Mark the Telegram linked account as inactive for a Genie user."""
+        conn = await self._get_db_conn()
+        try:
+            row = await conn.fetchrow(
+                """SELECT id, data FROM plugin_data
+                   WHERE user_id = $1::uuid AND plugin_name = $2 AND record_type = $3""",
+                user_id,
+                PLUGIN_NAME,
+                RECORD_TYPE_LINKED_ACCOUNT,
+            )
+            if not row:
+                return False
+            data = json.loads(row["data"])
+            data["active"] = False
+            await conn.execute(
+                "UPDATE plugin_data SET data = $1::jsonb, updated_at = NOW() WHERE id = $2",
+                json.dumps(data),
+                row["id"],
+            )
+            logger.info("Deactivated telegram link for user_id=%s", user_id)
+            return True
         finally:
             await conn.close()
 
@@ -309,6 +335,10 @@ class TelegramService:
             await self._handle_start(chat_id, message)
             return
 
+        if text.startswith("/reconnect"):
+            await self._handle_reconnect(chat_id, message)
+            return
+
         if text.startswith("/model"):
             await self._handle_model_command(chat_id, message)
             return
@@ -320,7 +350,7 @@ class TelegramService:
         conn = await self._get_db_conn()
         try:
             existing = await conn.fetchrow(
-                """SELECT id FROM plugin_data
+                """SELECT id, data FROM plugin_data
                    WHERE plugin_name = $1 AND record_type = $2
                      AND data->>'telegram_chat_id' = $3""",
                 PLUGIN_NAME,
@@ -331,12 +361,25 @@ class TelegramService:
             await conn.close()
 
         if existing:
-            await self.send_message(
-                chat_id,
-                "Your account is already linked! 🎉\n\nYou can send messages here and I'll respond with AI-powered answers.",
-            )
+            data = json.loads(existing["data"])
+            if data.get("active", True):
+                await self.send_message(
+                    chat_id,
+                    "Your account is already linked! 🎉\n\nYou can send messages here and I'll respond with AI-powered answers.\n\nUse /reconnect to re-link your account.",
+                )
+                return
+            # Account was deactivated — treat as new link
+            await self._generate_and_send_link_code(chat_id, message)
             return
 
+        await self._generate_and_send_link_code(chat_id, message)
+
+    async def _handle_reconnect(self, chat_id: int, message: Dict[str, Any]) -> None:
+        """Handle /reconnect command — generate a new link code regardless of current status."""
+        await self._generate_and_send_link_code(chat_id, message)
+
+    async def _generate_and_send_link_code(self, chat_id: int, message: Dict[str, Any]) -> None:
+        """Generate a link code and send it to the user."""
         from_user = message.get("from", {})
         username = from_user.get("username", "")
         first_name = from_user.get("first_name", "")
@@ -461,6 +504,14 @@ class TelegramService:
             return
 
         data = json.loads(row["data"])
+
+        if not data.get("active", True):
+            await self.send_message(
+                chat_id,
+                "Your Genie integration has been disconnected.\n\nSend /reconnect to link your account again.",
+            )
+            return
+
         genie_user_id = str(row["user_id"])
         text = message.get("text", "")
         if not text:
