@@ -35,24 +35,28 @@ const DEFAULT_LOCATION: UserLocation = {
 };
 
 export async function getStoredLocation(): Promise<UserLocation> {
-    const raw = await AsyncStorage.getItem(LOCATION_KEY);
-    if (raw) {
-        return JSON.parse(raw) as UserLocation;
-    }
-    // Migrate from old weather_location key
-    const legacy = await AsyncStorage.getItem(LEGACY_KEY);
-    if (legacy) {
-        const old = JSON.parse(legacy) as { lat: number; lon: number };
-        const migrated: UserLocation = {
-            lat: old.lat,
-            lon: old.lon,
-            displayName: 'Текущее место',
-            city: '',
-            country: '',
-            shareWithAgent: false,
-        };
-        await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(migrated));
-        return migrated;
+    try {
+        const raw = await AsyncStorage.getItem(LOCATION_KEY);
+        if (raw) {
+            return JSON.parse(raw) as UserLocation;
+        }
+        // Migrate from old weather_location key
+        const legacy = await AsyncStorage.getItem(LEGACY_KEY);
+        if (legacy) {
+            const old = JSON.parse(legacy) as { lat: number; lon: number };
+            const migrated: UserLocation = {
+                lat: old.lat,
+                lon: old.lon,
+                displayName: 'Текущее место',
+                city: '',
+                country: '',
+                shareWithAgent: false,
+            };
+            await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(migrated));
+            return migrated;
+        }
+    } catch {
+        // corrupted storage — fall through to default
     }
     return DEFAULT_LOCATION;
 }
@@ -65,11 +69,15 @@ export async function searchLocations(query: string): Promise<NominatimResult[]>
     if (query.trim().length < 2) return [];
     const lang = 'ru';
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1&accept-language=${lang}`;
-    const res = await fetch(url, {
-        headers: { 'User-Agent': 'GenieApp/1.0' },
-    });
-    if (!res.ok) return [];
-    return res.json();
+    try {
+        const res = await fetch(url, {
+            headers: { 'User-Agent': 'GenieApp/1.0' },
+        });
+        if (!res.ok) return [];
+        return res.json();
+    } catch {
+        return [];
+    }
 }
 
 export function nominatimResultToLocation(
