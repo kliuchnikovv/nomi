@@ -94,6 +94,7 @@ export type OAuthStatus = {
 
 const CONNECTOR_COLOR_MAP: Partial<Record<string, keyof ThemePalette>> = {
     gmail: 'red',
+    imap: 'blue',
     calendar: 'orange',
     github: 'magenta',
     telegram: 'blue',
@@ -127,4 +128,5 @@ export interface ConnectorContextType {
     startOAuth: (provider: string) => Promise<void>;
     deleteIntegration: (id: string) => Promise<void>;
     connectTelegram: (code: string) => Promise<void>;
+    connectImap: (email: string, password: string) => Promise<void>;
 }

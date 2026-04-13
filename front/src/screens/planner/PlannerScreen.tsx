@@ -14,6 +14,7 @@ import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-nativ
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ChatBubble, Calendar as CalendarIcon } from 'iconoir-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { TAB_BAR_ICON_HEIGHT } from '../../navigation/MainTabs';
 import { PlanItem } from './types';
 import { PlanDocumentContext } from './PlanDocumentContext';
 import { registerApplyPatches, unregisterApplyPatches } from './planDocumentRegistry';
@@ -183,6 +184,9 @@ export function PlannerScreen() {
                         >
                             {/* Header + list fill all available space above the bottom bar */}
                             <View style={{ flex: 1 }}>
+                                <View style={[styles.screenHeader, { borderBottomColor: theme.border }]}>
+                                    <Text style={[styles.screenTitle, { color: theme.textPrimary }]}>Planner</Text>
+                                </View>
                                 <DocumentHeader
                                     date={date}
                                     onPrev={() => setDate(shiftDate(date, -1))}
@@ -231,6 +235,9 @@ export function PlannerScreen() {
                                 </TouchableOpacity>
                             </View>
 
+                            {/* Spacer so bottom bar clears the floating tab bar */}
+                            <View style={{ height: TAB_BAR_ICON_HEIGHT }} />
+
                             {/* AI edit banner */}
                             <AIEditBanner message={bannerMessage} onDismiss={clearBanner} />
                         </KeyboardAvoidingView>
@@ -258,6 +265,16 @@ export function PlannerScreen() {
 const styles = StyleSheet.create({
     root: {
         flex: 1,
+    },
+    screenHeader: {
+        paddingHorizontal: 20,
+        paddingTop: 8,
+        paddingBottom: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    screenTitle: {
+        fontSize: 28,
+        fontWeight: '700',
     },
     listContent: {
         paddingBottom: 8,

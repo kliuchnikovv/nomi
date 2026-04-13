@@ -1,5 +1,11 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+    View,
+    Text,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +22,12 @@ import type { NavigationProp } from '@react-navigation/native';
 
 function getGreeting(name?: string) {
     const hour = new Date().getHours();
-    const base = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    const base =
+        hour < 12
+            ? 'Good morning'
+            : hour < 18
+            ? 'Good afternoon'
+            : 'Good evening';
     return name ? `${base}, ${name}!` : `${base}!`;
 }
 
@@ -31,7 +42,10 @@ export const DashboardScreen = () => {
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <ScrollView
                 style={styles.scroll}
-                contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
+                contentContainerStyle={[
+                    styles.content,
+                    { paddingTop: insets.top + 16 },
+                ]}
                 showsVerticalScrollIndicator={false}
             >
                 {/* Greeting header */}
@@ -49,7 +63,7 @@ export const DashboardScreen = () => {
                 </View>
 
                 {/* Plan My Day card */}
-                <TouchableOpacity
+                {/*<TouchableOpacity
                     style={[styles.planCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
                     onPress={() => navigation.navigate('Planning')}
                     activeOpacity={0.8}
@@ -64,7 +78,7 @@ export const DashboardScreen = () => {
                         </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
-                </TouchableOpacity>
+                </TouchableOpacity>*/}
 
                 {/* Row 2: Recent Chats (full width) */}
                 <RecentChatsWidget />

@@ -1,5 +1,6 @@
 import {
     ActivityIndicator,
+    KeyboardAvoidingView,
     Pressable,
     ScrollView,
     Text,
@@ -19,8 +20,8 @@ import { getIntegrationMetadata } from '../../../../services/integrations/regist
 import { IOSRemindersClient } from '../../../../services/integrations/clients/IOSRemindersClient';
 import { IOSHealthClient } from '../../../../services/integrations/clients/IOSHealthClient';
 
-export function BrowserTab() {
-    const { integrations, startOAuth, toggleTool, getIntegrations, connectTelegram } = useConnectors();
+export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
+    const { startOAuth, toggleTool, connectTelegram, connectImap } = useConnectors();
     const { theme, palette } = useTheme();
     const sharedStyles = useMemo(() => getStyles(theme, palette), [theme, palette]);
 
@@ -75,6 +76,12 @@ export function BrowserTab() {
     const [telegramCode, setTelegramCode] = useState('');
     const [telegramLoading, setTelegramLoading] = useState(false);
     const [telegramError, setTelegramError] = useState<string | null>(null);
+
+    const [imapModalVisible, setImapModalVisible] = useState(false);
+    const [imapEmail, setImapEmail] = useState('');
+    const [imapPassword, setImapPassword] = useState('');
+    const [imapLoading, setImapLoading] = useState(false);
+    const [imapError, setImapError] = useState<string | null>(null);
 
     // Handle connector press — Telegram gets a code input, others start OAuth, client-only just enable
     const handleConnectorPress = async (connector: Connector) => {
@@ -148,26 +155,59 @@ export function BrowserTab() {
                 }
 
                 await toggleTool(connector.id, true);
+                onSuccess?.();
             } catch (err) {
                 console.warn(`Failed to enable ${connector.id}`, err);
                 setErrorMsg(err instanceof Error ? err.message : `Failed to enable ${connector.name}`);
             }
             return;
         }
-        
+
         if (metadata?.authType === 'api_key' && connector.id === 'telegram') {
-            // Show Telegram code input modal
             setTelegramCode('');
             setTelegramError(null);
             setTelegramModalVisible(true);
             return;
         }
+
+        if (connector.id === 'imap') {
+            setImapEmail('');
+            setImapPassword('');
+            setImapError(null);
+            setImapModalVisible(true);
+            return;
+        }
         // Default: OAuth flow
         try {
             await startOAuth(connector.oauthProvider);
+            onSuccess?.();
         } catch (err) {
             console.warn(`Failed to start ${connector.oauthProvider} OAuth`, err);
             setErrorMsg(err instanceof Error ? err.message : `Failed to start ${connector.oauthProvider} OAuth`);
+        }
+    };
+
+    const handleImapSubmit = async () => {
+        if (!imapEmail.includes('@')) {
+            setImapError('Enter a valid email address');
+            return;
+        }
+        if (!imapPassword) {
+            setImapError('Enter your password');
+            return;
+        }
+        setImapLoading(true);
+        setImapError(null);
+        try {
+            await connectImap(imapEmail.trim(), imapPassword);
+            setImapModalVisible(false);
+            setImapEmail('');
+            setImapPassword('');
+            onSuccess?.();
+        } catch (e) {
+            setImapError(e instanceof Error ? e.message : 'Failed to connect');
+        } finally {
+            setImapLoading(false);
         }
     };
 
@@ -182,6 +222,7 @@ export function BrowserTab() {
             await connectTelegram(telegramCode);
             setTelegramModalVisible(false);
             setTelegramCode('');
+            onSuccess?.();
         } catch (e) {
             setTelegramError(e instanceof Error ? e.message : 'Failed to link Telegram');
         } finally {
@@ -189,89 +230,140 @@ export function BrowserTab() {
         }
     };
 
-    // Disabled Tools
-    const otherIntegrations = useMemo(
-        () => integrations.filter(p =>
-            p.provider !== 'gmail' &&
-            p.provider !== 'imap' &&
-            p.provider !== 'calendar' &&
-            p.provider !== 'github' &&
-            p.provider !== 'telegram' &&
-            p.provider !== 'ios_calendar' &&
-            p.provider !== 'ios_reminders' &&
-            p.provider !== 'ios_contacts'
-        ),
-        [integrations],
-    );
-    const disabledTools = otherIntegrations.filter(t => !t.connected);
+    const SECTIONS: { title: string; ids: string[] }[] = [
+        { title: 'Mail', ids: ['gmail', 'imap'] },
+        { title: 'Calendars', ids: ['calendar', 'ios_calendar'] },
+        { title: 'Messengers', ids: ['telegram'] },
+        { title: 'Tools', ids: ['github', 'ios_reminders', 'jules'] },
+        { title: 'Other', ids: [] }, // catch-all below
+    ];
 
-    const handleEnableTool = async (id: string) => {
-        try {
-            await toggleTool(id, true);
-        } catch (e) {
-            console.warn('Failed to enable tool', e);
-        }
-    };
+    const knownIds = new Set(SECTIONS.flatMap(s => s.ids));
+    const otherConnectors = CONNECTORS.filter(c => !knownIds.has(c.id));
 
-    const getConnectorDetails = (provider: string) => {
-        return CONNECTORS.find(c =>
-            c.id.toLowerCase() === provider.toLowerCase()
-            || c.toolKey.toLowerCase() === provider.toLowerCase()
-            || c.oauthProvider.toLowerCase() === provider.toLowerCase()
+    const renderSection = (title: string, connectors: Connector[]) => {
+        if (connectors.length === 0) return null;
+        return (
+            <View key={title} style={{ marginBottom: 24 }}>
+                <Text style={[sharedStyles.sectionTitle, { marginBottom: 12 }]}>{title}</Text>
+                <View style={styles.grid}>
+                    {connectors.map(connector => (
+                        <ConnectorCard
+                            key={connector.id}
+                            connector={connector}
+                            onPress={() => handleConnectorPress(connector)}
+                            styles={styles}
+                            palette={palette}
+                        />
+                    ))}
+                </View>
+            </View>
         );
     };
 
     return (
         <ScrollView
-            contentContainerStyle={sharedStyles.scrollContent}
+            contentContainerStyle={[sharedStyles.scrollContent, { paddingTop: 12 }]}
             showsVerticalScrollIndicator={false}
         >
-            <Text style={[sharedStyles.sectionTitle, { marginBottom: 16 }]}>Add New Integration</Text>
-
-            <View style={styles.grid}>
-                {CONNECTORS.map((connector) => (
-                    <ConnectorCard
-                        key={connector.id}
-                        connector={connector}
-                        onPress={() => handleConnectorPress(connector)}
-                        styles={styles}
-                        palette={palette}
-                    />
-                ))}
-            </View>
-
-            {disabledTools.length > 0 && (
-                <>
-                    <Text style={[sharedStyles.sectionTitle, { marginTop: 24, marginBottom: 16 }]}>Available Tools</Text>
-                    <View style={styles.grid}>
-                        {disabledTools.map((tool) => {
-                            const details = getConnectorDetails(tool.provider);
-                            // Synthesize a connector object
-                            const connector: Connector = {
-                                id: tool.id,
-                                name: tool.name,
-                                toolKey: tool.provider,
-                                oauthProvider: tool.provider,
-                                colorKey: details?.colorKey || 'blue',
-                                glyph: details?.glyph || 'application',
-                            };
-                            return (
-                                <ConnectorCard
-                                    key={tool.id}
-                                    connector={connector}
-                                    onPress={() => handleEnableTool(tool.id)}
-                                    styles={styles}
-                                    palette={palette}
-                                />
-                            );
-                        })}
-                    </View>
-                </>
-            )}
+            {SECTIONS.map(section => {
+                const connectors = section.ids.length > 0
+                    ? section.ids.flatMap(id => CONNECTORS.filter(c => c.id === id))
+                    : otherConnectors;
+                return renderSection(section.title, connectors);
+            })}
 
             {errorMsg && (
-                <Text style={[sharedStyles.syncStatus, { marginTop: 20, color: palette.red }]}>{errorMsg}</Text>
+                <Text style={[sharedStyles.syncStatus, { marginTop: 8, color: palette.red }]}>{errorMsg}</Text>
             )}
+
+            {/* IMAP Credentials Modal */}
+            <Modal
+                visible={imapModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setImapModalVisible(false)}
+            >
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                <View style={modalStyles.overlay}>
+                    <View style={[modalStyles.container, { backgroundColor: theme.surface }]}>
+                        <Text style={[modalStyles.title, { color: theme.text }]}>Connect Email</Text>
+                        <Text style={[modalStyles.subtitle, { color: theme.fadedText }]}>
+                            Server settings will be detected automatically based on your email domain.
+                        </Text>
+
+                        <TextInput
+                            style={[modalStyles.input, {
+                                color: theme.text,
+                                backgroundColor: theme.surfaceHighlight,
+                                borderColor: imapError ? palette.red : theme.border,
+                                fontSize: 16,
+                                letterSpacing: 0,
+                                fontWeight: '400',
+                            }]}
+                            value={imapEmail}
+                            onChangeText={(t) => { setImapEmail(t); setImapError(null); }}
+                            placeholder="email@example.com"
+                            placeholderTextColor={theme.fadedText}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            autoFocus
+                            textAlign="left"
+                        />
+
+                        <TextInput
+                            style={[modalStyles.input, {
+                                color: theme.text,
+                                backgroundColor: theme.surfaceHighlight,
+                                borderColor: imapError ? palette.red : theme.border,
+                                fontSize: 16,
+                                letterSpacing: 0,
+                                fontWeight: '400',
+                                marginTop: 8,
+                            }]}
+                            value={imapPassword}
+                            onChangeText={(t) => { setImapPassword(t); setImapError(null); }}
+                            placeholder="Password or app password"
+                            placeholderTextColor={theme.fadedText}
+                            secureTextEntry
+                            textAlign="left"
+                        />
+
+                        {imapError && (
+                            <Text style={[modalStyles.error, { color: palette.red }]}>{imapError}</Text>
+                        )}
+
+                        <View style={modalStyles.buttons}>
+                            <Pressable
+                                style={[modalStyles.button, { backgroundColor: theme.surfaceHighlight }]}
+                                onPress={() => setImapModalVisible(false)}
+                                disabled={imapLoading}
+                            >
+                                <Text style={[modalStyles.buttonText, { color: theme.text }]}>Cancel</Text>
+                            </Pressable>
+                            <Pressable
+                                style={[modalStyles.button, {
+                                    backgroundColor: theme.accent,
+                                    opacity: imapLoading ? 0.6 : 1,
+                                }]}
+                                onPress={handleImapSubmit}
+                                disabled={imapLoading}
+                            >
+                                {imapLoading ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <Text style={[modalStyles.buttonText, { color: '#fff' }]}>Connect</Text>
+                                )}
+                            </Pressable>
+                        </View>
+                    </View>
+                </View>
+                </KeyboardAvoidingView>
+            </Modal>
 
             {/* Telegram Code Input Modal */}
             <Modal

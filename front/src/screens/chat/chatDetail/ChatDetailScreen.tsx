@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Platform, KeyboardAvoidingView, RefreshControl, Text, Pressable, StyleSheet } from 'react-native';
+import { useSharedValue, withSpring, withDelay, runOnJS } from 'react-native-reanimated';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageViewing from 'react-native-image-viewing';
@@ -28,6 +29,9 @@ export function ChatDetailScreen() {
     const route = useRoute<RouteProp<ChatStackParamList, 'ChatDetail'>>();
     const { chatId } = route.params;
     const navigation = useNavigation();
+
+    // Slide-up animation for the input toolbar
+    const inputAnimY = useSharedValue(300);
 
     const { showDialog, dialogState, submitResponse, cancelDialog } = useAskUser();
     const {
@@ -93,7 +97,7 @@ export function ChatDetailScreen() {
         [user?.id],
     );
 
-    const headerTitle = externalTitle || 'Chat';
+    const headerTitle = externalTitle || activeChat?.title || 'Chat';
     const headerSubtitle = useMemo(() => {
         if (assistantWorking) return 'typing...';
         if (chatMode === 'team') {
@@ -102,12 +106,6 @@ export function ChatDetailScreen() {
         }
         return '';
     }, [assistantWorking, chatMode, selectedTeamId]);
-
-    const avatarInitial = useMemo(() => {
-        const icon = activeChat?.icon;
-        if (icon && icon.length > 0) return icon[0];
-        return headerTitle ? headerTitle[0].toUpperCase() : 'G';
-    }, [activeChat?.icon, headerTitle]);
 
     useEffect(() => {
         if (chatId && chatId !== emptyChatID && !isPluginThread) {
@@ -151,6 +149,35 @@ export function ChatDetailScreen() {
             delete (globalThis as any).__askUserDialog;
         };
     }, [showDialog]);
+
+    // Pending back-navigation action stored in a ref so the UI-thread callback can access it
+    const pendingNavAction = useRef<any>(null);
+
+    const doNavigate = useCallback(() => {
+        const action = pendingNavAction.current;
+        if (action) {
+            pendingNavAction.current = null;
+            navigation.dispatch(action);
+        }
+    }, [navigation]);
+
+    // Slide input up from the very bottom with a short delay so the screen is in position
+    useEffect(() => {
+        inputAnimY.value = 300;
+        inputAnimY.value = withDelay(150, withSpring(0, { damping: 22, stiffness: 180 }));
+    }, []);
+
+    // Slide input down and navigate in parallel (Back button only — swipe uses native transition)
+    useEffect(() => {
+        const unsubscribe = (navigation as any).addListener('beforeRemove', (e: any) => {
+            if (e.data.action.type !== 'GO_BACK' && e.data.action.type !== 'POP') return;
+            e.preventDefault();
+            pendingNavAction.current = e.data.action;
+            inputAnimY.value = withSpring(300, { damping: 22, stiffness: 180 });
+            setTimeout(() => runOnJS(doNavigate)(), 80);
+        });
+        return unsubscribe;
+    }, [navigation, doNavigate]);
 
     const handleDiceComplete = useCallback((resultMessage: string) => {
         setDiceOverlayVisible(false);
@@ -252,23 +279,20 @@ export function ChatDetailScreen() {
         onAttachmentPress: handleAttachmentPress,
         attachmentPosition,
         onMessageAction: handleMessageAction,
+        inputAnimY,
     });
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
-            {/* iMessage-style header */}
+            {/* Header */}
             <View style={[detailStyles.header, { paddingTop: insets.top + 8, backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-                {/* Left: back button */}
-                <Pressable onPress={() => navigation.goBack()} style={detailStyles.backBtn} hitSlop={8}>
-                    <Ionicons name="chevron-back" size={20} color={theme.accent} />
-                    <Text style={[detailStyles.backText, { color: theme.accent }]}>Back</Text>
+                {/* Left: back arrow only */}
+                <Pressable onPress={() => navigation.goBack()} style={detailStyles.backBtn} hitSlop={12}>
+                    <Ionicons name="chevron-back" size={28} color={theme.accent} />
                 </Pressable>
 
-                {/* Center: avatar + name + subtitle */}
+                {/* Center: title only */}
                 <View style={detailStyles.center}>
-                    <View style={[detailStyles.avatar, { backgroundColor: theme.accent }]}>
-                        <Text style={detailStyles.avatarText}>{avatarInitial}</Text>
-                    </View>
                     <Text style={[detailStyles.title, { color: theme.text }]} numberOfLines={1}>
                         {headerTitle}
                     </Text>
@@ -279,15 +303,15 @@ export function ChatDetailScreen() {
                     ) : null}
                 </View>
 
-                {/* Right: info button placeholder */}
+                {/* Right: info button */}
                 <Pressable style={detailStyles.infoBtn} hitSlop={8}>
-                    <Ionicons name="information-circle-outline" size={24} color={theme.accent} />
+                    <Ionicons name="information-circle-outline" size={22} color={theme.accent} />
                 </Pressable>
             </View>
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={{ flex: 1 }}
+                style={{ flex: 1, backgroundColor: theme.background }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 <GiftedChat
@@ -378,43 +402,25 @@ const detailStyles = StyleSheet.create({
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
     backBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        minWidth: 70,
-        gap: 2,
-    },
-    backText: {
-        fontSize: 17,
-        fontWeight: '400',
+        width: 44,
+        alignItems: 'flex-start',
+        justifyContent: 'center',
     },
     center: {
         flex: 1,
         alignItems: 'center',
     },
-    avatar: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 2,
-    },
-    avatarText: {
-        color: '#ffffff',
-        fontSize: 16,
-        fontWeight: '700',
-    },
     title: {
-        fontSize: 14,
-        fontWeight: '700',
-        lineHeight: 18,
+        fontSize: 16,
+        fontWeight: '600',
+        lineHeight: 20,
     },
     subtitle: {
         fontSize: 11,
         lineHeight: 14,
     },
     infoBtn: {
-        minWidth: 70,
+        width: 44,
         alignItems: 'flex-end',
     },
 });

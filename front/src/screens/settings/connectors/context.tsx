@@ -544,25 +544,15 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 const token = authStore.getToken();
 
                 if (token) {
-                    // We need the backend ID for this, but our local ID might be different if we generated it.
-                    // However, with the new sync logic, we should try to match.
-                    // But wait, our local ID is a UUID generated locally currently.
-                    // The sync logic I added doesn't store the backend ID explicitly in a separate field,
-                    // it just tries to use it or generates a new one.
-                    // Actually, if we look at syncFromBackend, I didn't enforce using backend ID.
-                    // So we might have a problem deleting by ID if they don't match.
-
-                    // Let's check if the ID matches a backend one.
-                    // If we can't match it easily, we might fail to delete on backend.
-
-                    // Better approach:
-                    // 1. Get the local integration
-                    // 2. Fetch backend integrations
-                    // 3. Find the matching backend integration by provider + email
-                    // 4. Delete using backend ID
-
                     const integration = configs.find(c => c.id === id);
-                    if (integration && integration.params?.account_email) {
+
+                    if (integration?.provider === 'telegram') {
+                        // Telegram is stored in plugin_data, not integrations table
+                        await fetch(`${apiUrl}/telegram/unlink`, {
+                            method: 'DELETE',
+                            headers: { Authorization: `Bearer ${token}` },
+                        });
+                    } else if (integration && integration.params?.account_email) {
                         const response = await fetch(`${apiUrl}/integrations`, {
                             headers: { Authorization: `Bearer ${token}` },
                         });
@@ -679,6 +669,48 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         [getIntegrations],
     );
 
+    const connectImap = React.useCallback(async (email: string, password: string) => {
+        const { IMAPEmailClient } = await import('../../../services/integrations/clients/IMAPEmailClient');
+        const config = IMAPEmailClient.autoDetectConfig(email, password);
+        const fullConfig = {
+            imapHost: config.imapHost || `imap.${email.split('@')[1]}`,
+            imapPort: config.imapPort || 993,
+            imapUseTLS: config.imapUseTLS ?? true,
+            smtpHost: config.smtpHost || `smtp.${email.split('@')[1]}`,
+            smtpPort: config.smtpPort || 465,
+            smtpUseTLS: config.smtpUseTLS ?? true,
+            username: email,
+            password,
+            displayName: email,
+        };
+
+        const client = new IMAPEmailClient();
+        const test = await client.testConnection(fullConfig);
+        if (!test.success) {
+            throw new Error(test.message || 'Connection failed');
+        }
+
+        const metadata = getIntegrationMetadata('imap');
+        await integrationStorage.createIntegration(
+            {
+                provider: 'imap' as any,
+                name: `Email (${email})`,
+                enabled: true,
+                accountEmail: email,
+                storageType: metadata?.storageType,
+                supportsBackgroundTasks: metadata?.supportsBackgroundTasks,
+                systemEventListeners: metadata?.systemEventListeners,
+            },
+            {
+                accessToken: JSON.stringify(fullConfig),
+                refreshToken: '',
+                tokenExpiry: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000),
+            },
+        );
+
+        await getIntegrations();
+    }, [getIntegrations]);
+
     const value: ConnectorContextType = {
         tools,
         integrations: configs,
@@ -688,6 +720,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         startOAuth,
         deleteIntegration,
         connectTelegram,
+        connectImap,
     };
 
     return (

@@ -137,4 +137,17 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         category: 'health',
         color: '#FF2D55',
     },
+    imap: {
+        id: 'imap',
+        name: 'imap',
+        displayName: 'Email (IMAP)',
+        description: 'Connect any email account via IMAP/SMTP',
+        icon: 'mail',
+        storageType: 'client',
+        supportsBackgroundTasks: true,
+        systemEventListeners: ['app_lifecycle'],
+        authType: 'api_key',
+        category: 'email',
+        color: '#5B8DEF',
+    },
 };

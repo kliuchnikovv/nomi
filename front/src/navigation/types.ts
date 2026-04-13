@@ -13,11 +13,21 @@ export type ChatStackParamList = {
   ChatDetail: { chatId: string };
 };
 
+// Settings nested stack (inside the Settings tab)
+export type SettingsStackParamList = {
+  SettingsHome: undefined;
+  ThemeScreen: undefined;
+  WeatherLocationScreen: undefined;
+  PlannerModelScreen: undefined;
+  BotIdentityScreen: undefined;
+  IntegrationsScreen: undefined;
+};
+
 // Main bottom tab navigator
 export type RootTabParamList = {
   Dashboard: undefined;
   Planning: undefined;
   Chat: NavigatorScreenParams<ChatStackParamList>; // Chat tab contains ChatStack
   Integrations: undefined;
-  Settings: undefined;
+  Settings: NavigatorScreenParams<SettingsStackParamList>; // Settings tab contains SettingsStack
 };

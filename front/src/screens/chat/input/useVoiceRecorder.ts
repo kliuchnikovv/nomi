@@ -2,18 +2,30 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import Voice from '@react-native-voice/voice';
 import { Platform, NativeModules } from 'react-native';
 
-const MAX_RECORDING_DURATION = 60; // 1 minute in seconds
+const MAX_RECORDING_DURATION = 60;
 
 type RecordingState = 'idle' | 'recording' | 'processing';
 
 const getDeviceLocale = () => {
     if (Platform.OS === 'ios') {
-        // iOS uses I18nManager for locale
         return NativeModules.I18nManager?.localeIdentifier || 'en-US';
     }
-    // Android
     return NativeModules.I18nManager?.localeIdentifier || 'en-US';
 };
+
+function clearAllIntervals(
+    durationRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
+    animationRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
+) {
+    if (durationRef.current) {
+        clearInterval(durationRef.current);
+        durationRef.current = null;
+    }
+    if (animationRef.current) {
+        clearInterval(animationRef.current);
+        animationRef.current = null;
+    }
+}
 
 export function useVoiceRecorder() {
     const [state, setState] = useState<RecordingState>('idle');
@@ -26,15 +38,9 @@ export function useVoiceRecorder() {
     const animationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const startTimeRef = useRef<number>(0);
 
-    // Initialize Voice recognition
     useEffect(() => {
-        Voice.onSpeechStart = () => {
-            console.log('Speech recognition started');
-        };
-
-        Voice.onSpeechEnd = () => {
-            console.log('Speech recognition ended');
-        };
+        Voice.onSpeechStart = () => {};
+        Voice.onSpeechEnd = () => {};
 
         Voice.onSpeechResults = (event) => {
             if (event.value && event.value.length > 0) {
@@ -43,15 +49,14 @@ export function useVoiceRecorder() {
         };
 
         Voice.onSpeechError = (event) => {
-            // Ignore "No speech detected" errors as they're normal
             if (event.error?.code === 'recognition_fail' && event.error?.message?.includes('No speech detected')) {
                 return;
             }
-            console.error('Speech recognition error:', event.error);
             setError(event.error?.message || 'Speech recognition failed');
         };
 
         return () => {
+            clearAllIntervals(durationIntervalRef, animationIntervalRef);
             Voice.destroy().then(Voice.removeAllListeners);
         };
     }, []);
@@ -64,9 +69,7 @@ export function useVoiceRecorder() {
             setDuration(0);
 
             const selectedLocale = locale || getDeviceLocale();
-            console.log('Starting recognition with locale:', selectedLocale);
 
-            // Start speech recognition
             if (Platform.OS === 'ios') {
                 await Voice.start(selectedLocale);
             }
@@ -74,20 +77,15 @@ export function useVoiceRecorder() {
             setState('recording');
             startTimeRef.current = Date.now();
 
-            // Start duration timer
             durationIntervalRef.current = setInterval(() => {
                 const elapsed = (Date.now() - startTimeRef.current) / 1000;
                 setDuration(elapsed);
 
-                // Auto-stop at max duration
                 if (elapsed >= MAX_RECORDING_DURATION) {
                     stopRecording();
                 }
             }, 100);
 
-            // Simulate audio levels with random values for animation.
-            // Use a fixed-size ring buffer (60 entries = 3 seconds at 50ms intervals)
-            // to prevent unbounded array growth during long recordings.
             const MAX_AUDIO_LEVELS = 60;
             animationIntervalRef.current = setInterval(() => {
                 const randomLevel = 0.2 + Math.random() * 0.7;
@@ -106,25 +104,13 @@ export function useVoiceRecorder() {
     const stopRecording = useCallback(async () => {
         try {
             setState('processing');
+            clearAllIntervals(durationIntervalRef, animationIntervalRef);
 
-            // Clear intervals
-            if (durationIntervalRef.current) {
-                clearInterval(durationIntervalRef.current);
-                durationIntervalRef.current = null;
-            }
-            if (animationIntervalRef.current) {
-                clearInterval(animationIntervalRef.current);
-                animationIntervalRef.current = null;
-            }
-
-            // Stop speech recognition
             if (Platform.OS === 'ios') {
                 await Voice.stop();
             }
 
-            // Wait a bit for final transcription results
             await new Promise<void>((resolve) => setTimeout(resolve, 500));
-
             setState('idle');
         } catch (err) {
             console.error('Failed to stop recording:', err);
@@ -142,20 +128,8 @@ export function useVoiceRecorder() {
 
     const cancelRecording = useCallback(async () => {
         try {
-            // Clear intervals
-            if (durationIntervalRef.current) {
-                clearInterval(durationIntervalRef.current);
-                durationIntervalRef.current = null;
-            }
-            if (animationIntervalRef.current) {
-                clearInterval(animationIntervalRef.current);
-                animationIntervalRef.current = null;
-            }
-
-            // Stop voice recognition
+            clearAllIntervals(durationIntervalRef, animationIntervalRef);
             await Voice.stop();
-
-            // Reset state without saving transcription
             setAudioLevels([]);
             setDuration(0);
             setState('idle');

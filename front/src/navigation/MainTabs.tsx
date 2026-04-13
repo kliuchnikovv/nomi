@@ -1,38 +1,98 @@
-import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import React, { useEffect } from 'react';
+import { LayoutChangeEvent } from 'react-native';
+import { createBottomTabNavigator, BottomTabBar, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+
+// Height of the tab bar icon area above the safe-area inset (≈ input bar / 1.5).
+// Used by screens that need a bottom spacer to clear the floating tab bar.
+export const TAB_BAR_ICON_HEIGHT = 60; // px above insets.bottom
 
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { PlannerScreen } from '../screens/planner/PlannerScreen';
 import { ChatStack } from './ChatStack';
 import { IntegrationsScreen } from '../screens/integrations/IntegrationsScreen';
-import { SettingsTabScreen } from '../screens/settingsTab/SettingsTabScreen';
+import { SettingsStack } from './SettingsStack';
 import type { RootTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-function getTabBarStyle(route: RouteProp<RootTabParamList, 'Chat'>, surface: string, border: string) {
-    const routeName = getFocusedRouteNameFromRoute(route) ?? 'ChatList';
-    if (routeName === 'ChatDetail') {
-        return { display: 'none' as const };
-    }
-    return { backgroundColor: surface, borderTopColor: border };
+const SPRING_CONFIG = { damping: 22, stiffness: 180 };
+
+function AnimatedTabBar(props: BottomTabBarProps) {
+    const { state } = props;
+    const { theme } = useTheme();
+    const heightSV = useSharedValue(0);
+    const progress = useSharedValue(0); // 0 = visible, 1 = hidden
+
+    // True when the Chat tab is focused and the user is inside ChatDetail
+    const chatRoute = state.routes.find(r => r.name === 'Chat');
+    const isInChatDetail = chatRoute
+        ? getFocusedRouteNameFromRoute(chatRoute) === 'ChatDetail'
+        : false;
+
+    useEffect(() => {
+        progress.value = withSpring(isInChatDetail ? 1 : 0, SPRING_CONFIG);
+    }, [isInChatDetail]);
+
+    // Measure the tab bar once on first layout
+    const handleLayout = (e: LayoutChangeEvent) => {
+        const h = e.nativeEvent.layout.height;
+        if (h > 0 && heightSV.value === 0) {
+            heightSV.value = h;
+        }
+    };
+
+    // Slide the bar off-screen downward without changing layout — avoids any reflow/jump
+    const containerStyle = useAnimatedStyle(() => ({
+        position: 'absolute' as const,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        transform: [{ translateY: heightSV.value * progress.value }],
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        overflow: 'hidden' as const,
+    }));
+
+    return (
+        <Animated.View
+            style={[containerStyle, {
+                borderWidth: 1,
+                borderBottomWidth: 0,
+                borderColor: `${theme.accent}40`,
+            }]}
+            onLayout={handleLayout}
+        >
+            <BottomTabBar {...props} />
+        </Animated.View>
+    );
 }
 
 export function MainTabs() {
     const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
+    // Total tab bar height = icon area + device bottom inset
+    const tabBarHeight = TAB_BAR_ICON_HEIGHT + insets.bottom;
 
     return (
         <Tab.Navigator
+            tabBar={(props) => <AnimatedTabBar {...props} />}
             screenOptions={({ route }: { route: RouteProp<RootTabParamList, keyof RootTabParamList> }) => ({
                 headerShown: false,
-                tabBarStyle: { backgroundColor: theme.surface, borderTopColor: theme.border },
+                tabBarStyle: {
+                    backgroundColor: theme.surface,
+                    borderTopWidth: 0,
+                    height: tabBarHeight,
+                    paddingTop: 12,
+                },
                 tabBarActiveTintColor: theme.accent,
                 tabBarInactiveTintColor: theme.textSecondary,
-                tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
-                tabBarIcon: ({ focused, color, size }: { focused: boolean; color: string; size: number }) => {
+                tabBarShowLabel: false,
+                tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => {
                     let iconName: keyof typeof Ionicons.glyphMap;
 
                     switch (route.name) {
@@ -55,22 +115,15 @@ export function MainTabs() {
                             iconName = 'ellipse';
                     }
 
-                    return <Ionicons name={iconName} size={size} color={color} />;
+                    return <Ionicons name={iconName} size={28} color={color} />;
                 },
             })}
         >
-            <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Home' }} />
-            <Tab.Screen name="Planning" component={PlannerScreen} options={{ title: 'Plan' }} />
-            <Tab.Screen
-                name="Chat"
-                component={ChatStack}
-                options={({ route }: { route: RouteProp<RootTabParamList, 'Chat'> }) => ({
-                    title: 'Chats',
-                    tabBarStyle: getTabBarStyle(route, theme.surface, theme.border),
-                })}
-            />
-            <Tab.Screen name="Integrations" component={IntegrationsScreen} options={{ title: 'Integrations' }} />
-            <Tab.Screen name="Settings" component={SettingsTabScreen} options={{ title: 'Settings' }} />
+            <Tab.Screen name="Dashboard" component={DashboardScreen} />
+            <Tab.Screen name="Planning" component={PlannerScreen} />
+            <Tab.Screen name="Chat" component={ChatStack} />
+            <Tab.Screen name="Integrations" component={IntegrationsScreen} />
+            <Tab.Screen name="Settings" component={SettingsStack} />
         </Tab.Navigator>
     );
 }

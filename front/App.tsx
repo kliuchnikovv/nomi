@@ -5,8 +5,8 @@
  * @format
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { StatusBar, StyleSheet, useColorScheme, View, Text, AppState, AppStateStatus } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StatusBar, useColorScheme, AppState, AppStateStatus } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
@@ -28,6 +28,7 @@ import { socket } from './src/socket';
 import { initDebugUtils } from './src/debug/DebugUtils';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ConnectorsProvider } from './src/screens/settings/connectors/context';
+import { SplashScreen } from './src/screens/splash/SplashScreen';
 
 // Initialize debug utilities
 initDebugUtils();
@@ -123,12 +124,7 @@ function App() {
     }, []);
 
     if (!configReady) {
-        return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDarkMode ? '#000' : '#fff' }}>
-                <Text style={{ color: isDarkMode ? '#fff' : '#000', fontSize: 20 }}>{initStatus}</Text>
-                <Text style={{ color: isDarkMode ? '#888' : '#666', marginTop: 10 }}>Genie App v0.0.1</Text>
-            </View>
-        );
+        return <SplashScreen initStatus={initStatus} />;
     }
 
     return (
