@@ -18,6 +18,7 @@ export type SettingsStackParamList = {
   SettingsHome: undefined;
   ThemeScreen: undefined;
   WeatherLocationScreen: undefined;
+  LocationScreen: undefined;
   PlannerModelScreen: undefined;
   BotIdentityScreen: undefined;
   IntegrationsScreen: undefined;
