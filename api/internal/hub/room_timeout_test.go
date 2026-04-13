@@ -19,7 +19,6 @@ func TestSendGenerationTimeoutError_UsesErrorInfo(t *testing.T) {
 	}
 
 	// Capture the error frame by adding a fake client
-	received := make(chan []byte, 1)
 	client := &Client{
 		room:    room,
 		send:    make(chan []byte, 8),
