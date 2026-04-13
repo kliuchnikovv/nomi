@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 
 ToolBuilder = Callable[[dict[str, Any]], Toolkit]
 
+# Virtual tools that are handled automatically by Agno (no builder needed).
+# Logged at debug level instead of warning.
+VIRTUAL_TOOLS = frozenset({
+    "knowledge_search",       # Agno auto-registers search_knowledge_base tool
+})
+
 
 @dataclass
 class ToolItem:
@@ -203,7 +209,13 @@ async def build(config: ToolsConfig, user_id: str | None = None) -> list[Toolkit
                     break
 
         if not builder:
-            logger.warning(f"[Tools] No builder found for tool: {item.name}")
+            if item.name in VIRTUAL_TOOLS:
+                logger.debug(
+                    "[Tools] Skipping virtual tool '%s' (handled by Agno automatically)",
+                    item.name,
+                )
+            else:
+                logger.warning(f"[Tools] No builder found for tool: {item.name}")
             continue
 
         # Gracefully skip tools that fail to initialize (e.g., missing credentials)

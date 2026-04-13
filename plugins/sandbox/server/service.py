@@ -67,7 +67,10 @@ class SandboxService:
                         error_text = await response.text()
                         raise Exception(f"Failed to create sandbox: {error_text}")
             except aiohttp.ClientError as e:
-                raise Exception(f"Connection error to sandbox controller: {e}")
+                raise Exception(
+                    f"Sandbox is currently unavailable. Please try again later. "
+                    f"(Connection error: {type(e).__name__})"
+                )
 
     async def get_sandbox_status(self, sandbox_id: str) -> Optional[Dict[str, Any]]:
         """Get sandbox status."""
@@ -112,7 +115,7 @@ class SandboxService:
                         error_text = await response.text()
                         raise Exception(f"Failed to execute command: {error_text}")
             except aiohttp.ClientError as e:
-                raise Exception(f"Connection error: {e}")
+                raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__}")
 
     async def exec_stream(
         self, sandbox_id: str, command: list, timeout: int = 60
@@ -165,7 +168,7 @@ class SandboxService:
                         error_text = await response.text()
                         raise Exception(f"Failed to upload file: {error_text}")
             except aiohttp.ClientError as e:
-                raise Exception(f"Connection error: {e}")
+                raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__}")
 
     async def download_file(self, sandbox_id: str, path: str) -> str:
         """Download a file from the sandbox."""
@@ -184,7 +187,7 @@ class SandboxService:
                         error_text = await response.text()
                         raise Exception(f"Failed to download file: {error_text}")
             except aiohttp.ClientError as e:
-                raise Exception(f"Connection error: {e}")
+                raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__}")
 
     async def list_files(self, sandbox_id: str, path: str = "/workspace") -> list:
         """List files in a directory."""
@@ -204,7 +207,7 @@ class SandboxService:
                         error_text = await response.text()
                         raise Exception(f"Failed to list files: {error_text}")
             except aiohttp.ClientError as e:
-                raise Exception(f"Connection error: {e}")
+                raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__}")
 
     async def destroy_sandbox(self, sandbox_id: str, delete_pvc: bool = False) -> bool:
         """Destroy a sandbox."""
@@ -226,7 +229,7 @@ class SandboxService:
                         error_text = await response.text()
                         raise Exception(f"Failed to destroy sandbox: {error_text}")
             except aiohttp.ClientError as e:
-                raise Exception(f"Connection error: {e}")
+                raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__}")
 
     def clear_cache_for_user(self, user_id: str, project_id: str = ""):
         """Clear cache entry for a user."""
