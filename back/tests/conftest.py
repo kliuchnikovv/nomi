@@ -25,6 +25,8 @@ def _setup_all_mocks():
     _install_mock_module("agno")
     _install_mock_module("agno.agent", {"Agent": MagicMock})
     _install_mock_module("agno.media", {"Image": MagicMock})
+    _install_mock_module("agno.workflow")
+    _install_mock_module("agno.workflow.types", {"WorkflowExecutionInput": MagicMock})
     _install_mock_module("agno.db")
     _install_mock_module("agno.db.postgres", {"PostgresDb": MagicMock})
     _install_mock_module("agno.db.postgres.schemas")
@@ -66,8 +68,10 @@ def _setup_all_mocks():
     # ── src.workflows (depends on agno + tools) ──
     _install_mock_module("src.workflows")
     _install_mock_module("src.workflows.models", {
-        "PlanStatus": MagicMock,
+        "PlanStatus": MagicMock(),
         "WorkflowState": MagicMock,
+        "PlanTask": MagicMock,
+        "PlanningInput": MagicMock,
     })
     _install_mock_module("src.workflows.planning", {
         "build_planning_workflow": MagicMock,
