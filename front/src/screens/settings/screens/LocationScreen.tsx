@@ -46,6 +46,12 @@ export function LocationScreen() {
         getStoredLocation().then(setLocation);
     }, []);
 
+    useEffect(() => {
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+    }, []);
+
     const handleQueryChange = (text: string) => {
         setQuery(text);
         if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -53,21 +59,34 @@ export function LocationScreen() {
             setResults([]);
             return;
         }
+        const capturedQuery = text;
         debounceRef.current = setTimeout(async () => {
             setSearching(true);
-            const found = await searchLocations(text);
-            setResults(found);
-            setSearching(false);
+            const found = await searchLocations(capturedQuery);
+            // Discard results if query changed while request was in-flight
+            setQuery(current => {
+                if (current === capturedQuery) {
+                    setResults(found);
+                    setSearching(false);
+                } else {
+                    setSearching(false);
+                }
+                return current;
+            });
         }, 300);
     };
 
     const handleSelectResult = async (result: NominatimResult) => {
-        const share = location?.shareWithAgent ?? false;
-        const updated = nominatimResultToLocation(result, share);
-        await saveLocation(updated);
-        setLocation(updated);
-        setQuery('');
-        setResults([]);
+        try {
+            const share = location?.shareWithAgent ?? false;
+            const updated = nominatimResultToLocation(result, share);
+            await saveLocation(updated);
+            setLocation(updated);
+            setQuery('');
+            setResults([]);
+        } catch {
+            // storage failure — silently ignore, state is unchanged
+        }
     };
 
     const handleGPS = async () => {
@@ -79,9 +98,13 @@ export function LocationScreen() {
 
     const handleToggleShare = async (value: boolean) => {
         if (!location) return;
-        const updated = { ...location, shareWithAgent: value };
-        await saveLocation(updated);
-        setLocation(updated);
+        try {
+            const updated = { ...location, shareWithAgent: value };
+            await saveLocation(updated);
+            setLocation(updated);
+        } catch {
+            // storage failure — silently ignore
+        }
     };
 
     const styles = useMemo(() => StyleSheet.create({
@@ -203,7 +226,7 @@ export function LocationScreen() {
                     <View style={styles.dropdown}>
                         <FlatList
                             data={results}
-                            keyExtractor={(_, i) => String(i)}
+                            keyExtractor={(item) => String(item.place_id)}
                             renderItem={({ item }) => (
                                 <Pressable style={styles.resultItem} onPress={() => handleSelectResult(item)}>
                                     <Text style={styles.resultText} numberOfLines={1}>
