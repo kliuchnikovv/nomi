@@ -33,12 +33,12 @@ class AgentRunWrapper:
         self._agent = agent
         self._rag_user_id = rag_user_id
 
-    async def arun(self, input, **kwargs):
+    def arun(self, input, **kwargs):
         filters = kwargs.get("knowledge_filters") or {}
         if isinstance(filters, dict):
             filters = {**filters, "user_id": self._rag_user_id}
         kwargs["knowledge_filters"] = filters
-        return await self._agent.arun(input, **kwargs)
+        return self._agent.arun(input, **kwargs)
 
     def run(self, input, **kwargs):
         filters = kwargs.get("knowledge_filters") or {}

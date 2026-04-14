@@ -1521,7 +1521,13 @@ class RedisSession:
     ) -> Any:
         """Invoke the agent with the given input and return the result."""
 
-        # Helper to decide if we should await
+        # Helper: call fn and await the result only if it is a coroutine.
+        # Using iscoroutinefunction is unreliable when the callable is a
+        # regular-function wrapper around an async function (e.g. AgentRunWrapper).
+        # Checking the *return value* handles all cases correctly:
+        #   - async def fn          → returns coroutine → await it
+        #   - def fn returning async generator (stream=True) → pass through
+        #   - def fn returning plain value → pass through
         async def run_fn(fn):
             inp = agent_input
             if isinstance(inp, str):
@@ -1529,9 +1535,10 @@ class RedisSession:
                     inp if (inp and inp.strip()) else "[continue from previous context]"
                 )
 
-            if asyncio.iscoroutinefunction(fn):
-                return await fn(inp, stream=True, stream_events=True, **kwargs)
-            return fn(inp, stream=True, stream_events=True, **kwargs)
+            result = fn(inp, stream=True, stream_events=True, **kwargs)
+            if asyncio.iscoroutine(result):
+                result = await result
+            return result
 
         result = None
         try:
