@@ -15,7 +15,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { NavArrowLeft } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
-import { themes } from '../../../themes';
 import { SettingsStackParamList } from '../../../navigation/types';
 import {
     UserLocation,
@@ -31,8 +30,7 @@ type Nav = NativeStackNavigationProp<SettingsStackParamList, 'LocationScreen'>;
 
 export function LocationScreen() {
     const navigation = useNavigation<Nav>();
-    const { theme, themeName } = useTheme();
-    const palette = themes[themeName].palette;
+    const { theme } = useTheme();
     const insets = useSafeAreaInsets();
 
     const [location, setLocation] = useState<UserLocation | null>(null);
@@ -40,6 +38,7 @@ export function LocationScreen() {
     const [results, setResults] = useState<NominatimResult[]>([]);
     const [searching, setSearching] = useState(false);
     const [gpsLoading, setGpsLoading] = useState(false);
+    const isMountedRef = useRef(true);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -48,6 +47,7 @@ export function LocationScreen() {
 
     useEffect(() => {
         return () => {
+            isMountedRef.current = false;
             if (debounceRef.current) clearTimeout(debounceRef.current);
         };
     }, []);
@@ -92,6 +92,7 @@ export function LocationScreen() {
     const handleGPS = async () => {
         setGpsLoading(true);
         const updated = await updateLocationFromGPS();
+        if (!isMountedRef.current) return;
         if (updated) setLocation(updated);
         setGpsLoading(false);
     };
@@ -192,7 +193,7 @@ export function LocationScreen() {
         },
         toggleLabel: { fontSize: 16, color: theme.textPrimary, flex: 1 },
         toggleHint: { fontSize: 12, color: theme.fadedText, marginTop: 4 },
-    }), [theme, palette]);
+    }), [theme]);
 
     return (
         <View style={[styles.root, { paddingTop: insets.top }]}>
