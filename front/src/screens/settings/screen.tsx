@@ -34,45 +34,63 @@ export default function SettingsHomeScreen() {
     const navigation = useNavigation<Nav>();
 
     const palette = themes[themeName].palette;
-    const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const styles = useMemo(
+        () => createStyles(theme, palette),
+        [theme, palette],
+    );
 
-    const [emailAnalysisMode, setEmailAnalysisMode] = useState<EmailAnalysisMode>('device');
-    const [plannerModelName, setPlannerModelName] = useState(PLANNER_MODEL_DEFAULT);
+    const [emailAnalysisMode, setEmailAnalysisMode] =
+        useState<EmailAnalysisMode>('device');
+    const [plannerModelName, setPlannerModelName] = useState(
+        PLANNER_MODEL_DEFAULT,
+    );
     const [botName, setBotName] = useState('Souper');
     const [locationDisplay, setLocationDisplay] = useState('');
-    const [currentThemeName, setCurrentThemeName] = useState(() => themes[themeName].name);
+    const [currentThemeName, setCurrentThemeName] = useState(
+        () => themes[themeName].name,
+    );
 
     // Refresh preview values each time this screen comes into focus
-    useFocusEffect(useCallback(() => {
-        initApiUrl();
-        setCurrentThemeName(themes[themeName].name);
+    useFocusEffect(
+        useCallback(() => {
+            initApiUrl();
+            setCurrentThemeName(themes[themeName].name);
 
-        AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
-            if (mode === 'server' || mode === 'device') setEmailAnalysisMode(mode);
-        });
-        AsyncStorage.getItem(PLANNER_MODEL_KEY).then(async savedId => {
-            if (!savedId) return;
-            try {
-                const models = await modelsApi.getModels();
-                const found = models.find(m => m.id === savedId);
-                setPlannerModelName(found?.name ?? savedId);
-            } catch {
-                setPlannerModelName(savedId);
-            }
-        });
-        botIdentityApi.get().then(identity => {
-            if (identity?.name) setBotName(identity.name);
-        }).catch(() => {});
-        getStoredLocation().then(loc => setLocationDisplay(loc.displayName));
-    }, [themeName]));
+            AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
+                if (mode === 'server' || mode === 'device')
+                    setEmailAnalysisMode(mode);
+            });
+            AsyncStorage.getItem(PLANNER_MODEL_KEY).then(async savedId => {
+                if (!savedId) return;
+                try {
+                    const models = await modelsApi.getModels();
+                    const found = models.find(m => m.id === savedId);
+                    setPlannerModelName(found?.name ?? savedId);
+                } catch {
+                    setPlannerModelName(savedId);
+                }
+            });
+            botIdentityApi
+                .get()
+                .then(identity => {
+                    if (identity?.name) setBotName(identity.name);
+                })
+                .catch(() => {});
+            getStoredLocation().then(loc =>
+                setLocationDisplay(loc.displayName),
+            );
+        }, [themeName]),
+    );
 
     return (
         <View style={[styles.root, { paddingTop: insets.top }]}>
             <View style={[styles.header, { paddingTop: 8 }]}>
                 <Text style={styles.title}>Settings</Text>
             </View>
-            <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
-
+            <ScrollView
+                style={styles.body}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+            >
                 <SettingsSection header="Appearance">
                     <SettingsRow
                         label="Theme"
@@ -86,19 +104,30 @@ export default function SettingsHomeScreen() {
                 <SettingsSection header="AI & Models">
                     <SettingsToggleRow
                         label="Email Analysis"
-                        subtitle={emailAnalysisMode === 'server' ? 'Server (gpt-5-nano)' : 'Device'}
+                        subtitle={
+                            emailAnalysisMode === 'server'
+                                ? 'Server (gpt-5-nano)'
+                                : 'Device'
+                        }
                         value={emailAnalysisMode === 'server'}
-                        onToggle={async (value) => {
-                            const mode: EmailAnalysisMode = value ? 'server' : 'device';
+                        onToggle={async value => {
+                            const mode: EmailAnalysisMode = value
+                                ? 'server'
+                                : 'device';
                             setEmailAnalysisMode(mode);
-                            await AsyncStorage.setItem(EMAIL_ANALYSIS_MODE_KEY, mode);
+                            await AsyncStorage.setItem(
+                                EMAIL_ANALYSIS_MODE_KEY,
+                                mode,
+                            );
                         }}
                         isFirst
                     />
                     <SettingsRow
                         label="Planner Model"
                         value={plannerModelName}
-                        onPress={() => navigation.navigate('PlannerModelScreen')}
+                        onPress={() =>
+                            navigation.navigate('PlannerModelScreen')
+                        }
                         isFirst={false}
                         isLast
                     />
@@ -116,7 +145,7 @@ export default function SettingsHomeScreen() {
 
                 <SettingsSection header="Data & Integrations">
                     <SettingsRow
-                        label="Местоположение"
+                        label="Location"
                         value={locationDisplay}
                         onPress={() => navigation.navigate('LocationScreen')}
                         isFirst
@@ -124,7 +153,9 @@ export default function SettingsHomeScreen() {
                     />
                     <SettingsRow
                         label="Integrations"
-                        onPress={() => navigation.navigate('IntegrationsScreen')}
+                        onPress={() =>
+                            navigation.navigate('IntegrationsScreen')
+                        }
                         isFirst={false}
                         isLast
                     />
@@ -140,13 +171,14 @@ export default function SettingsHomeScreen() {
                         label="Logout"
                         destructive
                         onPress={async () => {
-                            try { await logout(); } catch {}
+                            try {
+                                await logout();
+                            } catch {}
                         }}
                         isFirst={false}
                         isLast
                     />
                 </SettingsSection>
-
             </ScrollView>
         </View>
     );
