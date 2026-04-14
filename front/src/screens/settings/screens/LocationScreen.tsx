@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { NavArrowLeft } from 'iconoir-react-native';
+import { NavArrowLeft, MapPin } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { SettingsStackParamList } from '../../../navigation/types';
 import {
@@ -201,17 +201,17 @@ export function LocationScreen() {
                 <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <NavArrowLeft width={24} height={24} color={theme.textPrimary} />
                 </Pressable>
-                <Text style={styles.title}>Местоположение</Text>
+                <Text style={styles.title}>Location</Text>
             </View>
 
             <View style={styles.body}>
-                <Text style={styles.sectionLabel}>Поиск города</Text>
+                <Text style={styles.sectionLabel}>City Search</Text>
                 <View style={styles.searchRow}>
                     <TextInput
                         style={styles.input}
                         value={query}
                         onChangeText={handleQueryChange}
-                        placeholder="Введите название города..."
+                        placeholder="Enter city name..."
                         placeholderTextColor={theme.fadedText}
                     />
                     {query.length > 0 && (
@@ -242,7 +242,7 @@ export function LocationScreen() {
 
                 {location && (
                     <View style={styles.savedCard}>
-                        <Text style={styles.savedLabel}>Сохранено</Text>
+                        <Text style={styles.savedLabel}>Saved</Text>
                         <Text style={styles.savedValue}>{location.displayName}</Text>
                     </View>
                 )}
@@ -250,13 +250,13 @@ export function LocationScreen() {
                 <Pressable onPress={handleGPS} disabled={gpsLoading} style={styles.gpsBtn}>
                     {gpsLoading
                         ? <ActivityIndicator size="small" color={theme.textPrimary} />
-                        : <Text style={styles.gpsBtnText}>🎯 Определить по GPS</Text>
+                        : <><MapPin width={20} height={20} color={theme.textPrimary} /><Text style={styles.gpsBtnText}>Detect via GPS</Text></>
                     }
                 </Pressable>
 
-                <Text style={styles.sectionLabel}>Агент</Text>
+                <Text style={styles.sectionLabel}>Agent</Text>
                 <View style={styles.toggleRow}>
-                    <Text style={styles.toggleLabel}>Делиться локацией с агентом</Text>
+                    <Text style={styles.toggleLabel}>Share location with agent</Text>
                     <Switch
                         value={location?.shareWithAgent ?? false}
                         onValueChange={handleToggleShare}
@@ -265,7 +265,7 @@ export function LocationScreen() {
                 </View>
                 {location?.shareWithAgent && (
                     <Text style={styles.toggleHint}>
-                        Агент будет знать: {location.displayName}
+                        Agent will know: {location.displayName}
                     </Text>
                 )}
             </View>
