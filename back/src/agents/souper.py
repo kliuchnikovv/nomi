@@ -174,15 +174,11 @@ class SouperAgent(Agent):
             return 0
 
         try:
-            # Load all memories for the user from the database
             db = self.memory_manager.db
             if db is None:
                 return 0
 
-            # Access the underlying SQLAlchemy session via Agno's db
-            # Agno's PostgresDb stores AgentRun in the `agent_runs` table and
-            # memories are in `user_memories`.  We use the Agno API to load them.
-            memories = db.get_memories(user_id=self.user_id)
+            memories = db.get_user_memories(user_id=self.user_id)
             if not memories:
                 return 0
 
@@ -200,11 +196,11 @@ class SouperAgent(Agent):
                 if len(group) > 1:
                     # Sort by updated_at descending — keep the first (newest)
                     group.sort(
-                        key=lambda m: getattr(m, "updated_at", None) or "",
+                        key=lambda m: getattr(m, "updated_at", None) or 0,
                         reverse=True,
                     )
                     for duplicate in group[1:]:
-                        mem_id = getattr(duplicate, "id", None)
+                        mem_id = getattr(duplicate, "memory_id", None)
                         if mem_id:
                             ids_to_delete.append(mem_id)
 
@@ -213,23 +209,27 @@ class SouperAgent(Agent):
                 remaining = [
                     m
                     for m in memories
-                    if getattr(m, "id", None) not in set(ids_to_delete)
+                    if getattr(m, "memory_id", None) not in set(ids_to_delete)
                 ]
                 remaining.sort(
-                    key=lambda m: getattr(m, "updated_at", None) or "",
+                    key=lambda m: getattr(m, "updated_at", None) or 0,
                 )
                 excess = len(remaining) - MAX_UNIQUE_MEMORIES
                 for m in remaining[:excess]:
-                    mem_id = getattr(m, "id", None)
+                    mem_id = getattr(m, "memory_id", None)
                     if mem_id:
                         ids_to_delete.append(mem_id)
 
             if ids_to_delete:
-                for mem_id in ids_to_delete:
-                    try:
-                        db.delete_memory(mem_id)
-                    except Exception:
-                        pass
+                try:
+                    db.delete_user_memories(ids_to_delete, user_id=self.user_id)
+                except Exception:
+                    # Fallback: delete one by one
+                    for mem_id in ids_to_delete:
+                        try:
+                            db.delete_user_memory(mem_id, user_id=self.user_id)
+                        except Exception:
+                            pass
                 logger.info(
                     "[Souper] Deduplicated memories: deleted %d duplicates for user %s",
                     len(ids_to_delete),
