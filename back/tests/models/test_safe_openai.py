@@ -33,8 +33,11 @@ class TestNormalizeMessages:
             Message(role="tool", content="Tool result", tool_call_id="123"),
         ]
         result = model._normalize_messages(messages)
-        assert len(result) == 1
+        # "tool" role messages are preserved (not filtered) so the model can
+        # see tool results and avoid infinite tool-call loops.
+        assert len(result) == 2
         assert result[0].role == "user"
+        assert result[1].role == "tool"
 
     def test_remove_tool_calls_from_assistant(self):
         model = SafeOpenAI()
@@ -112,4 +115,5 @@ class TestInvokeMethods:
         list(model.invoke_stream(messages))
         mock_stream.assert_called_once()
         called_messages = mock_stream.call_args[0][0]
-        assert len(called_messages) == 1
+        # "tool" role messages are preserved so the model can see tool results.
+        assert len(called_messages) == 2

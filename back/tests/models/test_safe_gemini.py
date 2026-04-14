@@ -203,7 +203,9 @@ class TestSanitizeToolSchemas:
         result = model._sanitize_tool_schemas(tools)
         assert len(result) == 2
         assert "a" in result[0]["function"]["parameters"]["required"]
-        assert "b" not in result[1]["function"]["parameters"]["required"]
+        # When all required fields are invalid/untyped, the "required" key is
+        # removed entirely (empty required[] is rejected by Gemini API).
+        assert "required" not in result[1]["function"]["parameters"]
 
     def test_non_function_tool_unchanged(self):
         model = SafeGemini()
@@ -297,7 +299,9 @@ class TestGetRequestParams:
         model.get_request_params(tools=tools)
         call_args = mock_get_params.call_args
         passed_tools = call_args.kwargs.get("tools") or call_args[1].get("tools")
-        assert "x" not in passed_tools[0]["function"]["parameters"]["required"]
+        # When all required fields are invalid/untyped, the "required" key is
+        # removed entirely (empty required[] is rejected by Gemini API).
+        assert "required" not in passed_tools[0]["function"]["parameters"]
 
     @patch("src.models.safe_gemini.Gemini.get_request_params")
     def test_get_request_params_no_tools(self, mock_get_params):
