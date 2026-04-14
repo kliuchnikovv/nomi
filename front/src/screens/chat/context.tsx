@@ -23,6 +23,7 @@ import { useChatStore } from '../../store/chatStore';
 import { shallow } from 'zustand/shallow';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import { generateChatTitle } from '../../services/chatTitleGenerator';
+import { getStoredLocation } from '../../services/location/locationService';
 
 function generateId(): string {
     return `${Date.now().toString(36)}-${Math.random()
@@ -652,6 +653,17 @@ export function ChatProvider({
                 }
             }
 
+            // Read location for agent context
+            let agentLocation: string | undefined;
+            try {
+                const loc = await getStoredLocation();
+                if (loc.shareWithAgent) {
+                    agentLocation = loc.displayName;
+                }
+            } catch {
+                // non-critical
+            }
+
             socket.sendMessage(
                 text.trim(),
                 chatIdToUse,
@@ -669,6 +681,7 @@ export function ChatProvider({
                 token ?? undefined, // auth_token for list/agent tools that call Go API
                 commandToSend,
                 contextItems, // Pass context items (emails, documents, etc.)
+                agentLocation,
             );
         },
         [

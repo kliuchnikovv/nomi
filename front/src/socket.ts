@@ -531,7 +531,8 @@ export class ChatSocket {
         endpoint?: string,
         authToken?: string,
         command?: any,
-        contextItems?: any[]
+        contextItems?: any[],
+        userLocation?: string,
     ) {
         if (!chatId) {
             return;
@@ -557,6 +558,7 @@ export class ChatSocket {
             user_id: userId,
             command: command,
             context_items: contextItems, // Context items (emails, documents, etc.)
+            user_location: userLocation,
         };
         if (endpoint !== undefined && endpoint !== '') {
             payload.endpoint = endpoint;
