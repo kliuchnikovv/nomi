@@ -243,11 +243,31 @@ class SouperAgent(Agent):
             return 0
 
     async def arun(self, *args, **kwargs):
-        """Run agent and deduplicate memories afterwards."""
-        result = await super().arun(*args, **kwargs)
-        # Fire-and-forget deduplication — don't block the response
-        try:
-            await self._deduplicate_memories()
-        except Exception:
-            pass
-        return result
+        """Run agent and deduplicate memories afterwards.
+
+        Agent.arun(stream=True) returns an async generator, not a coroutine.
+        We must handle both cases: streaming (yield events, dedup after) and
+        non-streaming (await result, dedup after).
+        """
+        stream = kwargs.get("stream", self.stream) if hasattr(self, "stream") else kwargs.get("stream", False)
+        parent_arun = super().arun(*args, **kwargs)
+
+        if stream:
+            # Wrap the async generator to run dedup after iteration completes
+            async def _stream_with_dedup():
+                try:
+                    async for event in parent_arun:
+                        yield event
+                finally:
+                    try:
+                        await self._deduplicate_memories()
+                    except Exception:
+                        pass
+            return _stream_with_dedup()
+        else:
+            result = await parent_arun
+            try:
+                await self._deduplicate_memories()
+            except Exception:
+                pass
+            return result
