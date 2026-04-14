@@ -25,18 +25,21 @@ def _setup_all_mocks():
     _install_mock_module("agno")
     _install_mock_module("agno.agent", {"Agent": MagicMock})
     _install_mock_module("agno.media", {"Image": MagicMock})
-    _install_mock_module("agno.workflow")
-    _install_mock_module("agno.workflow.types", {"WorkflowExecutionInput": MagicMock})
+    _install_mock_module("agno.workflow", {"Workflow": MagicMock})
+    _install_mock_module("agno.workflow.types", {"WorkflowExecutionInput": MagicMock, "StepOutput": MagicMock})
     _install_mock_module("agno.db")
     _install_mock_module("agno.db.postgres", {"PostgresDb": MagicMock})
     _install_mock_module("agno.db.postgres.schemas")
     _install_mock_module("agno.db.postgres.async_postgres")
     _install_mock_module("agno.knowledge", {"Knowledge": MagicMock})
-    _install_mock_module("agno.models")
+    _install_mock_module("agno.models", {"__path__": []})
     _install_mock_module("agno.models.base", {"Model": MagicMock})
+    _install_mock_module("agno.models.message", {"Message": MagicMock})
     _install_mock_module("agno.vectordb")
     _install_mock_module("agno.vectordb.pgvector", {"PgVector": MagicMock})
-    _install_mock_module("agno.tools", {"Toolkit": MagicMock})
+    _install_mock_module("agno.tools", {"Toolkit": MagicMock, "Function": MagicMock})
+    _install_mock_module("agno.utils")
+    _install_mock_module("agno.utils.log", {"logger": MagicMock()})
 
     # ── sqlalchemy (required by agno.db.postgres) ──
     _install_mock_module("sqlalchemy")
@@ -51,38 +54,34 @@ def _setup_all_mocks():
         "AgentRunWrapper": MagicMock,
     })
     _install_mock_module("src.agents.souper", {"SouperAgent": MagicMock})
-    _install_mock_module("src.agents.planner", {"build_planner_agent": MagicMock})
+    _install_mock_module("src.agents.planner", {
+        "build_planner_agent": MagicMock,
+        "PLANNER_INSTRUCTIONS": "",
+    })
 
     # ── src.models (depends on agno) ──
-    _install_mock_module("src.models")
+    _install_mock_module("src.models", {"__path__": []})
     _install_mock_module("src.models.safe_gemini", {"SafeGemini": MagicMock})
+    _install_mock_module("src.models.safe_openai", {"SafeOpenAI": MagicMock})
 
     # ── src.tools (depends on agno) ──
-    _install_mock_module("src.tools")
+    # Mock only the heavy-dep modules used as dependencies.
+    # Modules that are tested directly (executor, planning, registry, router,
+    # user_interaction, discovery) load from disk — they only need agno.tools
+    # and agno.utils.log which are mocked above.
+    _install_mock_module("src.tools", {"__path__": []})
     _install_mock_module("src.tools.config", {"ToolConfigClient": MagicMock})
-    _install_mock_module("src.tools.discovery", {"build_discovery_tool": MagicMock})
-    _install_mock_module("src.tools.factory", {"build": MagicMock, "ToolsConfig": MagicMock})
+    _install_mock_module("src.tools.factory", {"build": MagicMock, "ToolsConfig": MagicMock, "TOOL_BUILDERS": {}})
     _install_mock_module("src.tools.models", {"ToolSpec": MagicMock})
-    _install_mock_module("src.tools.executor", {"ToolExecutor": MagicMock})
 
-    # ── src.workflows (depends on agno + tools) ──
-    _install_mock_module("src.workflows")
-    _install_mock_module("src.workflows.models", {
-        "PlanStatus": MagicMock(),
-        "WorkflowState": MagicMock,
-        "PlanTask": MagicMock,
-        "PlanningInput": MagicMock,
-    })
-    _install_mock_module("src.workflows.planning", {
-        "build_planning_workflow": MagicMock,
-        "PlanningInput": MagicMock,
-        "_planning_steps": MagicMock(),
-        "STAGE_STATUS_TEXT": {},
-        "PlanningStage": MagicMock,
-    })
+    # ── src.workflows ──
+    # Do NOT mock src.workflows, src.workflows.models, src.workflows.planning,
+    # src.workflows.tools, or src.workflows.ors_client — their __init__.py is
+    # empty/clean, models/tools/ors_client have no agno deps, and planning.py
+    # only needs agno.workflow.Workflow which is mocked above.
+    # Empty mocks for files that don't exist on disk (prevent ImportError):
     _install_mock_module("src.workflows.clarification")
     _install_mock_module("src.workflows.stages")
-    _install_mock_module("src.workflows.ors_client")
 
     # ── src.server.delivery (depends on agno) ──
     _install_mock_module("src.server.delivery", {
