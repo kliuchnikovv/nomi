@@ -202,6 +202,8 @@ const MessageScreen = React.memo(function MessageScreen(props: Props) {
 });
 
 export default MessageScreen;
+
+function ActionScreen({
     action,
     onActionPress,
     messageID,
