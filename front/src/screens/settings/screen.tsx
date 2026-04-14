@@ -124,7 +124,7 @@ export default function SettingsHomeScreen() {
                     <SettingsRow
                         label="Weather Location"
                         value={`${weatherLat}, ${weatherLon}`}
-                        onPress={() => navigation.navigate('WeatherLocationScreen')}
+                        onPress={() => navigation.navigate('LocationScreen')}
                         isFirst
                         isLast={false}
                     />
