@@ -13,7 +13,6 @@ from agno.learn import (
     EntityMemoryConfig,
     LearningMachine,
     LearningMode,
-    SessionContextConfig,
     UserProfileConfig,
 )
 
