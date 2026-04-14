@@ -11,6 +11,7 @@ import { themes } from '../../themes';
 import { initApiUrl } from '../../config';
 import { botIdentityApi, modelsApi } from '../../apiClient';
 
+import { getStoredLocation } from '../../services/location/locationService';
 import { SettingsSection } from './components/SettingsSection';
 import { SettingsRow } from './components/SettingsRow';
 import { SettingsToggleRow } from './components/SettingsToggleRow';
@@ -38,8 +39,7 @@ export default function SettingsHomeScreen() {
     const [emailAnalysisMode, setEmailAnalysisMode] = useState<EmailAnalysisMode>('device');
     const [plannerModelName, setPlannerModelName] = useState(PLANNER_MODEL_DEFAULT);
     const [botName, setBotName] = useState('Souper');
-    const [weatherLat, setWeatherLat] = useState('55.75');
-    const [weatherLon, setWeatherLon] = useState('37.62');
+    const [locationDisplay, setLocationDisplay] = useState('');
     const [currentThemeName, setCurrentThemeName] = useState(() => themes[themeName].name);
 
     // Refresh preview values each time this screen comes into focus
@@ -63,13 +63,7 @@ export default function SettingsHomeScreen() {
         botIdentityApi.get().then(identity => {
             if (identity?.name) setBotName(identity.name);
         }).catch(() => {});
-        AsyncStorage.getItem('weather_location').then(raw => {
-            if (raw) {
-                const loc = JSON.parse(raw);
-                setWeatherLat(String(loc.lat));
-                setWeatherLon(String(loc.lon));
-            }
-        });
+        getStoredLocation().then(loc => setLocationDisplay(loc.displayName));
     }, [themeName]));
 
     return (
@@ -122,8 +116,8 @@ export default function SettingsHomeScreen() {
 
                 <SettingsSection header="Data & Integrations">
                     <SettingsRow
-                        label="Weather Location"
-                        value={`${weatherLat}, ${weatherLon}`}
+                        label="Местоположение"
+                        value={locationDisplay}
                         onPress={() => navigation.navigate('LocationScreen')}
                         isFirst
                         isLast={false}
