@@ -24,6 +24,7 @@ import { initApiUrl } from './src/config';
 import { initDatabase } from './src/services/database/database';
 import { defineAllBackgroundTasks } from './src/services/integrations/BackgroundTaskManager';
 import { registerClientPlugins } from './src/plugins/registerClientPlugins';
+import { updateLocationFromGPS } from './src/services/location/locationService';
 import { socket } from './src/socket';
 import { initDebugUtils } from './src/debug/DebugUtils';
 import { AppNavigator } from './src/navigation/AppNavigator';
@@ -79,6 +80,11 @@ function App() {
                 await registerClientPlugins();
                 defineAllBackgroundTasks();
                 console.log('[App] Background tasks defined after plugin registration');
+
+                // Auto-detect location on launch (best-effort, does not block startup)
+                updateLocationFromGPS().catch(e =>
+                    console.warn('[App] Location auto-detect failed:', e)
+                );
 
             } catch (e) {
                 console.error("Failed to initialize app:", e);
