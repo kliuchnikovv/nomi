@@ -668,6 +668,7 @@ class RedisSession:
                 self._send_client_action_and_wait if self.redis_worker else None
             )
             bot_identity = payload.get("bot_identity") or None
+            user_location = payload.get("user_location") or None
             self.agent = await self.agent_factory.build(
                 session_id=self.session_id,
                 tools_specs=self.tools_specs,  # Likely empty, factory will fetch
@@ -681,6 +682,7 @@ class RedisSession:
                 endpoint=endpoint,
                 client_tool_runner=client_tool_runner,
                 bot_identity=bot_identity,
+                user_location=user_location,
             )
         except Exception as e:
             logger.error(

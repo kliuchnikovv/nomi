@@ -71,6 +71,7 @@ class SouperAgent(Agent):
         thinking: str = "off",
         timezone: str | None = "UTC",
         knowledge=None,
+        user_location: str | None = None,
         identity: dict | None = None,
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
@@ -111,6 +112,8 @@ class SouperAgent(Agent):
             base
             + f"\nCurrent time is: {datetime.now(ZoneInfo(effective_timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
         )
+        if user_location:
+            instructions += f"\nUser's current location: {user_location}"
 
         super().__init__(
             db=db,
