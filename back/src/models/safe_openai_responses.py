@@ -71,13 +71,18 @@ class SafeOpenAIResponses(OpenAIResponses):
     # ── Tool call ID remapping ────────────────────────────────────────────────
 
     def _remap_tool_call_ids(self, messages: List[Message]) -> None:
-        """Mutate messages in-place, adding 'fc_' prefix to any tool call ID that lacks it."""
+        """Mutate messages in-place, adding 'fc_' prefix to any tool call ID that lacks it.
+
+        Only plain UUIDs (no recognised prefix) are remapped. IDs already using a standard
+        prefix — 'fc_' (Responses API), 'call_' (OpenCode / Chat Completions) — are left
+        unchanged so Agno's fc_id_to_call_id lookup can resolve them correctly.
+        """
         for msg in messages:
             # Assistant messages with tool_calls
             if msg.tool_calls:
                 for tc in msg.tool_calls:
                     if isinstance(tc, dict) and isinstance(tc.get("id"), str):
-                        if not tc["id"].startswith("fc"):
+                        if not tc["id"].startswith("fc") and not tc["id"].startswith("call_"):
                             original = tc["id"]
                             tc["id"] = "fc_" + original
                             logger.debug(
@@ -86,7 +91,11 @@ class SafeOpenAIResponses(OpenAIResponses):
                                 tc["id"],
                             )
             # Tool result messages
-            if isinstance(msg.tool_call_id, str) and not msg.tool_call_id.startswith("fc"):
+            if (
+                isinstance(msg.tool_call_id, str)
+                and not msg.tool_call_id.startswith("fc")
+                and not msg.tool_call_id.startswith("call_")
+            ):
                 original = msg.tool_call_id
                 msg.tool_call_id = "fc_" + original
                 logger.debug(
