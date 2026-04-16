@@ -19,8 +19,8 @@ from src.core.config import Config
 from src.core.container import Container
 from src.plugins.loader import load_plugins, register_plugin_routes
 
-# Загружаем переменные окружения из .env файла, если он существует
-# Если файл не найден, используем переменные окружения из системы (для продакшн)
+# Load environment variables from .env file if it exists
+# If file not found, use system environment variables (for production)
 load_dotenv()
 
 # Global singleton for Vector DB to avoid connection pool exhaustion
@@ -96,7 +96,7 @@ _init_logging()
 
 logging.warning("[Startup] Python service initializing...")
 
-# Инициализация конфигурации и контейнера
+# Initialize configuration and container
 try:
     logging.warning("[Startup] Loading config...")
     config = Config.from_env()
@@ -113,7 +113,7 @@ except Exception as e:
     logging.critical("[Startup] FAILED to create container: %s", e, exc_info=True)
     raise
 
-# Инициализация AgentOS для совместимости с существующим кодом
+# Initialize AgentOS for compatibility with existing code
 try:
     logging.warning("[Startup] Creating SouperAgent...")
     souper = SouperAgent(

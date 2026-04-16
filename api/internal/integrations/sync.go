@@ -8,10 +8,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// SyncIntegration синхронизирует интеграцию между клиентом и сервером
-// Возвращает true, если интеграция должна быть синхронизирована
+// SyncIntegration synchronizes an integration between client and server
+// Returns true if the integration should be synced
 func SyncIntegration(integration *storage.Integration, logger *zap.Logger) (bool, error) {
-	// Проверяем, требуется ли синхронизация для этого провайдера
+	// Check if sync is required for this provider
 	if !ShouldSync(integration.Provider) {
 		logger.Debug("integration does not require sync",
 			zap.String("provider", integration.Provider),
@@ -19,7 +19,7 @@ func SyncIntegration(integration *storage.Integration, logger *zap.Logger) (bool
 		return false, nil
 	}
 
-	// Валидация данных интеграции
+	// Validate integration data
 	if err := ValidateIntegration(integration); err != nil {
 		return false, fmt.Errorf("integration validation failed: %w", err)
 	}
@@ -32,31 +32,31 @@ func SyncIntegration(integration *storage.Integration, logger *zap.Logger) (bool
 	return true, nil
 }
 
-// ValidateIntegration проверяет корректность данных интеграции
+// ValidateIntegration checks integration data validity
 func ValidateIntegration(integration *storage.Integration) error {
 	if integration.Provider == "" {
 		return fmt.Errorf("provider is required")
 	}
 
-	// Проверяем, существует ли провайдер в реестре
+	// Check if the provider exists in the registry
 	provider, ok := GetProvider(integration.Provider)
 	if !ok {
 		return fmt.Errorf("provider %s not found in registry", integration.Provider)
 	}
 
-	// Для OAuth провайдеров проверяем наличие параметров
+	// For OAuth providers, check for required parameters
 	if provider.OAuthConfig != nil {
 		if integration.Params == "" {
 			return fmt.Errorf("params are required for OAuth provider %s", integration.Provider)
 		}
 
-		// Проверяем, что Params - валидный JSON
+		// Verify that Params is valid JSON
 		var params map[string]interface{}
 		if err := json.Unmarshal([]byte(integration.Params), &params); err != nil {
 			return fmt.Errorf("invalid JSON in params: %w", err)
 		}
 
-		// Проверяем наличие обязательных полей для OAuth
+		// Check for required OAuth fields
 		if accessToken, ok := params["access_token"]; !ok || accessToken == "" {
 			return fmt.Errorf("access_token is required for OAuth provider %s", integration.Provider)
 		}
@@ -65,7 +65,7 @@ func ValidateIntegration(integration *storage.Integration) error {
 	return nil
 }
 
-// ConvertIntegrationToClientFormat конвертирует серверную интеграцию в формат для клиента
+// ConvertIntegrationToClientFormat converts a server integration to client format
 func ConvertIntegrationToClientFormat(integration *storage.Integration) (map[string]interface{}, error) {
 	provider, ok := GetProvider(integration.Provider)
 	if !ok {
@@ -79,23 +79,23 @@ func ConvertIntegrationToClientFormat(integration *storage.Integration) (map[str
 		"enabled":  integration.Enabled,
 	}
 
-	// Парсим параметры
+	// Parse parameters
 	if integration.Params != "" {
 		var params map[string]interface{}
 		if err := json.Unmarshal([]byte(integration.Params), &params); err != nil {
 			return nil, fmt.Errorf("failed to parse params: %w", err)
 		}
 
-		// Добавляем метаданные из реестра
+		// Add registry metadata
 		result["storage_type"] = string(provider.StorageType)
 		result["supports_background_tasks"] = provider.SupportsBackgroundTasks
 		result["system_event_listeners"] = provider.SystemEventListeners
 		result["description"] = provider.Description
 		result["icon"] = provider.Icon
 
-		// Для клиентских интеграций не передаем токены
+		// For client-only integrations, don't send tokens
 		if provider.StorageType == StorageTypeClientOnly {
-			// Удаляем чувствительные данные
+			// Remove sensitive data
 			delete(params, "access_token")
 			delete(params, "refresh_token")
 			delete(params, "client_secret")
@@ -107,7 +107,7 @@ func ConvertIntegrationToClientFormat(integration *storage.Integration) (map[str
 	return result, nil
 }
 
-// ConvertClientIntegrationToServerFormat конвертирует клиентскую интеграцию в формат для сервера
+// ConvertClientIntegrationToServerFormat converts a client integration to server format
 func ConvertClientIntegrationToServerFormat(clientData map[string]interface{}) (*storage.Integration, error) {
 	providerName, ok := clientData["provider"].(string)
 	if !ok || providerName == "" {
@@ -119,7 +119,7 @@ func ConvertClientIntegrationToServerFormat(clientData map[string]interface{}) (
 		return nil, fmt.Errorf("provider %s not found in registry", providerName)
 	}
 
-	// Для клиентских интеграций не сохраняем на сервере
+	// For client-only integrations, don't save on server
 	if provider.StorageType == StorageTypeClientOnly {
 		return nil, fmt.Errorf("client-only integrations should not be synced to server")
 	}
@@ -133,7 +133,7 @@ func ConvertClientIntegrationToServerFormat(clientData map[string]interface{}) (
 		integration.Name = name
 	}
 
-	// Конвертируем параметры
+	// Convert parameters
 	if params, ok := clientData["params"].(map[string]interface{}); ok {
 		paramsJSON, err := json.Marshal(params)
 		if err != nil {
@@ -145,7 +145,7 @@ func ConvertClientIntegrationToServerFormat(clientData map[string]interface{}) (
 	return integration, nil
 }
 
-// FilterIntegrationsForSync фильтрует интеграции, которые должны быть синхронизированы
+// FilterIntegrationsForSync filters integrations that should be synced
 func FilterIntegrationsForSync(integrations []storage.Integration) []storage.Integration {
 	var result []storage.Integration
 

@@ -151,7 +151,7 @@ def _run_recon_stage(
     pending_questions: list[str] = []
     if transport_mode is None:
         pending_questions.append(
-            "На чём планируешь передвигаться между точками? (пешком / на машине / на велосипеде)"
+            "How do you plan to travel between locations? (walking / driving / cycling)"
         )
 
     return StageResult(
@@ -285,7 +285,7 @@ def _run_route_stage(
                 "to_location": dst_loc,
                 "duration_min": duration_min,
                 "mode": profile,
-                "title": f"Выдвинуться в {dst_loc}",
+                "title": f"Head to {dst_loc}",
                 "insert_before_cluster_index": i + 1,
             }
         )
@@ -302,7 +302,7 @@ _BUILD_PROMPT = """You are building the final day schedule by applying structure
 Given clusters, travel blocks, task metadata, and planning date, produce a patch list
 that transforms the raw task list into a fully scheduled day.
 
-IMPORTANT: If a task already has a time hint in its text (e.g., "Встреча в 14:00"), 
+IMPORTANT: If a task already has a time hint in its text (e.g., "Meeting at 14:00"), 
 KEEP that exact time. Only assign times to tasks that don't have explicit times.
 
 Apply patches in this STRICT order:
@@ -319,7 +319,7 @@ Use specific time ranges only — never "morning" or "evening".
 Return ONLY valid JSON:
 {
   "patches": [
-    {"op": "add_item", "item": {"id": "...", "text": "Выдвинуться в gym", "depth": 0, "checked": false, "chips": []}},
+    {"op": "add_item", "item": {"id": "...", "text": "Head to gym", "depth": 0, "checked": false, "chips": []}},
     {"op": "add_chip", "item_id": "...", "chip": {"type": "time", "value": "09:00-10:00", "id": "..."}},
     {"op": "reorder_items", "ids": ["id1", "id2", "id3"]}
   ],
@@ -349,14 +349,14 @@ def _run_build_stage(
         return StageResult(
             output={
                 "patches": data.get("patches", []),
-                "summary": data.get("summary", "Расписание построено"),
+                "summary": data.get("summary", "Schedule built"),
             }
         )
     except asyncio.CancelledError:
         raise
     except Exception as exc:
         logger.warning("[PlanningWorkflow] BUILD parse failed: %s", exc)
-        return StageResult(output={"patches": [], "summary": "Расписание построено"})
+        return StageResult(output={"patches": [], "summary": "Schedule built"})
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -413,11 +413,11 @@ def _handle_clarifying(
 def _infer_transport(user_message: str, clarification_answers: list[str]) -> str | None:
     """Infer transport mode from user message or clarification answers. Returns None if unclear."""
     all_text = " ".join([user_message] + clarification_answers).lower()
-    if any(w in all_text for w in ("машин", "авто", "автомобил", "car", "drive")):
+    if any(w in all_text for w in ("car", "drive", "авто", "машин", "автомобил")):
         return "car"
-    if any(w in all_text for w in ("велосипед", "вело", "bike", "cycling")):
+    if any(w in all_text for w in ("bike", "cycling", "велосипед", "вело")):
         return "cycling"
-    if any(w in all_text for w in ("пешком", "пеш", "walk", "пешеход")):
+    if any(w in all_text for w in ("walk", "пешком", "пеш", "пешеход")):
         return "walking"
     return None
 
@@ -474,7 +474,7 @@ def _planning_steps(
             logger.info(
                 "[PlanningWorkflow] Returning from clarification to %s", pending
             )
-            yield StepOutput(step_name="continue", content="Хорошо, продолжаю...")
+            yield StepOutput(step_name="continue", content="OK, continuing...")
         status = state.get("status", PlanStatus.EXTRACT)
 
     # ── EXTRACT ───────────────────────────────────────────────────────────────
@@ -492,7 +492,7 @@ def _planning_steps(
         state["extract_output"] = result.output
         state["status"] = PlanStatus.RECON
         logger.info("[PlanningWorkflow] EXTRACT done, moving to RECON")
-        yield StepOutput(step_name="extract", content="Анализирую задачи...")
+        yield StepOutput(step_name="extract", content="Analyzing tasks...")
 
     # ── RECON ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.RECON:
@@ -510,7 +510,7 @@ def _planning_steps(
             return
         state["recon_output"] = result.output
         state["status"] = PlanStatus.CLUSTER
-        yield StepOutput(step_name="recon", content="Уточняю локации...")
+        yield StepOutput(step_name="recon", content="Looking up locations...")
 
     # ── CLUSTER ───────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.CLUSTER:
@@ -527,7 +527,7 @@ def _planning_steps(
         state["cluster_output"] = result.output
         state["status"] = PlanStatus.ROUTE
         logger.info("[PlanningWorkflow] CLUSTER done, moving to ROUTE")
-        yield StepOutput(step_name="cluster", content="Группирую задачи по локациям...")
+        yield StepOutput(step_name="cluster", content="Grouping tasks by location...")
 
     # ── ROUTE ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.ROUTE:
@@ -539,7 +539,7 @@ def _planning_steps(
         state["route_output"] = result.output
         state["status"] = PlanStatus.BUILD
         logger.info("[PlanningWorkflow] ROUTE done, moving to BUILD")
-        yield StepOutput(step_name="route", content="Рассчитываю маршрут...")
+        yield StepOutput(step_name="route", content="Calculating route...")
 
     # ── BUILD ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.BUILD:
@@ -553,11 +553,11 @@ def _planning_steps(
         )
         state["plan_patches"] = {
             "patches": result.output.get("patches", []),
-            "summary": result.output.get("summary", "Расписание готово"),
+            "summary": result.output.get("summary", "Schedule is ready"),
         }
         state["status"] = PlanStatus.REVIEW
         yield StepOutput(
-            step_name="build", content="Расписание построено! Проверь план."
+            step_name="build", content="Schedule is built! Check your plan."
         )
         return
 
@@ -566,14 +566,14 @@ def _planning_steps(
         state["status"] = PlanStatus.ITERATE
         yield StepOutput(
             step_name="review",
-            content="Готово! Можешь попросить изменить любую задачу, переставить время или добавить новую.",
+            content="Done! You can ask me to change any task, reschedule, or add a new one.",
         )
         return
 
     # ── ITERATE / FALLBACK ────────────────────────────────────────────────────
     yield StepOutput(
         step_name="iterate",
-        content="Чем могу помочь с планом? Можешь попросить перенести задачу, изменить время или переделать весь план.",
+        content="How can I help with your plan? You can ask me to move a task, change the time, or redo the entire plan.",
     )
 
 

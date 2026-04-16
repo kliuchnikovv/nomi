@@ -13,7 +13,7 @@ auth:
 
 ui:
   icon: user
-  description_short: iOS Contacts интеграция через Contacts Framework
+  description_short: iOS Contacts integration via Contacts Framework
   category: social
 
 methods:

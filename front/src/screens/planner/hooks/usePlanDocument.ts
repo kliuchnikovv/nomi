@@ -62,8 +62,8 @@ function sortByTime(items: PlanItem[]): PlanItem[] {
   });
 }
 
-// Strip embedded time ranges like "с 13:50 до 17:30", "21:00 - 00:00",
-// "в 15:00" etc. from item text so the title stays clean after time chip is added.
+// Strip embedded time ranges like "from 13:50 to 17:30", "21:00 - 00:00",
+// "at 15:00" etc. from item text so the title stays clean after time chip is added.
 function stripTimeFromText(text: string): string {
   let t = text;
   // "с HH:MM до HH:MM" (Russian "from X to Y")

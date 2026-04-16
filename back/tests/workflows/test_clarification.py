@@ -34,7 +34,7 @@ def test_extract_stage_fires_first_on_new_session():
             output={"extracted_tasks": [{"id": "t1"}]},
             pending_questions=[],
         )
-        list(_planning_steps(wf, _make_input("план на день")))
+        list(_planning_steps(wf, _make_input("daily plan")))
     mock_extract.assert_called_once()
     assert wf.session_state["status"] == PlanStatus.RECON
 
@@ -44,14 +44,14 @@ def test_clarification_loop_pauses_on_pending_question():
     with patch("src.workflows.planning._run_extract_stage") as mock_extract:
         mock_extract.return_value = StageResult(
             output={"extracted_tasks": []},
-            pending_questions=["Во сколько зал?"],
+            pending_questions=["What time is the gym?"],
         )
-        steps = list(_planning_steps(wf, _make_input("план")))
+        steps = list(_planning_steps(wf, _make_input("plan")))
     # Should yield one StepOutput with the question and set status to CLARIFYING
     assert wf.session_state["status"] == PlanStatus.CLARIFYING
     assert wf.session_state["pending_stage"] == PlanStatus.EXTRACT
     assert len(steps) == 1
-    assert "зал" in steps[0].content
+    assert "gym" in steps[0].content.lower()
 
 
 def test_clarification_answer_returns_to_stage():
@@ -59,8 +59,8 @@ def test_clarification_answer_returns_to_stage():
         "status": PlanStatus.CLARIFYING,
         "pending_stage": PlanStatus.EXTRACT,
         "pending_questions": [],  # all answered
-        "clarification_answers": ["В 10:00"],
-        "tasks": [{"id": "t1", "title": "Зал"}],
+        "clarification_answers": ["At 10:00"],
+        "tasks": [{"id": "t1", "title": "Gym"}],
         "planning_date": "2026-04-05",
         "extract_clarified": False,
     }
@@ -70,7 +70,7 @@ def test_clarification_answer_returns_to_stage():
             output={"extracted_tasks": [{"id": "t1", "time_hint": "10:00"}]},
             pending_questions=[],
         )
-        list(_planning_steps(wf, _make_input("В 10:00")))
+        list(_planning_steps(wf, _make_input("At 10:00")))
     # Should re-run EXTRACT then advance to RECON
     mock_extract.assert_called_once()
     assert wf.session_state["status"] == PlanStatus.RECON
@@ -79,7 +79,7 @@ def test_clarification_answer_returns_to_stage():
 def test_build_patches_stored_in_session_state():
     state = {
         "status": PlanStatus.BUILD,
-        "tasks": [{"id": "t1", "title": "Встреча", "time_hint": "14:00", "location": "office", "context_type": "place"}],
+        "tasks": [{"id": "t1", "title": "Meeting", "time_hint": "14:00", "location": "office", "context_type": "place"}],
         "planning_date": "2026-04-05",
         "timezone": "UTC",
         "extract_output": {"extracted_tasks": [{"id": "t1"}]},

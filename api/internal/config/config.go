@@ -51,7 +51,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// Заменяем переменные окружения
+	// Replace environment variables
 	expanded, err := envsubst.Bytes(data)
 	if err != nil {
 		return nil, err

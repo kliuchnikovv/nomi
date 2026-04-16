@@ -120,14 +120,14 @@ class ToolConfigClient:
 
     async def fetch_tools_list(self, session_id: str | None = None) -> list[ToolSpec]:
         """
-        Получает список инструментов из genie-api (пока без авторизации).
-        Возвращает список ToolSpec объектов.
+        Fetches the list of tools from genie-api (without auth for now).
+        Returns a list of ToolSpec objects.
         """
         tools: list[ToolSpec] = []
 
         try:
-            # Пока без авторизации - делаем запрос без токена
-            # TODO: добавить авторизацию когда будет нужно
+            # No auth for now - making request without token
+            # TODO: add auth when needed
             response = await self._client.get(
                 f"{self._base_url}/api/tools",
                 params={"session_id": session_id} if session_id else None,
@@ -139,7 +139,7 @@ class ToolConfigClient:
             return tools
 
         def _parse_params(params_value: Any) -> Dict[str, Any]:
-            """Парсит params из JSON строки или возвращает как есть, если это dict."""
+            """Parse params from JSON string or return as-is if it is a dict."""
             if isinstance(params_value, dict):
                 return params_value
             if isinstance(params_value, str):
@@ -149,7 +149,7 @@ class ToolConfigClient:
                     return {}
             return {}
 
-        # API возвращает массив инструментов
+        # API returns an array of tools
         if isinstance(payload, list):
             for item in payload:
                 try:
@@ -166,7 +166,7 @@ class ToolConfigClient:
                 except Exception as e:
                     logger.warning("Failed to parse tool: %s, error: %s", item, e)
                     continue
-        # Или объект с полем tools
+        # Or an object with a tools field
         elif isinstance(payload, dict):
             tools_list = payload.get("tools", [])
             if isinstance(tools_list, list):

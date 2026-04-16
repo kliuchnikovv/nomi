@@ -89,7 +89,7 @@ async def test_patch_plan_document_runner_raises_returns_error_string():
 async def test_patch_plan_document_summary_passed_correctly():
     runner = AsyncMock(return_value="ok")
     toolkit = make_toolkit(runner=runner)
-    summary = "Запланировал завтрак на 9:00"
+    summary = "Planned breakfast at 9:00"
     await toolkit.patch_plan_document(patches=[], summary=summary)
     params = runner.call_args[0][2]
     assert params["summary"] == summary

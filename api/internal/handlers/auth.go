@@ -18,18 +18,18 @@ func NewAuthHandler(service *services.AuthService) *AuthHandler {
 	}
 }
 
-// Используем типы из services
+// Use types from services
 type RegisterRequest = services.RegisterRequest
 type LoginRequest = services.LoginRequest
 type AuthResponse = services.AuthResponse
 
-// Register обрабатывает регистрацию нового пользователя
-// @Summary Регистрация нового пользователя
-// @Description Создает нового пользователя и возвращает JWT токен
+// Register handles user registration
+// @Summary Register a new user
+// @Description Creates a new user and returns a JWT token
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body RegisterRequest true "Данные для регистрации"
+// @Param request body RegisterRequest true "Registration data"
 // @Success 200 {object} AuthResponse
 // @Failure 400 {object} string "Invalid request"
 // @Failure 500 {object} string "Internal server error"
@@ -55,13 +55,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Login обрабатывает вход пользователя
-// @Summary Вход пользователя
-// @Description Аутентифицирует пользователя и возвращает JWT токен
+// Login handles user login
+// @Summary User login
+// @Description Authenticates user and returns a JWT token
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body LoginRequest true "Данные для входа"
+// @Param request body LoginRequest true "Login data"
 // @Success 200 {object} AuthResponse
 // @Failure 400 {object} string "Invalid request"
 // @Failure 401 {object} string "Invalid credentials"
@@ -88,7 +88,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// Refresh принимает refresh_token и возвращает новую пару access+refresh (ротация)
+// Refresh accepts a refresh_token and returns a new access+refresh pair (rotation)
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		RefreshToken string `json:"refresh_token"`
@@ -112,9 +112,9 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// GetMe возвращает информацию о текущем пользователе
-// @Summary Информация о текущем пользователе
-// @Description Возвращает информацию о текущем аутентифицированном пользователе
+// GetMe returns current user info
+// @Summary Current user info
+// @Description Returns info about the currently authenticated user
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -133,14 +133,14 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-// UpdateMe обновляет информацию о текущем пользователе
-// @Summary Обновление информации о текущем пользователе
-// @Description Обновляет настройки текущего пользователя
+// UpdateMe updates current user info
+// @Summary Update current user info
+// @Description Updates current user settings
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Param request body map[string]interface{} true "Поля для обновления"
+// @Param request body map[string]interface{} true "Fields to update"
 // @Success 200 {object} storage.User
 // @Failure 400 {object} string "Invalid request"
 // @Failure 401 {object} string "Unauthorized"
@@ -169,7 +169,7 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(updatedUser)
 }
 
-// GoogleLoginRequest представляет запрос на вход через Google
+// GoogleLoginRequest represents a Google login request
 type GoogleLoginRequest = services.GoogleLoginRequest
 
 // GoogleLogin handles Google Sign-In

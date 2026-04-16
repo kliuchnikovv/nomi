@@ -22,7 +22,7 @@ Rules:
 2. If it is a WRITE operation (send, create, delete, update) and the tool has 2+
     accounts → action: "question" asking which account to use
 3. If it is a READ operation and 2+ accounts exist:
-    - If the request contains "each" "every" "all" "every" "все" "каждый" "во всех" "по всем"
+    - If the request contains "each" "every" "all" "every" "все" "каждый" "во всех" "по всем"  # Russian: all, each, in all, across all
       or similar phrasing indicating ALL accounts → account_id: "*"
     - Otherwise, try to infer from the request or context; if unclear → action: "question"
 4. If no tool matches the request → action: "none"

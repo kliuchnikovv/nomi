@@ -29,7 +29,7 @@ import (
 // @host localhost
 // @BasePath /
 func main() {
-	// Определяем какой конфиг использовать
+	// Determine which config to use
 	configPath := "./config.yaml"
 	if os.Getenv("RAILWAY_ENVIRONMENT") != "" {
 		// In Docker/Railway, config is in the same directory as the binary
@@ -94,7 +94,7 @@ func main() {
 		logger.Info("loaded plugin manifests", zap.Int("count", len(plugins.Manifests)))
 	}
 
-	// Создаем DI Container
+	// Create DI Container
 	ctr, err := container.NewContainer(cfg, logger)
 	if err != nil {
 		logger.Fatal("failed to create container: %v", zap.Error(err))

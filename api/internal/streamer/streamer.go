@@ -284,8 +284,8 @@ func (streamer *Streamer) Stream(client *Socket) {
 					Model:     frame.Payload.Model,
 					CreatedAt: now,
 				})
-				// Пользовательское сообщение через WebSocket также считаем
-				// содержательной активностью чата.
+				// A user message via WebSocket is also considered
+				// meaningful chat activity.
 				_ = streamer.storage.TouchChatActivity(ctx, frame.ChatID, now)
 			}
 

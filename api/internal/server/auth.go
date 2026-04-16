@@ -22,12 +22,12 @@ func wrap(h http.HandlerFunc) gin.HandlerFunc {
 	}
 }
 
-// wrapWithAuth оборачивает gin.HandlerFunc в middleware авторизации
+// wrapWithAuth wraps gin.HandlerFunc with auth middleware
 func wrapWithAuth(h gin.HandlerFunc, authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		wrapped := gin.WrapH(authMiddleware.RequireAuth(
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Восстанавливаем gin.Context из http.Request
+				// Restore gin.Context from http.Request
 				c.Request = r
 
 				// Extract user from request context and set in Gin context
@@ -43,7 +43,7 @@ func wrapWithAuth(h gin.HandlerFunc, authMiddleware *auth.AuthMiddleware) gin.Ha
 	}
 }
 
-// wrapWithAuthHttp оборачивает http.HandlerFunc в middleware авторизации
+// wrapWithAuthHttp wraps http.HandlerFunc with auth middleware
 func wrapWithAuthHttp(h http.HandlerFunc, authMiddleware *auth.AuthMiddleware) gin.HandlerFunc {
 	return gin.WrapH(authMiddleware.RequireAuth(h))
 }

@@ -1,151 +1,151 @@
-# Сводка изменений: Переработка iOS интеграций без UI
+# Change Summary: iOS Integration Refactoring without UI
 
-## Выполненные изменения
+## Changes Made
 
-### 1. Регистрация плагинов
-- **Файл:** `front/src/plugins/registerClientPlugins.tsx`
-- **Изменения:**
-  - Убраны импорты UI компонентов: `IOSContactsPluginScreen`, `IOSRemindersPluginScreen`
-  - Убран `MainComponent` из регистрации `ios_contacts` и `ios_reminders`
-  - Для `ios_calendar` оставлен `MainComponent` (требуется для функциональности)
+### 1. Plugin Registration
+- **File:** `front/src/plugins/registerClientPlugins.tsx`
+- **Changes:**
+  - Removed UI component imports: `IOSContactsPluginScreen`, `IOSRemindersPluginScreen`
+  - Removed `MainComponent` from `ios_contacts` and `ios_reminders` registration
+  - For `ios_calendar`, `MainComponent` was kept (required for functionality)
 
 ### 2. IOSRemindersClient
-- **Файл:** `front/src/services/integrations/clients/IOSRemindersClient.ts`
-- **Добавлено:**
-  - Метод `openSettings()` - открывает системные настройки для управления разрешениями
+- **File:** `front/src/services/integrations/clients/IOSRemindersClient.ts`
+- **Added:**
+  - Method `openSettings()` - opens system settings for permission management
 
 ### 3. IOSContactsClient
-- **Файл:** `front/src/services/integrations/clients/IOSContactsClient.ts`
-- **Добавлено:**
-  - Метод `checkPermissionStatus()` - проверяет текущий статус разрешения
-  - Метод `requestPermission()` - запрашивает разрешение через системный диалог
-  - Метод `openSettings()` - открывает системные настройки
+- **File:** `front/src/services/integrations/clients/IOSContactsClient.ts`
+- **Added:**
+  - Method `checkPermissionStatus()` - checks current permission status
+  - Method `requestPermission()` - requests permission via system dialog
+  - Method `openSettings()` - opens system settings
 
 ### 4. IOSRemindersManager (Swift)
-- **Файл:** `front/ios/genie/IOSRemindersManager.swift`
-- **Добавлено:**
-  - Импорт `UIKit` для работы с настройками
-  - Метод `openSettings()` - открывает `UIApplication.openSettingsURLString`
+- **File:** `front/ios/genie/IOSRemindersManager.swift`
+- **Added:**
+  - Import `UIKit` for settings management
+  - Method `openSettings()` - opens `UIApplication.openSettingsURLString`
 
 ### 5. IOSContactsManager (Swift)
-- **Файл:** `front/ios/genie/IOSContactsManager.swift`
-- **Добавлено:**
-  - Импорт `UIKit` для работы с настройками
-  - Метод `checkPermissionStatus()` - возвращает статус разрешения Contacts
-  - Метод `requestPermission()` - вызывает приватный метод запроса разрешений
-  - Метод `openSettings()` - открывает системные настройки
+- **File:** `front/ios/genie/IOSContactsManager.swift`
+- **Added:**
+  - Import `UIKit` for settings management
+  - Method `checkPermissionStatus()` - returns Contacts permission status
+  - Method `requestPermission()` - calls private method for permission request
+  - Method `openSettings()` - opens system settings
 
-### 6. IOSNativeModules.m (Objective-C мост)
-- **Файл:** `front/ios/genie/IOSNativeModules.m`
-- **Добавлены экспорты:**
-  - Для `IOSContactsManager`: `checkPermissionStatus`, `requestPermission`, `openSettings`
-  - Для `IOSRemindersManager`: `openSettings`
+### 6. IOSNativeModules.m (Objective-C Bridge)
+- **File:** `front/ios/genie/IOSNativeModules.m`
+- **Added exports:**
+  - For `IOSContactsManager`: `checkPermissionStatus`, `requestPermission`, `openSettings`
+  - For `IOSRemindersManager`: `openSettings`
 
-### 7. Удалены UI компоненты
-- **Удалены файлы:**
+### 7. Removed UI Components
+- **Deleted files:**
   - `plugins/ios_contacts/client/components/IOSContactsPluginScreen.tsx`
   - `plugins/ios_reminders/client/components/IOSRemindersPluginScreen.tsx`
 
-### 8. Обновлены исполнители (executors)
-- **Файлы:**
+### 8. Updated Executors
+- **Files:**
   - `plugins/ios_contacts/client/executor.ts`
   - `plugins/ios_reminders/client/executor.ts`
-- **Добавлена логика:**
-  - Перед выполнением любого метода проверяется статус разрешения
-  - Если `notDetermined` - автоматически запрашивается разрешение
-  - Если `denied` - возвращается сообщение с инструкцией открыть настройки
-  - Если `authorized` - метод выполняется нормально
+- **Added logic:**
+  - Before executing any method, permission status is checked
+  - If `notDetermined` - permission is automatically requested
+  - If `denied` - a message is returned with instructions to open settings
+  - If `authorized` - method executes normally
 
-### 9. Документация
-- **Файл:** `front/ios/IOS_NATIVE_MODULES.md` (новый)
-- **Содержание:**
-  - Полная документация методов `IOSContactsManager`, `IOSRemindersManager`, `IOSCalendarManager`
-  - Описание разрешений iOS
-  - Поток работы с разрешениями
-  - Примеры использования
+### 9. Documentation
+- **File:** `front/ios/IOS_NATIVE_MODULES.md` (new)
+- **Contents:**
+  - Full documentation for `IOSContactsManager`, `IOSRemindersManager`, `IOSCalendarManager` methods
+  - iOS permissions description
+  - Permission workflow
+  - Usage examples
 
 ---
 
-## Поток работы с разрешениями
+## Permission Workflow
 
-### Подключение интеграции
+### Enabling an Integration
 
 ```
-Пользователь включает "iOS Contacts" в настройках
+User enables "iOS Contacts" in settings
     ↓
 ConnectorsProvider.toggleTool('ios_contacts', true)
     ↓
-Создаётся запись в локальной базе данных
+A record is created in the local database
     ↓
-При первом вызове метода (например, search_contacts)
+On first method call (e.g., search_contacts)
     ↓
 IOSContactsPlugin.execute() → checkPermissionStatus()
     ├─ notDetermined → requestPermission()
-    │   ├─ granted → выполнить метод
-    │   └─ denied → сообщение: "grant access to Contacts in settings"
-    ├─ denied → сообщение: "enable in iOS Settings > Genie > Contacts"
-    └─ authorized → выполнить метод
+    │   ├─ granted → execute method
+    │   └─ denied → message: "grant access to Contacts in settings"
+    ├─ denied → message: "enable in iOS Settings > Genie > Contacts"
+    └─ authorized → execute method
 ```
 
-### Вызов методов AI агентом
+### AI Agent Method Calls
 
 ```
 Python Agent → client_action → IOSContactsPlugin.execute()
     ↓
-Проверка разрешений
+Permission check
     ↓
-Если разрешено: IOSContactsClient → IOSContactsManager → Contacts Framework
-Если запрещено: возвращается инструкция для пользователя
+If allowed: IOSContactsClient → IOSContactsManager → Contacts Framework
+If denied: instruction is returned to the user
 ```
 
 ---
 
-## Преимущества новой архитектуры
+## Advantages of the New Architecture
 
-1. **Нет UI компонент** - интеграции работают без отдельных экранов
-2. **Системный поток разрешений** - стандартный iOS подход к разрешениям
-3. **Автоматический запрос** - интеграции сами запрашивают разрешение при необходимости
-4. **Ясные сообщения** - пользователь получает понятные инструкции при отказе
-5. **AI инструменты работают** - все методы доступны AI агентам как инструменты
-6. **Фоновые задачи сохранены** - RAG индексация продолжается работать
-7. **Упрощённая регистрация** - не нужно указывать `MainComponent`
+1. **No UI components** - integrations work without separate screens
+2. **System permission flow** - standard iOS approach to permissions
+3. **Automatic request** - integrations request permission themselves when needed
+4. **Clear messages** - user receives understandable instructions on denial
+5. **AI tools work** - all methods are available to AI agents as tools
+6. **Background tasks preserved** - RAG indexing continues to work
+7. **Simplified registration** - no need to specify `MainComponent`
 
 ---
 
-## Оставшиеся компоненты
+## Remaining Components
 
 ### IOSCalendar
-- **Почему остался UI:** Для календаря функциональность требует отображения событий
-- **MainComponent:** `IOSCalendarPluginScreen` оставлен в регистрации
-- **Совершенствование:** Можно добавить методы разрешений по аналогии с Contacts/Reminders
+- **Why UI remains:** Calendar functionality requires event display
+- **MainComponent:** `IOSCalendarPluginScreen` is kept in registration
+- **Improvement:** Permission methods can be added by analogy with Contacts/Reminders
 
 ---
 
-## Тестирование
+## Testing
 
-### Проверки для локального тестирования:
-1. Включить интеграцию в настройках приложения
-2. Первое использование метода - должен появиться системный диалог разрешения
-3. Разрешить доступ - методы должны работать корректно
-4. Запретить доступ и использовать снова - должно появиться сообщение с инструкцией
-5. Кнопка "Открыть настройки" должна перенаправлять в системные настройки
-6. RAG индексация должна работать в фоне
-7. AI агент должен иметь доступ к инструментам Contacts/Reminders
+### Checks for Local Testing:
+1. Enable the integration in app settings
+2. First method use - system permission dialog should appear
+3. Allow access - methods should work correctly
+4. Deny access and use again - instruction message should appear
+5. "Open Settings" button should redirect to system settings
+6. RAG indexing should work in the background
+7. AI agent should have access to Contacts/Reminders tools
 
-### Проверка сборки:
+### Build Check:
 ```bash
 cd front
-npm run lint  # Проверка linting
+npm run lint  # Linting check
 ```
 
-Примечание: Текущие ошибки TypeScript не связаны с изменениями в iOS интеграциях - это существующие проблемы с типами React Native в проекте.
+Note: Current TypeScript errors are not related to iOS integration changes - these are existing issues with React Native types in the project.
 
 ---
 
-## Следующие шаги (опционально)
+## Next Steps (Optional)
 
-1. Добавить методы разрешений в `IOSCalendarManager` для единообразия
-2. Обновить UI настроек приложения для отображения статуса разрешений
-3. Добавить кнопку "Открыть настройки" в экран настроек интеграций
-4. Добавить обработку ошибки `PERMISSION_DENIED` в `ClientToolExecutor`
-5. Добавить визуальный индикатор (иконка) для интеграций без разрешений
+1. Add permission methods to `IOSCalendarManager` for consistency
+2. Update app settings UI to display permission status
+3. Add "Open Settings" button to integration settings screen
+4. Add `PERMISSION_DENIED` error handling in `ClientToolExecutor`
+5. Add a visual indicator (icon) for integrations without permissions

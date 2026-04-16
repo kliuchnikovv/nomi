@@ -50,22 +50,24 @@ export function isPromotionalEmail(email: Email): boolean {
 // ── Keyword fallback ────────────────────────────────────────────────────────
 
 const URGENT_KEYWORDS = [
-    'срочно', 'urgent', 'immediately', 'expires', 'overdue', 'deadline', 'last chance',
+    'urgent', 'immediately', 'expires', 'overdue', 'deadline', 'last chance',
+    'срочно',
 ];
 
 const IMPORTANT_KEYWORDS = [
-    'subscription', 'подписка', 'invoice', 'счёт', 'счет', 'payment', 'оплата',
+    'subscription', 'invoice', 'payment',
     'billing', 'renewal', 'renewing', 'confirm', 'verify', 'receipt',
-    'due date', 'auto-renew', 'автопродление',
+    'due date', 'auto-renew',
+    'подписка', 'счёт', 'счет', 'оплата', 'автопродление',
 ];
 
 const ACTION_HINTS: { keywords: string[]; hint: string }[] = [
-    { keywords: ['срочно', 'urgent', 'immediately', 'deadline', 'last chance'], hint: 'Требует срочного внимания' },
-    { keywords: ['expires', 'overdue'], hint: 'Истекает срок' },
-    { keywords: ['invoice', 'счёт', 'счет', 'payment', 'оплата', 'billing', 'due date'], hint: 'Требует оплаты' },
-    { keywords: ['subscription', 'подписка', 'renewal', 'renewing', 'auto-renew', 'автопродление'], hint: 'Проверить подписку' },
-    { keywords: ['confirm', 'verify'], hint: 'Требует подтверждения' },
-    { keywords: ['receipt'], hint: 'Получен чек' },
+    { keywords: ['urgent', 'immediately', 'deadline', 'last chance', 'срочно'], hint: 'Requires immediate attention' },
+    { keywords: ['expires', 'overdue'], hint: 'Expiring soon' },
+    { keywords: ['invoice', 'payment', 'billing', 'due date', 'счёт', 'счет', 'оплата'], hint: 'Payment required' },
+    { keywords: ['subscription', 'renewal', 'renewing', 'auto-renew', 'подписка', 'автопродление'], hint: 'Check subscription' },
+    { keywords: ['confirm', 'verify'], hint: 'Requires confirmation' },
+    { keywords: ['receipt'], hint: 'Receipt received' },
 ];
 
 function getActionHint(matchedKeywords: string[], hasGmailImportant: boolean): string {
@@ -74,7 +76,7 @@ function getActionHint(matchedKeywords: string[], hasGmailImportant: boolean): s
             return hint;
         }
     }
-    return hasGmailImportant ? 'Отмечено как важное' : 'Требует внимания';
+    return hasGmailImportant ? 'Marked as important' : 'Requires attention';
 }
 
 function keywordAnalysis(email: Email): Omit<EmailAnalysisWithLog, 'analyzedByAI'> {
@@ -143,7 +145,7 @@ priority: 1=urgent (hours), 2=important (days), 3=moderate, 4=low.`;
         if (typeof parsed.requiresAction !== 'boolean') return null;
         return {
             requiresAction: parsed.requiresAction,
-            actionHint: parsed.actionHint ?? 'Требует внимания',
+            actionHint: parsed.actionHint ?? 'Requires attention',
             priority: typeof parsed.priority === 'number'
                 ? Math.min(4, Math.max(1, Math.round(parsed.priority)))
                 : 4,

@@ -500,7 +500,7 @@ auth:
 
 ui:
   icon: calendar
-  description_short: Google Calendar интеграция для работы с календарем
+  description_short: Google Calendar integration for calendar management
   category: calendar
 
 methods:

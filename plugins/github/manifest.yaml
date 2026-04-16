@@ -20,7 +20,7 @@ auth:
 
 ui:
   icon: github
-  description_short: GitHub интеграция для работы с репозиториями
+  description_short: GitHub integration for repository management
   category: development
 
 methods:

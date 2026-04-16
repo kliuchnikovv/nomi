@@ -138,9 +138,9 @@ func (s *Storage) CreateMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
-	// Обновляем updated_at для этого чата, чтобы отразить новую "содержательную" активность.
-	// Здесь создаётся новое сообщение (не стриминг кадр), поэтому это валидная точка
-	// для сдвига чата наверх списков активности.
+	// Update updated_at for this chat to reflect new "meaningful" activity.
+	// A new message is created here (not a streaming frame), so this is a valid point
+	// to push the chat up in activity lists.
 	_ = s.TouchChatActivity(ctx, m.ChatID, messageModel.CreatedAt)
 
 	return result, nil

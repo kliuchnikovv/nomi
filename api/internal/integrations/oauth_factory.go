@@ -11,14 +11,14 @@ import (
 	"strings"
 )
 
-// OAuthFactory создает OAuth конфигурации из реестра провайдеров (загруженных из манифестов плагинов)
+// OAuthFactory creates OAuth configurations from the provider registry (loaded from plugin manifests)
 type OAuthFactory struct {
 	cfg           *config.Config
 	logger        *zap.Logger
 	oidcProviders map[string]*oidc.Provider
 }
 
-// NewOAuthFactory создает новую фабрику OAuth конфигураций
+// NewOAuthFactory creates a new OAuth config factory
 func NewOAuthFactory(cfg *config.Config, logger *zap.Logger) (*OAuthFactory, error) {
 	factory := &OAuthFactory{
 		cfg:           cfg,
@@ -59,7 +59,7 @@ func NewOAuthFactory(cfg *config.Config, logger *zap.Logger) (*OAuthFactory, err
 	return factory, nil
 }
 
-// BuildOAuthConfig создает OAuth конфигурацию для указанного провайдера
+// BuildOAuthConfig creates an OAuth config for the specified provider
 func (f *OAuthFactory) BuildOAuthConfig(providerName string, permissions []string) (*oauth2.Config, error) {
 	provider, ok := GetProvider(providerName)
 	if !ok {
@@ -109,7 +109,7 @@ func (f *OAuthFactory) BuildOAuthConfig(providerName string, permissions []strin
 	return oauthConfig, nil
 }
 
-// GetOIDCProvider возвращает OIDC провайдер для указанного issuer URL
+// GetOIDCProvider returns the OIDC provider for the specified issuer URL
 func (f *OAuthFactory) GetOIDCProvider(issuerURL string) (*oidc.Provider, error) {
 	provider, ok := f.oidcProviders[issuerURL]
 	if !ok {
@@ -118,7 +118,7 @@ func (f *OAuthFactory) GetOIDCProvider(issuerURL string) (*oidc.Provider, error)
 	return provider, nil
 }
 
-// BuildOAuthConfigsForProvider создает OAuth конфигурации для всех провайдеров с указанным oauth_config_key
+// BuildOAuthConfigsForProvider creates OAuth configs for all providers with the specified oauth_config_key
 func (f *OAuthFactory) BuildOAuthConfigsForProvider(baseProviderName string) (map[string]*oauth2.Config, error) {
 	configs := make(map[string]*oauth2.Config)
 
@@ -140,7 +140,7 @@ func (f *OAuthFactory) BuildOAuthConfigsForProvider(baseProviderName string) (ma
 	return configs, nil
 }
 
-// BuildAllOAuthConfigs создает OAuth конфигурации для всех провайдеров в реестре
+// BuildAllOAuthConfigs creates OAuth configs for all providers in the registry
 func (f *OAuthFactory) BuildAllOAuthConfigs() (map[string]*oauth2.Config, error) {
 	configs := make(map[string]*oauth2.Config)
 

@@ -30,7 +30,7 @@ def test_travel_block():
         to_location="office",
         duration_min=25,
         mode="driving-car",
-        title="Выдвинуться в office",
+        title="Head to office",
         insert_before_cluster_index=1,
     )
     assert tb.duration_min == 25
