@@ -1,8 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
     TouchableOpacity,
+    Modal,
+    Pressable,
     StyleSheet,
     Animated,
 } from 'react-native';
@@ -35,6 +37,7 @@ interface Props {
 
 export function PlanChipBadge({ chip, onRemove }: Props) {
     const glowAnim = useRef(new Animated.Value(0)).current;
+    const [modalVisible, setModalVisible] = useState(false);
 
     const isPlaceholder =
         chip.value.startsWith('[') && chip.value.endsWith(']');
@@ -77,6 +80,58 @@ export function PlanChipBadge({ chip, onRemove }: Props) {
                     {chip.value}
                 </Text>
             </View>
+        );
+    }
+
+    if (chip.type === 'note') {
+        return (
+            <>
+                <View style={styles.wrapper}>
+                    <Animated.View
+                        style={[
+                            styles.glowBorder,
+                            { opacity: borderOpacity },
+                        ]}
+                    />
+                    <TouchableOpacity
+                        onPress={() => setModalVisible(true)}
+                        activeOpacity={0.7}
+                    >
+                        <View style={[styles.pill, { backgroundColor: chipStyle.bg }]}>
+                            <IconComponent width={12} height={12} color={chipStyle.text} />
+                            <Text style={[styles.valueText, { color: chipStyle.text }]}>инфо</Text>
+                            {onRemove && (
+                                <TouchableOpacity
+                                    onPress={onRemove}
+                                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                    style={styles.removeBtn}
+                                >
+                                    <Text style={[styles.removeText, { color: chipStyle.text }]}>×</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                <Modal
+                    visible={modalVisible}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setModalVisible(false)}
+                >
+                    <Pressable style={styles.backdrop} onPress={() => setModalVisible(false)}>
+                        <Pressable style={styles.card}>
+                            <Text style={styles.noteText}>{chip.value}</Text>
+                            <TouchableOpacity
+                                onPress={() => setModalVisible(false)}
+                                style={styles.closeBtn}
+                            >
+                                <Text style={styles.closeBtnText}>Закрыть</Text>
+                            </TouchableOpacity>
+                        </Pressable>
+                    </Pressable>
+                </Modal>
+            </>
         );
     }
 
@@ -146,5 +201,37 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         lineHeight: 16,
+    },
+    backdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    card: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 20,
+        width: '100%',
+        maxWidth: 360,
+        gap: 16,
+    },
+    noteText: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: '#1C1C1E',
+    },
+    closeBtn: {
+        alignSelf: 'flex-end',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: '#F5F0FF',
+        borderRadius: 10,
+    },
+    closeBtnText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#9B59B6',
     },
 });

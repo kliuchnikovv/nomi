@@ -64,6 +64,13 @@ export function PlannerScreen() {
 
     const [chatOpen, setChatOpen] = useState(false);
     const [autoSendTrigger, setAutoSendTrigger] = useState(false);
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+    useEffect(() => {
+        const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
+        const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false));
+        return () => { show.remove(); hide.remove(); };
+    }, []);
 
     // ---------------------------------------------------------------------------
     // Register applyPatches in registry
@@ -235,8 +242,8 @@ export function PlannerScreen() {
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Spacer so bottom bar clears the floating tab bar */}
-                            <View style={{ height: TAB_BAR_ICON_HEIGHT }} />
+                            {/* Spacer so bottom bar clears the floating tab bar (hidden when keyboard is open) */}
+                            {!keyboardVisible && <View style={{ height: TAB_BAR_ICON_HEIGHT }} />}
 
                             {/* AI edit banner */}
                             <AIEditBanner message={bannerMessage} onDismiss={clearBanner} />

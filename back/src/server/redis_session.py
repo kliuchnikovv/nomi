@@ -359,15 +359,44 @@ class RedisSession:
         try:
             # _planning_steps is a sync generator — iterate directly
             for step in _run_planning_steps(workflow, execution_input):
-                logger.info(
-                    "[PlannerWorkflow] Step yielded: %s",
-                    step.step_name if hasattr(step, "step_name") else "unknown",
-                )
+                step_name = step.step_name if hasattr(step, "step_name") else "unknown"
+                logger.info("[PlannerWorkflow] Step yielded: %s", step_name)
                 if self.cancel_event.is_set():
                     break
                 chunk = step.content if hasattr(step, "content") else None
-                if chunk:
-                    chunk = str(chunk)
+                if not chunk:
+                    continue
+                chunk = str(chunk)
+
+                if step_name == "clarify":
+                    options = (workflow.session_state or {}).get(
+                        "_current_clarifying_options", []
+                    )
+                    call_id = str(uuid.uuid4())
+                    await self._send_frame(
+                        make_data(
+                            self.next_id,
+                            Op.MESSAGE,
+                            msg_chat_id,
+                            {
+                                "type": "client_action",
+                                "call_id": call_id,
+                                "tool": "ask_user",
+                                "method": "ask",
+                                "params": {
+                                    "question": chunk,
+                                    "options": options,
+                                    "allow_custom": True,
+                                },
+                            },
+                        )
+                    )
+                    logger.info(
+                        "[PlannerWorkflow] Sent ask_user client_action call_id=%s opts=%s",
+                        call_id,
+                        options,
+                    )
+                else:
                     emitted.append(chunk)
                     await self._send_frame(
                         make_data(

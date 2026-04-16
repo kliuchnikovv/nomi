@@ -143,20 +143,12 @@ export default function SettingsHomeScreen() {
                     />
                 </SettingsSection>
 
-                <SettingsSection header="Data & Integrations">
+                <SettingsSection header="Data">
                     <SettingsRow
                         label="Location"
                         value={locationDisplay}
                         onPress={() => navigation.navigate('LocationScreen')}
                         isFirst
-                        isLast={false}
-                    />
-                    <SettingsRow
-                        label="Integrations"
-                        onPress={() =>
-                            navigation.navigate('IntegrationsScreen')
-                        }
-                        isFirst={false}
                         isLast
                     />
                 </SettingsSection>

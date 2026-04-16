@@ -20,7 +20,6 @@ export type SettingsStackParamList = {
   LocationScreen: undefined;
   PlannerModelScreen: undefined;
   BotIdentityScreen: undefined;
-  IntegrationsScreen: undefined;
 };
 
 // Main bottom tab navigator

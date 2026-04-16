@@ -31,3 +31,6 @@ __pycache__
 node_modules
 .worktrees/
 .idea
+conversations
+.superpowers
+docs

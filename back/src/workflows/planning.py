@@ -121,7 +121,8 @@ def _run_extract_stage(tasks: list[dict], context: dict) -> StageResult:
     )
     try:
         data = _extract_json(raw)
-        questions = data.get("pending_questions", [])
+        raw_questions = data.get("pending_questions", [])
+        questions = [{"q": q, "opts": []} for q in raw_questions]
         return StageResult(
             output={"extracted_tasks": data.get("tasks", tasks)},
             pending_questions=questions,
@@ -166,11 +167,13 @@ def _run_recon_stage(
 
         locations[loc] = {"coords": coords, "hours": hours}
 
-    pending_questions: list[str] = []
+    pending_questions: list[dict] = []
     if transport_mode is None:
-        pending_questions.append(
-            "How do you plan to travel between locations? (walking / driving / cycling)"
-        )
+
+        pending_questions.append({
+            "q": "How do you plan to travel between locations?"
+            "opts": ["Walking", "Driving", "Cycling", "Public transport"],
+        })
 
     return StageResult(
         output={"locations": locations, "transport_mode": transport_mode},
@@ -217,7 +220,7 @@ def _run_cluster_stage(
         data = _extract_json(raw)
         return StageResult(
             output={"clusters": data.get("clusters", [])},
-            pending_questions=data.get("pending_questions", []),
+            pending_questions=[{"q": q, "opts": []} for q in data.get("pending_questions", [])],
             is_complete=True,
         )
     except asyncio.CancelledError:
@@ -320,7 +323,7 @@ _BUILD_PROMPT = """You are building the final day schedule by applying structure
 Given clusters, travel blocks, task metadata, and planning date, produce a patch list
 that transforms the raw task list into a fully scheduled day.
 
-IMPORTANT: If a task already has a time hint in its text (e.g., "Meeting at 14:00"), 
+IMPORTANT: If a task already has a time hint in its text (e.g., "Meeting at 14:00"),
 KEEP that exact time. Only assign times to tasks that don't have explicit times.
 
 TRANSIT/FLIGHT TASKS — CRITICAL:
@@ -426,18 +429,20 @@ def _handle_clarifying(
     """
     # Record Q&A pair: the question that was last shown to the user
     current_q = state.pop("_current_clarifying_question", None)
+    state.pop("_current_clarifying_options", None)
     state.setdefault("clarification_answers", [])
     state["clarification_answers"].append(user_message)
     state.setdefault("clarification_qa", [])
     if current_q:
         state["clarification_qa"].append({"q": current_q, "a": user_message})
 
-    questions: list[str] = state.get("pending_questions", [])
+    questions: list[dict] = state.get("pending_questions", [])
     if questions:
-        next_q = questions.pop(0)
+        item = questions.pop(0)
         state["pending_questions"] = questions
-        state["_current_clarifying_question"] = next_q  # save before yielding
-        return next_q, False
+        state["_current_clarifying_question"] = item["q"]
+        state["_current_clarifying_options"] = item.get("opts", [])
+        return item["q"], False
 
     # All questions answered — return to pending stage
     pending = state.get("pending_stage", PlanStatus.EXTRACT)
@@ -526,12 +531,13 @@ def _planning_steps(
             },
         )
         if result.pending_questions and not state.get("extract_clarified"):
-            first_q = result.pending_questions[0]
+            first_item = result.pending_questions[0]
             state["pending_questions"] = result.pending_questions[1:]
             state["pending_stage"] = PlanStatus.EXTRACT
             state["status"] = PlanStatus.CLARIFYING
-            state["_current_clarifying_question"] = first_q
-            yield StepOutput(step_name="clarify", content=first_q)
+            state["_current_clarifying_question"] = first_item["q"]
+            state["_current_clarifying_options"] = first_item.get("opts", [])
+            yield StepOutput(step_name="clarify", content=first_item["q"])
             return
         state["extract_output"] = result.output
         state["status"] = PlanStatus.RECON
@@ -549,12 +555,13 @@ def _planning_steps(
         ) or _infer_transport(user_message, state.get("clarification_answers", []))
         result = _run_recon_stage(extracted, planning_date, transport)
         if result.pending_questions and not state.get("recon_clarified"):
-            first_q = result.pending_questions[0]
+            first_item = result.pending_questions[0]
             state["pending_questions"] = result.pending_questions[1:]
             state["pending_stage"] = PlanStatus.RECON
             state["status"] = PlanStatus.CLARIFYING
-            state["_current_clarifying_question"] = first_q
-            yield StepOutput(step_name="clarify", content=first_q)
+            state["_current_clarifying_question"] = first_item["q"]
+            state["_current_clarifying_options"] = first_item.get("opts", [])
+            yield StepOutput(step_name="clarify", content=first_item["q"])
             return
         state["recon_output"] = result.output
         state["status"] = PlanStatus.CLUSTER
@@ -569,12 +576,13 @@ def _planning_steps(
         locations = state.get("recon_output", {}).get("locations", {})
         result = _run_cluster_stage(extracted, locations)
         if result.pending_questions and not state.get("cluster_clarified"):
-            first_q = result.pending_questions[0]
+            first_item = result.pending_questions[0]
             state["pending_questions"] = result.pending_questions[1:]
             state["pending_stage"] = PlanStatus.CLUSTER
             state["status"] = PlanStatus.CLARIFYING
-            state["_current_clarifying_question"] = first_q
-            yield StepOutput(step_name="clarify", content=first_q)
+            state["_current_clarifying_question"] = first_item["q"]
+            state["_current_clarifying_options"] = first_item.get("opts", [])
+            yield StepOutput(step_name="clarify", content=first_item["q"])
             return
         state["cluster_output"] = result.output
         state["status"] = PlanStatus.ROUTE
