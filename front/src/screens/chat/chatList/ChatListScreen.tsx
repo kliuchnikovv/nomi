@@ -10,6 +10,7 @@ import { useTheme } from '../../../context/ThemeContext';
 import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
 import type { ChatStackParamList } from '../../../navigation/types';
+import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 
 type NavProp = NativeStackNavigationProp<ChatStackParamList, 'ChatList'>;
 
@@ -200,7 +201,7 @@ export function ChatListScreen() {
                 renderItem={renderItem}
                 onRefresh={() => getChats({ preserveActiveChat: true })}
                 refreshing={chatsLoading}
-                contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 16 }]}
+                contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + TAB_BAR_ICON_HEIGHT + 16 }]}
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                     <View style={styles.empty}>

@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
 import { ChatMessage, usePlannerChat } from '../hooks/usePlannerChat';
 import { PlanItem } from '../types';
+import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 
 // Space reserved at the bottom of the FlatList content so the newest
 // message is never hidden behind the absolutely-positioned footer.
@@ -169,7 +170,7 @@ export function ChatBottomSheet({
     onAutoSendHandled,
 }: Props) {
     const { theme } = useTheme();
-    const { top: topInset } = useSafeAreaInsets();
+    const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const listRef = useRef<FlatList<ChatMessage | 'thinking'>>(null);
     const snapPoints = ['55%', '92%'];
@@ -306,6 +307,7 @@ export function ChatBottomSheet({
             index={-1}
             snapPoints={snapPoints}
             topInset={topInset}
+            bottomInset={TAB_BAR_ICON_HEIGHT + bottomInset}
             enablePanDownToClose
             keyboardBehavior="fillParent"
             keyboardBlurBehavior="restore"

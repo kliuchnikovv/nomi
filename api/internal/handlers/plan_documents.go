@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -14,14 +15,21 @@ import (
 	"gorm.io/gorm"
 )
 
+// planDocumentStore is the minimal storage interface required by PlanDocumentsHandler.
+type planDocumentStore interface {
+	GetPlanDocument(ctx context.Context, userID uuid.UUID, date string) (*storage.PlanDocument, error)
+	CreatePlanDocument(ctx context.Context, doc *storage.PlanDocument) (*storage.PlanDocument, error)
+	UpdatePlanDocumentItems(ctx context.Context, id uuid.UUID, userID uuid.UUID, items datatypes.JSON) (*storage.PlanDocument, error)
+}
+
 // PlanDocumentsHandler handles REST operations for daily plan documents.
 type PlanDocumentsHandler struct {
-	store  *storage.Storage
+	store  planDocumentStore
 	logger *zap.Logger
 }
 
 // NewPlanDocumentsHandler creates a new PlanDocumentsHandler.
-func NewPlanDocumentsHandler(store *storage.Storage, logger *zap.Logger) *PlanDocumentsHandler {
+func NewPlanDocumentsHandler(store planDocumentStore, logger *zap.Logger) *PlanDocumentsHandler {
 	return &PlanDocumentsHandler{
 		store:  store,
 		logger: logger,

@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, memo, useEffect, useRef } from 'react';
 import { Linking, View, Text, ActionSheetIOS, Pressable, StyleSheet, Animated } from 'react-native';
+import ReAnimated, { useAnimatedStyle, useSharedValue, SharedValue } from 'react-native-reanimated';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
@@ -137,6 +138,7 @@ interface GiftedChatRenderersParams {
     assistantContainerMaxWidth: string;
     assistantWorking: boolean;
     bottomInset: number;
+    inputAnimY?: SharedValue<number>;
     styles: any;
     theme: ThemeColors;
     onSend: (text: string) => void;
@@ -158,10 +160,19 @@ export function useGiftedChatRenderers({
     onAttachmentPress,
     attachmentPosition,
     onMessageAction,
+    inputAnimY,
 }: GiftedChatRenderersParams) {
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
     const simpleStyles = useMemo(() => createSimpleTextStyles(theme), [theme]);
+
+    // Animated style for input toolbar slide-in.
+    // Always use a concrete SharedValue so the Reanimated worklet can track it properly.
+    const fallbackInputAnimY = useSharedValue(0);
+    const resolvedInputAnimY = inputAnimY ?? fallbackInputAnimY;
+    const inputToolbarAnimStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: resolvedInputAnimY.value }],
+    }));
     const { showToolCalls, isRateLimited, availableModels, setSelectedModel, setIsRateLimited, setError, generationStatus } = useChat();
 
     // Stable handlers - use refs to avoid dependency changes
@@ -299,8 +310,8 @@ export function useGiftedChatRenderers({
     const renderInputToolbar = useCallback(
         (_props: any) => {
             return (
-                <View style={{ backgroundColor: theme.background }}>
-                    <GenerationStatusBar status={generationStatus} theme={theme} />
+                <ReAnimated.View style={[{ backgroundColor: theme.background }, inputToolbarAnimStyle]}>
+                    {!error && <GenerationStatusBar status={generationStatus} theme={theme} />}
                     <ErrorBanner
                         error={error}
                         onRetry={onRetry}
@@ -309,10 +320,10 @@ export function useGiftedChatRenderers({
                         onChangeModel={isRateLimited ? handleChangeModel : undefined}
                     />
                     <ChatInput onSend={onSendRef.current} />
-                </View>
+                </ReAnimated.View>
             );
         },
-        [error, onRetry, onDismissError, chatTheme, isRateLimited, handleChangeModel, theme.background, generationStatus, theme]
+        [error, onRetry, onDismissError, chatTheme, isRateLimited, handleChangeModel, theme.background, generationStatus, theme, inputToolbarAnimStyle]
     );
 
     // Stable message renderer

@@ -169,14 +169,14 @@ class AgentFactory:
 
             # Send model name without opencode/ prefix — API expects e.g. "big-pickle" or "gpt-5-nano"
             if use_responses_api:
-                from agno.models.openai import OpenAIResponses
+                from src.models.safe_openai_responses import SafeOpenAIResponses
 
                 logger.info(
                     "[Factory] Creating OpenCode model (Responses API): %s (base_url=%s)",
                     model_name,
                     base_url,
                 )
-                return OpenAIResponses(
+                return SafeOpenAIResponses(
                     id=model_name,
                     api_key=api_key,
                     base_url=base_url,
@@ -284,6 +284,7 @@ class AgentFactory:
         endpoint: str | None = None,
         client_tool_runner: Callable[[str, str, dict], Awaitable[str]] | None = None,
         bot_identity: dict | None = None,
+        user_location: str | None = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -555,6 +556,7 @@ class AgentFactory:
                     user_id=rag_user_id,
                     timezone=timezone,
                     knowledge=self._knowledge,
+                    user_location=user_location,
                     identity=bot_identity,
                 )
 

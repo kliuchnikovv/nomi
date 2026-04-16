@@ -3,7 +3,6 @@ import {
     ArrowUp,
     Plus,
     XmarkCircle,
-    CursorPointer,
     Attachment as AttachmentIcon,
     Trash,
     Camera,
@@ -384,15 +383,6 @@ export default function ChatInput(props: Props) {
     const plusMenuItems: ContextMenuItem[] = useMemo(
         () => [
             {
-                id: 'model',
-                label: `Model: ${selectedModelName}`,
-                icon: <CursorPointer width={20} height={20} color="#fff" />,
-                onPress: () => {
-                    setPlusMenuVisible(false);
-                    setTimeout(() => setModelMenuVisible(true), 300);
-                },
-            },
-            {
                 id: 'files',
                 label: 'Files',
                 icon: <AttachmentIcon width={20} height={20} color="#fff" />,
@@ -421,8 +411,6 @@ export default function ChatInput(props: Props) {
             },
         ],
         [
-            selectedModelName,
-            setModelMenuVisible,
             pickDocument,
             pickImage,
             takePhoto,
@@ -753,6 +741,7 @@ export default function ChatInput(props: Props) {
                     returnKeyType="send"
                     onSubmitEditing={handleSend}
                     onBlur={() => Keyboard.dismiss()}
+                    keyboardAppearance="dark"
                 />
 
                 {/* Bottom row: Buttons */}
@@ -766,6 +755,17 @@ export default function ChatInput(props: Props) {
                             ]}
                         >
                             <Plus width={24} height={24} color={theme.text} />
+                        </Pressable>
+                        <Pressable
+                            onPress={showModelPicker}
+                            style={({ pressed }) => [
+                                styles.modelButton,
+                                pressed && styles.modelButtonPressed,
+                            ]}
+                        >
+                            <Text style={styles.modelButtonText} numberOfLines={1}>
+                                {selectedModelName}
+                            </Text>
                         </Pressable>
                     </View>
 
@@ -847,6 +847,7 @@ export default function ChatInput(props: Props) {
                 position="bottom-left"
                 title="Select Detail Level"
             />
+
         </View>
     );
 }

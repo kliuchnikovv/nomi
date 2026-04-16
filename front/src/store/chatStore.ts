@@ -101,9 +101,8 @@ function flushPendingUpdates(
     startTransition(() => {
         set((state) => {
             let currentMessages = state.chats[chatId] || [];
-            let newMessages = [...currentMessages];
+            let newMessages = currentMessages;
 
-            // Process all pending payloads in order
             for (const update of updates) {
                 const result = onReceivedMessage(update.payload, newMessages, chatId);
                 if (result !== newMessages) {
@@ -256,45 +255,17 @@ export const useChatStore = create<ChatStore>()(
                     flushPendingUpdates(chatId, set);
                 }
 
-                /*
-                console.log('[ChatStore 📥 addMessage]', {
-                    chatId,
-                    payload_type: payload?.type,
-                    payload_message_id: payload?.message_id,
-                    payload_agent_name: payload?.agent_name,
-                    payload_role: payload?.role,
-                    payload_message_preview: payload?.message?.substring(0, 50)
-                });
-                */
                 touchChatAccess(chatId);
                 startTransition(() => {
                     set((state) => {
                         const currentMessages = state.chats[chatId] || [];
-                        /*
-                        console.log('[ChatStore 📋 Before]', {
-                            chatId,
-                            messageCount: currentMessages.length,
-                            messageIds: currentMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`)
-                        });
-                        */
                         let newMessages = onReceivedMessage(payload, currentMessages, chatId);
 
                         if (newMessages === currentMessages) {
-                            // console.log('[ChatStore ⏭️  Skip] No changes, returning previous state');
                             return state;
                         }
 
-                        // Trim messages if they exceed the limit
                         newMessages = trimMessages(newMessages, MAX_MESSAGES_PER_CHAT);
-
-                        /*
-                        console.log('[ChatStore 📋 After]', {
-                            chatId,
-                            messageCount: newMessages.length,
-                            messageIds: newMessages.map(m => `${m.id}${m.agent_id ? `-${m.agent_id}` : ''}`),
-                            added: newMessages.length - currentMessages.length
-                        });
-                        */
                         return {
                             chats: evictOldChats({
                                 ...state.chats,
@@ -324,115 +295,85 @@ export const useChatStore = create<ChatStore>()(
     )
 );
 
-// Pure function extracted from ChatContext to handle message accumulation
 function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: string): Message[] {
-    console.log('[onReceivedMessage 🔄 Start]', {
-        payload_type: payload?.type,
-        payload_message_id: payload?.message_id,
-        payload_agent_name: payload?.agent_name,
-        payload_role: payload?.role,
-        prevMessagesCount: prevMessages.length
-    });
-    let newMessages: Message[] = [...prevMessages];
-
     const messageID = payload.message_id;
     if (!messageID) {
-        console.log('[onReceivedMessage ⚠️  No message_id] Skipping');
-        return newMessages;
+        return prevMessages;
     }
 
-    // Aggressive deduplication: filter out any existing duplicate messages with same ID
-    // Keep only the first occurrence if duplicates exist
-    const uniqueMap = new Map();
-    newMessages = newMessages.filter(item => {
-        const key = item.id;
-        if (uniqueMap.has(key)) {
-            console.log('[onReceivedMessage 🧹 Removed duplicate in state]', key);
-            return false;
-        }
-        uniqueMap.set(key, true);
-        return true;
-    });
+    let needsCopy = false;
+    let newMessages: Message[] = prevMessages;
 
-    // Check if message already exists (deduplication for optimistic updates)
-    const existingMessage = newMessages.find(m => m.id === messageID);
-
-    // For user messages: if already exists with same text, skip (optimistic duplicate)
-    if (existingMessage && existingMessage.role === 'user') {
-        console.log('[onReceivedMessage ⏭️  Duplicate user message] Skipping:', messageID);
-        return prevMessages; // Return unchanged
-    }
-
-    let messageIdx = newMessages.findIndex((item) => {
-        // Multi-agent support: message is identified by message_id AND agent_id
-        // Normalize to lowercase to handle casing inconsistencies (e.g. "Souper" vs "souper")
+    // Check for duplicate user messages without scanning entire array
+    let messageIdx = -1;
+    for (let i = 0; i < prevMessages.length; i++) {
+        const item = prevMessages[i];
+        if (item.id !== messageID) continue;
         if (payload.agent_name && item.agent_id) {
             if (item.agent_id.toLowerCase() !== payload.agent_name.toLowerCase()) {
-                return false;
+                continue;
             }
         }
-        return item.id === payload.message_id;
-    });
+        messageIdx = i;
+        break;
+    }
 
-    if (messageIdx === -1) {
-        messageIdx = newMessages.length;
-        // Use role from payload if available (for multi-device sync)
-        const role = payload.role || 'assistant';
-        const sender = payload.sender || (role === 'user' ? 'user' : 'assistant');
-        console.log('[onReceivedMessage ➕ New Message]', {
-            messageID,
-            role,
-            sender,
-            agent_id: payload.agent_name,
-            index: messageIdx
-        });
-        newMessages[messageIdx] = {
-            id: messageID,
-            chat_id: activeChatID,
-            sender: sender,
-            role: role,
-            agent_id: payload.agent_name,
-            // Initialize with a space for assistant to ensure GiftedChat renders the bubble immediately
-            text: role === 'user' ? (payload.message || "") : " ",
-            created_at: Date.now(),
-            content_parts: role === 'user' ? undefined : [], // Initialize content_parts for assistant
-            attachments: payload.attachments,
-            context_items: payload.context_items,
-        };
-        // For user messages from other devices, we're done - don't accumulate
-        if (role === 'user') {
-            console.log('[onReceivedMessage ✅ User message complete]');
+    if (messageIdx !== -1) {
+        const existingMessage = prevMessages[messageIdx];
+
+        // For user messages: if already exists, skip (optimistic duplicate)
+        if (existingMessage.role === 'user') {
+            return prevMessages;
+        }
+
+        // For assistant messages, update in place with lazy copy
+        const messageRole = payload.role || existingMessage.role;
+        if (messageRole === 'user') {
+            if (payload.message) {
+                if (!needsCopy) {
+                    newMessages = [...prevMessages];
+                    needsCopy = true;
+                }
+                newMessages[messageIdx] = {
+                    ...newMessages[messageIdx],
+                    text: payload.message,
+                    context_items: payload.context_items,
+                };
+            }
             return newMessages;
         }
-    } else {
-        console.log('[onReceivedMessage 🔄 Updating existing message]', {
-            messageID,
-            index: messageIdx,
-            agent_id: payload.agent_name
-        });
+
+        // Dispatch to handler for existing assistant messages
+        if (!needsCopy) {
+            newMessages = [...prevMessages];
+            needsCopy = true;
+        }
+        return dispatchPayload(payload, newMessages, messageIdx);
     }
 
-    // For ANY user message (new or existing), don't do text accumulation
-    // User messages arrive complete in a single frame, not streamed
-    const messageRole = payload.role || newMessages[messageIdx]?.role;
-    if (messageRole === 'user') {
-        // User messages don't stream - they're complete
-        // Just update text if needed and return
-        if (payload.message && newMessages[messageIdx]) {
-            console.log('[onReceivedMessage 📝 User message text update]');
-            newMessages[messageIdx] = {
-                ...newMessages[messageIdx],
-                text: payload.message, // Replace, don't append
-                context_items: payload.context_items, // Preserve context items
-            };
-        }
-        return newMessages;
+    // New message
+    if (!needsCopy) {
+        newMessages = [...prevMessages];
+        needsCopy = true;
     }
-    console.log('[onReceivedMessage 🚀 Dispatching to handler]', {
-        payload_type: payload.type,
-        messageIdx
+    const role = payload.role || 'assistant';
+    const sender = payload.sender || (role === 'user' ? 'user' : 'assistant');
+    newMessages.push({
+        id: messageID,
+        chat_id: activeChatID,
+        sender: sender,
+        role: role,
+        agent_id: payload.agent_name,
+        text: role === 'user' ? (payload.message || "") : " ",
+        created_at: Date.now(),
+        content_parts: role === 'user' ? undefined : [],
+        attachments: payload.attachments,
+        context_items: payload.context_items,
     });
 
-    // Dispatch to handler for assistant messages
-    return dispatchPayload(payload, newMessages, messageIdx);
+    if (role === 'user') {
+        return newMessages;
+    }
+
+    return dispatchPayload(payload, newMessages, newMessages.length - 1);
 }

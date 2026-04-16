@@ -8,6 +8,11 @@ This wrapper converts 'developer' to 'system', then 'system' to 'user' before se
 
 Additionally, GLM models don't support 'tool' role messages, so we filter those out
 and remove tool_calls from assistant messages since the API doesn't support them.
+
+Tool schemas are also sanitized to remove fields incompatible with z.ai/GLM:
+- ``strict: true`` removed (not supported)
+- ``additionalProperties`` removed (not supported)
+- Empty ``required: []`` arrays removed (causes "Tool type cannot be empty")
 """
 
 import logging
@@ -24,7 +29,74 @@ class SafeOpenAI(OpenAIChat):
     An OpenAI-compatible model wrapper that converts 'developer' and 'system' roles
     to 'user', filters out 'tool' role messages, and removes tool_calls from assistant
     messages for APIs that don't support these features (e.g., GLM models, Z.ai).
+
+    Also sanitizes tool schemas to remove ``strict``, ``additionalProperties``,
+    and empty ``required: []`` arrays that cause ``400: Tool type cannot be empty``
+    errors on z.ai/GLM endpoints.
     """
+
+    # ------------------------------------------------------------------
+    # Tool schema sanitization
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _sanitize_tool_schema(schema: dict) -> dict:
+        """Recursively strip fields incompatible with z.ai / GLM APIs."""
+        if not isinstance(schema, dict):
+            return schema
+        result = {}
+        for key, value in schema.items():
+            # Drop keys that z.ai does not understand
+            if key in ("strict", "additionalProperties"):
+                continue
+            # Remove empty required arrays
+            if key == "required" and isinstance(value, list) and not value:
+                continue
+            # Recurse into nested dicts (properties, items, etc.)
+            if isinstance(value, dict):
+                value = SafeOpenAI._sanitize_tool_schema(value)
+            elif isinstance(value, list):
+                value = [
+                    SafeOpenAI._sanitize_tool_schema(v)
+                    if isinstance(v, dict)
+                    else v
+                    for v in value
+                ]
+            result[key] = value
+        return result
+
+    def _sanitize_tools(self, tools: list[dict] | None) -> list[dict] | None:
+        """Sanitize a list of OpenAI-style tool dicts for z.ai/GLM.
+
+        For every tool the function:
+        1. Guarantees ``type: "function"`` wrapper is present.
+        2. Strips ``strict``, ``additionalProperties``, empty ``required``.
+        """
+        if not tools:
+            return tools
+
+        sanitized = []
+        for tool in tools:
+            # Guarantee type wrapper exists
+            if tool.get("type") != "function":
+                # If the tool dict looks like a bare function description,
+                # wrap it properly.
+                if "function" not in tool and "name" in tool:
+                    tool = {"type": "function", "function": tool}
+                else:
+                    tool = {**tool, "type": "function"}
+
+            # Sanitize the function definition
+            func = tool.get("function", {})
+            func = self._sanitize_tool_schema(func)
+            tool = {**tool, "function": func}
+            sanitized.append(tool)
+
+        return sanitized
+
+    # ------------------------------------------------------------------
+    # Message normalization
+    # ------------------------------------------------------------------
 
     def _normalize_messages(self, messages: list[Message]) -> list[Message]:
         """Convert 'developer' to 'system', 'system' to 'user', filter out 'tool' role, and remove tool_calls."""
@@ -136,9 +208,21 @@ class SafeOpenAI(OpenAIChat):
 
         return normalized_messages
 
+    def _format_tools(self, tools):
+        """Override to strip 'strict' field from tool definitions.
+        z.ai GLM rejects tool schemas that include 'strict: true' (error 1214).
+        """
+        tool_dicts = super()._format_tools(tools)
+        for tool in tool_dicts:
+            if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
+                tool["function"].pop("strict", None)
+        return tool_dicts
+
     def invoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
         logger.info("[SafeOpenAI] invoke() called with %d messages", len(messages))
         normalized = self._normalize_messages(messages)
+        if "tools" in kwargs:
+            kwargs["tools"] = self._sanitize_tools(kwargs["tools"])
         logger.info(
             "[SafeOpenAI] invoke() passing %d messages to super()", len(normalized)
         )
@@ -147,6 +231,8 @@ class SafeOpenAI(OpenAIChat):
     async def ainvoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
         logger.info("[SafeOpenAI] ainvoke() called with %d messages", len(messages))
         normalized = self._normalize_messages(messages)
+        if "tools" in kwargs:
+            kwargs["tools"] = self._sanitize_tools(kwargs["tools"])
         logger.info(
             "[SafeOpenAI] ainvoke() passing %d messages to super()", len(normalized)
         )
@@ -157,6 +243,8 @@ class SafeOpenAI(OpenAIChat):
             "[SafeOpenAI] invoke_stream() called with %d messages", len(messages)
         )
         normalized = self._normalize_messages(messages)
+        if "tools" in kwargs:
+            kwargs["tools"] = self._sanitize_tools(kwargs["tools"])
         logger.info(
             "[SafeOpenAI] invoke_stream() passing %d messages to super()",
             len(normalized),
@@ -168,6 +256,8 @@ class SafeOpenAI(OpenAIChat):
             "[SafeOpenAI] ainvoke_stream() called with %d messages", len(messages)
         )
         normalized = self._normalize_messages(messages)
+        if "tools" in kwargs:
+            kwargs["tools"] = self._sanitize_tools(kwargs["tools"])
         logger.info(
             "[SafeOpenAI] ainvoke_stream() passing %d messages to super()",
             len(normalized),

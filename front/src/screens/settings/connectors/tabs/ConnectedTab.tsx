@@ -1,5 +1,6 @@
 import {
     ActivityIndicator,
+    Alert,
     Pressable,
     ScrollView,
     Switch,
@@ -20,7 +21,7 @@ export function ConnectedTab() {
     const styles = useMemo(() => getStyles(theme, palette), [theme, palette]);
 
     const gmailIntegrations = useMemo(
-        () => integrations.filter(p => p.provider === 'gmail'),
+        () => integrations.filter(p => p.provider === 'gmail' || p.provider === 'imap'),
         [integrations],
     );
     const calendarIntegrations = useMemo(
@@ -91,7 +92,16 @@ export function ConnectedTab() {
                                     color={color}
                                     configID={integration.id}
                                     statusText={getIntegrationStatus(integration)}
-                                    onDelete={() => deleteIntegration(integration.id)}
+                                    onDelete={() => {
+                                        Alert.alert(
+                                            'Remove Integration',
+                                            `Remove ${integration.name}?`,
+                                            [
+                                                { text: 'Cancel', style: 'cancel' },
+                                                { text: 'Remove', style: 'destructive', onPress: () => deleteIntegration(integration.id) },
+                                            ],
+                                        );
+                                    }}
                                 />
                                 {i < items.length - 1 && (
                                     <View style={styles.divider} />
@@ -114,7 +124,7 @@ export function ConnectedTab() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
         >
-            {renderSection('Gmail accounts', gmailIntegrations, 'gmail')}
+            {renderSection('Mail', gmailIntegrations, 'gmail')}
             {renderSection('Google Calendar', calendarIntegrations, 'calendar')}
             {renderSection('GitHub', githubIntegrations, 'github')}
             {renderSection('Enabled Tools', enabledTools)}

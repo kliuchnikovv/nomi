@@ -13,13 +13,16 @@ from agno.learn import (
     EntityMemoryConfig,
     LearningMachine,
     LearningMode,
-    SessionContextConfig,
     UserProfileConfig,
 )
 
 logger = logging.getLogger(__name__)
 
 name = "Souper"
+
+# Maximum number of unique memories to keep in the injected context.
+# Older duplicates are pruned after each run.
+MAX_UNIQUE_MEMORIES = 30
 
 BASE_INSTRUCTIONS = f"""
 You are {name}, a personal AI assistant designed to help users with their daily tasks.
@@ -71,6 +74,7 @@ class SouperAgent(Agent):
         thinking: str = "off",
         timezone: str | None = "UTC",
         knowledge=None,
+        user_location: str | None = None,
         identity: dict | None = None,
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
@@ -111,6 +115,8 @@ class SouperAgent(Agent):
             base
             + f"\nCurrent time is: {datetime.now(ZoneInfo(effective_timezone)).strftime('%Y-%m-%d %H:%M:%S %z')}"
         )
+        if user_location:
+            instructions += f"\nUser's current location: {user_location}"
 
         super().__init__(
             db=db,
@@ -143,3 +149,125 @@ class SouperAgent(Agent):
             telemetry=False,
             send_media_to_model=True,
         )
+
+    # ------------------------------------------------------------------
+    # Memory deduplication
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_memory_text(text: str) -> str:
+        """Normalize memory text for deduplication comparison."""
+        if not text:
+            return ""
+        # Lowercase, strip whitespace, collapse multiple spaces
+        return " ".join(text.lower().split())
+
+    async def _deduplicate_memories(self) -> int:
+        """Remove duplicate memories for this user.
+
+        Keeps the most recent instance of each unique (normalized) memory
+        and prunes the total count to ``MAX_UNIQUE_MEMORIES``.
+
+        Returns the number of memories deleted.
+        """
+        if not self.memory_manager or not self.user_id:
+            return 0
+
+        try:
+            db = self.memory_manager.db
+            if db is None:
+                return 0
+
+            memories = db.get_user_memories(user_id=self.user_id)
+            if not memories:
+                return 0
+
+            # Group by normalized text
+            seen: dict[str, list] = {}
+            for mem in memories:
+                key = self._normalize_memory_text(
+                    mem.memory if hasattr(mem, "memory") else str(mem)
+                )
+                seen.setdefault(key, []).append(mem)
+
+            # Identify duplicates (keep newest per group)
+            ids_to_delete: list[str] = []
+            for _key, group in seen.items():
+                if len(group) > 1:
+                    # Sort by updated_at descending — keep the first (newest)
+                    group.sort(
+                        key=lambda m: getattr(m, "updated_at", None) or 0,
+                        reverse=True,
+                    )
+                    for duplicate in group[1:]:
+                        mem_id = getattr(duplicate, "memory_id", None)
+                        if mem_id:
+                            ids_to_delete.append(mem_id)
+
+            # If still over the limit after dedup, trim oldest globally
+            if len(memories) - len(ids_to_delete) > MAX_UNIQUE_MEMORIES:
+                remaining = [
+                    m
+                    for m in memories
+                    if getattr(m, "memory_id", None) not in set(ids_to_delete)
+                ]
+                remaining.sort(
+                    key=lambda m: getattr(m, "updated_at", None) or 0,
+                )
+                excess = len(remaining) - MAX_UNIQUE_MEMORIES
+                for m in remaining[:excess]:
+                    mem_id = getattr(m, "memory_id", None)
+                    if mem_id:
+                        ids_to_delete.append(mem_id)
+
+            if ids_to_delete:
+                try:
+                    db.delete_user_memories(ids_to_delete, user_id=self.user_id)
+                except Exception:
+                    # Fallback: delete one by one
+                    for mem_id in ids_to_delete:
+                        try:
+                            db.delete_user_memory(mem_id, user_id=self.user_id)
+                        except Exception:
+                            pass
+                logger.info(
+                    "[Souper] Deduplicated memories: deleted %d duplicates for user %s",
+                    len(ids_to_delete),
+                    self.user_id,
+                )
+
+            return len(ids_to_delete)
+
+        except Exception as exc:
+            logger.warning("[Souper] Memory deduplication failed: %s", exc)
+            return 0
+
+    async def arun(self, *args, **kwargs):
+        """Run agent and deduplicate memories afterwards.
+
+        Agent.arun(stream=True) returns an async generator, not a coroutine.
+        We must handle both cases: streaming (yield events, dedup after) and
+        non-streaming (await result, dedup after).
+        """
+        stream = kwargs.get("stream", self.stream) if hasattr(self, "stream") else kwargs.get("stream", False)
+        parent_arun = super().arun(*args, **kwargs)
+
+        if stream:
+            # Wrap the async generator to run dedup after iteration completes
+            async def _stream_with_dedup():
+                try:
+                    async for event in parent_arun:
+                        yield event
+                finally:
+                    try:
+                        await self._deduplicate_memories()
+                    except Exception:
+                        pass
+            return _stream_with_dedup()
+        else:
+            result = await parent_arun
+            try:
+                await self._deduplicate_memories()
+            except Exception:
+                pass
+            return result

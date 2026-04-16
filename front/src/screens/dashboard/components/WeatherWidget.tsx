@@ -1,10 +1,10 @@
+// front/src/screens/dashboard/components/WeatherWidget.tsx
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Linking, Platform } from 'react-native';
-import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../../context/ThemeContext';
 import { weatherApi } from '../../../apiClient';
+import { getStoredLocation } from '../../../services/location/locationService';
 
 interface WeatherData {
     temperature: number;
@@ -33,15 +33,8 @@ export function WeatherWidget() {
     const loadWeather = async () => {
         setLoading(true);
         try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                setLoading(false);
-                return;
-            }
-            const location = await Location.getCurrentPositionAsync({});
-            const { latitude: lat, longitude: lon } = location.coords;
-            await AsyncStorage.setItem('weather_location', JSON.stringify({ lat, lon }));
-            const data = await weatherApi.getCurrentWeather(lat, lon);
+            const loc = await getStoredLocation();
+            const data = await weatherApi.getCurrentWeather(loc.lat, loc.lon);
             if (data?.current_weather) {
                 setWeather({
                     temperature: data.current_weather.temperature,

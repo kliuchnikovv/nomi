@@ -78,9 +78,26 @@ _EXTRACT_PROMPT = """You are analyzing a task list for day planning.
 For each task extract:
 - id: the task id (unchanged)
 - time_hint: explicit time already in the title (e.g. "14:00", "evening") — or null
-- location: place mentioned or implied (e.g. "gym", "office", "home") — or null
+- location: the primary place for this task — see location rules below
+- destination_location: (transit/flight tasks only) the arrival airport or station — or null
 - context_type: one of "home", "hotel", "place", "transit", "none"
 - constraints: ordering requirements like "after breakfast" — or null
+
+Location extraction rules:
+- Regular tasks: use the place mentioned or implied (e.g. "gym", "office", "home").
+- Transit/flight/train tasks: set context_type to "transit".
+  - location: specific DEPARTURE point — use the full airport or station name
+    (e.g. "Аэропорт Эль-Прат, Барселона" for a Barcelona departure).
+  - destination_location: specific ARRIVAL point — use the full airport or station name
+    (e.g. "Аэропорт Сабиха Гёкчен, Стамбул" for an Istanbul arrival).
+  - Do NOT set location and destination_location to the same city.
+  - Example: "Перелет Барселона → Стамбул" → location="Аэропорт Эль-Прат, Барселона",
+    destination_location="Аэропорт Сабиха Гёкчен, Стамбул"
+
+If the additional context contains a "clarification_qa" list of {"q": "...", "a": "..."} pairs,
+use each answer to fill in the specific task field the question was about. Match the answer to
+the task by reading the question carefully — do NOT reassign answers between tasks.
+A time answer ("13:20 - 18:30") becomes time_hint ONLY for the task the question named explicitly.
 
 Also produce pending_questions: a list of questions to ask the user if duration,
 location, or time is missing for important tasks. Keep each question concise and
@@ -89,7 +106,8 @@ specific to one task. Return an empty list if nothing is unclear.
 Return ONLY valid JSON in this exact shape:
 {
   "tasks": [
-    {"id": "...", "time_hint": "14:00", "location": "office", "context_type": "place", "constraints": null}
+    {"id": "...", "time_hint": "14:00", "location": "office", "destination_location": null, "context_type": "place", "constraints": null},
+    {"id": "...", "time_hint": "13:20-18:30", "location": "Аэропорт Эль-Прат, Барселона", "destination_location": "Аэропорт Сабиха Гёкчен, Стамбул", "context_type": "transit", "constraints": null}
   ],
   "pending_questions": ["What time is your gym session?"]
 }"""
@@ -305,13 +323,23 @@ that transforms the raw task list into a fully scheduled day.
 IMPORTANT: If a task already has a time hint in its text (e.g., "Meeting at 14:00"), 
 KEEP that exact time. Only assign times to tasks that don't have explicit times.
 
+TRANSIT/FLIGHT TASKS — CRITICAL:
+- For tasks with context_type "transit": use the "location" field (departure airport) as the
+  location chip value — NOT the generic city name.
+- If the task has a "destination_location" field (non-null), add a note chip with value
+  "→ <destination_location>" so the destination is visible.
+- Do NOT add a location chip with a generic city name for transit tasks.
+
 Apply patches in this STRICT order:
 1. add_item — insert each travel task (one per travel block, place it before the destination cluster)
-2. add_chip (type=time) — assign "HH:MM-HH:MM" time ranges to ALL tasks and travel tasks that DON'T already have explicit times in their text
-3. add_chip (type=location) — add location chips to tasks that have a known location
-4. add_chip (type=note) — add note chips with useful comments (travel time, opening hours)
-5. update_item — strip embedded times/locations from task text if they are now captured in chips
-6. reorder_items — include ALL item ids sorted by start time (this MUST be the last patch)
+2. add_chip (type=time) — assign "HH:MM-HH:MM" time ranges to ALL tasks and travel tasks;
+   for tasks with a non-null time_hint use that value exactly; for others infer from context
+3. add_chip (type=location) — for transit tasks use the departure airport from the "location" field;
+   for other tasks use their known location
+4. add_chip (type=note) — for transit tasks add "→ <destination_location>" if set;
+   also add notes with travel time, opening hours where useful
+5. update_item — strip embedded times/locations from task text if now captured in chips
+6. reorder_items — include ALL item ids sorted by start time (MUST be the last patch)
 
 For reorder_items, include ALL item IDs (original + newly added travel items).
 Use specific time ranges only — never "morning" or "evening".
@@ -321,6 +349,8 @@ Return ONLY valid JSON:
   "patches": [
     {"op": "add_item", "item": {"id": "...", "text": "Head to gym", "depth": 0, "checked": false, "chips": []}},
     {"op": "add_chip", "item_id": "...", "chip": {"type": "time", "value": "09:00-10:00", "id": "..."}},
+    {"op": "add_chip", "item_id": "...", "chip": {"type": "location", "value": "Аэропорт Эль-Прат, Барселона", "id": "..."}},
+    {"op": "add_chip", "item_id": "...", "chip": {"type": "note", "value": "→ Аэропорт Сабиха Гёкчен, Стамбул", "id": "..."}},
     {"op": "reorder_items", "ids": ["id1", "id2", "id3"]}
   ],
   "summary": "Added times and travel tasks"
@@ -394,13 +424,19 @@ def _handle_clarifying(
 
     Returns (next_question_or_none, should_return_to_stage).
     """
+    # Record Q&A pair: the question that was last shown to the user
+    current_q = state.pop("_current_clarifying_question", None)
     state.setdefault("clarification_answers", [])
     state["clarification_answers"].append(user_message)
+    state.setdefault("clarification_qa", [])
+    if current_q:
+        state["clarification_qa"].append({"q": current_q, "a": user_message})
 
     questions: list[str] = state.get("pending_questions", [])
     if questions:
         next_q = questions.pop(0)
         state["pending_questions"] = questions
+        state["_current_clarifying_question"] = next_q  # save before yielding
         return next_q, False
 
     # All questions answered — return to pending stage
@@ -474,25 +510,35 @@ def _planning_steps(
             logger.info(
                 "[PlanningWorkflow] Returning from clarification to %s", pending
             )
-            yield StepOutput(step_name="continue", content="OK, continuing...")
+
+            yield StepOutput(step_name="continue", content="OK, continuing...\n")
+
         status = state.get("status", PlanStatus.EXTRACT)
 
     # ── EXTRACT ───────────────────────────────────────────────────────────────
     if state.get("status", PlanStatus.EXTRACT) == PlanStatus.EXTRACT:
         logger.info("[PlanningWorkflow] Running EXTRACT stage")
         result = _run_extract_stage(
-            tasks, {"clarifications": state.get("clarification_answers", [])}
+            tasks,
+            {
+                "clarifications": state.get("clarification_answers", []),
+                "clarification_qa": state.get("clarification_qa", []),
+            },
         )
         if result.pending_questions and not state.get("extract_clarified"):
+            first_q = result.pending_questions[0]
             state["pending_questions"] = result.pending_questions[1:]
             state["pending_stage"] = PlanStatus.EXTRACT
             state["status"] = PlanStatus.CLARIFYING
-            yield StepOutput(step_name="clarify", content=result.pending_questions[0])
+            state["_current_clarifying_question"] = first_q
+            yield StepOutput(step_name="clarify", content=first_q)
             return
         state["extract_output"] = result.output
         state["status"] = PlanStatus.RECON
         logger.info("[PlanningWorkflow] EXTRACT done, moving to RECON")
-        yield StepOutput(step_name="extract", content="Analyzing tasks...")
+
+        yield StepOutput(step_name="extract", content="Analyzing tasks...\n")
+
 
     # ── RECON ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.RECON:
@@ -503,14 +549,18 @@ def _planning_steps(
         ) or _infer_transport(user_message, state.get("clarification_answers", []))
         result = _run_recon_stage(extracted, planning_date, transport)
         if result.pending_questions and not state.get("recon_clarified"):
+            first_q = result.pending_questions[0]
             state["pending_questions"] = result.pending_questions[1:]
             state["pending_stage"] = PlanStatus.RECON
             state["status"] = PlanStatus.CLARIFYING
-            yield StepOutput(step_name="clarify", content=result.pending_questions[0])
+            state["_current_clarifying_question"] = first_q
+            yield StepOutput(step_name="clarify", content=first_q)
             return
         state["recon_output"] = result.output
         state["status"] = PlanStatus.CLUSTER
-        yield StepOutput(step_name="recon", content="Looking up locations...")
+
+        yield StepOutput(step_name="recon", content="Looking up locations...\n")
+
 
     # ── CLUSTER ───────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.CLUSTER:
@@ -519,15 +569,19 @@ def _planning_steps(
         locations = state.get("recon_output", {}).get("locations", {})
         result = _run_cluster_stage(extracted, locations)
         if result.pending_questions and not state.get("cluster_clarified"):
+            first_q = result.pending_questions[0]
             state["pending_questions"] = result.pending_questions[1:]
             state["pending_stage"] = PlanStatus.CLUSTER
             state["status"] = PlanStatus.CLARIFYING
-            yield StepOutput(step_name="clarify", content=result.pending_questions[0])
+            state["_current_clarifying_question"] = first_q
+            yield StepOutput(step_name="clarify", content=first_q)
             return
         state["cluster_output"] = result.output
         state["status"] = PlanStatus.ROUTE
         logger.info("[PlanningWorkflow] CLUSTER done, moving to ROUTE")
-        yield StepOutput(step_name="cluster", content="Grouping tasks by location...")
+
+        yield StepOutput(step_name="cluster", content="Grouping tasks by location...\n")
+
 
     # ── ROUTE ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.ROUTE:
@@ -539,7 +593,9 @@ def _planning_steps(
         state["route_output"] = result.output
         state["status"] = PlanStatus.BUILD
         logger.info("[PlanningWorkflow] ROUTE done, moving to BUILD")
-        yield StepOutput(step_name="route", content="Calculating route...")
+
+        yield StepOutput(step_name="route", content="Calculating route...\n")
+
 
     # ── BUILD ─────────────────────────────────────────────────────────────────
     if state.get("status") == PlanStatus.BUILD:
@@ -557,7 +613,7 @@ def _planning_steps(
         }
         state["status"] = PlanStatus.REVIEW
         yield StepOutput(
-            step_name="build", content="Schedule is built! Check your plan."
+            step_name="build", content="Schedule is built! Check your plan.\n"
         )
         return
 
@@ -566,14 +622,14 @@ def _planning_steps(
         state["status"] = PlanStatus.ITERATE
         yield StepOutput(
             step_name="review",
-            content="Done! You can ask me to change any task, reschedule, or add a new one.",
+            content="Done! You can ask me to change any task, reschedule, or add a new one.\n",
         )
         return
 
     # ── ITERATE / FALLBACK ────────────────────────────────────────────────────
     yield StepOutput(
         step_name="iterate",
-        content="How can I help with your plan? You can ask me to move a task, change the time, or redo the entire plan.",
+        content="How can I help with your plan? You can ask me to move a task, change the time, or redo the entire plan.\n",
     )
 
 

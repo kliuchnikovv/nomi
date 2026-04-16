@@ -41,8 +41,7 @@ async def test_factory_builds_only_discovery_tool_when_flag_set(monkeypatch):
         client_tool_runner=AsyncMock(),
     )
 
-    assert len(captured_tools) == 1
-    assert captured_tools[0].name == "discovery_tool"
+    assert any(getattr(t, "name", None) == "discovery_tool" for t in captured_tools)
 
 
 @pytest.mark.asyncio

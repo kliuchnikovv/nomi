@@ -255,10 +255,10 @@ async def test_discovery_tool_executes_for_all_accounts_with_asterisk(
     )
 
     mock_executor = MagicMock()
-    mock_executor.run.side_effect = [
+    mock_executor.arun = AsyncMock(side_effect=[
         "Recent emails from work account",
         "Recent emails from personal account",
-    ]
+    ])
 
     fn = build_discovery_tool(
         user_id="user1",
@@ -295,4 +295,4 @@ async def test_discovery_tool_executes_for_all_accounts_with_asterisk(
     assert personal_result["account_display"] == "personal@gmail.com"
     assert personal_result["result"] == "Recent emails from personal account"
 
-    assert mock_executor.run.call_count == 2
+    assert mock_executor.arun.call_count == 2

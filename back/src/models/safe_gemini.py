@@ -183,19 +183,46 @@ class SafeGemini(Gemini):
             or prop_def.get("$ref")
         )
 
+    @staticmethod
+    def _remove_empty_required(schema: dict) -> dict:
+        """Recursively remove empty ``required: []`` arrays from a JSON Schema.
+
+        Gemini API rejects ``required: []`` (empty list) in some cases, so we
+        strip the key entirely when the list is empty.  This is applied
+        recursively to nested ``properties`` objects as well.
+        """
+        if not isinstance(schema, dict):
+            return schema
+        result = {**schema}
+        if "required" in result and not result["required"]:
+            del result["required"]
+        # Recurse into nested object properties
+        if "properties" in result:
+            new_props = {}
+            for prop_name, prop_def in result["properties"].items():
+                if isinstance(prop_def, dict) and prop_def.get("type") == "object":
+                    new_props[prop_name] = SafeGemini._remove_empty_required(prop_def)
+                else:
+                    new_props[prop_name] = prop_def
+            result["properties"] = new_props
+        return result
+
     def _sanitize_tool_schemas(self, tools: list[dict]) -> list[dict]:
         """Remove required[] entries that Gemini would reject.
 
-        Two cases handled:
+        Three cases handled:
         1. Required field not present in properties at all.
         2. Required field present but its schema is empty/untyped — convert_schema
            returns None and the fallback Schema(type=None) is ignored by Gemini API.
+        3. Empty ``required: []`` array — Gemini rejects this entirely.
         """
         sanitized = []
         for tool in tools:
             if tool.get("type") == "function":
                 func_info = tool.get("function", {})
                 params = func_info.get("parameters", {})
+                modified = False
+
                 if "required" in params:
                     properties = params.get("properties", {})
                     defined = {
@@ -205,6 +232,7 @@ class SafeGemini(Gemini):
                     }
                     original = params["required"]
                     filtered = [r for r in original if r in defined]
+
                     if len(filtered) != len(original):
                         removed = set(original) - set(filtered)
                         logger.warning(
@@ -212,13 +240,30 @@ class SafeGemini(Gemini):
                             func_info.get("name", "?"),
                             removed,
                         )
-                        tool = {
-                            **tool,
-                            "function": {
-                                **func_info,
-                                "parameters": {**params, "required": filtered},
-                            },
-                        }
+                        modified = True
+
+                    # Remove empty required arrays entirely
+                    if not filtered:
+                        logger.debug(
+                            "[SafeGemini] Removing empty required[] from '%s'",
+                            func_info.get("name", "?"),
+                        )
+                        params = {k: v for k, v in params.items() if k != "required"}
+                        modified = True
+                    else:
+                        params = {**params, "required": filtered}
+
+                # Recursively clean nested object properties
+                params = self._remove_empty_required(params)
+
+                if modified or params is not func_info.get("parameters"):
+                    tool = {
+                        **tool,
+                        "function": {
+                            **func_info,
+                            "parameters": params,
+                        },
+                    }
             sanitized.append(tool)
         return sanitized
 

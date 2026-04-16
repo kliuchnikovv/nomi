@@ -304,26 +304,13 @@ export class ChatSocket {
                 this.hasConnectedBefore = true;
             };
 
-            // Performance optimization: batch streaming logs to reduce console spam
-            let logBatch: string[] = [];
-            let lastLogTime = Date.now();
-
-            const flushLogs = () => {
-                if (logBatch.length > 0) {
-                    console.log('[WS 📦 Batched]', logBatch.length, 'frames since last flush');
-                    logBatch = [];
-                    lastLogTime = Date.now();
-                }
-            };
-
             ws.onmessage = async (e: any) => {
                 this.touchActivity();
                 const raw = typeof e.data === 'string' ? e.data : '';
 
-                // Batch NDJSON processing for performance
                 const lines = raw.split('\n');
-                let hasStreamingText = false;
-                const streamingFrames: any[] = [];
+                const MAX_STREAMING_BATCH = 50;
+                let streamingCount = 0;
 
                 for (const line of lines) {
                     const trimmed = line.trim();
@@ -336,37 +323,31 @@ export class ChatSocket {
                         const frame = rawJson as Frame;
                         const op = frame.op;
 
-                        // Track streaming text frames for batch logging
                         const isStreamingText = op === 'message' &&
                             frame.kind === 'data' &&
                             frame.payload?.type === 'text' &&
                             frame.payload?.delta;
 
                         if (isStreamingText) {
-                            hasStreamingText = true;
-                            streamingFrames.push(frame);
-                            continue; // Skip individual log, will batch later
+                            streamingCount++;
+                            if (streamingCount > MAX_STREAMING_BATCH) continue;
+                            const chatId = frame.chat_id;
+                            if (chatId) {
+                                useChatStore.getState().addMessage(chatId, frame.payload);
+                            }
+                            continue;
                         }
 
-                        // Flush streaming logs periodically (every 500ms or 10 frames)
-                        if (logBatch.length > 10 || Date.now() - lastLogTime > 500) {
-                            flushLogs();
-                        }
-
-                        // Handle routing for non-streaming frames
                         if (op === 'message' || op === 'tools' || op === 'model' || op === 'done' || op === 'signal') {
                             const chatId = frame.chat_id;
                             if (chatId) {
                                 if (op === 'message' && frame.kind === 'data') {
                                     useChatStore.getState().addMessage(chatId, frame.payload);
-                                    // Route client_action frames to per-chatId planner store
                                     if (frame.payload?.type === 'client_action') {
-                                        console.log('[socket] client_action received, chatId=', chatId, 'tool=', frame.payload?.tool, 'call_id=', frame.payload?.call_id);
                                         emitPlannerAction(chatId, frame.payload);
                                     }
                                 }
 
-                                // Notify listeners
                                 if (op === 'message' && frame.kind === 'data') {
                                     this.handlers.onMessage?.(frame);
                                 } else if (op === 'done') {
@@ -453,16 +434,6 @@ export class ChatSocket {
                         }
                     } catch (err) {
                         console.warn('Failed to parse WS message:', err, trimmed);
-                    }
-                }
-
-                // Process accumulated streaming frames
-                if (streamingFrames.length > 0) {
-                    for (const frame of streamingFrames) {
-                        const chatId = frame.chat_id;
-                        if (chatId) {
-                            useChatStore.getState().addMessage(chatId, frame.payload);
-                        }
                     }
                 }
             };
@@ -560,7 +531,8 @@ export class ChatSocket {
         endpoint?: string,
         authToken?: string,
         command?: any,
-        contextItems?: any[]
+        contextItems?: any[],
+        userLocation?: string,
     ) {
         if (!chatId) {
             return;
@@ -586,6 +558,7 @@ export class ChatSocket {
             user_id: userId,
             command: command,
             context_items: contextItems, // Context items (emails, documents, etc.)
+            user_location: userLocation,
         };
         if (endpoint !== undefined && endpoint !== '') {
             payload.endpoint = endpoint;

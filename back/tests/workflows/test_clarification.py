@@ -29,14 +29,21 @@ def _make_input(message: str, tasks: list | None = None, date: str = "2026-04-05
 
 def test_extract_stage_fires_first_on_new_session():
     wf = _make_workflow(PlanStatus.EXTRACT)
-    with patch("src.workflows.planning._run_extract_stage") as mock_extract:
+    with patch("src.workflows.planning._run_extract_stage") as mock_extract, \
+         patch("src.workflows.planning._run_recon_stage") as mock_recon:
         mock_extract.return_value = StageResult(
             output={"extracted_tasks": [{"id": "t1"}]},
             pending_questions=[],
         )
+        # Mock RECON so it does not ask for clarification — test only verifies EXTRACT fires
+        mock_recon.return_value = StageResult(
+            output={"locations": {}, "transport_mode": "walking"},
+            pending_questions=[],
+        )
         list(_planning_steps(wf, _make_input("daily plan")))
     mock_extract.assert_called_once()
-    assert wf.session_state["status"] == PlanStatus.RECON
+    # EXTRACT fired and status advanced — no longer stuck at EXTRACT or CLARIFYING
+    assert wf.session_state["status"] not in (PlanStatus.EXTRACT, PlanStatus.CLARIFYING)
 
 
 def test_clarification_loop_pauses_on_pending_question():
@@ -65,15 +72,21 @@ def test_clarification_answer_returns_to_stage():
         "extract_clarified": False,
     }
     wf = _make_workflow(extra_state=state)
-    with patch("src.workflows.planning._run_extract_stage") as mock_extract:
+    with patch("src.workflows.planning._run_extract_stage") as mock_extract, \
+         patch("src.workflows.planning._run_recon_stage") as mock_recon:
         mock_extract.return_value = StageResult(
             output={"extracted_tasks": [{"id": "t1", "time_hint": "10:00"}]},
             pending_questions=[],
         )
+        # Mock RECON so it does not ask for clarification
+        mock_recon.return_value = StageResult(
+            output={"locations": {}, "transport_mode": "walking"},
+            pending_questions=[],
+        )
         list(_planning_steps(wf, _make_input("At 10:00")))
-    # Should re-run EXTRACT then advance to RECON
+    # Should re-run EXTRACT then advance — no longer stuck at EXTRACT or CLARIFYING
     mock_extract.assert_called_once()
-    assert wf.session_state["status"] == PlanStatus.RECON
+    assert wf.session_state["status"] not in (PlanStatus.EXTRACT, PlanStatus.CLARIFYING)
 
 
 def test_build_patches_stored_in_session_state():

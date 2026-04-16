@@ -60,21 +60,13 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
 }
 
 import { ContentPartsRenderer } from './ContentPartsRenderer';
-export default function MessageScreen(props: Props) {
+
+const MessageScreen = React.memo(function MessageScreen(props: Props) {
     const { showToolCalls, showReasoning } = useChat();
     const { theme, palette } = useTheme();
 
     const styles = useMemo(() => createStyles(theme, palette), [theme, palette]);
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
-
-    // Debug logging
-    console.log('[MessageScreen] Render:', {
-        id: props.message.id,
-        role: props.message.role,
-        hasContentParts: props.message.content_parts && props.message.content_parts.length > 0,
-        partsCount: props.message.content_parts?.length,
-        showReasoning,
-    });
 
     if (props.message.role === 'system') {
         return null;
@@ -107,25 +99,6 @@ export default function MessageScreen(props: Props) {
 
     // Use content_parts for inline rendering, fallback to text + grouped tool_calls
     const hasContentParts = props.message.content_parts && props.message.content_parts.length > 0;
-
-    // Debug logging
-    console.log('[MessageScreen] Render:', {
-        id: props.message.id,
-        role: props.message.role,
-        hasContentParts,
-        partsCount: props.message.content_parts?.length,
-        showReasoning, // from context hook
-    });
-
-    if (props.message.role === 'assistant') {
-        console.log('[MessageScreen] Rendering assistant message:', {
-            id: props.message.id,
-            hasContentParts,
-            contentPartsLength: props.message.content_parts?.length || 0,
-            contentPartsTypes: props.message.content_parts?.map(p => p.type) || [],
-            textLength: props.message.text?.length || 0,
-        });
-    }
 
     return (
         <View style={containerStylesByType[props.message.role]}>
@@ -226,11 +199,11 @@ export default function MessageScreen(props: Props) {
 
         </View>
     );
-}
+});
 
+export default MessageScreen;
 
-
-export function ActionScreen({
+function ActionScreen({
     action,
     onActionPress,
     messageID,
