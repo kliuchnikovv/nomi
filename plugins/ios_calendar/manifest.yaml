@@ -13,7 +13,7 @@ auth:
 
 ui:
   icon: calendar
-  description_short: iOS Calendar интеграция через EventKit
+  description_short: iOS Calendar integration via EventKit
   category: calendar
 
 methods:

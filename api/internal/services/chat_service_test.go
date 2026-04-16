@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// mockChatRepository - мок репозитория для тестирования
+// mockChatRepository is a mock repository for testing
 type mockChatRepository struct {
 	chats map[uuid.UUID]*chat.Chat
 }

@@ -13,7 +13,7 @@ auth:
 
 ui:
   icon: check-square
-  description_short: iOS Reminders интеграция через EventKit
+  description_short: iOS Reminders integration via EventKit
   category: productivity
 
 methods:

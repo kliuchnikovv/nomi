@@ -363,11 +363,11 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			})
 		}
 
-		// Пользовательское сообщение всегда считаем содержательной активностью чата.
+		// A user message is always considered meaningful chat activity.
 		_ = r.store.TouchChatActivity(ctx, r.ID, time.Now().UTC())
 
 		// Update Chat Title if empty (or default)
-		// Переиспользуем тот же ctx для обновления заголовка и активности.
+		// Reuse the same ctx for updating title and activity.
 		c, err := r.store.GetChat(ctx, r.initiatorID, r.ID)
 		if err == nil && (c.Title == "" || c.Title == "New Chat") {
 			newTitle := payload.Message

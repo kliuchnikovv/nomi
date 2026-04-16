@@ -7,9 +7,9 @@ from src.workflows.models import StageResult
 # ── EXTRACT ──────────────────────────────────────────────────────────────────
 
 SAMPLE_TASKS = [
-    {"id": "t1", "title": "Встреча в 14:00", "location": None},
-    {"id": "t2", "title": "Зал", "location": None},
-    {"id": "t3", "title": "Ужин дома", "location": None},
+    {"id": "t1", "title": "Meeting at 14:00", "location": None},
+    {"id": "t2", "title": "Gym", "location": None},
+    {"id": "t3", "title": "Dinner at home", "location": None},
 ]
 
 EXTRACT_LLM_RESPONSE = json.dumps({
@@ -80,7 +80,7 @@ def test_recon_asks_transport_when_none():
          patch("src.workflows.planning.search_place_hours", return_value=""):
         result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", transport_mode=None)
     assert len(result.pending_questions) == 1
-    assert "передвигаться" in result.pending_questions[0]
+    assert "travel" in result.pending_questions[0].lower()
     assert result.is_complete is False
 
 
@@ -181,7 +181,7 @@ def test_route_travel_block_title_format():
 
 BUILD_LLM_RESPONSE = json.dumps({
     "patches": [
-        {"op": "add_item", "item": {"id": "travel-1", "text": "Выдвинуться в gym", "depth": 0, "checked": False, "chips": []}},
+        {"op": "add_item", "item": {"id": "travel-1", "text": "Head to gym", "depth": 0, "checked": False, "chips": []}},
         {"op": "add_chip", "item_id": "t1", "chip": {"type": "time", "value": "09:00-09:30", "id": "c1"}},
         {"op": "add_chip", "item_id": "t2", "chip": {"type": "time", "value": "10:00-11:00", "id": "c2"}},
         {"op": "reorder_items", "ids": ["t1", "travel-1", "t2"]},
@@ -195,7 +195,7 @@ def test_build_stores_patches_in_output():
         result = _run_build_stage(
             tasks=EXTRACTED_FOR_CLUSTER,
             clusters=CLUSTERS,
-            travel_blocks=[{"title": "Выдвинуться в gym", "from_location": "home", "to_location": "gym", "duration_min": 20, "mode": "foot-walking", "insert_before_cluster_index": 1}],
+            travel_blocks=[{"title": "Head to gym", "from_location": "home", "to_location": "gym", "duration_min": 20, "mode": "foot-walking", "insert_before_cluster_index": 1}],
             locations=LOCATIONS,
             planning_date="2026-04-05",
             timezone="Europe/Moscow",

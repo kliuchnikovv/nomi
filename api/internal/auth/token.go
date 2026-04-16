@@ -31,12 +31,12 @@ func NewTokenManager(secretKey string) *TokenManager {
 	}
 }
 
-// GenerateToken создает новый JWT токен для пользователя
+// GenerateToken creates a new JWT token for the user
 func (tm *TokenManager) GenerateToken(user *storage.User) (string, error) {
 	claims := &Claims{
 		UserID: user.ID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // Токен действителен 24 часа
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // Token is valid for 24 hours
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 		},
@@ -56,7 +56,7 @@ func (tm *TokenManager) GenerateRefreshToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// ValidateToken проверяет JWT токен и возвращает claims
+// ValidateToken validates a JWT token and returns claims
 func (tm *TokenManager) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {

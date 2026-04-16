@@ -26,30 +26,30 @@ func NewAuthMiddleware(tokenManager *TokenManager, storage *storage.Storage) *Au
 	}
 }
 
-// GetUserFromContext возвращает пользователя из контекста
+// GetUserFromContext returns the user from context
 func GetUserFromContext(ctx context.Context) (*storage.User, bool) {
 	user, ok := ctx.Value(UserContextKey).(*storage.User)
 	return user, ok
 }
 
-// RequireAuth middleware для проверки JWT токена
+// RequireAuth is a middleware for JWT token validation
 func (am *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Получаем токен из заголовка Authorization
+		// Get token from Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			http.Error(w, "Authorization header is required", http.StatusUnauthorized)
 			return
 		}
 
-		// Проверяем формат токена "Bearer <token>"
+		// Check token format "Bearer <token>"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
 			return
 		}
 
-		// Проверяем токен
+		// Validate token
 		claims, err := am.tokenManager.ValidateToken(parts[1])
 		if err != nil {
 			if err == ErrExpiredToken {
@@ -60,14 +60,14 @@ func (am *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		// Получаем пользователя из базы данных
+		// Get user from database
 		user, err := am.storage.GetUserByID(r.Context(), claims.UserID)
 		if err != nil {
 			http.Error(w, "User not found", http.StatusUnauthorized)
 			return
 		}
 
-		// Добавляем пользователя в контекст
+		// Add user to context
 		ctx := context.WithValue(r.Context(), UserContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

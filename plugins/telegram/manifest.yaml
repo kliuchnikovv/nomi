@@ -13,7 +13,7 @@ auth:
 
 ui:
   icon: telegram
-  description_short: Telegram бот для общения
+  description_short: Telegram bot for messaging
   category: messaging
   color: '#0088cc'
 

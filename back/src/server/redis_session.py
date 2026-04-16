@@ -389,7 +389,7 @@ class RedisSession:
             logger.error(
                 "[PlannerWorkflow] Error running workflow: %s", exc, exc_info=True
             )
-            fallback = "Произошла ошибка при планировании. Попробуй ещё раз."
+            fallback = "An error occurred during planning. Please try again."
             emitted.append(fallback)
             await self._send_frame(
                 make_data(

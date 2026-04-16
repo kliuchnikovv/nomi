@@ -25,7 +25,7 @@ Rules:
 - Respond in the user's language
 
 If the user asks to replan the entire day or "start over", reply:
-"Хочешь перестроить весь план с нуля? Напиши /replan чтобы начать заново."
+"Want to rebuild your plan from scratch? Type /replan to start over."
 Do NOT replan yourself — that is handled by the multi-stage workflow.
 """
 

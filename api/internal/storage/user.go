@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// User представляет информацию о пользователе
+// User represents user information
 type User struct {
 	ID               uuid.UUID      `json:"id" gorm:"type:uuid;primary_key"`
 	Email            string         `json:"email" gorm:"uniqueIndex;not null"`
@@ -28,7 +28,7 @@ func (base *User) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
-// CreateUser создает нового пользователя
+// CreateUser creates a new user
 func (s *Storage) CreateUser(ctx context.Context, email, password, name string) (*User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -49,7 +49,7 @@ func (s *Storage) CreateUser(ctx context.Context, email, password, name string) 
 	return user, nil
 }
 
-// GetUserByEmail получает пользователя по email
+// GetUserByEmail gets a user by email
 func (s *Storage) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	var user User
 	result := s.DB.WithContext(ctx).Where("email = ?", email).First(&user)
@@ -59,7 +59,7 @@ func (s *Storage) GetUserByEmail(ctx context.Context, email string) (*User, erro
 	return &user, nil
 }
 
-// GetUserByID получает пользователя по ID
+// GetUserByID gets a user by ID
 func (s *Storage) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	var user User
 	result := s.DB.WithContext(ctx).First(&user, "id = ?", id)
@@ -69,13 +69,13 @@ func (s *Storage) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) 
 	return &user, nil
 }
 
-// VerifyPassword проверяет соответствие пароля хешу
+// VerifyPassword checks if the password matches the hash
 func (u *User) VerifyPassword(password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password))
 	return err == nil
 }
 
-// UpdateUser обновляет данные пользователя
+// UpdateUser updates user data
 func (s *Storage) UpdateUser(ctx context.Context, user *User) error {
 	result := s.DB.WithContext(ctx).Model(user).Updates(user)
 	if result.Error != nil {

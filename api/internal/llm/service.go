@@ -10,14 +10,14 @@ import (
 	"github.com/google/uuid"
 )
 
-// Service теперь отвечает за коммуникацию с AgnoProject RAG-сервисом.
+// Service is responsible for communication with the AgnoProject RAG service.
 type Service struct {
 	agnoAPIURL string
 	httpClient *http.Client
 }
 
-// NewService создает новый экземпляр LlmService.
-// Убедитесь, что вы передаете сюда URL из вашего конфига.
+// NewService creates a new LlmService instance.
+// Make sure to pass the URL from your config.
 func NewService(agnoAPIURL string) *Service {
 	return &Service{
 		agnoAPIURL: agnoAPIURL,
@@ -25,10 +25,9 @@ func NewService(agnoAPIURL string) *Service {
 	}
 }
 
-// GenerateResponse теперь не обращается напрямую к LLM,
-// а делегирует запрос AgnoProject.
+// GenerateResponse delegates the request to AgnoProject instead of calling LLM directly.
 func (s *Service) GenerateResponse(ctx context.Context, userQuery string) (string, error) {
-	// 1. Формируем тело запроса к AgnoProject /query
+	// 1. Build request body for AgnoProject /query
 	requestBody, err := json.Marshal(map[string]string{
 		"query": userQuery,
 	})
@@ -36,7 +35,7 @@ func (s *Service) GenerateResponse(ctx context.Context, userQuery string) (strin
 		return "", fmt.Errorf("failed to marshal query request: %w", err)
 	}
 
-	// 2. Создаем и отправляем HTTP POST-запрос
+	// 2. Create and send HTTP POST request
 	req, err := http.NewRequestWithContext(ctx, "POST", s.agnoAPIURL+"/query", bytes.NewBuffer(requestBody))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request for agno query: %w", err)
@@ -50,13 +49,13 @@ func (s *Service) GenerateResponse(ctx context.Context, userQuery string) (strin
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		// Попытаемся прочитать тело ошибки для лучшей диагностики
+		// Try to read the error body for better diagnostics
 		var errorBody map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errorBody)
 		return "", fmt.Errorf("agno project returned non-200 status: %d, body: %v", resp.StatusCode, errorBody)
 	}
 
-	// 3. Декодируем и возвращаем успешный ответ
+	// 3. Decode and return the successful response
 	var responseBody struct {
 		Answer    string `json:"answer"`
 		Reasoning string `json:"reasoning,omitempty"`

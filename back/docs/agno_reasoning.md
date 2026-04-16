@@ -1,84 +1,84 @@
 # Agno Reasoning: Three Approaches
 
-Документация по трём подходам к reasoning в библиотеке Agno.
+Documentation on three approaches to reasoning in the Agno library.
 
 ---
 
-## 1. Reasoning Models (Нативное reasoning)
+## 1. Reasoning Models (Native Reasoning)
 
-**Когда использовать:** Модель имеет встроенное reasoning (Gemini 2.5+, o1, DeepSeek R1)
+**When to use:** The model has built-in reasoning (Gemini 2.5+, o1, DeepSeek R1)
 
-**Параметры на уровне MODEL:**
+**MODEL-level parameters:**
 ```python
 from agno.models.google import Gemini
 
 # Gemini 2.5+ native thinking
 model = Gemini(
     id="gemini-2.5-pro",
-    thinking_budget=1024,      # Количество токенов для "мышления"
-    include_thoughts=True      # Включать мысли в вывод
+    thinking_budget=1024,      # Number of tokens for "thinking"
+    include_thoughts=True      # Include thoughts in output
 )
 
 # Gemini 3+ alternative
 model = Gemini(
     id="gemini-3-pro-preview",
-    thinking_level="low"       # "low" или "high"
+    thinking_level="low"       # "low" or "high"
 )
 ```
 
-**Совместимость:** ✅ Function calling работает
+**Compatibility:** ✅ Function calling works
 
 ---
 
 ## 2. Reasoning Tools (ReasoningTools toolkit)
 
-**Когда использовать:** Добавить reasoning к обычным моделям (GPT-4o, Claude 3.5)
+**When to use:** Add reasoning to regular models (GPT-4o, Claude 3.5)
 
-**Параметры на уровне AGENT tools:**
+**AGENT tools-level parameters:**
 ```python
 from agno.tools.reasoning import ReasoningTools
 
 agent = Agent(
     model=Claude(id="claude-3-5-sonnet-20241022"),
     tools=[
-        ReasoningTools(add_instructions=True),  # Добавляет think() и analyze()
+        ReasoningTools(add_instructions=True),  # Adds think() and analyze()
     ],
 )
 
 agent.print_response("...", show_full_reasoning=True)
 ```
 
-**Совместимость:** ✅ Function calling работает (инструменты = функции)
+**Compatibility:** ✅ Function calling works (tools = functions)
 
 ---
 
 ## 3. Reasoning Agents (Manual Chain-of-Thought)
 
-**Когда использовать:** ⚠️ ОСТОРОЖНО - может конфликтовать с function calling!
+**When to use:** ⚠️ CAUTION - may conflict with function calling!
 
-**Параметры на уровне AGENT/TEAM:**
+**AGENT/TEAM-level parameters:**
 ```python
 agent = Agent(
     model=model,
-    reasoning=True,              # Включает manual CoT
+    reasoning=True,              # Enables manual CoT
     reasoning_min_steps=1,
     reasoning_max_steps=5,
 )
 ```
 
-**Совместимость:** ❌ НЕ совместимо с Gemini function calling!
-- Использует `response_mime_type="application/json"` 
-- Вызывает ошибку: "Function calling with a response mime type: 'application/json' is unsupported"
+**Compatibility:** ❌ NOT compatible with Gemini function calling!
+- Uses `response_mime_type="application/json"` 
+- Causes error: "Function calling with a response mime type: 'application/json' is unsupported"
 
 ---
 
-## Рекомендации для DnD Team
+## Recommendations for DnD Team
 
-| Модель | Рекомендуемый подход |
+| Model | Recommended Approach |
 |--------|---------------------|
-| Gemini 2.5 Pro/Flash | `Gemini(thinking_budget=1024, include_thoughts=True)` на MODEL |
-| Gemini 3.x | `Gemini(thinking_level="low")` на MODEL |
-| Gemini 2.0 | Без reasoning ИЛИ `ReasoningTools` |
-| GPT-4o, Claude | `ReasoningTools(add_instructions=True)` в tools |
+| Gemini 2.5 Pro/Flash | `Gemini(thinking_budget=1024, include_thoughts=True)` at MODEL level |
+| Gemini 3.x | `Gemini(thinking_level="low")` at MODEL level |
+| Gemini 2.0 | No reasoning OR `ReasoningTools` |
+| GPT-4o, Claude | `ReasoningTools(add_instructions=True)` in tools |
 
-**Никогда не используйте `reasoning=True` на Agent/Team с Gemini + function calling!**
+**Never use `reasoning=True` on Agent/Team with Gemini + function calling!**

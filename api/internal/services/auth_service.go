@@ -29,105 +29,105 @@ func NewAuthService(userRepo repositories.UserRepository, tokenManager *auth.Tok
 	}
 }
 
-// RegisterRequest представляет запрос на регистрацию
+// RegisterRequest represents a registration request
 type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Name     string `json:"name"`
 }
 
-// LoginRequest представляет запрос на вход
+// LoginRequest represents a login request
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// AuthResponse представляет ответ с токенами
+// AuthResponse represents a token response
 type AuthResponse struct {
 	Token        string        `json:"token"`
 	RefreshToken string        `json:"refresh_token"`
 	User         *storage.User `json:"user"`
 }
 
-// Register регистрирует нового пользователя
+// Register registers a new user
 func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*AuthResponse, error) {
-	// Валидация
+	// Validation
 	if req.Email == "" || req.Password == "" {
 		return nil, ErrInvalidRequest
 	}
 
-	// Создаем пользователя
+	// Create user
 	user, err := s.userRepo.CreateUser(ctx, req.Email, req.Password, req.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	// Генерируем токены
+	// Generate tokens
 	return s.generateTokens(ctx, user)
 }
 
-// Login аутентифицирует пользователя
+// Login authenticates a user
 func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
-	// Валидация
+	// Validation
 	if req.Email == "" || req.Password == "" {
 		return nil, ErrInvalidCredentials
 	}
 
-	// Получаем пользователя
+	// Get user
 	user, err := s.userRepo.GetUserByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, ErrInvalidCredentials
 	}
 
-	// Проверяем пароль
+	// Verify password
 	if !user.VerifyPassword(req.Password) {
 		return nil, ErrInvalidCredentials
 	}
 
-	// Генерируем токены
+	// Generate tokens
 	return s.generateTokens(ctx, user)
 }
 
-// Refresh обновляет токены используя refresh token
+// Refresh refreshes tokens using a refresh token
 func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*AuthResponse, error) {
 	if refreshToken == "" {
 		return nil, ErrInvalidRefreshToken
 	}
 
-	// Потребляем refresh token
+	// Consume refresh token
 	rec, err := s.storage.ConsumeRefreshToken(ctx, refreshToken)
 	if err != nil {
 		return nil, ErrInvalidRefreshToken
 	}
 
-	// Получаем пользователя
+	// Get user
 	user, err := s.userRepo.GetUserByID(ctx, rec.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound
 	}
 
-	// Генерируем новые токены
+	// Generate new tokens
 	return s.generateTokens(ctx, user)
 }
 
-// GoogleLoginRequest представляет запрос на вход через Google
+// GoogleLoginRequest represents a Google login request
 type GoogleLoginRequest struct {
 	IDToken string `json:"id_token"`
 }
 
-// GoogleLogin аутентифицирует пользователя через Google OIDC
+// GoogleLogin authenticates a user via Google OIDC
 func (s *AuthService) GoogleLogin(ctx context.Context, req *GoogleLoginRequest) (*AuthResponse, error) {
 	if req.IDToken == "" {
 		return nil, ErrInvalidRequest
 	}
 
-	// Создаем OIDC провайдер
+	// Create OIDC provider
 	provider, err := oidc.NewProvider(ctx, "https://accounts.google.com")
 	if err != nil {
 		return nil, err
 	}
 
-	// Верифицируем токен
+	// Verify token
 	verifier := provider.Verifier(&oidc.Config{
 		SkipClientIDCheck: true,
 	})
@@ -137,7 +137,7 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req *GoogleLoginRequest) 
 		return nil, ErrInvalidToken
 	}
 
-	// Извлекаем claims
+	// Extract claims
 	var claims struct {
 		Email string `json:"email"`
 		Name  string `json:"name"`
@@ -146,10 +146,10 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req *GoogleLoginRequest) 
 		return nil, err
 	}
 
-	// Проверяем существование пользователя или создаем нового
+	// Check if user exists or create a new one
 	user, err := s.userRepo.GetUserByEmail(ctx, claims.Email)
 	if err != nil {
-		// Пользователь не существует, создаем нового
+		// User does not exist, create a new one
 		randomBytes := make([]byte, 16)
 		_, _ = rand.Read(randomBytes)
 		randomPassword := hex.EncodeToString(randomBytes)
@@ -165,16 +165,16 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req *GoogleLoginRequest) 
 		}
 	}
 
-	// Генерируем токены
+	// Generate tokens
 	return s.generateTokens(ctx, user)
 }
 
-// UpdateUserRequest представляет запрос на обновление пользователя
+// UpdateUserRequest represents a user update request
 type UpdateUserRequest struct {
 	WebSearchEnabled *bool `json:"web_search_enabled"`
 }
 
-// UpdateUser обновляет данные пользователя
+// UpdateUser updates user data
 func (s *AuthService) UpdateUser(ctx context.Context, user *storage.User, req *UpdateUserRequest) (*storage.User, error) {
 	if req.WebSearchEnabled != nil {
 		user.WebSearchEnabled = *req.WebSearchEnabled
@@ -187,21 +187,21 @@ func (s *AuthService) UpdateUser(ctx context.Context, user *storage.User, req *U
 	return user, nil
 }
 
-// generateTokens генерирует access и refresh токены для пользователя
+// generateTokens generates access and refresh tokens for a user
 func (s *AuthService) generateTokens(ctx context.Context, user *storage.User) (*AuthResponse, error) {
-	// Генерируем access token
+	// Generate access token
 	token, err := s.tokenManager.GenerateToken(user)
 	if err != nil {
 		return nil, err
 	}
 
-	// Генерируем refresh token
+	// Generate refresh token
 	refreshToken, err := s.tokenManager.GenerateRefreshToken()
 	if err != nil {
 		return nil, err
 	}
 
-	// Сохраняем refresh token
+	// Save refresh token
 	if err := s.storage.SaveRefreshToken(ctx, user.ID, refreshToken, 30*24*time.Hour); err != nil {
 		return nil, err
 	}

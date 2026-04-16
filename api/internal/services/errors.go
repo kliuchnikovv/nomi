@@ -1,6 +1,6 @@
 package services
 
-// ServiceError представляет ошибку сервиса
+// ServiceError represents a service error
 type ServiceError struct {
 	Message string
 	Code    string
@@ -10,7 +10,7 @@ func (e *ServiceError) Error() string {
 	return e.Message
 }
 
-// Общие ошибки сервисов
+// Common service errors
 var (
 	ErrInvalidRequest      = &ServiceError{Message: "Invalid request", Code: "INVALID_REQUEST"}
 	ErrInvalidCredentials  = &ServiceError{Message: "Invalid credentials", Code: "INVALID_CREDENTIALS"}

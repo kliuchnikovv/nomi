@@ -59,13 +59,13 @@ func NewMobileOAuthHandler(
 	db *storage.Storage,
 	cryptoKey []byte,
 ) (*MobileOAuthHandler, error) {
-	// Создаем OAuth фабрику из реестра
+	// Create OAuth factory from registry
 	oauthFactory, err := integrations.NewOAuthFactory(cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OAuth factory: %w", err)
 	}
 
-	// Получаем OIDC провайдер для Google (используется для gmail и calendar)
+	// Get OIDC provider for Google (used for gmail and calendar)
 	oidcProvider, err := oauthFactory.GetOIDCProvider("https://accounts.google.com")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OIDC provider: %w", err)
@@ -133,14 +133,14 @@ func (h *MobileOAuthHandler) Callback(c *gin.Context) {
 func (h *MobileOAuthHandler) Login(c *gin.Context) {
 	providerName := c.Param("provider")
 
-	// Проверяем, существует ли провайдер в реестре
+	// Check if the provider exists in the registry
 	_, ok := integrations.GetProvider(providerName)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", providerName)})
 		return
 	}
 
-	// Получаем permissions для провайдера
+	// Get permissions for the provider
 	var permissions []string
 	switch providerName {
 	case "gmail":
@@ -153,7 +153,7 @@ func (h *MobileOAuthHandler) Login(c *gin.Context) {
 		permissions = []string{}
 	}
 
-	// Создаем OAuth конфигурацию из реестра
+	// Create OAuth config from registry
 	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, permissions)
 	if err != nil {
 		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", providerName))
@@ -183,14 +183,14 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 	ctx := c.Request.Context()
 	providerName := c.Param("provider")
 
-	// Проверяем, существует ли провайдер в реестре
+	// Check if the provider exists in the registry
 	_, ok := integrations.GetProvider(providerName)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", providerName)})
 		return
 	}
 
-	// Получаем permissions для провайдера
+	// Get permissions for the provider
 	var permissions []string
 	switch providerName {
 	case "gmail":
@@ -203,7 +203,7 @@ func (h *MobileOAuthHandler) CallbackMobile(c *gin.Context) {
 		permissions = []string{}
 	}
 
-	// Создаем OAuth конфигурацию из реестра
+	// Create OAuth config from registry
 	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, permissions)
 	if err != nil {
 		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", providerName))
@@ -437,14 +437,14 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Проверяем, существует ли провайдер в реестре
+	// Check if the provider exists in the registry
 	_, ok := integrations.GetProvider(req.Provider)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", req.Provider)})
 		return
 	}
 
-	// Получаем permissions для провайдера
+	// Get permissions for the provider
 	var permissions []string
 	switch req.Provider {
 	case "gmail":
@@ -455,7 +455,7 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 		permissions = []string{}
 	}
 
-	// Создаем OAuth конфигурацию из реестра
+	// Create OAuth config from registry
 	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(req.Provider, permissions)
 	if err != nil {
 		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", req.Provider))
