@@ -52,7 +52,7 @@ def main() -> None:
         list_paths()
         return
 
-    if not args.path and not args.all:
+    if args.path is None and not args.all:
         parser.print_help()
         return
 
