@@ -102,7 +102,10 @@ class OpenAICompatibleProvider(LLMProvider):
                 {"role": "user", "content": user},
             ],
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        if content is None:
+            raise ValueError("Model returned no text content (empty or tool-only response)")
+        return content
 
 
 _KNOWN_PROVIDERS = {"anthropic", "google", "openai", "openrouter", "opencode", "z.ai"}

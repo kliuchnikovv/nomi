@@ -84,14 +84,16 @@ def test_load_provider_model_not_in_config_raises(tmp_path):
 
 def test_anthropic_vision_supported():
     from providers import AnthropicProvider
-    with patch("anthropic.Anthropic"):
+    mock_anthropic = MagicMock()
+    with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
         p = AnthropicProvider("claude-sonnet-4-6")
     assert p.supports_vision is True
 
 
 def test_google_vision_supported():
     from providers import GoogleProvider
-    with patch("google.genai.Client"):
+    mock_genai = MagicMock()
+    with patch.dict("sys.modules", {"google.genai": mock_genai, "google": MagicMock()}):
         p = GoogleProvider("gemini-2.0-flash")
     assert p.supports_vision is True
 
