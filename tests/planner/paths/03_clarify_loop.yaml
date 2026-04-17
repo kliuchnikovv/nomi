@@ -1,0 +1,19 @@
+id: 3
+name: "Clarification loop"
+description: |
+  User enters tasks with ambiguous information.
+  The planner asks a clarifying question (transport mode).
+  User answers and the plan continues to completion.
+input_tasks:
+  - text: "Doctor appointment"
+    chips:
+      - type: location
+        value: "City Clinic No. 5, Moscow"
+  - text: "Lunch"
+    chips: []
+clarification_answers:
+  transport: "Walking"
+success_criteria:
+  - "Clarification question appears in chat"
+  - "After answering, plan is built"
+  - "Tasks have time chips"

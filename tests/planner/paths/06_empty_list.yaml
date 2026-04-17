@@ -1,0 +1,10 @@
+id: 6
+name: "Empty task list"
+description: |
+  User taps Plan with zero tasks in the planner.
+  Expects a graceful message, no crash.
+input_tasks: []
+clarification_answers: {}
+success_criteria:
+  - "No crash"
+  - "Some message visible in chat (e.g. 'add some tasks')"

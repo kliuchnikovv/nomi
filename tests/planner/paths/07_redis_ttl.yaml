@@ -1,0 +1,19 @@
+id: 7
+name: "Expired Redis session"
+description: |
+  Simulate a session where Redis state has expired.
+  User sends a follow-up message after TTL.
+  Expects the workflow to restart from scratch gracefully.
+input_tasks:
+  - text: "Morning run"
+    chips:
+      - type: time
+        value: "07:30"
+clarification_answers: {}
+notes: |
+  To simulate: after the first Plan, connect to Redis and run:
+    DEL planner_state:<chat_id>
+  Then send a chat message and verify the workflow restarts cleanly.
+success_criteria:
+  - "No error shown to user"
+  - "Workflow restarts and produces a plan"

@@ -1,0 +1,21 @@
+id: 5
+name: "ORS unavailable — DuckDuckGo fallback"
+description: |
+  Tasks with locations when ORS API is unavailable.
+  Expects RECON to fall back to DuckDuckGo for travel time.
+  Plan still completes, possibly with approximate travel times.
+input_tasks:
+  - text: "Museum visit"
+    chips:
+      - type: location
+        value: "Tretyakov Gallery, Moscow"
+  - text: "Dinner"
+    chips:
+      - type: location
+        value: "Pushkin Restaurant, Moscow"
+clarification_answers:
+  transport: "Public transport"
+success_criteria:
+  - "Plan completes without error message"
+  - "Travel block appears between tasks"
+notes: "Simulate ORS failure by temporarily setting ORS_API_KEY to invalid value in .env before running."

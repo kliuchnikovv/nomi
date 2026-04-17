@@ -1,0 +1,22 @@
+id: 1
+name: "Simple plan (no locations)"
+description: |
+  User enters 3 tasks with time hints but no location chips.
+  Expects EXTRACT and BUILD stages only — no RECON/CLUSTER/ROUTE.
+  Final plan assigns time slots to all tasks.
+input_tasks:
+  - text: "Morning run"
+    chips:
+      - type: time
+        value: "07:30"
+  - text: "Team standup"
+    chips:
+      - type: time
+        value: "10:00"
+  - text: "Review pull requests"
+    chips: []
+clarification_answers: {}
+success_criteria:
+  - "All 3 tasks visible in the planner"
+  - "Each task has a time chip"
+  - "No travel blocks inserted"

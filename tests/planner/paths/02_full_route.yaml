@@ -1,0 +1,27 @@
+id: 2
+name: "Full plan with route"
+description: |
+  User enters 3 tasks each with a different Moscow location.
+  Expects full EXTRACT → RECON → CLUSTER → ROUTE → BUILD pipeline.
+  Plan must contain travel blocks between location tasks.
+input_tasks:
+  - text: "Coffee with Artem"
+    chips:
+      - type: time
+        value: "09:00"
+      - type: location
+        value: "Surf Coffee, Arbat, Moscow"
+  - text: "Office meeting"
+    chips:
+      - type: location
+        value: "Technopark, Nagatinskaya, Moscow"
+  - text: "Grocery shopping"
+    chips:
+      - type: location
+        value: "Perekrestok, Leninsky Ave, Moscow"
+clarification_answers:
+  transport: "Driving"
+success_criteria:
+  - "Travel block visible between tasks"
+  - "All tasks have time chips after planning"
+  - "At least 2 location chips visible"
