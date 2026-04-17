@@ -74,7 +74,7 @@ def analyze_results(
     screenshots: list[Path],
 ) -> dict:
     user = f"Test log:\n{log[:3000]}\n\nSuccess criteria:\n{yaml.dump(success_criteria)}"
-    images = [p.read_bytes() for p in screenshots[:3]] if provider.supports_vision and screenshots else None
+    images = [p.read_bytes() for p in screenshots[:3]] if provider.supports_vision else None
     raw = provider.complete(ANALYSIS_SYSTEM, user, images)
     raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     return json.loads(raw)

@@ -26,9 +26,10 @@ def test_generate_flow_returns_yaml():
     result = generate_flow(provider, SAMPLE_PATH)
     assert "launchApp" in result
     provider.complete.assert_called_once()
-    system, user = provider.complete.call_args.args[:2]
+    system, user, images = provider.complete.call_args.args[:3]
     assert "Maestro" in system
     assert "Simple plan" in user
+    assert images is None
 
 
 def test_analyze_results_pass():
