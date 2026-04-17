@@ -38,14 +38,16 @@ Return JSON only: {"result": "PASS" or "FAIL", "reason": "one sentence", "failed
 
 
 def generate_flow(provider: LLMProvider, path_descriptor: dict) -> str:
-    user = (
-        f"Path: {path_descriptor['name']}\n"
-        f"Description: {path_descriptor['description']}\n\n"
-        f"Input tasks:\n{yaml.dump(path_descriptor['input_tasks'])}\n"
-        f"Clarification answers (respond with these if asked):\n"
-        f"{yaml.dump(path_descriptor.get('clarification_answers', {}))}\n"
-        f"Success criteria:\n{yaml.dump(path_descriptor['success_criteria'])}"
-    )
+    parts = [
+        f"Path: {path_descriptor['name']}",
+        f"Description: {path_descriptor['description']}",
+        f"\nInput tasks:\n{yaml.dump(path_descriptor['input_tasks'])}",
+        f"Clarification answers (respond with these if asked):\n{yaml.dump(path_descriptor.get('clarification_answers', {}))}",
+    ]
+    if iterate_msg := path_descriptor.get("iterate_message"):
+        parts.append(f"After the plan is built, send this chat message to test ITERATE mode:\n{iterate_msg}")
+    parts.append(f"Success criteria:\n{yaml.dump(path_descriptor['success_criteria'])}")
+    user = "\n".join(parts)
     return provider.complete(MAESTRO_SYSTEM, user, None)
 
 
@@ -54,17 +56,23 @@ def run_maestro(flow_yaml: str, flow_dir: Path) -> tuple[int, str, list[Path]]:
     flow_path = flow_dir / f"flow_{timestamp}.yaml"
     flow_path.write_text(flow_yaml)
 
-    result = subprocess.run(
-        ["maestro", "test", str(flow_path)],
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
+    try:
+        result = subprocess.run(
+            ["maestro", "test", str(flow_path)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        log = result.stdout + result.stderr
+        exit_code = result.returncode
+    except subprocess.TimeoutExpired:
+        log = "Maestro timed out after 300 seconds"
+        exit_code = 1
 
     maestro_output_dir = Path.home() / ".maestro" / "tests"
     screenshots = sorted(maestro_output_dir.glob("**/*.png"))[-10:] if maestro_output_dir.exists() else []
 
-    return result.returncode, result.stdout + result.stderr, screenshots
+    return exit_code, log, screenshots
 
 
 def analyze_results(
@@ -77,7 +85,10 @@ def analyze_results(
     images = [p.read_bytes() for p in screenshots[:3]] if provider.supports_vision else None
     raw = provider.complete(ANALYSIS_SYSTEM, user, images)
     raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {"result": "FAIL", "reason": f"LLM returned unparseable JSON: {raw[:200]}", "failed_criteria": []}
 
 
 def save_report(result_dir: Path, path_id: int, analysis: dict, log: str) -> Path:

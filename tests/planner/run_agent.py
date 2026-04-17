@@ -34,9 +34,14 @@ def load_default_provider() -> tuple[str, str]:
     with open(CONFIG_PATH) as f:
         config = json.load(f)
     for m in config.get("models", []):
-        if m.get("supports_tools"):
+        if m.get("supports_tools") and not m.get("endpoint", "").endswith("/responses"):
             return m["provider"], m["id"]
-    return "anthropic", "claude-sonnet-4-6"
+    # Hard fallback — user must specify --provider if none found
+    print(
+        "Warning: no suitable model found in config/models.json. Use --provider and --model.",
+        file=sys.stderr,
+    )
+    return "openrouter", "meta-llama/llama-3.3-70b-instruct:free"
 
 
 def main() -> None:
@@ -47,6 +52,11 @@ def main() -> None:
     parser.add_argument("--provider", help="LLM provider name (anthropic/google/openrouter/…)")
     parser.add_argument("--model", help="Model ID from config/models.json")
     args = parser.parse_args()
+
+    import shutil
+    if not shutil.which("maestro"):
+        print("Error: 'maestro' not found. Install with: brew install maestro", file=sys.stderr)
+        sys.exit(1)
 
     if args.list:
         list_paths()
@@ -81,6 +91,8 @@ def main() -> None:
     results = []
     for descriptor in paths:
         print(f"── Path {descriptor['id']}: {descriptor['name']}")
+        if notes := descriptor.get("notes"):
+            print(f"   ⚠ Note: {notes.strip()}")
         result = run_test(provider, descriptor, FLOWS_DIR, RESULTS_DIR)
         results.append(result)
 
