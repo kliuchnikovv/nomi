@@ -142,16 +142,20 @@ export function PlannerScreen() {
     }, [items, addItem]);
 
     const handleLocationChipPress = useCallback((itemId: string) => {
+        // Apple Maps uses + for spaces, not %20
+        const encodeStop = (s: string) => encodeURIComponent(s).replace(/%20/g, '+');
         const stops: string[] = [];
         for (const item of items) {
             const locationChip = item.chips.find(c => c.type === 'location');
-            if (!item.checked && locationChip) {
+            const isTapped = item.id === itemId;
+            // Collect unchecked items; always include tapped item as destination
+            if (locationChip && (!item.checked || isTapped)) {
                 stops.push(locationChip.value);
             }
-            if (item.id === itemId) break;
+            if (isTapped) break;
         }
         if (stops.length === 0) return;
-        const encoded = stops.map(s => encodeURIComponent(s));
+        const encoded = stops.map(encodeStop);
         // Apple Maps multi-stop: saddr=first&daddr=second+to:third+to:fourth
         const url = encoded.length === 1
             ? `maps://?daddr=${encoded[0]}`
