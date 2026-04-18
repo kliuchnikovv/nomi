@@ -21,6 +21,7 @@ interface Props {
     onDelete: () => void;
     onAddAfter: () => void;
     onChipRemove: (chipId: string) => void;
+    onLocationChipPress?: (chipId: string) => void;
     drag: () => void;
     isActive: boolean;
     inputRef?: (ref: TextInput | null) => void;
@@ -34,6 +35,7 @@ export function PlanItemRow({
     onDelete,
     onAddAfter,
     onChipRemove,
+    onLocationChipPress,
     drag,
     isActive,
     inputRef,
@@ -198,6 +200,11 @@ export function PlanItemRow({
                                     key={chip.id}
                                     chip={chip}
                                     onRemove={() => onChipRemove(chip.id)}
+                                    onLocationPress={
+                                        chip.type === 'location' && onLocationChipPress
+                                            ? () => onLocationChipPress(chip.id)
+                                            : undefined
+                                    }
                                 />
                             ))}
                         </View>
