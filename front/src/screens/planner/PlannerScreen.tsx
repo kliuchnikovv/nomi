@@ -9,6 +9,7 @@ import {
     TouchableOpacity,
     TextInput,
     Keyboard,
+    Linking,
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -140,6 +141,20 @@ export function PlannerScreen() {
         pendingFocusIdRef.current = newId;
     }, [items, addItem]);
 
+    const handleLocationChipPress = useCallback((itemId: string) => {
+        const stops: string[] = [];
+        for (const item of items) {
+            if (item.checked) continue;
+            const locationChip = item.chips.find(c => c.type === 'location');
+            if (!locationChip) continue;
+            stops.push(locationChip.value);
+            if (item.id === itemId) break;
+        }
+        if (stops.length === 0) return;
+        const encoded = stops.map(s => encodeURIComponent(s)).join('/');
+        Linking.openURL(`maps://?daddr=${encoded}`);
+    }, [items]);
+
     // ---------------------------------------------------------------------------
     // "Plan day" — opens chat with auto-prompt
     // ---------------------------------------------------------------------------
@@ -169,12 +184,13 @@ export function PlannerScreen() {
                 onChipRemove={(chipId) =>
                     updateItem(item.id, { chips: item.chips.filter(c => c.id !== chipId) })
                 }
+                onLocationChipPress={() => handleLocationChipPress(item.id)}
                 drag={drag}
                 isActive={isActive}
                 inputRef={(ref) => registerInputRef(item.id, ref)}
             />
         </ScaleDecorator>
-    ), [toggleChecked, updateItem, indentItem, handleRemoveItem, handleAddAfter, registerInputRef]);
+    ), [toggleChecked, updateItem, indentItem, handleRemoveItem, handleAddAfter, registerInputRef, handleLocationChipPress]);
 
     // ---------------------------------------------------------------------------
     // Render
