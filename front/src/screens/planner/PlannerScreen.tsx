@@ -151,11 +151,11 @@ export function PlannerScreen() {
             if (item.id === itemId) break;
         }
         if (stops.length === 0) return;
-        const destination = encodeURIComponent(stops[stops.length - 1]);
-        const source = stops.length > 1 ? encodeURIComponent(stops[stops.length - 2]) : null;
-        const url = source
-            ? `maps://?saddr=${source}&daddr=${destination}`
-            : `maps://?daddr=${destination}`;
+        const encoded = stops.map(s => encodeURIComponent(s));
+        // Apple Maps multi-stop: saddr=first&daddr=second+to:third+to:fourth
+        const url = encoded.length === 1
+            ? `maps://?daddr=${encoded[0]}`
+            : `maps://?saddr=${encoded[0]}&daddr=${encoded.slice(1).join('+to:')}`;
         Linking.openURL(url).catch((err: unknown) => {
             console.warn('Failed to open Maps:', err);
         });
