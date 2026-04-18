@@ -151,8 +151,12 @@ export function PlannerScreen() {
             if (item.id === itemId) break;
         }
         if (stops.length === 0) return;
-        const encoded = stops.map(s => encodeURIComponent(s)).join('/');
-        Linking.openURL(`maps://?daddr=${encoded}`).catch((err: unknown) => {
+        const destination = encodeURIComponent(stops[stops.length - 1]);
+        const source = stops.length > 1 ? encodeURIComponent(stops[stops.length - 2]) : null;
+        const url = source
+            ? `maps://?saddr=${source}&daddr=${destination}`
+            : `maps://?daddr=${destination}`;
+        Linking.openURL(url).catch((err: unknown) => {
             console.warn('Failed to open Maps:', err);
         });
     }, [items]);
