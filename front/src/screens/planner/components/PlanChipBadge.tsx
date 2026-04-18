@@ -33,9 +33,10 @@ const CHIP_ICONS: Record<ChipType, React.FC<{ width: number; height: number; col
 interface Props {
     chip: PlanChip;
     onRemove?: () => void;
+    onLocationPress?: () => void;
 }
 
-export function PlanChipBadge({ chip, onRemove }: Props) {
+export function PlanChipBadge({ chip, onRemove, onLocationPress }: Props) {
     const glowAnim = useRef(new Animated.Value(0)).current;
     const [modalVisible, setModalVisible] = useState(false);
 
@@ -135,6 +136,24 @@ export function PlanChipBadge({ chip, onRemove }: Props) {
         );
     }
 
+    const pillContent = (
+        <View style={[styles.pill, { backgroundColor: chipStyle.bg }]}>
+            <IconComponent width={12} height={12} color={chipStyle.text} />
+            <Text style={[styles.valueText, { color: chipStyle.text }]}>
+                {chip.value}
+            </Text>
+            {onRemove && (
+                <TouchableOpacity
+                    onPress={onRemove}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                    style={styles.removeBtn}
+                >
+                    <Text style={[styles.removeText, { color: chipStyle.text }]}>×</Text>
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+
     return (
         <View style={styles.wrapper}>
             <Animated.View
@@ -143,21 +162,13 @@ export function PlanChipBadge({ chip, onRemove }: Props) {
                     { opacity: borderOpacity },
                 ]}
             />
-            <View style={[styles.pill, { backgroundColor: chipStyle.bg }]}>
-                <IconComponent width={12} height={12} color={chipStyle.text} />
-                <Text style={[styles.valueText, { color: chipStyle.text }]}>
-                    {chip.value}
-                </Text>
-                {onRemove && (
-                    <TouchableOpacity
-                        onPress={onRemove}
-                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                        style={styles.removeBtn}
-                    >
-                        <Text style={[styles.removeText, { color: chipStyle.text }]}>×</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
+            {chip.type === 'location' && onLocationPress ? (
+                <TouchableOpacity onPress={onLocationPress} activeOpacity={0.7}>
+                    {pillContent}
+                </TouchableOpacity>
+            ) : (
+                pillContent
+            )}
         </View>
     );
 }
