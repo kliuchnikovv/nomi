@@ -144,15 +144,17 @@ export function PlannerScreen() {
     const handleLocationChipPress = useCallback((itemId: string) => {
         const stops: string[] = [];
         for (const item of items) {
-            if (item.checked) continue;
             const locationChip = item.chips.find(c => c.type === 'location');
-            if (!locationChip) continue;
-            stops.push(locationChip.value);
+            if (!item.checked && locationChip) {
+                stops.push(locationChip.value);
+            }
             if (item.id === itemId) break;
         }
         if (stops.length === 0) return;
         const encoded = stops.map(s => encodeURIComponent(s)).join('/');
-        Linking.openURL(`maps://?daddr=${encoded}`);
+        Linking.openURL(`maps://?daddr=${encoded}`).catch((err: unknown) => {
+            console.warn('Failed to open Maps:', err);
+        });
     }, [items]);
 
     // ---------------------------------------------------------------------------
