@@ -156,10 +156,9 @@ export function PlannerScreen() {
         }
         if (stops.length === 0) return;
         const encoded = stops.map(encodeStop);
-        // Apple Maps multi-stop: saddr=first&daddr=second+to:third+to:fourth
-        const url = encoded.length === 1
-            ? `maps://?daddr=${encoded[0]}`
-            : `maps://?saddr=${encoded[0]}&daddr=${encoded.slice(1).join('+to:')}`;
+        // Omit saddr — Apple Maps defaults to current location.
+        // Multi-stop: daddr=first+to:second+to:third
+        const url = `maps://?daddr=${encoded.join('+to:')}`;
         Linking.openURL(url).catch((err: unknown) => {
             console.warn('Failed to open Maps:', err);
         });
