@@ -103,7 +103,7 @@ class MapsTool(Toolkit):
         }
 
         if near_coords:
-            lat, lon = near_coords
+            lon, lat = near_coords  # ors_client.geocode returns (lon, lat)
             deg = radius_km / 111.0  # rough degrees per km
             params["viewbox"] = f"{lon - deg},{lat + deg},{lon + deg},{lat - deg}"
             params["bounded"] = 1
@@ -134,7 +134,7 @@ class MapsTool(Toolkit):
 
             dist_suffix = ""
             if near_coords:
-                dist_m = _haversine_m(near_coords[0], near_coords[1], place_lat, place_lon)
+                dist_m = _haversine_m(near_coords[1], near_coords[0], place_lat, place_lon)
                 dist_suffix = f" ({_distance_label(dist_m)})"
 
             label = f"{short_name}{dist_suffix}"
