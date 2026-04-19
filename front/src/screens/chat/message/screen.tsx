@@ -234,6 +234,13 @@ function ActionScreen({
     }, []);
 
     const handleActionPress = useCallback(async (action: Action) => {
+        if (action?.command === 'open_maps' && action.url) {
+            await Linking.openURL(action.url).catch((err: unknown) => {
+                console.warn('Failed to open Maps:', err);
+            });
+            return;
+        }
+
         if (action?.command === 'open_web' && action.url) {
             await openWeb(action.url);
         }

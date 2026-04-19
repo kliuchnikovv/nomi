@@ -497,6 +497,16 @@ class AgentFactory:
             except Exception as e:
                 logger.warning("[Factory] Failed to add planning tool: %s", e)
 
+        # Add maps tool (open_route, search_places) - available to all agents
+        try:
+            from src.tools.maps import MapsTool
+
+            maps_tool = MapsTool()
+            tools = list(tools) + [maps_tool]
+            logger.info("[Factory] Added MapsTool (open_route, search_places)")
+        except Exception as e:
+            logger.warning("[Factory] Failed to add MapsTool: %s", e)
+
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs
 

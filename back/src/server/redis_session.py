@@ -340,6 +340,12 @@ class RedisSession:
             timezone=payload.get("timezone", "UTC"),
         )
 
+        # Inject user_location into session_state so RECON can geocode it as the
+        # user's starting point. Only set if not already persisted from a previous run.
+        user_location = payload.get("user_location") or None
+        if user_location and "user_location" not in session_state:
+            session_state["user_location"] = user_location
+
         workflow = build_planning_workflow(
             session_id=self.chat_id,
             session_state=session_state,
@@ -1307,6 +1313,29 @@ class RedisSession:
                                 },
                             )
                         )
+
+                        # If tool result contains "actions", emit an actions frame so the
+                        # client can render tappable buttons (e.g. "Open in Maps").
+                        # Generic — any tool returning {"text": "...", "actions": [...]} benefits.
+                        tool_result_str = safe_tool.get("result")
+                        if tool_result_str:
+                            try:
+                                result_data = json.loads(tool_result_str)
+                                if isinstance(result_data, dict) and result_data.get("actions"):
+                                    await self._send_frame(
+                                        make_data(
+                                            self.next_id,
+                                            Op.MESSAGE,
+                                            msg_chat_id,
+                                            {
+                                                "type": "actions",
+                                                "actions": result_data["actions"],
+                                                "message_id": message_id,
+                                            },
+                                        )
+                                    )
+                            except (json.JSONDecodeError, TypeError, AttributeError):
+                                pass  # plain-text result, no actions to dispatch
 
                     elif evt_type == "reasoning":
                         content = event.get("content", "")

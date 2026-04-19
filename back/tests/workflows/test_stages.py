@@ -216,3 +216,71 @@ def test_build_returns_empty_patches_on_bad_json():
             timezone="UTC",
         )
     assert result.output.get("patches") == []
+
+
+# ── RECON with user_location ──────────────────────────────────────────────────
+
+def test_recon_geocodes_user_location_as_origin():
+    with patch("src.workflows.planning.ors_client.geocode", return_value=(37.6, 55.7)) as mock_geo, \
+         patch("src.workflows.planning.search_place_hours", return_value=""):
+        result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", "walking", user_location="Москва")
+    locations = result.output["locations"]
+    assert "__origin__" in locations
+    assert locations["__origin__"]["coords"] == (37.6, 55.7)
+
+
+def test_recon_skips_origin_when_user_location_is_none():
+    with patch("src.workflows.planning.ors_client.geocode", return_value=(37.6, 55.7)), \
+         patch("src.workflows.planning.search_place_hours", return_value=""):
+        result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", "walking", user_location=None)
+    assert "__origin__" not in result.output["locations"]
+
+
+def test_recon_continues_without_origin_when_geocode_fails():
+    def geocode_side_effect(loc):
+        if loc == "Москва":
+            raise RuntimeError("ORS down")
+        return (37.6, 55.7)
+
+    with patch("src.workflows.planning.ors_client.geocode", side_effect=geocode_side_effect), \
+         patch("src.workflows.planning.search_place_hours", return_value=""):
+        result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", "walking", user_location="Москва")
+    assert "__origin__" not in result.output["locations"]
+    assert "office" in result.output["locations"]
+
+
+# ── ROUTE with __origin__ ─────────────────────────────────────────────────────
+
+LOCATIONS_WITH_ORIGIN = {
+    "__origin__": {"coords": (37.60, 55.70), "hours": ""},
+    "gym": {"coords": (37.65, 55.75), "hours": "7am-10pm"},
+    "office": {"coords": (37.66, 55.76), "hours": "9am-6pm"},
+    "home": {"coords": (37.61, 55.74), "hours": ""},
+}
+
+
+def test_route_prepends_origin_to_first_cluster_when_origin_present():
+    with patch("src.workflows.planning.ors_client.get_travel_time", return_value=15):
+        result = _run_route_stage(CLUSTERS[:2], LOCATIONS_WITH_ORIGIN, "walking")
+    blocks = result.output["travel_blocks"]
+    first = blocks[0]
+    assert first["from_location"] == "__origin__"
+    assert first["to_location"] == CLUSTERS[0]["location"]
+
+
+def test_route_no_origin_leg_when_origin_absent():
+    with patch("src.workflows.planning.ors_client.get_travel_time", return_value=15):
+        result = _run_route_stage(CLUSTERS[:2], LOCATIONS, "walking")
+    blocks = result.output["travel_blocks"]
+    assert all(b["from_location"] != "__origin__" for b in blocks)
+
+
+def test_route_origin_leg_skipped_when_first_cluster_same_as_origin():
+    clusters_from_origin = [
+        {"location": "__origin__", "context_type": "home", "task_ids": ["t0"]},
+        {"location": "gym", "context_type": "place", "task_ids": ["t1"]},
+    ]
+    with patch("src.workflows.planning.ors_client.get_travel_time", return_value=20):
+        result = _run_route_stage(clusters_from_origin, LOCATIONS_WITH_ORIGIN, "walking")
+    blocks = result.output["travel_blocks"]
+    assert not any(b["from_location"] == "__origin__" and b["to_location"] == "__origin__" for b in blocks)
