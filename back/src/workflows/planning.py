@@ -339,8 +339,12 @@ Apply patches in this STRICT order:
    for tasks with a non-null time_hint use that value exactly; for others infer from context
 3. add_chip (type=location) — for transit tasks use the departure airport from the "location" field;
    for other tasks use their known location
-4. add_chip (type=note) — for transit tasks add "→ <destination_location>" if set;
-   also add notes with travel time, opening hours where useful
+4. add_chip (type=note) — value MUST be a JSON string with shape {"hours":"...","description":"...","info":"..."}.
+   Use the location's "hours" field from context for opening hours.
+   "description" — one-sentence summary of the place.
+   "info" — useful tips: parking, payment methods, booking required, etc.
+   Omit keys with no useful value. For transit tasks: {"info":"→ <destination_location>"}.
+   Example value (escaped for JSON): "{\"hours\":\"09:00-22:00\",\"description\":\"Specialty coffee\",\"info\":\"Free WiFi, card only\"}"
 5. update_item — strip embedded times/locations from task text if now captured in chips
 6. reorder_items — include ALL item ids sorted by start time (MUST be the last patch)
 
@@ -353,7 +357,7 @@ Return ONLY valid JSON:
     {"op": "add_item", "item": {"id": "...", "text": "Head to gym", "depth": 0, "checked": false, "chips": []}},
     {"op": "add_chip", "item_id": "...", "chip": {"type": "time", "value": "09:00-10:00", "id": "..."}},
     {"op": "add_chip", "item_id": "...", "chip": {"type": "location", "value": "Аэропорт Эль-Прат, Барселона", "id": "..."}},
-    {"op": "add_chip", "item_id": "...", "chip": {"type": "note", "value": "→ Аэропорт Сабиха Гёкчен, Стамбул", "id": "..."}},
+    {"op": "add_chip", "item_id": "...", "chip": {"type": "note", "value": "{\"hours\":\"09:00-21:00\",\"description\":\"Specialty coffee bar\",\"info\":\"Card only, no reservations\"}", "id": "..."}},
     {"op": "reorder_items", "ids": ["id1", "id2", "id3"]}
   ],
   "summary": "Added times and travel tasks"
