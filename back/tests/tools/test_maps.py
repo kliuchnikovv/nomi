@@ -84,7 +84,7 @@ NOMINATIM_RESPONSE = [
 
 def test_search_places_returns_actions_per_result():
     tool = make_tool()
-    with patch("src.tools.maps.ors_client.geocode", return_value=(55.75, 37.62)), \
+    with patch("src.tools.maps.ors_client.geocode", return_value=(37.62, 55.75)), \
          patch("src.tools.maps.requests.get") as mock_get:
         mock_get.return_value.json.return_value = NOMINATIM_RESPONSE
         mock_get.return_value.raise_for_status = MagicMock()
@@ -95,7 +95,7 @@ def test_search_places_returns_actions_per_result():
 
 def test_search_places_label_contains_name_and_distance():
     tool = make_tool()
-    with patch("src.tools.maps.ors_client.geocode", return_value=(55.75, 37.62)), \
+    with patch("src.tools.maps.ors_client.geocode", return_value=(37.62, 55.75)), \
          patch("src.tools.maps.requests.get") as mock_get:
         mock_get.return_value.json.return_value = NOMINATIM_RESPONSE
         mock_get.return_value.raise_for_status = MagicMock()
@@ -108,7 +108,7 @@ def test_search_places_label_contains_name_and_distance():
 
 def test_search_places_no_results_returns_empty_actions():
     tool = make_tool()
-    with patch("src.tools.maps.ors_client.geocode", return_value=(55.75, 37.62)), \
+    with patch("src.tools.maps.ors_client.geocode", return_value=(37.62, 55.75)), \
          patch("src.tools.maps.requests.get") as mock_get:
         mock_get.return_value.json.return_value = []
         mock_get.return_value.raise_for_status = MagicMock()
@@ -134,7 +134,7 @@ def test_search_places_fallback_when_geocode_fails():
 
 def test_search_places_url_uses_encoded_address():
     tool = make_tool()
-    with patch("src.tools.maps.ors_client.geocode", return_value=(55.75, 37.62)), \
+    with patch("src.tools.maps.ors_client.geocode", return_value=(37.62, 55.75)), \
          patch("src.tools.maps.requests.get") as mock_get:
         mock_get.return_value.json.return_value = NOMINATIM_RESPONSE
         mock_get.return_value.raise_for_status = MagicMock()
