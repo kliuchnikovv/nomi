@@ -171,7 +171,7 @@ def _run_recon_stage(
     if transport_mode is None:
 
         pending_questions.append({
-            "q": "How do you plan to travel between locations?"
+            "q": "How do you plan to travel between locations?",
             "opts": ["Walking", "Driving", "Cycling", "Public transport"],
         })
 
