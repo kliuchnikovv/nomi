@@ -146,8 +146,17 @@ def _run_recon_stage(
     extracted_tasks: list[dict],
     planning_date: str,
     transport_mode: str | None,
+    user_location: str | None = None,
 ) -> StageResult:
     locations: dict[str, dict] = {}
+
+    # Geocode user's starting location as __origin__ for the ROUTE stage origin leg.
+    if user_location:
+        try:
+            origin_coords = ors_client.geocode(user_location)
+            locations["__origin__"] = {"coords": origin_coords, "hours": ""}
+        except Exception:
+            pass  # no origin — workflow continues without it
 
     for task in extracted_tasks:
         loc = task.get("location")
@@ -171,7 +180,7 @@ def _run_recon_stage(
     if transport_mode is None:
 
         pending_questions.append({
-            "q": "How do you plan to travel between locations?"
+            "q": "How do you plan to travel between locations?",
             "opts": ["Walking", "Driving", "Cycling", "Public transport"],
         })
 
@@ -259,6 +268,29 @@ def _run_route_stage(
 ) -> StageResult:
     profile = _PROFILE_MAP.get(transport_mode, "foot-walking")
     travel_blocks: list[dict] = []
+
+    # Prepend origin → first cluster leg if user location was geocoded as __origin__.
+    if "__origin__" in locations and clusters:
+        first_loc = clusters[0].get("location", "")
+        if first_loc and first_loc != "__origin__":
+            origin_coords = locations["__origin__"].get("coords")
+            first_coords = locations.get(first_loc, {}).get("coords")
+            duration_min = 30
+            if origin_coords and first_coords:
+                try:
+                    duration_min = ors_client.get_travel_time(origin_coords, first_coords, profile)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    pass
+            travel_blocks.append({
+                "from_location": "__origin__",
+                "to_location": first_loc,
+                "duration_min": duration_min,
+                "mode": profile,
+                "title": f"Head to {first_loc}",
+                "insert_before_cluster_index": 0,
+            })
 
     for i in range(len(clusters) - 1):
         src_loc = clusters[i].get("location", "")
@@ -557,7 +589,8 @@ def _planning_steps(
         transport = state.get("recon_output", {}).get(
             "transport_mode"
         ) or _infer_transport(user_message, state.get("clarification_answers", []))
-        result = _run_recon_stage(extracted, planning_date, transport)
+        user_location = state.get("user_location")
+        result = _run_recon_stage(extracted, planning_date, transport, user_location=user_location)
         if result.pending_questions and not state.get("recon_clarified"):
             first_item = result.pending_questions[0]
             state["pending_questions"] = result.pending_questions[1:]
