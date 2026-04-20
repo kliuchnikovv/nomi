@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { startTransition } from 'react';
-import { Message, ContentPart } from '../screens/main/models';
+import { Message, ContentPart, MessageAction } from '../screens/main/models';
 import { dispatchPayload } from './handlers';
 
 // Throttling configuration for streaming performance
@@ -28,6 +28,7 @@ interface ChatStore {
     removeMessage: (chatId: string, messageId: string) => void;
     clearChat: (chatId: string) => void;
     flushPendingUpdates: (chatId: string) => void;
+    appendActions: (chatId: string, messageId: string, actions: MessageAction[]) => void;
 }
 
 // Throttling state (outside store to avoid re-renders)
@@ -209,6 +210,27 @@ export const useChatStore = create<ChatStore>()(
                 if (pendingUpdates.has(chatId) && pendingUpdates.get(chatId)!.length > 0) {
                     flushPendingUpdates(chatId, set);
                 }
+            },
+
+            appendActions: (chatId, messageId, actions) => {
+                if (actions.length === 0) return;
+                set((state) => {
+                    const msgs = state.chats[chatId];
+                    if (!msgs) return state;
+                    const idx = msgs.findIndex(m => m.id === messageId);
+                    if (idx === -1) return state;
+                    const updated = [...msgs];
+                    updated[idx] = {
+                        ...updated[idx],
+                        actions: [...(updated[idx].actions ?? []), ...actions],
+                    };
+                    return {
+                        chats: {
+                            ...state.chats,
+                            [chatId]: updated,
+                        },
+                    };
+                });
             },
 
             addMessage: (chatId, payload) => {
