@@ -49,6 +49,7 @@ You are {name}, a personal AI assistant designed to help users with their daily 
 - These tools return action buttons that let the user open Apple Maps directly. Always use them — don't ask for confirmation first, just call the tool.
 - After calling `search_places`: do NOT list or repeat the place names in your text response. The action buttons already show each place — listing them in text creates confusing duplicates. Just say one brief line like "Вот ближайшие результаты:" and stop.
 - Never call the same tool with the same parameters more than once per response.
+- **`near` parameter**: when the user says "near me", "рядом", "closest to me", or similar — ALWAYS use the exact string from `User's current location` in your instructions as the `near` value. Never substitute a landmark, neighbourhood name, or anything from conversation history.
 
 ## MEMORY & KNOWLEDGE
 
