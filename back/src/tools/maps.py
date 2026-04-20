@@ -61,8 +61,9 @@ def _distance_label(metres: float) -> str:
 class MapsTool(Toolkit):
     """Toolkit for building Apple Maps routes and searching nearby places."""
 
-    def __init__(self) -> None:
+    def __init__(self, user_location: str | None = None) -> None:
         super().__init__(name="maps")
+        self._user_location = user_location
         self.register(self.open_route)
         self.register(self.search_places)
 
@@ -117,17 +118,21 @@ class MapsTool(Toolkit):
             JSON string: {"text": "...", "actions": [...]} where each action has an
             "Open in Maps" button for that specific place.
         """
+        # Prefer the session-level user location for geocoding: it is the ground-truth
+        # device location and more accurate than whatever string the LLM chose for `near`.
+        geocode_source = self._user_location if self._user_location else near
+
         near_coords: tuple[float, float] | None = None
         try:
-            near_coords = ors_client.geocode(near)
+            near_coords = ors_client.geocode(geocode_source)
         except Exception as exc:
-            logger.warning("[MapsTool] ORS geocode failed for %r: %s", near, exc)
+            logger.warning("[MapsTool] ORS geocode failed for %r: %s", geocode_source, exc)
 
         # Fall back to Nominatim geocoding if ORS is unavailable or returned nothing
         if not near_coords:
-            near_coords = _nominatim_geocode(near)
+            near_coords = _nominatim_geocode(geocode_source)
             if near_coords:
-                logger.info("[MapsTool] Used Nominatim geocode fallback for %r", near)
+                logger.info("[MapsTool] Used Nominatim geocode fallback for %r", geocode_source)
 
         params: dict = {
             "q": query,

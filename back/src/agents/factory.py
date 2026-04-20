@@ -501,9 +501,9 @@ class AgentFactory:
         try:
             from src.tools.maps import MapsTool
 
-            maps_tool = MapsTool()
+            maps_tool = MapsTool(user_location=user_location)
             tools = list(tools) + [maps_tool]
-            logger.info("[Factory] Added MapsTool (open_route, search_places)")
+            logger.info("[Factory] Added MapsTool (open_route, search_places) user_location=%r", user_location)
         except Exception as e:
             logger.warning("[Factory] Failed to add MapsTool: %s", e)
 
