@@ -35,3 +35,4 @@ conversations
 .superpowers
 docs
 .worktrees/
+.aider*

@@ -128,6 +128,7 @@ type UserMessagePayload struct {
 	AuthToken      string       `json:"auth_token,omitempty"`      // JWT for backend tools (e.g. list item API calls)
 	ExtractedFacts []string     `json:"extracted_facts,omitempty"` // Optional client-extracted facts (sync path)
 	ContextItems   interface{}  `json:"context_items,omitempty"`   // Context items (emails, documents, etc.)
+	UserLocation   string       `json:"user_location,omitempty"`   // User's current location (display name) for geo tools
 }
 
 // StoreFactsPayload is used for op "store_facts" (async client-side extraction result)
