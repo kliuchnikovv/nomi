@@ -101,7 +101,7 @@ class MapsTool(Toolkit):
             ],
         }, ensure_ascii=False)
 
-    def search_places(self, query: str, near: str, radius_km: float = 3.0) -> str:
+    def search_places(self, query: str, near: str = "", radius_km: float = 3.0) -> str:
         """Search for nearby places and return a list with "Open in Maps" buttons.
 
         Call this whenever the user asks to find nearby places — stores, cafés, pharmacies,
@@ -110,17 +110,19 @@ class MapsTool(Toolkit):
 
         Args:
             query: What to search for (e.g. "Lidl", "supermarket", "coffee shop", "pharmacy").
-            near: The reference location — use the user's current location if known,
-                  otherwise a landmark or city they mentioned (e.g. "Sant Estació, Barcelona").
+            near: A specific location to search near (e.g. "Sagrada Familia, Barcelona").
+                  OMIT this parameter (or pass "") when the user asks about places near
+                  their current location — the tool uses the device location automatically.
             radius_km: Search radius in kilometres (default 3.0).
 
         Returns:
             JSON string: {"text": "...", "actions": [...]} where each action has an
             "Open in Maps" button for that specific place.
         """
-        # Prefer the session-level user location for geocoding: it is the ground-truth
-        # device location and more accurate than whatever string the LLM chose for `near`.
+        # Use device location when available; only fall back to `near` when the user
+        # explicitly asked about a different specific place.
         geocode_source = self._user_location if self._user_location else near
+        display_near = near if near else (self._user_location or "your location")
 
         near_coords: tuple[float, float] | None = None
         try:
@@ -165,7 +167,7 @@ class MapsTool(Toolkit):
 
         if not results:
             return json.dumps(
-                {"text": f"Ничего не найдено по запросу «{query}» рядом с {near}.", "actions": []},
+                {"text": f"Ничего не найдено по запросу «{query}» рядом с {display_near}.", "actions": []},
                 ensure_ascii=False,
             )
 
@@ -190,5 +192,5 @@ class MapsTool(Toolkit):
             url = f"maps://?daddr={place_lat},{place_lon}"
             actions.append({"command": "open_maps", "label": label, "url": url})
 
-        text = f"Ближайшие «{query}» рядом с {near}:"
+        text = f"Ближайшие «{query}» рядом с {display_near}:"
         return json.dumps({"text": text, "actions": actions}, ensure_ascii=False)
