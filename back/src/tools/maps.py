@@ -174,9 +174,24 @@ class MapsTool(Toolkit):
         actions = []
         for place in results:
             display = place.get("display_name", "")
-            # Take first two comma-parts as the short name
-            parts = [p.strip() for p in display.split(",")]
-            short_name = ", ".join(parts[:2]) if len(parts) >= 2 else display
+            addr = place.get("address", {})
+
+            # Build label: "Name, №house Street" using addressdetails when available.
+            # Falls back to first two comma-parts of display_name.
+            name_part = (
+                addr.get("shop")
+                or addr.get("amenity")
+                or addr.get("name")
+                or display.split(",")[0].strip()
+            )
+            road = addr.get("road", "")
+            house = addr.get("house_number", "")
+            if road:
+                addr_part = f"{house} {road}".strip() if house else road
+                short_name = f"{name_part}, {addr_part}"
+            else:
+                parts = [p.strip() for p in display.split(",")]
+                short_name = ", ".join(parts[:2]) if len(parts) >= 2 else display
 
             place_lat = float(place.get("lat", 0))
             place_lon = float(place.get("lon", 0))
