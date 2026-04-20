@@ -131,7 +131,7 @@ class MapsTool(Toolkit):
 
         params: dict = {
             "q": query,
-            "limit": 5,
+            "limit": 15,  # fetch more candidates so we can sort by distance
             "format": "json",
             "addressdetails": 1,
         }
@@ -149,6 +149,14 @@ class MapsTool(Toolkit):
         except Exception as exc:
             logger.warning("[MapsTool] Nominatim request failed: %s", exc)
             return json.dumps({"text": f"Ошибка поиска: {exc}", "actions": []}, ensure_ascii=False)
+
+        # Sort by distance when we have a reference point, then keep top 5
+        if near_coords and results:
+            ref_lon, ref_lat = near_coords
+            results = sorted(
+                results,
+                key=lambda p: _haversine_m(ref_lat, ref_lon, float(p.get("lat", 0)), float(p.get("lon", 0))),
+            )[:5]
 
         if not results:
             return json.dumps(
