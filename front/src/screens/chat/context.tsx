@@ -23,6 +23,7 @@ import { useChatStore } from '../../store/chatStore';
 import { shallow } from 'zustand/shallow';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import { generateChatTitle } from '../../services/chatTitleGenerator';
+import { extractActions } from '../../services/actionExtractor';
 import { getStoredLocation } from '../../services/location/locationService';
 
 function generateId(): string {
@@ -1124,6 +1125,20 @@ export function ChatProvider({
                 }
                 // Flush final streaming state before transitioning UI
                 useChatStore.getState().flushPendingUpdates(chatId);
+
+                // Fire-and-forget: extract action buttons from final assistant text via AFM (iOS only)
+                const msgs = useChatStore.getState().chats[chatId] ?? [];
+                const lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant');
+                if (lastAssistant?.text) {
+                    extractActions(lastAssistant.text)
+                        .then(actions => {
+                            if (actions.length > 0) {
+                                useChatStore.getState().appendActions(chatId, lastAssistant.id, actions);
+                            }
+                        })
+                        .catch(() => {});
+                }
+
                 generatingForChatRef.current = null;
                 startTransition(() => {
                     setAssistantWorking(false);
