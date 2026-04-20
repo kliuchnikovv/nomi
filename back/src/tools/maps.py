@@ -138,8 +138,9 @@ class MapsTool(Toolkit):
                 dist_suffix = f" ({_distance_label(dist_m)})"
 
             label = f"{short_name}{dist_suffix}"
-            dest = _encode_stop(display)
-            url = f"maps://?daddr={dest}"
+            # Use exact coordinates so Apple Maps opens the precise Nominatim result
+            # rather than re-geocoding the address string (which can return a different place).
+            url = f"maps://?daddr={place_lat},{place_lon}"
             actions.append({"command": "open_maps", "label": label, "url": url})
 
         text = f"Ближайшие «{query}» рядом с {near}:"

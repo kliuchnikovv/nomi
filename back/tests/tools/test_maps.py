@@ -132,7 +132,8 @@ def test_search_places_fallback_when_geocode_fails():
     assert "viewbox" not in call_params
 
 
-def test_search_places_url_uses_encoded_address():
+def test_search_places_url_uses_coordinates_not_address():
+    """URL must use exact lat/lon from Nominatim so Apple Maps opens the right place."""
     tool = make_tool()
     with patch("src.tools.maps.ors_client.geocode", return_value=(37.62, 55.75)), \
          patch("src.tools.maps.requests.get") as mock_get:
@@ -140,5 +141,6 @@ def test_search_places_url_uses_encoded_address():
         mock_get.return_value.raise_for_status = MagicMock()
         result = json.loads(tool.search_places(query="супермаркет", near="Технопарк"))
     url = result["actions"][0]["url"]
+    # Must use coordinates from Nominatim response (lat=55.755, lon=37.617)
     assert "maps://" in url
-    assert "daddr=" in url
+    assert "daddr=55.755,37.617" in url
