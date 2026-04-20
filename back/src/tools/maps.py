@@ -47,13 +47,16 @@ class MapsTool(Toolkit):
         self.register(self.search_places)
 
     def open_route(self, stops: list[str], mode: str = "driving") -> str:
-        """Build an Apple Maps multi-stop route URL and return a JSON action payload.
+        """Build a navigation route and return an "Open in Maps" button for the user.
+
+        Call this whenever the user asks for directions, a route, or how to get somewhere.
+        The result includes an action button that opens Apple Maps directly — always call
+        this tool instead of describing the route in plain text.
 
         Args:
-            stops: List of address/place name strings (1–10 items).
+            stops: List of address/place name strings to navigate through (1–10 items).
+                   Route starts from the user's current location automatically.
             mode: Travel mode — "driving", "walking", or "cycling".
-                  Included in the response text label only; Apple Maps chooses
-                  the actual navigation mode based on the device setting.
 
         Returns:
             JSON string: {"text": "...", "actions": [{"command": "open_maps", "label": "...", "url": "maps://..."}]}
@@ -78,16 +81,21 @@ class MapsTool(Toolkit):
         }, ensure_ascii=False)
 
     def search_places(self, query: str, near: str, radius_km: float = 3.0) -> str:
-        """Search for nearby places matching a query and return a list with Maps links.
+        """Search for nearby places and return a list with "Open in Maps" buttons.
+
+        Call this whenever the user asks to find nearby places — stores, cafés, pharmacies,
+        restaurants, gyms, etc. This returns action buttons the user can tap to open each
+        place in Apple Maps. Always use this tool instead of listing places as plain text.
 
         Args:
-            query: What to search for (e.g. "супермаркет", "кофейня").
-            near: Reference location string (e.g. "Технопарк, Москва").
+            query: What to search for (e.g. "Lidl", "supermarket", "coffee shop", "pharmacy").
+            near: The reference location — use the user's current location if known,
+                  otherwise a landmark or city they mentioned (e.g. "Sant Estació, Barcelona").
             radius_km: Search radius in kilometres (default 3.0).
 
         Returns:
-            JSON string: {"text": "...", "actions": [...]} where each action
-            has command "open_maps" with the place address as the destination.
+            JSON string: {"text": "...", "actions": [...]} where each action has an
+            "Open in Maps" button for that specific place.
         """
         near_coords: tuple[float, float] | None = None
         try:
