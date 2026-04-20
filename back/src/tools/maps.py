@@ -14,7 +14,27 @@ from src.workflows import ors_client
 logger = logging.getLogger(__name__)
 
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+_NOMINATIM_GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
 _NOMINATIM_HEADERS = {"User-Agent": "Genie-AI/1.0"}
+
+
+def _nominatim_geocode(address: str) -> tuple[float, float] | None:
+    """Geocode an address via Nominatim (lon, lat). Used as fallback when ORS is unavailable."""
+    try:
+        resp = requests.get(
+            _NOMINATIM_GEOCODE_URL,
+            params={"q": address, "limit": 1, "format": "json"},
+            headers=_NOMINATIM_HEADERS,
+            timeout=8,
+        )
+        resp.raise_for_status()
+        results = resp.json()
+        if not results:
+            return None
+        return (float(results[0]["lon"]), float(results[0]["lat"]))
+    except Exception as exc:
+        logger.warning("[MapsTool] Nominatim geocode fallback failed for %r: %s", address, exc)
+        return None
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -102,6 +122,12 @@ class MapsTool(Toolkit):
             near_coords = ors_client.geocode(near)
         except Exception as exc:
             logger.warning("[MapsTool] ORS geocode failed for %r: %s", near, exc)
+
+        # Fall back to Nominatim geocoding if ORS is unavailable or returned nothing
+        if not near_coords:
+            near_coords = _nominatim_geocode(near)
+            if near_coords:
+                logger.info("[MapsTool] Used Nominatim geocode fallback for %r", near)
 
         params: dict = {
             "q": query,

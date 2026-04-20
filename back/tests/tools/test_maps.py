@@ -117,19 +117,34 @@ def test_search_places_no_results_returns_empty_actions():
     assert "nonexistent" in result["text"].lower() or "найден" in result["text"].lower()
 
 
-def test_search_places_fallback_when_geocode_fails():
-    """When ORS geocode fails, Nominatim is called without viewbox."""
+def test_search_places_fallback_when_both_geocodes_fail():
+    """When ORS and Nominatim geocode both fail, search runs without viewbox."""
     tool = make_tool()
     with patch("src.tools.maps.ors_client.geocode", side_effect=Exception("ORS down")), \
+         patch("src.tools.maps._nominatim_geocode", return_value=None), \
          patch("src.tools.maps.requests.get") as mock_get:
         mock_get.return_value.json.return_value = NOMINATIM_RESPONSE
         mock_get.return_value.raise_for_status = MagicMock()
         result = json.loads(tool.search_places(query="кофе", near="Москва"))
     # Should still return results (fallback path)
     assert len(result["actions"]) > 0
-    # Nominatim called without viewbox param
+    # Nominatim search called without viewbox param
     call_params = mock_get.call_args[1].get("params", mock_get.call_args[0][1] if len(mock_get.call_args[0]) > 1 else {})
     assert "viewbox" not in call_params
+
+
+def test_search_places_nominatim_geocode_fallback_adds_viewbox():
+    """When ORS fails but Nominatim geocode succeeds, viewbox is added to the search."""
+    tool = make_tool()
+    with patch("src.tools.maps.ors_client.geocode", side_effect=Exception("ORS down")), \
+         patch("src.tools.maps._nominatim_geocode", return_value=(37.62, 55.75)), \
+         patch("src.tools.maps.requests.get") as mock_get:
+        mock_get.return_value.json.return_value = NOMINATIM_RESPONSE
+        mock_get.return_value.raise_for_status = MagicMock()
+        result = json.loads(tool.search_places(query="кофе", near="Москва"))
+    assert len(result["actions"]) > 0
+    call_params = mock_get.call_args[1].get("params", mock_get.call_args[0][1] if len(mock_get.call_args[0]) > 1 else {})
+    assert "viewbox" in call_params
 
 
 def test_search_places_url_uses_coordinates_not_address():
