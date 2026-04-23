@@ -666,15 +666,25 @@ export function ChatProvider({
                 }
             }
 
-            // Read location for agent context
+            // Read location for agent context.
+            // If user attached a custom location context item, it takes precedence
+            // over the stored location so the agent operates on the chosen point.
             let agentLocation: string | undefined;
-            try {
-                const loc = await getStoredLocation();
-                if (loc.shareWithAgent) {
-                    agentLocation = loc.displayName;
+            const attachedLocation = contextItems.find(ci => ci.sourceType === 'location');
+            if (attachedLocation) {
+                const { lat, lon } = attachedLocation.metadata ?? {};
+                agentLocation = lat != null && lon != null
+                    ? `${attachedLocation.title} (${Number(lat).toFixed(6)},${Number(lon).toFixed(6)})`
+                    : attachedLocation.title;
+            } else {
+                try {
+                    const loc = await getStoredLocation();
+                    if (loc.shareWithAgent) {
+                        agentLocation = loc.displayName;
+                    }
+                } catch {
+                    // non-critical
                 }
-            } catch {
-                // non-critical
             }
 
             socket.sendMessage(

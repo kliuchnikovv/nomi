@@ -1513,6 +1513,15 @@ class RedisSession:
                         context_lines.append(f"📝 Note: {title}")
                         if preview:
                             context_lines.append(f"   Preview: {preview[:200]}")
+                    elif source_type == "location":
+                        lat = metadata.get("lat")
+                        lon = metadata.get("lon")
+                        if lat is not None and lon is not None:
+                            context_lines.append(
+                                f"📍 Location: {title} (coordinates: {lat},{lon})"
+                            )
+                        else:
+                            context_lines.append(f"📍 Location: {title}")
                     else:
                         context_lines.append(f"📎 {source_type.title()}: {title}")
 
