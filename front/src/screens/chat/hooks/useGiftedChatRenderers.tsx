@@ -302,6 +302,7 @@ export function useGiftedChatRenderers({
                                 borderBottomRightRadius: 18,
                                 borderBottomLeftRadius: 4,
                                 marginBottom: 2,
+                                paddingHorizontal: 8,
                             },
                         }}
                         textStyle={{
