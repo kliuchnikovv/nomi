@@ -26,6 +26,7 @@ const palette: ThemePalette = {
 export const visualStudioLightTheme: ThemeDescriptor = {
     id: 'visualStudioLight',
     name: 'Light (Visual Studio)',
+    variant: 'light',
     palette: palette,
     colors: {
         attention: palette.red,

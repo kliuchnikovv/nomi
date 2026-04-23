@@ -26,6 +26,7 @@ const palette: ThemePalette = {
 export const oneDarkTheme: ThemeDescriptor = {
     id: 'oneDark',
     name: 'One Dark',
+    variant: 'dark',
     palette: palette,
     colors: {
         attention: palette.red,

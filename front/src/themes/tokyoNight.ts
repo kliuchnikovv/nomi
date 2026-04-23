@@ -26,6 +26,7 @@ const palette: ThemePalette = {
 export const tokyoNightTheme: ThemeDescriptor = {
     id: 'tokyoNight',
     name: 'Tokyo Night',
+    variant: 'dark',
     palette: palette,
     colors: {
         attention: palette.red,

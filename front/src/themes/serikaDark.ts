@@ -26,6 +26,7 @@ const palette: ThemePalette = {
 export const serikaDarkTheme: ThemeDescriptor = {
     id: 'serikaDark',
     name: 'Serika Dark',
+    variant: 'dark',
     palette: palette,
     colors: {
         attention: palette.red,

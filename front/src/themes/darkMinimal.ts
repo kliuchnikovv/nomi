@@ -63,6 +63,7 @@ const effects: ThemeEffects = {
 export const darkMinimalTheme: ThemeDescriptor = {
     id: 'darkMinimal',
     name: 'Dark Minimal',
+    variant: 'dark',
     palette: palette,
     colors: {
         attention: palette.red,
