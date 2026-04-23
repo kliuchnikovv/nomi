@@ -174,6 +174,38 @@ const MessageScreen = React.memo(function MessageScreen(props: Props) {
                     })}
                 </View>
             )}
+            {props.message.context_items && props.message.context_items.some(ci => ci.sourceType === 'location') && (
+                <View style={{ marginTop: 8, gap: 6 }}>
+                    {props.message.context_items
+                        .filter(ci => ci.sourceType === 'location')
+                        .map(ci => (
+                            <View
+                                key={ci.id}
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    backgroundColor: 'rgba(52, 168, 83, 0.15)',
+                                    borderRadius: 10,
+                                    padding: 8,
+                                    gap: 8,
+                                }}
+                            >
+                                <Text style={{ fontSize: 18 }}>📍</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: theme.textPrimary, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
+                                        {ci.title}
+                                    </Text>
+                                    {ci.metadata?.lat != null && (
+                                        <Text style={{ color: theme.textSecondary, fontSize: 11 }}>
+                                            {Number(ci.metadata.lat).toFixed(4)}, {Number(ci.metadata.lon).toFixed(4)}
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+                        ))
+                    }
+                </View>
+            )}
             {props.message.model && (
                 <Text style={styles.modelText}>Model: {props.message.model}</Text>
             )}
