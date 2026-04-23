@@ -16,6 +16,7 @@ import {
     EyeClosed,
     MagicWand,
     Code,
+    MapPin,
 } from 'iconoir-react-native';
 
 import {
@@ -50,6 +51,7 @@ import { getApiUrl, API_URL } from '../../../config';
 import { AVAILABLE_TEAMS, TeamDetails } from '../teams';
 import { ContextItem, ContextItemCard } from '../components/ContextItemCard';
 import { contextStore } from '../../../services/ContextStore';
+import { LocationPickerModal } from './LocationPickerModal';
 
 type Props = {
     onSend: (text: string) => void;
@@ -71,6 +73,7 @@ export default function ChatInput(props: Props) {
     const [teamMenuVisible, setTeamMenuVisible] = useState(false);
     const [plusMenuVisible, setPlusMenuVisible] = useState(false);
     const [detailMenuVisible, setDetailMenuVisible] = useState(false);
+    const [locationPickerVisible, setLocationPickerVisible] = useState(false);
 
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
 
@@ -401,6 +404,15 @@ export default function ChatInput(props: Props) {
                 onPress: () => executeWithDelay(takePhoto),
             },
             {
+                id: 'location',
+                label: 'Location',
+                icon: <MapPin width={20} height={20} color="#34A853" />,
+                onPress: () => {
+                    setPlusMenuVisible(false);
+                    setTimeout(() => setLocationPickerVisible(true), 300);
+                },
+            },
+            {
                 id: 'detail_level',
                 label: 'Detail Level',
                 icon: <Eye width={20} height={20} color={theme.accent} />,
@@ -418,6 +430,7 @@ export default function ChatInput(props: Props) {
             theme.accent,
             detailLevel,
             setDetailLevel,
+            setLocationPickerVisible,
         ],
     );
 
@@ -848,6 +861,10 @@ export default function ChatInput(props: Props) {
                 title="Select Detail Level"
             />
 
+            <LocationPickerModal
+                visible={locationPickerVisible}
+                onClose={() => setLocationPickerVisible(false)}
+            />
         </View>
     );
 }
