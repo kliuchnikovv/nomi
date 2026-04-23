@@ -123,7 +123,6 @@ export function LocationPickerModal({ visible, onClose }: Props) {
         header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
         title: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
         input: {
-            flex: 1,
             backgroundColor: theme.surface,
             borderRadius: 10,
             borderWidth: StyleSheet.hairlineWidth,
