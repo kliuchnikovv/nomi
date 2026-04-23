@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Platform, KeyboardAvoidingView, RefreshControl, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Platform, KeyboardAvoidingView, RefreshControl, Text, Pressable, StyleSheet, AppState } from 'react-native';
 import { useSharedValue, withSpring, withDelay, runOnJS } from 'react-native-reanimated';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,7 +53,7 @@ export function ChatDetailScreen() {
     const { user, token } = useAuth();
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
-    const { activeChat } = useMain();
+    const { activeChat, getChats } = useMain();
 
     const styles = useMemo(() => createStyles(theme), [theme]);
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
@@ -74,6 +74,9 @@ export function ChatDetailScreen() {
 
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);
+    const appStateRef = useRef(AppState.currentState);
+    const snapshotUpdatedAtRef = useRef<number>(0);
+    const shouldRefreshRef = useRef(false);
     const extraData = useMemo(() => {
         const lastMsg = messages[0];
         const lastId = lastMsg?.id || '';
@@ -112,6 +115,29 @@ export function ChatDetailScreen() {
             getMessages(chatId);
         }
     }, [chatId, isPluginThread, getMessages]);
+
+    useEffect(() => {
+        if (!chatId || chatId === emptyChatID || isPluginThread) return;
+        const sub = AppState.addEventListener('change', (nextState: 'active' | 'background' | 'inactive' | 'unknown' | 'extension') => {
+            if (nextState === 'background' || nextState === 'inactive') {
+                snapshotUpdatedAtRef.current = activeChat?.updated_at ?? 0;
+            } else if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+                shouldRefreshRef.current = true;
+                getChats({ preserveActiveChat: true });
+            }
+            appStateRef.current = nextState;
+        });
+        return () => sub.remove();
+    }, [chatId, isPluginThread, getChats, activeChat]);
+
+    useEffect(() => {
+        if (!shouldRefreshRef.current) return;
+        if (!chatId || chatId === emptyChatID || isPluginThread) return;
+        shouldRefreshRef.current = false;
+        if (activeChat && activeChat.updated_at > snapshotUpdatedAtRef.current) {
+            getMessages(chatId, { isRefresh: true });
+        }
+    }, [activeChat?.updated_at, chatId, isPluginThread, getMessages]);
 
     useEffect(() => {
         // Scan for dice roll tool calls
