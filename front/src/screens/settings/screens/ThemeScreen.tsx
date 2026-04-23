@@ -17,98 +17,164 @@ export function ThemeScreen() {
     const insets = useSafeAreaInsets();
 
     const { darkThemes, lightThemes } = useMemo(() => {
-        const all = Object.entries(themes).map(([key, d]) => ({ label: d.name, value: key as ThemeName }));
+        const all = Object.entries(themes).map(([key, d]) => ({
+            label: d.name,
+            value: key as ThemeName,
+        }));
         return {
             darkThemes: all.filter(t => themes[t.value].variant === 'dark'),
             lightThemes: all.filter(t => themes[t.value].variant === 'light'),
         };
     }, []);
 
-    const styles = useMemo(() => StyleSheet.create({
-        root: { flex: 1, backgroundColor: theme.background },
-        header: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingBottom: 12,
-            gap: 8,
-        },
-        backBtn: { padding: 4 },
-        title: { fontSize: 24, fontWeight: '700', color: theme.textPrimary },
-        body: { paddingHorizontal: 16, paddingTop: 8 },
-        option: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingVertical: 14,
-            paddingHorizontal: 16,
-            borderRadius: 12,
-            marginBottom: 8,
-            borderWidth: 2,
-        },
-        optionSelected: {
-            backgroundColor: theme.surfaceHighlight,
-            borderColor: theme.accent,
-        },
-        optionUnselected: {
-            backgroundColor: theme.surface,
-            borderColor: 'transparent',
-        },
-        swatch: {
-            width: 20,
-            height: 20,
-            borderRadius: 10,
-            marginRight: 12,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: theme.border,
-        },
-        optionLabel: { flex: 1, fontSize: 16, fontWeight: '500', color: theme.textPrimary },
-        sectionHeader: {
-            fontSize: 13,
-            fontWeight: '600',
-            color: theme.textSecondary,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            marginTop: 16,
-            marginBottom: 8,
-            paddingHorizontal: 4,
-        },
-    }), [theme, palette]);
+    const styles = useMemo(
+        () =>
+            StyleSheet.create({
+                root: { flex: 1, backgroundColor: theme.background },
+                header: {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 16,
+                    paddingBottom: 12,
+                    gap: 8,
+                },
+                backBtn: { padding: 4 },
+                title: {
+                    fontSize: 24,
+                    fontWeight: '700',
+                    color: theme.textPrimary,
+                },
+                body: { paddingHorizontal: 16, paddingTop: 8 },
+                option: {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    marginBottom: 8,
+                    borderWidth: 2,
+                },
+                optionSelected: {
+                    backgroundColor: theme.surfaceHighlight,
+                    borderColor: theme.accent,
+                },
+                optionUnselected: {
+                    backgroundColor: theme.surface,
+                    borderColor: 'transparent',
+                },
+                swatch: {
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    marginRight: 12,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: theme.border,
+                },
+                optionLabel: {
+                    flex: 1,
+                    fontSize: 16,
+                    fontWeight: '500',
+                    color: theme.textPrimary,
+                },
+                sectionHeader: {
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: theme.textSecondary,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    marginTop: 16,
+                    marginBottom: 8,
+                    paddingHorizontal: 4,
+                },
+            }),
+        [theme, palette],
+    );
 
     return (
         <View style={[styles.root, { paddingTop: insets.top }]}>
             <View style={styles.header}>
-                <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <NavArrowLeft width={24} height={24} color={theme.textPrimary} />
+                <Pressable
+                    onPress={() => navigation.goBack()}
+                    style={styles.backBtn}
+                >
+                    <NavArrowLeft
+                        width={24}
+                        height={24}
+                        color={theme.textPrimary}
+                    />
                 </Pressable>
                 <Text style={styles.title}>Theme</Text>
             </View>
-            <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-                <Text style={styles.sectionHeader}>Тёмные</Text>
-                {darkThemes.map((t) => (
+            <ScrollView
+                style={styles.body}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+            >
+                <Text style={styles.sectionHeader}>Dark</Text>
+                {darkThemes.map(t => (
                     <Pressable
                         key={t.value}
-                        onPress={() => { setTheme(t.value); }}
-                        style={[styles.option, themeName === t.value ? styles.optionSelected : styles.optionUnselected]}
+                        onPress={() => {
+                            setTheme(t.value);
+                        }}
+                        style={[
+                            styles.option,
+                            themeName === t.value
+                                ? styles.optionSelected
+                                : styles.optionUnselected,
+                        ]}
                     >
-                        <View style={[styles.swatch, { backgroundColor: themes[t.value].colors.accent }]} />
+                        <View
+                            style={[
+                                styles.swatch,
+                                {
+                                    backgroundColor:
+                                        themes[t.value].colors.accent,
+                                },
+                            ]}
+                        />
                         <Text style={styles.optionLabel}>{t.label}</Text>
                         {themeName === t.value && (
-                            <Check width={18} height={18} color={theme.accent} />
+                            <Check
+                                width={18}
+                                height={18}
+                                color={theme.accent}
+                            />
                         )}
                     </Pressable>
                 ))}
 
-                <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Светлые</Text>
-                {lightThemes.map((t) => (
+                <Text style={[styles.sectionHeader, { marginTop: 24 }]}>
+                    Light
+                </Text>
+                {lightThemes.map(t => (
                     <Pressable
                         key={t.value}
-                        onPress={() => { setTheme(t.value); }}
-                        style={[styles.option, themeName === t.value ? styles.optionSelected : styles.optionUnselected]}
+                        onPress={() => {
+                            setTheme(t.value);
+                        }}
+                        style={[
+                            styles.option,
+                            themeName === t.value
+                                ? styles.optionSelected
+                                : styles.optionUnselected,
+                        ]}
                     >
-                        <View style={[styles.swatch, { backgroundColor: themes[t.value].colors.accent }]} />
+                        <View
+                            style={[
+                                styles.swatch,
+                                {
+                                    backgroundColor:
+                                        themes[t.value].colors.accent,
+                                },
+                            ]}
+                        />
                         <Text style={styles.optionLabel}>{t.label}</Text>
                         {themeName === t.value && (
-                            <Check width={18} height={18} color={theme.accent} />
+                            <Check
+                                width={18}
+                                height={18}
+                                color={theme.accent}
+                            />
                         )}
                     </Pressable>
                 ))}
