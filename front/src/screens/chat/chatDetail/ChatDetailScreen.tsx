@@ -75,8 +75,9 @@ export function ChatDetailScreen() {
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);
     const appStateRef = useRef(AppState.currentState);
-    const snapshotUpdatedAtRef = useRef<number>(0);
+    const snapshotUpdatedAtRef = useRef<number>(activeChat?.updated_at ?? 0);
     const shouldRefreshRef = useRef(false);
+    const activeChatRef = useRef(activeChat);
     const extraData = useMemo(() => {
         const lastMsg = messages[0];
         const lastId = lastMsg?.id || '';
@@ -111,6 +112,10 @@ export function ChatDetailScreen() {
     }, [assistantWorking, chatMode, selectedTeamId]);
 
     useEffect(() => {
+        activeChatRef.current = activeChat;
+    }, [activeChat]);
+
+    useEffect(() => {
         if (chatId && chatId !== emptyChatID && !isPluginThread) {
             getMessages(chatId);
         }
@@ -120,7 +125,7 @@ export function ChatDetailScreen() {
         if (!chatId || chatId === emptyChatID || isPluginThread) return;
         const sub = AppState.addEventListener('change', (nextState: 'active' | 'background' | 'inactive' | 'unknown' | 'extension') => {
             if (nextState === 'background' || nextState === 'inactive') {
-                snapshotUpdatedAtRef.current = activeChat?.updated_at ?? 0;
+                snapshotUpdatedAtRef.current = activeChatRef.current?.updated_at ?? 0;
             } else if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
                 shouldRefreshRef.current = true;
                 getChats({ preserveActiveChat: true });
@@ -128,7 +133,7 @@ export function ChatDetailScreen() {
             appStateRef.current = nextState;
         });
         return () => sub.remove();
-    }, [chatId, isPluginThread, getChats, activeChat]);
+    }, [chatId, isPluginThread, getChats]);
 
     useEffect(() => {
         if (!shouldRefreshRef.current) return;
