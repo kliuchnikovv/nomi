@@ -430,7 +430,6 @@ export default function ChatInput(props: Props) {
             theme.accent,
             detailLevel,
             setDetailLevel,
-            setLocationPickerVisible,
         ],
     );
 
