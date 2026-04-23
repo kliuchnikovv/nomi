@@ -15,8 +15,6 @@ import { MapPin, XmarkCircle } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import {
     NominatimResult,
-    UserLocation,
-    getStoredLocation,
     nominatimResultToLocation,
     searchLocations,
     updateLocationFromGPS,
@@ -31,7 +29,6 @@ type Props = {
 export function LocationPickerModal({ visible, onClose }: Props) {
     const { theme } = useTheme();
 
-    const [savedLocation, setSavedLocation] = useState<UserLocation | null>(null);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<NominatimResult[]>([]);
     const [searching, setSearching] = useState(false);
@@ -39,13 +36,8 @@ export function LocationPickerModal({ visible, onClose }: Props) {
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isMountedRef = useRef(true);
 
-    // Load saved location when modal opens
     useEffect(() => {
-        if (visible) {
-            getStoredLocation().then(loc => {
-                if (isMountedRef.current) setSavedLocation(loc);
-            }).catch(() => {});
-        } else {
+        if (!visible) {
             setQuery('');
             setResults([]);
         }
@@ -68,11 +60,6 @@ export function LocationPickerModal({ visible, onClose }: Props) {
         });
         onClose();
     }, [onClose]);
-
-    const handleUseSaved = useCallback(() => {
-        if (!savedLocation) return;
-        attachLocation(savedLocation.displayName, savedLocation.lat, savedLocation.lon);
-    }, [savedLocation, attachLocation]);
 
     const handleQueryChange = useCallback((text: string) => {
         setQuery(text);
@@ -145,25 +132,6 @@ export function LocationPickerModal({ visible, onClose }: Props) {
             letterSpacing: 0.8,
             marginBottom: 8,
         },
-        savedCard: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: theme.surface,
-            borderRadius: 12,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: theme.border,
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            gap: 10,
-            marginBottom: 20,
-        },
-        savedCardText: { flex: 1, color: theme.textPrimary, fontSize: 15 },
-        savedCardHint: { fontSize: 12, color: theme.fadedText, marginTop: 1 },
-        divider: {
-            height: StyleSheet.hairlineWidth,
-            backgroundColor: theme.border,
-            marginBottom: 16,
-        },
         input: {
             backgroundColor: theme.surface,
             borderRadius: 10,
@@ -221,24 +189,6 @@ export function LocationPickerModal({ visible, onClose }: Props) {
                             </Pressable>
                         </View>
 
-                        {/* My saved location */}
-                        {savedLocation && (
-                            <>
-                                <Text style={styles.sectionLabel}>My Location</Text>
-                                <Pressable style={styles.savedCard} onPress={handleUseSaved}>
-                                    <MapPin width={20} height={20} color={theme.accent} />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.savedCardText} numberOfLines={1}>
-                                            {savedLocation.displayName}
-                                        </Text>
-                                        <Text style={styles.savedCardHint}>Tap to attach</Text>
-                                    </View>
-                                </Pressable>
-                                <View style={styles.divider} />
-                            </>
-                        )}
-
-                        {/* Search for a custom point */}
                         <Text style={styles.sectionLabel}>Search a Place</Text>
                         <TextInput
                             style={styles.input}
@@ -246,7 +196,7 @@ export function LocationPickerModal({ visible, onClose }: Props) {
                             onChangeText={handleQueryChange}
                             placeholder="Enter city, address..."
                             placeholderTextColor={theme.fadedText}
-                            autoFocus={!savedLocation}
+                            autoFocus
                         />
 
                         {searching && (
