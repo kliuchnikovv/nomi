@@ -52,7 +52,7 @@ export type Message = {
 
 export type ContextItem = {
     id: string;
-    sourceType: 'email' | 'document' | 'image' | 'task' | 'note';
+    sourceType: 'email' | 'document' | 'image' | 'task' | 'note' | 'location';
     title: string;
     preview?: string;
     metadata?: Record<string, any>;
