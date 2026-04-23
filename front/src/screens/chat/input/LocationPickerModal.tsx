@@ -2,14 +2,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     ActivityIndicator,
     FlatList,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     Pressable,
     StyleSheet,
     Text,
     TextInput,
     View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapPin, XmarkCircle } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import {
@@ -27,7 +28,6 @@ type Props = {
 
 export function LocationPickerModal({ visible, onClose }: Props) {
     const { theme } = useTheme();
-    const insets = useSafeAreaInsets();
 
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<NominatimResult[]>([]);
@@ -109,7 +109,7 @@ export function LocationPickerModal({ visible, onClose }: Props) {
             borderTopRightRadius: 20,
             paddingTop: 16,
             paddingHorizontal: 16,
-            paddingBottom: insets.bottom + 16,
+            paddingBottom: 16,
             maxHeight: '80%',
         },
         handle: {
@@ -162,10 +162,14 @@ export function LocationPickerModal({ visible, onClose }: Props) {
             marginTop: 8,
         },
         gpsBtnText: { color: theme.textPrimary, fontWeight: '500', fontSize: 16 },
-    }), [theme, insets.bottom]);
+    }), [theme]);
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
             <Pressable style={styles.overlay} onPress={onClose}>
                 <Pressable style={styles.sheet} onPress={() => {}}>
                     <View style={styles.handle} />
@@ -219,6 +223,7 @@ export function LocationPickerModal({ visible, onClose }: Props) {
                     </Pressable>
                 </Pressable>
             </Pressable>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }
