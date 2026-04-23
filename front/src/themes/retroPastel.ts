@@ -28,6 +28,7 @@ const palette: ThemePalette = {
 export const retroPastelTheme: ThemeDescriptor = {
     id: 'retroPastel',
     name: 'Retro Pastel',
+    variant: 'light',
     palette: palette,
     colors: {
         attention: palette.red,

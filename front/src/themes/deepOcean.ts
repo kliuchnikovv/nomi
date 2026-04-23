@@ -26,6 +26,7 @@ const palette: ThemePalette = {
 export const deepOceanTheme: ThemeDescriptor = {
     id: 'deepOcean',
     name: 'Deep Ocean',
+    variant: 'dark',
     palette: palette,
     colors: {
         attention: palette.cyan,
