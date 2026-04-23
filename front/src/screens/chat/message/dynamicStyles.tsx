@@ -367,6 +367,25 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
             fontWeight: '600',
             color: theme.textSecondary,
         },
+        locationContainer: {
+            marginTop: 8,
+            gap: 6,
+        },
+        locationPill: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: 'rgba(52, 168, 83, 0.15)',
+            borderRadius: 10,
+            padding: 8,
+            gap: 8,
+        },
+        locationTitle: {
+            fontSize: 13,
+            fontWeight: '600',
+        },
+        locationCoords: {
+            fontSize: 11,
+        },
     });
 
     // Cache the result (limit cache size to prevent memory leaks)

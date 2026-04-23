@@ -26,6 +26,7 @@ const palette: ThemePalette = {
 export const retroSunsetTheme: ThemeDescriptor = {
     id: 'retroSunset',
     name: 'Retro Sunset',
+    variant: 'dark',
     palette: palette,
     colors: {
         attention: palette.red,

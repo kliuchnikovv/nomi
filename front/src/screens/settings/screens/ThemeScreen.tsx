@@ -16,10 +16,13 @@ export function ThemeScreen() {
     const palette = themes[themeName].palette;
     const insets = useSafeAreaInsets();
 
-    const themesList: { label: string; value: ThemeName }[] = useMemo(
-        () => Object.entries(themes).map(([key, d]) => ({ label: d.name, value: key as ThemeName })),
-        [],
-    );
+    const { darkThemes, lightThemes } = useMemo(() => {
+        const all = Object.entries(themes).map(([key, d]) => ({ label: d.name, value: key as ThemeName }));
+        return {
+            darkThemes: all.filter(t => themes[t.value].variant === 'dark'),
+            lightThemes: all.filter(t => themes[t.value].variant === 'light'),
+        };
+    }, []);
 
     const styles = useMemo(() => StyleSheet.create({
         root: { flex: 1, backgroundColor: theme.background },
@@ -59,6 +62,16 @@ export function ThemeScreen() {
             borderColor: theme.border,
         },
         optionLabel: { flex: 1, fontSize: 16, fontWeight: '500', color: theme.textPrimary },
+        sectionHeader: {
+            fontSize: 13,
+            fontWeight: '600',
+            color: theme.textSecondary,
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+            marginTop: 16,
+            marginBottom: 8,
+            paddingHorizontal: 4,
+        },
     }), [theme, palette]);
 
     return (
@@ -70,12 +83,26 @@ export function ThemeScreen() {
                 <Text style={styles.title}>Theme</Text>
             </View>
             <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
-                {themesList.map((t) => (
+                <Text style={styles.sectionHeader}>Тёмные</Text>
+                {darkThemes.map((t) => (
                     <Pressable
                         key={t.value}
-                        onPress={() => {
-                            setTheme(t.value);
-                        }}
+                        onPress={() => { setTheme(t.value); }}
+                        style={[styles.option, themeName === t.value ? styles.optionSelected : styles.optionUnselected]}
+                    >
+                        <View style={[styles.swatch, { backgroundColor: themes[t.value].colors.accent }]} />
+                        <Text style={styles.optionLabel}>{t.label}</Text>
+                        {themeName === t.value && (
+                            <Check width={18} height={18} color={theme.accent} />
+                        )}
+                    </Pressable>
+                ))}
+
+                <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Светлые</Text>
+                {lightThemes.map((t) => (
+                    <Pressable
+                        key={t.value}
+                        onPress={() => { setTheme(t.value); }}
                         style={[styles.option, themeName === t.value ? styles.optionSelected : styles.optionUnselected]}
                     >
                         <View style={[styles.swatch, { backgroundColor: themes[t.value].colors.accent }]} />

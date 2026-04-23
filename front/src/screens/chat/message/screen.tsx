@@ -174,6 +174,29 @@ const MessageScreen = React.memo(function MessageScreen(props: Props) {
                     })}
                 </View>
             )}
+            {(() => {
+                const locationItems = props.message.context_items?.filter(ci => ci.sourceType === 'location') ?? [];
+                if (locationItems.length === 0) return null;
+                return (
+                    <View style={styles.locationContainer}>
+                        {locationItems.map(ci => (
+                            <View key={ci.id} style={styles.locationPill}>
+                                <Text style={{ fontSize: 18 }}>📍</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.locationTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                                        {ci.title}
+                                    </Text>
+                                    {ci.metadata?.lat != null && (
+                                        <Text style={[styles.locationCoords, { color: theme.textSecondary }]}>
+                                            {Number(ci.metadata.lat).toFixed(4)}, {Number(ci.metadata.lon).toFixed(4)}
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                );
+            })()}
             {props.message.model && (
                 <Text style={styles.modelText}>Model: {props.message.model}</Text>
             )}

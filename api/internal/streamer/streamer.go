@@ -250,6 +250,7 @@ func (streamer *Streamer) Stream(client *Socket) {
 					ToolCalls: currentMessageMetadata.ToolCalls,
 					CreatedAt: time.Now().UTC(),
 				})
+				_ = streamer.storage.TouchChatActivity(ctx, frame.ChatID, time.Now().UTC())
 			}
 
 			// Reset metadata

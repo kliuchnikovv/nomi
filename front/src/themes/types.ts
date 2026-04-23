@@ -75,6 +75,7 @@ export type ThemeEffects = {
 export type ThemeDescriptor = {
     id: ThemeName;
     name: string;
+    variant: 'light' | 'dark';
     palette: ThemePalette;
     colors: ThemeColors;
     effects?: ThemeEffects;
