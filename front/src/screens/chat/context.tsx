@@ -1,5 +1,6 @@
 import { Frame, Message } from '../main/models';
 import { apiClient } from '../../apiClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, {
     createContext,
     useContext,
@@ -220,8 +221,19 @@ export function ChatProvider({
         useState<boolean>(true);
     const [detailLevel, setDetailLevelInternal] = useState<DetailLevel>('all');
 
+    // Load persisted detail level on mount
+    useEffect(() => {
+        AsyncStorage.getItem('@genie_detail_level').then(saved => {
+            if (saved && ['hide', 'tool_calls', 'think', 'all'].includes(saved)) {
+                setDetailLevel(saved as DetailLevel);
+            }
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const setDetailLevel = useCallback((level: DetailLevel) => {
         setDetailLevelInternal(level);
+        AsyncStorage.setItem('@genie_detail_level', level);
         switch (level) {
             case 'hide':
                 setShowToolCalls(false);

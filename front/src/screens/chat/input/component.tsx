@@ -79,7 +79,6 @@ export default function ChatInput(props: Props) {
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
     const styles = useMemo(() => createStyles(theme), [theme]);
-
     const {
         selectedModel,
         setSelectedModel,
@@ -580,45 +579,15 @@ export default function ChatInput(props: Props) {
         }));
     }, [selectedTeamId, selectTeam, theme.accent]);
 
-    const [isKeyboardVisible, setKeyboardVisible] = useState(false);
     const isSendDisabled =
         ((value?.length ?? 0) === 0 &&
             attachments.length === 0 &&
             contextItems.length === 0) ||
         attachments.some(a => a.loading);
 
-    useEffect(() => {
-        const keyboardDidShowListener = Keyboard.addListener(
-            'keyboardDidShow',
-            () => {
-                setKeyboardVisible(true);
-            },
-        );
-        const keyboardDidHideListener = Keyboard.addListener(
-            'keyboardDidHide',
-            () => {
-                setKeyboardVisible(false);
-            },
-        );
-
-        return () => {
-            keyboardDidHideListener.remove();
-            keyboardDidShowListener.remove();
-        };
-    }, []);
-
     return (
         <View style={styles.container}>
-            <View
-                style={[
-                    styles.inputWrapper,
-                    {
-                        paddingBottom: isKeyboardVisible
-                            ? 12
-                            : Math.max(insets.bottom, 12),
-                    },
-                ]}
-            >
+            <View style={[styles.inputWrapper, { paddingBottom: 12 }]}>
                 {/* Context Items Preview */}
                 {contextItems.length > 0 && (
                     <ScrollView

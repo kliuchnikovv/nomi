@@ -50,7 +50,12 @@ export function GenerationStatusBar({ status, theme }: Props) {
         <Animated.View
             style={[
                 styles.container,
-                { backgroundColor: theme.background, opacity, transform: [{ translateY }] },
+                {
+                    backgroundColor: theme.background,
+                    opacity,
+                    transform: [{ translateY }],
+                    paddingVertical: status !== null ? 6 : 0,
+                },
             ]}
             pointerEvents="none"
         >
@@ -69,8 +74,6 @@ export function GenerationStatusBar({ status, theme }: Props) {
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 16,
-        paddingVertical: 6,
-        minHeight: 32,
     },
     row: {
         flexDirection: 'row',

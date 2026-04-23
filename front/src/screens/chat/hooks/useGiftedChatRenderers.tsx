@@ -1,6 +1,19 @@
 import React, { useCallback, useMemo, memo, useEffect, useRef } from 'react';
-import { Linking, View, Text, ActionSheetIOS, Pressable, StyleSheet, Animated } from 'react-native';
-import ReAnimated, { useAnimatedStyle, useSharedValue, SharedValue } from 'react-native-reanimated';
+import {
+    Linking,
+    View,
+    Text,
+    ActionSheetIOS,
+    Pressable,
+    StyleSheet,
+    Animated,
+    useWindowDimensions,
+} from 'react-native';
+import ReAnimated, {
+    useAnimatedStyle,
+    useSharedValue,
+    SharedValue,
+} from 'react-native-reanimated';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Bubble, Message, MessageText } from 'react-native-gifted-chat';
 import Markdown from 'react-native-markdown-display';
@@ -84,7 +97,7 @@ const FastText = memo(function FastText({
                         duration: 400,
                         useNativeDriver: true,
                     }),
-                ])
+                ]),
             );
             animation.start();
             return () => animation.stop();
@@ -96,7 +109,9 @@ const FastText = memo(function FastText({
             <Text style={style}>
                 {text}
                 {isStreaming && (
-                    <Animated.Text style={{ opacity: cursorOpacity }}>▋</Animated.Text>
+                    <Animated.Text style={{ opacity: cursorOpacity }}>
+                        ▋
+                    </Animated.Text>
                 )}
             </Text>
         </Pressable>
@@ -104,10 +119,19 @@ const FastText = memo(function FastText({
 });
 
 // Memoized system message bubble
-const SystemMessageBubble = memo(function SystemMessageBubble({ text, theme }: { text: string; theme: any }) {
+const SystemMessageBubble = memo(function SystemMessageBubble({
+    text,
+    theme,
+}: {
+    text: string;
+    theme: any;
+}) {
     const [expanded, setExpanded] = React.useState(false);
     const { palette } = useTheme();
-    const dynamicStyles = useMemo(() => createStyles(theme, palette), [theme, palette]);
+    const dynamicStyles = useMemo(
+        () => createStyles(theme, palette),
+        [theme, palette],
+    );
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
 
     return (
@@ -115,15 +139,32 @@ const SystemMessageBubble = memo(function SystemMessageBubble({ text, theme }: {
             <View style={dynamicStyles.toolCallsContainer}>
                 <Pressable
                     onPress={() => setExpanded(!expanded)}
-                    style={({ pressed }) => [dynamicStyles.toolCallsHeader, pressed && { opacity: 0.7 }]}
+                    style={({ pressed }) => [
+                        dynamicStyles.toolCallsHeader,
+                        pressed && { opacity: 0.7 },
+                    ]}
                 >
-                    <Text style={dynamicStyles.toolCallsHeaderText}>System Activity</Text>
-                    <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }} />
+                    <Text style={dynamicStyles.toolCallsHeaderText}>
+                        System Activity
+                    </Text>
+                    <NavArrowDown
+                        width={12}
+                        height={12}
+                        color={theme.textSecondary}
+                        style={{
+                            transform: [
+                                { rotate: expanded ? '0deg' : '-90deg' },
+                            ],
+                        }}
+                    />
                 </Pressable>
                 {expanded && (
                     <View style={dynamicStyles.toolCallsList}>
                         <View style={dynamicStyles.toolCallItem}>
-                            <Markdown style={markdownStyles as any} rules={stableMarkdownRules}>
+                            <Markdown
+                                style={markdownStyles as any}
+                                rules={stableMarkdownRules}
+                            >
                                 {text}
                             </Markdown>
                         </View>
@@ -162,6 +203,7 @@ export function useGiftedChatRenderers({
     onMessageAction,
     inputAnimY,
 }: GiftedChatRenderersParams) {
+    const { width: windowWidth } = useWindowDimensions();
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
     const markdownStyles = useMemo(() => createMarkdownStyles(theme), [theme]);
     const simpleStyles = useMemo(() => createSimpleTextStyles(theme), [theme]);
@@ -173,7 +215,15 @@ export function useGiftedChatRenderers({
     const inputToolbarAnimStyle = useAnimatedStyle(() => ({
         transform: [{ translateY: resolvedInputAnimY.value }],
     }));
-    const { showToolCalls, isRateLimited, availableModels, setSelectedModel, setIsRateLimited, setError, generationStatus } = useChat();
+    const {
+        showToolCalls,
+        isRateLimited,
+        availableModels,
+        setSelectedModel,
+        setIsRateLimited,
+        setError,
+        generationStatus,
+    } = useChat();
 
     // Stable handlers - use refs to avoid dependency changes
     const onSendRef = React.useRef(onSend);
@@ -204,11 +254,11 @@ export function useGiftedChatRenderers({
                 cancelButtonIndex: 1,
                 userInterfaceStyle: 'dark',
             },
-            (buttonIndex) => {
+            buttonIndex => {
                 if (buttonIndex === 0) {
                     Clipboard.setString(messageText);
                 }
-            }
+            },
         );
     }, []);
 
@@ -221,11 +271,11 @@ export function useGiftedChatRenderers({
                 cancelButtonIndex: 1,
                 userInterfaceStyle: 'dark',
             },
-            (buttonIndex) => {
+            buttonIndex => {
                 if (buttonIndex === 0) {
                     Clipboard.setString(text);
                 }
-            }
+            },
         );
     }, []);
 
@@ -247,12 +297,10 @@ export function useGiftedChatRenderers({
                                 marginBottom: 2,
                             },
                             left: {
-                                backgroundColor: theme.surface,
+                                backgroundColor: 'transparent',
                                 borderRadius: 18,
                                 borderBottomRightRadius: 18,
                                 borderBottomLeftRadius: 4,
-                                paddingVertical: 12,
-                                paddingHorizontal: 16,
                                 marginBottom: 2,
                             },
                         }}
@@ -280,11 +328,12 @@ export function useGiftedChatRenderers({
                             right: { marginBottom: 4 },
                             left: { marginBottom: 4 },
                         }}
+                        renderTime={() => null}
                     />
                 </View>
             );
         },
-        [theme, handleLongPress]
+        [theme, handleLongPress],
     );
 
     const handleChangeModel = useCallback(() => {
@@ -296,13 +345,13 @@ export function useGiftedChatRenderers({
                 cancelButtonIndex: modelNames.length,
                 userInterfaceStyle: 'dark',
             },
-            (buttonIndex) => {
+            buttonIndex => {
                 if (buttonIndex < modelNames.length) {
                     setSelectedModel(availableModels[buttonIndex].id, true);
                     setIsRateLimited(false);
                     setError(null);
                 }
-            }
+            },
         );
     }, [availableModels, setSelectedModel, setIsRateLimited, setError]);
 
@@ -310,61 +359,104 @@ export function useGiftedChatRenderers({
     const renderInputToolbar = useCallback(
         (_props: any) => {
             return (
-                <ReAnimated.View style={[{ backgroundColor: theme.background }, inputToolbarAnimStyle]}>
-                    {!error && <GenerationStatusBar status={generationStatus} theme={theme} />}
+                <ReAnimated.View
+                    style={[
+                        { backgroundColor: theme.background },
+                        inputToolbarAnimStyle,
+                    ]}
+                >
+                    {!error && (
+                        <GenerationStatusBar
+                            status={generationStatus}
+                            theme={theme}
+                        />
+                    )}
                     <ErrorBanner
                         error={error}
                         onRetry={onRetry}
                         onDismiss={onDismissError}
                         theme={chatTheme}
-                        onChangeModel={isRateLimited ? handleChangeModel : undefined}
+                        onChangeModel={
+                            isRateLimited ? handleChangeModel : undefined
+                        }
                     />
                     <ChatInput onSend={onSendRef.current} />
                 </ReAnimated.View>
             );
         },
-        [error, onRetry, onDismissError, chatTheme, isRateLimited, handleChangeModel, theme.background, generationStatus, theme, inputToolbarAnimStyle]
+        [
+            error,
+            onRetry,
+            onDismissError,
+            chatTheme,
+            isRateLimited,
+            handleChangeModel,
+            theme.background,
+            generationStatus,
+            theme,
+            inputToolbarAnimStyle,
+        ],
     );
 
     // Stable message renderer
     const renderMessage = useCallback(
         (props: any) => {
-            const { currentMessage, combineWithPrevious, previousMessageToolCalls } = props;
-            
+            const {
+                currentMessage,
+                combineWithPrevious,
+                previousMessageToolCalls,
+            } = props;
+
             const attachments = currentMessage?.attachments;
             const hasAttachments = attachments && attachments.length > 0;
-            const showAttachmentsOutside = hasAttachments && attachmentPosition === 'outside';
+            const showAttachmentsOutside =
+                hasAttachments && attachmentPosition === 'outside';
 
             if (currentMessage.user._id === 'system') {
                 if (!showToolCalls) return null;
-                return <SystemMessageBubble text={currentMessage.text} theme={theme} />;
+                return (
+                    <SystemMessageBubble
+                        text={currentMessage.text}
+                        theme={theme}
+                    />
+                );
             }
 
             // If this message should be combined with previous, pass the tool_calls for merging
-            const extendedProps = combineWithPrevious && previousMessageToolCalls
-                ? {
-                    ...props,
-                    // Merge tool_calls from previous message into current
-                    content_parts: [
-                        ...(previousMessageToolCalls.content_parts || []),
-                        ...(currentMessage.content_parts || []),
-                    ],
-                    tool_calls: [
-                        ...(previousMessageToolCalls.tool_calls || []),
-                        ...(currentMessage.tool_calls || []),
-                    ],
-                }
-                : props;
+            const extendedProps =
+                combineWithPrevious && previousMessageToolCalls
+                    ? {
+                          ...props,
+                          // Merge tool_calls from previous message into current
+                          content_parts: [
+                              ...(previousMessageToolCalls.content_parts || []),
+                              ...(currentMessage.content_parts || []),
+                          ],
+                          tool_calls: [
+                              ...(previousMessageToolCalls.tool_calls || []),
+                              ...(currentMessage.tool_calls || []),
+                          ],
+                      }
+                    : props;
 
+            const isAssistantMsg =
+                currentMessage.user._id === 'assistant';
+            const assistantMaxWidth = windowWidth * 0.9;
             return (
                 <View style={{ width: '100%' }}>
                     {showAttachmentsOutside && (
                         <View
                             style={{
-                                marginLeft: currentMessage.user._id === 'assistant' ? 0 : 'auto',
-                                marginRight: currentMessage.user._id === 'assistant' ? 'auto' : 0,
+                                marginLeft:
+                                    currentMessage.user._id === 'assistant'
+                                        ? 0
+                                        : 'auto',
+                                marginRight:
+                                    currentMessage.user._id === 'assistant'
+                                        ? 'auto'
+                                        : 0,
                                 marginBottom: 4,
-                                maxWidth: '80%',
+                                maxWidth: windowWidth * 0.8,
                                 paddingHorizontal: 10,
                             }}
                         >
@@ -377,14 +469,16 @@ export function useGiftedChatRenderers({
                     )}
                     <Message
                         {...extendedProps}
-                        containerStyle={{
-                            left: [{ maxWidth: assistantContainerMaxWidth, width: '100%' }],
-                        }}
+                        containerStyle={
+                            isAssistantMsg
+                                ? { left: [{ maxWidth: assistantMaxWidth }] }
+                                : undefined
+                        }
                     />
                 </View>
             );
         },
-        [assistantContainerMaxWidth, attachmentPosition, theme, showToolCalls]
+        [assistantContainerMaxWidth, attachmentPosition, theme, showToolCalls, windowWidth],
     );
 
     // Stable message text renderer
@@ -396,7 +490,8 @@ export function useGiftedChatRenderers({
             const contextItems = props.currentMessage?.context_items;
             const hasAttachments = attachments && attachments.length > 0;
             const hasContextItems = contextItems && contextItems.length > 0;
-            const showAttachmentsInside = hasAttachments && attachmentPosition === 'inside';
+            const showAttachmentsInside =
+                hasAttachments && attachmentPosition === 'inside';
             const messageText = props.currentMessage?.text || '';
             const messageActions = props.currentMessage?.actions;
 
@@ -405,7 +500,8 @@ export function useGiftedChatRenderers({
                 isAssistant &&
                 messageText.length > 0 &&
                 !/[.!?。！？]\s*$/.test(messageText.trim()) &&
-                (!contentParts || contentParts.every((p: any) => p.type === 'text'));
+                (!contentParts ||
+                    contentParts.every((p: any) => p.type === 'text'));
 
             // Render attachments helper component
             const AttachmentsComponent = showAttachmentsInside ? (
@@ -431,13 +527,19 @@ export function useGiftedChatRenderers({
                 <MessageActions
                     actions={messageActions}
                     theme={theme}
-                    onActionPress={(action) => {
+                    onActionPress={action => {
                         if (action.url) {
                             Linking.openURL(action.url).catch(() => {});
                         } else if (action.prompt) {
                             onSendRef.current?.(action.prompt);
-                        } else if (onMessageActionRef.current && props.currentMessage?._id) {
-                            onMessageActionRef.current(String(props.currentMessage._id), action);
+                        } else if (
+                            onMessageActionRef.current &&
+                            props.currentMessage?._id
+                        ) {
+                            onMessageActionRef.current(
+                                String(props.currentMessage._id),
+                                action,
+                            );
                         }
                     }}
                 />
@@ -445,12 +547,15 @@ export function useGiftedChatRenderers({
 
             // Fast path: plain text content parts (most common during streaming)
             if (contentParts && contentParts.length > 0) {
-                const allPlainText = contentParts.every((p: any) => p.type === 'text');
+                const allPlainText = contentParts.every(
+                    (p: any) => p.type === 'text',
+                );
 
                 if (allPlainText && isAssistant) {
                     // During streaming: use FastText (plain Text component) for maximum speed
                     // After streaming: use Markdown only if text contains markdown syntax
-                    const shouldUseFastText = isStreaming || !hasMarkdown(messageText);
+                    const shouldUseFastText =
+                        isStreaming || !hasMarkdown(messageText);
 
                     if (shouldUseFastText) {
                         return (
@@ -472,23 +577,32 @@ export function useGiftedChatRenderers({
                         <View style={{ width: '100%' }}>
                             {ContextItemsComponent}
                             {AttachmentsComponent}
-                            <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
+                            <Pressable
+                                onLongPress={() =>
+                                    handleTextLongPress(messageText)
+                                }
+                                delayLongPress={300}
+                            >
                                 <Markdown
                                     style={markdownStyles as any}
                                     rules={stableMarkdownRules}
-                                    onLinkPress={(url) => {
-                                        InAppBrowser.isAvailable().then((available) => {
-                                            if (available) {
-                                                InAppBrowser.open(url, {
-                                                    showTitle: true,
-                                                    dismissButtonStyle: 'close',
-                                                    modalEnabled: true,
-                                                    enableDefaultShare: false,
-                                                });
-                                            } else {
-                                                Linking.openURL(url);
-                                            }
-                                        });
+                                    onLinkPress={url => {
+                                        InAppBrowser.isAvailable().then(
+                                            available => {
+                                                if (available) {
+                                                    InAppBrowser.open(url, {
+                                                        showTitle: true,
+                                                        dismissButtonStyle:
+                                                            'close',
+                                                        modalEnabled: true,
+                                                        enableDefaultShare:
+                                                            false,
+                                                    });
+                                                } else {
+                                                    Linking.openURL(url);
+                                                }
+                                            },
+                                        );
                                         return false;
                                     }}
                                 >
@@ -505,7 +619,10 @@ export function useGiftedChatRenderers({
                     <View style={{ width: '100%' }}>
                         {ContextItemsComponent}
                         {AttachmentsComponent}
-                        <ContentPartsRenderer parts={contentParts} onLongPress={handleTextLongPress} />
+                        <ContentPartsRenderer
+                            parts={contentParts}
+                            onLongPress={handleTextLongPress}
+                        />
                         {ActionsComponent}
                     </View>
                 );
@@ -517,7 +634,10 @@ export function useGiftedChatRenderers({
                     <View>
                         {ContextItemsComponent}
                         {AttachmentsComponent}
-                        <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
+                        <Pressable
+                            onLongPress={() => handleTextLongPress(messageText)}
+                            delayLongPress={300}
+                        >
                             <MessageText {...props} />
                         </Pressable>
                     </View>
@@ -545,12 +665,15 @@ export function useGiftedChatRenderers({
                 <View style={{ width: '100%' }}>
                     {ContextItemsComponent}
                     {AttachmentsComponent}
-                    <Pressable onLongPress={() => handleTextLongPress(messageText)} delayLongPress={300}>
+                    <Pressable
+                        onLongPress={() => handleTextLongPress(messageText)}
+                        delayLongPress={300}
+                    >
                         <Markdown
                             style={markdownStyles as any}
                             rules={stableMarkdownRules}
-                            onLinkPress={(url) => {
-                                InAppBrowser.isAvailable().then((available) => {
+                            onLinkPress={url => {
+                                InAppBrowser.isAvailable().then(available => {
                                     if (available) {
                                         InAppBrowser.open(url, {
                                             showTitle: true,
@@ -568,14 +691,26 @@ export function useGiftedChatRenderers({
                             {messageText}
                         </Markdown>
                     </Pressable>
-                    {showToolCalls && contentParts && contentParts.length > 0 && (
-                        <ContentPartsRenderer parts={contentParts} onLongPress={handleTextLongPress} />
-                    )}
+                    {showToolCalls &&
+                        contentParts &&
+                        contentParts.length > 0 && (
+                            <ContentPartsRenderer
+                                parts={contentParts}
+                                onLongPress={handleTextLongPress}
+                            />
+                        )}
                     {ActionsComponent}
                 </View>
             );
         },
-        [markdownStyles, simpleStyles, attachmentPosition, theme, handleTextLongPress, showToolCalls]
+        [
+            markdownStyles,
+            simpleStyles,
+            attachmentPosition,
+            theme,
+            handleTextLongPress,
+            showToolCalls,
+        ],
     );
 
     const renderFooter = useCallback(() => null, []);

@@ -1,6 +1,22 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Platform, KeyboardAvoidingView, RefreshControl, Text, Pressable, StyleSheet } from 'react-native';
-import { useSharedValue, withSpring, withDelay, runOnJS } from 'react-native-reanimated';
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
+import {
+    View,
+    RefreshControl,
+    Text,
+    Pressable,
+    StyleSheet,
+} from 'react-native';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+} from 'react-native-reanimated';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageViewing from 'react-native-image-viewing';
@@ -30,10 +46,11 @@ export function ChatDetailScreen() {
     const { chatId } = route.params;
     const navigation = useNavigation();
 
-    // Slide-up animation for the input toolbar
-    const inputAnimY = useSharedValue(300);
+    const inputAnimY = useSharedValue(0);
+    const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
 
-    const { showDialog, dialogState, submitResponse, cancelDialog } = useAskUser();
+    const { showDialog, dialogState, submitResponse, cancelDialog } =
+        useAskUser();
     const {
         messages,
         messagesLoading,
@@ -58,6 +75,12 @@ export function ChatDetailScreen() {
     const styles = useMemo(() => createStyles(theme), [theme]);
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
 
+    const animatedKeyboardStyle = useAnimatedStyle(() => ({
+        flex: 1,
+        backgroundColor: theme.background,
+        paddingBottom: Math.max(-keyboardHeight.value, insets.bottom),
+    }));
+
     const giftedMessages = useGiftedMessages(messages, user?.id);
 
     // Attachment state
@@ -70,7 +93,9 @@ export function ChatDetailScreen() {
     const [diceOverlayVisible, setDiceOverlayVisible] = useState(false);
     const [diceExpression, setDiceExpression] = useState<string | null>(null);
     const [diceDC, setDiceDC] = useState<number | null>(null);
-    const [processedRolls, setProcessedRolls] = useState<Set<string>>(new Set());
+    const [processedRolls, setProcessedRolls] = useState<Set<string>>(
+        new Set(),
+    );
 
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);
@@ -119,22 +144,31 @@ export function ChatDetailScreen() {
         const lastMsg = messages[0];
         if (lastMsg.tool_calls && lastMsg.tool_calls.length > 0) {
             for (const tool of lastMsg.tool_calls) {
-                if (tool.tool?.name === 'roll_dice' && !processedRolls.has(lastMsg.id)) {
+                if (
+                    tool.tool?.name === 'roll_dice' &&
+                    !processedRolls.has(lastMsg.id)
+                ) {
                     let resultData: any = null;
                     if (tool.tool.result) {
                         try {
-                            resultData = typeof tool.tool.result === 'string'
-                                ? JSON.parse(tool.tool.result)
-                                : tool.tool.result;
+                            resultData =
+                                typeof tool.tool.result === 'string'
+                                    ? JSON.parse(tool.tool.result)
+                                    : tool.tool.result;
                         } catch (e) {
                             console.warn('Failed to parse dice result', e);
                         }
                     }
-                    if (resultData && resultData.__client_action__ === 'roll_dice') {
+                    if (
+                        resultData &&
+                        resultData.__client_action__ === 'roll_dice'
+                    ) {
                         setDiceExpression(resultData.expression);
                         setDiceDC(resultData.dc);
                         setDiceOverlayVisible(true);
-                        setProcessedRolls(prev => new Set(prev).add(lastMsg.id));
+                        setProcessedRolls(prev =>
+                            new Set(prev).add(lastMsg.id),
+                        );
                         break;
                     }
                 }
@@ -150,49 +184,26 @@ export function ChatDetailScreen() {
         };
     }, [showDialog]);
 
-    // Pending back-navigation action stored in a ref so the UI-thread callback can access it
-    const pendingNavAction = useRef<any>(null);
+    const handleDiceComplete = useCallback(
+        (resultMessage: string) => {
+            setDiceOverlayVisible(false);
+            setDiceExpression(null);
+            setDiceDC(null);
+            if (resultMessage) {
+                sendMessage(resultMessage);
+            }
+        },
+        [sendMessage],
+    );
 
-    const doNavigate = useCallback(() => {
-        const action = pendingNavAction.current;
-        if (action) {
-            pendingNavAction.current = null;
-            navigation.dispatch(action);
-        }
-    }, [navigation]);
-
-    // Slide input up from the very bottom with a short delay so the screen is in position
-    useEffect(() => {
-        inputAnimY.value = 300;
-        inputAnimY.value = withDelay(150, withSpring(0, { damping: 22, stiffness: 180 }));
-    }, []);
-
-    // Slide input down and navigate in parallel (Back button only — swipe uses native transition)
-    useEffect(() => {
-        const unsubscribe = (navigation as any).addListener('beforeRemove', (e: any) => {
-            if (e.data.action.type !== 'GO_BACK' && e.data.action.type !== 'POP') return;
-            e.preventDefault();
-            pendingNavAction.current = e.data.action;
-            inputAnimY.value = withSpring(300, { damping: 22, stiffness: 180 });
-            setTimeout(() => runOnJS(doNavigate)(), 80);
-        });
-        return unsubscribe;
-    }, [navigation, doNavigate]);
-
-    const handleDiceComplete = useCallback((resultMessage: string) => {
-        setDiceOverlayVisible(false);
-        setDiceExpression(null);
-        setDiceDC(null);
-        if (resultMessage) {
-            sendMessage(resultMessage);
-        }
-    }, [sendMessage]);
-
-    const handleSend = useCallback((newMessages: IMessage[] = []) => {
-        if (newMessages.length > 0 && newMessages[0].text) {
-            sendMessage(newMessages[0].text.trim());
-        }
-    }, [sendMessage]);
+    const handleSend = useCallback(
+        (newMessages: IMessage[] = []) => {
+            if (newMessages.length > 0 && newMessages[0].text) {
+                sendMessage(newMessages[0].text.trim());
+            }
+        },
+        [sendMessage],
+    );
 
     const handleDismissError = useCallback(() => {
         setError(null);
@@ -203,61 +214,92 @@ export function ChatDetailScreen() {
         getMessages(chatId, { isRefresh: true });
     }, [chatId, getMessages, isPluginThread]);
 
-    const handleAttachmentPress = useCallback(async (attachment: Attachment) => {
-        if (attachment.file_type?.startsWith('image/')) {
-            const images: any[] = [];
-            if (attachment.uri) {
-                images.push({ uri: attachment.uri });
-            } else if (attachment.content) {
-                const uri = attachment.content.startsWith('data:image')
-                    ? attachment.content
-                    : `data:${attachment.file_type || 'image/png'};base64,${attachment.content}`;
-                images.push({ uri });
-            } else if (attachment.id) {
-                images.push({ uri: `${attachment.id}`, headers: { Authorization: `Bearer ${token}` } });
-            }
-            setPreviewImages(images);
-            setCurrentImageIndex(0);
-            setImageViewerVisible(true);
-        } else {
-            try {
-                if (attachment.uri?.startsWith('http')) {
-                    const isAvailable = await Sharing.isAvailableAsync();
-                    if (isAvailable) {
-                        const fileUri = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + '/' + (attachment.file_name || 'download');
-                        const downloadRes = await FileSystem.downloadAsync(attachment.uri, fileUri);
-                        await Sharing.shareAsync(downloadRes.uri);
-                    }
+    const handleAttachmentPress = useCallback(
+        async (attachment: Attachment) => {
+            if (attachment.file_type?.startsWith('image/')) {
+                const images: any[] = [];
+                if (attachment.uri) {
+                    images.push({ uri: attachment.uri });
                 } else if (attachment.content) {
-                    const fileUri = (FileSystem.documentDirectory || FileSystem.cacheDirectory) + '/' + (attachment.file_name || 'file');
-                    await FileSystem.writeAsStringAsync(fileUri, attachment.content, { encoding: 'base64' });
-                    await Sharing.shareAsync(fileUri);
+                    const uri = attachment.content.startsWith('data:image')
+                        ? attachment.content
+                        : `data:${attachment.file_type || 'image/png'};base64,${
+                              attachment.content
+                          }`;
+                    images.push({ uri });
+                } else if (attachment.id) {
+                    images.push({
+                        uri: `${attachment.id}`,
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
                 }
-            } catch (e) {
-                console.error('Error sharing file:', e);
+                setPreviewImages(images);
+                setCurrentImageIndex(0);
+                setImageViewerVisible(true);
+            } else {
+                try {
+                    if (attachment.uri?.startsWith('http')) {
+                        const isAvailable = await Sharing.isAvailableAsync();
+                        if (isAvailable) {
+                            const fileUri =
+                                (FileSystem.documentDirectory ||
+                                    FileSystem.cacheDirectory) +
+                                '/' +
+                                (attachment.file_name || 'download');
+                            const downloadRes = await FileSystem.downloadAsync(
+                                attachment.uri,
+                                fileUri,
+                            );
+                            await Sharing.shareAsync(downloadRes.uri);
+                        }
+                    } else if (attachment.content) {
+                        const fileUri =
+                            (FileSystem.documentDirectory ||
+                                FileSystem.cacheDirectory) +
+                            '/' +
+                            (attachment.file_name || 'file');
+                        await FileSystem.writeAsStringAsync(
+                            fileUri,
+                            attachment.content,
+                            { encoding: 'base64' },
+                        );
+                        await Sharing.shareAsync(fileUri);
+                    }
+                } catch (e) {
+                    console.error('Error sharing file:', e);
+                }
             }
-        }
-    }, [token]);
+        },
+        [token],
+    );
 
-    const handleMessageAction = useCallback(async (messageId: string, action: MessageAction) => {
-        try {
-            await sidebarApi.executeMessageAction('any', messageId, action);
-        } catch (e) {
-            console.error('Failed to execute action', e);
-        }
-    }, []);
+    const handleMessageAction = useCallback(
+        async (messageId: string, action: MessageAction) => {
+            try {
+                await sidebarApi.executeMessageAction('any', messageId, action);
+            } catch (e) {
+                console.error('Failed to execute action', e);
+            }
+        },
+        [],
+    );
 
-    const shouldUpdateMessage = useCallback((currentProps: any, nextProps: any) => {
-        const current = currentProps.currentMessage;
-        const next = nextProps.currentMessage;
-        if (current === next) return false;
-        if (current._id !== next._id) return true;
-        if (current.text !== next.text) return true;
-        if (current.createdAt !== next.createdAt) return true;
-        if ((current as any).content_parts !== (next as any).content_parts) return true;
-        if ((current as any).tool_calls !== (next as any).tool_calls) return true;
-        return false;
-    }, []);
+    const shouldUpdateMessage = useCallback(
+        (currentProps: any, nextProps: any) => {
+            const current = currentProps.currentMessage;
+            const next = nextProps.currentMessage;
+            if (current === next) return false;
+            if (current._id !== next._id) return true;
+            if (current.text !== next.text) return true;
+            if (current.createdAt !== next.createdAt) return true;
+            if ((current as any).content_parts !== (next as any).content_parts)
+                return true;
+            if ((current as any).tool_calls !== (next as any).tool_calls)
+                return true;
+            return false;
+        },
+        [],
+    );
 
     const {
         renderBubble,
@@ -285,19 +327,45 @@ export function ChatDetailScreen() {
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             {/* Header */}
-            <View style={[detailStyles.header, { paddingTop: insets.top + 8, backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+            <View
+                style={[
+                    detailStyles.header,
+                    {
+                        paddingTop: insets.top + 8,
+                        backgroundColor: theme.background,
+                        borderBottomColor: theme.border,
+                    },
+                ]}
+            >
                 {/* Left: back arrow only */}
-                <Pressable onPress={() => navigation.goBack()} style={detailStyles.backBtn} hitSlop={12}>
-                    <Ionicons name="chevron-back" size={28} color={theme.accent} />
+                <Pressable
+                    onPress={() => navigation.goBack()}
+                    style={detailStyles.backBtn}
+                    hitSlop={12}
+                >
+                    <Ionicons
+                        name="chevron-back"
+                        size={28}
+                        color={theme.accent}
+                    />
                 </Pressable>
 
                 {/* Center: title only */}
                 <View style={detailStyles.center}>
-                    <Text style={[detailStyles.title, { color: theme.text }]} numberOfLines={1}>
+                    <Text
+                        style={[detailStyles.title, { color: theme.text }]}
+                        numberOfLines={1}
+                    >
                         {headerTitle}
                     </Text>
                     {headerSubtitle ? (
-                        <Text style={[detailStyles.subtitle, { color: theme.textSecondary }]} numberOfLines={1}>
+                        <Text
+                            style={[
+                                detailStyles.subtitle,
+                                { color: theme.textSecondary },
+                            ]}
+                            numberOfLines={1}
+                        >
                             {headerSubtitle}
                         </Text>
                     ) : null}
@@ -305,15 +373,15 @@ export function ChatDetailScreen() {
 
                 {/* Right: info button */}
                 <Pressable style={detailStyles.infoBtn} hitSlop={8}>
-                    <Ionicons name="information-circle-outline" size={22} color={theme.accent} />
+                    <Ionicons
+                        name="information-circle-outline"
+                        size={22}
+                        color={theme.accent}
+                    />
                 </Pressable>
             </View>
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                style={{ flex: 1, backgroundColor: theme.background }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-            >
+            <Animated.View style={animatedKeyboardStyle}>
                 <GiftedChat
                     messages={messagesLoading ? [] : giftedMessages}
                     onSend={handleSend}
@@ -342,35 +410,52 @@ export function ChatDetailScreen() {
                     listProps={
                         chatId && chatId !== emptyChatID && !isPluginThread
                             ? {
-                                refreshControl: (
-                                    <RefreshControl
-                                        refreshing={refreshing}
-                                        onRefresh={handleRefreshHistory}
-                                        tintColor={theme.accent}
-                                        colors={[theme.accent]}
-                                    />
-                                ),
-                                maintainVisibleContentPosition: undefined,
-                                maxToRenderPerBatch: 10,
-                                windowSize: 10,
-                                initialNumToRender: 15,
-                                updateCellsBatchingPeriod: 50,
-                            }
+                                  refreshControl: (
+                                      <RefreshControl
+                                          refreshing={refreshing}
+                                          onRefresh={handleRefreshHistory}
+                                          tintColor={theme.accent}
+                                          colors={[theme.accent]}
+                                      />
+                                  ),
+                                  maintainVisibleContentPosition: undefined,
+                                  maxToRenderPerBatch: 10,
+                                  windowSize: 10,
+                                  initialNumToRender: 15,
+                                  updateCellsBatchingPeriod: 50,
+                              }
                             : {
-                                maxToRenderPerBatch: 10,
-                                windowSize: 10,
-                                initialNumToRender: 15,
-                            }
+                                  maxToRenderPerBatch: 10,
+                                  windowSize: 10,
+                                  initialNumToRender: 15,
+                              }
                     }
                 />
-            </KeyboardAvoidingView>
+            </Animated.View>
+
+            {/* Cover the safe-area gap (behind input toolbar) with the input's background color */}
+            {insets.bottom > 0 && (
+                <View
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: insets.bottom,
+                        backgroundColor: `${theme.accent}1F`,
+                    }}
+                />
+            )}
 
             <ImageViewing
                 images={previewImages}
                 imageIndex={currentImageIndex}
                 visible={imageViewerVisible}
                 onRequestClose={() => setImageViewerVisible(false)}
-                keyExtractor={(imageSrc: any, index: number) => `${imageSrc.uri}${index}`}
+                keyExtractor={(imageSrc: any, index: number) =>
+                    `${imageSrc.uri}${index}`
+                }
             />
 
             <DiceRollOverlay
