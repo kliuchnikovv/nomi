@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MessageAction } from '../../main/models';
 import { ThemeColors } from '../../../themes/types';
 
@@ -7,9 +7,10 @@ interface MessageActionsProps {
     actions?: MessageAction[];
     theme: ThemeColors;
     onActionPress?: (action: MessageAction) => void;
+    onActionLongPress?: (action: MessageAction) => void;
 }
 
-export const MessageActions: React.FC<MessageActionsProps> = ({ actions, theme, onActionPress }) => {
+export const MessageActions: React.FC<MessageActionsProps> = ({ actions, theme, onActionPress, onActionLongPress }) => {
     if (!actions || actions.length === 0) {
         return null;
     }
@@ -17,21 +18,23 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ actions, theme, 
     return (
         <View style={styles.container}>
             {actions.map((action, index) => (
-                <TouchableOpacity
+                <Pressable
                     key={`${index}-${action.label}`}
-                    style={[
+                    style={({ pressed }) => [
                         styles.chip,
                         {
                             backgroundColor: theme.surface,
                             borderColor: theme.border,
+                            opacity: pressed ? 0.7 : 1,
                         }
                     ]}
                     onPress={() => onActionPress?.(action)}
+                    onLongPress={() => onActionLongPress?.(action)}
                 >
                     <Text style={[styles.label, { color: theme.textPrimary }]}>
                         {action.label}
                     </Text>
-                </TouchableOpacity>
+                </Pressable>
             ))}
         </View>
     );

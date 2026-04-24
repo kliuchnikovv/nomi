@@ -50,9 +50,12 @@ type Room struct {
 
 	// Message builders state (replacing currentMessageMetadata)
 	messageBuilders map[uuid.UUID]*MessageBuilder
+
+	// User timezone (e.g., "Europe/Moscow", "America/New_York")
+	timezone string
 }
 
-func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string, mode string, command string) *Room {
+func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, store *storage.Storage, logger *zap.Logger, llmBaseURL string, mode string, command string, timezone string) *Room {
 	return &Room{
 		ID:                  id,
 		Type:                roomType,
@@ -70,6 +73,7 @@ func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, s
 		command:             command,
 		messageBuilders:     make(map[uuid.UUID]*MessageBuilder),
 		generationTimeoutCh: make(chan struct{}, 1),
+		timezone:            timezone,
 	}
 }
 

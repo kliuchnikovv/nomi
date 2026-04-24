@@ -27,7 +27,7 @@ func (r *Room) routeMessage(msg *ClientMessage, frame Frame, originalChatID uuid
 		}
 	}
 
-	chatRoom, err := r.hub.GetOrCreateRoom(originalChatID, RoomTypeChat, r.initiatorID, chatMode, chatCommand)
+	chatRoom, err := r.hub.GetOrCreateRoom(originalChatID, RoomTypeChat, r.initiatorID, chatMode, chatCommand, r.timezone)
 	if err != nil {
 		r.logger.Error("failed to get chat room for routing", zap.Error(err))
 	} else {

@@ -99,6 +99,12 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 		command = c.Query("team")
 	}
 
+	// Extract timezone from query parameters (sent by frontend)
+	timezone := c.Query("timezone")
+	if timezone == "" {
+		timezone = "UTC" // Default to UTC if not provided
+	}
+
 	// Enrich command with user integrations (Jules API key for development_team)
 	if mode == "team" && command != "" {
 		command = h.enrichCommandWithIntegrations(user.ID, command)
@@ -107,9 +113,10 @@ func (h *StreamHandler) ChatWS(c *gin.Context) {
 	h.logger.Info("websocket params",
 		zap.String("mode", mode),
 		zap.Bool("has_command", command != ""),
-		zap.String("room_type", string(roomType)))
+		zap.String("room_type", string(roomType)),
+		zap.String("timezone", timezone))
 
-	h.hub.ServeWs(c.Writer, c.Request, chatID, roomType, user, mode, command)
+	h.hub.ServeWs(c.Writer, c.Request, chatID, roomType, user, mode, command, timezone)
 }
 
 // enrichCommandWithIntegrations adds user's integration credentials to the command

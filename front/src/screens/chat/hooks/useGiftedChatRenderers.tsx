@@ -541,7 +541,9 @@ export function useGiftedChatRenderers({
                     theme={theme}
                     onActionPress={action => {
                         if (action.url) {
-                            Linking.openURL(action.url).catch(() => {});
+                            Linking.openURL(action.url).catch(() =>
+                                Linking.openURL(`https://maps.google.com/?q=${action.url}`)
+                            );
                         } else if (action.prompt) {
                             onSendRef.current?.(action.prompt);
                         } else if (
@@ -552,6 +554,12 @@ export function useGiftedChatRenderers({
                                 String(props.currentMessage._id),
                                 action,
                             );
+                        }
+                    }}
+                    onActionLongPress={action => {
+                        const routeUrl = action.route_url ?? action.url;
+                        if (routeUrl) {
+                            Linking.openURL(routeUrl).catch(() => {});
                         }
                     }}
                 />

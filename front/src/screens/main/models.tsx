@@ -53,6 +53,7 @@ export type MessageAction = {
     label: string
     command: string
     url?: string | null
+    route_url?: string | null
     prompt?: string | null
     agent?: string
     why?: string

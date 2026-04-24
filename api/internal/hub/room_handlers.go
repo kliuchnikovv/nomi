@@ -280,7 +280,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 			// Route to the correct chat room and stop processing in this room.
 			// We reuse the same client message payload; the target room will parse it again.
-			if targetRoom, err := r.hub.GetOrCreateRoom(msgChatID, RoomTypeChat, r.initiatorID, r.mode, r.command); err != nil {
+			if targetRoom, err := r.hub.GetOrCreateRoom(msgChatID, RoomTypeChat, r.initiatorID, r.mode, r.command, r.timezone); err != nil {
 				r.logger.Error("failed to get/create target chat room for reroute", zap.Error(err), zap.String("msg_chat_id", msgChatID.String()))
 			} else if targetRoom.ID != r.ID {
 				targetRoom.ingress <- msg
@@ -728,7 +728,6 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
-
 		// 5.2 Fetch and Bundle Chat History
 		messages, err := r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
 		if err != nil {
@@ -754,6 +753,11 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		finalMap["streaming"] = r.hub.Streaming(payload.Model)
 		if payload.AuthToken != "" {
 			finalMap["auth_token"] = payload.AuthToken
+		}
+
+		// Add timezone for Python backend to use in agent instructions
+		if r.timezone != "" {
+			finalMap["timezone"] = r.timezone
 		}
 
 		// Inject bot identity so Python backend can customise agent name/instructions/tone
@@ -879,7 +883,7 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	// Forward to User Room if this is a Chat Room
 	// This ensures users connected to the global "user" channel receive updates
 	if r.Type == RoomTypeChat && forwardToUser {
-		userRoom, err := r.hub.GetOrCreateRoom(r.initiatorID, RoomTypeUser, r.initiatorID, "", "")
+		userRoom, err := r.hub.GetOrCreateRoom(r.initiatorID, RoomTypeUser, r.initiatorID, "", "", r.timezone)
 		if err == nil && userRoom != nil {
 			userRoom.BroadcastFrame(frame)
 		} else {
