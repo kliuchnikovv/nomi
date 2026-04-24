@@ -33,6 +33,7 @@ import { createMarkdownRules } from '../message/markdownRules';
 import { useChat } from '../context';
 import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
 import { GenerationStatusBar } from '../components/GenerationStatusBar';
+import { Dimensions } from 'react-native';
 
 // Stable markdown rules - don't recreate on every render
 const stableMarkdownRules = createMarkdownRules(() => {
@@ -298,11 +299,13 @@ export function useGiftedChatRenderers({
                             },
                             left: {
                                 backgroundColor: 'transparent',
-                                borderRadius: 18,
-                                borderBottomRightRadius: 18,
-                                borderBottomLeftRadius: 4,
                                 marginBottom: 2,
-                                paddingHorizontal: 8,
+                                marginTop: 8,
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                minWidth: Dimensions.get('window').width * 0.9, // Force expansion to ~90% of screen
+                                alignSelf: 'stretch',
+                                // width: '100%',
                             },
                         }}
                         textStyle={{
@@ -440,22 +443,24 @@ export function useGiftedChatRenderers({
                       }
                     : props;
 
-            const isAssistantMsg =
-                currentMessage.user._id === 'assistant';
-            const assistantMaxWidth = windowWidth * 0.9;
+            const isAssistantMsg = currentMessage.user._id === 'assistant';
+            const assistantPadding = windowWidth * 0.04;
             return (
-                <View style={{ width: '100%' }}>
+                <View
+                    style={
+                        isAssistantMsg
+                            ? {
+                                  width: '100%',
+                                  paddingHorizontal: assistantPadding,
+                              }
+                            : { width: '100%' }
+                    }
+                >
                     {showAttachmentsOutside && (
                         <View
                             style={{
-                                marginLeft:
-                                    currentMessage.user._id === 'assistant'
-                                        ? 0
-                                        : 'auto',
-                                marginRight:
-                                    currentMessage.user._id === 'assistant'
-                                        ? 'auto'
-                                        : 0,
+                                marginLeft: isAssistantMsg ? 0 : 'auto',
+                                marginRight: isAssistantMsg ? 'auto' : 0,
                                 marginBottom: 4,
                                 maxWidth: windowWidth * 0.8,
                                 paddingHorizontal: 10,
@@ -472,14 +477,20 @@ export function useGiftedChatRenderers({
                         {...extendedProps}
                         containerStyle={
                             isAssistantMsg
-                                ? { left: [{ maxWidth: assistantMaxWidth }] }
+                                ? { left: [{ width: '100%', marginLeft: 0 }] }
                                 : undefined
                         }
                     />
                 </View>
             );
         },
-        [assistantContainerMaxWidth, attachmentPosition, theme, showToolCalls, windowWidth],
+        [
+            assistantContainerMaxWidth,
+            attachmentPosition,
+            theme,
+            showToolCalls,
+            windowWidth,
+        ],
     );
 
     // Stable message text renderer
