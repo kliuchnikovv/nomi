@@ -24,6 +24,7 @@ type Action struct {
 	Command     string                 `json:"command,omitempty"`
 	Action      string                 `json:"action,omitempty"`
 	URL         string                 `json:"url,omitempty"`
+	RouteURL    string                 `json:"route_url,omitempty"`
 	Prompt      string                 `json:"prompt,omitempty"`
 	Agent       string                 `json:"agent,omitempty"`
 	Why         string                 `json:"why,omitempty"`

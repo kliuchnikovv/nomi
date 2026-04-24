@@ -202,10 +202,11 @@ class MapsTool(Toolkit):
                 dist_suffix = f" ({_distance_label(dist_m)})"
 
             label = f"{short_name}{dist_suffix}"
-            # Use exact coordinates so Apple Maps opens the precise Nominatim result
-            # rather than re-geocoding the address string (which can return a different place).
-            url = f"maps://?daddr={place_lat},{place_lon}"
-            actions.append({"command": "open_maps", "label": label, "url": url})
+            # url — show place on map; route_url — navigate to place
+            encoded_name = quote_plus(short_name)
+            url = f"maps://?ll={place_lat},{place_lon}&q={encoded_name}"
+            route_url = f"maps://?daddr={place_lat},{place_lon}"
+            actions.append({"command": "open_maps", "label": label, "url": url, "route_url": route_url})
 
         text = f"Ближайшие «{query}» рядом с {display_near}:"
         return json.dumps({"text": text, "actions": actions}, ensure_ascii=False)
