@@ -377,7 +377,6 @@ export default function ChatScreen({
                 console.log('Action executed:', action);
             } catch (e) {
                 console.error('Failed to execute action', e);
-                // Optionally set error or show toast
             }
         },
         [],

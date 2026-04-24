@@ -50,12 +50,12 @@ export function LocationPickerModal({ visible, onClose }: Props) {
         };
     }, []);
 
-    const attachLocation = useCallback((title: string, lat: number | string, lon: number | string) => {
+    const attachLocation = useCallback((title: string, lat: number | string, lon: number | string, address?: string) => {
         contextStore.add({
             id: `location-${Date.now()}`,
             sourceType: 'location',
             title,
-            metadata: { lat: Number(lat), lon: Number(lon) },
+            metadata: { lat: Number(lat), lon: Number(lon), address: address ?? title },
             addedAt: Date.now(),
         });
         onClose();
@@ -86,7 +86,7 @@ export function LocationPickerModal({ visible, onClose }: Props) {
 
     const handleSelectResult = useCallback((result: NominatimResult) => {
         const loc = nominatimResultToLocation(result, false);
-        attachLocation(loc.displayName, loc.lat, loc.lon);
+        attachLocation(loc.displayName, loc.lat, loc.lon, loc.fullAddress);
     }, [attachLocation]);
 
     const handleGPS = useCallback(async () => {
@@ -95,7 +95,7 @@ export function LocationPickerModal({ visible, onClose }: Props) {
         if (!isMountedRef.current) return;
         setGpsLoading(false);
         if (!loc) return;
-        attachLocation(loc.displayName, loc.lat, loc.lon);
+        attachLocation(loc.displayName, loc.lat, loc.lon, loc.fullAddress);
     }, [attachLocation]);
 
     const styles = useMemo(() => StyleSheet.create({

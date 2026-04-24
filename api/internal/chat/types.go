@@ -19,9 +19,14 @@ type ToolCallFunction struct {
 
 // Action represents a suggested user action (e.g. button)
 type Action struct {
-	ID          string                 `json:"id"`
+	ID          string                 `json:"id,omitempty"`
 	Label       string                 `json:"label"`
-	Action      string                 `json:"action"` // e.g. "click", "navigate"
+	Command     string                 `json:"command,omitempty"`
+	Action      string                 `json:"action,omitempty"`
+	URL         string                 `json:"url,omitempty"`
+	Prompt      string                 `json:"prompt,omitempty"`
+	Agent       string                 `json:"agent,omitempty"`
+	Why         string                 `json:"why,omitempty"`
 	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 	Description string                 `json:"description,omitempty"`
 }

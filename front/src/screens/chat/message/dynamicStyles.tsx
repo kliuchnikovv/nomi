@@ -373,7 +373,7 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
         },
         locationPill: {
             flexDirection: 'row',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             backgroundColor: 'rgba(52, 168, 83, 0.15)',
             borderRadius: 10,
             padding: 8,

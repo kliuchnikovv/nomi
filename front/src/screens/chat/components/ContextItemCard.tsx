@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Pressable, Linking, Alert } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -119,6 +119,36 @@ export const ContextItemCard = ({
         : null;
 
     const displayName = githubParts ? truncateText(githubParts.repo) : truncateText(item.title);
+
+    if (item.sourceType === 'location') {
+        const lat = item.metadata?.lat;
+        const lon = item.metadata?.lon;
+        const address = item.metadata?.address ?? item.title;
+        return (
+            <Pressable
+                style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => {
+                    if (lat != null && lon != null) {
+                        Linking.openURL(`maps://?ll=${lat},${lon}&q=${encodeURIComponent(item.title)}`).catch(() =>
+                            Linking.openURL(`https://maps.google.com/?q=${lat},${lon}`)
+                        );
+                    }
+                }}
+                onLongPress={() => Alert.alert(item.title, address)}
+            >
+                <View style={styles.content}>
+                    <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
+                        <Ionicons name={icon} size={18} color={color} />
+                    </View>
+                    <View style={styles.textContent}>
+                        <Text style={[styles.title, { color: theme.textPrimary ?? theme.text }]} numberOfLines={2}>
+                            {item.title}
+                        </Text>
+                    </View>
+                </View>
+            </Pressable>
+        );
+    }
 
     return (
         <View

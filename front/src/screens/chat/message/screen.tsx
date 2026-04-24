@@ -1,5 +1,6 @@
 import {
     ActionSheetIOS,
+    Alert,
     ImageStyle,
     Linking,
     Pressable,
@@ -180,10 +181,26 @@ const MessageScreen = React.memo(function MessageScreen(props: Props) {
                 return (
                     <View style={styles.locationContainer}>
                         {locationItems.map(ci => (
-                            <View key={ci.id} style={styles.locationPill}>
+                            <Pressable
+                                key={ci.id}
+                                style={styles.locationPill}
+                                onPress={() => {
+                                    const lat = ci.metadata?.lat;
+                                    const lon = ci.metadata?.lon;
+                                    if (lat != null && lon != null) {
+                                        Linking.openURL(`maps://?ll=${lat},${lon}&q=${encodeURIComponent(ci.title)}`).catch(() =>
+                                            Linking.openURL(`https://maps.google.com/?q=${lat},${lon}`)
+                                        );
+                                    }
+                                }}
+                                onLongPress={() => {
+                                    const address = ci.metadata?.address ?? ci.title;
+                                    Alert.alert(ci.title, address);
+                                }}
+                            >
                                 <Text style={{ fontSize: 18 }}>📍</Text>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={[styles.locationTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                                    <Text style={[styles.locationTitle, { color: theme.textPrimary }]} numberOfLines={2}>
                                         {ci.title}
                                     </Text>
                                     {ci.metadata?.lat != null && (
@@ -192,7 +209,7 @@ const MessageScreen = React.memo(function MessageScreen(props: Props) {
                                         </Text>
                                     )}
                                 </View>
-                            </View>
+                            </Pressable>
                         ))}
                     </View>
                 );

@@ -6,6 +6,7 @@ export type UserLocation = {
     lat: number;
     lon: number;
     displayName: string;
+    fullAddress?: string;
     city: string;
     country: string;
     shareWithAgent: boolean;
@@ -92,6 +93,7 @@ export function nominatimResultToLocation(
         lat: parseFloat(result.lat),
         lon: parseFloat(result.lon),
         displayName: result.display_name.split(',').slice(0, 2).join(',').trim(),
+        fullAddress: result.display_name,
         city,
         country,
         shareWithAgent,
