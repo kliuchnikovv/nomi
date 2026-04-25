@@ -285,6 +285,7 @@ class AgentFactory:
         client_tool_runner: Callable[[str, str, dict], Awaitable[str]] | None = None,
         bot_identity: dict | None = None,
         user_location: str | None = None,
+        single_chat_mode: bool = False,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -509,6 +510,13 @@ class AgentFactory:
 
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs
+
+        # Register chat history search tool for single chat mode
+        if single_chat_mode and user_id and self._knowledge is not None:
+            from src.tools.chat_history import make_search_chat_history
+            search_fn = make_search_chat_history(self._knowledge, user_id)
+            tools.append(search_fn)
+            logger.info("[Factory] Registered search_chat_history tool for user=%s", user_id)
 
         # Setup RAG User ID: use user_id if explicit, or session_id if anonymous
         rag_user_id = user_id or session_id
