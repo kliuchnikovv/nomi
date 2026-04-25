@@ -91,6 +91,10 @@ class RedisSession:
         # History storage
         self.chat_history: list[dict[str, str]] = []
 
+        # Single chat mode state
+        self.single_chat_mode: bool = False  # Set from session state payload
+        self._model_context_limit: int | None = None  # Loaded lazily
+
         # Context items (emails, documents, etc.)
         # Context items (emails, documents, etc.)
         self.context_items: list[dict[str, Any]] = []
@@ -744,6 +748,7 @@ class RedisSession:
         # IF tools are passed in payload (rare), we could parse them.
 
         self.agent_type = payload.get("agent_type", "genie")
+        self.single_chat_mode = bool(payload.get("single_chat_mode", False))
         self.command_desc = payload.get("command") or payload.get("team")
         if self.command_desc is None:
             self.command_desc = {}
@@ -815,6 +820,7 @@ class RedisSession:
                 bot_identity=bot_identity,
                 user_location=user_location,
                 timezone=timezone,
+                single_chat_mode=self.single_chat_mode,
             )
         except Exception as e:
             logger.error(
@@ -1293,6 +1299,17 @@ class RedisSession:
                             make_done(self.next_id, msg_chat_id, done_payload)
                         )
                         done_sent = True
+
+                        # Archive old messages if context window is too full
+                        try:
+                            await self._maybe_archive_old_messages()
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as _arch_err:
+                            logger.warning(
+                                "[RedisSession] _maybe_archive_old_messages failed (non-fatal): %s",
+                                _arch_err,
+                            )
 
                         # Deliver to external channel via plugin delivery handler
                         if delivery_handler:
@@ -1866,6 +1883,116 @@ class RedisSession:
                 )
         except Exception as e:
             logger.warning("[RedisSession] Memory deduplication failed: %s", e)
+
+    def _get_model_context_limit(self, model_name: str) -> int:
+        """Return token context limit for the model from config/models.json. Falls back to 128_000."""
+        import json as _json
+
+        if self._model_context_limit is not None:
+            return self._model_context_limit
+
+        config_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "config", "models.json"
+        )
+        try:
+            with open(config_path) as f:
+                data = _json.load(f)
+            for m in data.get("models", []):
+                if m.get("id") == model_name:
+                    self._model_context_limit = m.get("context_window", 128_000)
+                    return self._model_context_limit
+        except Exception as exc:
+            logger.warning("[RedisSession] Failed to load model config: %s", exc)
+
+        self._model_context_limit = 128_000
+        return self._model_context_limit
+
+    async def _maybe_archive_old_messages(self) -> None:
+        """Archive oldest messages to pgvector when history exceeds 75% of context window.
+        Only runs when single_chat_mode is True.
+        """
+        if not self.single_chat_mode or not self.current_model_name:
+            return
+        if not self.chat_history:
+            return
+
+        context_limit = self._get_model_context_limit(self.current_model_name)
+        token_count = sum(len(m.get("content", "")) for m in self.chat_history) // 4
+
+        if token_count <= 0.75 * context_limit:
+            return
+
+        target_tokens = int(0.50 * context_limit)
+        to_archive = []
+        running = token_count
+
+        for msg in self.chat_history:  # oldest first
+            if running <= target_tokens:
+                break
+            to_archive.append(msg)
+            running -= len(msg.get("content", "")) // 4
+
+        if not to_archive:
+            return
+
+        # Index to pgvector
+        if self.agent_factory._knowledge is not None:
+            from agno.knowledge.document import Document
+            from datetime import datetime as _dt, timezone as _tz
+
+            for msg in to_archive:
+                try:
+                    doc = Document(
+                        content=msg.get("content", ""),
+                        meta={
+                            "user_id": self.user_id or "",
+                            "source": "chat_history",
+                            "role": msg.get("role", "unknown"),
+                            "timestamp": msg.get(
+                                "timestamp", _dt.now(_tz.utc).isoformat()
+                            ),
+                            "chat_id": self.chat_id,
+                            "message_id": msg.get("id", ""),
+                        },
+                    )
+                    self.agent_factory._knowledge.insert(doc)
+                except Exception as exc:
+                    logger.warning(
+                        "[RedisSession] Failed to index message to pgvector: %s", exc
+                    )
+
+        # Mark archived in Go API
+        message_ids = [m["id"] for m in to_archive if m.get("id")]
+        if message_ids:
+            import httpx
+
+            api_url = os.getenv("API_URL", "http://localhost:8080")
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        f"{api_url}/api/chats/{self.chat_id}/archive-messages",
+                        json={"message_ids": message_ids},
+                    )
+                    if resp.status_code not in (200, 204):
+                        logger.warning(
+                            "[RedisSession] archive-messages returned %d",
+                            resp.status_code,
+                        )
+            except Exception as exc:
+                logger.warning(
+                    "[RedisSession] Failed to call archive-messages: %s", exc
+                )
+
+        # Remove from local history
+        archived_ids = {m.get("id") for m in to_archive}
+        self.chat_history = [
+            m for m in self.chat_history if m.get("id") not in archived_ids
+        ]
+        logger.info(
+            "[RedisSession] Archived %d messages for chat %s",
+            len(to_archive),
+            self.chat_id,
+        )
 
     async def _repair_dangling_tool_calls(self, agent: Any) -> bool:
         """Repairs dangling tool calls in agent history."""
