@@ -4,6 +4,7 @@ export type User = {
     id: string;
     name: string;
     email: string;
+    single_chat_mode?: boolean;
 }
 
 export interface AuthContextType {

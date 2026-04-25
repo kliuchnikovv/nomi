@@ -9,7 +9,7 @@ import { createStyles } from './styles.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { themes } from '../../themes';
 import { initApiUrl } from '../../config';
-import { botIdentityApi, modelsApi } from '../../apiClient';
+import { authApi, botIdentityApi, modelsApi } from '../../apiClient';
 
 import { getStoredLocation } from '../../services/location/locationService';
 import { SettingsSection } from './components/SettingsSection';
@@ -49,12 +49,25 @@ export default function SettingsHomeScreen() {
     const [currentThemeName, setCurrentThemeName] = useState(
         () => themes[themeName].name,
     );
+    const [singleChatMode, setSingleChatMode] = useState(
+        user?.single_chat_mode ?? false,
+    );
+
+    const handleSingleChatModeToggle = useCallback(async (value: boolean) => {
+        try {
+            await authApi.updateMe({ single_chat_mode: value });
+            setSingleChatMode(value);
+        } catch (e) {
+            console.error('Failed to update single chat mode', e);
+        }
+    }, []);
 
     // Refresh preview values each time this screen comes into focus
     useFocusEffect(
         useCallback(() => {
             initApiUrl();
             setCurrentThemeName(themes[themeName].name);
+            setSingleChatMode(user?.single_chat_mode ?? false);
 
             AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
                 if (mode === 'server' || mode === 'device')
@@ -139,6 +152,14 @@ export default function SettingsHomeScreen() {
                         value={botName}
                         onPress={() => navigation.navigate('BotIdentityScreen')}
                         isFirst
+                        isLast={false}
+                    />
+                    <SettingsToggleRow
+                        label="Single Chat Mode"
+                        subtitle="Use one persistent endless chat"
+                        value={singleChatMode}
+                        onToggle={handleSingleChatModeToggle}
+                        isFirst={false}
                         isLast
                     />
                 </SettingsSection>
