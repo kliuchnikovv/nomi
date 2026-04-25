@@ -89,7 +89,7 @@ class RedisSession:
         self.cancel_event = asyncio.Event()
 
         # History storage
-        self.chat_history: list[dict[str, str]] = []
+        self.chat_history: list[dict[str, Any]] = []
 
         # Single chat mode state
         self.single_chat_mode: bool = False  # Set from session state payload
@@ -961,6 +961,8 @@ class RedisSession:
                             {
                                 "role": msg.get("role", "user"),
                                 "content": msg.get("text") or msg.get("content", ""),
+                                "id": msg.get("id", ""),
+                                "timestamp": msg.get("created_at") or msg.get("timestamp", ""),
                             }
                         )
                 logger.info(
