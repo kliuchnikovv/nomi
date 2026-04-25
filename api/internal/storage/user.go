@@ -16,6 +16,7 @@ type User struct {
 	PasswordHash     string         `json:"-" gorm:"not null"`
 	Name             string         `json:"name"`
 	WebSearchEnabled bool           `json:"web_search_enabled" gorm:"default:false"`
+	SingleChatMode   bool           `json:"single_chat_mode" gorm:"default:false"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`

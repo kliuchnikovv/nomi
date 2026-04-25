@@ -11,6 +11,7 @@ type Chat struct {
 	Model      string     `json:"model"`
 	Title      string     `json:"title"`
 	Mode       string     `json:"mode"`              // 'agent' or 'team'
+	Type       string     `json:"type"`              // 'regular' or 'persistent'
 	TeamID     *string    `json:"team_id,omitempty"` // null for agent mode
 	Icon       string     `json:"icon,omitempty"`    // Icon name provided by backend
 	CreatedAt  time.Time  `json:"created_at"`

@@ -16,6 +16,7 @@ type Chat struct {
 	Model  string    `gorm:"type:text;not null"`
 	Title  string    `gorm:"not null"`
 	Mode   string    `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
+	Type   string    `gorm:"type:varchar(20);not null;default:'regular'"` // 'regular' or 'persistent'
 
 	TeamID     *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
 	Icon       string     `gorm:"type:varchar(10);default:''"`
@@ -54,6 +55,7 @@ type Message struct {
 	Attachments  []Attachment   `gorm:"foreignKey:MessageID"`
 	CreatedAt    time.Time      `gorm:"not null;index:idx_messages_chat_created,priority:2,sort:desc"`
 	UpdatedAt    time.Time      `gorm:"not null"`
+	Archived     bool           `gorm:"not null;default:false"`
 }
 
 type Integration struct {
