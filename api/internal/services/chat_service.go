@@ -190,6 +190,26 @@ func (s *ChatService) DeleteChat(ctx context.Context, userID uuid.UUID, chatID u
 	return s.repo.Delete(ctx, userID, chatID)
 }
 
+// GetOrCreatePersistentChat returns the user's persistent chat, creating it if needed.
+func (s *ChatService) GetOrCreatePersistentChat(ctx context.Context, userID uuid.UUID, defaultModel string) (*chat.Chat, error) {
+	if defaultModel == "" {
+		defaultModel = "glm-4-flash"
+	}
+	c, err := s.repo.GetOrCreatePersistent(ctx, userID, defaultModel)
+	if err != nil {
+		return nil, err
+	}
+	if c.Icon == "" {
+		c.Icon = s.getIconForTeam(c.TeamID)
+	}
+	return c, nil
+}
+
+// ArchiveMessages marks given messages as archived.
+func (s *ChatService) ArchiveMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, messageIDs []uuid.UUID) error {
+	return s.repo.ArchiveMessages(ctx, userID, chatID, messageIDs)
+}
+
 // GetIconForTeam returns the icon for a team
 // Moved from handlers/chat.go
 func (s *ChatService) GetIconForTeam(teamID *string) string {

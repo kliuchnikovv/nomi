@@ -155,3 +155,59 @@ func (h *ChatHandler) DeleteChat(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
+
+// GetPersistentChat returns (or creates) the user's persistent chat.
+func (h *ChatHandler) GetPersistentChat(c *gin.Context) {
+	var ctx = c.Request.Context()
+
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
+		return
+	}
+
+	if !user.SingleChatMode {
+		apierror.Respond(c, apierror.NewForbidden("single chat mode is not enabled"))
+		return
+	}
+
+	persistentChat, err := h.service.GetOrCreatePersistentChat(ctx, user.ID, "")
+	if err != nil {
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, persistentChat)
+}
+
+// ArchiveMessages marks given messages as archived.
+func (h *ChatHandler) ArchiveMessages(c *gin.Context) {
+	var ctx = c.Request.Context()
+
+	chatID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		apierror.Respond(c, apierror.NewBadRequest("Invalid UUID", nil))
+		return
+	}
+
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
+		return
+	}
+
+	var req struct {
+		MessageIDs []uuid.UUID `json:"message_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.MessageIDs) == 0 {
+		apierror.Respond(c, apierror.NewBadRequest("message_ids required", nil))
+		return
+	}
+
+	if err := h.service.ArchiveMessages(ctx, user.ID, chatID, req.MessageIDs); err != nil {
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
+}

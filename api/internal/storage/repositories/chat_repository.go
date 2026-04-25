@@ -17,6 +17,8 @@ type ChatRepository interface {
 	Update(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error)
 	Delete(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error
 	GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUID, since time.Time) ([]*chat.Chat, error)
+	GetOrCreatePersistent(ctx context.Context, userID uuid.UUID, defaultModel string) (*chat.Chat, error)
+	ArchiveMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, messageIDs []uuid.UUID) error
 }
 
 // NewChatRepository creates a new chat repository
@@ -57,4 +59,14 @@ func (r *chatRepository) Delete(ctx context.Context, userID uuid.UUID, chatID uu
 // GetUserChatsModifiedAfter gets chats modified after a specific time
 func (r *chatRepository) GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUID, since time.Time) ([]*chat.Chat, error) {
 	return r.store.GetUserChatsModifiedAfter(ctx, userID, since)
+}
+
+// GetOrCreatePersistent returns the persistent chat for a user, creating it if needed.
+func (r *chatRepository) GetOrCreatePersistent(ctx context.Context, userID uuid.UUID, defaultModel string) (*chat.Chat, error) {
+	return r.store.GetOrCreatePersistentChat(ctx, userID, defaultModel)
+}
+
+// ArchiveMessages marks the given message IDs as archived.
+func (r *chatRepository) ArchiveMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, messageIDs []uuid.UUID) error {
+	return r.store.ArchiveMessages(ctx, userID, chatID, messageIDs)
 }

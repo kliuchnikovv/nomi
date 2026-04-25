@@ -172,12 +172,16 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req *GoogleLoginRequest) 
 // UpdateUserRequest represents a user update request
 type UpdateUserRequest struct {
 	WebSearchEnabled *bool `json:"web_search_enabled"`
+	SingleChatMode   *bool `json:"single_chat_mode"`
 }
 
 // UpdateUser updates user data
 func (s *AuthService) UpdateUser(ctx context.Context, user *storage.User, req *UpdateUserRequest) (*storage.User, error) {
 	if req.WebSearchEnabled != nil {
 		user.WebSearchEnabled = *req.WebSearchEnabled
+	}
+	if req.SingleChatMode != nil {
+		user.SingleChatMode = *req.SingleChatMode
 	}
 
 	if err := s.userRepo.UpdateUser(ctx, user); err != nil {

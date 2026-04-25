@@ -67,6 +67,27 @@ func (m *mockChatRepository) GetUserChatsModifiedAfter(ctx context.Context, user
 	return result, nil
 }
 
+func (m *mockChatRepository) GetOrCreatePersistent(ctx context.Context, userID uuid.UUID, defaultModel string) (*chat.Chat, error) {
+	for _, c := range m.chats {
+		if c.Type == "persistent" {
+			return c, nil
+		}
+	}
+	c := &chat.Chat{
+		ID:    uuid.New(),
+		Model: defaultModel,
+		Title: "Genie",
+		Mode:  "agent",
+		Type:  "persistent",
+	}
+	m.chats[c.ID] = c
+	return c, nil
+}
+
+func (m *mockChatRepository) ArchiveMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, messageIDs []uuid.UUID) error {
+	return nil
+}
+
 func TestChatService_CreateChat(t *testing.T) {
 	repo := newMockChatRepository()
 	service := NewChatService(repo)

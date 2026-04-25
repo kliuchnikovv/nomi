@@ -105,9 +105,11 @@ func New(
 	// Chat API (protected)
 	r.POST("/api/chats", wrapWithAuth(chatHandler.CreateChat, authMiddleware))
 	r.GET("/api/chats", wrapWithAuth(chatHandler.ListChats, authMiddleware))
+	r.GET("/api/chats/persistent", wrapWithAuth(chatHandler.GetPersistentChat, authMiddleware))
 	r.GET("/api/chats/:id", wrapWithAuth(chatHandler.GetChat, authMiddleware))
 	r.PUT("/api/chats/:id", wrapWithAuth(chatHandler.UpdateChat, authMiddleware))
 	r.DELETE("/api/chats/:id", wrapWithAuth(chatHandler.DeleteChat, authMiddleware))
+	r.POST("/api/chats/:id/archive-messages", wrapWithAuth(chatHandler.ArchiveMessages, authMiddleware))
 
 	// Chat streaming API (WebSocket only)
 	r.GET("/api/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
