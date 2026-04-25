@@ -140,9 +140,7 @@ function App() {
                 <SafeAreaProvider>
                     <ThemeProvider>
                         <AuthProvider>
-                            <StatusBar
-                                barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-                            />
+                            <StatusBar barStyle="light-content" />
                             <PluginChatsProvider>
                                 <ConnectorsProvider>
                                     <MainProvider>

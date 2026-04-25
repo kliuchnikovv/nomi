@@ -24,22 +24,66 @@ export const createMarkdownRules = (options: MarkdownRuleOptions) => {
     return createRulesInternal(options);
 };
 
+// All children are links (no surrounding text)
+const isLinkOnlyParagraph = (node: any) =>
+    node.children?.length > 0 &&
+    node.children.every((c: any) => c.type === 'link' || c.type === 'softbreak');
+
+// Paragraph has links mixed with text → needs flex-row layout
+const hasMixedLinks = (node: any) =>
+    node.children?.some((c: any) => c.type === 'link') &&
+    !isLinkOnlyParagraph(node);
+
 const createRulesInternal = ({ onCodeCopy, onLinkPress, onLinkCopy }: MarkdownRuleOptions) => ({
-    link: (node: any, children: any, _parent: any, styles: any) => (
-        <Pressable
-            key={node.key}
-            onPress={() => onLinkPress(node.attributes.href)}
-            onLongPress={() => onLinkCopy(node.attributes.href)}
-            delayLongPress={300}
-            style={({ pressed }) => [
-                styles.link_container,
-                pressed && { opacity: 0.7 },
-            ]}
-        >
-            <Text style={styles.link}>{children}</Text>
-            <Text style={styles.link_icon}>{' ↗'}</Text>
-        </Pressable>
-    ),
+    paragraph: (node: any, children: any, _parent: any, styles: any) => {
+        if (isLinkOnlyParagraph(node)) {
+            return (
+                <View key={node.key} style={styles.link_paragraph}>
+                    {children}
+                </View>
+            );
+        }
+        return (
+            <Text key={node.key} style={styles.paragraph}>
+                {children}
+            </Text>
+        );
+    },
+
+    link: (node: any, children: any, parent: any, styles: any) => {
+        const parentNode = Array.isArray(parent) ? parent[0] : parent;
+        const isBlockOnly = parentNode && isLinkOnlyParagraph(parentNode);
+        const isMixed = parentNode && hasMixedLinks(parentNode);
+
+        if (isBlockOnly) {
+            return (
+                <Pressable
+                    key={node.key}
+                    onPress={() => onLinkPress(node.attributes.href)}
+                    onLongPress={() => onLinkCopy(node.attributes.href)}
+                    delayLongPress={300}
+                    style={({ pressed }) => [styles.link_button, pressed && { opacity: 0.7 }]}
+                >
+                    <Text style={styles.link_button_text} numberOfLines={2}>{children}</Text>
+                    <Text style={styles.link_button_icon}>{'↗'}</Text>
+                </Pressable>
+            );
+        }
+
+        // Inline link inside mixed text paragraph
+        return (
+            <Text
+                key={node.key}
+                style={styles.link}
+                onPress={() => onLinkPress(node.attributes.href)}
+                onLongPress={() => onLinkCopy(node.attributes.href)}
+                delayLongPress={300}
+                suppressHighlighting
+            >
+                {children}<Text style={styles.link_icon}>{' ↗'}</Text>
+            </Text>
+        );
+    },
     fence: (node: any, children: any, _parent2: any, styles: any) => {
         return (
             <Pressable

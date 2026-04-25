@@ -38,6 +38,7 @@ import { Attachment, MessageAction } from '../../main/models';
 import { sidebarApi } from '../../../apiClient';
 import { AVAILABLE_TEAMS } from '../teams';
 import { DiceRollOverlay } from '../components/DiceRollOverlay';
+import { ToastContainer } from '../../../utils/ToastContainer';
 import { useAskUser } from '../AskUserContext';
 import { AskUserDialog } from '../components/AskUserDialog';
 import type { ChatStackParamList } from '../../../navigation/types';
@@ -523,6 +524,7 @@ export function ChatDetailScreen() {
                 onCancel={cancelDialog}
                 theme={theme}
             />
+            <ToastContainer />
         </View>
     );
 }

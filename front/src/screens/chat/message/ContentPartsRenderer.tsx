@@ -1,5 +1,5 @@
 import React, { useMemo, memo, useEffect, useRef } from 'react';
-import { View, Pressable, Text, StyleSheet, Animated } from 'react-native';
+import { View, Pressable, Text, StyleSheet, Animated, Linking, Clipboard } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useChat } from '../context';
 import { ContentPart } from './models';
@@ -9,9 +9,13 @@ import { createMarkdownRules } from './markdownRules';
 import { SingleToolCall, ReasoningBlock, CollapsibleSteps } from './ToolCalls';
 import { DocumentBlock } from './DocumentBlock';
 import { getChatElementComponent } from '../../../plugins/chatElementRegistry';
+import { showToast } from '../../../utils/toast';
 
-// Create markdown rules once outside component (they don't depend on props)
-const markdownRules = createMarkdownRules({ onCodeCopy: () => {}, onLinkPress: () => {}, onLinkCopy: () => {} });
+const markdownRules = createMarkdownRules({
+    onCodeCopy: (code) => { Clipboard.setString(code); showToast('Код скопирован'); },
+    onLinkPress: (url) => Linking.openURL(url).catch(() => {}),
+    onLinkCopy: (url) => { Clipboard.setString(url); showToast('Ссылка скопирована'); },
+});
 
 // Simple text styles for fast rendering during streaming
 const createSimpleTextStyles = (theme: any) =>

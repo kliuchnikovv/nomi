@@ -402,6 +402,7 @@ export const createMarkdownStyles = (theme: ThemeColors) => {
     // Simple cache key based on theme id or fallback
     const cacheKey = theme.id || theme.name || JSON.stringify({
         textPrimary: theme.textPrimary,
+        accent: theme.accent,
         codeBg: theme.codeBg,
         codeText: theme.codeText,
     });
@@ -417,15 +418,62 @@ export const createMarkdownStyles = (theme: ThemeColors) => {
         },
         link: {
             color: theme.accent,
-            textDecorationLine: 'underline',
-        },
-        link_container: {
-            flexDirection: 'row',
-            alignItems: 'baseline',
-            flexShrink: 1,
+            backgroundColor: withAlpha(theme.accent, 0.25),
+            textDecorationLine: 'none',
+            fontWeight: '700' as const,
         },
         link_icon: {
             color: theme.accent,
+            fontSize: 11,
+        },
+        link_paragraph: {
+            marginVertical: 4,
+            gap: 6,
+        },
+        paragraph_flow: {
+            flexDirection: 'row' as const,
+            flexWrap: 'wrap' as const,
+            alignItems: 'center' as const,
+            marginVertical: 4,
+            gap: 4,
+        },
+        link_chip: {
+            flexDirection: 'row' as const,
+            alignItems: 'center' as const,
+            backgroundColor: withAlpha(theme.accent, 0.2),
+            borderRadius: 6,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: withAlpha(theme.accent, 0.4),
+            paddingHorizontal: 7,
+            paddingVertical: 3,
+        },
+        link_chip_text: {
+            color: theme.accent,
+            fontWeight: '600' as const,
+            fontSize: 15,
+        },
+        link_chip_icon: {
+            color: theme.accent,
+            fontSize: 12,
+        },
+        link_button: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: withAlpha(theme.accent, 0.12),
+            borderRadius: 8,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: withAlpha(theme.accent, 0.3),
+            padding: 10,
+            gap: 8,
+        },
+        link_button_text: {
+            flex: 1,
+            color: theme.textPrimary,
+            fontSize: 14,
+            fontWeight: '600',
+        },
+        link_button_icon: {
+            color: theme.textSecondary,
             fontSize: 13,
         },
         code_inline: {

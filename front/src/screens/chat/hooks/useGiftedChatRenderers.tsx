@@ -21,6 +21,7 @@ import { NavArrowDown } from 'iconoir-react-native';
 import { createChatTheme } from '../theme';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 import { ThemeColors } from '../../../themes/types';
+import { showToast } from '../../../utils/toast';
 import { useTheme } from '../../../context/ThemeContext';
 import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -52,11 +53,12 @@ const openLink = (url: string) => {
 
 const copyLink = (url: string) => {
     Clipboard.setString(url);
+    showToast('Ссылка скопирована');
 };
 
 // Stable markdown rules - don't recreate on every render
 const stableMarkdownRules = createMarkdownRules({
-    onCodeCopy: () => {},
+    onCodeCopy: (code) => { Clipboard.setString(code); showToast('Код скопирован'); },
     onLinkPress: openLink,
     onLinkCopy: copyLink,
 });

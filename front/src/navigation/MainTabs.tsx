@@ -28,9 +28,10 @@ function AnimatedTabBar(props: BottomTabBarProps) {
     const heightSV = useSharedValue(0);
     const progress = useSharedValue(0); // 0 = visible, 1 = hidden
 
-    // True when the Chat tab is focused and the user is inside ChatDetail
+    // True when the Chat tab is the active tab AND user is inside ChatDetail
+    const isChatTabActive = state.routes[state.index]?.name === 'Chat';
     const chatRoute = state.routes.find(r => r.name === 'Chat');
-    const isInChatDetail = chatRoute
+    const isInChatDetail = isChatTabActive && chatRoute
         ? getFocusedRouteNameFromRoute(chatRoute) === 'ChatDetail'
         : false;
 
@@ -55,7 +56,6 @@ function AnimatedTabBar(props: BottomTabBarProps) {
         transform: [{ translateY: heightSV.value * progress.value }],
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        overflow: 'hidden' as const,
     }));
 
     return (
@@ -90,7 +90,7 @@ export function MainTabs() {
                     paddingTop: 12,
                 },
                 tabBarActiveTintColor: theme.accent,
-                tabBarInactiveTintColor: theme.textSecondary,
+                tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
                 tabBarShowLabel: false,
                 tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => {
                     let iconName: keyof typeof Ionicons.glyphMap;
@@ -121,7 +121,16 @@ export function MainTabs() {
         >
             <Tab.Screen name="Dashboard" component={DashboardScreen} />
             <Tab.Screen name="Planning" component={PlannerScreen} />
-            <Tab.Screen name="Chat" component={ChatStack} />
+            <Tab.Screen
+                name="Chat"
+                component={ChatStack}
+                listeners={({ navigation }) => ({
+                    tabPress: (e) => {
+                        e.preventDefault();
+                        navigation.navigate('Chat', { screen: 'ChatList' });
+                    },
+                })}
+            />
             <Tab.Screen name="Integrations" component={IntegrationsScreen} />
             <Tab.Screen name="Settings" component={SettingsStack} />
         </Tab.Navigator>
