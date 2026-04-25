@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class PlanStatus(str, Enum):
+    CONTEXT    = "context"
     EXTRACT    = "extract"
     RECON      = "recon"
     CLUSTER    = "cluster"
