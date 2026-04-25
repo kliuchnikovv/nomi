@@ -8,6 +8,7 @@ import {
     Animated,
     FlatList,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Spark } from 'iconoir-react-native';
 import Markdown from 'react-native-markdown-display';
 import BottomSheet, {
@@ -21,6 +22,9 @@ import { useTheme } from '../../../context/ThemeContext';
 import { ChatMessage, usePlannerChat } from '../hooks/usePlannerChat';
 import { PlanItem } from '../types';
 import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
+
+type PlanningLevel = 'quick' | 'standard' | 'full';
+const PLANNER_LEVEL_KEY = 'planner_level';
 
 // Space reserved at the bottom of the FlatList content so the newest
 // message is never hidden behind the absolutely-positioned footer.
@@ -52,6 +56,45 @@ interface FooterContentProps {
     theme: any;
     onSend: React.MutableRefObject<(text: string) => void>;
 }
+
+const LEVELS: { id: PlanningLevel; label: string }[] = [
+    { id: 'quick', label: '⚡ Quick' },
+    { id: 'standard', label: '📋 Standard' },
+    { id: 'full', label: '🔍 Full' },
+];
+
+const LevelSelector = React.memo(function LevelSelector({
+    theme,
+    level,
+    setLevel,
+}: { theme: any; level: PlanningLevel; setLevel: (l: PlanningLevel) => void }) {
+    return (
+        <View style={levelStyles.row}>
+            {LEVELS.map(({ id, label }) => (
+                <TouchableOpacity
+                    key={id}
+                    onPress={() => setLevel(id)}
+                    style={[
+                        levelStyles.btn,
+                        { borderColor: level === id ? theme.accent : theme.border },
+                        level === id && { backgroundColor: `${theme.accent}18` },
+                    ]}
+                    activeOpacity={0.7}
+                >
+                    <Text style={[levelStyles.btnText, { color: level === id ? theme.accent : theme.textSecondary }]}>
+                        {label}
+                    </Text>
+                </TouchableOpacity>
+            ))}
+        </View>
+    );
+});
+
+const levelStyles = StyleSheet.create({
+    row: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 2 },
+    btn: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+    btnText: { fontSize: 12, fontWeight: '500' },
+});
 
 const ChatFooterContent = React.memo(function ChatFooterContent({
     theme,
@@ -177,6 +220,23 @@ export function ChatBottomSheet({
 
     const { messages, sendMessage, isConnected, isThinking, replyToAskUser, hasMore, loadMore } = usePlannerChat(date);
 
+    // Planning level state — persisted across sessions
+    const [level, setLevelState] = useState<PlanningLevel>('standard');
+    const levelRef = useRef<PlanningLevel>('standard');
+    useEffect(() => {
+        AsyncStorage.getItem(PLANNER_LEVEL_KEY).then(v => {
+            if (v === 'quick' || v === 'standard' || v === 'full') {
+                setLevelState(v);
+                levelRef.current = v;
+            }
+        });
+    }, []);
+    const setLevel = useCallback((l: PlanningLevel) => {
+        setLevelState(l);
+        levelRef.current = l;
+        AsyncStorage.setItem(PLANNER_LEVEL_KEY, l);
+    }, []);
+
     // Stable send ref — ChatFooterContent reads this ref so renderFooter
     // never needs to change identity when items/sendMessage change.
     const onSendRef = useRef<(text: string) => void>(() => { });
@@ -184,7 +244,7 @@ export function ChatBottomSheet({
         onSendRef.current = (text: string) => {
             const namedItems = items ? items.filter(i => !i.checked && i.text.trim() !== '') : [];
             const context = namedItems.length > 0 ? buildPlanContext(items!) : undefined;
-            sendMessage(text, { context });
+            sendMessage(text, { context, level: levelRef.current });
         };
     }, [items, sendMessage]);
 
@@ -206,7 +266,7 @@ export function ChatBottomSheet({
         if (isOpen && isConnected && autoSend && !autoSentRef.current) {
             autoSentRef.current = true;
             const prompt = buildPlanningPrompt(itemsRef.current ?? [], date);
-            sendMessage(prompt, { webSearch: autoSendWebSearch ?? false });
+            sendMessage(prompt, { webSearch: autoSendWebSearch ?? false, level: levelRef.current });
             onAutoSendHandled?.();
         }
     }, [isOpen, isConnected, autoSend, date, sendMessage, onAutoSendHandled, autoSendWebSearch]);
@@ -250,10 +310,11 @@ export function ChatBottomSheet({
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
             <BottomSheetFooter {...props}>
+                <LevelSelector theme={theme} level={level} setLevel={setLevel} />
                 <ChatFooterContent theme={theme} onSend={onSendRef} />
             </BottomSheetFooter>
         ),
-        [theme], // theme changes on dark/light toggle only — acceptable remount
+        [theme, level, setLevel],
     );
 
     // ---------------------------------------------------------------------------

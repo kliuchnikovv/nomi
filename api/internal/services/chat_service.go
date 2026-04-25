@@ -75,8 +75,10 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, req inte
 		return nil, err
 	}
 
-	// Add icon
-	createdChat.Icon = s.getIconForTeam(createdChat.TeamID)
+	// Add icon: use stored icon or fall back to team-based icon
+	if createdChat.Icon == "" {
+		createdChat.Icon = s.getIconForTeam(createdChat.TeamID)
+	}
 
 	return createdChat, nil
 }
@@ -88,7 +90,9 @@ func (s *ChatService) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid
 		return nil, err
 	}
 
-	c.Icon = s.getIconForTeam(c.TeamID)
+	if c.Icon == "" {
+		c.Icon = s.getIconForTeam(c.TeamID)
+	}
 	return c, nil
 }
 
@@ -109,9 +113,11 @@ func (s *ChatService) ListChats(ctx context.Context, userID uuid.UUID, ifModifie
 		}
 	}
 
-	// Add icons to all chats
+	// Add icons to all chats (use stored icon, fall back to team-based)
 	for i := range chats {
-		chats[i].Icon = s.getIconForTeam(chats[i].TeamID)
+		if chats[i].Icon == "" {
+			chats[i].Icon = s.getIconForTeam(chats[i].TeamID)
+		}
 	}
 
 	return chats, nil
@@ -121,6 +127,7 @@ func (s *ChatService) ListChats(ctx context.Context, userID uuid.UUID, ifModifie
 type UpdateChatRequest struct {
 	Title      *string    `json:"title,omitempty"`
 	Model      *string    `json:"model,omitempty"`
+	Icon       *string    `json:"icon,omitempty"`
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 }
 
@@ -143,6 +150,9 @@ func (s *ChatService) UpdateChat(ctx context.Context, userID uuid.UUID, chatID u
 		if v.Model != nil {
 			currentChat.Model = *v.Model
 		}
+		if v.Icon != nil {
+			currentChat.Icon = *v.Icon
+		}
 		if v.ArchivedAt != nil {
 			currentChat.ArchivedAt = v.ArchivedAt
 		}
@@ -153,6 +163,9 @@ func (s *ChatService) UpdateChat(ctx context.Context, userID uuid.UUID, chatID u
 		}
 		if v.Model != "" {
 			currentChat.Model = v.Model
+		}
+		if v.Icon != "" {
+			currentChat.Icon = v.Icon
 		}
 		if v.ArchivedAt != nil {
 			currentChat.ArchivedAt = v.ArchivedAt
@@ -166,7 +179,9 @@ func (s *ChatService) UpdateChat(ctx context.Context, userID uuid.UUID, chatID u
 		return nil, err
 	}
 
-	updatedChat.Icon = s.getIconForTeam(updatedChat.TeamID)
+	if updatedChat.Icon == "" {
+		updatedChat.Icon = s.getIconForTeam(updatedChat.TeamID)
+	}
 	return updatedChat, nil
 }
 

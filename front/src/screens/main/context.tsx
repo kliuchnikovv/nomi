@@ -237,6 +237,18 @@ export function MainProvider({ children }: { children: ReactNode }) {
         }
     }
 
+    async function setChatIcon(chatId: string, icon: string) {
+        try {
+            await apiClient.put<void>(
+                `${getApiUrl()}/chats/${chatId}`,
+                { icon }
+            );
+            await getChats({ preserveActiveChat: true });
+        } catch (error) {
+            console.error('Failed to set chat icon:', error);
+        }
+    }
+
     // Ensure emptyChatID is always clean to show Dashboard
     useEffect(() => {
         if (activeChatID === emptyChatID) {
@@ -263,10 +275,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
     // State to store pending mode/team for new chat
     const [pendingChatMode, setPendingChatMode] = useState<{ mode: 'agent' | 'team'; teamId: string | null; initialMessage?: string } | null>(null);
 
-    function createNewChatWithMode(mode: 'agent' | 'team', teamId: string | null) {
-        // Store the mode/team to be used when the chat is created
-        setPendingChatMode({ mode, teamId });
-        // Trigger creation of a new chat
+    function createNewChatWithMode(mode: 'agent' | 'team', teamId: string | null, initialMessage?: string) {
+        setPendingChatMode({ mode, teamId, initialMessage });
         setActiveChatID(emptyChatID);
     }
 
@@ -288,6 +298,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
         createNewChat,
         createNewChatWithMode,
         renameChat,
+        setChatIcon,
         deleteChat,
         setActiveChatID,
         sidebarFilter,

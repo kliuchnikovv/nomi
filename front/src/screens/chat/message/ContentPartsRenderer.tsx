@@ -11,7 +11,7 @@ import { DocumentBlock } from './DocumentBlock';
 import { getChatElementComponent } from '../../../plugins/chatElementRegistry';
 
 // Create markdown rules once outside component (they don't depend on props)
-const markdownRules = createMarkdownRules(() => {});
+const markdownRules = createMarkdownRules({ onCodeCopy: () => {}, onLinkPress: () => {}, onLinkCopy: () => {} });
 
 // Simple text styles for fast rendering during streaming
 const createSimpleTextStyles = (theme: any) =>
@@ -203,56 +203,39 @@ const ToolCallsGroup = memo(function ToolCallsGroup({ parts }: { parts: ContentP
     );
 });
 
-// Memoized content parts processor
+type ProcessedPart = { type: 'text'; text: string } | { type: 'group'; parts: ContentPart[] };
+
+// Memoized content parts processor.
+// All tool_call and reasoning parts are merged into a single collapsible group
+// placed before the text response, regardless of interspersed short text fragments.
 function useProcessedParts(parts: ContentPart[], showToolCalls: boolean, showReasoning: boolean) {
     return useMemo(() => {
         if (!parts || parts.length === 0) return [];
 
-        const result: Array<{ type: 'text'; text: string } | { type: 'group'; parts: ContentPart[] }> = [];
-        let currentText = '';
-        let currentGroup: ContentPart[] = [];
+        const groupParts: ContentPart[] = [];
+        const textItems: string[] = [];
 
-        for (let i = 0; i < parts.length; i++) {
-            const part = parts[i];
-
-            // Filter based on settings
+        for (const part of parts) {
             if (part.type === 'tool_call' && !showToolCalls) continue;
             if (part.type === 'reasoning' && !showReasoning) continue;
             if (part.type === 'text' && isLogMessage(part.text)) continue;
 
             const isTextLike = part.type === 'text' || (part as any).type === 'member_response';
-
             if (isTextLike) {
-                // Flush any pending group
-                if (currentGroup.length > 0) {
-                    result.push({ type: 'group', parts: [...currentGroup] });
-                    currentGroup = [];
-                }
-
-                const textContent = part.type === 'text' ? part.text : (part as any).text;
-                // Skip whitespace-only separators that Python sends between tool calls
-                if (textContent && textContent.trim()) {
-                    // Accumulate text with separator
-                    currentText = currentText ? currentText + '\n\n' + textContent : textContent;
-                }
+                const txt: string = part.type === 'text' ? part.text : (part as any).text;
+                if (txt?.trim()) textItems.push(txt);
             } else if (part.type === 'tool_call' || part.type === 'reasoning') {
-                // Flush any pending text
-                if (currentText) {
-                    result.push({ type: 'text', text: currentText });
-                    currentText = '';
-                }
-                currentGroup.push(part);
+                groupParts.push(part);
             }
         }
 
-        // Flush remaining
-        if (currentText) {
-            result.push({ type: 'text', text: currentText });
+        const result: ProcessedPart[] = [];
+        if (groupParts.length > 0) {
+            result.push({ type: 'group', parts: groupParts });
         }
-        if (currentGroup.length > 0) {
-            result.push({ type: 'group', parts: [...currentGroup] });
+        for (const text of textItems) {
+            result.push({ type: 'text', text });
         }
-
         return result;
     }, [parts, showToolCalls, showReasoning]);
 }

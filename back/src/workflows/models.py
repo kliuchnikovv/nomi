@@ -60,3 +60,4 @@ class PlanningInput(BaseModel):
     tasks: list[PlanTask] = Field(default_factory=list)
     session_state: dict[str, Any] = Field(default_factory=dict)
     timezone: str = "UTC"
+    level: str = "standard"  # quick | standard | full

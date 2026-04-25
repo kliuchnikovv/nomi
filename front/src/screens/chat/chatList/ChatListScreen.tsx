@@ -136,7 +136,10 @@ export function ChatListScreen() {
                 onLongPress={() => handleLongPress(item.id, item.title || 'Untitled')}
             >
                 <View style={[styles.iconCircle, { backgroundColor: theme.surface }]}>
-                    <Ionicons name={isPlannerChat(item) ? 'calendar' : item.mode === 'team' ? 'people' : 'sparkles'} size={16} color={theme.accent} />
+                    {item.icon && /\p{Emoji}/u.test(item.icon) && !/^[0-9#*]$/.test(item.icon)
+                        ? <Text style={{ fontSize: 16 }}>{item.icon}</Text>
+                        : <Ionicons name={isPlannerChat(item) ? 'calendar' : item.mode === 'team' ? 'people' : 'sparkles'} size={16} color={theme.accent} />
+                    }
                 </View>
                 <View style={styles.itemContent}>
                     <View style={styles.itemRow}>

@@ -30,6 +30,7 @@ import { initDebugUtils } from './src/debug/DebugUtils';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 import { SplashScreen } from './src/screens/splash/SplashScreen';
+import { useShareExtension } from './src/share-extension/useShareExtension';
 
 // Initialize debug utilities
 initDebugUtils();
@@ -161,6 +162,7 @@ function App() {
 
 function AppContent() {
     const { isAuthenticated, isLoading, token } = useAuth();
+    useShareExtension();
 
     // Global Socket Lifecycle - Auth Token Management
     useEffect(() => {

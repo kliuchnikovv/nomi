@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
 
 interface Props {
     date: string;     // YYYY-MM-DD
     onPrev: () => void;
     onNext: () => void;
+    isSyncing?: boolean;
+    onSync?: () => void;
 }
 
 const WEEKDAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -44,9 +46,10 @@ function getLabel(date: string): string {
     return `${weekday}, ${day} ${month}`;
 }
 
-export function DocumentHeader({ date, onPrev, onNext }: Props) {
+export function DocumentHeader({ date, onPrev, onNext, isSyncing, onSync }: Props) {
     const { theme } = useTheme();
     const label = getLabel(date);
+    const showSync = Platform.OS === 'ios' && onSync;
 
     return (
         <View style={[styles.container, { borderColor: theme.border }]}>
@@ -63,14 +66,29 @@ export function DocumentHeader({ date, onPrev, onNext }: Props) {
                 {label}
             </Text>
 
-            <TouchableOpacity
-                onPress={onNext}
-                style={styles.arrowBtn}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-                <Text style={styles.arrow}>›</Text>
-            </TouchableOpacity>
+            <View style={styles.rightGroup}>
+                {showSync && (
+                    <TouchableOpacity
+                        onPress={onSync}
+                        disabled={isSyncing}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={styles.syncBtn}
+                    >
+                        {isSyncing
+                            ? <ActivityIndicator size="small" color="#007AFF" />
+                            : <Text style={[styles.syncIcon, { color: '#007AFF' }]}>↻</Text>
+                        }
+                    </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                    onPress={onNext}
+                    style={styles.arrowBtn}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Text style={styles.arrow}>›</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
@@ -101,5 +119,20 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         flex: 1,
         textAlign: 'center',
+    },
+    rightGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    syncBtn: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        minWidth: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    syncIcon: {
+        fontSize: 20,
+        fontWeight: '400',
     },
 });

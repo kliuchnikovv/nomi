@@ -400,9 +400,10 @@ class RedisSession:
         if user_location and "user_location" not in session_state:
             session_state["user_location"] = user_location
 
-        # CONTEXT preflight: fetch calendar events and health summary before the
-        # sync workflow generator starts. Only runs on the first invocation.
+        # CONTEXT preflight: fetch calendar events and (conditionally) health summary
+        # before the sync workflow generator starts. Only runs on the first invocation.
         planning_date = payload.get("planning_date", "")
+        planning_level = (self.command_desc or {}).get("level", "standard")
         current_status = session_state.get("status", PlanStatus.CONTEXT)
         if current_status == PlanStatus.CONTEXT or "context_data" not in session_state:
             from datetime import date as _date, timedelta
@@ -412,22 +413,30 @@ class RedisSession:
                 plan_dt = _date.today()
             yesterday = (plan_dt - timedelta(days=1)).isoformat()
 
-            cal_events, health_summary = await asyncio.gather(
-                self._fetch_calendar_events_for_plan(planning_date),
-                self._fetch_health_summary_for_plan(yesterday),
-                return_exceptions=True,
-            )
-            if isinstance(cal_events, BaseException):
-                cal_events = []
-            if isinstance(health_summary, BaseException):
-                health_summary = {}
+            if planning_level == "quick":
+                cal_events = await self._fetch_calendar_events_for_plan(planning_date)
+                if isinstance(cal_events, BaseException):
+                    cal_events = []
+                health_summary: dict = {}
+            else:
+                cal_events, health_summary = await asyncio.gather(
+                    self._fetch_calendar_events_for_plan(planning_date),
+                    self._fetch_health_summary_for_plan(yesterday),
+                    return_exceptions=True,
+                )
+                if isinstance(cal_events, BaseException):
+                    cal_events = []
+                if isinstance(health_summary, BaseException):
+                    health_summary = {}
 
             session_state["context_data"] = {
                 "calendar_events": cal_events,
                 "health_summary": health_summary,
             }
+            session_state["planning_level"] = planning_level
             logger.info(
-                "[PlannerContext] Loaded %d calendar events, health_summary keys=%s",
+                "[PlannerContext] level=%s, loaded %d calendar events, health_summary keys=%s",
+                planning_level,
                 len(cal_events),
                 list(health_summary.keys()),
             )

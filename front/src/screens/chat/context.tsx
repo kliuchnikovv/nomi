@@ -23,7 +23,7 @@ import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
 import { shallow } from 'zustand/shallow';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
-import { generateChatTitle } from '../../services/chatTitleGenerator';
+import { generateChatTitle, generateChatEmoji } from '../../services/chatTitleGenerator';
 import { extractActions } from '../../services/actionExtractor';
 import { getStoredLocation } from '../../services/location/locationService';
 
@@ -265,6 +265,7 @@ export function ChatProvider({
         clearPendingChatMode,
         sidebarFilter,
         renameChat,
+        setChatIcon,
         getChats,
     } = useMain();
 
@@ -552,6 +553,15 @@ export function ChatProvider({
                                     '[ChatContext] Title generation failed:',
                                     e,
                                 );
+                            });
+                        generateChatEmoji(text)
+                            .then(emoji => {
+                                if (emoji) {
+                                    setChatIcon(chatIdToUse!, emoji);
+                                }
+                            })
+                            .catch(e => {
+                                console.warn('[ChatContext] Emoji generation failed:', e);
                             });
                     }
                 }

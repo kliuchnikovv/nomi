@@ -35,9 +35,30 @@ import { ContentPartsRenderer } from '../message/ContentPartsRenderer';
 import { GenerationStatusBar } from '../components/GenerationStatusBar';
 import { Dimensions } from 'react-native';
 
+const openLink = (url: string) => {
+    InAppBrowser.isAvailable().then(available => {
+        if (available) {
+            InAppBrowser.open(url, {
+                showTitle: true,
+                dismissButtonStyle: 'close',
+                modalEnabled: true,
+                enableDefaultShare: false,
+            });
+        } else {
+            Linking.openURL(url);
+        }
+    });
+};
+
+const copyLink = (url: string) => {
+    Clipboard.setString(url);
+};
+
 // Stable markdown rules - don't recreate on every render
-const stableMarkdownRules = createMarkdownRules(() => {
-    Clipboard.setString('');
+const stableMarkdownRules = createMarkdownRules({
+    onCodeCopy: () => {},
+    onLinkPress: openLink,
+    onLinkCopy: copyLink,
 });
 
 // Simple text styles for fast rendering during streaming
@@ -606,25 +627,6 @@ export function useGiftedChatRenderers({
                                 <Markdown
                                     style={markdownStyles as any}
                                     rules={stableMarkdownRules}
-                                    onLinkPress={url => {
-                                        InAppBrowser.isAvailable().then(
-                                            available => {
-                                                if (available) {
-                                                    InAppBrowser.open(url, {
-                                                        showTitle: true,
-                                                        dismissButtonStyle:
-                                                            'close',
-                                                        modalEnabled: true,
-                                                        enableDefaultShare:
-                                                            false,
-                                                    });
-                                                } else {
-                                                    Linking.openURL(url);
-                                                }
-                                            },
-                                        );
-                                        return false;
-                                    }}
                                 >
                                     {messageText}
                                 </Markdown>
@@ -692,21 +694,6 @@ export function useGiftedChatRenderers({
                         <Markdown
                             style={markdownStyles as any}
                             rules={stableMarkdownRules}
-                            onLinkPress={url => {
-                                InAppBrowser.isAvailable().then(available => {
-                                    if (available) {
-                                        InAppBrowser.open(url, {
-                                            showTitle: true,
-                                            dismissButtonStyle: 'close',
-                                            modalEnabled: true,
-                                            enableDefaultShare: false,
-                                        });
-                                    } else {
-                                        Linking.openURL(url);
-                                    }
-                                });
-                                return false;
-                            }}
                         >
                             {messageText}
                         </Markdown>

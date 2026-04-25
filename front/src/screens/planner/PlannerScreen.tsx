@@ -20,6 +20,7 @@ import { PlanItem } from './types';
 import { PlanDocumentContext } from './PlanDocumentContext';
 import { registerApplyPatches, unregisterApplyPatches } from './planDocumentRegistry';
 import { usePlanDocument } from './hooks/usePlanDocument';
+import { usePlanRemindersSync } from './hooks/usePlanRemindersSync';
 import { PlanItemRow } from './components/PlanItemRow';
 import { AIEditBanner } from './components/AIEditBanner';
 import { ChatBottomSheet } from './components/ChatBottomSheet';
@@ -62,6 +63,8 @@ export function PlannerScreen() {
         bannerMessage,
         clearBanner,
     } = usePlanDocument(date);
+
+    const { isSyncing, sync: syncToReminders } = usePlanRemindersSync(date, items);
 
     const [chatOpen, setChatOpen] = useState(false);
     const [autoSendTrigger, setAutoSendTrigger] = useState(false);
@@ -223,6 +226,8 @@ export function PlannerScreen() {
                                     date={date}
                                     onPrev={() => setDate(shiftDate(date, -1))}
                                     onNext={() => setDate(shiftDate(date, 1))}
+                                    isSyncing={isSyncing}
+                                    onSync={syncToReminders}
                                 />
 
                                 <DraggableFlatList

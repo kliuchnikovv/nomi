@@ -416,8 +416,17 @@ export const createMarkdownStyles = (theme: ThemeColors) => {
             lineHeight: 24,
         },
         link: {
-            color: '#4A9EFF',
+            color: theme.accent,
             textDecorationLine: 'underline',
+        },
+        link_container: {
+            flexDirection: 'row',
+            alignItems: 'baseline',
+            flexShrink: 1,
+        },
+        link_icon: {
+            color: theme.accent,
+            fontSize: 13,
         },
         code_inline: {
             backgroundColor: theme.codeInlineBg || '#24283b',

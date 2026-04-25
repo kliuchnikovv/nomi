@@ -174,6 +174,7 @@ def _run_recon_stage(
     planning_date: str,
     transport_mode: str | None,
     user_location: str | None = None,
+    planning_level: str = "standard",
 ) -> StageResult:
     locations: dict[str, dict] = {}
 
@@ -203,20 +204,21 @@ def _run_recon_stage(
 
         locations[loc] = {"coords": coords, "hours": hours}
 
-    # Transport and news context for planning
+    # Transport and news context — only fetched for "full" level
     transport_news: str = ""
-    city = _extract_city_hint(user_location, locations)
-    if city:
-        parts = []
-        for search_fn in [search_transport_news, search_city_events]:
-            try:
-                result = search_fn(city, planning_date)[:300]
-                if result and not result.startswith("Search unavailable"):
-                    parts.append(result)
-            except Exception:
-                pass
-        if parts:
-            transport_news = "\n".join(parts)[:600]
+    if planning_level == "full":
+        city = _extract_city_hint(user_location, locations)
+        if city:
+            parts = []
+            for search_fn in [search_transport_news, search_city_events]:
+                try:
+                    result = search_fn(city, planning_date)[:300]
+                    if result and not result.startswith("Search unavailable"):
+                        parts.append(result)
+                except Exception:
+                    pass
+            if parts:
+                transport_news = "\n".join(parts)[:600]
 
     pending_questions: list[dict] = []
     if transport_mode is None:
@@ -658,7 +660,11 @@ def _planning_steps(
             "transport_mode"
         ) or _infer_transport(user_message, state.get("clarification_answers", []))
         user_location = state.get("user_location")
-        result = _run_recon_stage(extracted, planning_date, transport, user_location=user_location)
+        result = _run_recon_stage(
+            extracted, planning_date, transport,
+            user_location=user_location,
+            planning_level=state.get("planning_level", "standard"),
+        )
         if result.pending_questions and not state.get("recon_clarified"):
             first_item = result.pending_questions[0]
             state["pending_questions"] = result.pending_questions[1:]

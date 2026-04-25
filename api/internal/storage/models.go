@@ -18,6 +18,7 @@ type Chat struct {
 	Mode   string    `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
 
 	TeamID     *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
+	Icon       string     `gorm:"type:varchar(10);default:''"`
 	CreatedAt  time.Time  `gorm:"not null"`
 	UpdatedAt  time.Time  `gorm:"not null;index;index:idx_chats_user_updated,priority:2,sort:desc"`
 	ArchivedAt *time.Time `gorm:"default:null"`

@@ -1,9 +1,3 @@
-/**
- * Generates a short chat title from the first user message.
- * On iOS: uses Apple Foundation Models (on-device) when available.
- * On Android or on error: returns fallback (truncated message); backend will set title from first message.
- */
-
 import { Platform } from 'react-native';
 
 const TITLE_MAX_LENGTH = 50;
@@ -96,4 +90,45 @@ Title:`;
   const fallback = fallbackTitle(firstMessage);
   console.log(LOG_TAG, 'Returning fallback title:', fallback || '(empty)');
   return fallback;
+}
+
+const EMOJI_LOG_TAG = '[ChatEmojiGenerator]';
+
+function isEmoji(str: string): boolean {
+  return /^\p{Emoji}$/u.test(str) && !/^[0-9#*]$/u.test(str);
+}
+
+export async function generateChatEmoji(firstMessage: string): Promise<string> {
+  if (Platform.OS !== 'ios') return '';
+
+  const trimmed = firstMessage.trim();
+  if (trimmed.length < 5) return '';
+
+  try {
+    console.log(EMOJI_LOG_TAG, 'Generating emoji...');
+    const { apple } = require('@react-native-ai/apple');
+    const { generateText } = require('ai');
+
+    const prompt = `Pick exactly one emoji that best represents the topic of this message. Reply with only the emoji, nothing else.
+
+Message: ${trimmed.slice(0, 300)}
+Emoji:`;
+
+    const resultPromise = generateText({ model: apple(), prompt });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Emoji generation timeout')), GENERATION_TIMEOUT_MS),
+    );
+
+    const result = await Promise.race([resultPromise, timeoutPromise]);
+    const raw = (result as { text?: string })?.text?.trim() ?? '';
+    const emoji = Array.from(raw)[0] ?? '';
+    if (emoji && isEmoji(emoji)) {
+      console.log(EMOJI_LOG_TAG, 'Generated emoji:', emoji);
+      return emoji;
+    }
+    console.log(EMOJI_LOG_TAG, 'No valid emoji returned');
+  } catch (e) {
+    console.warn(EMOJI_LOG_TAG, 'Failed:', e);
+  }
+  return '';
 }

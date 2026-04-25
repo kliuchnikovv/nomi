@@ -79,7 +79,7 @@ export interface UsePlannerChatResult {
   isThinking: boolean;
   hasMore: boolean;
   loadMore: () => void;
-  sendMessage: (text: string, options?: { webSearch?: boolean; context?: string }) => void;
+  sendMessage: (text: string, options?: { webSearch?: boolean; context?: string; level?: 'quick' | 'standard' | 'full' }) => void;
   replyToAskUser: (callId: string, answer: string) => void;
 }
 
@@ -316,7 +316,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
   // ---------------------------------------------------------------------------
 
   const sendMessage = useCallback(
-    (text: string, options?: { webSearch?: boolean; context?: string }) => {
+    (text: string, options?: { webSearch?: boolean; context?: string; level?: 'quick' | 'standard' | 'full' }) => {
       const trimmed = text.trim();
       if (!trimmed || !chatId) return;
 
@@ -356,7 +356,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
         undefined, // 12th: userId
         undefined, // 13th: endpoint
         undefined, // 14th: authToken
-        { type: 'planner', date: date }, // 15th: command
+        { type: 'planner', date: date, level: options?.level ?? 'standard' }, // 15th: command
       );
     },
     [chatId, date],

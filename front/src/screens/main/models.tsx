@@ -9,8 +9,9 @@ export interface MainContextType {
     activeChat: Chat | null;
     getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
-    createNewChatWithMode: (mode: 'agent' | 'team', teamId: string | null) => void;
+    createNewChatWithMode: (mode: 'agent' | 'team', teamId: string | null, initialMessage?: string) => void;
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
+    setChatIcon: (chatId: string, icon: string) => Promise<void>;
     deleteChat: (chatId: string) => void;
     setActiveChatID: (id: string | null) => void;
     sidebarFilter: string;

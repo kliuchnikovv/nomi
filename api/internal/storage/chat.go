@@ -27,6 +27,7 @@ func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 		Title:     c.Title,
 		Mode:      mode,
 		TeamID:    c.TeamID,
+		Icon:      c.Icon,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -41,6 +42,7 @@ func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 		Title:     chatModel.Title,
 		Mode:      chatModel.Mode,
 		TeamID:    chatModel.TeamID,
+		Icon:      chatModel.Icon,
 		CreatedAt: chatModel.CreatedAt,
 		UpdatedAt: chatModel.UpdatedAt,
 	}, nil
@@ -60,6 +62,7 @@ func (s *Storage) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUI
 		Title:      chatModel.Title,
 		Mode:       chatModel.Mode,
 		TeamID:     chatModel.TeamID,
+		Icon:       chatModel.Icon,
 		CreatedAt:  chatModel.CreatedAt,
 		UpdatedAt:  chatModel.UpdatedAt,
 		ArchivedAt: chatModel.ArchivedAt,
@@ -83,6 +86,7 @@ func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.C
 			Title:      model.Title,
 			Mode:       model.Mode,
 			TeamID:     model.TeamID,
+			Icon:       model.Icon,
 			CreatedAt:  model.CreatedAt,
 			UpdatedAt:  model.UpdatedAt,
 			ArchivedAt: model.ArchivedAt,
@@ -97,6 +101,7 @@ func (s *Storage) UpdateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 		Updates(map[string]any{
 			"title":       c.Title,
 			"model":       c.Model,
+			"icon":        c.Icon,
 			"updated_at":  time.Now(),
 			"archived_at": c.ArchivedAt,
 		})
@@ -131,6 +136,7 @@ func (s *Storage) GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUI
 			Title:      model.Title,
 			Mode:       model.Mode,
 			TeamID:     model.TeamID,
+			Icon:       model.Icon,
 			CreatedAt:  model.CreatedAt,
 			UpdatedAt:  model.UpdatedAt,
 			ArchivedAt: model.ArchivedAt,

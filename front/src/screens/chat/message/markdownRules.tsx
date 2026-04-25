@@ -1,28 +1,46 @@
 import React from 'react';
 import { Text, Pressable, View } from 'react-native';
 
-// Cache for default rules (no-op copy handler)
-let defaultRulesCache: any = null;
-const NOOP_COPY = () => {};
+type MarkdownRuleOptions = {
+    onCodeCopy: (code: string) => void;
+    onLinkPress: (url: string) => void;
+    onLinkCopy: (url: string) => void;
+};
 
-/**
- * Create markdown rules with optional code copy handler
- * Results are cached for the default no-op handler for performance
- */
-export const createMarkdownRules = (onCodeCopy: (code: string) => void) => {
-    // Use cached rules for the default no-op handler
-    if (onCodeCopy === NOOP_COPY) {
+let defaultRulesCache: any = null;
+const NOOP: () => void = () => {};
+
+export const createMarkdownRules = (options: MarkdownRuleOptions) => {
+    if (
+        options.onCodeCopy === NOOP &&
+        options.onLinkPress === NOOP &&
+        options.onLinkCopy === NOOP
+    ) {
         if (!defaultRulesCache) {
-            defaultRulesCache = createRulesInternal(NOOP_COPY);
+            defaultRulesCache = createRulesInternal(options);
         }
         return defaultRulesCache;
     }
-
-    return createRulesInternal(onCodeCopy);
+    return createRulesInternal(options);
 };
 
-const createRulesInternal = (onCodeCopy: (code: string) => void) => ({
-    fence: (node: any, children: any, parent: any, styles: any) => {
+const createRulesInternal = ({ onCodeCopy, onLinkPress, onLinkCopy }: MarkdownRuleOptions) => ({
+    link: (node: any, children: any, _parent: any, styles: any) => (
+        <Pressable
+            key={node.key}
+            onPress={() => onLinkPress(node.attributes.href)}
+            onLongPress={() => onLinkCopy(node.attributes.href)}
+            delayLongPress={300}
+            style={({ pressed }) => [
+                styles.link_container,
+                pressed && { opacity: 0.7 },
+            ]}
+        >
+            <Text style={styles.link}>{children}</Text>
+            <Text style={styles.link_icon}>{' ↗'}</Text>
+        </Pressable>
+    ),
+    fence: (node: any, children: any, _parent2: any, styles: any) => {
         return (
             <Pressable
                 key={node.key}
