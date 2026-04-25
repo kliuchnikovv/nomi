@@ -9,6 +9,8 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/storage/repositories"
 )
 
+const defaultPersistentChatModel = "glm-4-flash"
+
 // ChatService contains business logic for chat operations
 type ChatService struct {
 	repo repositories.ChatRepository
@@ -193,7 +195,7 @@ func (s *ChatService) DeleteChat(ctx context.Context, userID uuid.UUID, chatID u
 // GetOrCreatePersistentChat returns the user's persistent chat, creating it if needed.
 func (s *ChatService) GetOrCreatePersistentChat(ctx context.Context, userID uuid.UUID, defaultModel string) (*chat.Chat, error) {
 	if defaultModel == "" {
-		defaultModel = "glm-4-flash"
+		defaultModel = defaultPersistentChatModel
 	}
 	c, err := s.repo.GetOrCreatePersistent(ctx, userID, defaultModel)
 	if err != nil {

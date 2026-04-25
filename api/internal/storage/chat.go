@@ -177,15 +177,16 @@ func (s *Storage) GetOrCreatePersistentChat(ctx context.Context, userID uuid.UUI
 
 	if err == nil {
 		return &chat.Chat{
-			ID:        chatModel.ID,
-			Model:     chatModel.Model,
-			Title:     chatModel.Title,
-			Mode:      chatModel.Mode,
-			Type:      chatModel.Type,
-			TeamID:    chatModel.TeamID,
-			Icon:      chatModel.Icon,
-			CreatedAt: chatModel.CreatedAt,
-			UpdatedAt: chatModel.UpdatedAt,
+			ID:         chatModel.ID,
+			Model:      chatModel.Model,
+			Title:      chatModel.Title,
+			Mode:       chatModel.Mode,
+			Type:       chatModel.Type,
+			TeamID:     chatModel.TeamID,
+			Icon:       chatModel.Icon,
+			CreatedAt:  chatModel.CreatedAt,
+			UpdatedAt:  chatModel.UpdatedAt,
+			ArchivedAt: chatModel.ArchivedAt,
 		}, nil
 	}
 
