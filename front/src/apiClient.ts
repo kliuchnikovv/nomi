@@ -257,6 +257,10 @@ export const authApi = {
     updateMe: (body: any) => apiClient.put<any>(`${API_URL()}/auth/me`, body),
 };
 
+export const chatsApi = {
+    getPersistentChat: () => apiClient.get<any>(`${API_URL()}/chats/persistent`),
+};
+
 export const briefingApi = {
     getBriefing: (context?: any) =>
         apiClient.post<any>(`${API_URL()}/briefing`, { context }),

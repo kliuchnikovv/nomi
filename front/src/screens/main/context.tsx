@@ -35,7 +35,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     const [activePluginIntegrationId, setActivePluginIntegrationId] = useState<string | null>(null);
     const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
 
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
 
 
     const activeChat = useMemo(
@@ -52,6 +52,23 @@ export function MainProvider({ children }: { children: ReactNode }) {
             getChats();
         }
     }, [isAuthenticated]);
+
+    // Auto-load persistent chat when single chat mode is enabled
+    useEffect(() => {
+        if (!isAuthenticated || !user?.single_chat_mode) return;
+
+        const url = `${getApiUrl()}/chats/persistent`;
+        apiClient.get<Chat>(url)
+            .then(persistentChat => {
+                if (!persistentChat) return;
+                setActiveChatID(persistentChat.id);
+                setChats(prev => {
+                    const exists = prev.some(c => c.id === persistentChat.id);
+                    return exists ? prev : [persistentChat, ...prev];
+                });
+            })
+            .catch(err => console.error('Failed to load persistent chat', err));
+    }, [isAuthenticated, user?.single_chat_mode]);
 
     function rebindPlaceholderChat(newChatId: string) {
         setChats(prev => prev.map(c => {

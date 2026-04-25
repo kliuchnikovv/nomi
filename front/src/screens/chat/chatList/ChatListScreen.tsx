@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { emptyChatID, useMain } from '../../main/context';
+import { useAuth } from '../../auth/context';
 import { useTheme } from '../../../context/ThemeContext';
 import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
@@ -37,6 +38,7 @@ export function ChatListScreen() {
     const navigation = useNavigation<NavProp>();
     const insets = useSafeAreaInsets();
     const { theme } = useTheme();
+    const { user } = useAuth();
     const {
         chats, chatsLoading, activeChatID, setActiveChatID,
         createNewChat, createNewChatWithMode, renameChat, deleteChat,
@@ -159,9 +161,11 @@ export function ChatListScreen() {
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: theme.background }]}>
                 <Text style={[styles.title, { color: theme.text }]}>Chats</Text>
-                <Pressable onPress={handleNewChat} style={[styles.newBtn, { backgroundColor: theme.accent }]}>
-                    <Ionicons name="add" size={20} color="#fff" />
-                </Pressable>
+                {!user?.single_chat_mode && (
+                    <Pressable onPress={handleNewChat} style={[styles.newBtn, { backgroundColor: theme.accent }]}>
+                        <Ionicons name="add" size={20} color="#fff" />
+                    </Pressable>
+                )}
             </View>
 
             {/* Search */}

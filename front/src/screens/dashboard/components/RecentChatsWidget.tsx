@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../context/ThemeContext';
+import { useAuth } from '../../auth/context';
 import { useMain } from '../../main/context';
 import { Chat } from '../../main/models';
 import type { RootTabParamList } from '../../../navigation/types';
@@ -35,7 +36,10 @@ function formatRelativeTime(timestamp: number | string | null | undefined): stri
 export function RecentChatsWidget() {
     const navigation = useNavigation<NavigationProp<RootTabParamList>>();
     const { theme } = useTheme();
+    const { user } = useAuth();
     const { chats } = useMain();
+
+    if (user?.single_chat_mode) return null;
 
     const toMs = (v: number | string) =>
         typeof v === 'number' ? v : Date.parse(String(v)) || 0;
