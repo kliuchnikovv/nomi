@@ -1,0 +1,6 @@
+ALTER TABLE chats ADD COLUMN IF NOT EXISTS type VARCHAR NOT NULL DEFAULT 'regular';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS single_chat_mode BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_chats_user_type ON chats(user_id, type);
+CREATE INDEX IF NOT EXISTS idx_messages_archived ON messages(chat_id, archived) WHERE archived = FALSE;
