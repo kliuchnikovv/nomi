@@ -13,7 +13,13 @@ from agno.workflow.types import WorkflowExecutionInput, StepOutput
 
 from . import ors_client
 from .models import PlanStatus, PlanningInput, StageResult
-from .tools import search_place_hours, search_route_time_text, search_weather  # noqa: F401
+from .tools import (  # noqa: F401
+    search_place_hours,
+    search_route_time_text,
+    search_weather,
+    search_transport_news,
+    search_city_events,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +105,13 @@ use each answer to fill in the specific task field the question was about. Match
 the task by reading the question carefully — do NOT reassign answers between tasks.
 A time answer ("13:20 - 18:30") becomes time_hint ONLY for the task the question named explicitly.
 
+If the additional context contains a "calendar_events" list, treat each event as an
+additional task. Create a synthetic id by prepending "cal_" to the event's id field
+(e.g. "cal_abc123"). Derive time_hint from start/end times in "HH:MM-HH:MM" format.
+Set location from the event's "location" field if present, context_type to "place" if
+a location is present else "none". Skip any calendar event whose title is substantially
+identical (>80% word overlap) to an existing user task — do not create duplicates.
+
 Also produce pending_questions: a list of questions to ask the user if duration,
 location, or time is missing for important tasks. Keep each question concise and
 specific to one task. Return an empty list if nothing is unclear.
@@ -142,6 +155,20 @@ def _run_extract_stage(tasks: list[dict], context: dict) -> StageResult:
 _SKIP_CONTEXT_TYPES = {"home", "hotel", "none"}
 
 
+def _extract_city_hint(user_location: str | None, locations: dict) -> str | None:
+    """Extract a usable city name for transport/news searches.
+
+    Prefers user_location; falls back to the first geocoded non-origin location key.
+    """
+    if user_location:
+        parts = [p.strip() for p in user_location.split(",")]
+        return parts[-2] if len(parts) >= 2 else parts[0]
+    for key in locations:
+        if key != "__origin__" and locations[key].get("coords"):
+            return key
+    return None
+
+
 def _run_recon_stage(
     extracted_tasks: list[dict],
     planning_date: str,
@@ -176,6 +203,21 @@ def _run_recon_stage(
 
         locations[loc] = {"coords": coords, "hours": hours}
 
+    # Transport and news context for planning
+    transport_news: str = ""
+    city = _extract_city_hint(user_location, locations)
+    if city:
+        parts = []
+        for search_fn in [search_transport_news, search_city_events]:
+            try:
+                result = search_fn(city, planning_date)[:300]
+                if result and not result.startswith("Search unavailable"):
+                    parts.append(result)
+            except Exception:
+                pass
+        if parts:
+            transport_news = "\n".join(parts)[:600]
+
     pending_questions: list[dict] = []
     if transport_mode is None:
 
@@ -185,7 +227,7 @@ def _run_recon_stage(
         })
 
     return StageResult(
-        output={"locations": locations, "transport_mode": transport_mode},
+        output={"locations": locations, "transport_mode": transport_mode, "transport_news": transport_news},
         pending_questions=pending_questions,
         is_complete=transport_mode is not None,
     )
@@ -383,6 +425,20 @@ Apply patches in this STRICT order:
 For reorder_items, include ALL item IDs (original + newly added travel items).
 Use specific time ranges only — never "morning" or "evening".
 
+HEALTH RECOMMENDATIONS:
+If health_summary contains sleep data where duration < 6.5 or quality == "poor":
+- Add a new plan item at the end of the day: id="health_sleep_rec", text="Лечь спать до 22:00".
+  Assign it a time chip "22:00-22:30".
+- Add a note chip with value {"info": "10-мин перерыв — ночью было мало сна"} to the
+  2-3 most time-intensive or cognitively heavy tasks in the plan.
+- Only apply these rules if health_summary.sleep is present. Do not invent health data.
+
+TRANSPORT DISRUPTIONS:
+If transport_news is non-empty, check each travel block in the plan:
+- If the disruption specifically mentions the city or transport mode used in that travel block,
+  add a note chip to that travel block item with value {"info": "Проверь: <one-line summary>"}.
+- Do not add generic notes to all tasks — only where specifically relevant.
+
 Return ONLY valid JSON:
 {
   "patches": [
@@ -403,6 +459,8 @@ def _run_build_stage(
     locations: dict,
     planning_date: str,
     timezone: str,
+    health_summary: dict | None = None,
+    transport_news: str = "",
 ) -> StageResult:
     context = {
         "planning_date": planning_date,
@@ -411,6 +469,8 @@ def _run_build_stage(
         "clusters": clusters,
         "travel_blocks": travel_blocks,
         "locations": {k: {"hours": v.get("hours", "")} for k, v in locations.items()},
+        "health_summary": health_summary or {},
+        "transport_news": transport_news or "",
     }
     raw = _run_agent_text(_BUILD_PROMPT, json.dumps(context, ensure_ascii=False))
     try:
@@ -433,6 +493,7 @@ def _run_build_stage(
 # ──────────────────────────────────────────────────────────────────────────────
 
 _STAGE_SEQUENCE = [
+    PlanStatus.CONTEXT,
     PlanStatus.EXTRACT,
     PlanStatus.RECON,
     PlanStatus.CLUSTER,
@@ -444,6 +505,7 @@ _STAGE_SEQUENCE = [
 _NEXT_STAGE = {a: b for a, b in zip(_STAGE_SEQUENCE, _STAGE_SEQUENCE[1:])}
 
 STAGE_STATUS_TEXT: dict[str, str] = {
+    PlanStatus.CONTEXT: "Loading your context...",
     PlanStatus.EXTRACT: "Analyzing tasks...",
     PlanStatus.RECON: "Looking up locations...",
     PlanStatus.CLUSTER: "Grouping by area...",
@@ -535,9 +597,15 @@ def _planning_steps(
     tasks: list[dict] = state.get("tasks", [])
     planning_date: str = state.get("planning_date", "")
     timezone: str = state.get("timezone", "UTC")
-    status: str = state.get("status", PlanStatus.EXTRACT)
+    status: str = state.get("status", PlanStatus.CONTEXT)
 
     logger.info("[PlanningWorkflow] status=%s tasks=%d", status, len(tasks))
+
+    # CONTEXT stage: context_data is populated by redis_session before the workflow.
+    # Just advance the status so subsequent stages can read it.
+    if state.get("status") in (PlanStatus.CONTEXT, None) and "context_data" in state:
+        state["status"] = PlanStatus.EXTRACT
+        logger.info("[PlanningWorkflow] CONTEXT done, advancing to EXTRACT")
 
     # ── CLARIFYING ────────────────────────────────────────────────────────────
     if status == PlanStatus.CLARIFYING:
@@ -650,7 +718,9 @@ def _planning_steps(
         travel_blocks = state.get("route_output", {}).get("travel_blocks", [])
         locations = state.get("recon_output", {}).get("locations", {})
         result = _run_build_stage(
-            extracted, clusters, travel_blocks, locations, planning_date, timezone
+            extracted, clusters, travel_blocks, locations, planning_date, timezone,
+            health_summary=state.get("context_data", {}).get("health_summary", {}),
+            transport_news=state.get("recon_output", {}).get("transport_news", ""),
         )
         state["plan_patches"] = {
             "patches": result.output.get("patches", []),

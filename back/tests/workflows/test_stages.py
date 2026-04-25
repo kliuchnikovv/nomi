@@ -66,7 +66,9 @@ EXTRACTED_TASKS = [
 
 def test_recon_geocodes_non_home_locations():
     with patch("src.workflows.planning.ors_client.geocode", return_value=(37.6, 55.7)) as mock_geo, \
-         patch("src.workflows.planning.search_place_hours", return_value="9am-9pm"):
+         patch("src.workflows.planning.search_place_hours", return_value="9am-9pm"), \
+         patch("src.workflows.planning.search_transport_news", return_value=""), \
+         patch("src.workflows.planning.search_city_events", return_value=""):
         result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", "car")
     # "home" is skipped, "office" and "gym" are geocoded
     assert mock_geo.call_count == 2
@@ -77,7 +79,9 @@ def test_recon_geocodes_non_home_locations():
 
 def test_recon_asks_transport_when_none():
     with patch("src.workflows.planning.ors_client.geocode", return_value=None), \
-         patch("src.workflows.planning.search_place_hours", return_value=""):
+         patch("src.workflows.planning.search_place_hours", return_value=""), \
+         patch("src.workflows.planning.search_transport_news", return_value=""), \
+         patch("src.workflows.planning.search_city_events", return_value=""):
         result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", transport_mode=None)
     assert len(result.pending_questions) == 1
     assert "travel" in result.pending_questions[0].lower()
@@ -86,7 +90,9 @@ def test_recon_asks_transport_when_none():
 
 def test_recon_complete_when_transport_known():
     with patch("src.workflows.planning.ors_client.geocode", return_value=(37.6, 55.7)), \
-         patch("src.workflows.planning.search_place_hours", return_value=""):
+         patch("src.workflows.planning.search_place_hours", return_value=""), \
+         patch("src.workflows.planning.search_transport_news", return_value=""), \
+         patch("src.workflows.planning.search_city_events", return_value=""):
         result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", "walking")
     assert result.is_complete is True
     assert result.pending_questions == []
@@ -222,7 +228,9 @@ def test_build_returns_empty_patches_on_bad_json():
 
 def test_recon_geocodes_user_location_as_origin():
     with patch("src.workflows.planning.ors_client.geocode", return_value=(37.6, 55.7)) as mock_geo, \
-         patch("src.workflows.planning.search_place_hours", return_value=""):
+         patch("src.workflows.planning.search_place_hours", return_value=""), \
+         patch("src.workflows.planning.search_transport_news", return_value=""), \
+         patch("src.workflows.planning.search_city_events", return_value=""):
         result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", "walking", user_location="Москва")
     locations = result.output["locations"]
     assert "__origin__" in locations
@@ -231,7 +239,9 @@ def test_recon_geocodes_user_location_as_origin():
 
 def test_recon_skips_origin_when_user_location_is_none():
     with patch("src.workflows.planning.ors_client.geocode", return_value=(37.6, 55.7)), \
-         patch("src.workflows.planning.search_place_hours", return_value=""):
+         patch("src.workflows.planning.search_place_hours", return_value=""), \
+         patch("src.workflows.planning.search_transport_news", return_value=""), \
+         patch("src.workflows.planning.search_city_events", return_value=""):
         result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", "walking", user_location=None)
     assert "__origin__" not in result.output["locations"]
 
@@ -243,7 +253,9 @@ def test_recon_continues_without_origin_when_geocode_fails():
         return (37.6, 55.7)
 
     with patch("src.workflows.planning.ors_client.geocode", side_effect=geocode_side_effect), \
-         patch("src.workflows.planning.search_place_hours", return_value=""):
+         patch("src.workflows.planning.search_place_hours", return_value=""), \
+         patch("src.workflows.planning.search_transport_news", return_value=""), \
+         patch("src.workflows.planning.search_city_events", return_value=""):
         result = _run_recon_stage(EXTRACTED_TASKS, "2026-04-05", "walking", user_location="Москва")
     assert "__origin__" not in result.output["locations"]
     assert "office" in result.output["locations"]

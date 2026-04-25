@@ -306,6 +306,60 @@ class RedisSession:
         except Exception as exc:
             logger.warning("[PlannerSession] Failed to save state: %s", exc)
 
+    async def _fetch_calendar_events_for_plan(self, planning_date: str) -> list[dict]:
+        """Fetch iOS Calendar events for the planning date via client_action.
+
+        Returns empty list on any error (graceful degradation).
+        """
+        try:
+            start = f"{planning_date}T00:00:00"
+            end = f"{planning_date}T23:59:59"
+            raw = await self._send_client_action_and_wait(
+                "ios_calendar",
+                "get_events",
+                {"start_date": start, "end_date": end, "limit": 30},
+            )
+            import re
+            import json as _json
+            match = re.search(r"```json\s*(\[.*?\])\s*```", raw, re.DOTALL)
+            return _json.loads(match.group(1)) if match else []
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("[PlannerContext] Calendar fetch failed (non-fatal): %s", exc)
+            return []
+
+    async def _fetch_health_summary_for_plan(self, yesterday_date: str) -> dict:
+        """Fetch iOS Health daily summary for yesterday via client_action.
+
+        Returns empty dict on any error (graceful degradation).
+        """
+        try:
+            raw = await self._send_client_action_and_wait(
+                "ios_health",
+                "get_daily_summary",
+                {"date": yesterday_date},
+            )
+            import re
+            result: dict = {}
+            dm = re.search(r"Duration:\s*([\d.]+)\s*hours", raw)
+            qm = re.search(r"Quality:\s*(\w+)", raw)
+            sm = re.search(r"Steps:\s*(\d+)", raw)
+            if dm or qm:
+                result["sleep"] = {}
+                if dm:
+                    result["sleep"]["duration"] = float(dm.group(1))
+                if qm:
+                    result["sleep"]["quality"] = qm.group(1).lower()
+            if sm:
+                result["activity"] = {"steps": int(sm.group(1))}
+            return result
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("[PlannerContext] Health fetch failed (non-fatal): %s", exc)
+            return {}
+
     async def _run_planning_workflow_steps(
         self,
         user_message: str,
@@ -345,6 +399,38 @@ class RedisSession:
         user_location = payload.get("user_location") or None
         if user_location and "user_location" not in session_state:
             session_state["user_location"] = user_location
+
+        # CONTEXT preflight: fetch calendar events and health summary before the
+        # sync workflow generator starts. Only runs on the first invocation.
+        planning_date = payload.get("planning_date", "")
+        current_status = session_state.get("status", PlanStatus.CONTEXT)
+        if current_status == PlanStatus.CONTEXT or "context_data" not in session_state:
+            from datetime import date as _date, timedelta
+            try:
+                plan_dt = _date.fromisoformat(planning_date) if planning_date else _date.today()
+            except ValueError:
+                plan_dt = _date.today()
+            yesterday = (plan_dt - timedelta(days=1)).isoformat()
+
+            cal_events, health_summary = await asyncio.gather(
+                self._fetch_calendar_events_for_plan(planning_date),
+                self._fetch_health_summary_for_plan(yesterday),
+                return_exceptions=True,
+            )
+            if isinstance(cal_events, BaseException):
+                cal_events = []
+            if isinstance(health_summary, BaseException):
+                health_summary = {}
+
+            session_state["context_data"] = {
+                "calendar_events": cal_events,
+                "health_summary": health_summary,
+            }
+            logger.info(
+                "[PlannerContext] Loaded %d calendar events, health_summary keys=%s",
+                len(cal_events),
+                list(health_summary.keys()),
+            )
 
         workflow = build_planning_workflow(
             session_id=self.chat_id,

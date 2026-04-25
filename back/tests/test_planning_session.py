@@ -28,6 +28,9 @@ def make_session(chat_id: str = "chat-1") -> RedisSession:
     session.redis_client = AsyncMock()
     session._send_frame = AsyncMock()
     session.cancel_event = asyncio.Event()
+    # CONTEXT preflight calls _send_client_action_and_wait for calendar/health data.
+    # Return empty string so both fetch methods degrade gracefully to [] / {}.
+    session._send_client_action_and_wait = AsyncMock(return_value="")
     return session
 
 
@@ -251,8 +254,10 @@ class TestRunPlanningWorkflowSteps:
         patches_data = {"patches": [{"op": "add_chip"}], "summary": "done"}
         mock_wf = self._make_workflow_mock({"plan_patches": patches_data})
 
-        # _send_client_action_and_wait is complex; mock it directly
-        session._send_client_action_and_wait = AsyncMock()
+        # _send_client_action_and_wait is complex; mock it directly.
+        # Note: the CONTEXT preflight also calls it (for calendar/health) before patches are applied,
+        # so we check with assert_any_call rather than assert_called_once_with.
+        session._send_client_action_and_wait = AsyncMock(return_value="")
 
         with patch("src.server.redis_session.build_planning_workflow", return_value=mock_wf), \
              patch("src.server.redis_session._run_planning_steps", return_value=iter([])):
@@ -261,7 +266,7 @@ class TestRunPlanningWorkflowSteps:
                 session_state={}, msg_chat_id="chat-1", message_id="msg-1",
             )
 
-        session._send_client_action_and_wait.assert_called_once_with(
+        session._send_client_action_and_wait.assert_any_call(
             "patch_plan_document", "edit", patches_data,
         )
         # plan_patches should be removed from state before saving
@@ -340,7 +345,9 @@ class TestRunPlanningWorkflowSteps:
         mock_build.assert_called_once()
         kwargs = mock_build.call_args[1]
         assert kwargs.get("session_id") == "my-chat"
-        assert kwargs.get("session_state") == {"status": "extract"}
+        # CONTEXT preflight adds context_data to session_state before the workflow runs;
+        # verify the original status is preserved rather than exact dict equality.
+        assert kwargs.get("session_state", {}).get("status") == "extract"
 
     @pytest.mark.asyncio
     async def test_uses_payload_tasks_over_parsed(self):

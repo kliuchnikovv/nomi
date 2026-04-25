@@ -38,3 +38,13 @@ def search_weather(location: str, date: str) -> str:
 def search_route_time_text(origin: str, destination: str) -> str:
     """DDG fallback for travel time when ORS coords are unavailable."""
     return _ddg_search(f"travel time from {origin} to {destination}")
+
+
+def search_transport_news(city: str, date: str) -> str:
+    """Search for transport disruptions, strikes, and road closures in a city."""
+    return _ddg_search(f"{city} transport disruptions strikes road closures {date}")
+
+
+def search_city_events(city: str, date: str) -> str:
+    """Search for city events (concerts, demonstrations, sports) that may affect traffic."""
+    return _ddg_search(f"{city} events demonstrations concerts sports {date}")
