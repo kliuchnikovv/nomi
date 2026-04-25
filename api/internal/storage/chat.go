@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,12 +21,18 @@ func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 		}
 	}
 
+	chatType := c.Type
+	if chatType == "" {
+		chatType = "regular"
+	}
+
 	chatModel := &Chat{
 		ID:        c.ID,
 		UserID:    userID,
 		Model:     c.Model,
 		Title:     c.Title,
 		Mode:      mode,
+		Type:      chatType,
 		TeamID:    c.TeamID,
 		Icon:      c.Icon,
 		CreatedAt: time.Now(),
@@ -41,6 +48,7 @@ func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat
 		Model:     chatModel.Model,
 		Title:     chatModel.Title,
 		Mode:      chatModel.Mode,
+		Type:      chatModel.Type,
 		TeamID:    chatModel.TeamID,
 		Icon:      chatModel.Icon,
 		CreatedAt: chatModel.CreatedAt,
@@ -61,6 +69,7 @@ func (s *Storage) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUI
 		Model:      chatModel.Model,
 		Title:      chatModel.Title,
 		Mode:       chatModel.Mode,
+		Type:       chatModel.Type,
 		TeamID:     chatModel.TeamID,
 		Icon:       chatModel.Icon,
 		CreatedAt:  chatModel.CreatedAt,
@@ -85,6 +94,7 @@ func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.C
 			Model:      model.Model,
 			Title:      model.Title,
 			Mode:       model.Mode,
+			Type:       model.Type,
 			TeamID:     model.TeamID,
 			Icon:       model.Icon,
 			CreatedAt:  model.CreatedAt,
@@ -135,6 +145,7 @@ func (s *Storage) GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUI
 			Model:      model.Model,
 			Title:      model.Title,
 			Mode:       model.Mode,
+			Type:       model.Type,
 			TeamID:     model.TeamID,
 			Icon:       model.Icon,
 			CreatedAt:  model.CreatedAt,
@@ -155,6 +166,41 @@ func (s *Storage) TouchChatActivity(ctx context.Context, chatID uuid.UUID, at ti
 		Update("updated_at", at)
 
 	return result.Error
+}
+
+// GetOrCreatePersistentChat returns the persistent chat for a user, creating it if needed.
+func (s *Storage) GetOrCreatePersistentChat(ctx context.Context, userID uuid.UUID, defaultModel string) (*chat.Chat, error) {
+	var chatModel Chat
+	err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND type = ?", userID, "persistent").
+		First(&chatModel).Error
+
+	if err == nil {
+		return &chat.Chat{
+			ID:        chatModel.ID,
+			Model:     chatModel.Model,
+			Title:     chatModel.Title,
+			Mode:      chatModel.Mode,
+			Type:      chatModel.Type,
+			TeamID:    chatModel.TeamID,
+			Icon:      chatModel.Icon,
+			CreatedAt: chatModel.CreatedAt,
+			UpdatedAt: chatModel.UpdatedAt,
+		}, nil
+	}
+
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	// Create the persistent chat
+	return s.CreateChat(ctx, userID, &chat.Chat{
+		ID:    uuid.New(),
+		Model: defaultModel,
+		Title: "Genie",
+		Mode:  "agent",
+		Type:  "persistent",
+	})
 }
 
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {

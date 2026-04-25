@@ -232,7 +232,7 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 	query := s.DB.WithContext(ctx).
 		Preload("Attachments").
 		Joins("JOIN chats ON messages.chat_id = chats.id").
-		Where("messages.chat_id = ? AND chats.user_id = ?", chatID, userID).
+		Where("messages.chat_id = ? AND chats.user_id = ? AND messages.archived = ?", chatID, userID, false).
 		Order("messages.created_at ASC")
 
 	// Apply limit if provided
@@ -503,4 +503,15 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 	}
 
 	return nil
+}
+
+// ArchiveMessages marks the given message IDs as archived.
+func (s *Storage) ArchiveMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, messageIDs []uuid.UUID) error {
+	return s.DB.WithContext(ctx).
+		Model(&Message{}).
+		Where("id IN ? AND chat_id = ? AND user_id = ?", messageIDs, chatID, userID).
+		Updates(map[string]any{
+			"archived":   true,
+			"updated_at": time.Now(),
+		}).Error
 }
