@@ -131,6 +131,7 @@ type UpdateChatRequest struct {
 	Model      *string    `json:"model,omitempty"`
 	Icon       *string    `json:"icon,omitempty"`
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+	ProjectID  *string    `json:"project_id,omitempty"` // UUID string or empty string to unassign
 }
 
 // UpdateChat updates a chat
@@ -157,6 +158,16 @@ func (s *ChatService) UpdateChat(ctx context.Context, userID uuid.UUID, chatID u
 		}
 		if v.ArchivedAt != nil {
 			currentChat.ArchivedAt = v.ArchivedAt
+		}
+		if v.ProjectID != nil {
+			if *v.ProjectID == "" {
+				currentChat.ProjectID = nil
+			} else {
+				parsed, err := uuid.Parse(*v.ProjectID)
+				if err == nil {
+					currentChat.ProjectID = &parsed
+				}
+			}
 		}
 	case *chat.Chat:
 		// Apply updates from chat.Chat

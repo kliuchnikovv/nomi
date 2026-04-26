@@ -27,6 +27,7 @@ type Container struct {
 	ChatService    *services.ChatService
 	MessageService *services.MessageService
 	AuthService    *services.AuthService
+	ProjectService *services.ProjectService
 
 	// Infrastructure
 	Hub          *hub.Hub
@@ -58,6 +59,9 @@ func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
 	messageService := services.NewMessageService(messageRepo)
 	authService := services.NewAuthService(userRepo, tokenManager, store)
 
+	projectRepo := repositories.NewProjectRepository(store)
+	projectService := services.NewProjectService(projectRepo)
+
 	// Initialize Hub
 	cryptoKey, _ := hex.DecodeString(cfg.Token.EncryptionKey)
 	hubInstance := hub.NewHub(store, logger, cfg.LLM.BaseURL, cryptoKey)
@@ -74,6 +78,7 @@ func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
 		ChatService:      chatService,
 		MessageService:   messageService,
 		AuthService:      authService,
+		ProjectService:   projectService,
 		Hub:              hubInstance,
 		Logger:           logger,
 		TokenManager:     tokenManager,

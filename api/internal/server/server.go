@@ -44,6 +44,7 @@ func New(
 	// Initialize handlers
 	var (
 		chatHandler        = handlers.NewChatHandler(ctr.ChatService)
+		projectHandler     = handlers.NewProjectHandler(ctr.ProjectService)
 		messageHandler     = handlers.NewMessageHandler(ctr.MessageService)
 		authMiddleware     = auth.NewAuthMiddleware(ctr.TokenManager, ctr.Storage)
 		authHandler        = handlers.NewAuthHandler(ctr.AuthService)
@@ -110,6 +111,12 @@ func New(
 	r.PUT("/api/chats/:id", wrapWithAuth(chatHandler.UpdateChat, authMiddleware))
 	r.DELETE("/api/chats/:id", wrapWithAuth(chatHandler.DeleteChat, authMiddleware))
 	r.POST("/api/chats/:id/archive-messages", wrapWithAuth(chatHandler.ArchiveMessages, authMiddleware))
+
+	// Projects API (protected)
+	r.GET("/api/projects", wrapWithAuth(projectHandler.ListProjects, authMiddleware))
+	r.POST("/api/projects", wrapWithAuth(projectHandler.CreateProject, authMiddleware))
+	r.PUT("/api/projects/:id", wrapWithAuth(projectHandler.UpdateProject, authMiddleware))
+	r.DELETE("/api/projects/:id", wrapWithAuth(projectHandler.DeleteProject, authMiddleware))
 
 	// Chat streaming API (WebSocket only)
 	r.GET("/api/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
