@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../screens/auth/context';
+import { useMain } from '../screens/main/context';
 
 // Height of the tab bar icon area above the safe-area inset (≈ input bar / 1.5).
 // Used by screens that need a bottom spacer to clear the floating tab bar.
@@ -75,6 +77,8 @@ function AnimatedTabBar(props: BottomTabBarProps) {
 export function MainTabs() {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
+    const { user } = useAuth();
+    const { activeChatID } = useMain();
     // Total tab bar height = icon area + device bottom inset
     const tabBarHeight = TAB_BAR_ICON_HEIGHT + insets.bottom;
 
@@ -127,7 +131,11 @@ export function MainTabs() {
                 listeners={({ navigation }) => ({
                     tabPress: (e) => {
                         e.preventDefault();
-                        navigation.navigate('Chat', { screen: 'ChatList' });
+                        if (user?.single_chat_mode && activeChatID) {
+                            navigation.navigate('Chat', { screen: 'ChatDetail', params: { chatId: activeChatID } });
+                        } else {
+                            navigation.navigate('Chat', { screen: 'ChatList' });
+                        }
                     },
                 })}
             />

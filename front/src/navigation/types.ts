@@ -10,7 +10,7 @@ export type AuthStackParamList = {
 // Chat nested stack (inside the Chat tab)
 export type ChatStackParamList = {
   ChatList: undefined;
-  ChatDetail: { chatId: string };
+  ChatDetail: { chatId?: string };
 };
 
 // Settings nested stack (inside the Settings tab)

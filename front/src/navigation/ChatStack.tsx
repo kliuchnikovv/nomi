@@ -4,6 +4,7 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import { ChatListScreen } from '../screens/chat/chatList/ChatListScreen';
 import { ChatDetailScreen } from '../screens/chat/chatDetail/ChatDetailScreen';
 import { useMain, emptyChatID } from '../screens/main/context';
+import { useAuth } from '../screens/auth/context';
 import { ChatProvider } from '../screens/chat/context';
 import { AskUserProvider } from '../screens/chat/AskUserContext';
 import type { ChatStackParamList } from './types';
@@ -12,11 +13,11 @@ const Stack = createNativeStackNavigator<ChatStackParamList>();
 
 function ChatDetailScreenWrapper() {
     const route = useRoute<RouteProp<ChatStackParamList, 'ChatDetail'>>();
-    const { chatId } = route.params;
-    const { setActiveChatID } = useMain();
+    const { activeChatID, setActiveChatID } = useMain();
+    const chatId = route.params?.chatId ?? activeChatID;
 
     useEffect(() => {
-        setActiveChatID(chatId);
+        if (chatId) setActiveChatID(chatId);
     }, [chatId, setActiveChatID]);
 
     return <ChatDetailScreen />;
@@ -24,6 +25,8 @@ function ChatDetailScreenWrapper() {
 
 export function ChatStack() {
     const { activeChatID, setActiveChatID } = useMain();
+    const { user } = useAuth();
+    const singleChatMode = user?.single_chat_mode && !!activeChatID;
 
     return (
         <ChatProvider
@@ -35,12 +38,15 @@ export function ChatStack() {
                     screenOptions={{
                         headerShown: false,
                     }}
+                    initialRouteName={singleChatMode ? 'ChatDetail' : 'ChatList'}
                 >
-                    <Stack.Screen
-                        name="ChatList"
-                        component={ChatListScreen}
-                        options={{ title: 'Chats' }}
-                    />
+                    {!singleChatMode && (
+                        <Stack.Screen
+                            name="ChatList"
+                            component={ChatListScreen}
+                            options={{ title: 'Chats' }}
+                        />
+                    )}
                     <Stack.Screen
                         name="ChatDetail"
                         component={ChatDetailScreenWrapper}
