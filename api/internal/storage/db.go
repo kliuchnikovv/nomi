@@ -38,6 +38,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&OAuthSession{},
 		&AuditSecurity{},
 		&User{},
+		&Project{},
 		&Chat{},
 		&Message{},
 		&RefreshToken{},
