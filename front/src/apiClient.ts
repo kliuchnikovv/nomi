@@ -258,7 +258,7 @@ export const authApi = {
 };
 
 export const chatsApi = {
-    getPersistentChat: () => apiClient.get<any>(`${API_URL()}/chats/persistent`),
+    getPersistentChat: () => apiClient.get<import('./screens/main/models').Chat>(`${API_URL()}/chats/persistent`),
 };
 
 export const briefingApi = {

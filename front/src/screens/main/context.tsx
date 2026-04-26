@@ -9,7 +9,7 @@ import React, {
 
 import { Alert, Platform, ToastAndroid } from 'react-native';
 import { useAuth } from '../auth/context.tsx';
-import { apiClient } from '../../apiClient.ts'
+import { apiClient, chatsApi } from '../../apiClient.ts'
 import { Chat, GetChatsOptions, MainContextType } from "./models";
 import { getApiUrl } from '../../config.ts';
 import { useChatStore } from '../../store/chatStore';
@@ -57,8 +57,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!isAuthenticated || !user?.single_chat_mode) return;
 
-        const url = `${getApiUrl()}/chats/persistent`;
-        apiClient.get<Chat>(url)
+        chatsApi.getPersistentChat()
             .then(persistentChat => {
                 if (!persistentChat) return;
                 setActiveChatID(persistentChat.id);
@@ -95,6 +94,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
             }
 
             setChats(data);
+            if (user?.single_chat_mode) return;
+
             if (data.length === 0) {
                 setActiveChatID(prev => {
                     if (preserveActiveChat && prev) {

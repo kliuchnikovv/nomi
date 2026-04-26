@@ -28,7 +28,7 @@ const PLANNER_MODEL_DEFAULT = 'glm-4.7';
 type Nav = NativeStackNavigationProp<SettingsStackParamList, 'SettingsHome'>;
 
 export default function SettingsHomeScreen() {
-    const { logout, user } = useAuth();
+    const { logout, user, updateUser } = useAuth();
     const { themeName, theme } = useTheme();
     const insets = useSafeAreaInsets();
     const navigation = useNavigation<Nav>();
@@ -57,10 +57,11 @@ export default function SettingsHomeScreen() {
         try {
             await authApi.updateMe({ single_chat_mode: value });
             setSingleChatMode(value);
+            if (user) updateUser({ ...user, single_chat_mode: value });
         } catch (e) {
             console.error('Failed to update single chat mode', e);
         }
-    }, []);
+    }, [user, updateUser]);
 
     // Refresh preview values each time this screen comes into focus
     useFocusEffect(
@@ -92,7 +93,7 @@ export default function SettingsHomeScreen() {
             getStoredLocation().then(loc =>
                 setLocationDisplay(loc.displayName),
             );
-        }, [themeName]),
+        }, [themeName, user]),
     );
 
     return (
