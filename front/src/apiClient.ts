@@ -261,6 +261,15 @@ export const chatsApi = {
     getPersistentChat: () => apiClient.get<import('./screens/main/models').Chat>(`${API_URL()}/chats/persistent`),
 };
 
+export const projectsApi = {
+    list: () => apiClient.get<import('./screens/main/models').Project[]>(`${API_URL()}/projects`),
+    create: (body: { name: string; description?: string; icon?: string }) =>
+        apiClient.post<import('./screens/main/models').Project>(`${API_URL()}/projects`, body),
+    update: (id: string, body: { name: string; description?: string; icon?: string }) =>
+        apiClient.put<import('./screens/main/models').Project>(`${API_URL()}/projects/${id}`, body),
+    delete: (id: string) => apiClient.delete<void>(`${API_URL()}/projects/${id}`),
+};
+
 export const briefingApi = {
     getBriefing: (context?: any) =>
         apiClient.post<any>(`${API_URL()}/briefing`, { context }),

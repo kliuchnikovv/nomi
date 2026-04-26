@@ -36,7 +36,7 @@ export type Chat = {
     updated_at: number
     archived_at: number | null
     deleted_at: number | null
-    list_id?: string | null
+    project_id?: string | null
     messages: Message[]
     icon?: string
 }
@@ -97,6 +97,16 @@ export type Message = {
     context_items?: any[] // Context items (emails, documents, etc.)
     /** Last processed stream chunk index (ix); used for dedup when same frame arrives from multiple channels. */
     _stream_ix?: number
+}
+
+export type Project = {
+    id: string
+    name: string
+    description: string
+    icon: string
+    chat_count: number
+    created_at: string
+    updated_at: string
 }
 
 export type Frame = {

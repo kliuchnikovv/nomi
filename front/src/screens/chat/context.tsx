@@ -393,7 +393,7 @@ export function ChatProvider({
                         model: selectedModelRef.current || 'gpt-5-nano',
                         mode: chatMode,
                         team_id: teamIdToSend,
-                        list_id: activeChat?.list_id,
+                        project_id: activeChat?.project_id,
                     },
                 );
                 if (created?.id) {
@@ -668,9 +668,9 @@ export function ChatProvider({
             let commandToSend = teamCommand;
             if (!commandToSend && activeChat) {
                 // If not in team mode, but we have list context, pass it
-                if (activeChat.list_id) {
+                if (activeChat.project_id) {
                     commandToSend = {
-                        list_id: activeChat.list_id,
+                        project_id: activeChat.project_id,
                         auth_token: token,
                     };
                 }
