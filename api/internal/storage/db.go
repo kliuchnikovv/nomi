@@ -47,7 +47,6 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Integration{},
 		&BotIdentity{},
 		&PlanDocument{},
-		&Project{},
 	); err != nil {
 		return nil, err
 	}

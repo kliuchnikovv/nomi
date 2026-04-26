@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 func (s *Storage) CreateProject(ctx context.Context, userID uuid.UUID, name, description, icon string) (*Project, error) {
@@ -57,6 +58,9 @@ func (s *Storage) UpdateProject(ctx context.Context, userID, projectID uuid.UUID
 	if result.Error != nil {
 		return nil, result.Error
 	}
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return s.GetProject(ctx, userID, projectID)
 }
 
@@ -73,11 +77,11 @@ func (s *Storage) DeleteProject(ctx context.Context, userID, projectID uuid.UUID
 		Delete(&Project{}).Error
 }
 
-func (s *Storage) CountChatsInProject(ctx context.Context, projectID uuid.UUID) (int64, error) {
+func (s *Storage) CountChatsInProject(ctx context.Context, userID, projectID uuid.UUID) (int64, error) {
 	var count int64
 	err := s.DB.WithContext(ctx).
 		Model(&Chat{}).
-		Where("project_id = ?", projectID).
+		Where("project_id = ? AND user_id = ?", projectID, userID).
 		Count(&count).Error
 	return count, err
 }
