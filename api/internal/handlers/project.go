@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/apierror"
 	"github.com/kliuchnikovv/genie-api/internal/services"
+	"gorm.io/gorm"
 )
 
 type ProjectHandler struct {
@@ -71,6 +73,10 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	}
 	project, err := h.service.Update(ctx, user.ID, projectID, &req)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			apierror.Respond(c, apierror.NewNotFound("Project not found"))
+			return
+		}
 		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
@@ -90,6 +96,10 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 		return
 	}
 	if err := h.service.Delete(ctx, user.ID, projectID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			apierror.Respond(c, apierror.NewNotFound("Project not found"))
+			return
+		}
 		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}

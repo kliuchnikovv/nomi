@@ -84,9 +84,13 @@ func (s *ProjectService) List(ctx context.Context, userID uuid.UUID) ([]*Project
 }
 
 func (s *ProjectService) Update(ctx context.Context, userID, projectID uuid.UUID, req *UpdateProjectRequest) (*ProjectResponse, error) {
+	existing, err := s.repo.Get(ctx, userID, projectID)
+	if err != nil {
+		return nil, err
+	}
 	icon := req.Icon
 	if icon == "" {
-		icon = "📁"
+		icon = existing.Icon
 	}
 	p, err := s.repo.Update(ctx, userID, projectID, req.Name, req.Description, icon)
 	if err != nil {

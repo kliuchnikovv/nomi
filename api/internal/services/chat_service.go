@@ -164,9 +164,10 @@ func (s *ChatService) UpdateChat(ctx context.Context, userID uuid.UUID, chatID u
 				currentChat.ProjectID = nil
 			} else {
 				parsed, err := uuid.Parse(*v.ProjectID)
-				if err == nil {
-					currentChat.ProjectID = &parsed
+				if err != nil {
+					return nil, ErrInvalidRequest
 				}
+				currentChat.ProjectID = &parsed
 			}
 		}
 	case *chat.Chat:
