@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+const isEmoji = (s?: string) => !!s && /\p{Emoji}/u.test(s) && !/^[0-9#*]$/.test(s);
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../../context/ThemeContext';
@@ -66,11 +67,10 @@ export function RecentChatsWidget() {
                         activeOpacity={0.7}
                     >
                         <View style={[styles.iconBg, { backgroundColor: theme.background }]}>
-                            <Ionicons
-                                name={getChatIcon(chat.icon) as any}
-                                size={16}
-                                color={theme.accent}
-                            />
+                            {isEmoji(chat.icon)
+                                ? <Text style={{ fontSize: 16 }}>{chat.icon}</Text>
+                                : <Ionicons name={getChatIcon(chat.icon) as any} size={16} color={theme.accent} />
+                            }
                         </View>
                         <Text
                             style={[styles.title, { color: theme.textPrimary }]}

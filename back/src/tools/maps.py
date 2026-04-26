@@ -202,8 +202,8 @@ class MapsTool(Toolkit):
                 dist_suffix = f" ({_distance_label(dist_m)})"
 
             label = f"{short_name}{dist_suffix}"
-            # url — show place on map; route_url — navigate to place
-            encoded_name = quote_plus(short_name)
+            # url — open business POI card; route_url — navigate to place
+            encoded_name = quote_plus(name_part)
             url = f"maps://?q={encoded_name}&sll={place_lat},{place_lon}&z=17"
             route_url = f"maps://?daddr={place_lat},{place_lon}"
             actions.append({"command": "open_maps", "label": label, "url": url, "route_url": route_url})

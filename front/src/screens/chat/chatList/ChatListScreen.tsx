@@ -47,6 +47,7 @@ export function ChatListScreen() {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [listLimit, setListLimit] = useState(30);
+    const [isPullRefreshing, setIsPullRefreshing] = useState(false);
 
     const filters = useMemo(() => {
         const list: { id: string; title: string; color: string }[] = [
@@ -206,8 +207,12 @@ export function ChatListScreen() {
                 data={visibleChats}
                 keyExtractor={(item) => item.id}
                 renderItem={renderItem}
-                onRefresh={() => getChats({ preserveActiveChat: true })}
-                refreshing={chatsLoading}
+                onRefresh={async () => {
+                    setIsPullRefreshing(true);
+                    await getChats({ preserveActiveChat: true });
+                    setIsPullRefreshing(false);
+                }}
+                refreshing={isPullRefreshing}
                 contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + TAB_BAR_ICON_HEIGHT + 16 }]}
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
