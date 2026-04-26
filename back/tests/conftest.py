@@ -147,6 +147,7 @@ def _setup_all_mocks():
     _install_mock_module("agno.db.postgres.schemas")
     _install_mock_module("agno.db.postgres.async_postgres")
     _install_mock_module("agno.knowledge", {"Knowledge": MagicMock})
+    _install_mock_module("agno.knowledge.document", {"Document": MagicMock})
     _install_mock_module("agno.models", {"__path__": []})
     _install_mock_module("agno.models.base", {"Model": _StubModel})
     _install_mock_module("agno.models.message", {"Message": _StubMessage})
