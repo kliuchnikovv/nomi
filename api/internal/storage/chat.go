@@ -71,6 +71,7 @@ func (s *Storage) GetChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUI
 		Mode:       chatModel.Mode,
 		Type:       chatModel.Type,
 		TeamID:     chatModel.TeamID,
+		ProjectID:  chatModel.ProjectID,
 		Icon:       chatModel.Icon,
 		CreatedAt:  chatModel.CreatedAt,
 		UpdatedAt:  chatModel.UpdatedAt,
@@ -96,6 +97,7 @@ func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.C
 			Mode:       model.Mode,
 			Type:       model.Type,
 			TeamID:     model.TeamID,
+			ProjectID:  model.ProjectID,
 			Icon:       model.Icon,
 			CreatedAt:  model.CreatedAt,
 			UpdatedAt:  model.UpdatedAt,
@@ -106,15 +108,20 @@ func (s *Storage) GetUserChats(ctx context.Context, userID uuid.UUID) ([]*chat.C
 }
 
 func (s *Storage) UpdateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
+	updates := map[string]any{
+		"title":       c.Title,
+		"model":       c.Model,
+		"icon":        c.Icon,
+		"updated_at":  time.Now(),
+		"archived_at": c.ArchivedAt,
+	}
+	if c.ProjectID != nil {
+		updates["project_id"] = c.ProjectID
+	}
+
 	result := s.DB.WithContext(ctx).Model(&Chat{}).
 		Where("id = ? AND user_id = ?", c.ID, userID).
-		Updates(map[string]any{
-			"title":       c.Title,
-			"model":       c.Model,
-			"icon":        c.Icon,
-			"updated_at":  time.Now(),
-			"archived_at": c.ArchivedAt,
-		})
+		Updates(updates)
 
 	if result.Error != nil {
 		return nil, result.Error
@@ -147,6 +154,7 @@ func (s *Storage) GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUI
 			Mode:       model.Mode,
 			Type:       model.Type,
 			TeamID:     model.TeamID,
+			ProjectID:  model.ProjectID,
 			Icon:       model.Icon,
 			CreatedAt:  model.CreatedAt,
 			UpdatedAt:  model.UpdatedAt,
