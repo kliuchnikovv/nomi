@@ -19,6 +19,7 @@ type Chat struct {
 	Type   string    `gorm:"type:varchar(20);not null;default:'regular'"` // 'regular' or 'persistent'
 
 	TeamID     *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
+	ProjectID  *uuid.UUID `gorm:"type:uuid;default:null;index"`
 	Icon       string     `gorm:"type:varchar(10);default:''"`
 	CreatedAt  time.Time  `gorm:"not null"`
 	UpdatedAt  time.Time  `gorm:"not null;index;index:idx_chats_user_updated,priority:2,sort:desc"`
@@ -80,6 +81,18 @@ type PluginData struct {
 	Data       datatypes.JSON `gorm:"type:jsonb;not null;default:'{}'"`
 	CreatedAt  time.Time      `gorm:"not null"`
 	UpdatedAt  time.Time      `gorm:"not null"`
+}
+
+// Project represents a user-defined project that groups related chats
+type Project struct {
+	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID      uuid.UUID      `gorm:"type:uuid;not null;index"`
+	Name        string         `gorm:"not null"`
+	Description string         `gorm:"not null;default:''"`
+	Icon        string         `gorm:"type:varchar(10);not null;default:'📁'"`
+	CreatedAt   time.Time      `gorm:"not null"`
+	UpdatedAt   time.Time      `gorm:"not null"`
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
 // CreateAttachment creates a new attachment record
