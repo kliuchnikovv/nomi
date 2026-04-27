@@ -138,6 +138,8 @@ export function ChatProvider({
     const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
     const [generationStatus, setGenerationStatus] = useState<string | null>(null);
     const [suggestedProjectId, setSuggestedProjectId] = useState<string | null>(null);
+    // Track which chatId we already attempted classification for (avoid repeated API calls).
+    const classifiedChatIdRef = useRef<string | null>(null);
     const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
@@ -581,6 +583,30 @@ export function ChatProvider({
                                 console.warn('[ProjectSuggest] failed:', e);
                             });
                     }
+                }
+
+                // Also classify existing chats that have no project yet (first attempt only).
+                if (
+                    chatIdToUse &&
+                    chatIdToUse !== emptyChatID &&
+                    !activeChat?.project_id &&
+                    !suggestedProjectId &&
+                    classifiedChatIdRef.current !== chatIdToUse
+                ) {
+                    classifiedChatIdRef.current = chatIdToUse;
+                    projectsApi.list()
+                        .then(projects => {
+                            console.log('[ProjectSuggest] existing-chat projects loaded:', projects?.length ?? 0);
+                            if (!projects || projects.length === 0) return null;
+                            return classifyMessageForProject(text, projects);
+                        })
+                        .then(projectId => {
+                            console.log('[ProjectSuggest] existing-chat classified:', projectId);
+                            if (projectId) setSuggestedProjectId(projectId);
+                        })
+                        .catch(e => {
+                            console.warn('[ProjectSuggest] existing-chat failed:', e);
+                        });
                 }
 
                 if (!chatIdToUse) {
