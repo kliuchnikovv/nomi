@@ -212,6 +212,63 @@ func (s *Storage) GetOrCreatePersistentChat(ctx context.Context, userID uuid.UUI
 	})
 }
 
+// GetLatestPersistentChat returns the most-recent persistent chat for the user, or nil if none exists.
+func (s *Storage) GetLatestPersistentChat(ctx context.Context, userID uuid.UUID) (*chat.Chat, error) {
+	var chatModel Chat
+	err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND type = 'persistent'", userID).
+		Order("updated_at DESC").
+		First(&chatModel).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &chat.Chat{
+		ID:         chatModel.ID,
+		Model:      chatModel.Model,
+		Title:      chatModel.Title,
+		Mode:       chatModel.Mode,
+		Type:       chatModel.Type,
+		TeamID:     chatModel.TeamID,
+		Icon:       chatModel.Icon,
+		CreatedAt:  chatModel.CreatedAt,
+		UpdatedAt:  chatModel.UpdatedAt,
+		ArchivedAt: chatModel.ArchivedAt,
+	}, nil
+}
+
+// ListPersistentChats returns all persistent chats for the user, newest first.
+func (s *Storage) ListPersistentChats(ctx context.Context, userID uuid.UUID) ([]*chat.Chat, error) {
+	var chatModels []Chat
+	if err := s.DB.WithContext(ctx).
+		Where("user_id = ? AND type = 'persistent'", userID).
+		Order("updated_at DESC").
+		Find(&chatModels).Error; err != nil {
+		return nil, err
+	}
+
+	chats := make([]*chat.Chat, len(chatModels))
+	for i, model := range chatModels {
+		chats[i] = &chat.Chat{
+			ID:         model.ID,
+			Model:      model.Model,
+			Title:      model.Title,
+			Mode:       model.Mode,
+			Type:       model.Type,
+			TeamID:     model.TeamID,
+			Icon:       model.Icon,
+			CreatedAt:  model.CreatedAt,
+			UpdatedAt:  model.UpdatedAt,
+			ArchivedAt: model.ArchivedAt,
+		}
+	}
+	return chats, nil
+}
+
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {
 	// Delete attachments linked to messages in this chat (scoped by user)
 	if err := s.DB.WithContext(ctx).

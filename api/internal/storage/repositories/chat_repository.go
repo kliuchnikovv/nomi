@@ -19,6 +19,10 @@ type ChatRepository interface {
 	GetUserChatsModifiedAfter(ctx context.Context, userID uuid.UUID, since time.Time) ([]*chat.Chat, error)
 	GetOrCreatePersistent(ctx context.Context, userID uuid.UUID, defaultModel string) (*chat.Chat, error)
 	ArchiveMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, messageIDs []uuid.UUID) error
+	// GetLatestPersistent returns the most-recent persistent chat for the user, or nil if none.
+	GetLatestPersistent(ctx context.Context, userID uuid.UUID) (*chat.Chat, error)
+	// ListPersistent returns all persistent chats for the user, newest first.
+	ListPersistent(ctx context.Context, userID uuid.UUID) ([]*chat.Chat, error)
 }
 
 // NewChatRepository creates a new chat repository
@@ -69,4 +73,12 @@ func (r *chatRepository) GetOrCreatePersistent(ctx context.Context, userID uuid.
 // ArchiveMessages marks the given message IDs as archived.
 func (r *chatRepository) ArchiveMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, messageIDs []uuid.UUID) error {
 	return r.store.ArchiveMessages(ctx, userID, chatID, messageIDs)
+}
+
+func (r *chatRepository) GetLatestPersistent(ctx context.Context, userID uuid.UUID) (*chat.Chat, error) {
+	return r.store.GetLatestPersistentChat(ctx, userID)
+}
+
+func (r *chatRepository) ListPersistent(ctx context.Context, userID uuid.UUID) ([]*chat.Chat, error) {
+	return r.store.ListPersistentChats(ctx, userID)
 }
