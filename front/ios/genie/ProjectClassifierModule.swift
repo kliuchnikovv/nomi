@@ -8,11 +8,7 @@
 //
 
 import Foundation
-
-// Foundation Models is available on iOS 26+ as a system framework.
-// We gate all usage behind availability checks so the app compiles and runs on
-// older OS versions — it simply never suggests a project there.
-@available(iOS 26.0, *)
+import React
 import FoundationModels
 
 @objc(ProjectClassifier)
@@ -53,7 +49,7 @@ class ProjectClassifierModule: NSObject {
                     resolve(result as Any)
                 } catch {
                     // Graceful degradation: classification failure is non-fatal.
-                    // Resolve with nil so the app simply shows no suggestion.
+                    // Resolve with NSNull so the app simply shows no suggestion.
                     resolve(NSNull())
                 }
             }
@@ -80,14 +76,16 @@ class ProjectClassifierModule: NSObject {
         }.joined(separator: "\n")
 
         let prompt = """
-You are a project classifier. Given a user message and a list of projects, decide which project (if any) the message belongs to.
+You are a project classifier. Given a user message and a list of projects, \
+decide which project (if any) the message belongs to.
 
 Projects:
 \(projectLines)
 
 User message: "\(messageText)"
 
-Reply with ONLY the number of the matching project (e.g. "2"), or "0" if none of the projects is a good match. Do not explain.
+Reply with ONLY the number of the matching project (e.g. "2"), or "0" if none \
+of the projects is a good match. Do not explain.
 """
 
         let response = try await session.respond(to: prompt)
