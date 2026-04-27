@@ -259,6 +259,7 @@ export const authApi = {
 
 export const chatsApi = {
     getPersistentChat: () => apiClient.get<import('./screens/main/models').Chat>(`${API_URL()}/chats/persistent`),
+    getPersistentChats: () => apiClient.get<import('./screens/main/models').Chat[]>(`${API_URL()}/chats/persistent/all`),
 };
 
 export const projectsApi = {
