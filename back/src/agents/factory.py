@@ -498,6 +498,19 @@ class AgentFactory:
             except Exception as e:
                 logger.warning("[Factory] Failed to add planning tool: %s", e)
 
+        # Add projects tool (list_projects) - available to all agents with a user_id
+        if user_id:
+            try:
+                from src.tools.projects import ProjectsTools
+
+                db_url = os.getenv("DB_DSN", "")
+                if db_url:
+                    projects_tool = ProjectsTools(db_url=db_url, user_id=user_id)
+                    tools = list(tools) + [projects_tool]
+                    logger.info("[Factory] Added projects tool (list_projects)")
+            except Exception as e:
+                logger.warning("[Factory] Failed to add projects tool: %s", e)
+
         # Add maps tool (open_route, search_places) - available to all agents
         try:
             from src.tools.maps import MapsTool

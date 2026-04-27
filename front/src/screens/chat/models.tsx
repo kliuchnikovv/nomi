@@ -9,6 +9,8 @@ export type Props = {
     children: ReactNode;
     activeChatID: string;
     setActiveChatID: (id: string) => void;
+    /** When set, new chats created in this context will be assigned to this project. */
+    initialProjectId?: string;
 };
 
 export interface MainContextType {

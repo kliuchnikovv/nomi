@@ -17,15 +17,12 @@ import { projectsApi, apiClient } from '../../apiClient';
 import { getApiUrl } from '../../config';
 import type { Project, Chat } from '../main/models';
 import type { ProjectsStackParamList } from '../../navigation/types';
-import type { RootTabParamList } from '../../navigation/types';
-import type { NavigationProp } from '@react-navigation/native';
 
 type Nav = NativeStackNavigationProp<ProjectsStackParamList, 'ProjectDetail'>;
 type Route = RouteProp<ProjectsStackParamList, 'ProjectDetail'>;
 
 export function ProjectDetailScreen() {
     const navigation = useNavigation<Nav>();
-    const rootNav = useNavigation<NavigationProp<RootTabParamList>>();
     const route = useRoute<Route>();
     const { projectId } = route.params;
     const { theme } = useTheme();
@@ -71,7 +68,7 @@ export function ProjectDetailScreen() {
     const renderChat = ({ item }: { item: Chat }) => (
         <TouchableOpacity
             style={[styles.chatRow, { backgroundColor: theme.surface }]}
-            onPress={() => rootNav.navigate('Chat', { screen: 'ChatDetail', params: { chatId: item.id } })}
+            onPress={() => navigation.navigate('ProjectChatDetail', { chatId: item.id })}
             activeOpacity={0.7}
         >
             <Text style={styles.chatIcon}>{item.icon || '💬'}</Text>
@@ -123,7 +120,7 @@ export function ProjectDetailScreen() {
             <View style={styles.chatsHeader}>
                 <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Chats</Text>
                 <TouchableOpacity
-                    onPress={() => rootNav.navigate('Chat', { screen: 'ChatList' })}
+                    onPress={() => navigation.navigate('ProjectChatDetail', { chatId: '', projectId })}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                     <Text style={[styles.newChatBtn, { color: theme.accent }]}>New chat</Text>

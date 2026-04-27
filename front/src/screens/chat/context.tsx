@@ -53,6 +53,7 @@ export function ChatProvider({
     children,
     activeChatID,
     setActiveChatID,
+    initialProjectId,
 }: Props) {
     // Select messages from global store with shallow comparison to prevent re-renders
     // when message content hasn't actually changed
@@ -395,7 +396,7 @@ export function ChatProvider({
                         model: selectedModelRef.current || 'gpt-5-nano',
                         mode: chatMode,
                         team_id: teamIdToSend,
-                        project_id: activeChat?.project_id,
+                        project_id: activeChat?.project_id ?? initialProjectId,
                     },
                 );
                 if (created?.id) {
