@@ -7,6 +7,19 @@
 
 #import <React/RCTBridgeModule.h>
 
+// MARK: - ProjectClassifier
+
+@interface RCT_EXTERN_MODULE(ProjectClassifier, NSObject)
+
+RCT_EXTERN_METHOD(classify:(NSString *)messageText
+                  projects:(NSArray *)projects
+                  resolve:(RCTPromiseResolveBlock)resolve
+                  reject:(RCTPromiseRejectBlock)reject)
+
+@end
+
+// MARK: - IOSCalendarManager
+
 @interface RCT_EXTERN_MODULE(IOSCalendarManager, NSObject)
 
 RCT_EXTERN_METHOD(getEvents:(NSString *)startDate

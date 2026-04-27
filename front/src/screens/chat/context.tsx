@@ -16,7 +16,8 @@ import { ChatContextType, Props, Model, DetailLevel } from './models';
 import { useAuth } from '../auth/context.tsx';
 import { socket } from '../../socket';
 import { getApiUrl } from '../../config.ts';
-import { modelsApi, sidebarApi } from '../../apiClient';
+import { modelsApi, sidebarApi, projectsApi } from '../../apiClient';
+import { classifyMessageForProject } from '../../services/projects/ProjectClassifier';
 import { AVAILABLE_TEAMS } from './teams';
 import { useMain } from '../main/context';
 import { useConnectors } from '../settings/connectors/context';
@@ -135,6 +136,7 @@ export function ChatProvider({
     const [teamCommand, setTeamCommand] = useState<any>(null);
     const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
     const [generationStatus, setGenerationStatus] = useState<string | null>(null);
+    const [suggestedProjectId, setSuggestedProjectId] = useState<string | null>(null);
     const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
@@ -562,6 +564,18 @@ export function ChatProvider({
                             })
                             .catch(e => {
                                 console.warn('[ChatContext] Emoji generation failed:', e);
+                            });
+                        // Classify new chat against projects (non-fatal, iOS 26+ only)
+                        projectsApi.list()
+                            .then(projects => {
+                                if (!projects || projects.length === 0) return;
+                                return classifyMessageForProject(text, projects);
+                            })
+                            .then(projectId => {
+                                if (projectId) setSuggestedProjectId(projectId);
+                            })
+                            .catch(e => {
+                                console.warn('[ChatContext] Project classification failed:', e);
                             });
                     }
                 }
@@ -1354,6 +1368,8 @@ export function ChatProvider({
         lastFailedMessage,
         setLastFailedMessage,
         generationStatus,
+        suggestedProjectId,
+        clearProjectSuggestion: () => setSuggestedProjectId(null),
     };
 
     return (

@@ -73,6 +73,9 @@ export interface ChatContextType {
     lastFailedMessage: { text: string; attachments?: any[]; messageId?: string; webSearch?: boolean; thinking?: string; contextItems?: any[] } | null;
     setLastFailedMessage: (msg: { text: string; attachments?: any[]; messageId?: string; webSearch?: boolean; thinking?: string; contextItems?: any[] } | null) => void;
     generationStatus: string | null;
+    // Project suggestion (shown after first message in a new chat)
+    suggestedProjectId: string | null;
+    clearProjectSuggestion: () => void;
 }
 
 

@@ -35,7 +35,10 @@ import { useGiftedMessages } from '../hooks/useGiftedMessages';
 import { useGiftedChatRenderers } from '../hooks/useGiftedChatRenderers';
 import { useTheme } from '../../../context/ThemeContext';
 import { Attachment, MessageAction } from '../../main/models';
-import { sidebarApi } from '../../../apiClient';
+import { sidebarApi, projectsApi, apiClient } from '../../../apiClient';
+import { getApiUrl } from '../../../config';
+import type { Project } from '../../main/models';
+import { ProjectSuggestionBanner } from './ProjectSuggestionBanner';
 import { AVAILABLE_TEAMS } from '../teams';
 import { DiceRollOverlay } from '../components/DiceRollOverlay';
 import { ToastContainer } from '../../../utils/ToastContainer';
@@ -68,6 +71,8 @@ export function ChatDetailScreen() {
         chatMode,
         selectedTeamId,
         activeAgentsCount,
+        suggestedProjectId,
+        clearProjectSuggestion,
     } = useChat();
     const { user, token } = useAuth();
     const { theme } = useTheme();
@@ -98,6 +103,31 @@ export function ChatDetailScreen() {
     const [processedRolls, setProcessedRolls] = useState<Set<string>>(
         new Set(),
     );
+
+    // Project suggestion banner
+    const [suggestedProject, setSuggestedProject] = useState<Project | null>(null);
+
+    useEffect(() => {
+        if (!suggestedProjectId) {
+            setSuggestedProject(null);
+            return;
+        }
+        projectsApi.list().then(projects => {
+            const found = (projects ?? []).find(p => p.id === suggestedProjectId) ?? null;
+            setSuggestedProject(found);
+        }).catch(() => setSuggestedProject(null));
+    }, [suggestedProjectId]);
+
+    const handleAcceptProjectSuggestion = useCallback(async () => {
+        if (!chatId || !suggestedProjectId) return;
+        try {
+            await apiClient.put(`${getApiUrl()}/chats/${chatId}`, { project_id: suggestedProjectId });
+            getChats({ preserveActiveChat: true });
+        } catch (e) {
+            console.warn('[ChatDetail] Failed to assign project:', e);
+        }
+        clearProjectSuggestion();
+    }, [chatId, suggestedProjectId, clearProjectSuggestion, getChats]);
 
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);
@@ -430,6 +460,19 @@ export function ChatDetailScreen() {
                     />
                 </Pressable>
             </View>
+
+            {suggestedProject && (
+                <ProjectSuggestionBanner
+                    project={suggestedProject}
+                    onAccept={handleAcceptProjectSuggestion}
+                    onDismiss={clearProjectSuggestion}
+                    accentColor={theme.accent}
+                    surfaceColor={theme.surface}
+                    textPrimaryColor={theme.textPrimary}
+                    textSecondaryColor={theme.textSecondary}
+                    borderColor={theme.border}
+                />
+            )}
 
             <Animated.View style={animatedKeyboardStyle}>
                 <GiftedChat
