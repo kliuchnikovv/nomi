@@ -29,6 +29,7 @@ type CreateChatRequest struct {
 	Title  string  `json:"title"`
 	Mode   string  `json:"mode"`
 	TeamID *string `json:"team_id,omitempty"`
+	Type   string  `json:"type,omitempty"`
 }
 
 // CreateChat creates a new chat with validation and business logic
@@ -46,6 +47,7 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, req inte
 			Title:  v.Title,
 			Mode:   v.Mode,
 			TeamID: v.TeamID,
+			Type:   v.Type,
 		}
 	default:
 		return nil, ErrInvalidRequest
@@ -61,12 +63,19 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, req inte
 		}
 	}
 
+	// Determine chat type
+	chatType := createReq.Type
+	if chatType == "" {
+		chatType = "regular"
+	}
+
 	// Create chat
 	c := &chat.Chat{
 		ID:        uuid.New(),
 		Model:     createReq.Model,
 		Title:     createReq.Title,
 		Mode:      mode,
+		Type:      chatType,
 		TeamID:    createReq.TeamID,
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
@@ -217,6 +226,16 @@ func (s *ChatService) GetOrCreatePersistentChat(ctx context.Context, userID uuid
 		c.Icon = s.getIconForTeam(c.TeamID)
 	}
 	return c, nil
+}
+
+// GetLatestPersistentChat returns the most-recent persistent chat for the user.
+func (s *ChatService) GetLatestPersistentChat(ctx context.Context, userID uuid.UUID) (*chat.Chat, error) {
+	return s.repo.GetLatestPersistent(ctx, userID)
+}
+
+// ListPersistentChats returns all persistent chats for the user, newest first.
+func (s *ChatService) ListPersistentChats(ctx context.Context, userID uuid.UUID) ([]*chat.Chat, error) {
+	return s.repo.ListPersistent(ctx, userID)
 }
 
 // ArchiveMessages marks given messages as archived.
