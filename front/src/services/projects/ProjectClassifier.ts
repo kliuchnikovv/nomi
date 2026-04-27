@@ -102,12 +102,20 @@ export async function classifyMessageForProject(
                 description: p.description,
             }));
             const result = await native.classify(messageText, projectPayload);
+            console.log('[ProjectClassifier] native result:', result);
             if (result) return result;
         } catch (e) {
             console.warn('[ProjectClassifier] Native classification failed:', e);
         }
+    } else {
+        console.log('[ProjectClassifier] native module not available, using keyword fallback');
     }
 
     // 2. JS keyword fallback
-    return classifyByKeywords(messageText, projects);
+    const keywordResult = classifyByKeywords(messageText, projects);
+    console.log('[ProjectClassifier] keyword result:', keywordResult,
+        'projects:', projects.map(p => p.name),
+        'msg tokens:', messageText.toLowerCase().split(/\s+/).filter(t => t.length >= MIN_KEYWORD_LENGTH),
+    );
+    return keywordResult;
 }

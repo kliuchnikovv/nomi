@@ -566,17 +566,19 @@ export function ChatProvider({
                             .catch(e => {
                                 console.warn('[ChatContext] Emoji generation failed:', e);
                             });
-                        // Classify new chat against projects (non-fatal, iOS 26+ only)
+                        // Classify new chat against projects
                         projectsApi.list()
                             .then(projects => {
-                                if (!projects || projects.length === 0) return;
+                                console.log('[ProjectSuggest] projects loaded:', projects?.length ?? 0);
+                                if (!projects || projects.length === 0) return null;
                                 return classifyMessageForProject(text, projects);
                             })
                             .then(projectId => {
+                                console.log('[ProjectSuggest] classified:', projectId);
                                 if (projectId) setSuggestedProjectId(projectId);
                             })
                             .catch(e => {
-                                console.warn('[ChatContext] Project classification failed:', e);
+                                console.warn('[ProjectSuggest] failed:', e);
                             });
                     }
                 }

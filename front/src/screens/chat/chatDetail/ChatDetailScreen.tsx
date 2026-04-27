@@ -108,14 +108,19 @@ export function ChatDetailScreen() {
     const [suggestedProject, setSuggestedProject] = useState<Project | null>(null);
 
     useEffect(() => {
+        console.log('[ProjectBanner] suggestedProjectId changed:', suggestedProjectId);
         if (!suggestedProjectId) {
             setSuggestedProject(null);
             return;
         }
         projectsApi.list().then(projects => {
             const found = (projects ?? []).find(p => p.id === suggestedProjectId) ?? null;
+            console.log('[ProjectBanner] resolved project:', found?.name ?? 'NOT FOUND');
             setSuggestedProject(found);
-        }).catch(() => setSuggestedProject(null));
+        }).catch(e => {
+            console.warn('[ProjectBanner] failed to load projects:', e);
+            setSuggestedProject(null);
+        });
     }, [suggestedProjectId]);
 
     const handleAcceptProjectSuggestion = useCallback(async () => {
