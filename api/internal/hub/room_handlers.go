@@ -219,6 +219,13 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 	// Handle stop operation - cancel generation
 	if frame.Operation == StopOperation {
+		// Route to the correct room if chat_id doesn't match (e.g. project chat stop sent via global chat socket)
+		if frame.ChatID != uuid.Nil && frame.ChatID != r.ID && r.Type == RoomTypeChat {
+			if targetRoom, err := r.hub.GetOrCreateRoom(frame.ChatID, RoomTypeChat, r.initiatorID, r.mode, r.command, r.timezone); err == nil && targetRoom.ID != r.ID {
+				targetRoom.ingress <- msg
+				return
+			}
+		}
 		r.logger.Info("stop operation received, cancelling generation")
 		r.generationInProgress = false
 		if r.generationTimer != nil {
