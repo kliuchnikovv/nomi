@@ -31,16 +31,20 @@ function AnimatedTabBar(props: BottomTabBarProps) {
     const heightSV = useSharedValue(0);
     const progress = useSharedValue(0); // 0 = visible, 1 = hidden
 
-    // True when the Chat tab is the active tab AND user is inside ChatDetail
-    const isChatTabActive = state.routes[state.index]?.name === 'Chat';
+    // Hide tab bar when inside a full-screen chat (Chat tab or Projects tab)
+    const activeTabName = state.routes[state.index]?.name;
     const chatRoute = state.routes.find(r => r.name === 'Chat');
-    const isInChatDetail = isChatTabActive && chatRoute
+    const projectsRoute = state.routes.find(r => r.name === 'Projects');
+    const isInChatDetail = activeTabName === 'Chat' && chatRoute
         ? getFocusedRouteNameFromRoute(chatRoute) === 'ChatDetail'
+        : false;
+    const isInProjectChatDetail = activeTabName === 'Projects' && projectsRoute
+        ? getFocusedRouteNameFromRoute(projectsRoute) === 'ProjectChatDetail'
         : false;
 
     useEffect(() => {
-        progress.value = withSpring(isInChatDetail ? 1 : 0, SPRING_CONFIG);
-    }, [isInChatDetail]);
+        progress.value = withSpring((isInChatDetail || isInProjectChatDetail) ? 1 : 0, SPRING_CONFIG);
+    }, [isInChatDetail, isInProjectChatDetail]);
 
     // Measure the tab bar once on first layout
     const handleLayout = (e: LayoutChangeEvent) => {
