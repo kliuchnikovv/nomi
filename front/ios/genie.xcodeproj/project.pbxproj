@@ -20,6 +20,7 @@
 		79797E082F4396200022FF81 /* IOSContactsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797E022F4396200022FF81 /* IOSContactsManager.swift */; };
 		79A9FF432F438DE900ED05DC /* IOSHealthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */; };
 		79A9FF462F438DE900ED05DC /* IOSNativeModules.m in Sources */ = {isa = PBXBuildFile; fileRef = 79A9FF412F438DE900ED05DC /* IOSNativeModules.m */; };
+		79797ECC2F4396200022FF81 /* ProjectClassifierModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797EDD2F4396200022FF81 /* ProjectClassifierModule.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
@@ -52,6 +53,7 @@
 		79A9FF3D2F438DAB00ED05DC /* genie-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "genie-Bridging-Header.h"; sourceTree = "<group>"; };
 		79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSHealthManager.swift; path = genie/IOSHealthManager.swift; sourceTree = "<group>"; };
 		79A9FF412F438DE900ED05DC /* IOSNativeModules.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = IOSNativeModules.m; path = genie/IOSNativeModules.m; sourceTree = "<group>"; };
+		79797EDD2F4396200022FF81 /* ProjectClassifierModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProjectClassifierModule.swift; path = genie/ProjectClassifierModule.swift; sourceTree = "<group>"; };
 		79A9FF482F438E3200ED05DC /* genie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = genie.entitlements; path = genie/genie.entitlements; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = genie/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		D3039251C689D2B66356D26C /* Pods-genie.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.release.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.release.xcconfig"; sourceTree = "<group>"; };
@@ -90,6 +92,7 @@
 				79A9FF3D2F438DAB00ED05DC /* genie-Bridging-Header.h */,
 				79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */,
 				79A9FF412F438DE900ED05DC /* IOSNativeModules.m */,
+				79797EDD2F4396200022FF81 /* ProjectClassifierModule.swift */,
 			);
 			name = genie;
 			sourceTree = "<group>";
@@ -351,6 +354,7 @@
 				796AD91A2F4CFF14001F9C89 /* IOSShortcutsManager.swift in Sources */,
 				79A9FF432F438DE900ED05DC /* IOSHealthManager.swift in Sources */,
 				79A9FF462F438DE900ED05DC /* IOSNativeModules.m in Sources */,
+				79797ECC2F4396200022FF81 /* ProjectClassifierModule.swift in Sources */,
 				79797DFF2F4393E90022FF81 /* DateExtensions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
