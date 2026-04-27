@@ -54,6 +54,7 @@ export function ChatProvider({
     activeChatID,
     setActiveChatID,
     initialProjectId,
+    initialPendingText,
 }: Props) {
     // Select messages from global store with shallow comparison to prevent re-renders
     // when message content hasn't actually changed
@@ -138,6 +139,7 @@ export function ChatProvider({
     const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
     const [generationStatus, setGenerationStatus] = useState<string | null>(null);
     const [suggestedProjectId, setSuggestedProjectId] = useState<string | null>(null);
+    const [classifiedText, setClassifiedText] = useState<string | null>(null);
     // Track which chatId we already attempted classification for (avoid repeated API calls).
     const classifiedChatIdRef = useRef<string | null>(null);
     const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -192,7 +194,7 @@ export function ChatProvider({
     // Error state management
     const [error, setError] = useState<string | null>(null);
     const [isRateLimited, setIsRateLimited] = useState(false);
-    const [pendingInputText, setPendingInputText] = useState<string | null>(null);
+    const [pendingInputText, setPendingInputText] = useState<string | null>(initialPendingText ?? null);
     const [lastFailedMessage, setLastFailedMessage] = useState<{
         text: string;
         attachments?: any[];
@@ -577,7 +579,10 @@ export function ChatProvider({
                             })
                             .then(projectId => {
                                 console.log('[ProjectSuggest] classified:', projectId);
-                                if (projectId) setSuggestedProjectId(projectId);
+                                if (projectId) {
+                                    setSuggestedProjectId(projectId);
+                                    setClassifiedText(text);
+                                }
                             })
                             .catch(e => {
                                 console.warn('[ProjectSuggest] failed:', e);
@@ -602,7 +607,10 @@ export function ChatProvider({
                         })
                         .then(projectId => {
                             console.log('[ProjectSuggest] existing-chat classified:', projectId);
-                            if (projectId) setSuggestedProjectId(projectId);
+                            if (projectId) {
+                                setSuggestedProjectId(projectId);
+                                setClassifiedText(text);
+                            }
                         })
                         .catch(e => {
                             console.warn('[ProjectSuggest] existing-chat failed:', e);
@@ -1398,7 +1406,8 @@ export function ChatProvider({
         setLastFailedMessage,
         generationStatus,
         suggestedProjectId,
-        clearProjectSuggestion: () => setSuggestedProjectId(null),
+        classifiedText,
+        clearProjectSuggestion: () => { setSuggestedProjectId(null); setClassifiedText(null); },
     };
 
     return (

@@ -27,7 +27,7 @@ export type ProjectsStackParamList = {
   ProjectsList: undefined;
   ProjectDetail: { projectId: string };
   CreateEditProject: { projectId?: string };
-  ProjectChatDetail: { chatId: string; projectId?: string };
+  ProjectChatDetail: { chatId: string; projectId?: string; pendingText?: string };
 };
 
 // Main bottom tab navigator

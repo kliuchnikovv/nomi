@@ -14,7 +14,7 @@ const Stack = createNativeStackNavigator<ProjectsStackParamList>();
 
 function ProjectChatDetailWrapper() {
     const route = useRoute<RouteProp<ProjectsStackParamList, 'ProjectChatDetail'>>();
-    const { chatId, projectId } = route.params;
+    const { chatId, projectId, pendingText } = route.params;
 
     // Local state — intentionally isolated from the global Chat tab.
     // Using emptyChatID sentinel so ChatProvider creates a new chat on first send.
@@ -25,6 +25,7 @@ function ProjectChatDetailWrapper() {
             activeChatID={localChatId}
             setActiveChatID={setLocalChatId}
             initialProjectId={projectId}
+            initialPendingText={pendingText}
         >
             <AskUserProvider>
                 <ChatDetailScreen />

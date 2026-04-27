@@ -72,6 +72,7 @@ export function ChatDetailScreen() {
         selectedTeamId,
         activeAgentsCount,
         suggestedProjectId,
+        classifiedText,
         clearProjectSuggestion,
     } = useChat();
     const { user, token } = useAuth();
@@ -123,16 +124,20 @@ export function ChatDetailScreen() {
         });
     }, [suggestedProjectId]);
 
-    const handleAcceptProjectSuggestion = useCallback(async () => {
-        if (!chatId || !suggestedProjectId) return;
-        try {
-            await apiClient.put(`${getApiUrl()}/chats/${chatId}`, { project_id: suggestedProjectId });
-            getChats({ preserveActiveChat: true });
-        } catch (e) {
-            console.warn('[ChatDetail] Failed to assign project:', e);
-        }
+    const handleAcceptProjectSuggestion = useCallback(() => {
+        if (!suggestedProjectId) return;
         clearProjectSuggestion();
-    }, [chatId, suggestedProjectId, clearProjectSuggestion, getChats]);
+        // Navigate to a brand-new chat in the project, pre-populated with the
+        // message that triggered the suggestion — without touching the current chat.
+        (navigation as any).navigate('Projects', {
+            screen: 'ProjectChatDetail',
+            params: {
+                chatId: '',
+                projectId: suggestedProjectId,
+                pendingText: classifiedText ?? undefined,
+            },
+        });
+    }, [suggestedProjectId, classifiedText, clearProjectSuggestion, navigation]);
 
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);

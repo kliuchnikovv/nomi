@@ -11,6 +11,8 @@ export type Props = {
     setActiveChatID: (id: string) => void;
     /** When set, new chats created in this context will be assigned to this project. */
     initialProjectId?: string;
+    /** When set, pre-populates the message input when the screen mounts. */
+    initialPendingText?: string;
 };
 
 export interface MainContextType {
@@ -77,6 +79,7 @@ export interface ChatContextType {
     generationStatus: string | null;
     // Project suggestion (shown after first message in a new chat)
     suggestedProjectId: string | null;
+    classifiedText: string | null;
     clearProjectSuggestion: () => void;
 }
 
