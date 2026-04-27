@@ -16,6 +16,7 @@ export const TAB_BAR_ICON_HEIGHT = 60; // px above insets.bottom
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { PlannerScreen } from '../screens/planner/PlannerScreen';
 import { ChatStack } from './ChatStack';
+import { ProjectsStack } from './ProjectsStack';
 import { IntegrationsScreen } from '../screens/integrations/IntegrationsScreen';
 import { SettingsStack } from './SettingsStack';
 import type { RootTabParamList } from './types';
@@ -109,6 +110,9 @@ export function MainTabs() {
                         case 'Chat':
                             iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
                             break;
+                        case 'Projects':
+                            iconName = focused ? 'folder' : 'folder-outline';
+                            break;
                         case 'Integrations':
                             iconName = focused ? 'apps' : 'apps-outline';
                             break;
@@ -139,6 +143,7 @@ export function MainTabs() {
                     },
                 })}
             />
+            <Tab.Screen name="Projects" component={ProjectsStack} />
             <Tab.Screen name="Integrations" component={IntegrationsScreen} />
             <Tab.Screen name="Settings" component={SettingsStack} />
         </Tab.Navigator>

@@ -22,11 +22,19 @@ export type SettingsStackParamList = {
   BotIdentityScreen: undefined;
 };
 
+// Projects nested stack (inside the Projects tab)
+export type ProjectsStackParamList = {
+  ProjectsList: undefined;
+  ProjectDetail: { projectId: string };
+  CreateEditProject: { projectId?: string };
+};
+
 // Main bottom tab navigator
 export type RootTabParamList = {
   Dashboard: undefined;
   Planning: undefined;
   Chat: NavigatorScreenParams<ChatStackParamList>; // Chat tab contains ChatStack
+  Projects: NavigatorScreenParams<ProjectsStackParamList>;
   Integrations: undefined;
   Settings: NavigatorScreenParams<SettingsStackParamList>; // Settings tab contains SettingsStack
 };
