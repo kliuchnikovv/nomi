@@ -24,6 +24,8 @@ export interface MainContextType {
     setActivePluginIntegrationId: (id: string | null) => void;
     rightSidebarVisible: boolean;
     setRightSidebarVisible: (visible: boolean) => void;
+    isNewSession: boolean;
+    setIsNewSession: (v: boolean) => void;
 }
 
 export type Chat = {

@@ -156,7 +156,7 @@ func (h *ChatHandler) DeleteChat(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
-// GetPersistentChat returns (or creates) the user's persistent chat.
+// GetPersistentChat returns the most-recent persistent chat for the user, or nil if none exists.
 func (h *ChatHandler) GetPersistentChat(c *gin.Context) {
 	var ctx = c.Request.Context()
 
@@ -166,18 +166,37 @@ func (h *ChatHandler) GetPersistentChat(c *gin.Context) {
 		return
 	}
 
-	if !user.SingleChatMode {
-		apierror.Respond(c, apierror.NewForbidden("single chat mode is not enabled"))
-		return
-	}
-
-	persistentChat, err := h.service.GetOrCreatePersistentChat(ctx, user.ID, "")
+	chat, err := h.service.GetLatestPersistentChat(ctx, user.ID)
 	if err != nil {
 		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
 		return
 	}
 
-	c.JSON(http.StatusOK, persistentChat)
+	if chat == nil {
+		c.JSON(http.StatusOK, nil)
+		return
+	}
+
+	c.JSON(http.StatusOK, chat)
+}
+
+// ListPersistentChats returns all persistent chats for the user, newest first.
+func (h *ChatHandler) ListPersistentChats(c *gin.Context) {
+	var ctx = c.Request.Context()
+
+	user, err := userFromCtx(ctx)
+	if err != nil {
+		apierror.Respond(c, apierror.NewUnauthorized(err.Error()))
+		return
+	}
+
+	chats, err := h.service.ListPersistentChats(ctx, user.ID)
+	if err != nil {
+		apierror.Respond(c, apierror.NewInternalServerError(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, chats)
 }
 
 // ArchiveMessages marks given messages as archived.

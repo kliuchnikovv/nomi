@@ -13,6 +13,10 @@ export type Props = {
     initialProjectId?: string;
     /** When set, pre-populates the message input when the screen mounts. */
     initialPendingText?: string;
+    /** When true, the provider treats the current chat as a brand-new session (no history). */
+    isNewSession?: boolean;
+    /** Called once the persistent chat has been created for a new session. */
+    onSessionStarted?: () => void;
 };
 
 export interface MainContextType {
@@ -30,7 +34,7 @@ export interface ChatContextType {
     messagesLoading: boolean;
     getMessages: (chatId: string, opts?: { isRefresh?: boolean }) => void;
     refreshing: boolean;
-    sendMessage: (text: string, attachments?: any[], webSearch?: boolean, thinking?: string, role?: string) => void;
+    sendMessage: (text: string, attachments?: any[], webSearch?: boolean, thinking?: string, role?: string, contextItems?: any[]) => void;
     executeMessageAction: (action: { command: string; url?: string | null; prompt?: string | null; agent?: string | null }, messageId: string) => Promise<void>;
     assistantWorking: boolean;
     externalTitle?: string | null;
@@ -81,6 +85,12 @@ export interface ChatContextType {
     suggestedProjectId: string | null;
     classifiedText: string | null;
     clearProjectSuggestion: () => void;
+    // Session-level classification (blocks first send until project is resolved)
+    pendingMessage: string | null;
+    suggestedProjectForSession: import('../main/models').Project | null;
+    sessionClassified: boolean;
+    clearProjectSuggestionForSession: () => void;
+    confirmProjectSuggestionForSession: () => void;
 }
 
 

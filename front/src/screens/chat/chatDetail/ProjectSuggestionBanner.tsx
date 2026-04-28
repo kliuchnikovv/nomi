@@ -12,6 +12,8 @@ interface Props {
     textPrimaryColor: string;
     textSecondaryColor: string;
     borderColor: string;
+    /** If true, shows a "Нет" text button instead of just the X icon (for blocking mode) */
+    showNoButton?: boolean;
 }
 
 export function ProjectSuggestionBanner({
@@ -23,6 +25,7 @@ export function ProjectSuggestionBanner({
     textPrimaryColor,
     textSecondaryColor,
     borderColor,
+    showNoButton = false,
 }: Props) {
     return (
         <View style={[styles.container, { backgroundColor: surfaceColor, borderColor }]}>
@@ -35,18 +38,28 @@ export function ProjectSuggestionBanner({
                     {project.name}
                 </Text>
             </View>
+            {showNoButton ? (
+                <TouchableOpacity
+                    style={styles.noBtn}
+                    onPress={onDismiss}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Text style={[styles.noBtnText, { color: textSecondaryColor }]}>Нет</Text>
+                </TouchableOpacity>
+            ) : (
+                <TouchableOpacity
+                    onPress={onDismiss}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Ionicons name="close" size={18} color={textSecondaryColor} />
+                </TouchableOpacity>
+            )}
             <TouchableOpacity
                 style={[styles.addBtn, { backgroundColor: accentColor }]}
                 onPress={onAccept}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
                 <Text style={styles.addBtnText}>Add</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-                onPress={onDismiss}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-                <Ionicons name="close" size={18} color={textSecondaryColor} />
             </TouchableOpacity>
         </View>
     );
@@ -65,6 +78,8 @@ const styles = StyleSheet.create({
     text: { flex: 1 },
     label: { fontSize: 11, fontWeight: '500' },
     name: { fontSize: 14, fontWeight: '600', marginTop: 1 },
+    noBtn: { paddingHorizontal: 8 },
+    noBtnText: { fontSize: 14, fontWeight: '500' },
     addBtn: {
         borderRadius: 8,
         paddingHorizontal: 14,

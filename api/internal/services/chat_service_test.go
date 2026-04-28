@@ -84,6 +84,28 @@ func (m *mockChatRepository) GetOrCreatePersistent(ctx context.Context, userID u
 	return c, nil
 }
 
+func (m *mockChatRepository) GetLatestPersistent(ctx context.Context, userID uuid.UUID) (*chat.Chat, error) {
+	var latest *chat.Chat
+	for _, c := range m.chats {
+		if c.Type == "persistent" {
+			if latest == nil || c.CreatedAt.After(latest.CreatedAt) {
+				latest = c
+			}
+		}
+	}
+	return latest, nil
+}
+
+func (m *mockChatRepository) ListPersistent(ctx context.Context, userID uuid.UUID) ([]*chat.Chat, error) {
+	result := make([]*chat.Chat, 0)
+	for _, c := range m.chats {
+		if c.Type == "persistent" {
+			result = append(result, c)
+		}
+	}
+	return result, nil
+}
+
 func (m *mockChatRepository) ArchiveMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, messageIDs []uuid.UUID) error {
 	return nil
 }

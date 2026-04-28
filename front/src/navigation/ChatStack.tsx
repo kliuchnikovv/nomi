@@ -24,7 +24,7 @@ function ChatDetailScreenWrapper() {
 }
 
 export function ChatStack() {
-    const { activeChatID, setActiveChatID } = useMain();
+    const { activeChatID, setActiveChatID, isNewSession, setIsNewSession } = useMain();
     const { user } = useAuth();
     const singleChatMode = user?.single_chat_mode && !!activeChatID;
 
@@ -32,6 +32,8 @@ export function ChatStack() {
         <ChatProvider
             activeChatID={activeChatID ? activeChatID : emptyChatID}
             setActiveChatID={setActiveChatID}
+            isNewSession={isNewSession}
+            onSessionStarted={() => setIsNewSession(false)}
         >
             <AskUserProvider>
                 <Stack.Navigator

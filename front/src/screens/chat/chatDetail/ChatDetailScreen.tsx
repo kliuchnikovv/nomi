@@ -12,6 +12,7 @@ import {
     Pressable,
     StyleSheet,
     AppState,
+    TouchableOpacity,
 } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
@@ -39,12 +40,15 @@ import { sidebarApi, projectsApi, apiClient } from '../../../apiClient';
 import { getApiUrl } from '../../../config';
 import type { Project } from '../../main/models';
 import { ProjectSuggestionBanner } from './ProjectSuggestionBanner';
+import { PersistentChatEmptyState } from './PersistentChatEmptyState';
+import { SessionHistorySheet, formatSessionDate } from './SessionHistorySheet';
 import { AVAILABLE_TEAMS } from '../teams';
 import { DiceRollOverlay } from '../components/DiceRollOverlay';
 import { ToastContainer } from '../../../utils/ToastContainer';
 import { useAskUser } from '../AskUserContext';
 import { AskUserDialog } from '../components/AskUserDialog';
 import type { ChatStackParamList } from '../../../navigation/types';
+import type { Chat, Message } from '../../main/models';
 
 export function ChatDetailScreen() {
     const route = useRoute<RouteProp<ChatStackParamList, 'ChatDetail'>>();
@@ -74,11 +78,16 @@ export function ChatDetailScreen() {
         suggestedProjectId,
         classifiedText,
         clearProjectSuggestion,
+        pendingMessage,
+        suggestedProjectForSession,
+        clearProjectSuggestionForSession,
+        confirmProjectSuggestionForSession,
+        setPendingInputText,
     } = useChat();
     const { user, token } = useAuth();
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
-    const { activeChat, getChats } = useMain();
+    const { activeChat, getChats, isNewSession, setIsNewSession } = useMain();
 
     const styles = useMemo(() => createStyles(theme), [theme]);
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
@@ -105,8 +114,13 @@ export function ChatDetailScreen() {
         new Set(),
     );
 
-    // Project suggestion banner
+    // Project suggestion banner (non-session, existing chats)
     const [suggestedProject, setSuggestedProject] = useState<Project | null>(null);
+
+    // History sheet state
+    const [historySheetVisible, setHistorySheetVisible] = useState(false);
+    const [loadedHistoryChat, setLoadedHistoryChat] = useState<Chat | null>(null);
+    const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
 
     useEffect(() => {
         console.log('[ProjectBanner] suggestedProjectId changed:', suggestedProjectId);
@@ -138,6 +152,31 @@ export function ChatDetailScreen() {
             },
         });
     }, [suggestedProjectId, classifiedText, clearProjectSuggestion, navigation]);
+
+    const handleSelectSession = useCallback(async (selectedChat: Chat) => {
+        setLoadedHistoryChat(selectedChat);
+        const msgs = await apiClient.get<Message[]>(
+            `${getApiUrl()}/chats/${selectedChat.id}/messages`
+        );
+        setHistoryMessages(msgs ?? []);
+    }, []);
+
+    const handleChipPress = useCallback((text: string) => {
+        setPendingInputText(text);
+    }, [setPendingInputText]);
+
+    const handleAcceptSessionProjectSuggestion = useCallback(() => {
+        if (!suggestedProjectForSession) return;
+        confirmProjectSuggestionForSession();
+        (navigation as any).navigate('Projects', {
+            screen: 'ProjectChatDetail',
+            params: {
+                chatId: '',
+                projectId: suggestedProjectForSession.id,
+                pendingText: pendingMessage ?? undefined,
+            },
+        });
+    }, [suggestedProjectForSession, pendingMessage, confirmProjectSuggestionForSession, navigation]);
 
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);
@@ -394,7 +433,7 @@ export function ChatDetailScreen() {
     const {
         renderBubble,
         renderFooter,
-        renderInputToolbar,
+        renderInputToolbar: renderInputToolbarBase,
         renderMessage,
         renderMessageText,
         onLongPressMessage,
@@ -413,6 +452,18 @@ export function ChatDetailScreen() {
         onMessageAction: handleMessageAction,
         inputAnimY,
     });
+
+    const renderInputToolbar = useCallback((props: any) => {
+        const toolbar = renderInputToolbarBase(props);
+        if (pendingMessage) {
+            return (
+                <View pointerEvents="none" style={{ opacity: 0.4 }}>
+                    {toolbar}
+                </View>
+            );
+        }
+        return toolbar;
+    }, [pendingMessage, renderInputToolbarBase]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -471,7 +522,8 @@ export function ChatDetailScreen() {
                 </Pressable>
             </View>
 
-            {suggestedProject && (
+            {/* Non-session project suggestion banner (existing chats) */}
+            {!isNewSession && suggestedProject && (
                 <ProjectSuggestionBanner
                     project={suggestedProject}
                     onAccept={handleAcceptProjectSuggestion}
@@ -484,57 +536,104 @@ export function ChatDetailScreen() {
                 />
             )}
 
+            {/* History button — shown at top when in new session */}
+            {isNewSession && (
+                <TouchableOpacity
+                    style={[detailStyles.historyBtn, { borderBottomColor: theme.border }]}
+                    onPress={() => setHistorySheetVisible(true)}
+                >
+                    <Ionicons name="time-outline" size={16} color={theme.accent} />
+                    <Text style={[detailStyles.historyBtnText, { color: theme.accent }]}>
+                        История сессий
+                    </Text>
+                </TouchableOpacity>
+            )}
+
+            {/* Loaded history separator */}
+            {loadedHistoryChat && historyMessages.length > 0 && (
+                <View style={[detailStyles.historySeparator, { borderColor: theme.border }]}>
+                    <Text style={[detailStyles.historySeparatorText, { color: theme.textSecondary }]}>
+                        — Сессия от {formatSessionDate(loadedHistoryChat.updated_at)} —
+                    </Text>
+                </View>
+            )}
+
             <Animated.View style={animatedKeyboardStyle}>
-                <GiftedChat
-                    messages={messagesLoading ? [] : giftedMessages}
-                    onSend={handleSend}
-                    user={currentUser}
-                    renderMessage={renderMessage}
-                    renderBubble={renderBubble}
-                    renderMessageText={renderMessageText}
-                    renderInputToolbar={renderInputToolbar}
-                    isTyping={false}
-                    renderFooter={renderFooter}
-                    inverted={true}
-                    minInputToolbarHeight={60}
-                    maxComposerHeight={100}
-                    renderAvatar={null}
-                    messagesContainerStyle={styles.messagesContainer}
-                    placeholder="Type a message..."
-                    scrollToBottom
-                    alwaysShowSend
-                    isAlignedTop={false}
-                    isScrollToBottomEnabled={true}
-                    timeFormat="HH:mm"
-                    onLongPress={onLongPressMessage}
-                    shouldUpdateMessage={shouldUpdateMessage}
-                    extraData={extraData}
-                    keyExtractor={(message: IMessage) => String(message._id)}
-                    listProps={
-                        chatId && chatId !== emptyChatID && !isPluginThread
-                            ? {
-                                  refreshControl: (
-                                      <RefreshControl
-                                          refreshing={refreshing}
-                                          onRefresh={handleRefreshHistory}
-                                          tintColor={theme.accent}
-                                          colors={[theme.accent]}
-                                      />
-                                  ),
-                                  maintainVisibleContentPosition: undefined,
-                                  maxToRenderPerBatch: 10,
-                                  windowSize: 10,
-                                  initialNumToRender: 15,
-                                  updateCellsBatchingPeriod: 50,
-                              }
-                            : {
-                                  maxToRenderPerBatch: 10,
-                                  windowSize: 10,
-                                  initialNumToRender: 15,
-                              }
-                    }
-                />
+                {isNewSession && messages.length === 0 && historyMessages.length === 0 ? (
+                    <PersistentChatEmptyState
+                        onChipPress={handleChipPress}
+                        accentColor={theme.accent}
+                        textPrimaryColor={theme.textPrimary}
+                        textSecondaryColor={theme.textSecondary}
+                        surfaceColor={theme.surface}
+                    />
+                ) : (
+                    <GiftedChat
+                        messages={messagesLoading ? [] : giftedMessages}
+                        onSend={handleSend}
+                        user={currentUser}
+                        renderMessage={renderMessage}
+                        renderBubble={renderBubble}
+                        renderMessageText={renderMessageText}
+                        renderInputToolbar={renderInputToolbar}
+                        isTyping={false}
+                        renderFooter={renderFooter}
+                        inverted={true}
+                        minInputToolbarHeight={60}
+                        maxComposerHeight={100}
+                        renderAvatar={null}
+                        messagesContainerStyle={styles.messagesContainer}
+                        placeholder="Type a message..."
+                        scrollToBottom
+                        alwaysShowSend
+                        isAlignedTop={false}
+                        isScrollToBottomEnabled={true}
+                        timeFormat="HH:mm"
+                        onLongPress={onLongPressMessage}
+                        shouldUpdateMessage={shouldUpdateMessage}
+                        extraData={extraData}
+                        keyExtractor={(message: IMessage) => String(message._id)}
+                        listProps={
+                            chatId && chatId !== emptyChatID && !isPluginThread
+                                ? {
+                                      refreshControl: (
+                                          <RefreshControl
+                                              refreshing={refreshing}
+                                              onRefresh={handleRefreshHistory}
+                                              tintColor={theme.accent}
+                                              colors={[theme.accent]}
+                                          />
+                                      ),
+                                      maintainVisibleContentPosition: undefined,
+                                      maxToRenderPerBatch: 10,
+                                      windowSize: 10,
+                                      initialNumToRender: 15,
+                                      updateCellsBatchingPeriod: 50,
+                                  }
+                                : {
+                                      maxToRenderPerBatch: 10,
+                                      windowSize: 10,
+                                      initialNumToRender: 15,
+                                  }
+                        }
+                    />
+                )}
             </Animated.View>
+
+            {/* Blocking project suggestion banner for new sessions (above input) */}
+            {suggestedProjectForSession && (
+                <ProjectSuggestionBanner
+                    project={suggestedProjectForSession}
+                    onAccept={handleAcceptSessionProjectSuggestion}
+                    onDismiss={clearProjectSuggestionForSession}
+                    accentColor={theme.accent}
+                    surfaceColor={theme.surface}
+                    textPrimaryColor={theme.textPrimary}
+                    textSecondaryColor={theme.textSecondary}
+                    borderColor={theme.border}
+                    showNoButton={true}
+                />
+            )}
 
             {/* Cover the safe-area gap (behind input toolbar) with the input's background color */}
             {insets.bottom > 0 && (
@@ -577,6 +676,19 @@ export function ChatDetailScreen() {
                 onCancel={cancelDialog}
                 theme={theme}
             />
+
+            <SessionHistorySheet
+                visible={historySheetVisible}
+                onClose={() => setHistorySheetVisible(false)}
+                onSelectSession={handleSelectSession}
+                accentColor={theme.accent}
+                textPrimaryColor={theme.textPrimary}
+                textSecondaryColor={theme.textSecondary}
+                surfaceColor={theme.surface}
+                backgroundColor={theme.background}
+                borderColor={theme.border}
+            />
+
             <ToastContainer />
         </View>
     );
@@ -612,4 +724,20 @@ const detailStyles = StyleSheet.create({
         width: 44,
         alignItems: 'flex-end',
     },
+    historyBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        gap: 6,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    historyBtnText: { fontSize: 14, fontWeight: '500' },
+    historySeparator: {
+        alignItems: 'center',
+        paddingVertical: 8,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    historySeparatorText: { fontSize: 12 },
 });
