@@ -55,6 +55,8 @@ export function ChatProvider({
     setActiveChatID,
     initialProjectId,
     initialPendingText,
+    isNewSession = false,
+    onSessionStarted,
 }: Props) {
     // Select messages from global store with shallow comparison to prevent re-renders
     // when message content hasn't actually changed
@@ -142,6 +144,10 @@ export function ChatProvider({
     const [classifiedText, setClassifiedText] = useState<string | null>(null);
     // Track which chatId we already attempted classification for (avoid repeated API calls).
     const classifiedChatIdRef = useRef<string | null>(null);
+    // Session-level classification state (blocks first send in a new session until project resolved)
+    const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+    const [suggestedProjectForSession, setSuggestedProjectForSession] = useState<import('../main/models').Project | null>(null);
+    const [sessionClassified, setSessionClassified] = useState(false);
     const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
@@ -237,6 +243,15 @@ export function ChatProvider({
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Reset session classification state whenever a new session begins
+    useEffect(() => {
+        if (isNewSession) {
+            setSessionClassified(false);
+            setPendingMessage(null);
+            setSuggestedProjectForSession(null);
+        }
+    }, [isNewSession]);
 
     const setDetailLevel = useCallback((level: DetailLevel) => {
         setDetailLevelInternal(level);
@@ -781,7 +796,7 @@ export function ChatProvider({
         ],
     );
 
-    const sendMessage = useCallback(
+    const sendMessageInternal = useCallback(
         async (
             text: string,
             attachments: any[] = [],
@@ -790,6 +805,18 @@ export function ChatProvider({
             role: string = 'user',
             contextItems?: any[],
         ) => {
+            // Lazy persistent chat creation for new sessions
+            if (activeChatID === emptyChatID && isNewSession) {
+                const created = await apiClient.post<{ id: string }>(`${getApiUrl()}/chats`, {
+                    title: 'Chat',
+                    model: selectedModelRef.current || 'gpt-5-nano',
+                    mode: 'agent',
+                    type: 'persistent',
+                });
+                if (!created) return;
+                setActiveChatID(created.id);
+                onSessionStarted?.();
+            }
             await sendStreamingMessage(
                 text,
                 attachments,
@@ -800,8 +827,49 @@ export function ChatProvider({
                 contextItems,
             );
         },
-        [sendStreamingMessage],
+        [activeChatID, isNewSession, onSessionStarted, sendStreamingMessage, setActiveChatID],
     );
+
+    const sendMessage = useCallback(
+        async (text: string, attachments?: any[], webSearch?: boolean, thinking?: string, role?: string) => {
+            if (isNewSession && !sessionClassified) {
+                try {
+                    const projects = await projectsApi.list();
+                    if (projects && projects.length > 0) {
+                        const projectId = await classifyMessageForProject(text, projects);
+                        if (projectId) {
+                            const matched = projects.find(p => p.id === projectId) ?? null;
+                            if (matched) {
+                                setPendingMessage(text);
+                                setSuggestedProjectForSession(matched);
+                                return;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[SessionClassify] classification failed, sending anyway:', e);
+                }
+                setSessionClassified(true);
+            }
+            sendMessageInternal(text, attachments, webSearch, thinking, role);
+        },
+        [isNewSession, sessionClassified, sendMessageInternal],
+    );
+
+    const clearProjectSuggestionForSession = useCallback(() => {
+        const text = pendingMessage;
+        setPendingMessage(null);
+        setSuggestedProjectForSession(null);
+        setSessionClassified(true);
+        if (text) {
+            sendMessageInternal(text);
+        }
+    }, [pendingMessage, sendMessageInternal]);
+
+    const confirmProjectSuggestionForSession = useCallback(() => {
+        setPendingMessage(null);
+        setSuggestedProjectForSession(null);
+    }, []);
 
     const retryLastMessage = useCallback(() => {
         if (lastFailedMessage) {
@@ -1408,6 +1476,11 @@ export function ChatProvider({
         suggestedProjectId,
         classifiedText,
         clearProjectSuggestion: () => { setSuggestedProjectId(null); setClassifiedText(null); },
+        pendingMessage,
+        suggestedProjectForSession,
+        sessionClassified,
+        clearProjectSuggestionForSession,
+        confirmProjectSuggestionForSession,
     };
 
     return (
