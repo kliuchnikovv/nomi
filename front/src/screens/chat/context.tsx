@@ -503,6 +503,7 @@ export function ChatProvider({
             reuseMessageId?: string,
             role: string = 'user',
             contextItems?: any[],
+            chatIdOverride?: string,
         ) => {
             if (!text.trim() && attachments.length === 0) return;
             if (!user?.id) return;
@@ -527,7 +528,7 @@ export function ChatProvider({
                 contextItems,
             });
 
-            let chatIdToUse = activeChatID;
+            let chatIdToUse = chatIdOverride || activeChatID;
             let messageID: string | undefined = reuseMessageId;
             const timestamp = Date.now();
 
@@ -746,7 +747,7 @@ export function ChatProvider({
             // If user attached a custom location context item, it takes precedence
             // over the stored location so the agent operates on the chosen point.
             let agentLocation: string | undefined;
-            const attachedLocation = contextItems.find(ci => ci.sourceType === 'location');
+            const attachedLocation = contextItems?.find(ci => ci.sourceType === 'location');
             if (attachedLocation) {
                 const { lat, lon } = attachedLocation.metadata ?? {};
                 agentLocation = lat != null && lon != null
@@ -806,6 +807,7 @@ export function ChatProvider({
             contextItems?: any[],
         ) => {
             // Lazy persistent chat creation for new sessions
+            let persistentChatId: string | undefined;
             if (activeChatID === emptyChatID && isNewSession) {
                 const created = await apiClient.post<{ id: string }>(`${getApiUrl()}/chats`, {
                     title: 'Chat',
@@ -814,6 +816,7 @@ export function ChatProvider({
                     type: 'persistent',
                 });
                 if (!created) return;
+                persistentChatId = created.id;
                 setActiveChatID(created.id);
                 onSessionStarted?.();
             }
@@ -825,13 +828,14 @@ export function ChatProvider({
                 undefined,
                 role,
                 contextItems,
+                persistentChatId,
             );
         },
         [activeChatID, isNewSession, onSessionStarted, sendStreamingMessage, setActiveChatID],
     );
 
     const sendMessage = useCallback(
-        async (text: string, attachments?: any[], webSearch?: boolean, thinking?: string, role?: string) => {
+        async (text: string, attachments?: any[], webSearch?: boolean, thinking?: string, role?: string, contextItems?: any[]) => {
             if (isNewSession && !sessionClassified) {
                 try {
                     const projects = await projectsApi.list();
@@ -851,7 +855,7 @@ export function ChatProvider({
                 }
                 setSessionClassified(true);
             }
-            sendMessageInternal(text, attachments, webSearch, thinking, role);
+            sendMessageInternal(text, attachments, webSearch, thinking, role, contextItems);
         },
         [isNewSession, sessionClassified, sendMessageInternal],
     );
