@@ -40,7 +40,7 @@ import { sidebarApi, projectsApi, apiClient } from '../../../apiClient';
 import { getApiUrl } from '../../../config';
 import type { Project } from '../../main/models';
 import { ProjectSuggestionBanner } from './ProjectSuggestionBanner';
-import { PersistentChatEmptyState } from './PersistentChatEmptyState';
+import { PersistentChatEmptyState, useChips } from './PersistentChatEmptyState';
 import { SessionHistorySheet, formatSessionDate } from './SessionHistorySheet';
 import { AVAILABLE_TEAMS } from '../teams';
 import { DiceRollOverlay } from '../components/DiceRollOverlay';
@@ -99,6 +99,7 @@ export function ChatDetailScreen() {
     }));
 
     const giftedMessages = useGiftedMessages(messages, user?.id);
+    const chips = useChips();
 
     // Attachment state
     const [imageViewerVisible, setImageViewerVisible] = useState(false);
@@ -454,17 +455,42 @@ export function ChatDetailScreen() {
         inputAnimY,
     });
 
+    const showEmptyChips = isNewSession && historyMessages.length === 0 && giftedMessages.length === 0;
+    const showEmptyGreeting = showEmptyChips;
+
+    // Track the input toolbar height so the greeting overlay can avoid it.
+    const [inputToolbarHeight, setInputToolbarHeight] = useState(0);
+
     const renderInputToolbar = useCallback((props: any) => {
         const toolbar = renderInputToolbarBase(props);
+        const inner = (
+            <View onLayout={e => setInputToolbarHeight(e.nativeEvent.layout.height)}>
+                {showEmptyChips && chips.length > 0 && (
+                    <View style={detailStyles.chipsRow}>
+                        {chips.map(chip => (
+                            <TouchableOpacity
+                                key={chip.label}
+                                style={[detailStyles.chipBtn, { backgroundColor: theme.surface, borderColor: theme.accent + '40' }]}
+                                onPress={() => handleChipPress(chip.text)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[detailStyles.chipBtnText, { color: theme.textPrimary }]}>{chip.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+                {toolbar}
+            </View>
+        );
         if (pendingMessage) {
             return (
                 <View pointerEvents="none" style={{ opacity: 0.4 }}>
-                    {toolbar}
+                    {inner}
                 </View>
             );
         }
-        return toolbar;
-    }, [pendingMessage, renderInputToolbarBase]);
+        return inner;
+    }, [pendingMessage, renderInputToolbarBase, showEmptyChips, chips, handleChipPress, theme]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -560,6 +586,28 @@ export function ChatDetailScreen() {
             )}
 
             <Animated.View style={animatedKeyboardStyle}>
+                {/* Greeting overlay — rendered as absolute so it's immune to
+                    GiftedChat's inverted-FlatList layout quirks. Offset from
+                    the bottom by the measured input toolbar height so the
+                    greeting is centered in the messages area only. */}
+                {showEmptyGreeting && (
+                    <View
+                        pointerEvents="none"
+                        style={[
+                            StyleSheet.absoluteFillObject,
+                            { justifyContent: 'center', alignItems: 'center', paddingBottom: inputToolbarHeight },
+                        ]}
+                    >
+                        <PersistentChatEmptyState
+                            onChipPress={handleChipPress}
+                            accentColor={theme.accent}
+                            textPrimaryColor={theme.textPrimary}
+                            textSecondaryColor={theme.textSecondary}
+                            surfaceColor={theme.surface}
+                            showChips={false}
+                        />
+                    </View>
+                )}
                 <GiftedChat
                     messages={messagesLoading ? [] : [...giftedMessages, ...historyGiftedMessages]}
                     onSend={handleSend}
@@ -585,23 +633,6 @@ export function ChatDetailScreen() {
                     shouldUpdateMessage={shouldUpdateMessage}
                     extraData={extraData}
                     keyExtractor={(message: IMessage) => String(message._id)}
-                    renderChatEmpty={
-                        isNewSession && historyMessages.length === 0
-                            ? () => (
-                                // The FlatList is inverted (scaleY: -1), so we invert back
-                                // to keep the greeting right-side-up.
-                                <View style={detailStyles.emptyStateInner}>
-                                    <PersistentChatEmptyState
-                                        onChipPress={handleChipPress}
-                                        accentColor={theme.accent}
-                                        textPrimaryColor={theme.textPrimary}
-                                        textSecondaryColor={theme.textSecondary}
-                                        surfaceColor={theme.surface}
-                                    />
-                                </View>
-                            )
-                            : undefined
-                    }
                     listProps={
                         chatId && chatId !== emptyChatID && !isPluginThread
                             ? {
@@ -748,10 +779,20 @@ const detailStyles = StyleSheet.create({
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
     historySeparatorText: { fontSize: 12 },
-    emptyStateInner: {
-        flex: 1,
-        // GiftedChat's inverted FlatList applies scaleY: -1 to the scroll container.
-        // Apply the inverse transform so the greeting/chips appear right-side-up.
-        transform: [{ scaleY: -1 }],
+    chipsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        paddingBottom: 4,
+        justifyContent: 'center',
     },
+    chipBtn: {
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 20,
+        borderWidth: 1,
+    },
+    chipBtnText: { fontSize: 14, fontWeight: '500' },
 });

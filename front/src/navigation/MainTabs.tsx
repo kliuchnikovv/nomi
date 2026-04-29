@@ -35,9 +35,13 @@ function AnimatedTabBar(props: BottomTabBarProps) {
     const activeTabName = state.routes[state.index]?.name;
     const chatRoute = state.routes.find(r => r.name === 'Chat');
     const projectsRoute = state.routes.find(r => r.name === 'Projects');
-    const isInChatDetail = activeTabName === 'Chat' && chatRoute
-        ? getFocusedRouteNameFromRoute(chatRoute) === 'ChatDetail'
-        : false;
+    // Hide when Chat tab is active and we're NOT on the list screen.
+    // getFocusedRouteNameFromRoute returns undefined when no navigation has
+    // occurred yet (initial route). In that case the focused screen IS the
+    // initialRouteName, which in singleChatMode is 'ChatDetail' — so we hide
+    // the bar whenever the name is not explicitly 'ChatList'.
+    const chatFocusedRoute = chatRoute ? getFocusedRouteNameFromRoute(chatRoute) : undefined;
+    const isInChatDetail = activeTabName === 'Chat' && chatFocusedRoute !== 'ChatList';
     const isInProjectChatDetail = activeTabName === 'Projects' && projectsRoute
         ? getFocusedRouteNameFromRoute(projectsRoute) === 'ProjectChatDetail'
         : false;

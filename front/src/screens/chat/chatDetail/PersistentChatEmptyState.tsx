@@ -14,9 +14,10 @@ interface Props {
     textPrimaryColor: string;
     textSecondaryColor: string;
     surfaceColor: string;
+    showChips?: boolean;
 }
 
-function useChips(): Chip[] {
+export function useChips(): Chip[] {
     const { integrations } = useConnectors();
     const chips: Chip[] = [];
 
@@ -31,7 +32,7 @@ function useChips(): Chip[] {
     return chips.slice(0, 4);
 }
 
-export function PersistentChatEmptyState({ onChipPress, accentColor, textPrimaryColor, textSecondaryColor, surfaceColor }: Props) {
+export function PersistentChatEmptyState({ onChipPress, accentColor, textPrimaryColor, textSecondaryColor, surfaceColor, showChips = true }: Props) {
     const { user } = useAuth();
     const chips = useChips();
     const firstName = user?.name?.split(' ')[0] ?? 'там';
@@ -45,18 +46,20 @@ export function PersistentChatEmptyState({ onChipPress, accentColor, textPrimary
             <Text style={[styles.subtitle, { color: textSecondaryColor }]}>
                 Чем могу помочь сегодня?
             </Text>
-            <View style={styles.chips}>
-                {chips.map(chip => (
-                    <TouchableOpacity
-                        key={chip.label}
-                        style={[styles.chip, { backgroundColor: surfaceColor, borderColor: accentColor + '40' }]}
-                        onPress={() => onChipPress(chip.text)}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={[styles.chipText, { color: textPrimaryColor }]}>{chip.label}</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+            {showChips && (
+                <View style={styles.chips}>
+                    {chips.map(chip => (
+                        <TouchableOpacity
+                            key={chip.label}
+                            style={[styles.chip, { backgroundColor: surfaceColor, borderColor: accentColor + '40' }]}
+                            onPress={() => onChipPress(chip.text)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.chipText, { color: textPrimaryColor }]}>{chip.label}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
         </View>
     );
 }
