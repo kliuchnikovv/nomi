@@ -52,7 +52,7 @@ import type { Chat, Message } from '../../main/models';
 
 export function ChatDetailScreen() {
     const route = useRoute<RouteProp<ChatStackParamList, 'ChatDetail'>>();
-    const { chatId } = route.params;
+    const chatId = route.params?.chatId ?? emptyChatID;
     const navigation = useNavigation();
 
     const inputAnimY = useSharedValue(0);
