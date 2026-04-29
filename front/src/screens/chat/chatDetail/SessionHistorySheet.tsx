@@ -3,6 +3,7 @@ import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
     Modal, Pressable, ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { chatsApi } from '../../../apiClient';
 import type { Chat } from '../../main/models';
 
@@ -18,8 +19,9 @@ interface Props {
     borderColor: string;
 }
 
-export function formatSessionDate(updatedAt: number): string {
-    const date = new Date(updatedAt * 1000);
+export function formatSessionDate(updatedAt: number | string): string {
+    // Backend may send either Unix seconds (number) or an ISO-8601 string (time.Time).
+    const date = typeof updatedAt === 'string' ? new Date(updatedAt) : new Date(updatedAt * 1000);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
 
@@ -37,6 +39,7 @@ export function SessionHistorySheet({
 }: Props) {
     const [sessions, setSessions] = useState<Chat[]>([]);
     const [loading, setLoading] = useState(false);
+    const insets = useSafeAreaInsets();
 
     useEffect(() => {
         if (!visible) return;
@@ -65,7 +68,7 @@ export function SessionHistorySheet({
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <Pressable style={styles.backdrop} onPress={onClose} />
-            <View style={[styles.sheet, { backgroundColor: surfaceColor }]}>
+            <View style={[styles.sheet, { backgroundColor: surfaceColor, paddingBottom: insets.bottom }]}>
                 <View style={[styles.header, { borderBottomColor: borderColor }]}>
                     <Text style={[styles.headerTitle, { color: textPrimaryColor }]}>
                         История сессий

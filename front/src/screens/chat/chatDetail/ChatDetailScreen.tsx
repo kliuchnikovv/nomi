@@ -609,7 +609,10 @@ export function ChatDetailScreen() {
                     }
                 />
                 {isNewSession && giftedMessages.length === 0 && historyMessages.length === 0 && (
-                    <View style={[detailStyles.emptyStateOverlay, { backgroundColor: theme.background }]}>
+                    <View style={[
+                        detailStyles.emptyStateOverlay,
+                        { backgroundColor: theme.background, bottom: 60 + insets.bottom },
+                    ]}>
                         <PersistentChatEmptyState
                             onChipPress={handleChipPress}
                             accentColor={theme.accent}
@@ -742,8 +745,10 @@ const detailStyles = StyleSheet.create({
     },
     historySeparatorText: { fontSize: 12 },
     emptyStateOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        // Leave room at the bottom for the GiftedChat input toolbar (~80px)
-        bottom: 80,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        // bottom is set dynamically: minInputToolbarHeight (60) + insets.bottom
     },
 });
