@@ -26,7 +26,7 @@ function ChatDetailScreenWrapper() {
 export function ChatStack() {
     const { activeChatID, setActiveChatID, isNewSession, setIsNewSession } = useMain();
     const { user } = useAuth();
-    const singleChatMode = user?.single_chat_mode && !!activeChatID;
+    const singleChatMode = !!user?.single_chat_mode;
 
     return (
         <ChatProvider

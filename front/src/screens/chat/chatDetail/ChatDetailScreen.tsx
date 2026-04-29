@@ -559,64 +559,65 @@ export function ChatDetailScreen() {
             )}
 
             <Animated.View style={animatedKeyboardStyle}>
-                {isNewSession && messages.length === 0 && historyMessages.length === 0 ? (
-                    <PersistentChatEmptyState
-                        onChipPress={handleChipPress}
-                        accentColor={theme.accent}
-                        textPrimaryColor={theme.textPrimary}
-                        textSecondaryColor={theme.textSecondary}
-                        surfaceColor={theme.surface}
-                    />
-                ) : (
-                    <GiftedChat
-                        messages={messagesLoading ? [] : giftedMessages}
-                        onSend={handleSend}
-                        user={currentUser}
-                        renderMessage={renderMessage}
-                        renderBubble={renderBubble}
-                        renderMessageText={renderMessageText}
-                        renderInputToolbar={renderInputToolbar}
-                        isTyping={false}
-                        renderFooter={renderFooter}
-                        inverted={true}
-                        minInputToolbarHeight={60}
-                        maxComposerHeight={100}
-                        renderAvatar={null}
-                        messagesContainerStyle={styles.messagesContainer}
-                        placeholder="Type a message..."
-                        scrollToBottom
-                        alwaysShowSend
-                        isAlignedTop={false}
-                        isScrollToBottomEnabled={true}
-                        timeFormat="HH:mm"
-                        onLongPress={onLongPressMessage}
-                        shouldUpdateMessage={shouldUpdateMessage}
-                        extraData={extraData}
-                        keyExtractor={(message: IMessage) => String(message._id)}
-                        listProps={
-                            chatId && chatId !== emptyChatID && !isPluginThread
-                                ? {
-                                      refreshControl: (
-                                          <RefreshControl
-                                              refreshing={refreshing}
-                                              onRefresh={handleRefreshHistory}
-                                              tintColor={theme.accent}
-                                              colors={[theme.accent]}
-                                          />
-                                      ),
-                                      maintainVisibleContentPosition: undefined,
-                                      maxToRenderPerBatch: 10,
-                                      windowSize: 10,
-                                      initialNumToRender: 15,
-                                      updateCellsBatchingPeriod: 50,
-                                  }
-                                : {
-                                      maxToRenderPerBatch: 10,
-                                      windowSize: 10,
-                                      initialNumToRender: 15,
-                                  }
-                        }
-                    />
+                <GiftedChat
+                    messages={messagesLoading ? [] : giftedMessages}
+                    onSend={handleSend}
+                    user={currentUser}
+                    renderMessage={renderMessage}
+                    renderBubble={renderBubble}
+                    renderMessageText={renderMessageText}
+                    renderInputToolbar={renderInputToolbar}
+                    isTyping={false}
+                    renderFooter={renderFooter}
+                    inverted={true}
+                    minInputToolbarHeight={60}
+                    maxComposerHeight={100}
+                    renderAvatar={null}
+                    messagesContainerStyle={styles.messagesContainer}
+                    placeholder="Type a message..."
+                    scrollToBottom
+                    alwaysShowSend
+                    isAlignedTop={false}
+                    isScrollToBottomEnabled={true}
+                    timeFormat="HH:mm"
+                    onLongPress={onLongPressMessage}
+                    shouldUpdateMessage={shouldUpdateMessage}
+                    extraData={extraData}
+                    keyExtractor={(message: IMessage) => String(message._id)}
+                    listProps={
+                        chatId && chatId !== emptyChatID && !isPluginThread
+                            ? {
+                                  refreshControl: (
+                                      <RefreshControl
+                                          refreshing={refreshing}
+                                          onRefresh={handleRefreshHistory}
+                                          tintColor={theme.accent}
+                                          colors={[theme.accent]}
+                                      />
+                                  ),
+                                  maintainVisibleContentPosition: undefined,
+                                  maxToRenderPerBatch: 10,
+                                  windowSize: 10,
+                                  initialNumToRender: 15,
+                                  updateCellsBatchingPeriod: 50,
+                              }
+                            : {
+                                  maxToRenderPerBatch: 10,
+                                  windowSize: 10,
+                                  initialNumToRender: 15,
+                              }
+                    }
+                />
+                {isNewSession && giftedMessages.length === 0 && historyMessages.length === 0 && (
+                    <View style={[detailStyles.emptyStateOverlay, { backgroundColor: theme.background }]}>
+                        <PersistentChatEmptyState
+                            onChipPress={handleChipPress}
+                            accentColor={theme.accent}
+                            textPrimaryColor={theme.textPrimary}
+                            textSecondaryColor={theme.textSecondary}
+                            surfaceColor={theme.surface}
+                        />
+                    </View>
                 )}
             </Animated.View>
 
@@ -740,4 +741,9 @@ const detailStyles = StyleSheet.create({
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
     historySeparatorText: { fontSize: 12 },
+    emptyStateOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        // Leave room at the bottom for the GiftedChat input toolbar (~80px)
+        bottom: 80,
+    },
 });
