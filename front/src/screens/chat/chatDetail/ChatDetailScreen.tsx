@@ -121,6 +121,7 @@ export function ChatDetailScreen() {
     const [historySheetVisible, setHistorySheetVisible] = useState(false);
     const [loadedHistoryChat, setLoadedHistoryChat] = useState<Chat | null>(null);
     const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
+    const historyGiftedMessages = useGiftedMessages(historyMessages, user?.id);
 
     useEffect(() => {
         console.log('[ProjectBanner] suggestedProjectId changed:', suggestedProjectId);
@@ -560,7 +561,7 @@ export function ChatDetailScreen() {
 
             <Animated.View style={animatedKeyboardStyle}>
                 <GiftedChat
-                    messages={messagesLoading ? [] : giftedMessages}
+                    messages={messagesLoading ? [] : [...giftedMessages, ...historyGiftedMessages]}
                     onSend={handleSend}
                     user={currentUser}
                     renderMessage={renderMessage}
@@ -584,6 +585,23 @@ export function ChatDetailScreen() {
                     shouldUpdateMessage={shouldUpdateMessage}
                     extraData={extraData}
                     keyExtractor={(message: IMessage) => String(message._id)}
+                    renderChatEmpty={
+                        isNewSession && historyMessages.length === 0
+                            ? () => (
+                                // The FlatList is inverted (scaleY: -1), so we invert back
+                                // to keep the greeting right-side-up.
+                                <View style={detailStyles.emptyStateInner}>
+                                    <PersistentChatEmptyState
+                                        onChipPress={handleChipPress}
+                                        accentColor={theme.accent}
+                                        textPrimaryColor={theme.textPrimary}
+                                        textSecondaryColor={theme.textSecondary}
+                                        surfaceColor={theme.surface}
+                                    />
+                                </View>
+                            )
+                            : undefined
+                    }
                     listProps={
                         chatId && chatId !== emptyChatID && !isPluginThread
                             ? {
@@ -608,20 +626,6 @@ export function ChatDetailScreen() {
                               }
                     }
                 />
-                {isNewSession && giftedMessages.length === 0 && historyMessages.length === 0 && (
-                    <View style={[
-                        detailStyles.emptyStateOverlay,
-                        { backgroundColor: theme.background, bottom: 60 + insets.bottom },
-                    ]}>
-                        <PersistentChatEmptyState
-                            onChipPress={handleChipPress}
-                            accentColor={theme.accent}
-                            textPrimaryColor={theme.textPrimary}
-                            textSecondaryColor={theme.textSecondary}
-                            surfaceColor={theme.surface}
-                        />
-                    </View>
-                )}
             </Animated.View>
 
             {/* Blocking project suggestion banner for new sessions (above input) */}
@@ -744,11 +748,10 @@ const detailStyles = StyleSheet.create({
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
     historySeparatorText: { fontSize: 12 },
-    emptyStateOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        // bottom is set dynamically: minInputToolbarHeight (60) + insets.bottom
+    emptyStateInner: {
+        flex: 1,
+        // GiftedChat's inverted FlatList applies scaleY: -1 to the scroll container.
+        // Apply the inverse transform so the greeting/chips appear right-side-up.
+        transform: [{ scaleY: -1 }],
     },
 });
