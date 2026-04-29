@@ -13,6 +13,8 @@ import {
     StyleSheet,
     AppState,
     TouchableOpacity,
+    TouchableWithoutFeedback,
+    Keyboard,
 } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, {
@@ -458,42 +460,20 @@ export function ChatDetailScreen() {
     const showEmptyChips = isNewSession && historyMessages.length === 0 && giftedMessages.length === 0;
     const showEmptyGreeting = showEmptyChips;
 
-    // Track the input toolbar height so the greeting overlay can avoid it.
-    const [inputToolbarHeight, setInputToolbarHeight] = useState(0);
-
     const renderInputToolbar = useCallback((props: any) => {
         const toolbar = renderInputToolbarBase(props);
-        const inner = (
-            <View onLayout={e => setInputToolbarHeight(e.nativeEvent.layout.height)}>
-                {showEmptyChips && chips.length > 0 && (
-                    <View style={detailStyles.chipsRow}>
-                        {chips.map(chip => (
-                            <TouchableOpacity
-                                key={chip.label}
-                                style={[detailStyles.chipBtn, { backgroundColor: theme.surface, borderColor: theme.accent + '40' }]}
-                                onPress={() => handleChipPress(chip.text)}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={[detailStyles.chipBtnText, { color: theme.textPrimary }]}>{chip.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                )}
-                {toolbar}
-            </View>
-        );
         if (pendingMessage) {
             return (
                 <View pointerEvents="none" style={{ opacity: 0.4 }}>
-                    {inner}
+                    {toolbar}
                 </View>
             );
         }
-        return inner;
-    }, [pendingMessage, renderInputToolbarBase, showEmptyChips, chips, handleChipPress, theme]);
+        return toolbar;
+    }, [pendingMessage, renderInputToolbarBase]);
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.container, { backgroundColor: theme.background, position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }]}>
             {/* Header */}
             <View
                 style={[
@@ -586,77 +566,93 @@ export function ChatDetailScreen() {
             )}
 
             <Animated.View style={animatedKeyboardStyle}>
-                {/* Greeting overlay — rendered as absolute so it's immune to
-                    GiftedChat's inverted-FlatList layout quirks. Offset from
-                    the bottom by the measured input toolbar height so the
-                    greeting is centered in the messages area only. */}
-                {showEmptyGreeting && (
-                    <View
-                        pointerEvents="none"
-                        style={[
-                            StyleSheet.absoluteFillObject,
-                            { justifyContent: 'center', alignItems: 'center', paddingBottom: inputToolbarHeight },
-                        ]}
-                    >
-                        <PersistentChatEmptyState
-                            onChipPress={handleChipPress}
-                            accentColor={theme.accent}
-                            textPrimaryColor={theme.textPrimary}
-                            textSecondaryColor={theme.textSecondary}
-                            surfaceColor={theme.surface}
-                            showChips={false}
-                        />
-                    </View>
+                {showEmptyGreeting ? (
+                    <>
+                        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                                <PersistentChatEmptyState
+                                onChipPress={handleChipPress}
+                                accentColor={theme.accent}
+                                textPrimaryColor={theme.textPrimary}
+                                textSecondaryColor={theme.textSecondary}
+                                surfaceColor={theme.surface}
+                                showChips={false}
+                            />
+                        </View>
+                        </TouchableWithoutFeedback>
+                        {showEmptyChips && chips.length > 0 && (
+                            <View style={detailStyles.chipsRow}>
+                                {chips.map(chip => (
+                                    <TouchableOpacity
+                                        key={chip.label}
+                                        style={[detailStyles.chipBtn, { backgroundColor: theme.surface, borderColor: theme.accent + '40' }]}
+                                        onPress={() => handleChipPress(chip.text)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={[detailStyles.chipBtnText, { color: theme.textPrimary }]}>{chip.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
+                        {pendingMessage ? (
+                            <View pointerEvents="none" style={{ opacity: 0.4 }}>
+                                {renderInputToolbarBase({})}
+                            </View>
+                        ) : (
+                            renderInputToolbarBase({})
+                        )}
+                    </>
+                ) : (
+                    <GiftedChat
+                        messages={messagesLoading ? [] : [...giftedMessages, ...historyGiftedMessages]}
+                        onSend={handleSend}
+                        user={currentUser}
+                        renderMessage={renderMessage}
+                        renderBubble={renderBubble}
+                        renderMessageText={renderMessageText}
+                        renderInputToolbar={renderInputToolbar}
+                        isTyping={false}
+                        renderFooter={renderFooter}
+                        inverted={true}
+                        minInputToolbarHeight={60}
+                        maxComposerHeight={100}
+                        renderAvatar={null}
+                        messagesContainerStyle={styles.messagesContainer}
+                        placeholder="Type a message..."
+                        scrollToBottom
+                        alwaysShowSend
+                        isAlignedTop={false}
+                        isScrollToBottomEnabled={true}
+                        timeFormat="HH:mm"
+                        onLongPress={onLongPressMessage}
+                        shouldUpdateMessage={shouldUpdateMessage}
+                        extraData={extraData}
+                        keyExtractor={(message: IMessage) => String(message._id)}
+                        listProps={
+                            chatId && chatId !== emptyChatID && !isPluginThread
+                                ? {
+                                      refreshControl: (
+                                          <RefreshControl
+                                              refreshing={refreshing}
+                                              onRefresh={handleRefreshHistory}
+                                              tintColor={theme.accent}
+                                              colors={[theme.accent]}
+                                          />
+                                      ),
+                                      maintainVisibleContentPosition: undefined,
+                                      maxToRenderPerBatch: 10,
+                                      windowSize: 10,
+                                      initialNumToRender: 15,
+                                      updateCellsBatchingPeriod: 50,
+                                  }
+                                : {
+                                      maxToRenderPerBatch: 10,
+                                      windowSize: 10,
+                                      initialNumToRender: 15,
+                                  }
+                        }
+                    />
                 )}
-                <GiftedChat
-                    messages={messagesLoading ? [] : [...giftedMessages, ...historyGiftedMessages]}
-                    onSend={handleSend}
-                    user={currentUser}
-                    renderMessage={renderMessage}
-                    renderBubble={renderBubble}
-                    renderMessageText={renderMessageText}
-                    renderInputToolbar={renderInputToolbar}
-                    isTyping={false}
-                    renderFooter={renderFooter}
-                    inverted={true}
-                    minInputToolbarHeight={60}
-                    maxComposerHeight={100}
-                    renderAvatar={null}
-                    messagesContainerStyle={styles.messagesContainer}
-                    placeholder="Type a message..."
-                    scrollToBottom
-                    alwaysShowSend
-                    isAlignedTop={false}
-                    isScrollToBottomEnabled={true}
-                    timeFormat="HH:mm"
-                    onLongPress={onLongPressMessage}
-                    shouldUpdateMessage={shouldUpdateMessage}
-                    extraData={extraData}
-                    keyExtractor={(message: IMessage) => String(message._id)}
-                    listProps={
-                        chatId && chatId !== emptyChatID && !isPluginThread
-                            ? {
-                                  refreshControl: (
-                                      <RefreshControl
-                                          refreshing={refreshing}
-                                          onRefresh={handleRefreshHistory}
-                                          tintColor={theme.accent}
-                                          colors={[theme.accent]}
-                                      />
-                                  ),
-                                  maintainVisibleContentPosition: undefined,
-                                  maxToRenderPerBatch: 10,
-                                  windowSize: 10,
-                                  initialNumToRender: 15,
-                                  updateCellsBatchingPeriod: 50,
-                              }
-                            : {
-                                  maxToRenderPerBatch: 10,
-                                  windowSize: 10,
-                                  initialNumToRender: 15,
-                              }
-                    }
-                />
             </Animated.View>
 
             {/* Blocking project suggestion banner for new sessions (above input) */}

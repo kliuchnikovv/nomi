@@ -17,6 +17,7 @@ import { WeatherWidget } from './components/WeatherWidget';
 import { DateWidget } from './components/DateWidget';
 import { RecentChatsWidget } from './components/RecentChatsWidget';
 import { PlaceholderWidget } from './components/PlaceholderWidget';
+import { TAB_BAR_ICON_HEIGHT } from '../../navigation/MainTabs';
 import type { RootTabParamList } from '../../navigation/types';
 import type { NavigationProp } from '@react-navigation/native';
 
@@ -44,7 +45,7 @@ export const DashboardScreen = () => {
                 style={styles.scroll}
                 contentContainerStyle={[
                     styles.content,
-                    { paddingTop: insets.top + 16 },
+                    { paddingTop: insets.top + 16, paddingBottom: TAB_BAR_ICON_HEIGHT + insets.bottom + 16 },
                 ]}
                 showsVerticalScrollIndicator={false}
             >
