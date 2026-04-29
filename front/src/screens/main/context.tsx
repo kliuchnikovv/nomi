@@ -16,7 +16,6 @@ import { useChatStore } from '../../store/chatStore';
 
 export const emptyChatID = '00000000-0000-0000-0000-000000000000';
 
-const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
 
 const MainContext = createContext<MainContextType | undefined>(undefined);
 
@@ -62,28 +61,14 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
         chatsApi.getPersistentChat()
             .then(persistentChat => {
-                if (!persistentChat) {
-                    // No previous persistent chat — start fresh
-                    setIsNewSession(true);
-                    return;
-                }
-
-                const updatedAt = persistentChat.updated_at
-                    ? persistentChat.updated_at * 1000  // server sends Unix seconds
-                    : 0;
-                const elapsed = Date.now() - updatedAt;
-
-                if (elapsed > SESSION_TIMEOUT_MS) {
-                    // Timed out — show empty state, keep previous chat as history
-                    setIsNewSession(true);
-                } else {
-                    // Active session — resume normally
-                    setActiveChatID(persistentChat.id);
+                // Always start with an empty state on app launch.
+                // Previous session is accessible via the history button.
+                setIsNewSession(true);
+                if (persistentChat) {
                     setChats(prev => {
                         const exists = prev.some(c => c.id === persistentChat.id);
                         return exists ? prev : [persistentChat, ...prev];
                     });
-                    setIsNewSession(false);
                 }
             })
             .catch(err => console.error('Failed to load persistent chat', err));
