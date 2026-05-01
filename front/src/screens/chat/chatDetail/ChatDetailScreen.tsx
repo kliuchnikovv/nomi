@@ -566,18 +566,17 @@ export function ChatDetailScreen() {
                     ) : null}
                 </View>
 
-                {/* Right: new chat button */}
-                <Pressable
-                    style={detailStyles.infoBtn}
-                    hitSlop={8}
-                    onPress={handleNewChat}
-                >
-                    <Ionicons
-                        name="create-outline"
-                        size={22}
-                        color={theme.accent}
-                    />
-                </Pressable>
+                {/* Right: history + new chat buttons */}
+                <View style={detailStyles.headerRight}>
+                    {user?.single_chat_mode && (
+                        <Pressable hitSlop={8} onPress={() => setHistorySheetVisible(true)}>
+                            <Ionicons name="time-outline" size={22} color={theme.accent} />
+                        </Pressable>
+                    )}
+                    <Pressable hitSlop={8} onPress={handleNewChat}>
+                        <Ionicons name="create-outline" size={22} color={theme.accent} />
+                    </Pressable>
+                </View>
             </View>
 
             {/* Non-session project suggestion banner (existing chats) */}
@@ -594,30 +593,6 @@ export function ChatDetailScreen() {
                 />
             )}
 
-            {/* History button — shown in single_chat_mode always, or during a new session */}
-            {(isNewSession || user?.single_chat_mode) && (
-                <TouchableOpacity
-                    style={[
-                        detailStyles.historyBtn,
-                        { borderBottomColor: theme.border },
-                    ]}
-                    onPress={() => setHistorySheetVisible(true)}
-                >
-                    <Ionicons
-                        name="time-outline"
-                        size={16}
-                        color={theme.accent}
-                    />
-                    <Text
-                        style={[
-                            detailStyles.historyBtnText,
-                            { color: theme.accent },
-                        ]}
-                    >
-                        Session History
-                    </Text>
-                </TouchableOpacity>
-            )}
 
             {/* Loaded history separator */}
             {loadedHistoryChat && historyMessages.length > 0 && (
@@ -860,19 +835,13 @@ const detailStyles = StyleSheet.create({
         fontSize: 11,
         lineHeight: 14,
     },
-    infoBtn: {
-        width: 44,
-        alignItems: 'flex-end',
-    },
-    historyBtn: {
+    headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 10,
-        gap: 6,
-        borderBottomWidth: StyleSheet.hairlineWidth,
+        gap: 16,
+        minWidth: 44,
+        justifyContent: 'flex-end',
     },
-    historyBtnText: { fontSize: 14, fontWeight: '500' },
     historySeparator: {
         alignItems: 'center',
         paddingVertical: 8,
