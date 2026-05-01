@@ -8,7 +8,14 @@ import {
     StyleSheet,
     Animated,
 } from 'react-native';
-import { Clock, MapPin, Link, EditPencil, InfoCircle, Star } from 'iconoir-react-native';
+import {
+    Clock,
+    MapPin,
+    Link,
+    EditPencil,
+    InfoCircle,
+    Star,
+} from 'iconoir-react-native';
 import { PlanChip, ChipType } from '../types';
 
 interface ChipStyle {
@@ -17,13 +24,16 @@ interface ChipStyle {
 }
 
 const CHIP_STYLES: Record<ChipType, ChipStyle> = {
-    time:     { bg: '#E8F4FF', text: '#007AFF' },
+    time: { bg: '#E8F4FF', text: '#007AFF' },
     location: { bg: '#FFF0E8', text: '#FF6B00' },
-    link:     { bg: '#F0FFF0', text: '#34C759' },
-    note:     { bg: '#F5F0FF', text: '#9B59B6' },
+    link: { bg: '#F0FFF0', text: '#34C759' },
+    note: { bg: '#F5F0FF', text: '#9B59B6' },
 };
 
-const CHIP_ICONS: Record<ChipType, React.FC<{ width: number; height: number; color: string }>> = {
+const CHIP_ICONS: Record<
+    ChipType,
+    React.FC<{ width: number; height: number; color: string }>
+> = {
     time: Clock,
     location: MapPin,
     link: Link,
@@ -40,11 +50,17 @@ function parseNoteValue(value: string): NoteData | null {
     try {
         const parsed = JSON.parse(value);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            const { hours, description, info } = parsed as Record<string, unknown>;
+            const { hours, description, info } = parsed as Record<
+                string,
+                unknown
+            >;
             if (hours || description || info) {
                 return {
                     hours: typeof hours === 'string' ? hours : undefined,
-                    description: typeof description === 'string' ? description : undefined,
+                    description:
+                        typeof description === 'string'
+                            ? description
+                            : undefined,
                     info: typeof info === 'string' ? info : undefined,
                 };
             }
@@ -102,7 +118,13 @@ export function PlanChipBadge({ chip, onRemove, onLocationPress }: Props) {
         return (
             <View style={[styles.pill, styles.placeholderPill]}>
                 <IconComponent width={12} height={12} color="#FF6B00" />
-                <Text style={[styles.valueText, styles.placeholderText, { color: '#FF6B00' }]}>
+                <Text
+                    style={[
+                        styles.valueText,
+                        styles.placeholderText,
+                        { color: '#FF6B00' },
+                    ]}
+                >
                     {chip.value}
                 </Text>
             </View>
@@ -116,25 +138,50 @@ export function PlanChipBadge({ chip, onRemove, onLocationPress }: Props) {
             <>
                 <View style={styles.wrapper}>
                     <Animated.View
-                        style={[
-                            styles.glowBorder,
-                            { opacity: borderOpacity },
-                        ]}
+                        style={[styles.glowBorder, { opacity: borderOpacity }]}
                     />
                     <TouchableOpacity
                         onPress={() => setModalVisible(true)}
                         activeOpacity={0.7}
                     >
-                        <View style={[styles.pill, { backgroundColor: chipStyle.bg }]}>
-                            <IconComponent width={12} height={12} color={chipStyle.text} />
-                            <Text style={[styles.valueText, { color: chipStyle.text }]}>Info</Text>
+                        <View
+                            style={[
+                                styles.pill,
+                                { backgroundColor: chipStyle.bg },
+                            ]}
+                        >
+                            <IconComponent
+                                width={12}
+                                height={12}
+                                color={chipStyle.text}
+                            />
+                            <Text
+                                style={[
+                                    styles.valueText,
+                                    { color: chipStyle.text },
+                                ]}
+                            >
+                                Info
+                            </Text>
                             {onRemove && (
                                 <TouchableOpacity
                                     onPress={onRemove}
-                                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                    hitSlop={{
+                                        top: 6,
+                                        bottom: 6,
+                                        left: 4,
+                                        right: 4,
+                                    }}
                                     style={styles.removeBtn}
                                 >
-                                    <Text style={[styles.removeText, { color: chipStyle.text }]}>×</Text>
+                                    <Text
+                                        style={[
+                                            styles.removeText,
+                                            { color: chipStyle.text },
+                                        ]}
+                                    >
+                                        ×
+                                    </Text>
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -147,37 +194,60 @@ export function PlanChipBadge({ chip, onRemove, onLocationPress }: Props) {
                     animationType="fade"
                     onRequestClose={() => setModalVisible(false)}
                 >
-                    <Pressable style={styles.backdrop} onPress={() => setModalVisible(false)}>
+                    <Pressable
+                        style={styles.backdrop}
+                        onPress={() => setModalVisible(false)}
+                    >
                         <Pressable style={styles.card}>
                             {noteData ? (
                                 <View style={styles.noteRows}>
                                     {noteData.hours && (
                                         <View style={styles.noteRow}>
-                                            <Clock width={16} height={16} color="#9B59B6" />
-                                            <Text style={styles.noteText}>{noteData.hours}</Text>
+                                            <Clock
+                                                width={16}
+                                                height={16}
+                                                color="#9B59B6"
+                                            />
+                                            <Text style={styles.noteText}>
+                                                {noteData.hours}
+                                            </Text>
                                         </View>
                                     )}
                                     {noteData.description && (
                                         <View style={styles.noteRow}>
-                                            <InfoCircle width={16} height={16} color="#9B59B6" />
-                                            <Text style={styles.noteText}>{noteData.description}</Text>
+                                            <InfoCircle
+                                                width={16}
+                                                height={16}
+                                                color="#9B59B6"
+                                            />
+                                            <Text style={styles.noteText}>
+                                                {noteData.description}
+                                            </Text>
                                         </View>
                                     )}
                                     {noteData.info && (
                                         <View style={styles.noteRow}>
-                                            <Star width={16} height={16} color="#9B59B6" />
-                                            <Text style={styles.noteText}>{noteData.info}</Text>
+                                            <Star
+                                                width={16}
+                                                height={16}
+                                                color="#9B59B6"
+                                            />
+                                            <Text style={styles.noteText}>
+                                                {noteData.info}
+                                            </Text>
                                         </View>
                                     )}
                                 </View>
                             ) : (
-                                <Text style={styles.noteText}>{chip.value}</Text>
+                                <Text style={styles.noteText}>
+                                    {chip.value}
+                                </Text>
                             )}
                             <TouchableOpacity
                                 onPress={() => setModalVisible(false)}
                                 style={styles.closeBtn}
                             >
-                                <Text style={styles.closeBtnText}>Закрыть</Text>
+                                <Text style={styles.closeBtnText}>Close</Text>
                             </TouchableOpacity>
                         </Pressable>
                     </Pressable>
@@ -198,7 +268,11 @@ export function PlanChipBadge({ chip, onRemove, onLocationPress }: Props) {
                     hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     style={styles.removeBtn}
                 >
-                    <Text style={[styles.removeText, { color: chipStyle.text }]}>×</Text>
+                    <Text
+                        style={[styles.removeText, { color: chipStyle.text }]}
+                    >
+                        ×
+                    </Text>
                 </TouchableOpacity>
             )}
         </View>
@@ -207,10 +281,7 @@ export function PlanChipBadge({ chip, onRemove, onLocationPress }: Props) {
     return (
         <View style={styles.wrapper}>
             <Animated.View
-                style={[
-                    styles.glowBorder,
-                    { opacity: borderOpacity },
-                ]}
+                style={[styles.glowBorder, { opacity: borderOpacity }]}
             />
             {chip.type === 'location' && onLocationPress ? (
                 <TouchableOpacity onPress={onLocationPress} activeOpacity={0.7}>

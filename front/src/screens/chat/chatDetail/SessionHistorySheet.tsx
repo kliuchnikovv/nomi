@@ -1,7 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-    View, Text, FlatList, TouchableOpacity, StyleSheet,
-    Modal, Pressable, ActivityIndicator, ActionSheetIOS, Alert,
+    View,
+    Text,
+    FlatList,
+    TouchableOpacity,
+    StyleSheet,
+    Modal,
+    Pressable,
+    ActivityIndicator,
+    ActionSheetIOS,
+    Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,21 +31,36 @@ interface Props {
 
 export function formatSessionDate(updatedAt: number | string): string {
     // Backend may send either Unix seconds (number) or an ISO-8601 string (time.Time).
-    const date = typeof updatedAt === 'string' ? new Date(updatedAt) : new Date(updatedAt * 1000);
+    const date =
+        typeof updatedAt === 'string'
+            ? new Date(updatedAt)
+            : new Date(updatedAt * 1000);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
 
-    const timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const timeStr = date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 
     if (diffDays === 0) return `Today, ${timeStr}`;
     if (diffDays === 1) return `Yesterday, ${timeStr}`;
-    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + `, ${timeStr}`;
+    return (
+        date.toLocaleDateString('en-US', { day: 'numeric', month: 'long' }) +
+        `, ${timeStr}`
+    );
 }
 
 export function SessionHistorySheet({
-    visible, onClose, onSelectSession,
-    accentColor, textPrimaryColor, textSecondaryColor,
-    surfaceColor, backgroundColor, borderColor,
+    visible,
+    onClose,
+    onSelectSession,
+    accentColor,
+    textPrimaryColor,
+    textSecondaryColor,
+    surfaceColor,
+    backgroundColor,
+    borderColor,
 }: Props) {
     const [sessions, setSessions] = useState<Chat[]>([]);
     const [loading, setLoading] = useState(false);
@@ -47,97 +70,184 @@ export function SessionHistorySheet({
     useEffect(() => {
         if (!visible) return;
         setLoading(true);
-        chatsApi.getPersistentChats()
+        chatsApi
+            .getPersistentChats()
             .then(chats => setSessions(chats ?? []))
             .catch(() => setSessions([]))
             .finally(() => setLoading(false));
     }, [visible]);
 
-    const handleLongPress = useCallback((item: Chat) => {
-        const displayTitle = item.title || formatSessionDate(item.updated_at);
-        ActionSheetIOS.showActionSheetWithOptions(
-            { options: ['Rename', 'Delete', 'Cancel'], destructiveButtonIndex: 1, cancelButtonIndex: 2 },
-            (idx) => {
-                if (idx === 0) {
-                    Alert.prompt('Rename Session', '', [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                            text: 'Rename',
-                            onPress: (newTitle?: string) => {
-                                const trimmed = newTitle?.trim();
-                                if (!trimmed) return;
-                                renameChat(item.id, trimmed);
-                                setSessions(prev => prev.map(s =>
-                                    s.id === item.id ? { ...s, title: trimmed } : s
-                                ));
-                            },
-                        },
-                    ], 'plain-text', displayTitle);
-                } else if (idx === 1) {
-                    deleteChat(item.id);
-                    setSessions(prev => prev.filter(s => s.id !== item.id));
-                }
-            },
-        );
-    }, [renameChat, deleteChat]);
-
-    const renderItem = useCallback(({ item }: { item: Chat }) => {
-        const hasTitle = !!item.title;
-        const hasEmoji = !!item.icon && /\p{Emoji}/u.test(item.icon) && !/^[0-9#*]$/.test(item.icon);
-        return (
-            <TouchableOpacity
-                style={[styles.row, { borderBottomColor: borderColor }]}
-                onPress={() => { onSelectSession(item); onClose(); }}
-                onLongPress={() => handleLongPress(item)}
-                activeOpacity={0.7}
-            >
-                <View style={[styles.iconCircle, { backgroundColor: surfaceColor }]}>
-                    {hasEmoji
-                        ? <Text style={styles.iconEmoji}>{item.icon}</Text>
-                        : <Ionicons name="sparkles" size={16} color={accentColor} />
+    const handleLongPress = useCallback(
+        (item: Chat) => {
+            const displayTitle =
+                item.title || formatSessionDate(item.updated_at);
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    options: ['Rename', 'Delete', 'Cancel'],
+                    destructiveButtonIndex: 1,
+                    cancelButtonIndex: 2,
+                },
+                idx => {
+                    if (idx === 0) {
+                        Alert.prompt(
+                            'Rename Session',
+                            '',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Rename',
+                                    onPress: (newTitle?: string) => {
+                                        const trimmed = newTitle?.trim();
+                                        if (!trimmed) return;
+                                        renameChat(item.id, trimmed);
+                                        setSessions(prev =>
+                                            prev.map(s =>
+                                                s.id === item.id
+                                                    ? { ...s, title: trimmed }
+                                                    : s,
+                                            ),
+                                        );
+                                    },
+                                },
+                            ],
+                            'plain-text',
+                            displayTitle,
+                        );
+                    } else if (idx === 1) {
+                        deleteChat(item.id);
+                        setSessions(prev => prev.filter(s => s.id !== item.id));
                     }
-                </View>
-                <View style={styles.textBlock}>
-                    {hasTitle && (
-                        <Text style={[styles.date, { color: textSecondaryColor }]}>
-                            {formatSessionDate(item.updated_at)}
+                },
+            );
+        },
+        [renameChat, deleteChat],
+    );
+
+    const renderItem = useCallback(
+        ({ item }: { item: Chat }) => {
+            const hasTitle = !!item.title;
+            const hasEmoji =
+                !!item.icon &&
+                /\p{Emoji}/u.test(item.icon) &&
+                !/^[0-9#*]$/.test(item.icon);
+            return (
+                <TouchableOpacity
+                    style={[styles.row, { borderBottomColor: borderColor }]}
+                    onPress={() => {
+                        onSelectSession(item);
+                        onClose();
+                    }}
+                    onLongPress={() => handleLongPress(item)}
+                    activeOpacity={0.7}
+                >
+                    <View
+                        style={[
+                            styles.iconCircle,
+                            { backgroundColor: surfaceColor },
+                        ]}
+                    >
+                        {hasEmoji ? (
+                            <Text style={styles.iconEmoji}>{item.icon}</Text>
+                        ) : (
+                            <Ionicons
+                                name="sparkles"
+                                size={16}
+                                color={accentColor}
+                            />
+                        )}
+                    </View>
+                    <View style={styles.textBlock}>
+                        {hasTitle && (
+                            <Text
+                                style={[
+                                    styles.date,
+                                    { color: textSecondaryColor },
+                                ]}
+                            >
+                                {formatSessionDate(item.updated_at)}
+                            </Text>
+                        )}
+                        <Text
+                            style={[styles.title, { color: textPrimaryColor }]}
+                            numberOfLines={1}
+                        >
+                            {item.title ||
+                                `Session from ${formatSessionDate(
+                                    item.updated_at,
+                                )}`}
                         </Text>
-                    )}
-                    <Text style={[styles.title, { color: textPrimaryColor }]} numberOfLines={1}>
-                        {item.title || `Session from ${formatSessionDate(item.updated_at)}`}
-                    </Text>
-                </View>
-            </TouchableOpacity>
-        );
-    }, [borderColor, surfaceColor, accentColor, textSecondaryColor, textPrimaryColor, onSelectSession, onClose, handleLongPress]);
+                    </View>
+                </TouchableOpacity>
+            );
+        },
+        [
+            borderColor,
+            surfaceColor,
+            accentColor,
+            textSecondaryColor,
+            textPrimaryColor,
+            onSelectSession,
+            onClose,
+            handleLongPress,
+        ],
+    );
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+        <Modal
+            visible={visible}
+            transparent
+            animationType="slide"
+            onRequestClose={onClose}
+        >
             <Pressable style={styles.backdrop} onPress={onClose} />
-            <View style={[styles.sheet, { backgroundColor: surfaceColor, paddingBottom: insets.bottom }]}>
-                <View style={[styles.header, { borderBottomColor: borderColor }]}>
-                    <Text style={[styles.headerTitle, { color: textPrimaryColor }]}>
+            <View
+                style={[
+                    styles.sheet,
+                    {
+                        backgroundColor: surfaceColor,
+                        paddingBottom: insets.bottom,
+                    },
+                ]}
+            >
+                <View
+                    style={[styles.header, { borderBottomColor: borderColor }]}
+                >
+                    <Text
+                        style={[
+                            styles.headerTitle,
+                            { color: textPrimaryColor },
+                        ]}
+                    >
                         Session History
                     </Text>
                     <TouchableOpacity onPress={onClose} hitSlop={8}>
-                        <Text style={[styles.closeBtn, { color: accentColor }]}>Close</Text>
+                        <Text style={[styles.closeBtn, { color: accentColor }]}>
+                            Close
+                        </Text>
                     </TouchableOpacity>
                 </View>
-                {loading
-                    ? <ActivityIndicator style={{ margin: 32 }} color={accentColor} />
-                    : (
-                        <FlatList
-                            data={sessions}
-                            keyExtractor={item => item.id}
-                            renderItem={renderItem}
-                            ListEmptyComponent={
-                                <Text style={[styles.empty, { color: textSecondaryColor }]}>
-                                    No previous sessions
-                                </Text>
-                            }
-                        />
-                    )
-                }
+                {loading ? (
+                    <ActivityIndicator
+                        style={{ margin: 32 }}
+                        color={accentColor}
+                    />
+                ) : (
+                    <FlatList
+                        data={sessions}
+                        keyExtractor={item => item.id}
+                        renderItem={renderItem}
+                        ListEmptyComponent={
+                            <Text
+                                style={[
+                                    styles.empty,
+                                    { color: textSecondaryColor },
+                                ]}
+                            >
+                                No previous sessions
+                            </Text>
+                        }
+                    />
+                )}
             </View>
         </Modal>
     );

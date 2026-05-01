@@ -30,9 +30,9 @@ const LEGACY_KEY = 'weather_location';
 const DEFAULT_LOCATION: UserLocation = {
     lat: 55.75,
     lon: 37.62,
-    displayName: 'Москва, Россия',
-    city: 'Москва',
-    country: 'Россия',
+    displayName: 'Moscow, Russia',
+    city: 'Moscow',
+    country: 'Russia',
     shareWithAgent: false,
 };
 
@@ -49,7 +49,7 @@ export async function getStoredLocation(): Promise<UserLocation> {
             const migrated: UserLocation = {
                 lat: old.lat,
                 lon: old.lon,
-                displayName: 'Текущее место',
+                displayName: 'Current location',
                 city: '',
                 country: '',
                 shareWithAgent: false,
@@ -67,10 +67,14 @@ export async function saveLocation(loc: UserLocation): Promise<void> {
     await AsyncStorage.setItem(LOCATION_KEY, JSON.stringify(loc));
 }
 
-export async function searchLocations(query: string): Promise<NominatimResult[]> {
+export async function searchLocations(
+    query: string,
+): Promise<NominatimResult[]> {
     if (query.trim().length < 2) return [];
     const lang = 'ru';
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1&accept-language=${lang}`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+        query,
+    )}&format=json&limit=5&addressdetails=1&accept-language=${lang}`;
     try {
         const res = await fetch(url, {
             headers: { 'User-Agent': 'GenieApp/1.0' },
@@ -92,7 +96,11 @@ export function nominatimResultToLocation(
     return {
         lat: parseFloat(result.lat),
         lon: parseFloat(result.lon),
-        displayName: result.display_name.split(',').slice(0, 2).join(',').trim(),
+        displayName: result.display_name
+            .split(',')
+            .slice(0, 2)
+            .join(',')
+            .trim(),
         fullAddress: result.display_name,
         city,
         country,
@@ -100,7 +108,10 @@ export function nominatimResultToLocation(
     };
 }
 
-export async function reverseGeocode(lat: number, lon: number): Promise<NominatimResult | null> {
+export async function reverseGeocode(
+    lat: number,
+    lon: number,
+): Promise<NominatimResult | null> {
     const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&accept-language=ru`;
     try {
         const res = await fetch(url, {
@@ -122,7 +133,10 @@ export async function updateLocationFromGPS(): Promise<UserLocation | null> {
         const result = await reverseGeocode(latitude, longitude);
         if (!result) return null;
         const existing = await getStoredLocation();
-        const updated = nominatimResultToLocation(result, existing.shareWithAgent);
+        const updated = nominatimResultToLocation(
+            result,
+            existing.shareWithAgent,
+        );
         await saveLocation(updated);
         return updated;
     } catch {

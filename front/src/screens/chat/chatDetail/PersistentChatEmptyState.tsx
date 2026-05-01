@@ -22,40 +22,70 @@ export function useChips(): Chip[] {
     const chips: Chip[] = [];
 
     const hasGmail = integrations.some(c => c.id === 'gmail' && c.connected);
-    const hasCalendar = integrations.some(c => c.id === 'calendar' && c.connected);
+    const hasCalendar = integrations.some(
+        c => c.id === 'calendar' && c.connected,
+    );
 
-    if (hasGmail) chips.push({ label: '📧 Проверь почту', text: 'Проверь мою почту и выдели важное' });
-    if (hasCalendar) chips.push({ label: '📅 Встречи', text: 'Что у меня запланировано сегодня?' });
-    chips.push({ label: '💻 Напиши код', text: 'Помоги написать код' });
-    chips.push({ label: '🔍 Найди информацию', text: 'Найди информацию о' });
+    if (hasGmail)
+        chips.push({
+            label: '📧 Check email',
+            text: 'Check my email and highlight important items',
+        });
+    if (hasCalendar)
+        chips.push({
+            label: '📅 Meetings',
+            text: 'What do I have planned today?',
+        });
+    chips.push({ label: '💻 Write code', text: 'Help me write code' });
+    chips.push({ label: '🔍 Find info', text: 'Find information about' });
 
     return chips.slice(0, 4);
 }
 
-export function PersistentChatEmptyState({ onChipPress, accentColor, textPrimaryColor, textSecondaryColor, surfaceColor, showChips = true }: Props) {
+export function PersistentChatEmptyState({
+    onChipPress,
+    accentColor,
+    textPrimaryColor,
+    textSecondaryColor,
+    surfaceColor,
+    showChips = true,
+}: Props) {
     const { user } = useAuth();
     const chips = useChips();
-    const firstName = user?.name?.split(' ')[0] ?? 'там';
+    const firstName = user?.name?.split(' ')[0] ?? 'friend';
 
     return (
         <View style={styles.container}>
             <Text style={styles.avatar}>🧞</Text>
             <Text style={[styles.greeting, { color: textPrimaryColor }]}>
-                Привет, {firstName}!
+                Hello, {firstName}!
             </Text>
             <Text style={[styles.subtitle, { color: textSecondaryColor }]}>
-                Чем могу помочь сегодня?
+                How can I help you today?
             </Text>
             {showChips && (
                 <View style={styles.chips}>
                     {chips.map(chip => (
                         <TouchableOpacity
                             key={chip.label}
-                            style={[styles.chip, { backgroundColor: surfaceColor, borderColor: accentColor + '40' }]}
+                            style={[
+                                styles.chip,
+                                {
+                                    backgroundColor: surfaceColor,
+                                    borderColor: accentColor + '40',
+                                },
+                            ]}
                             onPress={() => onChipPress(chip.text)}
                             activeOpacity={0.7}
                         >
-                            <Text style={[styles.chipText, { color: textPrimaryColor }]}>{chip.label}</Text>
+                            <Text
+                                style={[
+                                    styles.chipText,
+                                    { color: textPrimaryColor },
+                                ]}
+                            >
+                                {chip.label}
+                            </Text>
                         </TouchableOpacity>
                     ))}
                 </View>

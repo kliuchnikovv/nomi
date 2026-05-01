@@ -53,12 +53,15 @@ const openLink = (url: string) => {
 
 const copyLink = (url: string) => {
     Clipboard.setString(url);
-    showToast('Ссылка скопирована');
+    showToast('Link copied');
 };
 
 // Stable markdown rules - don't recreate on every render
 const stableMarkdownRules = createMarkdownRules({
-    onCodeCopy: (code) => { Clipboard.setString(code); showToast('Код скопирован'); },
+    onCodeCopy: code => {
+        Clipboard.setString(code);
+        showToast('Code copied');
+    },
     onLinkPress: openLink,
     onLinkCopy: copyLink,
 });
@@ -565,7 +568,9 @@ export function useGiftedChatRenderers({
                     onActionPress={action => {
                         if (action.url) {
                             Linking.openURL(action.url).catch(() =>
-                                Linking.openURL(`https://maps.google.com/?q=${action.url}`)
+                                Linking.openURL(
+                                    `https://maps.google.com/?q=${action.url}`,
+                                ),
                             );
                         } else if (action.prompt) {
                             onSendRef.current?.(action.prompt);

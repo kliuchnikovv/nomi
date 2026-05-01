@@ -19,8 +19,8 @@ export const createStyles = (theme: ThemeColors) =>
             borderBottomRightRadius: 0,
             paddingHorizontal: 18,
             paddingTop: 12,
-            minHeight: 80, // Было 56, увеличено до 80
-            paddingBottom: 12, // Добавить базовый paddingBottom
+            minHeight: 80, // Was 56, increased to 80
+            paddingBottom: 12, // Add base paddingBottom
             borderWidth: 1,
             borderColor: `${theme.accent}40`,
             borderBottomWidth: 0,

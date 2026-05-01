@@ -1,5 +1,13 @@
 import React, { useMemo, memo, useEffect, useRef } from 'react';
-import { View, Pressable, Text, StyleSheet, Animated, Linking, Clipboard } from 'react-native';
+import {
+    View,
+    Pressable,
+    Text,
+    StyleSheet,
+    Animated,
+    Linking,
+    Clipboard,
+} from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useChat } from '../context';
 import { ContentPart } from './models';
@@ -12,9 +20,15 @@ import { getChatElementComponent } from '../../../plugins/chatElementRegistry';
 import { showToast } from '../../../utils/toast';
 
 const markdownRules = createMarkdownRules({
-    onCodeCopy: (code) => { Clipboard.setString(code); showToast('Код скопирован'); },
-    onLinkPress: (url) => Linking.openURL(url).catch(() => {}),
-    onLinkCopy: (url) => { Clipboard.setString(url); showToast('Ссылка скопирована'); },
+    onCodeCopy: code => {
+        Clipboard.setString(code);
+        showToast('Code copied');
+    },
+    onLinkPress: url => Linking.openURL(url).catch(() => {}),
+    onLinkCopy: url => {
+        Clipboard.setString(url);
+        showToast('Link copied');
+    },
 });
 
 // Simple text styles for fast rendering during streaming
@@ -58,7 +72,13 @@ function isLogMessage(text: string): boolean {
 
     try {
         const obj = JSON.parse(text);
-        return obj && typeof obj === 'object' && 'level' in obj && 'timestamp' in obj && 'message' in obj;
+        return (
+            obj &&
+            typeof obj === 'object' &&
+            'level' in obj &&
+            'timestamp' in obj &&
+            'message' in obj
+        );
     } catch {
         return false;
     }
@@ -74,7 +94,12 @@ function parseDocument(text: string): { msg: string; content: any } | null {
     if (match?.[1]) {
         try {
             const obj = JSON.parse(match[1]);
-            if (obj && typeof obj === 'object' && 'msg' in obj && 'content' in obj) {
+            if (
+                obj &&
+                typeof obj === 'object' &&
+                'msg' in obj &&
+                'content' in obj
+            ) {
                 return { msg: obj.msg, content: obj.content };
             }
         } catch {
@@ -114,7 +139,7 @@ const StreamingTextPart = memo(function StreamingTextPart({
                         duration: 400,
                         useNativeDriver: true,
                     }),
-                ])
+                ]),
             );
             animation.start();
             return () => animation.stop();
@@ -169,7 +194,9 @@ const StreamingTextPart = memo(function StreamingTextPart({
             <Text style={simpleStyles.text}>
                 {text}
                 {isStreaming && (
-                    <Animated.Text style={{ opacity: cursorOpacity }}>▋</Animated.Text>
+                    <Animated.Text style={{ opacity: cursorOpacity }}>
+                        ▋
+                    </Animated.Text>
                 )}
             </Text>
         </Pressable>
@@ -177,13 +204,19 @@ const StreamingTextPart = memo(function StreamingTextPart({
 });
 
 // Memoized component for tool calls and reasoning
-const ToolCallsGroup = memo(function ToolCallsGroup({ parts }: { parts: ContentPart[] }) {
+const ToolCallsGroup = memo(function ToolCallsGroup({
+    parts,
+}: {
+    parts: ContentPart[];
+}) {
     return (
         <CollapsibleSteps>
             {parts.map((part, index) => {
                 if (part.type === 'tool_call') {
                     // Check chat element registry for custom UI
-                    const CustomElement = getChatElementComponent(part.tool_call.name);
+                    const CustomElement = getChatElementComponent(
+                        part.tool_call.name,
+                    );
                     if (CustomElement) {
                         const args =
                             typeof part.tool_call.arguments === 'string'
@@ -197,9 +230,19 @@ const ToolCallsGroup = memo(function ToolCallsGroup({ parts }: { parts: ContentP
                             />
                         );
                     }
-                    return <SingleToolCall key={`tool-${index}`} toolCall={part.tool_call} />;
+                    return (
+                        <SingleToolCall
+                            key={`tool-${index}`}
+                            toolCall={part.tool_call}
+                        />
+                    );
                 } else if (part.type === 'reasoning') {
-                    return <ReasoningBlock key={`reasoning-${index}`} reasoning={part.reasoning} />;
+                    return (
+                        <ReasoningBlock
+                            key={`reasoning-${index}`}
+                            reasoning={part.reasoning}
+                        />
+                    );
                 }
                 return null;
             })}
@@ -207,12 +250,18 @@ const ToolCallsGroup = memo(function ToolCallsGroup({ parts }: { parts: ContentP
     );
 });
 
-type ProcessedPart = { type: 'text'; text: string } | { type: 'group'; parts: ContentPart[] };
+type ProcessedPart =
+    | { type: 'text'; text: string }
+    | { type: 'group'; parts: ContentPart[] };
 
 // Memoized content parts processor.
 // All tool_call and reasoning parts are merged into a single collapsible group
 // placed before the text response, regardless of interspersed short text fragments.
-function useProcessedParts(parts: ContentPart[], showToolCalls: boolean, showReasoning: boolean) {
+function useProcessedParts(
+    parts: ContentPart[],
+    showToolCalls: boolean,
+    showReasoning: boolean,
+) {
     return useMemo(() => {
         if (!parts || parts.length === 0) return [];
 
@@ -224,9 +273,12 @@ function useProcessedParts(parts: ContentPart[], showToolCalls: boolean, showRea
             if (part.type === 'reasoning' && !showReasoning) continue;
             if (part.type === 'text' && isLogMessage(part.text)) continue;
 
-            const isTextLike = part.type === 'text' || (part as any).type === 'member_response';
+            const isTextLike =
+                part.type === 'text' ||
+                (part as any).type === 'member_response';
             if (isTextLike) {
-                const txt: string = part.type === 'text' ? part.text : (part as any).text;
+                const txt: string =
+                    part.type === 'text' ? part.text : (part as any).text;
                 if (txt?.trim()) textItems.push(txt);
             } else if (part.type === 'tool_call' || part.type === 'reasoning') {
                 groupParts.push(part);
@@ -292,7 +344,12 @@ export const ContentPartsRenderer = memo(function ContentPartsRenderer({
                         />
                     );
                 } else {
-                    return <ToolCallsGroup key={`group-${index}`} parts={group.parts} />;
+                    return (
+                        <ToolCallsGroup
+                            key={`group-${index}`}
+                            parts={group.parts}
+                        />
+                    );
                 }
             })}
         </>

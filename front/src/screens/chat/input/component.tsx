@@ -599,12 +599,7 @@ export default function ChatInput(props: Props) {
 
     return (
         <View style={styles.container}>
-            <View
-                style={[
-                    styles.inputWrapper,
-                    { paddingBottom: 0 /*insets.bottom*/ },
-                ]}
-            >
+            <View style={[styles.inputWrapper, { paddingBottom: 12 }]}>
                 {/* Context Items Preview */}
                 {contextItems.length > 0 && (
                     <ScrollView

@@ -12,7 +12,7 @@ interface Props {
     textPrimaryColor: string;
     textSecondaryColor: string;
     borderColor: string;
-    /** If true, shows a "Нет" text button instead of just the X icon (for blocking mode) */
+    /** If true, shows a "No" text button instead of just the X icon (for blocking mode) */
     showNoButton?: boolean;
 }
 
@@ -28,13 +28,21 @@ export function ProjectSuggestionBanner({
     showNoButton = false,
 }: Props) {
     return (
-        <View style={[styles.container, { backgroundColor: surfaceColor, borderColor }]}>
+        <View
+            style={[
+                styles.container,
+                { backgroundColor: surfaceColor, borderColor },
+            ]}
+        >
             <Text style={styles.projectIcon}>{project.icon}</Text>
             <View style={styles.text}>
                 <Text style={[styles.label, { color: textSecondaryColor }]}>
                     Add to project?
                 </Text>
-                <Text style={[styles.name, { color: textPrimaryColor }]} numberOfLines={1}>
+                <Text
+                    style={[styles.name, { color: textPrimaryColor }]}
+                    numberOfLines={1}
+                >
                     {project.name}
                 </Text>
             </View>
@@ -44,14 +52,25 @@ export function ProjectSuggestionBanner({
                     onPress={onDismiss}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                    <Text style={[styles.noBtnText, { color: textSecondaryColor }]}>Нет</Text>
+                    <Text
+                        style={[
+                            styles.noBtnText,
+                            { color: textSecondaryColor },
+                        ]}
+                    >
+                        No
+                    </Text>
                 </TouchableOpacity>
             ) : (
                 <TouchableOpacity
                     onPress={onDismiss}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                    <Ionicons name="close" size={18} color={textSecondaryColor} />
+                    <Ionicons
+                        name="close"
+                        size={18}
+                        color={textSecondaryColor}
+                    />
                 </TouchableOpacity>
             )}
             <TouchableOpacity
