@@ -810,7 +810,7 @@ export function ChatProvider({
             let persistentChatId: string | undefined;
             if (activeChatID === emptyChatID && isNewSession) {
                 const created = await apiClient.post<{ id: string }>(`${getApiUrl()}/chats`, {
-                    title: 'Chat',
+                    title: 'New Chat',
                     model: selectedModelRef.current || 'gpt-5-nano',
                     mode: 'agent',
                     type: 'persistent',
@@ -819,6 +819,12 @@ export function ChatProvider({
                 persistentChatId = created.id;
                 setActiveChatID(created.id);
                 onSessionStarted?.();
+                generateChatTitle(text)
+                    .then(title => { if (title) renameChat(persistentChatId!, title); })
+                    .catch(e => { console.warn('[ChatContext] Persistent title generation failed:', e); });
+                generateChatEmoji(text)
+                    .then(emoji => { if (emoji) setChatIcon(persistentChatId!, emoji); })
+                    .catch(() => {});
             }
             await sendStreamingMessage(
                 text,

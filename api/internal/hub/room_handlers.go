@@ -376,7 +376,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		// Update Chat Title if empty (or default)
 		// Reuse the same ctx for updating title and activity.
 		c, err := r.store.GetChat(ctx, r.initiatorID, r.ID)
-		if err == nil && (c.Title == "" || c.Title == "New Chat") {
+		if err == nil && (c.Title == "" || c.Title == "New Chat" || c.Title == "Chat") {
 			newTitle := payload.Message
 			runes := []rune(newTitle)
 			if len(runes) > 50 {
