@@ -376,6 +376,10 @@ export function ChatDetailScreen() {
         getMessages(chatId, { isRefresh: true });
     }, [chatId, getMessages, isPluginThread]);
 
+    const handleNewChat = useCallback(() => {
+        navigation.navigate('ChatDetail' as never, { chatId: emptyChatID } as never);
+    }, [navigation]);
+
     const handleAttachmentPress = useCallback(
         async (attachment: Attachment) => {
             if (attachment.file_type?.startsWith('image/')) {
@@ -561,10 +565,10 @@ export function ChatDetailScreen() {
                     ) : null}
                 </View>
 
-                {/* Right: info button */}
-                <Pressable style={detailStyles.infoBtn} hitSlop={8}>
+                {/* Right: new chat button */}
+                <Pressable style={detailStyles.infoBtn} hitSlop={8} onPress={handleNewChat}>
                     <Ionicons
-                        name="information-circle-outline"
+                        name="create-outline"
                         size={22}
                         color={theme.accent}
                     />
