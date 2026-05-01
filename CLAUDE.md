@@ -2,11 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Language Policy
+
+**The app UI is English-only.** All user-facing strings in `front/` must be in English. No i18n layer exists — do not add Russian or other language strings to JSX/TSX files. The sole exceptions are hard-coded Russian strings already present in `SessionHistorySheet.tsx` (legacy), which will be migrated separately.
+
 ## Project Overview
 
 **Genie** is a hybrid AI assistant combining a cloud brain with local execution. It features a 3-tier architecture:
 
-- **Mobile App** (`front/`) — React Native/TypeScript client with local tool execution
+- **Mobile App** (`front/`) — React Native/Expo/TypeScript client with local tool execution
 - **Go API** (`api/`) — REST/WebSocket hub for routing and state management
 - **Python Brain** (`back/`) — Agno-based AI agents with streaming responses
 
@@ -83,6 +87,64 @@ docker-compose up --build
 # Stop services
 docker-compose down
 ```
+
+## Mobile App Architecture (`front/`)
+
+### Navigation Structure
+
+```
+AppNavigator
+└── MainTabs (bottom tabs)
+    ├── Dashboard          — DashboardScreen
+    ├── Planning           — PlannerScreen
+    ├── Chat               — ChatStack
+    │   ├── ChatList       — ChatListScreen (session list)
+    │   └── ChatDetail     — ChatDetailScreen (wrapped in ChatDetailScreenWrapper)
+    ├── Projects           — ProjectsStack
+    ├── Integrations       — IntegrationsScreen
+    └── Settings           — SettingsStack
+```
+
+**Key files:**
+- `front/src/navigation/AppNavigator.tsx` — root navigator (auth gate)
+- `front/src/navigation/MainTabs.tsx` — bottom tab bar (hidden when in ChatDetail)
+- `front/src/navigation/ChatStack.tsx` — chat sub-stack with `ChatProvider` + `AskUserProvider`
+
+### Chat Screen Flow
+
+`ChatStack` wraps all chat screens in `ChatProvider` (shared context) and `AskUserProvider`.
+
+- **`ChatListScreen`** — lists all sessions; "+" button calls `createNewChatWithMode` then navigates to `ChatDetail` with `emptyChatID`
+- **`ChatDetailScreenWrapper`** — route adapter: reads `chatId` from route params, syncs it to `MainContext.activeChatID` via `useEffect`
+- **`ChatDetailScreen`** — main chat UI: message list (`GiftedChat`), input toolbar, header with back + title + new-chat button
+
+**New chat button** (top-right of `ChatDetailScreen`): calls `setIsNewSession(true)` then `navigation.replace('ChatDetail', { chatId: emptyChatID })` — replaces current screen in-stack so back goes to `ChatList`.
+
+### State Management
+
+| Context | Location | Responsibility |
+|---|---|---|
+| `MainContext` | `screens/main/context.tsx` | Chat list, `activeChatID`, `isNewSession`, `pendingChatMode` |
+| `ChatContext` | `screens/chat/context.tsx` | Messages, streaming, `sendMessage`, WebSocket lifecycle |
+| `AuthContext` | `screens/auth/context.tsx` | User session, token |
+| `ThemeContext` | `context/ThemeContext.tsx` | Active theme object |
+| `AskUserContext` | `screens/chat/AskUserContext.tsx` | Client tool user-confirmation dialogs |
+
+**Message store:** `useChatStore` (Zustand, `store/chatStore.ts`) — keyed by `chatId`. The empty chat sentinel `emptyChatID = '00000000-0000-0000-0000-000000000000'` is cleared every time it becomes active (see `MainContext` effect) to ensure a clean welcome screen.
+
+### Single Chat Mode (`user.single_chat_mode`)
+
+When enabled, the app starts directly on `ChatDetail` (skipping `ChatList`) and shows a persistent session with history accessible via `SessionHistorySheet`.
+
+- **`isNewSession`** flag controls the welcome screen (greeting + history button + chips)
+- `onSessionStarted` callback (passed from `ChatStack` to `ChatProvider`) sets `isNewSession = false` when the first message is sent
+- **`SessionHistorySheet`** (`screens/chat/chatDetail/SessionHistorySheet.tsx`) — bottom sheet modal listing past sessions via `GET /api/chats/persistent/all`; items show title or "Session from {date}" fallback
+
+### Theme System
+
+Themes live in `front/src/themes/`. Each theme implements the `Theme` interface (`themes/types.ts`). Active theme is provided by `useTheme()`. Key color slots used throughout: `background`, `surface`, `text`, `textPrimary`, `textSecondary`, `accent`, `border`.
+
+Do not hardcode colors — always use `theme.*` tokens.
 
 ## Architecture Deep Dive
 
