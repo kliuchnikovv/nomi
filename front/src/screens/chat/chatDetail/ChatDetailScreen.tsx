@@ -567,7 +567,11 @@ export function ChatDetailScreen() {
                 </View>
 
                 {/* Right: new chat button */}
-                <Pressable style={detailStyles.infoBtn} hitSlop={8} onPress={handleNewChat}>
+                <Pressable
+                    style={detailStyles.infoBtn}
+                    hitSlop={8}
+                    onPress={handleNewChat}
+                >
                     <Ionicons
                         name="create-outline"
                         size={22}
@@ -590,8 +594,8 @@ export function ChatDetailScreen() {
                 />
             )}
 
-            {/* History button — shown at top when in new session */}
-            {isNewSession && (
+            {/* History button — shown in single_chat_mode always, or during a new session */}
+            {(isNewSession || user?.single_chat_mode) && (
                 <TouchableOpacity
                     style={[
                         detailStyles.historyBtn,
@@ -610,7 +614,7 @@ export function ChatDetailScreen() {
                             { color: theme.accent },
                         ]}
                     >
-                        История сессий
+                        Session History
                     </Text>
                 </TouchableOpacity>
             )}
@@ -629,7 +633,7 @@ export function ChatDetailScreen() {
                             { color: theme.textSecondary },
                         ]}
                     >
-                        — Сессия от{' '}
+                        — Session from{' '}
                         {formatSessionDate(loadedHistoryChat.updated_at)} —
                     </Text>
                 </View>
