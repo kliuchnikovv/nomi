@@ -50,20 +50,25 @@ export function SessionHistorySheet({
             .finally(() => setLoading(false));
     }, [visible]);
 
-    const renderItem = useCallback(({ item }: { item: Chat }) => (
-        <TouchableOpacity
-            style={[styles.row, { borderBottomColor: borderColor }]}
-            onPress={() => { onSelectSession(item); onClose(); }}
-            activeOpacity={0.7}
-        >
-            <Text style={[styles.date, { color: textSecondaryColor }]}>
-                {formatSessionDate(item.updated_at)}
-            </Text>
-            <Text style={[styles.title, { color: textPrimaryColor }]} numberOfLines={1}>
-                {item.title || 'Без названия'}
-            </Text>
-        </TouchableOpacity>
-    ), [borderColor, textSecondaryColor, textPrimaryColor, onSelectSession, onClose]);
+    const renderItem = useCallback(({ item }: { item: Chat }) => {
+        const hasTitle = !!item.title;
+        return (
+            <TouchableOpacity
+                style={[styles.row, { borderBottomColor: borderColor }]}
+                onPress={() => { onSelectSession(item); onClose(); }}
+                activeOpacity={0.7}
+            >
+                {hasTitle && (
+                    <Text style={[styles.date, { color: textSecondaryColor }]}>
+                        {formatSessionDate(item.updated_at)}
+                    </Text>
+                )}
+                <Text style={[styles.title, { color: textPrimaryColor }]} numberOfLines={1}>
+                    {item.title || `Сессия от ${formatSessionDate(item.updated_at)}`}
+                </Text>
+            </TouchableOpacity>
+        );
+    }, [borderColor, textSecondaryColor, textPrimaryColor, onSelectSession, onClose]);
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
