@@ -49,6 +49,7 @@ import { DiceRollOverlay } from '../components/DiceRollOverlay';
 import { ToastContainer } from '../../../utils/ToastContainer';
 import { useAskUser } from '../AskUserContext';
 import { AskUserDialog } from '../components/AskUserDialog';
+import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 import type { ChatStackParamList } from '../../../navigation/types';
 import type { Chat, Message } from '../../main/models';
 
@@ -118,28 +119,43 @@ export function ChatDetailScreen() {
     );
 
     // Project suggestion banner (non-session, existing chats)
-    const [suggestedProject, setSuggestedProject] = useState<Project | null>(null);
+    const [suggestedProject, setSuggestedProject] = useState<Project | null>(
+        null,
+    );
 
     // History sheet state
     const [historySheetVisible, setHistorySheetVisible] = useState(false);
-    const [loadedHistoryChat, setLoadedHistoryChat] = useState<Chat | null>(null);
+    const [loadedHistoryChat, setLoadedHistoryChat] = useState<Chat | null>(
+        null,
+    );
     const [historyMessages, setHistoryMessages] = useState<Message[]>([]);
     const historyGiftedMessages = useGiftedMessages(historyMessages, user?.id);
 
     useEffect(() => {
-        console.log('[ProjectBanner] suggestedProjectId changed:', suggestedProjectId);
+        console.log(
+            '[ProjectBanner] suggestedProjectId changed:',
+            suggestedProjectId,
+        );
         if (!suggestedProjectId) {
             setSuggestedProject(null);
             return;
         }
-        projectsApi.list().then(projects => {
-            const found = (projects ?? []).find(p => p.id === suggestedProjectId) ?? null;
-            console.log('[ProjectBanner] resolved project:', found?.name ?? 'NOT FOUND');
-            setSuggestedProject(found);
-        }).catch(e => {
-            console.warn('[ProjectBanner] failed to load projects:', e);
-            setSuggestedProject(null);
-        });
+        projectsApi
+            .list()
+            .then(projects => {
+                const found =
+                    (projects ?? []).find(p => p.id === suggestedProjectId) ??
+                    null;
+                console.log(
+                    '[ProjectBanner] resolved project:',
+                    found?.name ?? 'NOT FOUND',
+                );
+                setSuggestedProject(found);
+            })
+            .catch(e => {
+                console.warn('[ProjectBanner] failed to load projects:', e);
+                setSuggestedProject(null);
+            });
     }, [suggestedProjectId]);
 
     const handleAcceptProjectSuggestion = useCallback(() => {
@@ -155,19 +171,27 @@ export function ChatDetailScreen() {
                 pendingText: classifiedText ?? undefined,
             },
         });
-    }, [suggestedProjectId, classifiedText, clearProjectSuggestion, navigation]);
+    }, [
+        suggestedProjectId,
+        classifiedText,
+        clearProjectSuggestion,
+        navigation,
+    ]);
 
     const handleSelectSession = useCallback(async (selectedChat: Chat) => {
         setLoadedHistoryChat(selectedChat);
         const msgs = await apiClient.get<Message[]>(
-            `${getApiUrl()}/chats/${selectedChat.id}/messages`
+            `${getApiUrl()}/chats/${selectedChat.id}/messages`,
         );
         setHistoryMessages(msgs ?? []);
     }, []);
 
-    const handleChipPress = useCallback((text: string) => {
-        setPendingInputText(text);
-    }, [setPendingInputText]);
+    const handleChipPress = useCallback(
+        (text: string) => {
+            setPendingInputText(text);
+        },
+        [setPendingInputText],
+    );
 
     const handleAcceptSessionProjectSuggestion = useCallback(() => {
         if (!suggestedProjectForSession) return;
@@ -180,7 +204,12 @@ export function ChatDetailScreen() {
                 pendingText: pendingMessage ?? undefined,
             },
         });
-    }, [suggestedProjectForSession, pendingMessage, confirmProjectSuggestionForSession, navigation]);
+    }, [
+        suggestedProjectForSession,
+        pendingMessage,
+        confirmProjectSuggestionForSession,
+        navigation,
+    ]);
 
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);
@@ -457,23 +486,36 @@ export function ChatDetailScreen() {
         inputAnimY,
     });
 
-    const showEmptyChips = isNewSession && historyMessages.length === 0 && giftedMessages.length === 0;
+    const showEmptyChips =
+        isNewSession &&
+        historyMessages.length === 0 &&
+        giftedMessages.length === 0;
     const showEmptyGreeting = showEmptyChips;
 
-    const renderInputToolbar = useCallback((props: any) => {
-        const toolbar = renderInputToolbarBase(props);
-        if (pendingMessage) {
-            return (
-                <View pointerEvents="none" style={{ opacity: 0.4 }}>
-                    {toolbar}
-                </View>
-            );
-        }
-        return toolbar;
-    }, [pendingMessage, renderInputToolbarBase]);
+    const renderInputToolbar = useCallback(
+        (props: any) => {
+            const toolbar = renderInputToolbarBase(props);
+            if (pendingMessage) {
+                return (
+                    <View pointerEvents="none" style={{ opacity: 0.4 }}>
+                        {toolbar}
+                    </View>
+                );
+            }
+            return toolbar;
+        },
+        [pendingMessage, renderInputToolbarBase],
+    );
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background, position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }]}>
+        <View
+            style={[
+                styles.container,
+                {
+                    backgroundColor: theme.background,
+                },
+            ]}
+        >
             {/* Header */}
             <View
                 style={[
@@ -546,11 +588,23 @@ export function ChatDetailScreen() {
             {/* History button — shown at top when in new session */}
             {isNewSession && (
                 <TouchableOpacity
-                    style={[detailStyles.historyBtn, { borderBottomColor: theme.border }]}
+                    style={[
+                        detailStyles.historyBtn,
+                        { borderBottomColor: theme.border },
+                    ]}
                     onPress={() => setHistorySheetVisible(true)}
                 >
-                    <Ionicons name="time-outline" size={16} color={theme.accent} />
-                    <Text style={[detailStyles.historyBtnText, { color: theme.accent }]}>
+                    <Ionicons
+                        name="time-outline"
+                        size={16}
+                        color={theme.accent}
+                    />
+                    <Text
+                        style={[
+                            detailStyles.historyBtnText,
+                            { color: theme.accent },
+                        ]}
+                    >
                         История сессий
                     </Text>
                 </TouchableOpacity>
@@ -558,9 +612,20 @@ export function ChatDetailScreen() {
 
             {/* Loaded history separator */}
             {loadedHistoryChat && historyMessages.length > 0 && (
-                <View style={[detailStyles.historySeparator, { borderColor: theme.border }]}>
-                    <Text style={[detailStyles.historySeparatorText, { color: theme.textSecondary }]}>
-                        — Сессия от {formatSessionDate(loadedHistoryChat.updated_at)} —
+                <View
+                    style={[
+                        detailStyles.historySeparator,
+                        { borderColor: theme.border },
+                    ]}
+                >
+                    <Text
+                        style={[
+                            detailStyles.historySeparatorText,
+                            { color: theme.textSecondary },
+                        ]}
+                    >
+                        — Сессия от{' '}
+                        {formatSessionDate(loadedHistoryChat.updated_at)} —
                     </Text>
                 </View>
             )}
@@ -568,28 +633,53 @@ export function ChatDetailScreen() {
             <Animated.View style={animatedKeyboardStyle}>
                 {showEmptyGreeting ? (
                     <>
-                        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                        <TouchableWithoutFeedback
+                            onPress={Keyboard.dismiss}
+                            accessible={false}
+                        >
+                            <View
+                                style={{
+                                    flex: 1,
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                }}
+                            >
                                 <PersistentChatEmptyState
-                                onChipPress={handleChipPress}
-                                accentColor={theme.accent}
-                                textPrimaryColor={theme.textPrimary}
-                                textSecondaryColor={theme.textSecondary}
-                                surfaceColor={theme.surface}
-                                showChips={false}
-                            />
-                        </View>
+                                    onChipPress={handleChipPress}
+                                    accentColor={theme.accent}
+                                    textPrimaryColor={theme.textPrimary}
+                                    textSecondaryColor={theme.textSecondary}
+                                    surfaceColor={theme.surface}
+                                    showChips={false}
+                                />
+                            </View>
                         </TouchableWithoutFeedback>
                         {showEmptyChips && chips.length > 0 && (
                             <View style={detailStyles.chipsRow}>
                                 {chips.map(chip => (
                                     <TouchableOpacity
                                         key={chip.label}
-                                        style={[detailStyles.chipBtn, { backgroundColor: theme.surface, borderColor: theme.accent + '40' }]}
-                                        onPress={() => handleChipPress(chip.text)}
+                                        style={[
+                                            detailStyles.chipBtn,
+                                            {
+                                                backgroundColor: theme.surface,
+                                                borderColor:
+                                                    theme.accent + '40',
+                                            },
+                                        ]}
+                                        onPress={() =>
+                                            handleChipPress(chip.text)
+                                        }
                                         activeOpacity={0.7}
                                     >
-                                        <Text style={[detailStyles.chipBtnText, { color: theme.textPrimary }]}>{chip.label}</Text>
+                                        <Text
+                                            style={[
+                                                detailStyles.chipBtnText,
+                                                { color: theme.textPrimary },
+                                            ]}
+                                        >
+                                            {chip.label}
+                                        </Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
@@ -604,7 +694,11 @@ export function ChatDetailScreen() {
                     </>
                 ) : (
                     <GiftedChat
-                        messages={messagesLoading ? [] : [...giftedMessages, ...historyGiftedMessages]}
+                        messages={
+                            messagesLoading
+                                ? []
+                                : [...giftedMessages, ...historyGiftedMessages]
+                        }
                         onSend={handleSend}
                         user={currentUser}
                         renderMessage={renderMessage}
@@ -614,7 +708,7 @@ export function ChatDetailScreen() {
                         isTyping={false}
                         renderFooter={renderFooter}
                         inverted={true}
-                        minInputToolbarHeight={60}
+                        minInputToolbarHeight={insets.bottom + 112}
                         maxComposerHeight={100}
                         renderAvatar={null}
                         messagesContainerStyle={styles.messagesContainer}
@@ -627,7 +721,9 @@ export function ChatDetailScreen() {
                         onLongPress={onLongPressMessage}
                         shouldUpdateMessage={shouldUpdateMessage}
                         extraData={extraData}
-                        keyExtractor={(message: IMessage) => String(message._id)}
+                        keyExtractor={(message: IMessage) =>
+                            String(message._id)
+                        }
                         listProps={
                             chatId && chatId !== emptyChatID && !isPluginThread
                                 ? {

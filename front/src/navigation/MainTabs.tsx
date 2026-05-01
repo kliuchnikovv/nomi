@@ -1,9 +1,20 @@
 import React, { useEffect } from 'react';
 import { LayoutChangeEvent } from 'react-native';
-import { createBottomTabNavigator, BottomTabBar, BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { getFocusedRouteNameFromRoute, type RouteProp } from '@react-navigation/native';
+import {
+    createBottomTabNavigator,
+    BottomTabBar,
+    BottomTabBarProps,
+} from '@react-navigation/bottom-tabs';
+import {
+    getFocusedRouteNameFromRoute,
+    type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+    withSpring,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../screens/auth/context';
@@ -31,23 +42,27 @@ function AnimatedTabBar(props: BottomTabBarProps) {
     const heightSV = useSharedValue(0);
     const progress = useSharedValue(0); // 0 = visible, 1 = hidden
 
-    // Hide tab bar when inside a full-screen chat (Chat tab or Projects tab)
     const activeTabName = state.routes[state.index]?.name;
     const chatRoute = state.routes.find(r => r.name === 'Chat');
     const projectsRoute = state.routes.find(r => r.name === 'Projects');
-    // Hide when Chat tab is active and we're NOT on the list screen.
-    // getFocusedRouteNameFromRoute returns undefined when no navigation has
-    // occurred yet (initial route). In that case the focused screen IS the
-    // initialRouteName, which in singleChatMode is 'ChatDetail' — so we hide
-    // the bar whenever the name is not explicitly 'ChatList'.
-    const chatFocusedRoute = chatRoute ? getFocusedRouteNameFromRoute(chatRoute) : undefined;
-    const isInChatDetail = activeTabName === 'Chat' && chatFocusedRoute !== 'ChatList';
-    const isInProjectChatDetail = activeTabName === 'Projects' && projectsRoute
-        ? getFocusedRouteNameFromRoute(projectsRoute) === 'ProjectChatDetail'
-        : false;
+    const isInChatDetail = activeTabName === 'Chat';
+    // getFocusedRouteNameFromRoute returns undefined on the initial route (ProjectsList).
+    // Hide the bar whenever we've navigated away from the root screen.
+    const projectsFocusedRoute = projectsRoute
+        ? getFocusedRouteNameFromRoute(projectsRoute)
+        : undefined;
+    // undefined = initial state (ProjectsList), 'ProjectsList' = navigated back to list.
+    // Hide the bar whenever we're deeper than the root screen.
+    const isInProjectChatDetail =
+        activeTabName === 'Projects' &&
+        projectsFocusedRoute !== undefined &&
+        projectsFocusedRoute !== 'ProjectsList';
 
     useEffect(() => {
-        progress.value = withSpring((isInChatDetail || isInProjectChatDetail) ? 1 : 0, SPRING_CONFIG);
+        progress.value = withSpring(
+            isInChatDetail || isInProjectChatDetail ? 1 : 0,
+            SPRING_CONFIG,
+        );
     }, [isInChatDetail, isInProjectChatDetail]);
 
     // Measure the tab bar once on first layout
@@ -64,7 +79,6 @@ function AnimatedTabBar(props: BottomTabBarProps) {
         bottom: 0,
         left: 0,
         right: 0,
-        zIndex: 10,
         transform: [{ translateY: heightSV.value * progress.value }],
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
@@ -72,11 +86,14 @@ function AnimatedTabBar(props: BottomTabBarProps) {
 
     return (
         <Animated.View
-            style={[containerStyle, {
-                borderWidth: 1,
-                borderBottomWidth: 0,
-                borderColor: `${theme.accent}40`,
-            }]}
+            style={[
+                containerStyle,
+                {
+                    borderWidth: 1,
+                    borderBottomWidth: 0,
+                    borderColor: `${theme.accent}40`,
+                },
+            ]}
             onLayout={handleLayout}
         >
             <BottomTabBar {...props} />
@@ -94,20 +111,29 @@ export function MainTabs() {
 
     return (
         <Tab.Navigator
-            tabBar={(props) => <AnimatedTabBar {...props} />}
-            screenOptions={({ route }: { route: RouteProp<RootTabParamList, keyof RootTabParamList> }) => ({
+            tabBar={props => <AnimatedTabBar {...props} />}
+            screenOptions={({
+                route,
+            }: {
+                route: RouteProp<RootTabParamList, keyof RootTabParamList>;
+            }) => ({
                 headerShown: false,
                 tabBarStyle: {
                     backgroundColor: theme.surface,
                     borderTopWidth: 0,
                     height: tabBarHeight,
                     paddingTop: 12,
-                    position: 'absolute',
                 },
                 tabBarActiveTintColor: theme.accent,
                 tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
                 tabBarShowLabel: false,
-                tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) => {
+                tabBarIcon: ({
+                    focused,
+                    color,
+                }: {
+                    focused: boolean;
+                    color: string;
+                }) => {
                     let iconName: keyof typeof Ionicons.glyphMap;
 
                     switch (route.name) {
@@ -115,10 +141,14 @@ export function MainTabs() {
                             iconName = focused ? 'home' : 'home-outline';
                             break;
                         case 'Planning':
-                            iconName = focused ? 'calendar' : 'calendar-outline';
+                            iconName = focused
+                                ? 'calendar'
+                                : 'calendar-outline';
                             break;
                         case 'Chat':
-                            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+                            iconName = focused
+                                ? 'chatbubbles'
+                                : 'chatbubbles-outline';
                             break;
                         case 'Projects':
                             iconName = focused ? 'folder' : 'folder-outline';
@@ -127,7 +157,9 @@ export function MainTabs() {
                             iconName = focused ? 'apps' : 'apps-outline';
                             break;
                         case 'Settings':
-                            iconName = focused ? 'settings' : 'settings-outline';
+                            iconName = focused
+                                ? 'settings'
+                                : 'settings-outline';
                             break;
                         default:
                             iconName = 'ellipse';
@@ -143,10 +175,13 @@ export function MainTabs() {
                 name="Chat"
                 component={ChatStack}
                 listeners={({ navigation }) => ({
-                    tabPress: (e) => {
+                    tabPress: e => {
                         e.preventDefault();
                         if (user?.single_chat_mode && activeChatID) {
-                            navigation.navigate('Chat', { screen: 'ChatDetail', params: { chatId: activeChatID } });
+                            navigation.navigate('Chat', {
+                                screen: 'ChatDetail',
+                                params: { chatId: activeChatID },
+                            });
                         } else {
                             navigation.navigate('Chat', { screen: 'ChatList' });
                         }

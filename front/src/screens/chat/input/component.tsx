@@ -599,7 +599,12 @@ export default function ChatInput(props: Props) {
 
     return (
         <View style={styles.container}>
-            <View style={[styles.inputWrapper, { paddingBottom: 12 }]}>
+            <View
+                style={[
+                    styles.inputWrapper,
+                    { paddingBottom: 0 /*insets.bottom*/ },
+                ]}
+            >
                 {/* Context Items Preview */}
                 {contextItems.length > 0 && (
                     <ScrollView
@@ -744,7 +749,10 @@ export default function ChatInput(props: Props) {
                                 pressed && styles.modelButtonPressed,
                             ]}
                         >
-                            <Text style={styles.modelButtonText} numberOfLines={1}>
+                            <Text
+                                style={styles.modelButtonText}
+                                numberOfLines={1}
+                            >
                                 {selectedModelName}
                             </Text>
                         </Pressable>
