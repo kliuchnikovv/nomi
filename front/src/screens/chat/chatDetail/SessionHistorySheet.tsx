@@ -4,6 +4,7 @@ import {
     Modal, Pressable, ActivityIndicator, ActionSheetIOS, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { chatsApi } from '../../../apiClient';
 import type { Chat } from '../../main/models';
 import { useMain } from '../../main/context';
@@ -28,8 +29,8 @@ export function formatSessionDate(updatedAt: number | string): string {
 
     const timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
-    if (diffDays === 0) return `Сегодня, ${timeStr}`;
-    if (diffDays === 1) return `Вчера, ${timeStr}`;
+    if (diffDays === 0) return `Today, ${timeStr}`;
+    if (diffDays === 1) return `Yesterday, ${timeStr}`;
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + `, ${timeStr}`;
 }
 
@@ -82,6 +83,7 @@ export function SessionHistorySheet({
 
     const renderItem = useCallback(({ item }: { item: Chat }) => {
         const hasTitle = !!item.title;
+        const hasEmoji = !!item.icon && /\p{Emoji}/u.test(item.icon) && !/^[0-9#*]$/.test(item.icon);
         return (
             <TouchableOpacity
                 style={[styles.row, { borderBottomColor: borderColor }]}
@@ -89,17 +91,25 @@ export function SessionHistorySheet({
                 onLongPress={() => handleLongPress(item)}
                 activeOpacity={0.7}
             >
-                {hasTitle && (
-                    <Text style={[styles.date, { color: textSecondaryColor }]}>
-                        {formatSessionDate(item.updated_at)}
+                <View style={[styles.iconCircle, { backgroundColor: surfaceColor }]}>
+                    {hasEmoji
+                        ? <Text style={styles.iconEmoji}>{item.icon}</Text>
+                        : <Ionicons name="sparkles" size={16} color={accentColor} />
+                    }
+                </View>
+                <View style={styles.textBlock}>
+                    {hasTitle && (
+                        <Text style={[styles.date, { color: textSecondaryColor }]}>
+                            {formatSessionDate(item.updated_at)}
+                        </Text>
+                    )}
+                    <Text style={[styles.title, { color: textPrimaryColor }]} numberOfLines={1}>
+                        {item.title || `Session from ${formatSessionDate(item.updated_at)}`}
                     </Text>
-                )}
-                <Text style={[styles.title, { color: textPrimaryColor }]} numberOfLines={1}>
-                    {item.title || `Сессия от ${formatSessionDate(item.updated_at)}`}
-                </Text>
+                </View>
             </TouchableOpacity>
         );
-    }, [borderColor, textSecondaryColor, textPrimaryColor, onSelectSession, onClose, handleLongPress]);
+    }, [borderColor, surfaceColor, accentColor, textSecondaryColor, textPrimaryColor, onSelectSession, onClose, handleLongPress]);
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -107,10 +117,10 @@ export function SessionHistorySheet({
             <View style={[styles.sheet, { backgroundColor: surfaceColor, paddingBottom: insets.bottom }]}>
                 <View style={[styles.header, { borderBottomColor: borderColor }]}>
                     <Text style={[styles.headerTitle, { color: textPrimaryColor }]}>
-                        История сессий
+                        Session History
                     </Text>
                     <TouchableOpacity onPress={onClose} hitSlop={8}>
-                        <Text style={[styles.closeBtn, { color: accentColor }]}>Закрыть</Text>
+                        <Text style={[styles.closeBtn, { color: accentColor }]}>Close</Text>
                     </TouchableOpacity>
                 </View>
                 {loading
@@ -122,7 +132,7 @@ export function SessionHistorySheet({
                             renderItem={renderItem}
                             ListEmptyComponent={
                                 <Text style={[styles.empty, { color: textSecondaryColor }]}>
-                                    Нет предыдущих сессий
+                                    No previous sessions
                                 </Text>
                             }
                         />
@@ -151,11 +161,23 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 17, fontWeight: '600' },
     closeBtn: { fontSize: 15 },
     row: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 14,
+        paddingVertical: 12,
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    date: { fontSize: 12, marginBottom: 3 },
+    iconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    iconEmoji: { fontSize: 18 },
+    textBlock: { flex: 1 },
+    date: { fontSize: 12, marginBottom: 2 },
     title: { fontSize: 15 },
     empty: { textAlign: 'center', margin: 32, fontSize: 14 },
 });
