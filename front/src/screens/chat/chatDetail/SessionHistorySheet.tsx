@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
-    Modal, Pressable, ActivityIndicator,
+    Modal, Pressable, ActivityIndicator, ActionSheetIOS, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { chatsApi } from '../../../apiClient';
 import type { Chat } from '../../main/models';
+import { useMain } from '../../main/context';
 
 interface Props {
     visible: boolean;
@@ -40,6 +41,7 @@ export function SessionHistorySheet({
     const [sessions, setSessions] = useState<Chat[]>([]);
     const [loading, setLoading] = useState(false);
     const insets = useSafeAreaInsets();
+    const { renameChat, deleteChat } = useMain();
 
     useEffect(() => {
         if (!visible) return;
@@ -50,12 +52,41 @@ export function SessionHistorySheet({
             .finally(() => setLoading(false));
     }, [visible]);
 
+    const handleLongPress = useCallback((item: Chat) => {
+        const displayTitle = item.title || formatSessionDate(item.updated_at);
+        ActionSheetIOS.showActionSheetWithOptions(
+            { options: ['Rename', 'Delete', 'Cancel'], destructiveButtonIndex: 1, cancelButtonIndex: 2 },
+            (idx) => {
+                if (idx === 0) {
+                    Alert.prompt('Rename Session', '', [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Rename',
+                            onPress: (newTitle?: string) => {
+                                const trimmed = newTitle?.trim();
+                                if (!trimmed) return;
+                                renameChat(item.id, trimmed);
+                                setSessions(prev => prev.map(s =>
+                                    s.id === item.id ? { ...s, title: trimmed } : s
+                                ));
+                            },
+                        },
+                    ], 'plain-text', displayTitle);
+                } else if (idx === 1) {
+                    deleteChat(item.id);
+                    setSessions(prev => prev.filter(s => s.id !== item.id));
+                }
+            },
+        );
+    }, [renameChat, deleteChat]);
+
     const renderItem = useCallback(({ item }: { item: Chat }) => {
         const hasTitle = !!item.title;
         return (
             <TouchableOpacity
                 style={[styles.row, { borderBottomColor: borderColor }]}
                 onPress={() => { onSelectSession(item); onClose(); }}
+                onLongPress={() => handleLongPress(item)}
                 activeOpacity={0.7}
             >
                 {hasTitle && (
@@ -68,7 +99,7 @@ export function SessionHistorySheet({
                 </Text>
             </TouchableOpacity>
         );
-    }, [borderColor, textSecondaryColor, textPrimaryColor, onSelectSession, onClose]);
+    }, [borderColor, textSecondaryColor, textPrimaryColor, onSelectSession, onClose, handleLongPress]);
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
