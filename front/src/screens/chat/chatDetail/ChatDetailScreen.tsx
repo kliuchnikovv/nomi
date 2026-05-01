@@ -377,7 +377,7 @@ export function ChatDetailScreen() {
     }, [chatId, getMessages, isPluginThread]);
 
     const handleNewChat = useCallback(() => {
-        navigation.navigate('ChatDetail' as never, { chatId: emptyChatID } as never);
+        (navigation as any).push('ChatDetail', { chatId: emptyChatID });
     }, [navigation]);
 
     const handleAttachmentPress = useCallback(
