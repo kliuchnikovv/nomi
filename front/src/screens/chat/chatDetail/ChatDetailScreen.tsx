@@ -377,8 +377,9 @@ export function ChatDetailScreen() {
     }, [chatId, getMessages, isPluginThread]);
 
     const handleNewChat = useCallback(() => {
+        setIsNewSession(true);
         (navigation as any).replace('ChatDetail', { chatId: emptyChatID });
-    }, [navigation]);
+    }, [navigation, setIsNewSession]);
 
     const handleAttachmentPress = useCallback(
         async (attachment: Attachment) => {
