@@ -5,6 +5,7 @@ export type User = {
     name: string;
     email: string;
     single_chat_mode?: boolean;
+    agent_storage_mode?: 'payload' | 'agno';
 }
 
 export interface AuthContextType {

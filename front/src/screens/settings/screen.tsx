@@ -53,6 +53,9 @@ export default function SettingsHomeScreen() {
     const [singleChatMode, setSingleChatMode] = useState(
         user?.single_chat_mode ?? false,
     );
+    const [agnoSessions, setAgnoSessions] = useState(
+        user?.agent_storage_mode === 'agno',
+    );
 
     const handleSingleChatModeToggle = useCallback(async (value: boolean) => {
         try {
@@ -64,12 +67,24 @@ export default function SettingsHomeScreen() {
         }
     }, [user, updateUser]);
 
+    const handleAgnoSessionsToggle = useCallback(async (value: boolean) => {
+        try {
+            const mode = value ? 'agno' : 'payload';
+            await authApi.updateMe({ agent_storage_mode: mode });
+            setAgnoSessions(value);
+            if (user) updateUser({ ...user, agent_storage_mode: mode });
+        } catch (e) {
+            console.error('Failed to update agent storage mode', e);
+        }
+    }, [user, updateUser]);
+
     // Refresh preview values each time this screen comes into focus
     useFocusEffect(
         useCallback(() => {
             initApiUrl();
             setCurrentThemeName(themes[themeName].name);
             setSingleChatMode(user?.single_chat_mode ?? false);
+            setAgnoSessions(user?.agent_storage_mode === 'agno');
 
             AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
                 if (mode === 'server' || mode === 'device')
@@ -180,6 +195,13 @@ export default function SettingsHomeScreen() {
                         subtitle="Use one persistent endless chat"
                         value={singleChatMode}
                         onToggle={handleSingleChatModeToggle}
+                        isFirst={false}
+                    />
+                    <SettingsToggleRow
+                        label="Agno Sessions"
+                        subtitle="Store session history in Agno instead of payload"
+                        value={agnoSessions}
+                        onToggle={handleAgnoSessionsToggle}
                         isFirst={false}
                         isLast
                     />

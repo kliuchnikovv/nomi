@@ -6,7 +6,7 @@
 import * as SQLite from 'expo-sqlite';
 
 const DATABASE_NAME = 'genie.db';
-const DATABASE_VERSION = 8;
+const DATABASE_VERSION = 9;
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -93,6 +93,9 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
     }
     if (currentVersion < 8) {
         await migrateV8(database);
+    }
+    if (currentVersion < 9) {
+        await migrateV9(database);
     }
 }
 
@@ -386,6 +389,24 @@ async function migrateV8(database: SQLite.SQLiteDatabase): Promise<void> {
         INSERT INTO migrations (version, applied_at) VALUES (8, ${Date.now()});
     `);
     console.log('[Database] Migration V8 applied: vectors table removed');
+}
+
+/**
+ * Migration V9: User-space separation — add user_id to integrations, briefings, plugin_chats
+ */
+async function migrateV9(database: SQLite.SQLiteDatabase): Promise<void> {
+    await database.execAsync(`
+        ALTER TABLE integrations ADD COLUMN user_id TEXT;
+        ALTER TABLE briefings ADD COLUMN user_id TEXT;
+        ALTER TABLE plugin_chats ADD COLUMN user_id TEXT;
+
+        CREATE INDEX IF NOT EXISTS idx_integrations_user_id ON integrations(user_id);
+        CREATE INDEX IF NOT EXISTS idx_briefings_user_id ON briefings(user_id);
+        CREATE INDEX IF NOT EXISTS idx_plugin_chats_user_id ON plugin_chats(user_id);
+
+        INSERT INTO migrations (version, applied_at) VALUES (9, ${Date.now()});
+    `);
+    console.log('[Database] Migration V9 applied: user_id added for user-space separation');
 }
 
 /**

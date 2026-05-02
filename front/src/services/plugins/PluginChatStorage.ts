@@ -29,6 +29,19 @@ export interface PluginMessage {
 }
 
 class PluginChatStorage {
+    private currentUserId: string | null = null;
+
+    setCurrentUserId(userId: string | null): void {
+        this.currentUserId = userId;
+    }
+
+    private requireUserId(): string {
+        if (!this.currentUserId) {
+            throw new Error('PluginChatStorage: no current user set');
+        }
+        return this.currentUserId;
+    }
+
     /**
      * Create a new plugin chat
      */
@@ -39,6 +52,7 @@ class PluginChatStorage {
         title: string,
         data?: Record<string, any>
     ): Promise<PluginChat> {
+        const userId = this.requireUserId();
         const db = getDatabase();
         const now = Date.now();
         const id = generateId();
@@ -46,9 +60,9 @@ class PluginChatStorage {
         const dataStr = data ? JSON.stringify(data) : null;
 
         await db.runAsync(
-            `INSERT INTO plugin_chats (id, plugin_name, record_type, source_id, title, data, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, pluginName, recordType, sourceId, title, dataStr, now, now]
+            `INSERT INTO plugin_chats (id, plugin_name, record_type, source_id, title, data, user_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, pluginName, recordType, sourceId, title, dataStr, userId, now, now]
         );
 
         console.log(`[PluginChatStorage] Created chat for ${pluginName}: ${title}`);
@@ -69,10 +83,11 @@ class PluginChatStorage {
      * Get all plugin chats for a specific plugin, optionally filtered by integrationId stored in data JSON
      */
     async getPluginChats(pluginName: string, recordType?: string, integrationId?: string): Promise<PluginChat[]> {
+        const userId = this.requireUserId();
         const db = getDatabase();
 
-        let query = 'SELECT * FROM plugin_chats WHERE plugin_name = ?';
-        const params: any[] = [pluginName];
+        let query = 'SELECT * FROM plugin_chats WHERE plugin_name = ? AND user_id = ?';
+        const params: any[] = [pluginName, userId];
 
         if (recordType) {
             query += ' AND record_type = ?';
@@ -104,11 +119,12 @@ class PluginChatStorage {
      * Get a plugin chat by source ID
      */
     async getPluginChat(sourceId: string): Promise<PluginChat | null> {
+        const userId = this.requireUserId();
         const db = getDatabase();
 
         const row = await db.getFirstAsync<any>(
-            'SELECT * FROM plugin_chats WHERE source_id = ?',
-            [sourceId]
+            'SELECT * FROM plugin_chats WHERE source_id = ? AND user_id = ?',
+            [sourceId, userId]
         );
 
         if (!row) {
@@ -221,8 +237,9 @@ class PluginChatStorage {
      * Delete all plugin chats (and their messages via CASCADE) for a specific plugin
      */
     async deletePluginChatsByPlugin(pluginName: string): Promise<void> {
+        const userId = this.requireUserId();
         const db = getDatabase();
-        await db.runAsync('DELETE FROM plugin_chats WHERE plugin_name = ?', [pluginName]);
+        await db.runAsync('DELETE FROM plugin_chats WHERE plugin_name = ? AND user_id = ?', [pluginName, userId]);
         console.log(`[PluginChatStorage] Deleted all chats for plugin: ${pluginName}`);
     }
 

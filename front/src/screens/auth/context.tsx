@@ -15,6 +15,8 @@ import { apiClient, setupApiClient } from '../../apiClient';
 import { getApiUrl } from '../../config';
 import { AuthContextType, User, alertError } from './models';
 import { secureTokenStorage } from '../../services/auth/SecureTokenStorage';
+import { integrationStorage } from '../../services/integrations/IntegrationStorage';
+import { pluginChatStorage } from '../../services/plugins/PluginChatStorage';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -420,6 +422,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(updatedUser);
         await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
     };
+
+    // Sync current user ID into storage singletons for user-space isolation
+    useEffect(() => {
+        const userId = user?.id ?? null;
+        integrationStorage.setCurrentUserId(userId);
+        pluginChatStorage.setCurrentUserId(userId);
+    }, [user]);
 
     // Update apiClient whenever token changes to fix race condition with initial load
     useEffect(() => {

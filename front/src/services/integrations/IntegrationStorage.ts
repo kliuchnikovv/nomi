@@ -132,21 +132,35 @@ export interface SuggestedAction {
 }
 
 class IntegrationStorage {
+    private currentUserId: string | null = null;
+
+    setCurrentUserId(userId: string | null): void {
+        this.currentUserId = userId;
+    }
+
+    private requireUserId(): string {
+        if (!this.currentUserId) {
+            throw new Error('IntegrationStorage: no current user set');
+        }
+        return this.currentUserId;
+    }
+
     // ==================== Integration CRUD ====================
 
     async createIntegration(
         integration: Omit<Integration, 'id' | 'createdAt' | 'updatedAt'>,
         credentials: IntegrationCredentials
     ): Promise<Integration> {
+        const userId = this.requireUserId();
         const db = getDatabase();
         const id = generateUUID();
         const now = Date.now();
 
         // Insert integration
         await db.runAsync(
-            `INSERT INTO integrations (id, provider, name, enabled, account_email, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [id, integration.provider, integration.name, integration.enabled ? 1 : 0, integration.accountEmail ?? null, now, now]
+            `INSERT INTO integrations (id, provider, name, enabled, account_email, user_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, integration.provider, integration.name, integration.enabled ? 1 : 0, integration.accountEmail ?? null, userId, now, now]
         );
 
         // Insert encrypted credentials
@@ -172,6 +186,7 @@ class IntegrationStorage {
     }
 
     async getIntegrations(): Promise<Integration[]> {
+        const userId = this.requireUserId();
         const db = getDatabase();
         const rows = await db.getAllAsync<{
             id: string;
@@ -181,7 +196,7 @@ class IntegrationStorage {
             account_email: string | null;
             created_at: number;
             updated_at: number;
-        }>('SELECT * FROM integrations ORDER BY created_at DESC');
+        }>('SELECT * FROM integrations WHERE user_id = ? ORDER BY created_at DESC', [userId]);
 
         return rows.map(row => ({
             id: row.id,
@@ -220,6 +235,7 @@ class IntegrationStorage {
     }
 
     async getIntegrationByEmail(provider: string, email: string): Promise<Integration | null> {
+        const userId = this.requireUserId();
         const db = getDatabase();
         const row = await db.getFirstAsync<{
             id: string;
@@ -229,7 +245,7 @@ class IntegrationStorage {
             account_email: string | null;
             created_at: number;
             updated_at: number;
-        }>('SELECT * FROM integrations WHERE provider = ? AND account_email = ?', [provider, email]);
+        }>('SELECT * FROM integrations WHERE provider = ? AND account_email = ? AND user_id = ?', [provider, email, userId]);
 
         if (!row) return null;
 
@@ -817,14 +833,15 @@ class IntegrationStorage {
     // ==================== V3: Briefings ====================
 
     async createBriefing(date: string, headline?: string, summary?: string): Promise<Briefing> {
+        const userId = this.requireUserId();
         const db = getDatabase();
         const id = generateUUID();
         const now = Date.now();
 
         await db.runAsync(
-            `INSERT OR REPLACE INTO briefings (id, date, headline, summary, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [id, date, headline ?? null, summary ?? null, now, now]
+            `INSERT OR REPLACE INTO briefings (id, date, user_id, headline, summary, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [id, date, userId, headline ?? null, summary ?? null, now, now]
         );
 
         return {
@@ -838,10 +855,11 @@ class IntegrationStorage {
     }
 
     async getBriefingForDate(date: string): Promise<Briefing | null> {
+        const userId = this.requireUserId();
         const db = getDatabase();
         const row = await db.getFirstAsync<any>(
-            'SELECT * FROM briefings WHERE date = ?',
-            [date]
+            'SELECT * FROM briefings WHERE date = ? AND user_id = ?',
+            [date, userId]
         );
 
         if (!row) return null;
