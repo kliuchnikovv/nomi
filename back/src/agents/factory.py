@@ -17,6 +17,7 @@ from src.tools.config import ToolConfigClient
 from src.tools.discovery import build_discovery_tool
 from src.tools.factory import build as build_tools, ToolsConfig
 from src.tools.models import ToolSpec
+from src.storage.backend import StorageBackend
 from agno.tools import Toolkit
 
 logger = logging.getLogger(__name__)
@@ -286,6 +287,7 @@ class AgentFactory:
         bot_identity: dict | None = None,
         user_location: str | None = None,
         single_chat_mode: bool = False,
+        storage_backend: StorageBackend | None = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -578,6 +580,9 @@ class AgentFactory:
                 )
                 logger.info("[Factory] Built PlannerAgent for agent_type=planner")
             else:
+                use_agno_sessions = (
+                    storage_backend is not None and storage_backend.use_agno_sessions()
+                )
                 agent = SouperAgent(
                     db=self._db,
                     model=model,
@@ -589,6 +594,9 @@ class AgentFactory:
                     knowledge=self._knowledge,
                     user_location=user_location,
                     identity=bot_identity,
+                    session_id=session_id if use_agno_sessions else None,
+                    num_history_runs=6,
+                    enable_session_summaries=use_agno_sessions,
                 )
 
             # _attach_tool_context removed - ChatHistoryTool is disabled

@@ -13,6 +13,8 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from agno.media import Image
 from src.agents.factory import AgentFactory
 from src.agents.souper import SouperAgent
+from src.storage.backend import PayloadBackend, StorageBackend
+from src.storage.factory import create_storage_backend
 from src.constants import Redis as RedisConstants
 from src.server.models import Frame, Op, Kind
 from src.server.utils import (
@@ -102,6 +104,9 @@ class RedisSession:
         # Plugin delivery context (set from payload in handle_user_message)
         self._delivery_source: str | None = None
         self._delivery_context: dict[str, Any] = {}
+
+        # Storage backend (set per-request from agent_storage_mode flag)
+        self.storage_backend: StorageBackend = PayloadBackend(chat_history=[])
 
         # Per-session client tool result handling
         self.pubsub: Any | None = None
@@ -729,7 +734,9 @@ class RedisSession:
             if self.redis_client:
                 await self.redis_client.close()
 
-    async def build_agent_instance(self, payload: dict):
+    async def build_agent_instance(
+        self, payload: dict, storage_backend: StorageBackend | None = None
+    ):
         """Build the agent based on payload parameters."""
         # Extract params from payload or defaults
         self.current_model_name = payload.get("model")
@@ -821,6 +828,7 @@ class RedisSession:
                 user_location=user_location,
                 timezone=timezone,
                 single_chat_mode=self.single_chat_mode,
+                storage_backend=storage_backend or self.storage_backend,
             )
         except Exception as e:
             logger.error(
@@ -1104,6 +1112,14 @@ class RedisSession:
             self.user_id = str(incoming_user_id)
             logger.info("[RedisSession] Updated user_id from payload: %s", self.user_id)
 
+        # 0a. Build storage backend based on per-user feature flag
+        agent_storage_mode = payload.get("agent_storage_mode", "payload")
+        self.storage_backend = create_storage_backend(
+            agent_storage_mode=agent_storage_mode,
+            chat_history=payload.get("history") or [],
+            session_id=self.session_id,
+        )
+
         # 0b. Extract plugin delivery context from payload
         self._delivery_source = payload.get("source")
         if self._delivery_source:
@@ -1131,9 +1147,9 @@ class RedisSession:
                 list(self._delivery_context.keys()),
             )
 
-        # 1. Check and update chat history
+        # 1. Check and update chat history (payload mode only; agno mode loads history internally)
         incoming_history = payload.get("history")
-        if incoming_history:
+        if incoming_history and isinstance(self.storage_backend, PayloadBackend):
             # Replace history on each message to avoid duplication across reused sessions
             self.chat_history = []
             self._parse_history(payload)
@@ -1147,7 +1163,7 @@ class RedisSession:
         # ------------------------------------
 
         # Build agent
-        await self.build_agent_instance(payload)
+        await self.build_agent_instance(payload, storage_backend=self.storage_backend)
 
         # Optionally store client-extracted facts from payload (e.g. from sync path)
         incoming_facts = payload.get("extracted_facts")
@@ -1303,15 +1319,17 @@ class RedisSession:
                         done_sent = True
 
                         # Archive old messages if context window is too full
-                        try:
-                            await self._maybe_archive_old_messages()
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception as _arch_err:
-                            logger.warning(
-                                "[RedisSession] _maybe_archive_old_messages failed (non-fatal): %s",
-                                _arch_err,
-                            )
+                        # (payload mode only; agno mode compresses via enable_session_summaries)
+                        if isinstance(self.storage_backend, PayloadBackend):
+                            try:
+                                await self._maybe_archive_old_messages()
+                            except asyncio.CancelledError:
+                                raise
+                            except Exception as _arch_err:
+                                logger.warning(
+                                    "[RedisSession] _maybe_archive_old_messages failed (non-fatal): %s",
+                                    _arch_err,
+                                )
 
                         # Deliver to external channel via plugin delivery handler
                         if delivery_handler:

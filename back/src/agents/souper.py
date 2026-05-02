@@ -84,6 +84,9 @@ class SouperAgent(Agent):
         knowledge=None,
         user_location: str | None = None,
         identity: dict | None = None,
+        session_id: str | None = None,
+        num_history_runs: int = 6,
+        enable_session_summaries: bool = False,
         **kwargs,  # Accept additional kwargs for agno's deep_copy() compatibility
     ):
         # Resolve effective identity values
@@ -156,6 +159,9 @@ class SouperAgent(Agent):
             markdown=True,
             telemetry=False,
             send_media_to_model=True,
+            session_id=session_id,
+            num_history_runs=num_history_runs,
+            enable_session_summaries=enable_session_summaries,
         )
 
     # ------------------------------------------------------------------

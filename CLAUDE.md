@@ -218,6 +218,32 @@ All integrations (Gmail, GitHub, Calendar, etc.) are centrally defined in **3 re
 - `back/src/tools/factory.py` — Filters client-only integrations from Python tools
 - `front/src/services/tools/ClientToolExecutor.ts` — Local tool execution
 
+### Memory Architecture
+
+Genie uses a **four-layer memory system** built on Agno primitives.  
+Full spec: [`docs/superpowers/specs/2026-05-02-agent-memory-architecture.md`](docs/superpowers/specs/2026-05-02-agent-memory-architecture.md)
+
+| Layer | Name | Agno Primitive | Status |
+|---|---|---|---|
+| 0 | Working | context assembly | Always on |
+| 1 | Session (STM) | `PostgresAgentStorage` | Feature-flagged |
+| 2 | LTM | `MemoryManager` + `LearningMachine` | Always on |
+| 3 | RAG | `Knowledge` + `PgVector` | Always on |
+| 4 | Compression | `enable_session_summaries` | Feature-flagged |
+
+**Session backend feature flag** — `users.agent_storage_mode`:
+- `'payload'` — history from Go API payload (default). Go fetches last 50 messages, includes them in the Redis frame.
+- `'agno'` — Agno's `PostgresDb` owns sessions (keyed by `session_id`). Go omits history from payload; Agno loads it via `add_history_to_context`. Session compression enabled automatically.
+
+**Key files:**
+- `back/src/storage/backend.py` — `StorageBackend` protocol, `PayloadBackend`, `AgnoBackend`
+- `back/src/storage/factory.py` — `create_storage_backend()`
+- `back/src/agents/factory.py` — `AgentFactory.build()` accepts `storage_backend`
+- `back/src/agents/souper.py` — `SouperAgent` with `MemoryManager` + `LearningMachine`
+- `back/src/server/redis_session.py` — extracts `agent_storage_mode`, builds backend, guards payload-only paths
+- `api/internal/hub/room_handlers.go` — reads `agent_storage_mode`, conditionally includes history
+- `api/migrations/003_agent_storage_mode.sql` — adds `agent_storage_mode` column
+
 ### Memory & RAG
 
 Genie uses a **2-layer memory system**:

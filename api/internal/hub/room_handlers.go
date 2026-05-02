@@ -735,12 +735,20 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
-		// 5.2 Fetch and Bundle Chat History
-		messages, err := r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
-		if err != nil {
-			r.logger.Warn("failed to load history for bundling", zap.Error(err))
-		} else if len(messages) > 0 {
-			// handled in finalMap
+		// 5.2 Resolve agent storage mode for this user
+		agentStorageMode := "payload"
+		if user, err := r.store.GetUserByID(ctx, r.initiatorID); err == nil && user.AgentStorageMode != "" {
+			agentStorageMode = user.AgentStorageMode
+		}
+
+		// 5.3 Fetch and Bundle Chat History (only for payload mode; agno mode reads from its own storage)
+		var messages []*chat.Message
+		if agentStorageMode != "agno" {
+			var err error
+			messages, err = r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
+			if err != nil {
+				r.logger.Warn("failed to load history for bundling", zap.Error(err))
+			}
 		}
 
 		// Construct final payload for Redis
@@ -757,6 +765,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 		// Ensure user_id is present in finalMap
 		finalMap["user_id"] = r.initiatorID.String()
+		finalMap["agent_storage_mode"] = agentStorageMode
 		finalMap["streaming"] = r.hub.Streaming(payload.Model)
 		if payload.AuthToken != "" {
 			finalMap["auth_token"] = payload.AuthToken
