@@ -16,6 +16,7 @@ import { SettingsSection } from './components/SettingsSection';
 import { SettingsRow } from './components/SettingsRow';
 import { SettingsToggleRow } from './components/SettingsToggleRow';
 import { SettingsStackParamList } from '../../navigation/types';
+import { TAB_BAR_ICON_HEIGHT } from '../../navigation/MainTabs';
 
 // Shared with plugins/gmail/client/emailAnalyzer.ts
 const EMAIL_ANALYSIS_MODE_KEY = '@genie_email_analysis_mode';
@@ -103,7 +104,7 @@ export default function SettingsHomeScreen() {
             </View>
             <ScrollView
                 style={styles.body}
-                contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+                contentContainerStyle={{ paddingBottom: insets.bottom + TAB_BAR_ICON_HEIGHT + 32 }}
             >
                 <SettingsSection header="Appearance">
                     <SettingsRow
@@ -115,7 +116,36 @@ export default function SettingsHomeScreen() {
                     />
                 </SettingsSection>
 
-                <SettingsSection header="AI & Models">
+                <SettingsSection header="Assistant">
+                    <SettingsRow
+                        label="Bot Identity"
+                        value={botName}
+                        onPress={() => navigation.navigate('BotIdentityScreen')}
+                        isFirst
+                        isLast
+                    />
+                </SettingsSection>
+
+                <SettingsSection header="Data">
+                    <SettingsRow
+                        label="Location"
+                        value={locationDisplay}
+                        onPress={() => navigation.navigate('LocationScreen')}
+                        isFirst
+                        isLast
+                    />
+                </SettingsSection>
+
+                <SettingsSection header="Integrations">
+                    <SettingsRow
+                        label="Integrations"
+                        onPress={() => navigation.navigate('IntegrationsScreen')}
+                        isFirst
+                        isLast
+                    />
+                </SettingsSection>
+
+                <SettingsSection header="Experimental">
                     <SettingsToggleRow
                         label="Email Analysis"
                         subtitle={
@@ -143,16 +173,6 @@ export default function SettingsHomeScreen() {
                             navigation.navigate('PlannerModelScreen')
                         }
                         isFirst={false}
-                        isLast
-                    />
-                </SettingsSection>
-
-                <SettingsSection header="Assistant">
-                    <SettingsRow
-                        label="Bot Identity"
-                        value={botName}
-                        onPress={() => navigation.navigate('BotIdentityScreen')}
-                        isFirst
                         isLast={false}
                     />
                     <SettingsToggleRow
@@ -161,16 +181,6 @@ export default function SettingsHomeScreen() {
                         value={singleChatMode}
                         onToggle={handleSingleChatModeToggle}
                         isFirst={false}
-                        isLast
-                    />
-                </SettingsSection>
-
-                <SettingsSection header="Data">
-                    <SettingsRow
-                        label="Location"
-                        value={locationDisplay}
-                        onPress={() => navigation.navigate('LocationScreen')}
-                        isFirst
                         isLast
                     />
                 </SettingsSection>

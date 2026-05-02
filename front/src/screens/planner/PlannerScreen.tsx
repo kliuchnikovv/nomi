@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ChatBubble, Calendar as CalendarIcon } from 'iconoir-react-native';
+import { ChatBubble, Calendar as CalendarIcon, Plus } from 'iconoir-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { TAB_BAR_ICON_HEIGHT } from '../../navigation/MainTabs';
 import { PlanItem } from './types';
@@ -25,6 +25,17 @@ import { PlanItemRow } from './components/PlanItemRow';
 import { AIEditBanner } from './components/AIEditBanner';
 import { ChatBottomSheet } from './components/ChatBottomSheet';
 import { DocumentHeader } from './components/DocumentHeader';
+import { AddChipMenu } from './components/AddChipMenu';
+import { TimePickerModal } from './components/TimePickerModal';
+import { PlanLocationPickerModal } from './components/PlanLocationPickerModal';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function generateId(): string {
+    return `${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
+}
 
 // ---------------------------------------------------------------------------
 // Date helpers
@@ -69,6 +80,11 @@ export function PlannerScreen() {
     const [chatOpen, setChatOpen] = useState(false);
     const [autoSendTrigger, setAutoSendTrigger] = useState(false);
     const [keyboardVisible, setKeyboardVisible] = useState(false);
+    const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+    const [chipMenuItemId, setChipMenuItemId] = useState<string | null>(null);
+    const [timePickerItemId, setTimePickerItemId] = useState<string | null>(null);
+    const [locationPickerItemId, setLocationPickerItemId] = useState<string | null>(null);
+
 
     useEffect(() => {
         const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
@@ -184,6 +200,32 @@ export function PlannerScreen() {
     // Render item
     // ---------------------------------------------------------------------------
 
+    const handleTimeChipConfirm = useCallback((value: string) => {
+        if (!timePickerItemId) return;
+        const item = items.find(i => i.id === timePickerItemId);
+        if (!item) return;
+        updateItem(timePickerItemId, {
+            chips: [
+                ...item.chips.filter(c => c.type !== 'time'),
+                { id: generateId(), type: 'time', value, isNew: true, source: 'user' },
+            ],
+        });
+        setTimePickerItemId(null);
+    }, [timePickerItemId, items, updateItem]);
+
+    const handleLocationChipAdd = useCallback((value: string) => {
+        if (!locationPickerItemId) return;
+        const item = items.find(i => i.id === locationPickerItemId);
+        if (!item) return;
+        updateItem(locationPickerItemId, {
+            chips: [
+                ...item.chips.filter(c => c.type !== 'location'),
+                { id: generateId(), type: 'location', value, isNew: true, source: 'user' },
+            ],
+        });
+        setLocationPickerItemId(null);
+    }, [locationPickerItemId, items, updateItem]);
+
     const renderItem = useCallback(({ item, drag, isActive }: RenderItemParams<PlanItem>) => (
         <ScaleDecorator>
             <PlanItemRow
@@ -196,6 +238,7 @@ export function PlannerScreen() {
                 onChipRemove={(chipId) =>
                     updateItem(item.id, { chips: item.chips.filter(c => c.id !== chipId) })
                 }
+                onFocus={() => setFocusedItemId(item.id)}
                 onLocationChipPress={() => handleLocationChipPress(item.id)}
                 drag={drag}
                 isActive={isActive}
@@ -250,8 +293,20 @@ export function PlannerScreen() {
                                 ]}
                             >
                                 <TouchableOpacity
+                                    onPress={() => focusedItemId && setChipMenuItemId(focusedItemId)}
+                                    style={[
+                                        styles.addChipBtn,
+                                        { borderColor: theme.border, backgroundColor: theme.surface, opacity: focusedItemId ? 1 : 0.35 },
+                                    ]}
+                                    activeOpacity={0.7}
+                                    disabled={!focusedItemId}
+                                >
+                                    <Plus width={18} height={18} color={theme.textPrimary} />
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
                                     onPress={() => { Keyboard.dismiss(); setChatOpen(true); }}
-                                    style={[styles.bottomBtn, styles.chatBtn, { borderColor: theme.border }]}
+                                    style={[styles.bottomBtn, styles.chatBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.bottomBtnContent}>
@@ -290,6 +345,36 @@ export function PlannerScreen() {
                         onAutoSendHandled={() => setAutoSendTrigger(false)}
                     />
                 </View>
+
+                <AddChipMenu
+                    visible={chipMenuItemId !== null}
+                    onClose={() => setChipMenuItemId(null)}
+                    onSelectTime={() => {
+                        setTimePickerItemId(chipMenuItemId);
+                        setChipMenuItemId(null);
+                    }}
+                    onSelectLocation={() => {
+                        setLocationPickerItemId(chipMenuItemId);
+                        setChipMenuItemId(null);
+                    }}
+                />
+
+                <TimePickerModal
+                    visible={timePickerItemId !== null}
+                    initialValue={
+                        timePickerItemId
+                            ? items.find(i => i.id === timePickerItemId)?.chips.find(c => c.type === 'time')?.value
+                            : undefined
+                    }
+                    onConfirm={handleTimeChipConfirm}
+                    onCancel={() => setTimePickerItemId(null)}
+                />
+
+                <PlanLocationPickerModal
+                    visible={locationPickerItemId !== null}
+                    onClose={() => setLocationPickerItemId(null)}
+                    onSelect={handleLocationChipAdd}
+                />
             </GestureHandlerRootView>
         </PlanDocumentContext.Provider>
     );
@@ -330,6 +415,14 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingVertical: 10,
         borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    addChipBtn: {
+        width: 44,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
     },

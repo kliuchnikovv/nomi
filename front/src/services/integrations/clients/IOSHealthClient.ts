@@ -357,14 +357,15 @@ class IOSHealthClient {
      */
     async getDailySummary(date: string): Promise<DailySummary> {
         this.ensureAvailable();
+        const isoDate = date.includes('T') ? date : `${date}T00:00:00`;
         try {
-            const summary: DailySummary = await IOSHealthManager.getDailySummary(date);
+            const summary: DailySummary = await IOSHealthManager.getDailySummary(isoDate);
             return summary;
         } catch (error: any) {
             console.error('[IOSHealthClient] getDailySummary error:', error);
             // Daily summary needs all categories
             return await this.handlePermissionError(error, ['activity', 'heart', 'sleep', 'workouts'], () =>
-                IOSHealthManager.getDailySummary(date)
+                IOSHealthManager.getDailySummary(isoDate)
             );
         }
     }

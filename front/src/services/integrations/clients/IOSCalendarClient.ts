@@ -29,6 +29,11 @@ export interface Calendar {
     color: string;
 }
 
+// Ensure full ISO8601 datetime string — native EventKit rejects bare YYYY-MM-DD dates
+function toISO8601(date: string): string {
+    return date.includes('T') ? date : `${date}T00:00:00`;
+}
+
 class IOSCalendarClient {
     /**
      * Get calendar events for a date range
@@ -47,8 +52,8 @@ class IOSCalendarClient {
 
         try {
             const events: CalendarEvent[] = await IOSCalendarManager.getEvents(
-                startDate,
-                endDate,
+                toISO8601(startDate),
+                toISO8601(endDate),
                 limit,
                 calendar || '',
             );
@@ -78,7 +83,12 @@ class IOSCalendarClient {
             throw new Error('IOSCalendarManager is not available.');
         }
 
-        const event = await IOSCalendarManager.createEvent(title, start, end, options);
+        const event = await IOSCalendarManager.createEvent(
+            title,
+            toISO8601(start),
+            toISO8601(end),
+            options,
+        );
         return event;
     }
 
@@ -101,7 +111,12 @@ class IOSCalendarClient {
             throw new Error('IOSCalendarManager is not available.');
         }
 
-        const event = await IOSCalendarManager.updateEvent(id, updates);
+        const normalized = {
+            ...updates,
+            ...(updates.start && { start: toISO8601(updates.start) }),
+            ...(updates.end && { end: toISO8601(updates.end) }),
+        };
+        const event = await IOSCalendarManager.updateEvent(id, normalized);
         return event;
     }
 

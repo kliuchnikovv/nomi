@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import {
     View,
     Text,
@@ -67,7 +73,11 @@ const LevelSelector = React.memo(function LevelSelector({
     theme,
     level,
     setLevel,
-}: { theme: any; level: PlanningLevel; setLevel: (l: PlanningLevel) => void }) {
+}: {
+    theme: any;
+    level: PlanningLevel;
+    setLevel: (l: PlanningLevel) => void;
+}) {
     return (
         <View style={levelStyles.row}>
             {LEVELS.map(({ id, label }) => (
@@ -76,12 +86,27 @@ const LevelSelector = React.memo(function LevelSelector({
                     onPress={() => setLevel(id)}
                     style={[
                         levelStyles.btn,
-                        { borderColor: level === id ? theme.accent : theme.border },
-                        level === id && { backgroundColor: `${theme.accent}18` },
+                        {
+                            borderColor:
+                                level === id ? theme.accent : theme.border,
+                        },
+                        level === id && {
+                            backgroundColor: `${theme.accent}18`,
+                        },
                     ]}
                     activeOpacity={0.7}
                 >
-                    <Text style={[levelStyles.btnText, { color: level === id ? theme.accent : theme.textSecondary }]}>
+                    <Text
+                        style={[
+                            levelStyles.btnText,
+                            {
+                                color:
+                                    level === id
+                                        ? theme.accent
+                                        : theme.textSecondary,
+                            },
+                        ]}
+                    >
                         {label}
                     </Text>
                 </TouchableOpacity>
@@ -91,8 +116,20 @@ const LevelSelector = React.memo(function LevelSelector({
 });
 
 const levelStyles = StyleSheet.create({
-    row: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 2 },
-    btn: { flex: 1, alignItems: 'center', paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+    row: {
+        flexDirection: 'row',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        paddingBottom: 2,
+    },
+    btn: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 5,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
     btnText: { fontSize: 12, fontWeight: '500' },
 });
 
@@ -113,7 +150,10 @@ const ChatFooterContent = React.memo(function ChatFooterContent({
         <View
             style={[
                 styles.inputBar,
-                { borderTopColor: theme.border, backgroundColor: theme.background },
+                {
+                    borderTopColor: theme.border,
+                    backgroundColor: theme.background,
+                },
             ]}
         >
             <BottomSheetTextInput
@@ -154,7 +194,11 @@ const ChatFooterContent = React.memo(function ChatFooterContent({
 
 function currentDateTimeStr(): string {
     const d = new Date();
-    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getFullYear())} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return `${String(d.getDate()).padStart(2, '0')}.${String(
+        d.getMonth() + 1,
+    ).padStart(2, '0')} ${String(d.getFullYear())} ${String(
+        d.getHours(),
+    ).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function buildPlanningPrompt(items: PlanItem[], date: string): string {
@@ -163,15 +207,19 @@ function buildPlanningPrompt(items: PlanItem[], date: string): string {
         return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now) — I have no tasks yet. Please suggest something.`;
     }
     const planLines = namedItems.map(i => `ID:${i.id} ${i.text}`).join('\n');
-    return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now). Please replan ALL tasks from scratch — ignore any previously assigned times.\n\n[Current plan:\n${planLines}]`;
+    return `Help me plan my day for ${date} (it's ${currentDateTimeStr()} now).\n\n[Current plan:\n${planLines}]`;
 }
 
 function buildPlanContext(items: PlanItem[]): string {
-    const lines = items.filter(i => !i.checked && i.text.trim() !== '').map(i => {
-        const chips = i.chips.map(c => `[${c.type}:${c.id} ${c.value}]`).join(' ');
-        return `ID:${i.id} ${i.text}${chips ? ' ' + chips : ''}`;
-    });
-    return `[Current plan:\n${lines.join('\n')}]`;
+    const lines = items
+        .filter(i => !i.checked && i.text.trim() !== '')
+        .map(i => {
+            const chips = i.chips
+                .map(c => `[${c.type}:${c.id} ${c.value}${c.source === 'user' ? ' 📌pinned' : ''}]`)
+                .join(' ');
+            return `ID:${i.id} ${i.text}${chips ? ' ' + chips : ''}`;
+        });
+    return `[Current plan:\n${lines.join('\n')}]\n[Note: chips marked 📌pinned were set by the user — do NOT change or remove them without explicit permission.]`;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,8 +232,16 @@ function ThinkingIndicator() {
     useEffect(() => {
         const anim = Animated.loop(
             Animated.sequence([
-                Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
-                Animated.timing(opacity, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+                Animated.timing(opacity, {
+                    toValue: 1,
+                    duration: 600,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(opacity, {
+                    toValue: 0.4,
+                    duration: 600,
+                    useNativeDriver: true,
+                }),
             ]),
         );
         anim.start();
@@ -193,7 +249,13 @@ function ThinkingIndicator() {
     }, [opacity]);
 
     return (
-        <Animated.View style={[styles.bubble, styles.assistantBubble, { opacity, alignSelf: 'flex-start' }]}>
+        <Animated.View
+            style={[
+                styles.bubble,
+                styles.assistantBubble,
+                { opacity, alignSelf: 'flex-start' },
+            ]}
+        >
             <Text style={styles.thinkingDots}>···</Text>
         </Animated.View>
     );
@@ -218,7 +280,15 @@ export function ChatBottomSheet({
     const listRef = useRef<FlatList<ChatMessage | 'thinking'>>(null);
     const snapPoints = ['55%', '92%'];
 
-    const { messages, sendMessage, isConnected, isThinking, replyToAskUser, hasMore, loadMore } = usePlannerChat(date);
+    const {
+        messages,
+        sendMessage,
+        isConnected,
+        isThinking,
+        replyToAskUser,
+        hasMore,
+        loadMore,
+    } = usePlannerChat(date);
 
     // Planning level state — persisted across sessions
     const [level, setLevelState] = useState<PlanningLevel>('standard');
@@ -239,11 +309,14 @@ export function ChatBottomSheet({
 
     // Stable send ref — ChatFooterContent reads this ref so renderFooter
     // never needs to change identity when items/sendMessage change.
-    const onSendRef = useRef<(text: string) => void>(() => { });
+    const onSendRef = useRef<(text: string) => void>(() => {});
     useEffect(() => {
         onSendRef.current = (text: string) => {
-            const namedItems = items ? items.filter(i => !i.checked && i.text.trim() !== '') : [];
-            const context = namedItems.length > 0 ? buildPlanContext(items!) : undefined;
+            const namedItems = items
+                ? items.filter(i => !i.checked && i.text.trim() !== '')
+                : [];
+            const context =
+                namedItems.length > 0 ? buildPlanContext(items!) : undefined;
             sendMessage(text, { context, level: levelRef.current });
         };
     }, [items, sendMessage]);
@@ -260,24 +333,37 @@ export function ChatBottomSheet({
     // Auto-send
     const autoSentRef = useRef(false);
     const itemsRef = useRef(items);
-    useEffect(() => { itemsRef.current = items; });
+    useEffect(() => {
+        itemsRef.current = items;
+    });
 
     useEffect(() => {
         if (isOpen && isConnected && autoSend && !autoSentRef.current) {
             autoSentRef.current = true;
             const prompt = buildPlanningPrompt(itemsRef.current ?? [], date);
-            sendMessage(prompt, { webSearch: autoSendWebSearch ?? false, level: levelRef.current });
+            sendMessage(prompt, {
+                webSearch: autoSendWebSearch ?? false,
+                level: levelRef.current,
+            });
             onAutoSendHandled?.();
         }
-    }, [isOpen, isConnected, autoSend, date, sendMessage, onAutoSendHandled, autoSendWebSearch]);
+    }, [
+        isOpen,
+        isConnected,
+        autoSend,
+        date,
+        sendMessage,
+        onAutoSendHandled,
+        autoSendWebSearch,
+    ]);
 
     useEffect(() => {
         if (!autoSend) autoSentRef.current = false;
     }, [autoSend]);
 
     // Natural order: oldest → newest; FlatList scrolls to end (bottom = newest)
-    const listData = useMemo(() =>
-        [...messages, ...(isThinking ? ['thinking' as const] : [])],
+    const listData = useMemo(
+        () => [...messages, ...(isThinking ? ['thinking' as const] : [])],
         [messages, isThinking],
     );
 
@@ -310,7 +396,11 @@ export function ChatBottomSheet({
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
             <BottomSheetFooter {...props}>
-                <LevelSelector theme={theme} level={level} setLevel={setLevel} />
+                <LevelSelector
+                    theme={theme}
+                    level={level}
+                    setLevel={setLevel}
+                />
                 <ChatFooterContent theme={theme} onSend={onSendRef} />
             </BottomSheetFooter>
         ),
@@ -337,7 +427,10 @@ export function ChatBottomSheet({
                     styles.bubble,
                     isUser
                         ? [styles.userBubble, { backgroundColor: '#5856D6' }]
-                        : [styles.assistantBubble, { backgroundColor: theme.surface }],
+                        : [
+                              styles.assistantBubble,
+                              { backgroundColor: theme.surface },
+                          ],
                 ]}
             >
                 <Markdown style={markdownStyles(textColor)}>
@@ -350,7 +443,9 @@ export function ChatBottomSheet({
                             <TouchableOpacity
                                 key={opt}
                                 style={styles.optionChip}
-                                onPress={() => replyToAskUser(item.askUser!.callId, opt)}
+                                onPress={() =>
+                                    replyToAskUser(item.askUser!.callId, opt)
+                                }
                                 activeOpacity={0.75}
                             >
                                 <Text style={styles.optionText}>{opt}</Text>
@@ -384,15 +479,38 @@ export function ChatBottomSheet({
         >
             <View style={styles.container}>
                 {/* Header */}
-                <View style={[styles.header, { borderBottomColor: theme.border }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                        <Spark width={18} height={18} color={theme.textPrimary} />
-                        <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
+                <View
+                    style={[styles.header, { borderBottomColor: theme.border }]}
+                >
+                    <View
+                        style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            flex: 1,
+                        }}
+                    >
+                        <Spark
+                            width={18}
+                            height={18}
+                            color={theme.textPrimary}
+                        />
+                        <Text
+                            style={[
+                                styles.headerTitle,
+                                { color: theme.textPrimary },
+                            ]}
+                        >
                             Genie
                         </Text>
                     </View>
                     {!isConnected && (
-                        <Text style={[styles.connectingLabel, { color: theme.textSecondary }]}>
+                        <Text
+                            style={[
+                                styles.connectingLabel,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
                             connecting...
                         </Text>
                     )}
@@ -402,7 +520,12 @@ export function ChatBottomSheet({
                         activeOpacity={0.7}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                        <Text style={[styles.closeBtnText, { color: theme.textSecondary }]}>
+                        <Text
+                            style={[
+                                styles.closeBtnText,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
                             Close
                         </Text>
                     </TouchableOpacity>
@@ -412,10 +535,19 @@ export function ChatBottomSheet({
                 <BottomSheetFlatList
                     ref={listRef as any}
                     data={listData}
-                    keyExtractor={(item: ChatMessage | 'thinking', idx: number) =>
-                        item === 'thinking' ? 'thinking' : (item as ChatMessage).id ?? String(idx)
+                    keyExtractor={(
+                        item: ChatMessage | 'thinking',
+                        idx: number,
+                    ) =>
+                        item === 'thinking'
+                            ? 'thinking'
+                            : (item as ChatMessage).id ?? String(idx)
                     }
-                    renderItem={({ item }: { item: ChatMessage | 'thinking' }) => {
+                    renderItem={({
+                        item,
+                    }: {
+                        item: ChatMessage | 'thinking';
+                    }) => {
                         if (item === 'thinking') return <ThinkingIndicator />;
                         return renderMessage({ item: item as ChatMessage });
                     }}
@@ -431,14 +563,24 @@ export function ChatBottomSheet({
                                 style={styles.loadMoreBtn}
                                 activeOpacity={0.7}
                             >
-                                <Text style={[styles.loadMoreText, { color: theme.textSecondary }]}>
+                                <Text
+                                    style={[
+                                        styles.loadMoreText,
+                                        { color: theme.textSecondary },
+                                    ]}
+                                >
                                     Load more
                                 </Text>
                             </TouchableOpacity>
                         ) : null
                     }
                     ListEmptyComponent={
-                        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                        <Text
+                            style={[
+                                styles.emptyText,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
                             Ask Genie about this day…
                         </Text>
                     }
@@ -463,7 +605,11 @@ function markdownStyles(color: string) {
         ordered_list_content: { flex: 1, flexShrink: 1 },
         strong: { fontWeight: '700' as const, color },
         em: { fontStyle: 'italic' as const, color },
-        code_inline: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, color },
+        code_inline: {
+            fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+            fontSize: 13,
+            color,
+        },
     };
 }
 

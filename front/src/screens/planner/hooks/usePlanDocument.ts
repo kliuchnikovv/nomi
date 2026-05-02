@@ -385,18 +385,23 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
                                 const existingIdx = i.chips.findIndex(
                                     c => c.type === patch.chip.type,
                                 );
+                                // Never overwrite a chip the user pinned manually
+                                if (existingIdx !== -1 && i.chips[existingIdx].source === 'user') {
+                                    return i;
+                                }
                                 // Auto-clean text when a time chip is added (strip embedded time ranges)
                                 const cleanText =
                                     patch.chip.type === 'time'
                                         ? stripTimeFromText(i.text)
                                         : i.text;
                                 if (existingIdx !== -1) {
-                                    // Upsert: update existing chip of same type, preserve original id
+                                    // Upsert: update existing AI chip of same type, preserve original id
                                     const chips = [...i.chips];
                                     chips[existingIdx] = {
                                         ...patch.chip,
                                         id: i.chips[existingIdx].id,
                                         isNew: true,
+                                        source: 'ai',
                                     };
                                     return {
                                         ...i,
@@ -415,6 +420,7 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
                                             ...patch.chip,
                                             id: generateId(),
                                             isNew: true,
+                                            source: 'ai',
                                         },
                                     ],
                                     isNew: true,
@@ -441,10 +447,11 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
                                     ? {
                                           ...i,
                                           chips: i.chips.map(c =>
-                                              c.id === patch.chip.id
+                                              c.id === patch.chip.id && c.source !== 'user'
                                                   ? {
                                                         ...patch.chip,
                                                         isNew: true,
+                                                        source: 'ai',
                                                     }
                                                   : c,
                                           ),

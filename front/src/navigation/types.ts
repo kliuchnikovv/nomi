@@ -20,6 +20,7 @@ export type SettingsStackParamList = {
   LocationScreen: undefined;
   PlannerModelScreen: undefined;
   BotIdentityScreen: undefined;
+  IntegrationsScreen: undefined;
 };
 
 // Projects nested stack (inside the Projects tab)
@@ -36,6 +37,5 @@ export type RootTabParamList = {
   Planning: undefined;
   Chat: NavigatorScreenParams<ChatStackParamList>; // Chat tab contains ChatStack
   Projects: NavigatorScreenParams<ProjectsStackParamList>;
-  Integrations: undefined;
   Settings: NavigatorScreenParams<SettingsStackParamList>; // Settings tab contains SettingsStack
 };

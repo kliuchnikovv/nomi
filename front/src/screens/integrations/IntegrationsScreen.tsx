@@ -10,7 +10,8 @@ import {
     StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Xmark } from 'iconoir-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Xmark, NavArrowLeft } from 'iconoir-react-native';
 import { usePluginChats } from '../integrationsSidebar/context';
 import { useTheme } from '../../context/ThemeContext';
 import { useMain } from '../main/context';
@@ -90,6 +91,7 @@ function IntegrationItem({
 export function IntegrationsScreen() {
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
+    const navigation = useNavigation();
     const { plugins, refreshing, refresh } = usePluginChats();
     const { integrations, toggleTool, deleteIntegration } = useConnectors();
     const { setActivePluginView, setActivePluginIntegrationId } = useMain();
@@ -201,6 +203,15 @@ export function IntegrationsScreen() {
     return (
         <View style={[styles.container, { backgroundColor: theme.background }]}>
             <View style={[styles.header, { paddingTop: insets.top }]}>
+                {navigation.canGoBack() && (
+                    <Pressable
+                        onPress={() => navigation.goBack()}
+                        style={styles.backBtn}
+                        hitSlop={12}
+                    >
+                        <NavArrowLeft width={24} height={24} color={theme.textPrimary} />
+                    </Pressable>
+                )}
                 <Text style={[styles.title, { color: theme.textPrimary }]}>Integrations</Text>
                 <Pressable
                     onPress={() => setAddOpen(true)}
@@ -300,6 +311,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingBottom: 16,
+        gap: 4,
+    },
+    backBtn: {
+        marginRight: 4,
     },
     title: {
         flex: 1,

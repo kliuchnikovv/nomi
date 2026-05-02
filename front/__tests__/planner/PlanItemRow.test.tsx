@@ -52,6 +52,7 @@ const defaultProps = {
   onDelete: jest.fn(),
   onAddAfter: jest.fn(),
   onChipRemove: jest.fn(),
+  onFocus: jest.fn(),
   drag: jest.fn(),
   isActive: false,
   inputRef: (_ref: any) => {},

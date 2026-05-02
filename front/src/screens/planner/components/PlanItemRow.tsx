@@ -21,6 +21,7 @@ interface Props {
     onDelete: () => void;
     onAddAfter: () => void;
     onChipRemove: (chipId: string) => void;
+    onFocus: () => void;
     onLocationChipPress?: () => void;
     drag: () => void;
     isActive: boolean;
@@ -35,6 +36,7 @@ export function PlanItemRow({
     onDelete,
     onAddAfter,
     onChipRemove,
+    onFocus,
     onLocationChipPress,
     drag,
     isActive,
@@ -190,6 +192,7 @@ export function PlanItemRow({
                             scrollEnabled={false}
                             onKeyPress={handleKeyPress}
                             blurOnSubmit={false}
+                            onFocus={onFocus}
                         />
                     </View>
 

@@ -5,6 +5,7 @@ export interface PlanChip {
   type: ChipType;
   value: string;
   isNew?: boolean;
+  source?: 'user' | 'ai';
 }
 
 export interface PlanItem {
