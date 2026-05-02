@@ -65,7 +65,7 @@ async function runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
 
     // Get current version
     const result = await database.getFirstAsync<{ version: number }>(
-        'SELECT MAX(version) as version FROM migrations'
+        'SELECT MAX(version) as version FROM migrations',
     );
     const currentVersion = result?.version ?? 0;
 
@@ -201,7 +201,7 @@ async function migrateV2(database: SQLite.SQLiteDatabase): Promise<void> {
 
         -- Track analysis status
         ALTER TABLE emails ADD COLUMN analyzed_at INTEGER;
-        
+
         -- Indexes
         CREATE INDEX IF NOT EXISTS idx_events_date ON events(start_date);
         CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
@@ -406,7 +406,9 @@ async function migrateV9(database: SQLite.SQLiteDatabase): Promise<void> {
 
         INSERT INTO migrations (version, applied_at) VALUES (9, ${Date.now()});
     `);
-    console.log('[Database] Migration V9 applied: user_id added for user-space separation');
+    console.log(
+        '[Database] Migration V9 applied: user_id added for user-space separation',
+    );
 }
 
 /**
@@ -440,4 +442,26 @@ export async function clearDatabase(): Promise<void> {
         DELETE FROM github_repos_cache;
     `);
     console.log('[Database] All data cleared');
+}
+
+/**
+ * Reset the database completely (delete file and reinitialize)
+ * This is useful when schema changes require a fresh start
+ */
+export async function resetDatabase(): Promise<void> {
+    console.log('[Database] Resetting database...');
+
+    // Close the connection first
+    if (db) {
+        await db.closeAsync();
+        db = null;
+    }
+
+    // Delete the database file
+    await SQLite.deleteDatabaseAsync(DATABASE_NAME);
+    console.log('[Database] Database file deleted');
+
+    // Reinitialize with fresh migrations
+    await initDatabase();
+    console.log('[Database] Database reset complete');
 }

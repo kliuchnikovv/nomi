@@ -8,7 +8,7 @@ import { encrypt, decrypt } from '../security/encryptionService';
 
 // Simple UUID generator that works without native modules
 function generateUUID(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = (Math.random() * 16) | 0;
         const v = c === 'x' ? r : (r & 0x3) | 0x8;
         return v.toString(16);
@@ -125,7 +125,13 @@ export interface BriefingItem {
 export interface SuggestedAction {
     id: string;
     briefingItemId: string;
-    actionType: 'reply' | 'forward' | 'schedule' | 'delegate' | 'archive' | 'followup';
+    actionType:
+        | 'reply'
+        | 'forward'
+        | 'schedule'
+        | 'delegate'
+        | 'archive'
+        | 'followup';
     label: string;
     params?: Record<string, any>;
     displayOrder: number;
@@ -149,29 +155,70 @@ class IntegrationStorage {
 
     async createIntegration(
         integration: Omit<Integration, 'id' | 'createdAt' | 'updatedAt'>,
-        credentials: IntegrationCredentials
+        credentials: IntegrationCredentials,
     ): Promise<Integration> {
         const userId = this.requireUserId();
         const db = getDatabase();
         const id = generateUUID();
         const now = Date.now();
 
-        // Insert integration
-        await db.runAsync(
-            `INSERT INTO integrations (id, provider, name, enabled, account_email, user_id, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, integration.provider, integration.name, integration.enabled ? 1 : 0, integration.accountEmail ?? null, userId, now, now]
-        );
+        // Check if user_id column exists (for backwards compatibility)
+        let hasUserIdColumn = false;
+        try {
+            const columns = await db.getAllAsync<{ name: string }>(
+                `PRAGMA table_info(integrations)`,
+            );
+            hasUserIdColumn = columns.some(col => col.name === 'user_id');
+        } catch (e) {
+            // If PRAGMA fails, assume column doesn't exist
+            console.warn('[IntegrationStorage] Failed to check columns:', e);
+        }
+
+        // Insert integration with or without user_id based on schema version
+        if (hasUserIdColumn) {
+            await db.runAsync(
+                `INSERT INTO integrations (id, provider, name, enabled, account_email, user_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    id,
+                    integration.provider,
+                    integration.name,
+                    integration.enabled ? 1 : 0,
+                    integration.accountEmail ?? null,
+                    userId,
+                    now,
+                    now,
+                ],
+            );
+        } else {
+            await db.runAsync(
+                `INSERT INTO integrations (id, provider, name, enabled, account_email, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    id,
+                    integration.provider,
+                    integration.name,
+                    integration.enabled ? 1 : 0,
+                    integration.accountEmail ?? null,
+                    now,
+                    now,
+                ],
+            );
+        }
 
         // Insert encrypted credentials
         const encryptedAccess = await encrypt(credentials.accessToken);
-        const encryptedRefresh = credentials.refreshToken ? await encrypt(credentials.refreshToken) : null;
-        const expiry = credentials.tokenExpiry ? credentials.tokenExpiry.getTime() : null;
+        const encryptedRefresh = credentials.refreshToken
+            ? await encrypt(credentials.refreshToken)
+            : null;
+        const expiry = credentials.tokenExpiry
+            ? credentials.tokenExpiry.getTime()
+            : null;
 
         await db.runAsync(
             `INSERT INTO integration_credentials (integration_id, access_token, refresh_token, token_expiry)
              VALUES (?, ?, ?, ?)`,
-            [id, encryptedAccess, encryptedRefresh, expiry]
+            [id, encryptedAccess, encryptedRefresh, expiry],
         );
 
         return {
@@ -196,7 +243,10 @@ class IntegrationStorage {
             account_email: string | null;
             created_at: number;
             updated_at: number;
-        }>('SELECT * FROM integrations WHERE user_id = ? ORDER BY created_at DESC', [userId]);
+        }>(
+            'SELECT * FROM integrations WHERE user_id = ? ORDER BY created_at DESC',
+            [userId],
+        );
 
         return rows.map(row => ({
             id: row.id,
@@ -234,7 +284,10 @@ class IntegrationStorage {
         };
     }
 
-    async getIntegrationByEmail(provider: string, email: string): Promise<Integration | null> {
+    async getIntegrationByEmail(
+        provider: string,
+        email: string,
+    ): Promise<Integration | null> {
         const userId = this.requireUserId();
         const db = getDatabase();
         const row = await db.getFirstAsync<{
@@ -245,7 +298,10 @@ class IntegrationStorage {
             account_email: string | null;
             created_at: number;
             updated_at: number;
-        }>('SELECT * FROM integrations WHERE provider = ? AND account_email = ? AND user_id = ?', [provider, email, userId]);
+        }>(
+            'SELECT * FROM integrations WHERE provider = ? AND account_email = ? AND user_id = ?',
+            [provider, email, userId],
+        );
 
         if (!row) return null;
 
@@ -260,7 +316,10 @@ class IntegrationStorage {
         };
     }
 
-    async updateIntegration(id: string, updates: Partial<Pick<Integration, 'name' | 'enabled'>>): Promise<void> {
+    async updateIntegration(
+        id: string,
+        updates: Partial<Pick<Integration, 'name' | 'enabled'>>,
+    ): Promise<void> {
         const db = getDatabase();
         const now = Date.now();
 
@@ -277,7 +336,10 @@ class IntegrationStorage {
         }
 
         values.push(id);
-        await db.runAsync(`UPDATE integrations SET ${fields.join(', ')} WHERE id = ?`, values);
+        await db.runAsync(
+            `UPDATE integrations SET ${fields.join(', ')} WHERE id = ?`,
+            values,
+        );
     }
 
     async deleteIntegration(id: string): Promise<void> {
@@ -291,27 +353,38 @@ class IntegrationStorage {
 
     // ==================== Credentials ====================
 
-    async getCredentials(integrationId: string): Promise<IntegrationCredentials | null> {
+    async getCredentials(
+        integrationId: string,
+    ): Promise<IntegrationCredentials | null> {
         const db = getDatabase();
         const row = await db.getFirstAsync<{
             access_token: string;
             refresh_token: string | null;
             token_expiry: number | null;
-        }>('SELECT * FROM integration_credentials WHERE integration_id = ?', [integrationId]);
+        }>('SELECT * FROM integration_credentials WHERE integration_id = ?', [
+            integrationId,
+        ]);
 
         if (!row) return null;
 
         const accessToken = await decrypt(row.access_token);
-        const refreshToken = row.refresh_token ? await decrypt(row.refresh_token) : undefined;
+        const refreshToken = row.refresh_token
+            ? await decrypt(row.refresh_token)
+            : undefined;
 
         return {
             accessToken,
             refreshToken,
-            tokenExpiry: row.token_expiry ? new Date(row.token_expiry) : undefined,
+            tokenExpiry: row.token_expiry
+                ? new Date(row.token_expiry)
+                : undefined,
         };
     }
 
-    async updateCredentials(integrationId: string, credentials: Partial<IntegrationCredentials>): Promise<void> {
+    async updateCredentials(
+        integrationId: string,
+        credentials: Partial<IntegrationCredentials>,
+    ): Promise<void> {
         const db = getDatabase();
 
         const fields: string[] = [];
@@ -323,25 +396,38 @@ class IntegrationStorage {
         }
         if (credentials.refreshToken !== undefined) {
             fields.push('refresh_token = ?');
-            values.push(credentials.refreshToken ? await encrypt(credentials.refreshToken) : null);
+            values.push(
+                credentials.refreshToken
+                    ? await encrypt(credentials.refreshToken)
+                    : null,
+            );
         }
         if (credentials.tokenExpiry !== undefined) {
             fields.push('token_expiry = ?');
-            values.push(credentials.tokenExpiry ? credentials.tokenExpiry.getTime() : null);
+            values.push(
+                credentials.tokenExpiry
+                    ? credentials.tokenExpiry.getTime()
+                    : null,
+            );
         }
 
         if (fields.length === 0) return;
 
         values.push(integrationId);
         await db.runAsync(
-            `UPDATE integration_credentials SET ${fields.join(', ')} WHERE integration_id = ?`,
-            values
+            `UPDATE integration_credentials SET ${fields.join(
+                ', ',
+            )} WHERE integration_id = ?`,
+            values,
         );
     }
 
     // ==================== Email Cache ====================
 
-    async cacheEmails(integrationId: string, emails: Omit<Email, 'id' | 'integrationId' | 'fetchedAt'>[]): Promise<void> {
+    async cacheEmails(
+        integrationId: string,
+        emails: Omit<Email, 'id' | 'integrationId' | 'fetchedAt'>[],
+    ): Promise<void> {
         const db = getDatabase();
         const now = Date.now();
 
@@ -349,15 +435,15 @@ class IntegrationStorage {
             // Check if email already exists
             const existing = await db.getFirstAsync<{ id: string }>(
                 'SELECT id FROM emails WHERE integration_id = ? AND gmail_id = ?',
-                [integrationId, email.gmailId]
+                [integrationId, email.gmailId],
             );
 
             if (existing) {
                 // Update existing email
                 await db.runAsync(
-                    `UPDATE emails SET 
-                     thread_id = ?, subject = ?, snippet = ?, from_email = ?, from_name = ?, 
-                     to_emails = ?, date = ?, labels = ?, body_text = ?, body_html = ?, 
+                    `UPDATE emails SET
+                     thread_id = ?, subject = ?, snippet = ?, from_email = ?, from_name = ?,
+                     to_emails = ?, date = ?, labels = ?, body_text = ?, body_html = ?,
                      is_read = ?, fetched_at = ?
                      WHERE id = ?`,
                     [
@@ -373,15 +459,15 @@ class IntegrationStorage {
                         email.bodyHtml ?? null,
                         email.isRead ? 1 : 0,
                         now,
-                        existing.id
-                    ]
+                        existing.id,
+                    ],
                 );
             } else {
                 // Insert new email
                 const id = generateUUID();
                 await db.runAsync(
-                    `INSERT INTO emails 
-                     (id, integration_id, gmail_id, thread_id, subject, snippet, from_email, from_name, 
+                    `INSERT INTO emails
+                     (id, integration_id, gmail_id, thread_id, subject, snippet, from_email, from_name,
                       to_emails, date, labels, body_text, body_html, is_read, fetched_at)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
@@ -400,13 +486,16 @@ class IntegrationStorage {
                         email.bodyHtml ?? null,
                         email.isRead ? 1 : 0,
                         now,
-                    ]
+                    ],
                 );
             }
         }
     }
 
-    async getCachedEmails(integrationId: string, limit: number = 50): Promise<Email[]> {
+    async getCachedEmails(
+        integrationId: string,
+        limit: number = 50,
+    ): Promise<Email[]> {
         const db = getDatabase();
         const rows = await db.getAllAsync<{
             id: string;
@@ -426,7 +515,7 @@ class IntegrationStorage {
             fetched_at: number;
         }>(
             'SELECT * FROM emails WHERE integration_id = ? ORDER BY date DESC LIMIT ?',
-            [integrationId, limit]
+            [integrationId, limit],
         );
 
         return rows.map(row => ({
@@ -450,7 +539,10 @@ class IntegrationStorage {
 
     async getEmail(id: string): Promise<Email | null> {
         const db = getDatabase();
-        const row = await db.getFirstAsync<any>('SELECT * FROM emails WHERE id = ?', [id]);
+        const row = await db.getFirstAsync<any>(
+            'SELECT * FROM emails WHERE id = ?',
+            [id],
+        );
         if (!row) return null;
 
         return {
@@ -478,43 +570,51 @@ class IntegrationStorage {
         integrationId: string,
         sourceType: string,
         sourceId: string,
-        content: string
+        content: string,
     ): Promise<void> {
         const db = getDatabase();
         const id = generateUUID();
         const now = Date.now();
 
         await db.runAsync(
-            `INSERT OR REPLACE INTO generated_content 
+            `INSERT OR REPLACE INTO generated_content
              (id, integration_id, source_type, source_id, content, created_at)
              VALUES (?, ?, ?, ?, ?, ?)`,
-            [id, integrationId, sourceType, sourceId, content, now]
+            [id, integrationId, sourceType, sourceId, content, now],
         );
     }
 
-    async getGeneratedContent(sourceType: string, sourceId: string): Promise<string | null> {
+    async getGeneratedContent(
+        sourceType: string,
+        sourceId: string,
+    ): Promise<string | null> {
         const db = getDatabase();
         const row = await db.getFirstAsync<{ content: string }>(
             'SELECT content FROM generated_content WHERE source_type = ? AND source_id = ?',
-            [sourceType, sourceId]
+            [sourceType, sourceId],
         );
         return row?.content ?? null;
     }
 
     async clearEmailCache(integrationId: string): Promise<void> {
         const db = getDatabase();
-        await db.runAsync('DELETE FROM emails WHERE integration_id = ?', [integrationId]);
+        await db.runAsync('DELETE FROM emails WHERE integration_id = ?', [
+            integrationId,
+        ]);
     }
 
     // ==================== Analysis & Extraction ====================
 
-    async getUnanalyzedEmails(limit: number = 10, integrationId?: string): Promise<Email[]> {
+    async getUnanalyzedEmails(
+        limit: number = 10,
+        integrationId?: string,
+    ): Promise<Email[]> {
         const db = getDatabase();
         const rows = await db.getAllAsync<any>(
             integrationId
                 ? 'SELECT * FROM emails WHERE analyzed_at IS NULL AND integration_id = ? ORDER BY date DESC LIMIT ?'
                 : 'SELECT * FROM emails WHERE analyzed_at IS NULL ORDER BY date DESC LIMIT ?',
-            integrationId ? [integrationId, limit] : [limit]
+            integrationId ? [integrationId, limit] : [limit],
         );
 
         return rows.map(row => ({
@@ -539,7 +639,7 @@ class IntegrationStorage {
     async saveExtractedData(
         sourceId: string,
         events: Partial<ExtractedEvent>[],
-        tasks: Partial<ExtractedTask>[]
+        tasks: Partial<ExtractedTask>[],
     ): Promise<void> {
         const db = getDatabase();
         const now = Date.now();
@@ -551,7 +651,7 @@ class IntegrationStorage {
             if (event.externalId) {
                 const existing = await db.getFirstAsync<{ id: string }>(
                     'SELECT id FROM events WHERE source_id = ? AND external_id = ?',
-                    [sourceId, event.externalId]
+                    [sourceId, event.externalId],
                 );
                 existingId = existing?.id ?? null;
             }
@@ -559,17 +659,19 @@ class IntegrationStorage {
             if (existingId) {
                 // Update existing event
                 await db.runAsync(
-                    `UPDATE events SET 
+                    `UPDATE events SET
                      title = ?, start_date = ?, end_date = ?, location = ?, status = ?
                      WHERE id = ?`,
                     [
                         event.title!,
                         new Date(event.startDate!).getTime(),
-                        event.endDate ? new Date(event.endDate).getTime() : null,
+                        event.endDate
+                            ? new Date(event.endDate).getTime()
+                            : null,
                         event.location ?? null,
                         event.status ?? 'confirmed',
-                        existingId
-                    ]
+                        existingId,
+                    ],
                 );
             } else {
                 // Insert new event
@@ -582,12 +684,14 @@ class IntegrationStorage {
                         sourceId,
                         event.title!,
                         new Date(event.startDate!).getTime(),
-                        event.endDate ? new Date(event.endDate).getTime() : null,
+                        event.endDate
+                            ? new Date(event.endDate).getTime()
+                            : null,
                         event.location ?? null,
                         event.status ?? 'confirmed',
                         event.externalId ?? null,
-                        now
-                    ]
+                        now,
+                    ],
                 );
             }
         }
@@ -604,18 +708,24 @@ class IntegrationStorage {
                     task.dueDate ? new Date(task.dueDate).getTime() : null,
                     task.priority ?? 'normal',
                     0,
-                    now
-                ]
+                    now,
+                ],
             );
         }
     }
 
     async markAnalyzed(emailId: string): Promise<void> {
         const db = getDatabase();
-        await db.runAsync('UPDATE emails SET analyzed_at = ? WHERE id = ?', [Date.now(), emailId]);
+        await db.runAsync('UPDATE emails SET analyzed_at = ? WHERE id = ?', [
+            Date.now(),
+            emailId,
+        ]);
     }
 
-    async getEventsForDate(date: Date, integrationId?: string): Promise<ExtractedEvent[]> {
+    async getEventsForDate(
+        date: Date,
+        integrationId?: string,
+    ): Promise<ExtractedEvent[]> {
         const db = getDatabase();
         const startOfDay = new Date(date);
         startOfDay.setHours(0, 0, 0, 0);
@@ -623,13 +733,13 @@ class IntegrationStorage {
         endOfDay.setHours(23, 59, 59, 999);
 
         const whereClause = integrationId ? 'AND source_id = ?' : '';
-        const params = integrationId 
+        const params = integrationId
             ? [startOfDay.getTime(), endOfDay.getTime(), integrationId]
             : [startOfDay.getTime(), endOfDay.getTime()];
 
         const rows = await db.getAllAsync<any>(
             `SELECT * FROM events WHERE start_date >= ? AND start_date <= ? ${whereClause} ORDER BY start_date ASC`,
-            params
+            params,
         );
 
         return rows.map(row => ({
@@ -641,13 +751,17 @@ class IntegrationStorage {
             location: row.location ?? undefined,
             status: row.status,
             externalId: row.external_id ?? undefined,
-            createdAt: new Date(row.created_at)
+            createdAt: new Date(row.created_at),
         }));
     }
 
-    async getEventsRange(startDate: Date, endDate: Date, integrationId?: string): Promise<ExtractedEvent[]> {
+    async getEventsRange(
+        startDate: Date,
+        endDate: Date,
+        integrationId?: string,
+    ): Promise<ExtractedEvent[]> {
         const db = getDatabase();
-        
+
         const whereClause = integrationId ? 'AND source_id = ?' : '';
         const params = integrationId
             ? [startDate.getTime(), endDate.getTime(), integrationId]
@@ -655,7 +769,7 @@ class IntegrationStorage {
 
         const rows = await db.getAllAsync<any>(
             `SELECT * FROM events WHERE start_date >= ? AND start_date <= ? ${whereClause} ORDER BY start_date ASC`,
-            params
+            params,
         );
 
         return rows.map(row => ({
@@ -667,14 +781,14 @@ class IntegrationStorage {
             location: row.location ?? undefined,
             status: row.status,
             externalId: row.external_id ?? undefined,
-            createdAt: new Date(row.created_at)
+            createdAt: new Date(row.created_at),
         }));
     }
 
     async getPendingTasks(): Promise<ExtractedTask[]> {
         const db = getDatabase();
         const rows = await db.getAllAsync<any>(
-            `SELECT * FROM tasks WHERE is_completed = 0 ORDER BY priority DESC, due_date ASC`
+            `SELECT * FROM tasks WHERE is_completed = 0 ORDER BY priority DESC, due_date ASC`,
         );
         return rows.map(row => ({
             id: row.id,
@@ -683,7 +797,7 @@ class IntegrationStorage {
             dueDate: row.due_date ? new Date(row.due_date) : undefined,
             priority: row.priority,
             isCompleted: row.is_completed === 1,
-            createdAt: new Date(row.created_at)
+            createdAt: new Date(row.created_at),
         }));
     }
 
@@ -693,15 +807,27 @@ class IntegrationStorage {
      * Helper to ensure database schema columns exist
      */
     private async _ensureColumnsExist(db: any): Promise<void> {
-         try {
-            await db.runAsync('ALTER TABLE analyzed_emails ADD COLUMN target_date TEXT');
-        } catch (e) { /* ignore if exists */ }
         try {
-            await db.runAsync('ALTER TABLE analyzed_emails ADD COLUMN is_completed INTEGER DEFAULT 0');
-        } catch (e) { /* ignore if exists */ }
+            await db.runAsync(
+                'ALTER TABLE analyzed_emails ADD COLUMN target_date TEXT',
+            );
+        } catch (e) {
+            /* ignore if exists */
+        }
         try {
-            await db.runAsync('ALTER TABLE analyzed_emails ADD COLUMN completed_at INTEGER');
-        } catch (e) { /* ignore if exists */ }
+            await db.runAsync(
+                'ALTER TABLE analyzed_emails ADD COLUMN is_completed INTEGER DEFAULT 0',
+            );
+        } catch (e) {
+            /* ignore if exists */
+        }
+        try {
+            await db.runAsync(
+                'ALTER TABLE analyzed_emails ADD COLUMN completed_at INTEGER',
+            );
+        } catch (e) {
+            /* ignore if exists */
+        }
     }
 
     async saveEmailAnalysis(
@@ -711,7 +837,7 @@ class IntegrationStorage {
             connections: string[];
             timeFrame?: string;
             targetDate?: string;
-        }
+        },
     ): Promise<AnalyzedEmail> {
         const db = getDatabase();
         await this._ensureColumnsExist(db);
@@ -719,7 +845,7 @@ class IntegrationStorage {
         // Check if analysis already exists for this email
         const existing = await db.getFirstAsync<any>(
             'SELECT * FROM analyzed_emails WHERE email_id = ?',
-            [emailId]
+            [emailId],
         );
 
         const id = existing?.id || generateUUID();
@@ -732,7 +858,17 @@ class IntegrationStorage {
         await db.runAsync(
             `INSERT OR REPLACE INTO analyzed_emails (id, email_id, urgency, connections, time_frame, target_date, is_completed, completed_at, analyzed_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, emailId, analysis.urgency, JSON.stringify(analysis.connections), analysis.timeFrame ?? null, analysis.targetDate ?? null, isCompleted, completedAt, now]
+            [
+                id,
+                emailId,
+                analysis.urgency,
+                JSON.stringify(analysis.connections),
+                analysis.timeFrame ?? null,
+                analysis.targetDate ?? null,
+                isCompleted,
+                completedAt,
+                now,
+            ],
         );
 
         return {
@@ -744,7 +880,7 @@ class IntegrationStorage {
             targetDate: analysis.targetDate,
             isCompleted: isCompleted === 1,
             completedAt: completedAt ? new Date(completedAt) : undefined,
-            analyzedAt: new Date(now)
+            analyzedAt: new Date(now),
         };
     }
 
@@ -752,7 +888,7 @@ class IntegrationStorage {
         const db = getDatabase();
         const row = await db.getFirstAsync<any>(
             'SELECT * FROM analyzed_emails WHERE email_id = ?',
-            [emailId]
+            [emailId],
         );
 
         if (!row) return null;
@@ -765,8 +901,10 @@ class IntegrationStorage {
             timeFrame: row.time_frame ?? undefined,
             targetDate: row.target_date ?? undefined,
             isCompleted: row.is_completed === 1,
-            completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
-            analyzedAt: new Date(row.analyzed_at)
+            completedAt: row.completed_at
+                ? new Date(row.completed_at)
+                : undefined,
+            analyzedAt: new Date(row.analyzed_at),
         };
     }
 
@@ -775,12 +913,12 @@ class IntegrationStorage {
         await this._ensureColumnsExist(db);
 
         const rows = await db.getAllAsync<any>(
-            `SELECT * FROM analyzed_emails 
-             WHERE urgency IN ('asap', 'high') 
+            `SELECT * FROM analyzed_emails
+             WHERE urgency IN ('asap', 'high')
              GROUP BY email_id
-             ORDER BY 
+             ORDER BY
              CASE urgency WHEN 'asap' THEN 0 WHEN 'high' THEN 1 ELSE 2 END,
-             analyzed_at DESC`
+             analyzed_at DESC`,
         );
 
         return rows.map(row => ({
@@ -791,8 +929,10 @@ class IntegrationStorage {
             timeFrame: row.time_frame ?? undefined,
             targetDate: row.target_date ?? undefined,
             isCompleted: row.is_completed === 1,
-            completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
-            analyzedAt: new Date(row.analyzed_at)
+            completedAt: row.completed_at
+                ? new Date(row.completed_at)
+                : undefined,
+            analyzedAt: new Date(row.analyzed_at),
         }));
     }
 
@@ -814,7 +954,7 @@ class IntegrationStorage {
                 (target_date IS NULL AND urgency IN ('asap', 'high') AND analyzed_at > ?)
              GROUP BY email_id
              ORDER BY target_date ASC, urgency DESC`,
-            [date, date, Date.now() - 86400000] // Last 24h for fallback
+            [date, date, Date.now() - 86400000], // Last 24h for fallback
         );
 
         return rows.map(row => ({
@@ -825,14 +965,20 @@ class IntegrationStorage {
             timeFrame: row.time_frame ?? undefined,
             targetDate: row.target_date ?? undefined,
             isCompleted: row.is_completed === 1,
-            completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
-            analyzedAt: new Date(row.analyzed_at)
+            completedAt: row.completed_at
+                ? new Date(row.completed_at)
+                : undefined,
+            analyzedAt: new Date(row.analyzed_at),
         }));
     }
 
     // ==================== V3: Briefings ====================
 
-    async createBriefing(date: string, headline?: string, summary?: string): Promise<Briefing> {
+    async createBriefing(
+        date: string,
+        headline?: string,
+        summary?: string,
+    ): Promise<Briefing> {
         const userId = this.requireUserId();
         const db = getDatabase();
         const id = generateUUID();
@@ -841,7 +987,7 @@ class IntegrationStorage {
         await db.runAsync(
             `INSERT OR REPLACE INTO briefings (id, date, user_id, headline, summary, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [id, date, userId, headline ?? null, summary ?? null, now, now]
+            [id, date, userId, headline ?? null, summary ?? null, now, now],
         );
 
         return {
@@ -850,7 +996,7 @@ class IntegrationStorage {
             headline,
             summary,
             createdAt: new Date(now),
-            updatedAt: new Date(now)
+            updatedAt: new Date(now),
         };
     }
 
@@ -859,7 +1005,7 @@ class IntegrationStorage {
         const db = getDatabase();
         const row = await db.getFirstAsync<any>(
             'SELECT * FROM briefings WHERE date = ? AND user_id = ?',
-            [date, userId]
+            [date, userId],
         );
 
         if (!row) return null;
@@ -870,11 +1016,14 @@ class IntegrationStorage {
             headline: row.headline ?? undefined,
             summary: row.summary ?? undefined,
             createdAt: new Date(row.created_at),
-            updatedAt: new Date(row.updated_at)
+            updatedAt: new Date(row.updated_at),
         };
     }
 
-    async updateBriefing(id: string, updates: Partial<Pick<Briefing, 'headline' | 'summary'>>): Promise<void> {
+    async updateBriefing(
+        id: string,
+        updates: Partial<Pick<Briefing, 'headline' | 'summary'>>,
+    ): Promise<void> {
         const db = getDatabase();
         const now = Date.now();
         const fields: string[] = ['updated_at = ?'];
@@ -890,7 +1039,10 @@ class IntegrationStorage {
         }
 
         values.push(id);
-        await db.runAsync(`UPDATE briefings SET ${fields.join(', ')} WHERE id = ?`, values);
+        await db.runAsync(
+            `UPDATE briefings SET ${fields.join(', ')} WHERE id = ?`,
+            values,
+        );
     }
 
     // ==================== V3: Briefing Items ====================
@@ -899,20 +1051,22 @@ class IntegrationStorage {
         const db = getDatabase();
         // First delete suggested actions for all items in this briefing
         await db.runAsync(
-            `DELETE FROM suggested_actions WHERE briefing_item_id IN 
+            `DELETE FROM suggested_actions WHERE briefing_item_id IN
              (SELECT id FROM briefing_items WHERE briefing_id = ?)`,
-            [briefingId]
+            [briefingId],
         );
         // Then delete the items
-        await db.runAsync(
-            'DELETE FROM briefing_items WHERE briefing_id = ?',
-            [briefingId]
-        );
+        await db.runAsync('DELETE FROM briefing_items WHERE briefing_id = ?', [
+            briefingId,
+        ]);
     }
 
     async addBriefingItem(
         briefingId: string,
-        item: Omit<BriefingItem, 'id' | 'briefingId' | 'completedAt' | 'suggestedActions'> & { isCompleted?: boolean }
+        item: Omit<
+            BriefingItem,
+            'id' | 'briefingId' | 'completedAt' | 'suggestedActions'
+        > & { isCompleted?: boolean },
     ): Promise<BriefingItem> {
         const db = getDatabase();
         const id = generateUUID();
@@ -921,14 +1075,24 @@ class IntegrationStorage {
         await db.runAsync(
             `INSERT INTO briefing_items (id, briefing_id, source_type, source_id, title, description, priority, is_completed, display_order)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, briefingId, item.sourceType, item.sourceId, item.title, item.description ?? null, item.priority, isCompleted, item.displayOrder]
+            [
+                id,
+                briefingId,
+                item.sourceType,
+                item.sourceId,
+                item.title,
+                item.description ?? null,
+                item.priority,
+                isCompleted,
+                item.displayOrder,
+            ],
         );
 
         return {
             id,
             briefingId,
             ...item,
-            isCompleted: false
+            isCompleted: false,
         };
     }
 
@@ -936,7 +1100,7 @@ class IntegrationStorage {
         const db = getDatabase();
         const rows = await db.getAllAsync<any>(
             'SELECT * FROM briefing_items WHERE briefing_id = ? ORDER BY display_order ASC',
-            [briefingId]
+            [briefingId],
         );
 
         const items: BriefingItem[] = [];
@@ -951,59 +1115,71 @@ class IntegrationStorage {
                 description: row.description ?? undefined,
                 priority: row.priority,
                 isCompleted: row.is_completed === 1,
-                completedAt: row.completed_at ? new Date(row.completed_at) : undefined,
+                completedAt: row.completed_at
+                    ? new Date(row.completed_at)
+                    : undefined,
                 displayOrder: row.display_order,
-                suggestedActions: actions
+                suggestedActions: actions,
             });
         }
 
         return items;
     }
 
-    async markBriefingItemComplete(itemId: string, isCompleted: boolean = true): Promise<void> {
+    async markBriefingItemComplete(
+        itemId: string,
+        isCompleted: boolean = true,
+    ): Promise<void> {
         const db = getDatabase();
         const completedAt = isCompleted ? Date.now() : null;
 
         // Update briefing item
         await db.runAsync(
             'UPDATE briefing_items SET is_completed = ?, completed_at = ? WHERE id = ?',
-            [isCompleted ? 1 : 0, completedAt, itemId]
+            [isCompleted ? 1 : 0, completedAt, itemId],
         );
 
         // Also update underlying source status if it's an analyzed email
         try {
             const item = await db.getFirstAsync<any>(
                 'SELECT source_type, source_id FROM briefing_items WHERE id = ?',
-                [itemId]
+                [itemId],
             );
 
             if (item && item.source_type === 'email') {
                 await this._ensureColumnsExist(db);
                 await db.runAsync(
                     'UPDATE analyzed_emails SET is_completed = ?, completed_at = ? WHERE email_id = ?',
-                    [isCompleted ? 1 : 0, completedAt, item.source_id]
+                    [isCompleted ? 1 : 0, completedAt, item.source_id],
                 );
-                console.log(`[IntegrationStorage] Synced completion status for email ${item.source_id}`);
+                console.log(
+                    `[IntegrationStorage] Synced completion status for email ${item.source_id}`,
+                );
             }
         } catch (e) {
-            console.warn('[IntegrationStorage] Failed to sync email completion status:', e);
+            console.warn(
+                '[IntegrationStorage] Failed to sync email completion status:',
+                e,
+            );
         }
     }
 
-    async getBriefingProgress(briefingId: string): Promise<{ total: number; completed: number }> {
+    async getBriefingProgress(
+        briefingId: string,
+    ): Promise<{ total: number; completed: number }> {
         const db = getDatabase();
         const total = await db.getFirstAsync<{ count: number }>(
             'SELECT COUNT(*) as count FROM briefing_items WHERE briefing_id = ?',
-            [briefingId]
+            [briefingId],
         );
         const completed = await db.getFirstAsync<{ count: number }>(
             'SELECT COUNT(*) as count FROM briefing_items WHERE briefing_id = ? AND is_completed = 1',
-            [briefingId]
+            [briefingId],
         );
 
         return {
             total: total?.count ?? 0,
-            completed: completed?.count ?? 0
+            completed: completed?.count ?? 0,
         };
     }
 
@@ -1011,7 +1187,7 @@ class IntegrationStorage {
 
     async addSuggestedAction(
         briefingItemId: string,
-        action: Omit<SuggestedAction, 'id' | 'briefingItemId'>
+        action: Omit<SuggestedAction, 'id' | 'briefingItemId'>,
     ): Promise<SuggestedAction> {
         const db = getDatabase();
         const id = generateUUID();
@@ -1019,21 +1195,30 @@ class IntegrationStorage {
         await db.runAsync(
             `INSERT INTO suggested_actions (id, briefing_item_id, action_type, label, params, display_order)
              VALUES (?, ?, ?, ?, ?, ?)`,
-            [id, briefingItemId, action.actionType, action.label, JSON.stringify(action.params ?? {}), action.displayOrder]
+            [
+                id,
+                briefingItemId,
+                action.actionType,
+                action.label,
+                JSON.stringify(action.params ?? {}),
+                action.displayOrder,
+            ],
         );
 
         return {
             id,
             briefingItemId,
-            ...action
+            ...action,
         };
     }
 
-    async getSuggestedActions(briefingItemId: string): Promise<SuggestedAction[]> {
+    async getSuggestedActions(
+        briefingItemId: string,
+    ): Promise<SuggestedAction[]> {
         const db = getDatabase();
         const rows = await db.getAllAsync<any>(
             'SELECT * FROM suggested_actions WHERE briefing_item_id = ? ORDER BY display_order ASC',
-            [briefingItemId]
+            [briefingItemId],
         );
 
         return rows.map(row => ({
@@ -1042,7 +1227,7 @@ class IntegrationStorage {
             actionType: row.action_type,
             label: row.label,
             params: row.params ? JSON.parse(row.params) : undefined,
-            displayOrder: row.display_order
+            displayOrder: row.display_order,
         }));
     }
 }
