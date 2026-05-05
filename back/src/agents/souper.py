@@ -1,12 +1,14 @@
+import json
 import logging
+import re
 from datetime import datetime
-
 from zoneinfo import ZoneInfo
 
 from agno.db.postgres import PostgresDb
 from agno.agent import Agent
 from agno.memory.manager import MemoryManager
 from agno.models.base import Model
+from agno.models.message import Message
 from agno.tools import Toolkit, Function
 
 from agno.learn import (
@@ -68,7 +70,13 @@ Your memory operates automatically. Never ask the user to tell you what to remem
 **`add_memory(memory)` / `update_memory(id, memory)` / `delete_memory(id)`** — explicit memory management.
 - `add_memory`: only when the user directly asks to remember something (e.g., "remember that...", "keep in mind...").
 - `update_memory` / `delete_memory`: when stored info is corrected or the user asks to forget.
-- Do NOT call these proactively — memory is saved automatically after each response."""
+- Do NOT call these proactively — memory is saved automatically after each response.
+
+**Conflict avoidance (IMPORTANT):**
+- Before calling `add_memory`, check `<memories_from_previous_interactions>` for any existing fact on the same topic.
+- If an existing memory would become outdated or wrong by this new fact, call `update_memory(id, new_text)` on that memory_id — do NOT add a new conflicting entry.
+- Example: stored memory "User likes coffee" + user now says "I quit coffee" → call `update_memory` to change it, not `add_memory`.
+- Only call `add_memory` when no existing memory already covers the same factual domain."""
 
 
 class SouperAgent(Agent):
@@ -256,6 +264,96 @@ class SouperAgent(Agent):
             logger.warning("[Souper] Memory deduplication failed: %s", exc)
             return 0
 
+    async def _resolve_memory_conflicts(self) -> int:
+        """Use the agent's LLM to detect and remove semantically conflicting memories.
+
+        Called after _deduplicate_memories(). Finds pairs of memories that cannot both
+        be true (e.g. two different home cities, two different ages) and deletes the
+        older / less-specific entry.
+
+        Returns the number of memories deleted.
+        """
+        if not self.memory_manager or not self.user_id:
+            return 0
+
+        try:
+            db = self.memory_manager.db
+            if db is None:
+                return 0
+
+            memories = db.get_user_memories(user_id=self.user_id)
+            if not memories or len(memories) < 2:
+                return 0
+
+            # Format numbered list for the LLM
+            mem_lines = "\n".join(
+                f"{i + 1}. [{getattr(m, 'memory_id', '?')}] {getattr(m, 'memory', str(m))}"
+                for i, m in enumerate(memories)
+            )
+
+            prompt = (
+                "You are a memory conflict detector. Below are facts stored about a user.\n"
+                "Identify pairs where one fact CONTRADICTS or SUPERSEDES another — "
+                "meaning both cannot be true simultaneously.\n\n"
+                "Rules:\n"
+                "- Only flag true factual conflicts (e.g. location, age, a preference that has changed)\n"
+                "- Complementary or unrelated facts are NOT conflicts\n"
+                "- For each conflict, mark the OLDER or less specific entry for deletion\n"
+                "- Order within the list is newest-first; prefer keeping lower-numbered entries\n"
+                "- Return ONLY valid JSON — an array of {\"delete\": \"<memory_id>\"} objects\n"
+                "- If no conflicts exist, return []\n\n"
+                f"Memories:\n{mem_lines}\n\n"
+                "Respond only with the JSON array, no explanation."
+            )
+
+            model_response = await self.model.aresponse(
+                messages=[Message(role="user", content=prompt)]
+            )
+
+            raw = (model_response.content or "").strip()
+
+            # Extract JSON array even if the model wraps it in markdown fences
+            json_match = re.search(r"\[.*?\]", raw, re.DOTALL)
+            if not json_match:
+                return 0
+
+            deletions = json.loads(json_match.group())
+            if not isinstance(deletions, list):
+                return 0
+
+            ids_to_delete = [
+                entry["delete"]
+                for entry in deletions
+                if isinstance(entry, dict) and "delete" in entry and entry["delete"]
+            ]
+
+            if not ids_to_delete:
+                return 0
+
+            # Safety guard: never delete more than half the memory set at once
+            max_deletions = max(1, len(memories) // 2)
+            ids_to_delete = ids_to_delete[:max_deletions]
+
+            try:
+                db.delete_user_memories(ids_to_delete, user_id=self.user_id)
+            except Exception:
+                for mem_id in ids_to_delete:
+                    try:
+                        db.delete_user_memory(mem_id, user_id=self.user_id)
+                    except Exception:
+                        pass
+
+            logger.info(
+                "[Souper] Conflict resolution: deleted %d conflicting memories for user %s",
+                len(ids_to_delete),
+                self.user_id,
+            )
+            return len(ids_to_delete)
+
+        except Exception as exc:
+            logger.warning("[Souper] Memory conflict resolution failed: %s", exc)
+            return 0
+
     async def arun(self, *args, **kwargs):
         """Run agent and deduplicate memories afterwards.
 
@@ -267,7 +365,7 @@ class SouperAgent(Agent):
         parent_arun = super().arun(*args, **kwargs)
 
         if stream:
-            # Wrap the async generator to run dedup after iteration completes
+            # Wrap the async generator to run dedup + conflict resolution after iteration completes
             async def _stream_with_dedup():
                 try:
                     async for event in parent_arun:
@@ -277,11 +375,19 @@ class SouperAgent(Agent):
                         await self._deduplicate_memories()
                     except Exception:
                         pass
+                    try:
+                        await self._resolve_memory_conflicts()
+                    except Exception:
+                        pass
             return _stream_with_dedup()
         else:
             result = await parent_arun
             try:
                 await self._deduplicate_memories()
+            except Exception:
+                pass
+            try:
+                await self._resolve_memory_conflicts()
             except Exception:
                 pass
             return result
