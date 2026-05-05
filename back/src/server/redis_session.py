@@ -2386,45 +2386,22 @@ class RedisSession:
 
     def _extract_reasoning_content(self, ev: Any, event_type: str) -> str | None:
         """Extract reasoning content from various event formats."""
-        # Check for Agno's reasoning_content attribute
         if hasattr(ev, "reasoning_content") and ev.reasoning_content:
-            logger.debug(
-                "[RedisSession] Found reasoning_content: %d chars",
-                len(ev.reasoning_content),
-            )
             return ev.reasoning_content
 
-        # Check for thinking_content (Gemini native thinking)
         if hasattr(ev, "thinking_content") and ev.thinking_content:
-            logger.debug(
-                "[RedisSession] Found thinking_content: %d chars",
-                len(ev.thinking_content),
-            )
             return ev.thinking_content
 
-        # Check for thinking attribute (older format)
         if hasattr(ev, "thinking") and ev.thinking:
-            logger.debug("[RedisSession] Found thinking: %d chars", len(ev.thinking))
             return ev.thinking
 
-        # Check for content in Reasoning* event types
         if ("Reasoning" in event_type or "Thinking" in event_type) and hasattr(
             ev, "content"
         ):
             if ev.content:
-                logger.debug(
-                    "[RedisSession] Found reasoning from %s: %d chars",
-                    event_type,
-                    len(ev.content),
-                )
                 return ev.content
 
-        # Also check delta field for streaming reasoning
         if hasattr(ev, "delta") and "Reasoning" in event_type:
-            logger.debug(
-                "[RedisSession] Found reasoning delta: %d chars",
-                len(str(ev.delta)),
-            )
             return ev.delta
 
         return None

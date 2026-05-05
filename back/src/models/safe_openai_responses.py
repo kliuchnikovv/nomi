@@ -67,11 +67,8 @@ class SafeOpenAIResponses(OpenAIResponses):
         # Strip "reasoning" if it is empty (agno always injects {} when unset).
         if params.get("reasoning") == {}:
             del params["reasoning"]
-            logger.debug("[SafeOpenAIResponses] Removed empty 'reasoning' param")
-        # Strip "store" unless the caller explicitly configured it.
         if "store" in params and self.store is None:
             del params["store"]
-            logger.debug("[SafeOpenAIResponses] Removed auto-injected 'store' param")
         return params
 
     # ── Tool call ID remapping ────────────────────────────────────────────────
