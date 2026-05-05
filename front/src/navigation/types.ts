@@ -21,6 +21,7 @@ export type SettingsStackParamList = {
   PlannerModelScreen: undefined;
   BotIdentityScreen: undefined;
   IntegrationsScreen: undefined;
+  MemoryScreen: undefined;
 };
 
 // Projects nested stack (inside the Projects tab)

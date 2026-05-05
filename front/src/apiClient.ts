@@ -325,6 +325,18 @@ export const emailApi = {
     }>(`${API_URL()}/emails/analyze`, email),
 };
 
+export interface MemoryEntry {
+    id: string;
+    memory: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export const memoryApi = {
+    list: () => apiClient.get<MemoryEntry[]>(`${API_URL()}/user/memories`),
+    delete: (id: string) => apiClient.delete<void>(`${API_URL()}/user/memories/${id}`),
+};
+
 export const credentialsApi = {
     save: (provider: string, type: 'api_key' | 'custom', apiKey?: string, extra?: Record<string, any>) =>
         apiClient.post<{ ok: boolean }>(`${API_URL()}/credentials`, {

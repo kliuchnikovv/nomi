@@ -137,6 +137,11 @@ export default function SettingsHomeScreen() {
                         value={botName}
                         onPress={() => navigation.navigate('BotIdentityScreen')}
                         isFirst
+                    />
+                    <SettingsRow
+                        label="Memory"
+                        onPress={() => navigation.navigate('MemoryScreen')}
+                        isFirst={false}
                         isLast
                     />
                 </SettingsSection>

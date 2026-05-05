@@ -92,6 +92,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tokenData: string | null,
         refreshTokenData: string | null,
     ) {
+        // Set user ID immediately (synchronously) so storage calls after
+        // setAuthData() in the same tick see the correct user context.
+        // The useEffect on `user` is a safety net for the initial load.
+        const userId = userData?.id ?? null;
+        integrationStorage.setCurrentUserId(userId);
+        pluginChatStorage.setCurrentUserId(userId);
+
         setUser(userData);
         setToken(tokenData);
         setRefreshTokenValue(refreshTokenData);
@@ -289,15 +296,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 // Let's try to update *all* google-based integration tokens that we can find?
                 // Or simply: The user just logged in. We can assume we want to use these tokens for future calls.
                 // We will create/update the "Primary" integration.
-
-                // For this step, let's just save the tokens to SecureStore using a temporary 'primary_google' key
-                // OR we can import `integrationStorage` here?
-                // `apiClient` is imported, `IntegrationStorage` is in services.
-
-                // Let's do a dynamic import to avoid circular dep issues in `context.tsx` (often generic).
-                const { integrationStorage } = await import(
-                    '../../services/integrations/IntegrationStorage'
-                );
 
                 // Ensure we have a local integration record for Gmail and Calendar
                 // If not, create them locally.
