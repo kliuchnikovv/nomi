@@ -24,6 +24,17 @@ func NewMemoriesHandler(store *storage.Storage, logger *zap.Logger) *MemoriesHan
 	}
 }
 
+// memoryRow is used to scan the raw DB row. Agno stores:
+//   - memory_id: primary key (text)
+//   - memory: JSONB column holding a JSON string literal — extracted with #>> '{}'
+//   - created_at / updated_at: BigInteger (Unix epoch seconds)
+type memoryRow struct {
+	MemoryID  string `gorm:"column:memory_id"`
+	Memory    string `gorm:"column:memory"`
+	CreatedAt int64  `gorm:"column:created_at"`
+	UpdatedAt int64  `gorm:"column:updated_at"`
+}
+
 // memoryEntry is the API response shape for a single agent memory.
 type memoryEntry struct {
 	ID        string    `json:"id"`
@@ -38,10 +49,13 @@ func (h *MemoriesHandler) GetMemories(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
 	userIDStr := userID.String()
 
-	var rows []memoryEntry
+	var rows []memoryRow
 	if err := h.store.DB.WithContext(c.Request.Context()).
 		Raw(
-			"SELECT id, memory, created_at, updated_at FROM agno_memories WHERE user_id = ? ORDER BY created_at DESC",
+			// Agno stores its tables in the 'ai' schema (PostgresDb default).
+			// memory column is JSONB containing a raw JSON string; #>> '{}' extracts it as text.
+			// created_at / updated_at are BigInteger Unix epoch seconds.
+			"SELECT memory_id, memory #>> '{}' AS memory, created_at, updated_at FROM ai.agno_memories WHERE user_id = ? ORDER BY created_at DESC",
 			userIDStr,
 		).
 		Scan(&rows).Error; err != nil {
@@ -53,20 +67,27 @@ func (h *MemoriesHandler) GetMemories(c *gin.Context) {
 		return
 	}
 
-	if rows == nil {
-		rows = []memoryEntry{}
+	entries := make([]memoryEntry, 0, len(rows))
+	for _, r := range rows {
+		entries = append(entries, memoryEntry{
+			ID:        r.MemoryID,
+			Memory:    r.Memory,
+			CreatedAt: time.Unix(r.CreatedAt, 0).UTC(),
+			UpdatedAt: time.Unix(r.UpdatedAt, 0).UTC(),
+		})
 	}
-	c.JSON(http.StatusOK, rows)
+
+	c.JSON(http.StatusOK, entries)
 }
 
-// DeleteMemory deletes a single agno_memories row by ID (ownership verified).
+// DeleteMemory deletes a single agno_memories row by memory_id (ownership verified).
 // DELETE /api/user/memories/:id
 func (h *MemoriesHandler) DeleteMemory(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
 	memID := c.Param("id")
 
 	result := h.store.DB.WithContext(c.Request.Context()).
-		Exec("DELETE FROM agno_memories WHERE id = ? AND user_id = ?", memID, userID.String())
+		Exec("DELETE FROM ai.agno_memories WHERE memory_id = ? AND user_id = ?", memID, userID.String())
 	if result.Error != nil {
 		h.logger.Error("failed to delete memory",
 			zap.String("user_id", userID.String()),
