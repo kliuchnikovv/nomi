@@ -338,7 +338,7 @@ class AgentFactory:
                 config.add("knowledge_search", **params)
                 config_used = config
                 try:
-                    tools = await build_tools(config, user_id=user_id)
+                    tools = await build_tools(config, user_id=user_id, knowledge=self._knowledge)
                     logger.info("[Factory] Built %d tools for ListAgent", len(tools))
                 except Exception as e:
                     logger.warning("[Factory] Failed to build list tools: %s", e)
@@ -366,7 +366,7 @@ class AgentFactory:
                         tools_config.add("web_search")
                         logger.info("[Factory] Added web search tool")
 
-                    tools = await build_tools(tools_config, user_id=user_id)
+                    tools = await build_tools(tools_config, user_id=user_id, knowledge=self._knowledge)
                 except Exception as e:
                     logger.warning(
                         "[Factory] Failed to fetch tools for user %s: %s", user_id, e
@@ -405,7 +405,7 @@ class AgentFactory:
                     logger.info("[WS] Added web search tool (always enabled)")
 
                 config_used = config
-                tools = await build_tools(config, user_id=user_id)
+                tools = await build_tools(config, user_id=user_id, knowledge=self._knowledge)
             # Add client proxy tools from plugin manifests (round-trip: model -> device -> result)
             if client_tool_runner and config_used and config_used.entries:
                 try:
@@ -566,7 +566,7 @@ class AgentFactory:
                 ):
                     config = ToolsConfig()
                     config.add("web_search")
-                    search_tools = await build_tools(config)
+                    search_tools = await build_tools(config, knowledge=self._knowledge)
                     tools = list(tools) + list(search_tools)
                     logger.info("[Factory] Added web_search tool to PlannerAgent")
 

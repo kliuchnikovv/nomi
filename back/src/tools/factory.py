@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from agno.tools import Toolkit
 from src.tools.duckduckgo_custom import (
@@ -12,6 +12,9 @@ from src.integrations.registry import (
     get_provider,
     should_include_in_tools,
 )
+
+if TYPE_CHECKING:
+    from agno.knowledge import Knowledge
 
 DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
@@ -140,10 +143,38 @@ Always call this tool after analyzing the user's schedule to apply your recommen
     return tool
 
 
+def _build_user_memory(params: dict[str, Any]) -> Toolkit:
+    """Build user memory tools (add_memory, search_memory)."""
+    logger.info("[UserMemory] Building user memory tools")
+    from src.tools.user_memory import make_user_memory_tools
+    from agno.knowledge import Knowledge
+
+    knowledge: Knowledge | None = params.get("knowledge")
+    user_id: str = params.get("user_id", "")
+
+    if not knowledge:
+        logger.warning("[UserMemory] No knowledge provided, skipping tool")
+        from agno.tools import Toolkit
+        return Toolkit(name="user_memory")
+
+    tool_instance = make_user_memory_tools(knowledge=knowledge, user_id=user_id)
+    tool = Toolkit(
+        name="user_memory",
+        functions=[tool_instance.add_memory, tool_instance.search_memory],
+    )
+    tool.add_instructions = True
+    tool.instructions = """You have access to user memory tools.
+Use add_memory to remember important facts about the user (location, preferences, personal details).
+Use search_memory to recall previously stored facts about the user.
+Always call add_memory when the user shares personal information like where they live, their preferences, or important details about themselves."""
+    return tool
+
+
 TOOL_BUILDERS: dict[str, ToolBuilder] = {
     "web_search": _build_web_search,
     "user_interaction": _build_user_interaction,
     "planning": _build_planning,
+    "user_memory": _build_user_memory,
 }
 
 
@@ -152,12 +183,28 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
     TOOL_BUILDERS[name] = builder
 
 
-async def build(config: ToolsConfig, user_id: str | None = None) -> list[Toolkit]:
+async def build(
+    config: ToolsConfig,
+    user_id: str | None = None,
+    knowledge: "Knowledge" | None = None,
+) -> list[Toolkit]:
     tools: list[Toolkit] = []
     logger.debug(
         "[Tools] Building tools from config with %d entries", len(config.entries)
     )
     logger.debug("[Tools] Registered builders: %s", list(TOOL_BUILDERS.keys()))
+
+    # Auto-add user_memory tool when knowledge is available but not in config
+    if knowledge and "user_memory" not in {item.name.lower() for item in config}:
+        config.add("user_memory")
+        logger.info("[Tools] Auto-added user_memory tool (knowledge available)")
+
+    # Inject knowledge into params for user_memory tool
+    if knowledge:
+        for item in config:
+            if item.name.lower() == "user_memory" and "knowledge" not in item.params:
+                item.params["knowledge"] = knowledge
+                logger.debug("[Tools] Injected knowledge into user_memory tool params")
 
     for item in config:
         logger.debug("[Tools] Processing tool item: %s", item.name)
