@@ -526,6 +526,17 @@ class AgentFactory:
         # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
         # We pass the actual Toolkit objects, not ToolSpec configs
 
+        # Add remember_this tool — explicit RAG indexing by agent request
+        if user_id and self._knowledge is not None:
+            try:
+                from src.tools.user_memory import UserMemoryTools
+
+                memory_tool = UserMemoryTools(knowledge=self._knowledge, user_id=user_id)
+                tools = list(tools) + [memory_tool]
+                logger.info("[Factory] Added UserMemoryTools (remember_this) for user=%s", user_id)
+            except Exception as e:
+                logger.warning("[Factory] Failed to add UserMemoryTools: %s", e)
+
         # Register chat history search tool for single chat mode
         if single_chat_mode and user_id and self._knowledge is not None:
             from src.tools.chat_history import make_search_chat_history
