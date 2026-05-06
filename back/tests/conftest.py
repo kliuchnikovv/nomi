@@ -157,6 +157,16 @@ def _setup_all_mocks():
     _install_mock_module("agno.vectordb")
     _install_mock_module("agno.vectordb.pgvector", {"PgVector": MagicMock})
     _install_mock_module("agno.tools", {"Toolkit": _StubToolkit, "Function": _StubFunction})
+    _install_mock_module("agno.memory")
+    _install_mock_module("agno.memory.manager", {"MemoryManager": MagicMock})
+    _install_mock_module("agno.learn", {
+        "EntityMemoryConfig": MagicMock,
+        "LearningMachine": MagicMock,
+        "LearningMode": MagicMock,
+        "UserProfileConfig": MagicMock,
+    })
+    _install_mock_module("agno.db.schemas")
+    _install_mock_module("agno.db.schemas.memory", {"UserMemory": MagicMock})
     _install_mock_module("agno.utils")
     _install_mock_module("agno.utils.log", {"logger": MagicMock()})
 
@@ -168,9 +178,8 @@ def _setup_all_mocks():
 
     # ── src.agents (depends on agno) ──
     _install_mock_module("src.agents", {"__path__": [os.path.join(_SRC_DIR, "agents")]})
-    # src.agents.factory and src.agents.planner are NOT mocked — tests test the real modules.
-    # src.agents.souper is mocked because it has complex agno Memory/LearningMachine deps.
-    _install_mock_module("src.agents.souper", {"SouperAgent": MagicMock})
+    # src.agents.factory, src.agents.planner, and src.agents.souper are NOT mocked — tests test the real modules.
+    # agno.memory, agno.learn, and agno.db.schemas stubs above enable souper.py to load from disk.
 
     # ── src.models (depends on agno) ──
     # Do NOT mock safe_gemini or safe_openai — tests test those real classes.
