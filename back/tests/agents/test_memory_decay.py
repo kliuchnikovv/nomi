@@ -1,11 +1,136 @@
 # back/tests/agents/test_memory_decay.py
 """Tests for SouperAgent memory decay / staleness marking."""
 
+import time
+
+import pytest
+from unittest.mock import MagicMock
+
 
 def test_souperagent_importable():
     from src.agents.souper import SouperAgent
     # Verify it's the real class, not a MagicMock
     assert isinstance(SouperAgent, type), f"SouperAgent should be a real type, got {type(SouperAgent)}"
     assert SouperAgent.__module__ == "src.agents.souper", "SouperAgent should be loaded from src.agents.souper"
-    assert not hasattr(SouperAgent, "_mark_stale_memories"), "Expected _mark_stale_memories to not exist yet"
-    # _mark_stale_memories doesn't exist yet — just confirm real class loads
+    # _mark_stale_memories will be added in Task 2 — just confirm real class loads
+
+
+def _make_agent(user_id="user1"):
+    """Build a SouperAgent instance without calling __init__."""
+    from src.agents.souper import SouperAgent
+    agent = object.__new__(SouperAgent)
+    agent.user_id = user_id
+    agent.memory_manager = MagicMock()
+    agent.memory_manager.db = MagicMock()
+    return agent
+
+
+def _make_memory(memory_id, text, age_days, updated_days=None):
+    now = int(time.time())
+    m = MagicMock()
+    m.memory_id = memory_id
+    m.memory = text
+    m.created_at = now - age_days * 86400
+    m.updated_at = (now - updated_days * 86400) if updated_days is not None else None
+    m.topics = None
+    return m
+
+
+@pytest.mark.asyncio
+async def test_old_memory_gets_stale_prefix():
+    agent = _make_agent()
+    mem = _make_memory("m1", "User likes Vienna", age_days=200)
+    agent.memory_manager.db.get_user_memories.return_value = [mem]
+
+    from src.agents.souper import STALE_PREFIX
+    count = await agent._mark_stale_memories()
+
+    assert count == 1
+    assert mem.memory == STALE_PREFIX + "User likes Vienna"
+    agent.memory_manager.db.replace_user_memory.assert_called_once_with("m1", mem)
+
+
+@pytest.mark.asyncio
+async def test_fresh_memory_not_marked():
+    agent = _make_agent()
+    mem = _make_memory("m2", "User lives in Berlin", age_days=10)
+    agent.memory_manager.db.get_user_memories.return_value = [mem]
+
+    count = await agent._mark_stale_memories()
+
+    assert count == 0
+    agent.memory_manager.db.replace_user_memory.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_recently_updated_memory_not_marked():
+    """created_at old but updated_at recent → not stale."""
+    agent = _make_agent()
+    mem = _make_memory("m3", "User has a cat", age_days=300, updated_days=5)
+    agent.memory_manager.db.get_user_memories.return_value = [mem]
+
+    count = await agent._mark_stale_memories()
+
+    assert count == 0
+    agent.memory_manager.db.replace_user_memory.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_already_stale_memory_not_double_marked():
+    agent = _make_agent()
+    from src.agents.souper import STALE_PREFIX
+    mem = _make_memory("m4", STALE_PREFIX + "User likes Vienna", age_days=200)
+    agent.memory_manager.db.get_user_memories.return_value = [mem]
+
+    count = await agent._mark_stale_memories()
+
+    assert count == 0
+    agent.memory_manager.db.replace_user_memory.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stale_prefix_removed_when_memory_confirmed():
+    """updated_at is recent (agent called update_memory) but prefix still present → strip it."""
+    agent = _make_agent()
+    from src.agents.souper import STALE_PREFIX
+    mem = _make_memory("m5", STALE_PREFIX + "User likes Vienna", age_days=300, updated_days=1)
+    agent.memory_manager.db.get_user_memories.return_value = [mem]
+
+    count = await agent._mark_stale_memories()
+
+    assert count == 1
+    assert mem.memory == "User likes Vienna"
+    agent.memory_manager.db.replace_user_memory.assert_called_once_with("m5", mem)
+
+
+@pytest.mark.asyncio
+async def test_no_user_id_skips_check():
+    agent = _make_agent(user_id="")
+    count = await agent._mark_stale_memories()
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_no_memory_manager_skips_check():
+    from src.agents.souper import SouperAgent
+    agent = object.__new__(SouperAgent)
+    agent.user_id = "user1"
+    agent.memory_manager = None
+    count = await agent._mark_stale_memories()
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_memory_with_no_timestamps_skipped():
+    """Memories where both created_at and updated_at are None must not be marked stale."""
+    agent = _make_agent()
+    mem = _make_memory("m6", "User speaks French", age_days=0)
+    mem.created_at = None
+    mem.updated_at = None
+    agent.memory_manager.db.get_user_memories.return_value = [mem]
+
+    count = await agent._mark_stale_memories()
+
+    assert count == 0
+    agent.memory_manager.db.replace_user_memory.assert_not_called()
+    assert mem.memory == "User speaks French"

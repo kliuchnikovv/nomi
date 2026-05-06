@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -25,6 +26,8 @@ name = "Souper"
 # Maximum number of unique memories to keep in the injected context.
 # Older duplicates are pruned after each run.
 MAX_UNIQUE_MEMORIES = 30
+STALE_PREFIX = "[POSSIBLY STALE] "
+STALE_THRESHOLD_DAYS = 180
 
 BASE_INSTRUCTIONS = f"""
 You are {name}, a personal AI assistant designed to help users with their daily tasks.
@@ -352,6 +355,72 @@ class SouperAgent(Agent):
 
         except Exception as exc:
             logger.warning("[Souper] Memory conflict resolution failed: %s", exc)
+            return 0
+
+    async def _mark_stale_memories(self) -> int:
+        """Prepend STALE_PREFIX to memories not updated in STALE_THRESHOLD_DAYS.
+
+        Also strips the prefix from memories that were recently confirmed
+        (updated_at refreshed by the agent calling update_memory).
+        Returns the number of memories whose staleness state changed.
+        """
+        if not self.memory_manager or not self.user_id:
+            return 0
+
+        try:
+            db = self.memory_manager.db
+            if db is None:
+                return 0
+
+            memories = db.get_user_memories(user_id=self.user_id)
+            if not memories:
+                return 0
+
+            now = time.time()
+            cutoff = now - STALE_THRESHOLD_DAYS * 86400
+            changed = 0
+
+            for mem in memories:
+                text = getattr(mem, "memory", "") or ""
+                updated_at = getattr(mem, "updated_at", None)
+                created_at = getattr(mem, "created_at", None)
+                if updated_at is None and created_at is None:
+                    continue
+                last_touched = max(updated_at or 0, created_at or 0)
+                is_stale = last_touched < cutoff
+                already_marked = text.startswith(STALE_PREFIX)
+
+                if is_stale and not already_marked:
+                    mem.memory = STALE_PREFIX + text
+                elif not is_stale and already_marked:
+                    mem.memory = text[len(STALE_PREFIX):]
+                else:
+                    continue
+
+                mem_id = getattr(mem, "memory_id", None)
+                if not mem_id:
+                    mem.memory = text  # restore on failure
+                    continue
+
+                try:
+                    db.replace_user_memory(mem_id, mem)
+                    changed += 1
+                except Exception as exc:
+                    logger.warning(
+                        "[Souper] Failed to update staleness for memory %s: %s", mem_id, exc
+                    )
+                    mem.memory = text  # restore on failure
+
+            if changed:
+                logger.info(
+                    "[Souper] Staleness: %d memories changed state for user %s",
+                    changed,
+                    self.user_id,
+                )
+            return changed
+
+        except Exception as exc:
+            logger.warning("[Souper] Memory staleness check failed: %s", exc)
             return 0
 
     async def arun(self, *args, **kwargs):
