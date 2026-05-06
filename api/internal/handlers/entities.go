@@ -20,7 +20,10 @@ type EntitiesHandler struct {
 
 // NewEntitiesHandler creates a new EntitiesHandler.
 func NewEntitiesHandler(store *storage.Storage, logger *zap.Logger) *EntitiesHandler {
-	return &EntitiesHandler{store: store, logger: logger}
+	return &EntitiesHandler{
+		store:  store,
+		logger: logger,
+	}
 }
 
 // entityRow scans a row from ai.agno_learnings.
@@ -60,8 +63,8 @@ type entityRelationship struct {
 	Relation string `json:"relation"`
 }
 
-// EntityEntry is the API response shape for a single entity memory.
-type EntityEntry struct {
+// entityEntry is the API response shape for a single entity memory.
+type entityEntry struct {
 	ID            string               `json:"id"`
 	EntityID      string               `json:"entity_id"`
 	EntityType    string               `json:"entity_type"`
@@ -96,7 +99,7 @@ func (h *EntitiesHandler) GetEntities(c *gin.Context) {
 		return
 	}
 
-	entries := make([]EntityEntry, 0, len(rows))
+	entries := make([]entityEntry, 0, len(rows))
 	for _, r := range rows {
 		var content entityContent
 		if err := json.Unmarshal(r.Content, &content); err != nil {
@@ -106,7 +109,7 @@ func (h *EntitiesHandler) GetEntities(c *gin.Context) {
 			)
 			continue
 		}
-		entries = append(entries, EntityEntry{
+		entries = append(entries, entityEntry{
 			ID:            r.ID,
 			EntityID:      content.EntityID,
 			EntityType:    content.EntityType,
