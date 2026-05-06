@@ -75,6 +75,7 @@ func New(
 		botIdentityHandler   = handlers.NewBotIdentityHandler(ctr.Storage, logger)
 		planDocumentsHandler = handlers.NewPlanDocumentsHandler(ctr.Storage, logger)
 		memoriesHandler      = handlers.NewMemoriesHandler(ctr.Storage, logger)
+		entitiesHandler      = handlers.NewEntitiesHandler(ctr.Storage, logger)
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -146,6 +147,9 @@ func New(
 	// Memories API — MUST be before the wildcard /api/:plugin/*path route
 	r.GET("/api/user/memories", wrapWithAuth(memoriesHandler.GetMemories, authMiddleware))
 	r.DELETE("/api/user/memories/:id", wrapWithAuth(memoriesHandler.DeleteMemory, authMiddleware))
+
+	// Entities API — MUST be before the wildcard /api/:plugin/*path route
+	r.GET("/api/user/entities", wrapWithAuth(entitiesHandler.GetEntities, authMiddleware))
 
 	// RAG index — forward personal data indexing requests to Python backend
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
