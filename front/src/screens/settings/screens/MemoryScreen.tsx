@@ -14,7 +14,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { NavArrowLeft, Trash } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { themes } from '../../../themes';
-import { MemoryEntry, memoryApi } from '../../../apiClient';
+import { MemoryEntry, EntityEntry, memoryApi, entityApi } from '../../../apiClient';
 import { SettingsStackParamList } from '../../../navigation/types';
 
 type Nav = NativeStackNavigationProp<SettingsStackParamList, 'MemoryScreen'>;
@@ -40,13 +40,18 @@ export function MemoryScreen() {
     const [memories, setMemories] = useState<MemoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [entities, setEntities] = useState<EntityEntry[]>([]);
 
     const load = useCallback(async (isRefresh = false) => {
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
         try {
-            const data = await memoryApi.list();
-            setMemories(data ?? []);
+            const [memoriesData, entitiesData] = await Promise.all([
+                memoryApi.list(),
+                entityApi.list(),
+            ]);
+            setMemories(memoriesData ?? []);
+            setEntities(entitiesData ?? []);
         } catch (e) {
             console.error('Failed to load memories', e);
         } finally {
@@ -113,6 +118,51 @@ export function MemoryScreen() {
         memoryText: { fontSize: 15, color: theme.textPrimary, lineHeight: 21 },
         dateText: { fontSize: 12, color: theme.fadedText, marginTop: 4 },
         deleteBtn: { padding: 4, marginTop: 2 },
+        sectionTitle: {
+            fontSize: 13,
+            fontWeight: '600',
+            color: theme.fadedText,
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+            marginTop: 16,
+            marginBottom: 4,
+        },
+        entityCard: {
+            backgroundColor: theme.surface,
+            borderRadius: 12,
+            padding: 14,
+            marginTop: 10,
+        },
+        entityHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 6,
+        },
+        entityName: {
+            fontSize: 15,
+            fontWeight: '600',
+            color: theme.textPrimary,
+            flex: 1,
+        },
+        entityTypeBadge: {
+            backgroundColor: theme.accent + '22',
+            borderRadius: 6,
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+        },
+        entityTypeText: {
+            fontSize: 11,
+            fontWeight: '600',
+            color: theme.accent,
+            textTransform: 'capitalize',
+        },
+        entityFact: {
+            fontSize: 13,
+            color: theme.textSecondary ?? theme.fadedText,
+            lineHeight: 18,
+            marginTop: 2,
+        },
     }), [theme, palette, insets.bottom]);
 
     const renderItem = useCallback(({ item }: { item: MemoryEntry }) => (
@@ -131,6 +181,36 @@ export function MemoryScreen() {
         </View>
     ), [styles, theme, handleDelete]);
 
+    const renderEntityCard = useCallback((entity: EntityEntry) => (
+        <View key={entity.entity_id} style={styles.entityCard}>
+            <View style={styles.entityHeader}>
+                <Text style={styles.entityName} numberOfLines={1}>
+                    {entity.name ?? entity.entity_id}
+                </Text>
+                <View style={styles.entityTypeBadge}>
+                    <Text style={styles.entityTypeText}>{entity.entity_type}</Text>
+                </View>
+            </View>
+            {(entity.facts ?? []).slice(0, 3).map(fact => (
+                <Text key={fact.id} style={styles.entityFact}>• {fact.content}</Text>
+            ))}
+        </View>
+    ), [styles]);
+
+    const listHeader = useMemo(() => (
+        <View>
+            {entities.length > 0 && (
+                <View>
+                    <Text style={styles.sectionTitle}>Entities</Text>
+                    {entities.map(e => renderEntityCard(e))}
+                </View>
+            )}
+            {memories.length > 0 && (
+                <Text style={styles.sectionTitle}>Memories</Text>
+            )}
+        </View>
+    ), [entities, memories.length, styles, renderEntityCard]);
+
     return (
         <View style={[styles.root, { paddingTop: insets.top }]}>
             <View style={styles.header}>
@@ -144,7 +224,7 @@ export function MemoryScreen() {
                 <View style={styles.centered}>
                     <ActivityIndicator size="large" color={theme.accent} />
                 </View>
-            ) : memories.length === 0 ? (
+            ) : memories.length === 0 && entities.length === 0 ? (
                 <View style={styles.centered}>
                     <Text style={styles.emptyText}>
                         No memories yet. Chat with the agent and it will start remembering things about you.
@@ -155,6 +235,7 @@ export function MemoryScreen() {
                     data={memories}
                     keyExtractor={item => item.id}
                     renderItem={renderItem}
+                    ListHeaderComponent={listHeader}
                     contentContainerStyle={styles.listContent}
                     onRefresh={() => load(true)}
                     refreshing={refreshing}
