@@ -119,12 +119,10 @@ export function MemoryScreen() {
         dateText: { fontSize: 12, color: theme.fadedText, marginTop: 4 },
         deleteBtn: { padding: 4, marginTop: 2 },
         sectionTitle: {
-            fontSize: 13,
-            fontWeight: '600',
-            color: theme.fadedText,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            marginTop: 16,
+            fontSize: 17,
+            fontWeight: '600' as const,
+            color: theme.textPrimary,
+            marginTop: 20,
             marginBottom: 4,
         },
         entityCard: {
@@ -182,10 +180,10 @@ export function MemoryScreen() {
     ), [styles, theme, handleDelete]);
 
     const renderEntityCard = useCallback((entity: EntityEntry) => (
-        <View key={entity.entity_id} style={styles.entityCard}>
+        <View key={entity.id} style={styles.entityCard}>
             <View style={styles.entityHeader}>
                 <Text style={styles.entityName} numberOfLines={1}>
-                    {entity.name ?? entity.entity_id}
+                    {entity.name || entity.entity_id}
                 </Text>
                 <View style={styles.entityTypeBadge}>
                     <Text style={styles.entityTypeText}>{entity.entity_type}</Text>
@@ -197,19 +195,17 @@ export function MemoryScreen() {
         </View>
     ), [styles]);
 
-    const listHeader = useMemo(() => (
+    const listHeader = useMemo(() => entities.length > 0 ? (
         <View>
-            {entities.length > 0 && (
-                <View>
-                    <Text style={styles.sectionTitle}>Entities</Text>
-                    {entities.map(e => renderEntityCard(e))}
-                </View>
-            )}
+            <Text style={styles.sectionTitle}>Entity Memory</Text>
+            {entities.map(renderEntityCard)}
             {memories.length > 0 && (
                 <Text style={styles.sectionTitle}>Memories</Text>
             )}
         </View>
-    ), [entities, memories.length, styles, renderEntityCard]);
+    ) : memories.length > 0 ? (
+        <Text style={styles.sectionTitle}>Memories</Text>
+    ) : null, [entities, memories.length, styles, renderEntityCard]);
 
     return (
         <View style={[styles.root, { paddingTop: insets.top }]}>
