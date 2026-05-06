@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -147,9 +149,8 @@ def _build_user_memory(params: dict[str, Any]) -> Toolkit:
     """Build user memory tools (add_memory, search_memory)."""
     logger.info("[UserMemory] Building user memory tools")
     from src.tools.user_memory import make_user_memory_tools
-    from agno.knowledge import Knowledge
 
-    knowledge: Knowledge | None = params.get("knowledge")
+    knowledge = params.get("knowledge")
     user_id: str = params.get("user_id", "")
 
     if not knowledge:
