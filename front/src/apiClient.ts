@@ -337,6 +337,41 @@ export const memoryApi = {
     delete: (id: string) => apiClient.delete<void>(`${API_URL()}/user/memories/${id}`),
 };
 
+export interface EntityFact {
+    id: string;
+    content: string;
+    confidence?: number;
+}
+
+export interface EntityEvent {
+    id: string;
+    content: string;
+    date?: string;
+}
+
+export interface EntityRelationship {
+    entity_id: string;
+    relation: string;
+}
+
+export interface EntityEntry {
+    id: string;
+    entity_id: string;
+    entity_type: string;
+    name?: string;
+    description?: string;
+    properties?: Record<string, string>;
+    facts?: EntityFact[];
+    events?: EntityEvent[];
+    relationships?: EntityRelationship[];
+    created_at: string;
+    updated_at: string;
+}
+
+export const entityApi = {
+    list: () => apiClient.get<EntityEntry[]>(`${API_URL()}/user/entities`),
+};
+
 export const credentialsApi = {
     save: (provider: string, type: 'api_key' | 'custom', apiKey?: string, extra?: Record<string, any>) =>
         apiClient.post<{ ok: boolean }>(`${API_URL()}/credentials`, {
