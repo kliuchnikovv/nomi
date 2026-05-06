@@ -134,3 +134,10 @@ async def test_memory_with_no_timestamps_skipped():
     assert count == 0
     agent.memory_manager.db.replace_user_memory.assert_not_called()
     assert mem.memory == "User speaks French"
+
+
+def test_normalize_strips_stale_prefix():
+    from src.agents.souper import SouperAgent, STALE_PREFIX
+    normalize = SouperAgent._normalize_memory_text
+    assert normalize(STALE_PREFIX + "User likes Vienna") == normalize("User likes Vienna")
+    assert normalize(STALE_PREFIX + "User likes Vienna") == "user likes vienna"

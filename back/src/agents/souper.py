@@ -184,7 +184,8 @@ class SouperAgent(Agent):
         """Normalize memory text for deduplication comparison."""
         if not text:
             return ""
-        # Lowercase, strip whitespace, collapse multiple spaces
+        if text.startswith(STALE_PREFIX):
+            text = text[len(STALE_PREFIX):]
         return " ".join(text.lower().split())
 
     async def _deduplicate_memories(self) -> int:
