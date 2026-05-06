@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// EntitiesHandler handles REST operations for Agno entity memory.
+// EntitiesHandler handles REST operations for Agno entity memories.
 type EntitiesHandler struct {
 	store  *storage.Storage
 	logger *zap.Logger
@@ -20,36 +20,62 @@ type EntitiesHandler struct {
 
 // NewEntitiesHandler creates a new EntitiesHandler.
 func NewEntitiesHandler(store *storage.Storage, logger *zap.Logger) *EntitiesHandler {
-	return &EntitiesHandler{
-		store:  store,
-		logger: logger,
-	}
+	return &EntitiesHandler{store: store, logger: logger}
 }
 
-// entityRow is used to scan a raw DB row from ai.agno_learnings.
+// entityRow scans a row from ai.agno_learnings.
 type entityRow struct {
-	ID        string  `gorm:"column:id"`
-	Content   string  `gorm:"column:content"`
-	CreatedAt *string `gorm:"column:created_at"`
-	UpdatedAt *string `gorm:"column:updated_at"`
+	ID        string `gorm:"column:id"`
+	Content   []byte `gorm:"column:content"`
+	CreatedAt int64  `gorm:"column:created_at"`
+	UpdatedAt int64  `gorm:"column:updated_at"`
 }
 
-// entityContent is the parsed shape of the JSONB content column.
+// entityContent mirrors the EntityMemory JSON stored in the content column.
 type entityContent struct {
-	Entity  string `json:"entity"`
-	Summary string `json:"summary"`
+	EntityID      string               `json:"entity_id"`
+	EntityType    string               `json:"entity_type"`
+	Name          string               `json:"name"`
+	Description   string               `json:"description"`
+	Properties    map[string]string    `json:"properties"`
+	Facts         []entityFact         `json:"facts"`
+	Events        []entityEvent        `json:"events"`
+	Relationships []entityRelationship `json:"relationships"`
+}
+
+type entityFact struct {
+	ID         string  `json:"id"`
+	Content    string  `json:"content"`
+	Confidence float64 `json:"confidence,omitempty"`
+}
+
+type entityEvent struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+	Date    string `json:"date,omitempty"`
+}
+
+type entityRelationship struct {
+	EntityID string `json:"entity_id"`
+	Relation string `json:"relation"`
 }
 
 // EntityEntry is the API response shape for a single entity memory.
 type EntityEntry struct {
-	ID        string    `json:"id"`
-	Entity    string    `json:"entity"`
-	Summary   string    `json:"summary"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID            string               `json:"id"`
+	EntityID      string               `json:"entity_id"`
+	EntityType    string               `json:"entity_type"`
+	Name          string               `json:"name,omitempty"`
+	Description   string               `json:"description,omitempty"`
+	Properties    map[string]string    `json:"properties,omitempty"`
+	Facts         []entityFact         `json:"facts,omitempty"`
+	Events        []entityEvent        `json:"events,omitempty"`
+	Relationships []entityRelationship `json:"relationships,omitempty"`
+	CreatedAt     time.Time            `json:"created_at"`
+	UpdatedAt     time.Time            `json:"updated_at"`
 }
 
-// GetEntities returns all entity_memory rows from ai.agno_learnings for the authenticated user.
+// GetEntities returns all Agno entity memories for the authenticated user.
 // GET /api/user/entities
 func (h *EntitiesHandler) GetEntities(c *gin.Context) {
 	userID := c.MustGet("userID").(uuid.UUID)
@@ -62,43 +88,37 @@ func (h *EntitiesHandler) GetEntities(c *gin.Context) {
 			namespace,
 		).
 		Scan(&rows).Error; err != nil {
-		h.logger.Error("failed to fetch entity memories",
+		h.logger.Error("failed to fetch entities",
 			zap.String("user_id", userID.String()),
 			zap.Error(err),
 		)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch entity memories"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch entities"})
 		return
 	}
 
 	entries := make([]EntityEntry, 0, len(rows))
 	for _, r := range rows {
 		var content entityContent
-		if err := json.Unmarshal([]byte(r.Content), &content); err != nil {
+		if err := json.Unmarshal(r.Content, &content); err != nil {
 			h.logger.Warn("failed to parse entity content",
 				zap.String("id", r.ID),
 				zap.Error(err),
 			)
 			continue
 		}
-
-		entry := EntityEntry{
-			ID:      r.ID,
-			Entity:  content.Entity,
-			Summary: content.Summary,
-		}
-
-		if r.CreatedAt != nil {
-			if t, err := time.Parse(time.RFC3339, *r.CreatedAt); err == nil {
-				entry.CreatedAt = t.UTC()
-			}
-		}
-		if r.UpdatedAt != nil {
-			if t, err := time.Parse(time.RFC3339, *r.UpdatedAt); err == nil {
-				entry.UpdatedAt = t.UTC()
-			}
-		}
-
-		entries = append(entries, entry)
+		entries = append(entries, EntityEntry{
+			ID:            r.ID,
+			EntityID:      content.EntityID,
+			EntityType:    content.EntityType,
+			Name:          content.Name,
+			Description:   content.Description,
+			Properties:    content.Properties,
+			Facts:         content.Facts,
+			Events:        content.Events,
+			Relationships: content.Relationships,
+			CreatedAt:     time.Unix(r.CreatedAt, 0).UTC(),
+			UpdatedAt:     time.Unix(r.UpdatedAt, 0).UTC(),
+		})
 	}
 
 	c.JSON(http.StatusOK, entries)
