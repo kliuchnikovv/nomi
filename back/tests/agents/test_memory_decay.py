@@ -141,3 +141,83 @@ def test_normalize_strips_stale_prefix():
     normalize = SouperAgent._normalize_memory_text
     assert normalize(STALE_PREFIX + "User likes Vienna") == normalize("User likes Vienna")
     assert normalize(STALE_PREFIX + "User likes Vienna") == "user likes vienna"
+
+
+@pytest.mark.asyncio
+async def test_arun_calls_mark_stale_after_run():
+    from src.agents.souper import SouperAgent
+    agent = object.__new__(SouperAgent)
+    agent.user_id = "user1"
+    agent.memory_manager = MagicMock()
+    agent.memory_manager.db = MagicMock()
+    agent.memory_manager.db.get_user_memories.return_value = []
+
+    called = []
+
+    async def fake_dedup():
+        called.append("dedup")
+        return 0
+
+    async def fake_conflicts():
+        called.append("conflicts")
+        return 0
+
+    async def fake_stale():
+        called.append("stale")
+        return 0
+
+    agent._deduplicate_memories = fake_dedup
+    agent._resolve_memory_conflicts = fake_conflicts
+    agent._mark_stale_memories = fake_stale
+
+    async def fake_parent_arun(*args, **kwargs):
+        return MagicMock()
+
+    import unittest.mock as mock
+    with mock.patch.object(
+        SouperAgent.__bases__[0], "arun", new=fake_parent_arun
+    ):
+        await agent.arun()
+
+    assert called == ["dedup", "conflicts", "stale"]
+
+
+@pytest.mark.asyncio
+async def test_arun_streaming_calls_mark_stale_in_order():
+    from src.agents.souper import SouperAgent
+    agent = object.__new__(SouperAgent)
+    agent.user_id = "user1"
+    agent.stream = True
+    agent.memory_manager = MagicMock()
+    agent.memory_manager.db = MagicMock()
+    agent.memory_manager.db.get_user_memories.return_value = []
+
+    called = []
+
+    async def fake_dedup():
+        called.append("dedup")
+        return 0
+
+    async def fake_conflicts():
+        called.append("conflicts")
+        return 0
+
+    async def fake_stale():
+        called.append("stale")
+        return 0
+
+    agent._deduplicate_memories = fake_dedup
+    agent._resolve_memory_conflicts = fake_conflicts
+    agent._mark_stale_memories = fake_stale
+
+    async def fake_parent_arun(*args, **kwargs):
+        return
+        yield  # make it an async generator
+
+    import unittest.mock as mock
+    with mock.patch.object(SouperAgent.__bases__[0], "arun", new=fake_parent_arun):
+        gen = await agent.arun(stream=True)
+        async for _ in gen:
+            pass
+
+    assert called == ["dedup", "conflicts", "stale"]

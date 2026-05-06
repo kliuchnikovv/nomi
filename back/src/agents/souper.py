@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -79,7 +80,13 @@ Your memory operates automatically. Never ask the user to tell you what to remem
 - Before calling `add_memory`, check `<memories_from_previous_interactions>` for any existing fact on the same topic.
 - If an existing memory would become outdated or wrong by this new fact, call `update_memory(id, new_text)` on that memory_id — do NOT add a new conflicting entry.
 - Example: stored memory "User likes coffee" + user now says "I quit coffee" → call `update_memory` to change it, not `add_memory`.
-- Only call `add_memory` when no existing memory already covers the same factual domain."""
+- Only call `add_memory` when no existing memory already covers the same factual domain.
+
+**Stale memory handling:**
+- Memories prefixed with `[POSSIBLY STALE]` are facts not confirmed in over 6 months.
+- When a stale memory becomes relevant, ask the user briefly: "Just to confirm — is it still true that [fact]?"
+- Once confirmed, call `update_memory(memory_id, text)` with the text WITHOUT the `[POSSIBLY STALE]` prefix to refresh it.
+- When corrected, call `update_memory(memory_id, corrected_fact)` with the accurate text (no prefix)."""
 
 
 class SouperAgent(Agent):
@@ -420,6 +427,8 @@ class SouperAgent(Agent):
                 )
             return changed
 
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             logger.warning("[Souper] Memory staleness check failed: %s", exc)
             return 0
@@ -449,6 +458,10 @@ class SouperAgent(Agent):
                         await self._resolve_memory_conflicts()
                     except Exception:
                         pass
+                    try:
+                        await self._mark_stale_memories()
+                    except Exception:
+                        pass
             return _stream_with_dedup()
         else:
             result = await parent_arun
@@ -458,6 +471,10 @@ class SouperAgent(Agent):
                 pass
             try:
                 await self._resolve_memory_conflicts()
+            except Exception:
+                pass
+            try:
+                await self._mark_stale_memories()
             except Exception:
                 pass
             return result
