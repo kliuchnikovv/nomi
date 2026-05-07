@@ -1,20 +1,97 @@
 /**
  * @format
  *
- * Smoke test: verifies the App component mounts without a synchronous crash.
- * Async side-effects (integration loading, background tasks) are allowed to
- * fail gracefully — they are mocked or caught inside the app itself.
+ * Smoke test: verifies the App component mounts without crashing, including
+ * the async init phase (API URL, database, plugins). All heavy native deps
+ * are mocked; we let the full async init settle before asserting.
  */
 import React from 'react';
-import ReactTestRenderer, { act } from 'react-test-renderer';
+import { render, waitFor } from '@testing-library/react-native';
 import App from '../App';
 
-test('renders without crashing', () => {
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    // Only check synchronous render — async effects (DB init, integrations)
-    // run after mount and have their own error handling within the app.
-    act(() => {
-        renderer = ReactTestRenderer.create(<App />);
+// ── Async init mocks ──────────────────────────────────────────────────────────
+
+jest.mock('../src/config', () => ({
+    getApiUrl: () => 'http://test',
+    initApiUrl: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../src/services/database/database', () => ({
+    initDatabase: jest.fn(() => Promise.resolve()),
+    getDatabase: jest.fn(),
+}));
+
+jest.mock('../src/services/integrations/BackgroundTaskManager', () => ({
+    defineAllBackgroundTasks: jest.fn(),
+    initializeSystemEventListeners: jest.fn(),
+    initializeBackgroundTasks: jest.fn(() => Promise.resolve()),
+    refreshBackgroundTasks: jest.fn(() => Promise.resolve()),
+    registerBackgroundTask: jest.fn(() => Promise.resolve()),
+    unregisterBackgroundTask: jest.fn(() => Promise.resolve()),
+    stopAllBackgroundTasks: jest.fn(() => Promise.resolve()),
+    manuallyTriggerBackgroundTask: jest.fn(() => Promise.resolve()),
+    getActiveTaskConfig: jest.fn(() => undefined),
+    isActive: jest.fn(() => false),
+}));
+
+jest.mock('../src/services/location/locationService', () => ({
+    updateLocationFromGPS: jest.fn(() => Promise.resolve()),
+    getStoredLocation: jest.fn(() => Promise.resolve({ lat: 0, lon: 0 })),
+}));
+
+jest.mock('../src/socket', () => ({
+    socket: {
+        connect: jest.fn(),
+        close: jest.fn(),
+        isReady: jest.fn(() => false),
+        setToken: jest.fn(),
+        processOutbox: jest.fn(),
+    },
+}));
+
+// ── Navigation mock ───────────────────────────────────────────────────────────
+// NavigationContainer calls window.dispatchEvent which doesn't exist in the
+// react-native test environment.
+jest.mock('@react-navigation/native', () => {
+    const React = require('react');
+    return {
+        NavigationContainer: ({ children }: any) => React.createElement(React.Fragment, null, children),
+        DarkTheme: { colors: {} },
+        useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn(), replace: jest.fn() }),
+        useRoute: () => ({ params: {} }),
+        useFocusEffect: (cb: any) => { require('react').useEffect(cb, []); },
+    };
+});
+
+jest.mock('@react-navigation/native-stack', () => ({
+    createNativeStackNavigator: () => ({
+        Navigator: ({ children }: any) => children,
+        Screen: () => null,
+    }),
+}));
+
+jest.mock('@react-navigation/bottom-tabs', () => ({
+    createBottomTabNavigator: () => ({
+        Navigator: ({ children }: any) => children,
+        Screen: () => null,
+    }),
+}));
+
+jest.mock('../src/debug/DebugUtils', () => ({
+    initDebugUtils: jest.fn(),
+}));
+
+// ── Test ──────────────────────────────────────────────────────────────────────
+
+test('renders without crashing and completes async init', async () => {
+    const { getByText } = render(<App />);
+
+    // Initially shows the splash screen while configReady=false
+    expect(getByText('Genie')).toBeTruthy();
+
+    // Wait for the async init to complete (configReady flips to true)
+    // After init, the auth gate is shown (loading=true → null, or login screen)
+    await waitFor(() => {
+        expect(require('../src/services/database/database').initDatabase).toHaveBeenCalled();
     });
-    expect(renderer).toBeTruthy();
 });

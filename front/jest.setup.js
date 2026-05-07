@@ -1,5 +1,12 @@
 import 'react-native-gesture-handler/jestSetup';
 
+// @react-navigation/native's NavigationContainer calls window.dispatchEvent to
+// broadcast navigation state changes. The react-native Jest environment doesn't
+// provide a real DOM, so we stub it to prevent worker crashes.
+if (typeof window !== 'undefined' && typeof window.dispatchEvent !== 'function') {
+    window.dispatchEvent = () => true;
+}
+
 jest.mock('react-native-reanimated', () => {
     const Reanimated = require('react-native-reanimated/mock');
 
