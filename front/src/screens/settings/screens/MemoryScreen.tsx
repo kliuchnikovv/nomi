@@ -46,14 +46,18 @@ export function MemoryScreen() {
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
         try {
-            const [memoriesData, entitiesData] = await Promise.all([
+            const [memoriesResult, entitiesResult] = await Promise.allSettled([
                 memoryApi.list(),
                 entityApi.list(),
             ]);
-            setMemories(memoriesData ?? []);
-            setEntities(entitiesData ?? []);
-        } catch (e) {
-            console.error('Failed to load memories', e);
+            setMemories(memoriesResult.status === 'fulfilled' ? (memoriesResult.value ?? []) : []);
+            setEntities(entitiesResult.status === 'fulfilled' ? (entitiesResult.value ?? []) : []);
+            if (memoriesResult.status === 'rejected') {
+                console.error('Failed to load memories', memoriesResult.reason);
+            }
+            if (entitiesResult.status === 'rejected') {
+                console.warn('Failed to load entities', entitiesResult.reason);
+            }
         } finally {
             setLoading(false);
             setRefreshing(false);
