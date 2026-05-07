@@ -145,6 +145,21 @@ jest.mock('react-native-keyboard-controller', () => ({
 jest.mock('react-native/Libraries/EventEmitter/NativeEventEmitter');
 jest.mock('react-native-markdown-display', () => 'Markdown');
 
+jest.mock('@gorhom/bottom-sheet', () => {
+    const React = require('react');
+    const BottomSheetFlatList = ({ data, renderItem }) =>
+        data ? data.map((item, i) => renderItem({ item, index: i })) : null;
+    const BottomSheet = ({ children }) => children || null;
+    BottomSheet.displayName = 'BottomSheet';
+    return { __esModule: true, default: BottomSheet, BottomSheetFlatList, BottomSheetScrollView: ({ children }) => children };
+});
+
+jest.mock('iconoir-react-native', () => {
+    const React = require('react');
+    const stub = (name) => (props) => React.createElement('View', { testID: name, ...props });
+    return new Proxy({}, { get: (_, name) => stub(String(name)) });
+});
+
 jest.mock('@expo/vector-icons', () => {
     const React = require('react');
     const mockIcon = ({ name, ...props }) => React.createElement('View', props);
