@@ -8,6 +8,9 @@
         "lint": "eslint .",
         "start": "react-native start",
         "test": "jest",
+        "test:coverage": "jest --coverage",
+        "test:watch": "jest --watch",
+        "type-check": "tsc --noEmit",
         "postinstall": "patch-package"
     },
     "dependencies": {

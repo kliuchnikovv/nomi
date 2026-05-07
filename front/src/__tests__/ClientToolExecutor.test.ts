@@ -4,28 +4,28 @@
  *  - #12: No hardcoded debug URLs (127.0.0.1:7242)
  */
 
-import { ClientToolExecutor } from '../../services/tools/ClientToolExecutor';
+import { ClientToolExecutor } from '../services/tools/ClientToolExecutor';
 
 // Mock the plugin registry
-jest.mock('../../plugins/clientRegistry', () => ({
+jest.mock('../plugins/clientRegistry', () => ({
     getClientPluginHandler: jest.fn(),
     getClientPlugin: jest.fn(),
 }));
 
-jest.mock('../../plugins/registerClientPlugins', () => ({
+jest.mock('../plugins/registerClientPlugins', () => ({
     registerClientPlugins: jest.fn(),
 }));
 
-jest.mock('../../screens/planner/planDocumentRegistry', () => ({
+jest.mock('../screens/planner/planDocumentRegistry', () => ({
     callApplyPatches: jest.fn(),
 }));
 
-jest.mock('../integrations/registry', () => ({
+jest.mock('../services/integrations/registry', () => ({
     getIntegrationMetadata: jest.fn(),
 }));
 
-import { getClientPluginHandler } from '../../plugins/clientRegistry';
-import { getIntegrationMetadata } from '../integrations/registry';
+import { getClientPluginHandler } from '../plugins/clientRegistry';
+import { getIntegrationMetadata } from '../services/integrations/registry';
 
 const mockedGetHandler = getClientPluginHandler as jest.MockedFunction<typeof getClientPluginHandler>;
 const mockedGetMetadata = getIntegrationMetadata as jest.MockedFunction<typeof getIntegrationMetadata>;
