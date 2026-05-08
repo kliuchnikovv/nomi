@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { LayoutChangeEvent, View, Text } from 'react-native';
+import { LayoutChangeEvent } from 'react-native';
 import {
     createBottomTabNavigator,
     BottomTabBar,
@@ -35,28 +35,6 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 
 const SPRING_CONFIG = { damping: 22, stiffness: 180 };
 
-function CalendarDayIcon({ color }: { color: string }) {
-    const day = String(new Date().getDate());
-    return (
-        <View style={{
-            width: 26,
-            height: 26,
-            borderRadius: 6,
-            borderWidth: 1.5,
-            borderColor: color,
-            alignItems: 'center',
-            justifyContent: 'center',
-        }}>
-            <Text style={{
-                fontSize: 13,
-                fontWeight: '700',
-                color,
-                lineHeight: 15,
-                includeFontPadding: false,
-            }}>{day}</Text>
-        </View>
-    );
-}
 
 function AnimatedTabBar(props: BottomTabBarProps) {
     const { state } = props;
@@ -166,16 +144,15 @@ export function MainTabs() {
                 }) => {
                     let iconName: keyof typeof Ionicons.glyphMap;
 
-                    if (route.name === 'Chat') {
-                        return <CalendarDayIcon color={color} />;
-                    }
-
                     switch (route.name) {
                         case 'Dashboard':
                             iconName = focused ? 'home' : 'home-outline';
                             break;
                         case 'Planning':
                             iconName = focused ? 'calendar' : 'calendar-outline';
+                            break;
+                        case 'Chat':
+                            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
                             break;
                         case 'Projects':
                             iconName = focused ? 'folder' : 'folder-outline';

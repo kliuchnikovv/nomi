@@ -21,6 +21,23 @@ function isPlannerChat(c: Chat): boolean {
     return c.mode === 'agent' && (c.title || '').startsWith(PLANNER_TITLE_PREFIX);
 }
 
+function PlannerDayIcon({ title, color }: { title: string; color: string }) {
+    const match = title.match(/Planner: \d{4}-\d{2}-(\d{2})/);
+    const day = match ? String(parseInt(match[1], 10)) : '?';
+    return (
+        <View style={{
+            width: 24, height: 24, borderRadius: 5,
+            borderWidth: 1.5, borderColor: color,
+            alignItems: 'center', justifyContent: 'center',
+        }}>
+            <Text style={{
+                fontSize: 11, fontWeight: '700', color,
+                lineHeight: 13, includeFontPadding: false,
+            }}>{day}</Text>
+        </View>
+    );
+}
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function formatTime(value?: number | null): string {
@@ -139,9 +156,11 @@ export function ChatListScreen() {
                 onLongPress={() => handleLongPress(item.id, item.title || 'Untitled')}
             >
                 <View style={[styles.iconCircle, { backgroundColor: theme.surface }]}>
-                    {item.icon && /\p{Emoji}/u.test(item.icon) && !/^[0-9#*]$/.test(item.icon)
-                        ? <Text style={{ fontSize: 16 }}>{item.icon}</Text>
-                        : <Ionicons name={isPlannerChat(item) ? 'calendar' : item.mode === 'team' ? 'people' : 'sparkles'} size={16} color={theme.accent} />
+                    {isPlannerChat(item)
+                        ? <PlannerDayIcon title={item.title || ''} color={theme.accent} />
+                        : item.icon && /\p{Emoji}/u.test(item.icon) && !/^[0-9#*]$/.test(item.icon)
+                            ? <Text style={{ fontSize: 16 }}>{item.icon}</Text>
+                            : <Ionicons name={item.mode === 'team' ? 'people' : 'sparkles'} size={16} color={theme.accent} />
                     }
                 </View>
                 <View style={styles.itemContent}>
