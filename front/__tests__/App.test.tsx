@@ -81,6 +81,17 @@ jest.mock('../src/debug/DebugUtils', () => ({
     initDebugUtils: jest.fn(),
 }));
 
+// ConnectorsProvider does async DB + integration loading that produces
+// act() warnings in a smoke test. Stub it as a pass-through.
+jest.mock('../src/screens/settings/connectors/context', () => ({
+    ConnectorsProvider: ({ children }: any) => children,
+    useConnectors: () => ({
+        tools: [], configs: [], pendingProvider: null, pendingCode: null,
+        authStatus: null, getIntegrations: jest.fn(), addIntegration: jest.fn(),
+        updateIntegration: jest.fn(), removeIntegration: jest.fn(),
+    }),
+}));
+
 // ── Test ──────────────────────────────────────────────────────────────────────
 
 test('renders without crashing and completes async init', async () => {

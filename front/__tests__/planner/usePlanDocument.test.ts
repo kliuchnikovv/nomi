@@ -54,9 +54,11 @@ async function renderAndLoad(items: PlanItem[] = []) {
 // ── Loading ───────────────────────────────────────────────────────────────────
 
 describe('usePlanDocument — loading', () => {
-    it('starts in loading state', () => {
+    it('starts in loading state', async () => {
         const { result } = renderHook(() => usePlanDocument('2024-06-15'));
         expect(result.current.loading).toBe(true);
+        // Let the async GET settle so state updates don't escape act().
+        await waitFor(() => expect(result.current.loading).toBe(false));
     });
 
     it('loads document from API and sets items', async () => {

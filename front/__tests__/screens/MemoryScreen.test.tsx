@@ -63,6 +63,9 @@ describe('MemoryScreen — structure', () => {
     it('renders the screen title', async () => {
         const { getByText } = render(<MemoryScreen />);
         expect(getByText('Memory')).toBeTruthy();
+        // Wait for useFocusEffect's load() to settle so async state updates
+        // don't escape the act() boundary and produce warnings.
+        await waitFor(() => expect(mockMemoryList).toHaveBeenCalled());
     });
 
     it('shows loading indicator on initial render', () => {
