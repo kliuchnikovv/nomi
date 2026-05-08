@@ -2,11 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import {
     Animated,
     ActivityIndicator,
-    SafeAreaView,
     StyleSheet,
     Text,
     View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Hardcoded retroSunset palette — ThemeProvider is not mounted yet at splash time
 const COLORS = {
