@@ -98,6 +98,10 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
   const chatModelRef = useRef<string>(DEFAULT_MODEL);
   const chatProviderRef = useRef<string>(DEFAULT_PROVIDER);
   const bootstrappedRef = useRef(false);
+  // Tracks the resolved chatId immediately (before React state propagates)
+  const chatIdRef = useRef<string | null>(null);
+  // Prevents concurrent lazy creation races
+  const creatingRef = useRef(false);
 
   // Subscribe to the store messages for THIS planner chat
   const storeMessages = useChatStore(state =>
@@ -186,6 +190,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
 
     // Reset per-day state immediately when date changes
     setChatId(null);
+    chatIdRef.current = null;
     setLocalMessages([]);
     setIsThinking(false);
     setIsConnected(false);
@@ -207,36 +212,30 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
         if (cancelled) return;
 
         const expectedTitle = `Planner: ${date}`;
-        let plannerChat = chats.find(
+        const plannerChat = (chats ?? []).find(
           c => c.title === expectedTitle && c.mode === PLANNER_CHAT_MODE,
         );
 
-        let resolvedId: string;
-        if (!plannerChat) {
-          const created = await apiClient.post<{ id: string }>(
-            `${getApiUrl()}/chats`,
-            { title: expectedTitle, mode: PLANNER_CHAT_MODE, model, team_id: null },
-          );
-          if (cancelled || !created?.id) return;
-          resolvedId = created.id;
-        } else {
-          resolvedId = plannerChat.id;
-        }
+        if (plannerChat) {
+          const resolvedId = plannerChat.id;
 
-        if (cancelled) return;
-
-        // LOAD HISTORY — merge to avoid wiping any in-flight streamed messages
-        const history = await apiClient.get<Message[]>(`${getApiUrl()}/chats/${resolvedId}/messages`);
-        if (!cancelled && history) {
-          const existing = useChatStore.getState().chats[resolvedId];
-          if (!existing || existing.length === 0) {
-            useChatStore.getState().setMessages(resolvedId, history);
-          } else {
-            useChatStore.getState().mergeMessages(resolvedId, history);
+          // LOAD HISTORY — merge to avoid wiping any in-flight streamed messages
+          const history = await apiClient.get<Message[]>(`${getApiUrl()}/chats/${resolvedId}/messages`);
+          if (!cancelled && history) {
+            const existing = useChatStore.getState().chats[resolvedId];
+            if (!existing || existing.length === 0) {
+              useChatStore.getState().setMessages(resolvedId, history);
+            } else {
+              useChatStore.getState().mergeMessages(resolvedId, history);
+            }
           }
-        }
 
-        setChatId(resolvedId);
+          if (cancelled) return;
+          chatIdRef.current = resolvedId;
+          setChatId(resolvedId);
+        }
+        // No chat yet for this date — it will be created lazily on first send.
+
         bootstrappedRef.current = true;
         setIsConnected(true);
       } catch (err) {
@@ -316,9 +315,32 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
   // ---------------------------------------------------------------------------
 
   const sendMessage = useCallback(
-    (text: string, options?: { webSearch?: boolean; context?: string; level?: 'quick' | 'standard' | 'full' }) => {
+    async (text: string, options?: { webSearch?: boolean; context?: string; level?: 'quick' | 'standard' | 'full' }) => {
       const trimmed = text.trim();
-      if (!trimmed || !chatId) return;
+      if (!trimmed) return;
+
+      // Lazy creation: create the chat on first send if it doesn't exist yet
+      let resolvedId = chatIdRef.current;
+      if (!resolvedId) {
+        if (creatingRef.current) return;
+        creatingRef.current = true;
+        try {
+          const expectedTitle = `Planner: ${date}`;
+          const created = await apiClient.post<{ id: string }>(
+            `${getApiUrl()}/chats`,
+            { title: expectedTitle, mode: PLANNER_CHAT_MODE, model: chatModelRef.current, team_id: null },
+          );
+          if (!created?.id) return;
+          resolvedId = created.id;
+          chatIdRef.current = resolvedId;
+          setChatId(resolvedId);
+        } catch (err) {
+          console.error('[usePlannerChat] lazy create error:', err);
+          return;
+        } finally {
+          creatingRef.current = false;
+        }
+      }
 
       const userMsgId = generateId();
       // Store only the visible text locally; context is invisible to the user
@@ -331,7 +353,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
       if (!token) return;
 
       socket.setChannel('chat');
-      socket.setChatId(chatId);
+      socket.setChatId(resolvedId);
       socket.setToken(token);
 
       if (!socket.isReady()) {
@@ -343,7 +365,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
 
       socket.sendMessage(
         payload,
-        chatId,
+        resolvedId,
         `planner_${Date.now()}`,
         userMsgId,
         undefined, // 5th: attachmentIDs
@@ -359,7 +381,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
         { type: 'planner', date: date, level: options?.level ?? 'standard' }, // 15th: command
       );
     },
-    [chatId, date],
+    [date],
   );
 
   // ---------------------------------------------------------------------------
@@ -369,7 +391,8 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
   const replyToAskUser = useCallback(
     (callId: string, answer: string) => {
       const trimmed = answer.trim();
-      if (!trimmed || !chatId) return;
+      const resolvedId = chatIdRef.current;
+      if (!trimmed || !resolvedId) return;
 
       const userMsgId = generateId();
       setLocalMessages(prev => [
@@ -383,7 +406,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
       if (!token) return;
 
       socket.setChannel('chat');
-      socket.setChatId(chatId);
+      socket.setChatId(resolvedId);
       socket.setToken(token);
 
       if (!socket.isReady()) {
@@ -392,7 +415,7 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
 
       socket.sendMessage(
         trimmed,
-        chatId,
+        resolvedId,
         `planner_reply_${Date.now()}`,
         userMsgId,
         undefined, // 5th: attachmentIDs
@@ -408,9 +431,9 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
         { type: 'planner', date: date },
       );
 
-      sendClientToolResult(chatId, callId, answer).catch(() => { });
+      sendClientToolResult(resolvedId, callId, answer).catch(() => { });
     },
-    [chatId, date],
+    [date],
   );
 
   return { messages, isConnected, isThinking, hasMore, loadMore, sendMessage, replyToAskUser };
