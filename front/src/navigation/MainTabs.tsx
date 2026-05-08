@@ -166,7 +166,7 @@ export function MainTabs() {
                 }) => {
                     let iconName: keyof typeof Ionicons.glyphMap;
 
-                    if (route.name === 'Planning') {
+                    if (route.name === 'Chat') {
                         return <CalendarDayIcon color={color} />;
                     }
 
@@ -174,10 +174,8 @@ export function MainTabs() {
                         case 'Dashboard':
                             iconName = focused ? 'home' : 'home-outline';
                             break;
-                        case 'Chat':
-                            iconName = focused
-                                ? 'chatbubbles'
-                                : 'chatbubbles-outline';
+                        case 'Planning':
+                            iconName = focused ? 'calendar' : 'calendar-outline';
                             break;
                         case 'Projects':
                             iconName = focused ? 'folder' : 'folder-outline';

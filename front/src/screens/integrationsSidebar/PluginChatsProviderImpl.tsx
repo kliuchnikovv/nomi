@@ -6,13 +6,16 @@ import { integrationStorage } from '../../services/integrations/IntegrationStora
 import { getAllIntegrations } from '../../services/integrations/registry';
 import { INTEGRATION_REGISTRY } from '../../plugins/registry.generated';
 import { getClientPlugin } from '../../plugins/clientRegistry';
+import { useAuth } from '../auth/context';
 
 export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
     const [plugins, setPlugins] = useState<Plugin[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const loadPlugins = useCallback(async () => {
+        if (!user) return;
         try {
             setLoading(true);
             setError(null);
@@ -65,7 +68,7 @@ export const PluginChatsProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     useEffect(() => {
         loadPlugins();
-    }, [loadPlugins]);
+    }, [loadPlugins, user]);
 
     const value = useMemo(() => ({
         plugins,
