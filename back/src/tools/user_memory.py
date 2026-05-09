@@ -41,3 +41,7 @@ class UserMemoryTools(Toolkit):
         except Exception as exc:
             logger.error("[UserMemory] Failed: %s", exc)
             return f"Failed to save: {exc}"
+
+
+def make_user_memory_tools(knowledge: "Knowledge", user_id: str) -> "UserMemoryTools":
+    return UserMemoryTools(knowledge=knowledge, user_id=user_id)
