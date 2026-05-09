@@ -980,24 +980,6 @@ class RedisSession:
                     self.chat_history[-1]["role"] if self.chat_history else "N/A",
                 )
 
-    def _build_history_messages(self, current_text: str) -> list:
-        """Build a List[Message] for native Agno multi-turn history + current message.
-
-        Passing List[Message] to agent.arun lets the model see real conversation
-        turns rather than a plain-text transcript, which is more reliable across
-        all model providers (Claude, GPT, GLM, etc.).
-        """
-        from agno.models.message import Message
-
-        msgs = [
-            Message(role=h["role"], content=h["content"])
-            for h in self.chat_history
-            if h.get("content")
-        ]
-        if current_text and current_text.strip():
-            msgs.append(Message(role="user", content=current_text))
-        return msgs
-
     async def _extract_and_store_facts(self, text: str) -> None:
         """
         Run memory extraction in background: extract facts from current message + recent
@@ -1684,7 +1666,23 @@ class RedisSession:
                     + "\n--- End Context Items ---"
                 )
 
-        # Accumulated tool results (independent of history)
+        # Add conversation history as text so Agno receives a normal string input
+        # and can set user_message correctly for session tracking.
+        if self.chat_history:
+            try:
+                history_lines = []
+                for h in self.chat_history:
+                    role = "User" if h["role"] == "user" else "Assistant"
+                    history_lines.append(f"{role}: {h['content']}")
+                context_parts.append(
+                    "[Conversation history]\n"
+                    + "\n".join(history_lines)
+                    + "\n[End of conversation history]"
+                )
+            except Exception as e:
+                logger.error("[RedisSession] Failed to inject history: %s", e)
+
+        # Accumulated tool results
         if self._accumulated_tool_results:
             tool_results_lines = []
             for idx, tool_result in enumerate(self._accumulated_tool_results):
@@ -1748,12 +1746,9 @@ class RedisSession:
         async def run_fn(fn):
             inp = agent_input
             if isinstance(inp, str):
-                if self.chat_history:
-                    # Pass history as native Agno conversation messages so the
-                    # model treats prior turns as its own memory, not injected text.
-                    inp = self._build_history_messages(inp)
-                elif not (inp and inp.strip()):
-                    inp = "[continue from previous context]"
+                inp = (
+                    inp if (inp and inp.strip()) else "[continue from previous context]"
+                )
 
             result = fn(inp, stream=True, stream_events=True, **kwargs)
             if asyncio.iscoroutine(result):
