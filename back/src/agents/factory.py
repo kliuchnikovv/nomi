@@ -594,6 +594,12 @@ class AgentFactory:
                 use_agno_sessions = (
                     storage_backend is not None and storage_backend.use_agno_sessions()
                 )
+                # Session summaries require the model to return structured JSON.
+                # Only Claude models do this reliably; others (GLM, Gemini, etc.)
+                # return empty or unstructured responses, causing parse failures.
+                supports_json_summaries = bool(
+                    model_name and model_name.startswith("claude-")
+                )
                 agent = SouperAgent(
                     db=self._db,
                     model=model,
@@ -607,7 +613,7 @@ class AgentFactory:
                     identity=bot_identity,
                     session_id=session_id if use_agno_sessions else None,
                     num_history_runs=6,
-                    enable_session_summaries=use_agno_sessions,
+                    enable_session_summaries=use_agno_sessions and supports_json_summaries,
                 )
 
             # _attach_tool_context removed - ChatHistoryTool is disabled
