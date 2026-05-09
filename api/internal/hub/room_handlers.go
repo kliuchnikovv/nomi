@@ -353,6 +353,23 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		)
 
 		ctx := context.Background()
+
+		// Resolve agent storage mode and fetch history BEFORE saving the current
+		// message so it is not duplicated in both the history payload and the
+		// "new message" field sent to Python.
+		agentStorageMode := "payload"
+		if user, err := r.store.GetUserByID(ctx, r.initiatorID); err == nil && user.AgentStorageMode != "" {
+			agentStorageMode = user.AgentStorageMode
+		}
+		var historyMessages []*chat.Message
+		if agentStorageMode != "agno" {
+			var err error
+			historyMessages, err = r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
+			if err != nil {
+				r.logger.Warn("failed to load history for bundling", zap.Error(err))
+			}
+		}
+
 		err := r.store.UpsertMessage(ctx, senderID, &chat.Message{
 			ID:        msgID,
 			ChatID:    r.ID,
@@ -368,6 +385,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				"operation":  "save_message",
 				"message_id": msgID.String(),
 			})
+			return
 		}
 
 		// A user message is always considered meaningful chat activity.
@@ -735,21 +753,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
-		// 5.2 Resolve agent storage mode for this user
-		agentStorageMode := "payload"
-		if user, err := r.store.GetUserByID(ctx, r.initiatorID); err == nil && user.AgentStorageMode != "" {
-			agentStorageMode = user.AgentStorageMode
-		}
-
-		// 5.3 Fetch and Bundle Chat History (only for payload mode; agno mode reads from its own storage)
-		var messages []*chat.Message
-		if agentStorageMode != "agno" {
-			var err error
-			messages, err = r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
-			if err != nil {
-				r.logger.Warn("failed to load history for bundling", zap.Error(err))
-			}
-		}
+		// 5.2/5.3 agent storage mode and history already resolved above (before UpsertMessage).
 
 		// Construct final payload for Redis
 		// Since we modified payload (Tools, Command), let's marshal it.
@@ -785,9 +789,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
-		if len(messages) > 0 {
-			historyData := make([]map[string]interface{}, 0, len(messages))
-			for _, msg := range messages {
+		if len(historyMessages) > 0 {
+			historyData := make([]map[string]interface{}, 0, len(historyMessages))
+			for _, msg := range historyMessages {
 				historyData = append(historyData, map[string]interface{}{
 					"role":    string(msg.Role),
 					"content": msg.Text,
