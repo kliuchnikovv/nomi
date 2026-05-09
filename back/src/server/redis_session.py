@@ -980,6 +980,24 @@ class RedisSession:
                     self.chat_history[-1]["role"] if self.chat_history else "N/A",
                 )
 
+    def _build_history_messages(self, current_text: str) -> list:
+        """Build a List[Message] for native Agno multi-turn history + current message.
+
+        Passing List[Message] to agent.arun lets the model see real conversation
+        turns rather than a plain-text transcript, which is more reliable across
+        all model providers (Claude, GPT, GLM, etc.).
+        """
+        from agno.models.message import Message
+
+        msgs = [
+            Message(role=h["role"], content=h["content"])
+            for h in self.chat_history
+            if h.get("content")
+        ]
+        if current_text and current_text.strip():
+            msgs.append(Message(role="user", content=current_text))
+        return msgs
+
     async def _extract_and_store_facts(self, text: str) -> None:
         """
         Run memory extraction in background: extract facts from current message + recent
@@ -1666,51 +1684,26 @@ class RedisSession:
                     + "\n--- End Context Items ---"
                 )
 
-        # Add conversation history
-        if self.chat_history:
-            try:
-                # Format history as conversation context
-                # Make it clear this is ACTUAL conversation history model should reference
-                history_lines = []
-                for h in self.chat_history:
-                    role = "User" if h["role"] == "user" else "You"
-                    content = h["content"]
-                    history_lines.append(f"{role}: {content}")
+        # Accumulated tool results (independent of history)
+        if self._accumulated_tool_results:
+            tool_results_lines = []
+            for idx, tool_result in enumerate(self._accumulated_tool_results):
+                tool_name = tool_result.get("name", "unknown")
+                result_data = tool_result.get("result")
+                if result_data:
+                    tool_results_lines.append(f"**Tool Result {idx + 1}:**")
+                    tool_results_lines.append(f"Tool: {tool_name}")
+                    tool_results_lines.append(
+                        f"Result: {str(result_data)[:200]}..."
+                    )
+                else:
+                    tool_results_lines.append(f"**Tool Result {idx + 1}:**")
+                    tool_results_lines.append(f"Tool: {tool_name}")
+                    tool_results_lines.append("Result: No result data")
 
-                history_context = "\n".join(history_lines)
-
-                # Format with clear instructions that this IS conversation
-                context_parts.append(
-                    f"""[IMPORTANT: The following is your conversation history with this user. Use it to answer questions about previous messages.]
-
---- Previous messages in this conversation ---
-{history_context}
---- End of conversation history ---"""
-                )
-
-                # Add accumulated tool results to context
-                if self._accumulated_tool_results:
-                    tool_results_lines = []
-                    for idx, tool_result in enumerate(self._accumulated_tool_results):
-                        tool_name = tool_result.get("name", "unknown")
-                        result_data = tool_result.get("result")
-                        if result_data:
-                            tool_results_lines.append(f"**Tool Result {idx + 1}:**")
-                            tool_results_lines.append(f"Tool: {tool_name}")
-                            tool_results_lines.append(
-                                f"Result: {str(result_data)[:200]}..."
-                            )
-                        else:
-                            tool_results_lines.append(f"**Tool Result {idx + 1}:**")
-                            tool_results_lines.append(f"Tool: {tool_name}")
-                            tool_results_lines.append("Result: No result data")
-
-                    if tool_results_lines:
-                        context_parts.append("\\n".join(tool_results_lines) + "\\n")
-                        # Clear accumulated results after adding to context
-                        self._accumulated_tool_results.clear()
-            except Exception as e:
-                logger.error("[RedisSession] Failed to inject history: %s", e)
+            if tool_results_lines:
+                context_parts.append("\\n".join(tool_results_lines) + "\\n")
+                self._accumulated_tool_results.clear()
 
         # Combine all context parts (including tool results)
         if context_parts:
@@ -1755,9 +1748,12 @@ class RedisSession:
         async def run_fn(fn):
             inp = agent_input
             if isinstance(inp, str):
-                inp = (
-                    inp if (inp and inp.strip()) else "[continue from previous context]"
-                )
+                if self.chat_history:
+                    # Pass history as native Agno conversation messages so the
+                    # model treats prior turns as its own memory, not injected text.
+                    inp = self._build_history_messages(inp)
+                elif not (inp and inp.strip()):
+                    inp = "[continue from previous context]"
 
             result = fn(inp, stream=True, stream_events=True, **kwargs)
             if asyncio.iscoroutine(result):
