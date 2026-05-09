@@ -229,13 +229,13 @@ func (s *Storage) GetMessage(ctx context.Context, userID uuid.UUID, messageID uu
 }
 
 func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid.UUID, limit ...int) ([]*chat.Message, error) {
+	// Order DESC so LIMIT fetches the newest messages, then reverse for chronological order.
 	query := s.DB.WithContext(ctx).
 		Preload("Attachments").
 		Joins("JOIN chats ON messages.chat_id = chats.id").
 		Where("messages.chat_id = ? AND chats.user_id = ? AND messages.archived = ?", chatID, userID, false).
-		Order("messages.created_at ASC")
+		Order("messages.created_at DESC")
 
-	// Apply limit if provided
 	if len(limit) > 0 && limit[0] > 0 {
 		query = query.Limit(limit[0])
 	}
@@ -243,6 +243,11 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 	var messages []Message
 	if err := query.Find(&messages).Error; err != nil {
 		return nil, err
+	}
+
+	// Reverse to restore oldest-first order expected by callers.
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
 	}
 
 	result := make([]*chat.Message, len(messages))
