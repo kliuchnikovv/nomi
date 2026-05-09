@@ -1610,8 +1610,25 @@ class RedisSession:
         async for event in self._iterate_agent_stream(result):
             yield event
 
+    def _build_history_messages(self, current_text: str) -> list:
+        """Build a list of Agno Message objects from chat_history + current message.
+
+        Used by PayloadBackend mode so the LLM sees proper multi-turn messages
+        instead of an embedded history text block in a single user message.
+        """
+        from agno.models.message import Message
+
+        msgs = [
+            Message(role=h["role"], content=h["content"])
+            for h in self.chat_history
+            if h.get("content")
+        ]
+        if current_text and current_text.strip():
+            msgs.append(Message(role="user", content=current_text))
+        return msgs
+
     def _build_agent_input(self, text: str) -> str:
-        """Build agent input with conversation history and context items."""
+        """Build agent input with context items and accumulated tool results."""
         context_parts = []
 
         # Add context items (emails, documents, etc.)
@@ -1665,22 +1682,6 @@ class RedisSession:
                     + "\n".join(context_lines)
                     + "\n--- End Context Items ---"
                 )
-
-        # Add conversation history as text so Agno receives a normal string input
-        # and can set user_message correctly for session tracking.
-        if self.chat_history:
-            try:
-                history_lines = []
-                for h in self.chat_history:
-                    role = "User" if h["role"] == "user" else "Assistant"
-                    history_lines.append(f"{role}: {h['content']}")
-                context_parts.append(
-                    "[Conversation history]\n"
-                    + "\n".join(history_lines)
-                    + "\n[End of conversation history]"
-                )
-            except Exception as e:
-                logger.error("[RedisSession] Failed to inject history: %s", e)
 
         # Accumulated tool results
         if self._accumulated_tool_results:
@@ -1746,9 +1747,13 @@ class RedisSession:
         async def run_fn(fn):
             inp = agent_input
             if isinstance(inp, str):
-                inp = (
-                    inp if (inp and inp.strip()) else "[continue from previous context]"
-                )
+                from src.storage.backend import PayloadBackend
+                if self.chat_history and isinstance(self.storage_backend, PayloadBackend):
+                    # Pass full multi-turn history so the LLM sees real conversation
+                    # turns rather than an embedded text block in a single user message.
+                    inp = self._build_history_messages(inp)
+                elif not (inp and inp.strip()):
+                    inp = "[continue from previous context]"
 
             result = fn(inp, stream=True, stream_events=True, **kwargs)
             if asyncio.iscoroutine(result):
