@@ -146,8 +146,8 @@ Always call this tool after analyzing the user's schedule to apply your recommen
 
 
 def _build_user_memory(params: dict[str, Any]) -> Toolkit:
-    """Build user memory tools (add_memory, search_memory)."""
-    logger.info("[UserMemory] Building user memory tools")
+    """Build user memory tools."""
+    from agno.tools import Toolkit
     from src.tools.user_memory import make_user_memory_tools
 
     knowledge = params.get("knowledge")
@@ -155,20 +155,9 @@ def _build_user_memory(params: dict[str, Any]) -> Toolkit:
 
     if not knowledge:
         logger.warning("[UserMemory] No knowledge provided, skipping tool")
-        from agno.tools import Toolkit
         return Toolkit(name="user_memory")
 
-    tool_instance = make_user_memory_tools(knowledge=knowledge, user_id=user_id)
-    tool = Toolkit(
-        name="user_memory",
-        functions=[tool_instance.add_memory, tool_instance.search_memory],
-    )
-    tool.add_instructions = True
-    tool.instructions = """You have access to user memory tools.
-Use add_memory to remember important facts about the user (location, preferences, personal details).
-Use search_memory to recall previously stored facts about the user.
-Always call add_memory when the user shares personal information like where they live, their preferences, or important details about themselves."""
-    return tool
+    return make_user_memory_tools(knowledge=knowledge, user_id=user_id)
 
 
 TOOL_BUILDERS: dict[str, ToolBuilder] = {
