@@ -12,8 +12,8 @@ import (
 // PlanDocument represents a daily plan document in the database.
 type PlanDocument struct {
 	ID        uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	UserID    uuid.UUID      `gorm:"type:uuid;not null;index:idx_plan_documents_user_date,priority:1"`
-	Date      string         `gorm:"type:date;not null;index:idx_plan_documents_user_date,priority:2;uniqueIndex:idx_plan_documents_user_date_unique"`
+	UserID    uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex:idx_plan_documents_user_date_unique,priority:1"`
+	Date      string         `gorm:"type:date;not null;uniqueIndex:idx_plan_documents_user_date_unique,priority:2"`
 	Items     datatypes.JSON `gorm:"type:jsonb;not null;default:'[]'"`
 	CreatedAt time.Time      `gorm:"not null"`
 	UpdatedAt time.Time      `gorm:"not null"`

@@ -42,7 +42,7 @@ jest.mock('../../src/navigation/MainTabs', () => ({
 // AVAILABLE_TEAMS returns a predictable list
 jest.mock('../../src/screens/chat/teams', () => ({
     AVAILABLE_TEAMS: [
-        { id: 'genie_team', name: 'Genie Team', isAgent: false },
+        { id: 'nomi_team', name: 'Nomi Team', isAgent: false },
     ],
 }));
 
@@ -135,7 +135,7 @@ describe('ChatListScreen', () => {
 
         it('renders team chip from AVAILABLE_TEAMS', () => {
             const { getByText } = renderScreen();
-            expect(getByText('Genie Team')).toBeTruthy();
+            expect(getByText('Nomi Team')).toBeTruthy();
         });
 
         it('pressing "All" chip calls setSidebarFilter("all")', () => {
@@ -188,12 +188,12 @@ describe('ChatListScreen', () => {
         it('renders badge "Team" for team chats when sidebarFilter="all"', () => {
             mockMain = {
                 ...DEFAULT_MAIN_CTX,
-                chats: [makeChat({ id: 'c2', title: 'Team chat', mode: 'team', team_id: 'genie_team', updated_at: 1 })],
+                chats: [makeChat({ id: 'c2', title: 'Team chat', mode: 'team', team_id: 'nomi_team', updated_at: 1 })],
                 sidebarFilter: 'all',
             };
             const { getAllByText } = renderScreen();
-            // "Genie Team" appears in both filter chip and badge — expect at least 2
-            expect(getAllByText('Genie Team').length).toBeGreaterThanOrEqual(2);
+            // "Nomi Team" appears in both filter chip and badge — expect at least 2
+            expect(getAllByText('Nomi Team').length).toBeGreaterThanOrEqual(2);
         });
 
         it('renders people icon for team chat', () => {

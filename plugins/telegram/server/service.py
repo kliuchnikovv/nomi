@@ -387,8 +387,8 @@ class TelegramService:
 
         await self.send_message(
             chat_id,
-            f"Welcome to Genie Bot! 🧞\n\nYour linking code:\n\n<b>{code}</b>\n\n"
-            f"Enter this code in the Genie app:\nSettings → Integrations → Telegram\n\n"
+            f"Welcome to Nomi Bot! ✨\n\nYour linking code:\n\n<b>{code}</b>\n\n"
+            f"Enter this code in the Nomi app:\nSettings → Integrations → Telegram\n\n"
             f"The code expires in 10 minutes.",
         )
 

@@ -34,7 +34,7 @@ export function AuthScreen() {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
             >
-                <Text style={styles.logo}>Genie</Text>
+                <Text style={styles.logo}>Nomi</Text>
                 <Text style={styles.subtitle}>Your AI Assistant</Text>
 
                 <View style={styles.formContainer}>

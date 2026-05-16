@@ -77,7 +77,7 @@ export async function searchLocations(
     )}&format=json&limit=5&addressdetails=1&accept-language=${lang}`;
     try {
         const res = await fetch(url, {
-            headers: { 'User-Agent': 'GenieApp/1.0' },
+            headers: { 'User-Agent': 'NomiApp/1.0' },
         });
         if (!res.ok) return [];
         return res.json();
@@ -115,7 +115,7 @@ export async function reverseGeocode(
     const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1&accept-language=ru`;
     try {
         const res = await fetch(url, {
-            headers: { 'User-Agent': 'GenieApp/1.0' },
+            headers: { 'User-Agent': 'NomiApp/1.0' },
         });
         if (!res.ok) return null;
         return res.json();

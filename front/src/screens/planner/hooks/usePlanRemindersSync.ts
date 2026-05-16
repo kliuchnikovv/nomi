@@ -5,7 +5,7 @@ import { iosRemindersClient } from '../../../services/integrations/clients/IOSRe
 import { PlanItem } from '../types';
 
 const storageKey = (date: string) => `planner_reminders_map_${date}`;
-const LIST_NAME = 'Genie Plan';
+const LIST_NAME = 'Nomi Plan';
 
 function chipToDate(date: string, chipValue: string): string | undefined {
     const match = chipValue.match(/^(\d{1,2}):(\d{2})/);

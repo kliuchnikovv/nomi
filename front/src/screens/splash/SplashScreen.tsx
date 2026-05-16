@@ -38,7 +38,7 @@ export function SplashScreen({ initStatus }: SplashScreenProps) {
             <View style={styles.spacer} />
 
             <Animated.View style={[styles.center, { opacity: fadeAnim }]}>
-                <Text style={styles.appName}>Genie</Text>
+                <Text style={styles.appName}>Nomi</Text>
                 <Text style={styles.tagline}>Your AI Assistant</Text>
 
                 <View style={styles.divider} />

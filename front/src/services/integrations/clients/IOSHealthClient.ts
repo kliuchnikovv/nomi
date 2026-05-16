@@ -114,7 +114,7 @@ class IOSHealthClient {
                 console.log('[IOSHealthClient] Permissions granted, retrying operation...');
                 return await retryFn();
             }
-            throw new Error(`HealthKit permission was denied by user. Please grant access in Settings → Privacy → Health → genie`);
+            throw new Error(`HealthKit permission was denied by user. Please grant access in Settings → Privacy → Health → Nomi`);
         }
         throw error;
     }

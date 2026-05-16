@@ -1,5 +1,5 @@
 # back/tests/agents/test_memory_decay.py
-"""Tests for SouperAgent memory decay / staleness marking."""
+"""Tests for NomiAgent memory decay / staleness marking."""
 
 import time
 
@@ -8,17 +8,17 @@ from unittest.mock import MagicMock
 
 
 def test_souperagent_importable():
-    from src.agents.souper import SouperAgent
+    from src.agents.nomi import NomiAgent
     # Verify it's the real class, not a MagicMock
-    assert isinstance(SouperAgent, type), f"SouperAgent should be a real type, got {type(SouperAgent)}"
-    assert SouperAgent.__module__ == "src.agents.souper", "SouperAgent should be loaded from src.agents.souper"
+    assert isinstance(NomiAgent, type), f"NomiAgent should be a real type, got {type(NomiAgent)}"
+    assert NomiAgent.__module__ == "src.agents.nomi", "NomiAgent should be loaded from src.agents.nomi"
     # _mark_stale_memories will be added in Task 2 — just confirm real class loads
 
 
 def _make_agent(user_id="user1"):
-    """Build a SouperAgent instance without calling __init__."""
-    from src.agents.souper import SouperAgent
-    agent = object.__new__(SouperAgent)
+    """Build a NomiAgent instance without calling __init__."""
+    from src.agents.nomi import NomiAgent
+    agent = object.__new__(NomiAgent)
     agent.user_id = user_id
     agent.memory_manager = MagicMock()
     agent.memory_manager.db = MagicMock()
@@ -42,7 +42,7 @@ async def test_old_memory_gets_stale_prefix():
     mem = _make_memory("m1", "User likes Vienna", age_days=200)
     agent.memory_manager.db.get_user_memories.return_value = [mem]
 
-    from src.agents.souper import STALE_PREFIX
+    from src.agents.nomi import STALE_PREFIX
     count = await agent._mark_stale_memories()
 
     assert count == 1
@@ -78,7 +78,7 @@ async def test_recently_updated_memory_not_marked():
 @pytest.mark.asyncio
 async def test_already_stale_memory_not_double_marked():
     agent = _make_agent()
-    from src.agents.souper import STALE_PREFIX
+    from src.agents.nomi import STALE_PREFIX
     mem = _make_memory("m4", STALE_PREFIX + "User likes Vienna", age_days=200)
     agent.memory_manager.db.get_user_memories.return_value = [mem]
 
@@ -92,7 +92,7 @@ async def test_already_stale_memory_not_double_marked():
 async def test_stale_prefix_removed_when_memory_confirmed():
     """updated_at is recent (agent called update_memory) but prefix still present → strip it."""
     agent = _make_agent()
-    from src.agents.souper import STALE_PREFIX
+    from src.agents.nomi import STALE_PREFIX
     mem = _make_memory("m5", STALE_PREFIX + "User likes Vienna", age_days=300, updated_days=1)
     agent.memory_manager.db.get_user_memories.return_value = [mem]
 
@@ -112,8 +112,8 @@ async def test_no_user_id_skips_check():
 
 @pytest.mark.asyncio
 async def test_no_memory_manager_skips_check():
-    from src.agents.souper import SouperAgent
-    agent = object.__new__(SouperAgent)
+    from src.agents.nomi import NomiAgent
+    agent = object.__new__(NomiAgent)
     agent.user_id = "user1"
     agent.memory_manager = None
     count = await agent._mark_stale_memories()
@@ -137,16 +137,16 @@ async def test_memory_with_no_timestamps_skipped():
 
 
 def test_normalize_strips_stale_prefix():
-    from src.agents.souper import SouperAgent, STALE_PREFIX
-    normalize = SouperAgent._normalize_memory_text
+    from src.agents.nomi import NomiAgent, STALE_PREFIX
+    normalize = NomiAgent._normalize_memory_text
     assert normalize(STALE_PREFIX + "User likes Vienna") == normalize("User likes Vienna")
     assert normalize(STALE_PREFIX + "User likes Vienna") == "user likes vienna"
 
 
 @pytest.mark.asyncio
 async def test_arun_calls_mark_stale_after_run():
-    from src.agents.souper import SouperAgent
-    agent = object.__new__(SouperAgent)
+    from src.agents.nomi import NomiAgent
+    agent = object.__new__(NomiAgent)
     agent.user_id = "user1"
     agent.memory_manager = MagicMock()
     agent.memory_manager.db = MagicMock()
@@ -175,7 +175,7 @@ async def test_arun_calls_mark_stale_after_run():
 
     import unittest.mock as mock
     with mock.patch.object(
-        SouperAgent.__bases__[0], "arun", new=fake_parent_arun
+        NomiAgent.__bases__[0], "arun", new=fake_parent_arun
     ):
         await agent.arun()
 
@@ -184,8 +184,8 @@ async def test_arun_calls_mark_stale_after_run():
 
 @pytest.mark.asyncio
 async def test_arun_streaming_calls_mark_stale_in_order():
-    from src.agents.souper import SouperAgent
-    agent = object.__new__(SouperAgent)
+    from src.agents.nomi import NomiAgent
+    agent = object.__new__(NomiAgent)
     agent.user_id = "user1"
     agent.stream = True
     agent.memory_manager = MagicMock()
@@ -215,7 +215,7 @@ async def test_arun_streaming_calls_mark_stale_in_order():
         yield  # make it an async generator
 
     import unittest.mock as mock
-    with mock.patch.object(SouperAgent.__bases__[0], "arun", new=fake_parent_arun):
+    with mock.patch.object(NomiAgent.__bases__[0], "arun", new=fake_parent_arun):
         gen = await agent.arun(stream=True)
         async for _ in gen:
             pass

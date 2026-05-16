@@ -19,7 +19,7 @@ export const iosContactsPlugin: ClientPluginHandler = {
                 return 'Please grant access to Contacts in the system settings to use this feature.';
             }
         } else if (permissionStatus === 'denied') {
-            return 'Contacts access is denied. Please enable it in iOS Settings > Genie > Contacts.';
+            return 'Contacts access is denied. Please enable it in iOS Settings > Nomi > Contacts.';
         }
 
         // Permission granted, proceed with the method

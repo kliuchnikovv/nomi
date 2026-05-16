@@ -12,7 +12,7 @@ import redis.asyncio as redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from agno.media import Image
 from src.agents.factory import AgentFactory
-from src.agents.souper import SouperAgent
+from src.agents.nomi import NomiAgent
 from src.storage.backend import PayloadBackend, StorageBackend
 from src.storage.factory import create_storage_backend
 from src.constants import Redis as RedisConstants
@@ -754,7 +754,7 @@ class RedisSession:
         # We rely on AgentFactory fetching tools from API using user_id.
         # IF tools are passed in payload (rare), we could parse them.
 
-        self.agent_type = payload.get("agent_type", "genie")
+        self.agent_type = payload.get("agent_type", "nomi")
         self.single_chat_mode = bool(payload.get("single_chat_mode", False))
         self.command_desc = payload.get("command") or payload.get("team")
         if self.command_desc is None:
@@ -798,7 +798,7 @@ class RedisSession:
                     "development_team",
                     "dnd_team",
                     "travel_planning",
-                    "genie",
+                    "nomi",
                 ]
                 if team_type in known_teams:
                     logger.info("[RedisSession] Detected team mode: type=%s", team_type)
@@ -1005,7 +1005,7 @@ class RedisSession:
                 thinking="off",
             )
 
-            memoriser = SouperAgent(
+            memoriser = NomiAgent(
                 db=db,
                 model=model,
                 knowledge=knowledge,

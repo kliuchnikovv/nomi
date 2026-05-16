@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>genie</string>
+	<string>Nomi</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -49,27 +49,27 @@
 		<true/>
 	</dict>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Genie needs access to your calendar to help manage your events</string>
+	<string>Nomi needs access to your calendar to help manage your events</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Genie needs access to your camera to take photos for attachments</string>
+	<string>Nomi needs access to your camera to take photos for attachments</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Genie needs access to your contacts to help you communicate with people</string>
+	<string>Nomi needs access to your contacts to help you communicate with people</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Genie needs access to read your health data to provide personalized health insights</string>
+	<string>Nomi needs access to read your health data to provide personalized health insights</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Genie needs permission to write health data like workouts, nutrition, and body measurements</string>
+	<string>Nomi needs permission to write health data like workouts, nutrition, and body measurements</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Genie needs access to your location to provide location-based services</string>
+	<string>Nomi needs access to your location to provide location-based services</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Genie needs access to your microphone to record voice messages</string>
+	<string>Nomi needs access to your microphone to record voice messages</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Genie needs access to your photo library to select images for attachments</string>
+	<string>Nomi needs access to your photo library to select images for attachments</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Helper</string>
 	<key>NSRemindersUsageDescription</key>
-	<string>Genie needs access to your reminders to help you stay organized</string>
+	<string>Nomi needs access to your reminders to help you stay organized</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Genie uses speech recognition to transcribe your voice messages</string>
+	<string>Nomi uses speech recognition to transcribe your voice messages</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>

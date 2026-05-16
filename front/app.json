@@ -1,8 +1,8 @@
 {
     "name": "genie",
-    "displayName": "genie",
+    "displayName": "Nomi",
     "expo": {
-        "name": "genie",
+        "name": "Nomi",
         "slug": "genie",
         "ios": {
             "infoPlist": {

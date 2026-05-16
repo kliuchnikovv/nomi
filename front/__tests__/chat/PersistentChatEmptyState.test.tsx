@@ -29,9 +29,9 @@ const baseProps = {
 describe('PersistentChatEmptyState', () => {
     beforeEach(() => jest.clearAllMocks());
 
-    it('renders Genie emoji', () => {
+    it('renders Nomi emoji', () => {
         const { getByText } = render(<PersistentChatEmptyState {...baseProps} />);
-        expect(getByText('🧞')).toBeTruthy();
+        expect(getByText('✨')).toBeTruthy();
     });
 
     it('renders greeting using first name', () => {

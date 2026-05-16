@@ -165,7 +165,7 @@ const ChatFooterContent = React.memo(function ChatFooterContent({
                         borderColor: theme.border,
                     },
                 ])}
-                placeholder="Message Genie…"
+                placeholder="Message Nomi…"
                 placeholderTextColor={theme.textSecondary}
                 value={text}
                 onChangeText={setText}
@@ -501,7 +501,7 @@ export function ChatBottomSheet({
                                 { color: theme.textPrimary },
                             ]}
                         >
-                            Genie
+                            Nomi
                         </Text>
                     </View>
                     {!isConnected && (
@@ -581,7 +581,7 @@ export function ChatBottomSheet({
                                 { color: theme.textSecondary },
                             ]}
                         >
-                            Ask Genie about this day…
+                            Ask Nomi about this day…
                         </Text>
                     }
                 />

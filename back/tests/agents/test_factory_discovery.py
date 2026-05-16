@@ -26,13 +26,13 @@ async def test_factory_builds_only_discovery_tool_when_flag_set(monkeypatch):
     factory.build_model = MagicMock(return_value=MagicMock())
 
     captured_tools = []
-    def fake_souper(db, model, tools, **kwargs):
+    def fake_nomi(db, model, tools, **kwargs):
         captured_tools.extend(tools)
         agent = MagicMock()
-        agent.name = "genie"
+        agent.name = "nomi"
         return agent
 
-    monkeypatch.setattr("src.agents.factory.SouperAgent", fake_souper)
+    monkeypatch.setattr("src.agents.factory.NomiAgent", fake_nomi)
 
     await factory.build(
         session_id="sess1",
@@ -60,13 +60,13 @@ async def test_factory_uses_legacy_mode_when_flag_not_set(monkeypatch):
     factory.build_model = MagicMock(return_value=MagicMock())
 
     captured_tools = []
-    def fake_souper(db, model, tools, **kwargs):
+    def fake_nomi(db, model, tools, **kwargs):
         captured_tools.extend(tools)
         agent = MagicMock()
-        agent.name = "genie"
+        agent.name = "nomi"
         return agent
 
-    monkeypatch.setattr("src.agents.factory.SouperAgent", fake_souper)
+    monkeypatch.setattr("src.agents.factory.NomiAgent", fake_nomi)
     # Mock build_tools to return empty list (no real toolkit construction)
     monkeypatch.setattr("src.agents.factory.build_tools", AsyncMock(return_value=[]))
 

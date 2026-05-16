@@ -8,8 +8,8 @@ For this to work every link in the chain must be correct:
       → PayloadBackend (default)
 
   AgentFactory.build()   [factory.py]
-      AgnoBackend  → SouperAgent(session_id="<real id>")  ← Agno loads from DB
-      PayloadBackend → SouperAgent(session_id=None)       ← ephemeral
+      AgnoBackend  → NomiAgent(session_id="<real id>")  ← Agno loads from DB
+      PayloadBackend → NomiAgent(session_id=None)       ← ephemeral
 
   _stream_agent_events() [redis_session.py]
       non-team mode → kwargs["session_id"] = self.session_id  ← passed to arun()
@@ -88,10 +88,10 @@ class TestStorageBackendContracts:
         assert b.get_history() == hist
 
 
-# ─── 3. AgentFactory wires session_id correctly into SouperAgent ──────────────
+# ─── 3. AgentFactory wires session_id correctly into NomiAgent ──────────────
 
 class TestAgentFactorySessionWiring:
-    """Factory must pass session_id to SouperAgent only for AgnoBackend."""
+    """Factory must pass session_id to NomiAgent only for AgnoBackend."""
 
     def _make_factory(self, monkeypatch):
         from src.agents.factory import AgentFactory
@@ -105,18 +105,18 @@ class TestAgentFactorySessionWiring:
 
     @pytest.mark.asyncio
     async def test_agno_backend_passes_real_session_id_to_souper(self, monkeypatch):
-        """AgnoBackend → SouperAgent receives the actual session_id."""
+        """AgnoBackend → NomiAgent receives the actual session_id."""
         from src.storage.backend import AgnoBackend
 
         captured: dict = {}
 
-        def fake_souper(db, model, tools, **kwargs):
+        def fake_nomi(db, model, tools, **kwargs):
             captured.update(kwargs)
             agent = MagicMock()
-            agent.name = "genie"
+            agent.name = "nomi"
             return agent
 
-        monkeypatch.setattr("src.agents.factory.SouperAgent", fake_souper)
+        monkeypatch.setattr("src.agents.factory.NomiAgent", fake_nomi)
 
         factory = self._make_factory(monkeypatch)
         await factory.build(
@@ -133,18 +133,18 @@ class TestAgentFactorySessionWiring:
 
     @pytest.mark.asyncio
     async def test_payload_backend_passes_none_session_id_to_souper(self, monkeypatch):
-        """PayloadBackend → SouperAgent receives session_id=None (ephemeral)."""
+        """PayloadBackend → NomiAgent receives session_id=None (ephemeral)."""
         from src.storage.backend import PayloadBackend
 
         captured: dict = {}
 
-        def fake_souper(db, model, tools, **kwargs):
+        def fake_nomi(db, model, tools, **kwargs):
             captured.update(kwargs)
             agent = MagicMock()
-            agent.name = "genie"
+            agent.name = "nomi"
             return agent
 
-        monkeypatch.setattr("src.agents.factory.SouperAgent", fake_souper)
+        monkeypatch.setattr("src.agents.factory.NomiAgent", fake_nomi)
 
         factory = self._make_factory(monkeypatch)
         await factory.build(
@@ -160,30 +160,30 @@ class TestAgentFactorySessionWiring:
         )
 
     def test_souper_always_built_with_add_history_to_context(self):
-        """add_history_to_context=True must be present in SouperAgent's constructor.
+        """add_history_to_context=True must be present in NomiAgent's constructor.
         This is what tells Agno to inject session history into every run's context."""
         import inspect
-        from src.agents.souper import SouperAgent
+        from src.agents.nomi import NomiAgent
 
-        source = inspect.getsource(SouperAgent.__init__)
+        source = inspect.getsource(NomiAgent.__init__)
         assert "add_history_to_context=True" in source, (
-            "SouperAgent must pass add_history_to_context=True to Agent.__init__"
+            "NomiAgent must pass add_history_to_context=True to Agent.__init__"
         )
 
     @pytest.mark.asyncio
     async def test_agno_backend_enables_num_history_runs(self, monkeypatch):
-        """AgnoBackend → SouperAgent receives num_history_runs=6."""
+        """AgnoBackend → NomiAgent receives num_history_runs=6."""
         from src.storage.backend import AgnoBackend
 
         captured: dict = {}
 
-        def fake_souper(db, model, tools, **kwargs):
+        def fake_nomi(db, model, tools, **kwargs):
             captured.update(kwargs)
             agent = MagicMock()
-            agent.name = "genie"
+            agent.name = "nomi"
             return agent
 
-        monkeypatch.setattr("src.agents.factory.SouperAgent", fake_souper)
+        monkeypatch.setattr("src.agents.factory.NomiAgent", fake_nomi)
 
         factory = self._make_factory(monkeypatch)
         await factory.build(

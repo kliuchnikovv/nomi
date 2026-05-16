@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 _NOMINATIM_GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
-_NOMINATIM_HEADERS = {"User-Agent": "Genie-AI/1.0"}
+_NOMINATIM_HEADERS = {"User-Agent": "Nomi-AI/1.0"}
 
 
 def _nominatim_geocode(address: str) -> tuple[float, float] | None:

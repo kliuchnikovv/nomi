@@ -216,11 +216,35 @@ export function usePlanDocument(date: string): UsePlanDocumentResult {
                 }
 
                 if (!doc) {
-                    // Create new document
-                    doc = await apiClient.post<PlanDocument>(
-                        `${getApiUrl()}/plan-documents`,
-                        { date, items: [] },
-                    );
+                    try {
+                        // Create new document
+                        doc = await apiClient.post<PlanDocument>(
+                            `${getApiUrl()}/plan-documents`,
+                            { date, items: [] },
+                        );
+                    } catch (createErr: any) {
+                        // Race condition: another call already created the document.
+                        // Fetch the existing one instead of propagating the error.
+                        const msg: string = createErr?.message ?? '';
+                        if (msg.toLowerCase().includes('already exists')) {
+                            try {
+                                doc = await apiClient.get<PlanDocument>(
+                                    `${getApiUrl()}/plan-documents?date=${date}`,
+                                );
+                            } catch (retryErr: any) {
+                                // Retry GET also failed (e.g. wrong unique constraint
+                                // in DB — document owned by a different user).
+                                // Log as warning so LogBox does not surface a red error.
+                                console.warn(
+                                    '[usePlanDocument] retry GET after conflict failed:',
+                                    retryErr?.message,
+                                );
+                                // Leave doc = null; the screen will show an empty state.
+                            }
+                        } else {
+                            throw createErr;
+                        }
+                    }
                 }
 
                 if (cancelled || !doc) return;

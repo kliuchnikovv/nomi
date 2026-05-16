@@ -18,7 +18,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../screens/auth/context';
-import { useMain } from '../screens/main/context';
+import { useMain, emptyChatID } from '../screens/main/context';
 
 // Height of the tab bar icon area above the safe-area inset (≈ input bar / 1.5).
 // Used by screens that need a bottom spacer to clear the floating tab bar.
@@ -36,58 +36,79 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 const SPRING_CONFIG = { damping: 22, stiffness: 180 };
 
 
-function AnimatedTabBar(props: BottomTabBarProps) {
-    const { state } = props;
+function AnimatedTabBar(props: BottomTabBarProps & { initialHeight: number }) {
+    const { state, initialHeight } = props;
     const { theme } = useTheme();
-    const heightSV = useSharedValue(0);
-    const progress = useSharedValue(0); // 0 = visible, 1 = hidden
+    const { user } = useAuth();
+
+    // ── Determine visibility synchronously, before hooks ──────────────────────
+    // This lets us seed progress with the correct initial value so there is no
+    // first-frame flash of the bar on screens where it should be hidden.
 
     const activeTabName = state.routes[state.index]?.name;
     const chatRoute = state.routes.find(r => r.name === 'Chat');
     const projectsRoute = state.routes.find(r => r.name === 'Projects');
-    // getFocusedRouteNameFromRoute returns undefined on the initial route (ChatList).
-    // Hide the bar only when navigated to ChatDetail, not on the list.
+
+    // getFocusedRouteNameFromRoute returns undefined for the initial (root) route.
+    // We also inspect the nested route state directly so single_chat_mode, which
+    // uses ChatDetail as the initial Chat-stack route, is handled correctly.
     const chatFocusedRoute = chatRoute
         ? getFocusedRouteNameFromRoute(chatRoute)
         : undefined;
+    const chatNestedRouteName = chatRoute?.state
+        ? (chatRoute.state.routes[chatRoute.state.index ?? 0] as any)?.name
+        : undefined;
     const isInChatDetail =
         activeTabName === 'Chat' &&
-        chatFocusedRoute !== undefined &&
-        chatFocusedRoute !== 'ChatList';
-    // getFocusedRouteNameFromRoute returns undefined on the initial route (ProjectsList).
-    // Hide the bar whenever we've navigated away from the root screen.
+        (
+            // In single_chat_mode, ChatList is not registered in the stack —
+            // the Chat tab always shows ChatDetail regardless of params.screen.
+            !!user?.single_chat_mode ||
+            (chatFocusedRoute !== undefined && chatFocusedRoute !== 'ChatList') ||
+            chatNestedRouteName === 'ChatDetail'
+        );
+
     const projectsFocusedRoute = projectsRoute
         ? getFocusedRouteNameFromRoute(projectsRoute)
         : undefined;
-    // undefined = initial state (ProjectsList), 'ProjectsList' = navigated back to list.
-    // Hide the bar whenever we're deeper than the root screen.
     const isInProjectChatDetail =
         activeTabName === 'Projects' &&
         projectsFocusedRoute !== undefined &&
         projectsFocusedRoute !== 'ProjectsList';
 
-    useEffect(() => {
-        progress.value = withSpring(
-            isInChatDetail || isInProjectChatDetail ? 1 : 0,
-            SPRING_CONFIG,
-        );
-    }, [isInChatDetail, isInProjectChatDetail]);
+    const shouldHide = isInChatDetail || isInProjectChatDetail;
 
-    // Measure the tab bar once on first layout
+    // ── Shared values ─────────────────────────────────────────────────────────
+    // heightSV is pre-seeded so the translateY calculation is correct on the
+    // very first frame (onLayout fires after paint).
+    const heightSV = useSharedValue(initialHeight);
+    // opacity: 1 = visible, 0 = hidden (directly maps shouldHide → 0/1).
+    const opacity = useSharedValue(shouldHide ? 0 : 1);
+
+    // Animate on subsequent route changes.
+    useEffect(() => {
+        const target = shouldHide ? 0 : 1;
+        opacity.value = withSpring(target, SPRING_CONFIG);
+        // Also update heightSV-based translation for a slide-out effect.
+        heightSV.value = initialHeight;
+    }, [shouldHide, initialHeight]);
+
+    // Refine the height once the real layout is known.
     const handleLayout = (e: LayoutChangeEvent) => {
         const h = e.nativeEvent.layout.height;
-        if (h > 0 && heightSV.value === 0) {
+        if (h > 0) {
             heightSV.value = h;
         }
     };
 
-    // Slide the bar off-screen downward without changing layout — avoids any reflow/jump
     const containerStyle = useAnimatedStyle(() => ({
         position: 'absolute' as const,
         bottom: 0,
         left: 0,
         right: 0,
-        transform: [{ translateY: heightSV.value * progress.value }],
+        // Slide down while fading — gives a natural exit feel.
+        transform: [{ translateY: heightSV.value * (1 - opacity.value) }],
+        opacity: opacity.value,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
     }));
@@ -119,7 +140,7 @@ export function MainTabs() {
 
     return (
         <Tab.Navigator
-            tabBar={props => <AnimatedTabBar {...props} />}
+            tabBar={props => <AnimatedTabBar {...props} initialHeight={tabBarHeight} />}
             screenOptions={({
                 route,
             }: {
@@ -178,10 +199,13 @@ export function MainTabs() {
                 listeners={({ navigation }) => ({
                     tabPress: e => {
                         e.preventDefault();
-                        if (user?.single_chat_mode && activeChatID) {
+                        if (user?.single_chat_mode) {
+                            // In single_chat_mode ChatList is not in the stack;
+                            // always open ChatDetail. Fall back to emptyChatID so
+                            // the welcome screen shows when no active chat exists yet.
                             navigation.navigate('Chat', {
                                 screen: 'ChatDetail',
-                                params: { chatId: activeChatID },
+                                params: { chatId: activeChatID || emptyChatID },
                             });
                         } else {
                             navigation.navigate('Chat', { screen: 'ChatList' });

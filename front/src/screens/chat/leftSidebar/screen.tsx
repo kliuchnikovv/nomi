@@ -86,7 +86,7 @@ function ChatListContent({
 
     const filters = useMemo(() => {
         const list: { id: string; title: string; color?: string }[] = [
-            { id: 'agent', title: 'Genie', color: theme.success || '#9ECE6A' },
+            { id: 'agent', title: 'Nomi', color: theme.success || '#9ECE6A' },
             { id: 'planner', title: 'Planner', color: '#FF9E64' },
         ];
         AVAILABLE_TEAMS.forEach(t => {
@@ -296,7 +296,7 @@ function ChatListContent({
                         categoryColor = theme.info || '#7DCFFF';
                 }
             } else {
-                category = 'Genie';
+                category = 'Nomi';
                 categoryColor = theme.success || '#9ECE6A';
             }
         }

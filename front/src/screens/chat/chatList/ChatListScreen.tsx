@@ -68,7 +68,7 @@ export function ChatListScreen() {
 
     const filters = useMemo(() => {
         const list: { id: string; title: string; color: string }[] = [
-            { id: 'agent', title: 'Genie', color: theme.success || '#9ECE6A' },
+            { id: 'agent', title: 'Nomi', color: theme.success || '#9ECE6A' },
             { id: 'planner', title: 'Planner', color: '#FF9E64' },
         ];
         AVAILABLE_TEAMS.forEach(t => {
@@ -144,7 +144,7 @@ export function ChatListScreen() {
                 badgeLabel = team?.name || 'Team';
                 badgeColor = theme.info || '#7DCFFF';
             } else {
-                badgeLabel = 'Genie';
+                badgeLabel = 'Nomi';
                 badgeColor = theme.success || '#9ECE6A';
             }
         }

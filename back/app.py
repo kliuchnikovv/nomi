@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from agno.os import AgentOS
 from starlette.middleware.sessions import SessionMiddleware
 
-from src.agents.souper import SouperAgent
+from src.agents.nomi import NomiAgent
 
 from dotenv import load_dotenv
 from src.core.config import Config
@@ -115,20 +115,20 @@ except Exception as e:
 
 # Initialize AgentOS for compatibility with existing code
 try:
-    logging.warning("[Startup] Creating SouperAgent...")
-    souper = SouperAgent(
+    logging.warning("[Startup] Creating NomiAgent...")
+    nomi = NomiAgent(
         db=container.db,
         model=container.model,
         debug_mode=config.debug_mode,
     )
-    logging.warning("[Startup] SouperAgent created")
+    logging.warning("[Startup] NomiAgent created")
     logging.warning("[Startup] Creating AgentOS app...")
-    agent_os = AgentOS(agents=[souper])
+    agent_os = AgentOS(agents=[nomi])
     global app
     app = agent_os.get_app()
     logging.warning("[Startup] AgentOS app created")
 except Exception as e:
-    logging.critical("[Startup] FAILED to create AgentOS/SouperAgent: %s", e, exc_info=True)
+    logging.critical("[Startup] FAILED to create AgentOS/NomiAgent: %s", e, exc_info=True)
     raise
 
 

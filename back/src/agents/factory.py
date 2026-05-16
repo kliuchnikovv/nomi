@@ -9,7 +9,7 @@ from agno.knowledge import Knowledge
 from agno.models.base import Model
 from agno.vectordb.pgvector import PgVector
 
-from src.agents.souper import SouperAgent
+from src.agents.nomi import NomiAgent
 from src.agents.planner import build_planner_agent
 from src.models.safe_gemini import SafeGemini
 
@@ -553,7 +553,7 @@ class AgentFactory:
             session_id,
             rag_user_id,
             model_name or "default",
-            agent_type or "genie",
+            agent_type or "nomi",
             len(tools),
         )
 
@@ -600,7 +600,7 @@ class AgentFactory:
                 supports_json_summaries = bool(
                     model_name and model_name.startswith("claude-")
                 )
-                agent = SouperAgent(
+                agent = NomiAgent(
                     db=self._db,
                     model=model,
                     tools=tools,
@@ -629,7 +629,7 @@ class AgentFactory:
                 "[WS] Failed to create agent: session_id=%s model=%s agent_type=%s error=%s",
                 session_id,
                 model_name or "default",
-                agent_type or "genie",
+                agent_type or "nomi",
                 e,
                 exc_info=True,
             )

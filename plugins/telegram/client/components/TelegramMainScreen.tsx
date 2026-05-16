@@ -119,7 +119,7 @@ export function TelegramMainScreen({ integrationId, onClose }: PluginMainScreenP
                                             : { ...styles.assistantMessage, backgroundColor: theme.surfaceHighlight },
                                     ]}>
                                         <Text style={[styles.messageRole, { color: theme.textSecondary }]}>
-                                            {item.role === 'user' ? 'You (Telegram)' : 'Genie'}
+                                            {item.role === 'user' ? 'You (Telegram)' : 'Nomi'}
                                         </Text>
                                         <Text style={[styles.messageText, { color: theme.text }]}>
                                             {item.text}

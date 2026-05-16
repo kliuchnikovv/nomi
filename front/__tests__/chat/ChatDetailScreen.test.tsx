@@ -137,7 +137,7 @@ jest.mock('../../src/apiClient', () => ({
 
 jest.mock('../../src/navigation/MainTabs', () => ({ TAB_BAR_ICON_HEIGHT: 60 }));
 jest.mock('../../src/screens/chat/teams', () => ({
-    AVAILABLE_TEAMS: [{ id: 'genie_team', name: 'Genie Team', isAgent: false }],
+    AVAILABLE_TEAMS: [{ id: 'nomi_team', name: 'Nomi Team', isAgent: false }],
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

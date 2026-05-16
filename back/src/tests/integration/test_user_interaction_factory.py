@@ -42,7 +42,7 @@ async def test_user_interaction_in_factory():
         session_id="test-session",
         tools_specs=[],
         model_name="gemini-2.0-flash",
-        agent_type="genie",
+        agent_type="nomi",
         command_desc={},
         web_search=False,
         thinking="off",

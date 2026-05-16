@@ -56,7 +56,7 @@ export function PersistentChatEmptyState({
 
     return (
         <View style={styles.container}>
-            <Text style={styles.avatar}>🧞</Text>
+            <Text style={styles.avatar}>✨</Text>
             <Text style={[styles.greeting, { color: textPrimaryColor }]}>
                 Hello, {firstName}!
             </Text>
