@@ -16,6 +16,7 @@ export type ContextMenuItem = {
     id: string;
     label: string;
     icon?: React.ReactNode;
+    badges?: React.ReactNode;
     onPress: () => void;
     destructive?: boolean;
     isSwitch?: boolean;
@@ -66,14 +67,19 @@ export const ContextMenu = ({
                 showBorder && styles.itemBorder,
             ]}
         >
-            <Text
-                style={[
-                    styles.itemText,
-                    item.destructive && styles.destructiveText,
-                ]}
-            >
-                {item.label}
-            </Text>
+            <View style={styles.labelRow}>
+                <Text
+                    style={[
+                        styles.itemText,
+                        item.destructive && styles.destructiveText,
+                    ]}
+                >
+                    {item.label}
+                </Text>
+                {item.badges && (
+                    <View style={styles.badgesContainer}>{item.badges}</View>
+                )}
+            </View>
             <View style={styles.rightContainer}>
                 {item.isSwitch ? (
                     <Switch
@@ -204,6 +210,17 @@ const createStyles = (theme: ThemeColors) => StyleSheet.create({
     rightContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+    },
+    labelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    badgesContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginLeft: 6,
+        gap: 3,
     },
     icon: {
         marginLeft: 8,
