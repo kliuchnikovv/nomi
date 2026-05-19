@@ -27,7 +27,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>genie</string>
+				<string>nomi</string>
 			</array>
 		</dict>
 		<dict>

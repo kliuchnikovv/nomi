@@ -118,9 +118,9 @@ describe('ChatListScreen', () => {
     });
 
     describe('filter chips', () => {
-        it('renders "Genie" chip', () => {
+        it('renders "Nomi" chip', () => {
             const { getByText } = renderScreen();
-            expect(getByText('Genie')).toBeTruthy();
+            expect(getByText('Nomi')).toBeTruthy();
         });
 
         it('renders "Planner" chip', () => {
@@ -174,7 +174,7 @@ describe('ChatListScreen', () => {
             expect(getByText('My First Chat')).toBeTruthy();
         });
 
-        it('renders badge "Genie" when sidebarFilter="all" for agent chat', () => {
+        it('renders badge "Nomi" when sidebarFilter="all" for agent chat', () => {
             mockMain = {
                 ...DEFAULT_MAIN_CTX,
                 chats: [makeChat({ id: 'c1', title: 'Agent chat', mode: 'agent', updated_at: 1 })],
@@ -182,7 +182,7 @@ describe('ChatListScreen', () => {
             };
             const { getAllByText } = renderScreen();
             // "Genie" appears in both filter chip and badge — expect at least 2
-            expect(getAllByText('Genie').length).toBeGreaterThanOrEqual(2);
+            expect(getAllByText('Nomi').length).toBeGreaterThanOrEqual(2);
         });
 
         it('renders badge "Team" for team chats when sidebarFilter="all"', () => {

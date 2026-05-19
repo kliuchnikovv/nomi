@@ -98,7 +98,7 @@ test('renders without crashing and completes async init', async () => {
     const { getByText } = render(<App />);
 
     // Initially shows the splash screen while configReady=false
-    expect(getByText('Genie')).toBeTruthy();
+    expect(getByText('Nomi')).toBeTruthy();
 
     // Wait for the async init to complete (configReady flips to true)
     // After init, the auth gate is shown (loading=true → null, or login screen)

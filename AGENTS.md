@@ -6,7 +6,7 @@
 
 ## Project Overview
 
-**Genie** is a hybrid AI assistant that combines a powerful cloud brain with a privacy-focused local execution environment.
+**Nomi** is a hybrid AI assistant that combines a powerful cloud brain with a privacy-focused local execution environment.
 
 **Core Components:**
 - **`front/`** — React Native mobile app (TypeScript/Expo). Acts as the "Body" and "Hands".
@@ -18,7 +18,7 @@
 
 ## System Architecture
 
-Genie uses a 3-tier architecture designed for low-latency streaming and high privacy.
+Nomi uses a 3-tier architecture designed for low-latency streaming and high privacy.
 
 ### 1. The Hub (`api/`)
 - **Role:** Central message router and state manager.
@@ -93,7 +93,7 @@ Communication between Go Hub, Python Brain, and Client uses a JSON Frame protoco
 
 ### Integration Architecture
 
-Genie uses a **registry-based integration system** that simplifies adding new providers and clearly separates client-side and server-side integrations.
+Nomi uses a **registry-based integration system** that simplifies adding new providers and clearly separates client-side and server-side integrations.
 
 #### Integration Types
 
@@ -210,7 +210,7 @@ slack: {
 
 ## RAG (Retrieval-Augmented Generation)
 
-Genie uses a **Hybrid RAG** approach with multiple layers:
+Nomi uses a **Hybrid RAG** approach with multiple layers:
 
 ### 1. Built-in Agno RAG (Primary Memory System)
 
@@ -233,7 +233,7 @@ When enabled, Agno automatically:
 
 **Example:**
 ```python
-agent = SouperAgent(
+agent = NomiAgent(
     knowledge=UserScopedKnowledge(user_id=user_id, vector_db=vector_db),
     search_knowledge=True,  # Automatic search enabled
     # ...
@@ -249,7 +249,7 @@ When enabled, Agno automatically:
 
 **Example:**
 ```python
-agent = SouperAgent(
+agent = NomiAgent(
     knowledge=UserScopedKnowledge(user_id=user_id, vector_db=vector_db),
     update_knowledge=True,  # Automatic fact storage enabled
     # ...
@@ -257,8 +257,8 @@ agent = SouperAgent(
 ```
 
 **Agent Integration:**
-All agents in Genie support built-in RAG:
-- ✅ `SouperAgent` — Full RAG support (search + update)
+All agents in Nomi support built-in RAG:
+- ✅ `NomiAgent` — Full RAG support (search + update)
 - ✅ `RagAgent` — Full RAG support
 - ✅ `BriefingAgent` — Full RAG support
 - ✅ `MailerAgent` — Full RAG support
@@ -314,7 +314,7 @@ All agents in Genie support built-in RAG:
                           ▼
 ┌─────────────────────────────────────────────────────────┐
 │              All Agno Agents                            │
-│  - SouperAgent, BriefingAgent, MailerAgent, etc.        │
+│  - NomiAgent, BriefingAgent, MailerAgent, etc.        │
 │  - DevelopmentTeam agents                               │
 │  - D&D Team agents                                      │
 └─────────────────────────────────────────────────────────┘
@@ -368,7 +368,7 @@ All agents in Genie support built-in RAG:
 
 ## Plugin System
 
-Genie supports **plugins** — server-side extensions that run within the Python back-end process and integrate external messaging platforms with the core AI system.
+Nomi supports **plugins** — server-side extensions that run within the Python back-end process and integrate external messaging platforms with the core AI system.
 
 ### Architecture
 
@@ -523,11 +523,11 @@ cd api && go build ./...
 - **Framework**: Agno (AI agent orchestration), FastAPI
 - **Architecture**: Teams of agents with tools
 - **Entry point**: `back/app.py`
-- **Main agent**: `back/src/agents/souper.py`
+- **Main agent**: `back/src/agents/nomi.py`
 
 ### Agent Memory (RAG Integration)
 
-All agents in Genie support built-in memory via Agno's RAG system:
+All agents in Nomi support built-in memory via Agno's RAG system:
 
 **Creating Agents with Memory:**
 ```python
@@ -541,7 +541,7 @@ vector_db = build_vector_db(db_url=db_url)
 knowledge = UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
 
 # Create agent with memory
-agent = SouperAgent(
+agent = NomiAgent(
     model=model,
     knowledge=knowledge,
     search_knowledge=True,   # Automatic search in knowledge base
@@ -783,7 +783,7 @@ vector_db = build_vector_db(db_url=db_url)
 knowledge = UserScopedKnowledge(user_id=user_id, vector_db=vector_db)
 
 # Create agent with memory enabled
-agent = SouperAgent(
+agent = NomiAgent(
     model=model,
     knowledge=knowledge,
     search_knowledge=True,   # Automatic search enabled
@@ -805,7 +805,7 @@ if vector_db:
     knowledge = UserScopedKnowledge(user_id=rag_user_id, vector_db=vector_db)
 
 # Pass to all agents
-agent = SouperAgent(
+agent = NomiAgent(
     model=model,
     knowledge=knowledge,  # Automatically provided
     # ...

@@ -76,7 +76,7 @@ func (m *mockChatRepository) GetOrCreatePersistent(ctx context.Context, userID u
 	c := &chat.Chat{
 		ID:    uuid.New(),
 		Model: defaultModel,
-		Title: "Genie",
+		Title: "Nomi",
 		Mode:  "agent",
 		Type:  "persistent",
 	}
@@ -151,7 +151,7 @@ func TestChatService_GetIconForTeam(t *testing.T) {
 	}{
 		{nil, ""},
 		{strPtr("dnd_team"), "d20"},
-		{strPtr("genie"), "sparkles"},
+		{strPtr("nomi"), "sparkles"},
 		{strPtr("development_team"), "code"},
 		{strPtr("unknown"), ""},
 	}

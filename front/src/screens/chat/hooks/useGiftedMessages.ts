@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { IMessage } from 'react-native-gifted-chat';
-import { Message as GenieMessage, Attachment } from '../../main/models';
+import { Message as NomiMessage, Attachment } from '../../main/models';
 
 export interface ExtendedIMessage extends IMessage {
     tool_calls?: any[];
@@ -19,7 +19,7 @@ const getTimestamp = (value?: number | string | null): number => {
 };
 
 // Fast check if array is sorted in ascending order by timestamp
-const isSortedAscending = (messages: GenieMessage[]): boolean => {
+const isSortedAscending = (messages: NomiMessage[]): boolean => {
     if (messages.length < 2) return true;
     for (let i = 1; i < messages.length; i++) {
         const prev = getTimestamp(messages[i - 1].created_at);
@@ -30,7 +30,7 @@ const isSortedAscending = (messages: GenieMessage[]): boolean => {
 };
 
 // Fast message filter - inlined for performance
-const shouldShowMessage = (msg: GenieMessage): boolean => {
+const shouldShowMessage = (msg: NomiMessage): boolean => {
     const text = msg.text;
     if (text && text.length > 0 && text.trim().length > 0) return true;
     if (msg.attachments?.length) return true;
@@ -41,9 +41,9 @@ const shouldShowMessage = (msg: GenieMessage): boolean => {
     return false;
 };
 
-export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
+export function useGiftedMessages(messages: NomiMessage[], userId?: string) {
     // Cache last result to avoid re-computation when messages reference is stable
-    const lastMessagesRef = useRef<GenieMessage[]>([]);
+    const lastMessagesRef = useRef<NomiMessage[]>([]);
     const lastResultRef = useRef<ExtendedIMessage[]>([]);
 
     return useMemo(() => {
@@ -57,7 +57,7 @@ export function useGiftedMessages(messages: GenieMessage[], userId?: string) {
 
         // Optimization: if messages are already sorted chronologically (common case),
         // just reverse them instead of full sort O(n log n)
-        let sorted: GenieMessage[];
+        let sorted: NomiMessage[];
         if (isSortedAscending(messages)) {
             // Fast reverse: create new array in reverse order
             sorted = new Array(messages.length);

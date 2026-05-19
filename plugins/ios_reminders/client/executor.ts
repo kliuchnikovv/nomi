@@ -19,7 +19,7 @@ export const iosRemindersPlugin: ClientPluginHandler = {
                 return 'Please grant access to Reminders in the system settings to use this feature.';
             }
         } else if (permissionStatus === 'denied') {
-            return 'Reminders access is denied. Please enable it in iOS Settings > Genie > Reminders.';
+            return 'Reminders access is denied. Please enable it in iOS Settings > Nomi > Reminders.';
         }
 
         // Permission granted, proceed with the method

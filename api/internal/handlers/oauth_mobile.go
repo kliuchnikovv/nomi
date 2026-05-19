@@ -88,7 +88,7 @@ type LoginResponse struct {
 
 // Callback handles the OAuth callback from Google and redirects to the mobile app.
 // GET /api/oauth/:provider/callback
-// Redirects to: genie://oauth/callback?provider=...&code=...
+// Redirects to: nomi://oauth/callback?provider=...&code=...
 func (h *MobileOAuthHandler) Callback(c *gin.Context) {
 	providerName := c.Param("provider")
 	code := c.Query("code")
@@ -104,7 +104,7 @@ func (h *MobileOAuthHandler) Callback(c *gin.Context) {
 			zap.String("description", errorDesc),
 		)
 		// Redirect to app with error
-		redirectURL := fmt.Sprintf("genie://oauth/callback?provider=%s&error=%s", providerName, errorParam)
+		redirectURL := fmt.Sprintf("nomi://oauth/callback?provider=%s&error=%s", providerName, errorParam)
 		c.Redirect(http.StatusFound, redirectURL)
 		return
 	}
@@ -121,7 +121,7 @@ func (h *MobileOAuthHandler) Callback(c *gin.Context) {
 
 	// Redirect to the mobile app with the code
 	// The app will then call /callback-mobile to exchange the code for tokens
-	redirectURL := fmt.Sprintf("genie://oauth/callback?provider=%s&code=%s",
+	redirectURL := fmt.Sprintf("nomi://oauth/callback?provider=%s&code=%s",
 		url.QueryEscape(providerName),
 		url.QueryEscape(code))
 	c.Redirect(http.StatusFound, redirectURL)

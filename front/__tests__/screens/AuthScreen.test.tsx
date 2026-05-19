@@ -54,7 +54,7 @@ beforeEach(() => {
 describe('AuthScreen — static content', () => {
     it('renders the app name', () => {
         const { getByText } = render(<AuthScreen />);
-        expect(getByText('Genie')).toBeTruthy();
+        expect(getByText('Nomi')).toBeTruthy();
     });
 
     it('renders the tagline', () => {

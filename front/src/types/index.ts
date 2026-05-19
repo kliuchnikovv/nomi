@@ -1,5 +1,5 @@
 /**
- * Centralized type definitions for Genie frontend
+ * Centralized type definitions for Nomi frontend
  *
  * This file re-exports all types from organized sub-modules
  * to provide a single entry point for type imports.

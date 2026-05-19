@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Genie** is a hybrid AI assistant combining a cloud brain with local execution. It features a 3-tier architecture:
+**Nomi** is a hybrid AI assistant combining a cloud brain with local execution. It features a 3-tier architecture:
 
 - **Mobile App** (`front/`) — React Native/Expo/TypeScript client with local tool execution
 - **Go API** (`api/`) — REST/WebSocket hub for routing and state management
@@ -101,7 +101,6 @@ AppNavigator
     │   ├── ChatList       — ChatListScreen (session list)
     │   └── ChatDetail     — ChatDetailScreen (wrapped in ChatDetailScreenWrapper)
     ├── Projects           — ProjectsStack
-    ├── Integrations       — IntegrationsScreen
     └── Settings           — SettingsStack
 ```
 
@@ -220,7 +219,7 @@ All integrations (Gmail, GitHub, Calendar, etc.) are centrally defined in **3 re
 
 ### Memory Architecture
 
-Genie uses a **four-layer memory system** built on Agno primitives.  
+Nomi uses a **four-layer memory system** built on Agno primitives.  
 Full spec: [`docs/superpowers/specs/2026-05-02-agent-memory-architecture.md`](docs/superpowers/specs/2026-05-02-agent-memory-architecture.md)
 
 | Layer | Name | Agno Primitive | Status |
@@ -239,14 +238,14 @@ Full spec: [`docs/superpowers/specs/2026-05-02-agent-memory-architecture.md`](do
 - `back/src/storage/backend.py` — `StorageBackend` protocol, `PayloadBackend`, `AgnoBackend`
 - `back/src/storage/factory.py` — `create_storage_backend()`
 - `back/src/agents/factory.py` — `AgentFactory.build()` accepts `storage_backend`
-- `back/src/agents/souper.py` — `SouperAgent` with `MemoryManager` + `LearningMachine`
+- `back/src/agents/nomi.py` — `NomiAgent` with `MemoryManager` + `LearningMachine`
 - `back/src/server/redis_session.py` — extracts `agent_storage_mode`, builds backend, guards payload-only paths
 - `api/internal/hub/room_handlers.go` — reads `agent_storage_mode`, conditionally includes history
 - `api/migrations/003_agent_storage_mode.sql` — adds `agent_storage_mode` column
 
 ### Memory & RAG
 
-Genie uses a **2-layer memory system**:
+Nomi uses a **2-layer memory system**:
 
 #### 1. Vector Knowledge Store (`personal_vectors`)
 - **Shared Knowledge**: One Agno `Knowledge(vector_db=PgVector(...))` instance per process, table `personal_vectors`
@@ -269,26 +268,33 @@ Genie uses a **2-layer memory system**:
 - Memories injected into prompt as `<memories_from_previous_interactions>`
 - `LearningMachine`: auto-learns user profile and entity memory (namespaced `user:{user_id}:personal`) after each run
 
-**File:** `back/src/agents/souper.py`
+**File:** `back/src/agents/nomi.py`
 
-### Agent Teams
+### Agent Types
 
-Teams use a **Leader + Members** pattern:
+`AgentFactory.build()` dispatches on `agent_type` from the payload:
 
-- **Leader**: Orchestrates tasks, decides which member to delegate to
-- **Members**: Specialized agents (Mailer, Scheduler, etc.)
-- **Delegation**: Leader calls `delegate_task_to_member` tool
-- **Streaming**: Member responses streamed as `member_response` type to show "who is speaking"
-
-**Team Types:**
-- `DevelopmentTeam` — Software development (Analyst, Architect, Developer, Reviewer)
-- `GenieTeam` — General assistant (Mailer, Briefing, Scheduler)
-- `D&D Team` — Dungeon & Dragons campaign (DM, Players)
+- **`nomi`** (default) — full `NomiAgent` with `MemoryManager` + `LearningMachine` + RAG
+- **`planner`** — lightweight `PlannerAgent` for day-plan editing; stateless patches via `patch_plan_document`
+- **`team`** — team mode; `command_desc.type` identifies the team (`development_team`, `dnd_team`, `travel_planning`, `nomi`); member responses stream as `member_response` frames
 
 **Files:**
-- `back/src/teams/factory.py` — Team builder
-- `back/src/teams/development/team.py` — Development team implementation
-- `back/src/teams/genie/team.py` — Genie team implementation
+- `back/src/agents/nomi.py` — `NomiAgent` (full assistant)
+- `back/src/agents/planner.py` — `build_planner_agent()` (day planner)
+- `back/src/agents/souper.py` — backward-compat shim; re-exports from `nomi.py`
+- `back/src/workflows/planning.py` — multi-stage planning workflow (extract → recon → cluster → route → build)
+
+### Planning Workflow (`back/src/workflows/`)
+
+Multi-stage pipeline used when user requests a full day plan:
+
+1. **Extract** — parse tasks from natural language
+2. **Recon** — locate places via ORS/maps
+3. **Cluster** — group by area
+4. **Route** — optimize order
+5. **Build** — assemble final plan document
+
+`build_planning_workflow()` returns a runnable workflow object. The `PlannerAgent` handles iterative edits after the plan is built.
 
 ### Background Tasks (Mobile)
 
@@ -328,7 +334,13 @@ Redis → Python brain → Redis → DeliveryHandler →
 Send to Telegram + save assistant response to plugin_data
 ```
 
-**Key Files:**
+**Available Plugins:**
+- `telegram` — Telegram bot bridge (webhook → Redis → brain → Telegram)
+- `calendar`, `ios_calendar`, `ios_reminders`, `ios_contacts`, `ios_health`, `ios_shortcuts` — iOS device integrations (client-side plugins)
+- `github`, `gmail`, `imap_email` — server-side service integrations
+- `sandbox` — isolated Linux sandbox for code execution
+
+**Key Files (Telegram example):**
 - `plugins/telegram/server/service.py` — Core logic (messages, model selection, linking)
 - `plugins/telegram/server/routes.py` — FastAPI routes (webhook, link, status, messages)
 - `plugins/telegram/server/delivery.py` — Response delivery to Telegram + plugin_data persistence
@@ -370,21 +382,7 @@ tool.create_file(repo_name="owner/repo", path="file.py", content="...")  # messa
 
 **File:** `back/src/tools/factory.py`
 
-### 3. Context Injection (Development Team)
-
-`DevelopmentTeam.run()` auto-injects system context into messages:
-
-```
-[SYSTEM CONTEXT - IMPORTANT]
-**Current Project ID**: uuid. ALWAYS use this ID when creating tasks.
-**Current Task ID**: uuid. Use this as parent_id for subtasks.
-You have access to repositories: [list]. Use ONLY these names.
-[END SYSTEM CONTEXT]
-```
-
-**File:** `back/src/teams/development/team.py`
-
-### 4. Repository Discovery
+### 3. Repository Discovery
 
 Repositories are discovered via GitHub integration — **NOT environment variables**:
 
@@ -396,12 +394,11 @@ repos = self.github_tool.list_repos(limit=50)
 # os.getenv('GITHUB_REPO_NAME')  ❌
 ```
 
-### 5. Agent Memory Best Practices
+### 4. Agent Memory Best Practices
 
-- **Shared Knowledge**: `AgentFactory.get_knowledge()` returns the shared Agno Knowledge for insert/delete; pass `metadata={"user_id": user_id}` on every insert and `metadata={"user_id": user_id, ...}` on remove_vectors_by_metadata
+- **Shared Knowledge**: `AgentFactory.get_knowledge()` returns the shared Agno Knowledge for insert/delete; pass `metadata={"user_id": user_id}` on every insert and `metadata={"user_id": user_id, ...}` on `remove_vectors_by_metadata`
 - **Run-level filters**: `AgentRunWrapper` injects `knowledge_filters={"user_id": rag_user_id}` at every `run`/`arun`, so agentic search is user-scoped without a custom Knowledge subclass
-- **Update storage**: Agents receive `UserKnowledgeAdapter(shared_knowledge, rag_user_id)` so `update_knowledge` stores facts with user_id in metadata
-- `AgentFactory.build()` returns an `AgentRunWrapper` (same interface as agent) and passes Knowledge adapter to all agents
+- `AgentFactory.build()` returns an `AgentRunWrapper` (same interface as agent)
 
 ## Configuration Files
 

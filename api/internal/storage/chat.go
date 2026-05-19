@@ -206,7 +206,7 @@ func (s *Storage) GetOrCreatePersistentChat(ctx context.Context, userID uuid.UUI
 	return s.CreateChat(ctx, userID, &chat.Chat{
 		ID:    uuid.New(),
 		Model: defaultModel,
-		Title: "Genie",
+		Title: "Nomi",
 		Mode:  "agent",
 		Type:  "persistent",
 	})

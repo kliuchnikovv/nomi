@@ -87,7 +87,7 @@ describe('usePlanRemindersSync — iOS', () => {
 
         expect(mockCreate).toHaveBeenCalledWith(
             'Buy groceries',
-            expect.objectContaining({ list: 'Genie Plan' })
+            expect.objectContaining({ list: 'Nomi Plan' })
         );
     });
 

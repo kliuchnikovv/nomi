@@ -5,7 +5,7 @@ import { SplashScreen } from '../../src/screens/splash/SplashScreen';
 describe('SplashScreen', () => {
     it('renders the app name', () => {
         const { getByText } = render(<SplashScreen initStatus="Starting…" />);
-        expect(getByText('Genie')).toBeTruthy();
+        expect(getByText('Nomi')).toBeTruthy();
     });
 
     it('renders the tagline', () => {

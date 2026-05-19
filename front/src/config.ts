@@ -34,7 +34,7 @@ export async function setApiUrl(url: string): Promise<void> {
 export const API_URL = DEFAULT_API_URL;
 
 // Deep link scheme for OAuth callback (make sure it's configured in iOS/Android)
-export const APP_SCHEME = 'genie';
+export const APP_SCHEME = 'nomi';
 export const OAUTH_CALLBACK_URL = `${APP_SCHEME}://oauth/callback`;
 
 //'http://localhost:8080/api'

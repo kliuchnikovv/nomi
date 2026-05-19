@@ -258,7 +258,7 @@ func (s *ChatService) getIconForTeam(teamID *string) string {
 	switch *teamID {
 	case "dnd_team":
 		return "d20"
-	case "genie":
+	case "nomi":
 		return "sparkles"
 	case "development_team":
 		return "code"

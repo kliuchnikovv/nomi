@@ -21,7 +21,7 @@ import Animated, {
 import ImageViewing from 'react-native-image-viewing';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Message as GenieMessage } from '../main/models';
+import { Message as NomiMessage } from '../main/models';
 
 import { useChat } from './context';
 import { useAuth } from '../auth/context';

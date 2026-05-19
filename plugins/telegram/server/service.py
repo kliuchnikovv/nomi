@@ -506,7 +506,7 @@ class TelegramService:
         if not data.get("active", True):
             await self.send_message(
                 chat_id,
-                "Your Genie integration has been disconnected.\n\nSend /reconnect to link your account again.",
+                "Your Nomi integration has been disconnected.\n\nSend /reconnect to link your account again.",
             )
             return
 

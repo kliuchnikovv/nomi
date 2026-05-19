@@ -75,7 +75,7 @@ export const DashboardScreen = () => {
                     <View style={styles.planText}>
                         <Text style={[styles.planTitle, { color: theme.textPrimary }]}>Plan My Day</Text>
                         <Text style={[styles.planSubtitle, { color: theme.textSecondary }]}>
-                            Let Genie build your schedule
+                            Let Nomi build your schedule
                         </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />

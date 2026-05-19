@@ -6,7 +6,7 @@ export function useShareExtension() {
     const { createNewChatWithMode } = useMain();
 
     const handle = useCallback((url: string) => {
-        if (!url.startsWith('genie://share')) return;
+        if (!url.startsWith('nomi://share')) return;
         const match = url.match(/[?&]text=([^&]*)/);
         const text = match ? decodeURIComponent(match[1]) : '';
         if (text) createNewChatWithMode('agent', null, text);
