@@ -1716,18 +1716,21 @@ class RedisSession:
 
     def _process_attachments(self, attachments: list) -> list[Image]:
         """Process attachments and extract images."""
+        import base64 as _base64
+
         images = []
         for att in attachments:
             if isinstance(att, dict) and att.get("file_type", "").startswith("image/"):
-                import base64
-
+                content = att.get("content")
+                if not content:
+                    continue
                 try:
-                    content = att.get("content", "")
-                    if content:
-                        image_bytes = base64.b64decode(content)
-                        images.append(
-                            Image(content=image_bytes, format=att.get("file_type"))
-                        )
+                    image_bytes = _base64.b64decode(content)
+                    mime = att.get("file_type", "image/jpeg")
+                    fmt = mime.split("/")[-1] if "/" in mime else mime
+                    images.append(
+                        Image(content=image_bytes, format=fmt, mime_type=mime)
+                    )
                 except Exception as e:
                     logger.error("[RedisSession] Image decode error: %s", e)
         return images
