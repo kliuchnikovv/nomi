@@ -240,7 +240,7 @@ export default function ChatInput(props: Props) {
             const result = await launchImageLibrary({
                 mediaType: 'photo',
                 quality: 0.8,
-                selectionLimit: 1,
+                selectionLimit: 5,
                 includeExtra: true, // Force permission check
             });
             console.log('launchImageLibrary result:', result);
@@ -382,6 +382,19 @@ export default function ChatInput(props: Props) {
         return name;
     }, [availableModels, selectedModel]);
 
+    const visionSupported = useMemo(
+        () =>
+            availableModels.find(m => m.id === selectedModel)?.supports_vision ??
+            false,
+        [availableModels, selectedModel],
+    );
+
+    useEffect(() => {
+        if (!visionSupported && attachments.length > 0) {
+            setAttachments(prev => (prev.length > 0 ? [] : prev));
+        }
+    }, [visionSupported]);
+
     const plusMenuItems: ContextMenuItem[] = useMemo(
         () => [
             {
@@ -390,18 +403,22 @@ export default function ChatInput(props: Props) {
                 icon: <AttachmentIcon width={20} height={20} color="#fff" />,
                 onPress: () => executeWithDelay(pickDocument),
             },
-            {
-                id: 'photos',
-                label: 'Photos',
-                icon: <MediaImage width={20} height={20} color="#fff" />,
-                onPress: () => executeWithDelay(pickImage),
-            },
-            {
-                id: 'camera',
-                label: 'Camera',
-                icon: <Camera width={20} height={20} color="#fff" />,
-                onPress: () => executeWithDelay(takePhoto),
-            },
+            ...(visionSupported
+                ? [
+                      {
+                          id: 'photos',
+                          label: 'Photos',
+                          icon: <MediaImage width={20} height={20} color="#fff" />,
+                          onPress: () => executeWithDelay(pickImage),
+                      },
+                      {
+                          id: 'camera',
+                          label: 'Camera',
+                          icon: <Camera width={20} height={20} color="#fff" />,
+                          onPress: () => executeWithDelay(takePhoto),
+                      },
+                  ]
+                : []),
             {
                 id: 'location',
                 label: 'Location',
@@ -422,6 +439,7 @@ export default function ChatInput(props: Props) {
             },
         ],
         [
+            visionSupported,
             pickDocument,
             pickImage,
             takePhoto,
@@ -549,13 +567,32 @@ export default function ChatInput(props: Props) {
         for (const model of filteredModels) {
             const provider = model.provider ?? 'other';
             const items = byProvider.get(provider) ?? [];
+            const isSelected = model.id === selectedModel;
+            const badgeColor = isSelected ? theme.accent : theme.textSecondary;
             items.push({
                 id: model.id,
                 label: model.name || model.id,
-                icon:
-                    model.id === selectedModel ? (
-                        <Check width={20} height={20} color={theme.accent} />
-                    ) : undefined,
+                badges: (model.supports_vision || model.supports_thinking) ? (
+                    <>
+                        {model.supports_vision && (
+                            <MediaImage
+                                width={13}
+                                height={13}
+                                color={badgeColor}
+                            />
+                        )}
+                        {model.supports_thinking && (
+                            <MagicWand
+                                width={13}
+                                height={13}
+                                color={badgeColor}
+                            />
+                        )}
+                    </>
+                ) : undefined,
+                icon: isSelected ? (
+                    <Check width={20} height={20} color={theme.accent} />
+                ) : undefined,
                 onPress: () => {
                     setSelectedModel(model.id);
                     setModelMenuVisible(false);
@@ -573,6 +610,7 @@ export default function ChatInput(props: Props) {
         selectedModel,
         setSelectedModel,
         theme.accent,
+        theme.textSecondary,
         thinkingLevel,
     ]);
 

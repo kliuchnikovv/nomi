@@ -96,6 +96,7 @@ class RedisSession:
         # Single chat mode state
         self.single_chat_mode: bool = False  # Set from session state payload
         self._model_context_limit: int | None = None  # Loaded lazily
+        self._model_supports_vision_cache: bool | None = None  # Loaded lazily
 
         # Context items (emails, documents, etc.)
         # Context items (emails, documents, etc.)
@@ -740,6 +741,7 @@ class RedisSession:
         """Build the agent based on payload parameters."""
         # Extract params from payload or defaults
         self.current_model_name = payload.get("model")
+        self._model_supports_vision_cache = None
         endpoint = payload.get("endpoint")
         self.streaming = bool(payload.get("streaming", False))
 
@@ -893,6 +895,10 @@ class RedisSession:
                 # If model is not set, set it from command
                 if self.current_model_name is None:
                     self.current_model_name = cmd_obj.get("model")
+                    self._model_supports_vision_cache = None
+                elif cmd_obj.get("model") and cmd_obj.get("model") != self.current_model_name:
+                    self.current_model_name = cmd_obj.get("model")
+                    self._model_supports_vision_cache = None
 
         tool_names = [t.name for t in self.tools_specs]
         logger.info(
@@ -1586,10 +1592,16 @@ class RedisSession:
 
         agent_input = self._build_agent_input(text)
 
-        if attachments:
+        if attachments and self._model_supports_vision():
             images = self._process_attachments(attachments)
             if images:
                 kwargs["images"] = images
+        elif attachments:
+            logger.info(
+                "[RedisSession] Model %s does not support vision; skipping %d attachment(s)",
+                self.current_model_name,
+                len(attachments),
+            )
 
         agent = self.agent
         if not agent:
@@ -1716,18 +1728,21 @@ class RedisSession:
 
     def _process_attachments(self, attachments: list) -> list[Image]:
         """Process attachments and extract images."""
+        import base64 as _base64
+
         images = []
         for att in attachments:
             if isinstance(att, dict) and att.get("file_type", "").startswith("image/"):
-                import base64
-
+                content = att.get("content")
+                if not content:
+                    continue
                 try:
-                    content = att.get("content", "")
-                    if content:
-                        image_bytes = base64.b64decode(content)
-                        images.append(
-                            Image(content=image_bytes, format=att.get("file_type"))
-                        )
+                    image_bytes = _base64.b64decode(content)
+                    mime = att.get("file_type", "image/jpeg")
+                    fmt = mime.split("/")[-1] if "/" in mime else mime
+                    images.append(
+                        Image(content=image_bytes, format=fmt, mime_type=mime)
+                    )
                 except Exception as e:
                     logger.error("[RedisSession] Image decode error: %s", e)
         return images
@@ -1922,6 +1937,32 @@ class RedisSession:
 
         self._model_context_limit = 128_000
         return self._model_context_limit
+
+    def _model_supports_vision(self) -> bool:
+        """Return True if current model supports vision input per config/models.json."""
+        import json as _json
+
+        if not self.current_model_name:
+            return False
+
+        if self._model_supports_vision_cache is not None:
+            return self._model_supports_vision_cache
+
+        config_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "config", "models.json"
+        )
+        try:
+            with open(config_path) as f:
+                data = _json.load(f)
+            for m in data.get("models", []):
+                if m.get("id") == self.current_model_name:
+                    self._model_supports_vision_cache = bool(m.get("supports_vision", False))
+                    return self._model_supports_vision_cache
+        except Exception as exc:
+            logger.warning("[RedisSession] Failed to load model config for vision check: %s", exc)
+
+        self._model_supports_vision_cache = False
+        return False
 
     async def _maybe_archive_old_messages(self) -> None:
         """Archive oldest messages to pgvector when history exceeds 75% of context window.
