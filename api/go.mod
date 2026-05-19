@@ -31,9 +31,11 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
+	github.com/golang-jwt/jwt/v4 v4.4.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/sideshow/apns2 v0.25.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gorm.io/driver/mysql v1.5.6 // indirect

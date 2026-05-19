@@ -70,12 +70,14 @@ func New(
 			}
 			return h
 		}()
-		toolsHandler         = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey)
-		integrationsHandler  = handlers.NewIntegrationsHandler(ctr.Storage, logger)
-		botIdentityHandler   = handlers.NewBotIdentityHandler(ctr.Storage, logger)
-		planDocumentsHandler = handlers.NewPlanDocumentsHandler(ctr.Storage, logger)
-		memoriesHandler      = handlers.NewMemoriesHandler(ctr.Storage, logger)
-		entitiesHandler      = handlers.NewEntitiesHandler(ctr.Storage, logger)
+		toolsHandler          = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey)
+		integrationsHandler   = handlers.NewIntegrationsHandler(ctr.Storage, logger)
+		botIdentityHandler    = handlers.NewBotIdentityHandler(ctr.Storage, logger)
+		planDocumentsHandler  = handlers.NewPlanDocumentsHandler(ctr.Storage, logger)
+		memoriesHandler       = handlers.NewMemoriesHandler(ctr.Storage, logger)
+		entitiesHandler       = handlers.NewEntitiesHandler(ctr.Storage, logger)
+		notificationsHandler  = handlers.NewNotificationsHandler(ctr.Storage)
+		devicesHandler        = handlers.NewDevicesHandler(ctr.Storage)
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -168,6 +170,17 @@ func New(
 	r.GET("/api/plan-documents", wrapWithAuth(planDocumentsHandler.GetPlanDocument, authMiddleware))
 	r.POST("/api/plan-documents", wrapWithAuth(planDocumentsHandler.CreatePlanDocument, authMiddleware))
 	r.PATCH("/api/plan-documents/:id", wrapWithAuth(planDocumentsHandler.PatchPlanDocument, authMiddleware))
+
+	// Notifications API
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.POST("/api/notifications", wrapWithAuth(notificationsHandler.Create, authMiddleware))
+	r.GET("/api/notifications", wrapWithAuth(notificationsHandler.List, authMiddleware))
+	r.DELETE("/api/notifications/:id", wrapWithAuth(notificationsHandler.Cancel, authMiddleware))
+
+	// Device token registration
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.POST("/api/devices", wrapWithAuth(devicesHandler.Register, authMiddleware))
+	r.DELETE("/api/devices/:token", wrapWithAuth(devicesHandler.Deregister, authMiddleware))
 
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path

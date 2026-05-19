@@ -5,11 +5,11 @@
  * @format
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar, useColorScheme, AppState, AppStateStatus } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme, NavigationContainerRef } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MainProvider } from './src/screens/main/context';
@@ -31,11 +31,18 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 import { SplashScreen } from './src/screens/splash/SplashScreen';
 import { useShareExtension } from './src/share-extension/useShareExtension';
+import { handleLastNotificationResponse, setupNotificationHandlers } from './src/services/notifications/NotificationHandler';
 
 // Initialize debug utilities
 initDebugUtils();
 
-function ThemedNavigationContainer({ children }: { children: React.ReactNode }) {
+function ThemedNavigationContainer({
+    children,
+    navigationRef,
+}: {
+    children: React.ReactNode;
+    navigationRef: React.RefObject<NavigationContainerRef<any> | null>;
+}) {
     const { theme } = useTheme();
     const navTheme = {
         ...DarkTheme,
@@ -48,13 +55,14 @@ function ThemedNavigationContainer({ children }: { children: React.ReactNode }) 
             primary: theme.accent,
         },
     };
-    return <NavigationContainer theme={navTheme}>{children}</NavigationContainer>;
+    return <NavigationContainer ref={navigationRef as React.RefObject<NavigationContainerRef<any>>} theme={navTheme}>{children}</NavigationContainer>;
 }
 
 function App() {
     const isDarkMode = useColorScheme() === 'dark';
     const [configReady, setConfigReady] = useState(false);
     const [initStatus, setInitStatus] = useState('Initializing...');
+    const navigationRef = useRef<NavigationContainerRef<any>>(null);
 
     // Initialize API URL and Database before rendering
     useEffect(() => {
@@ -144,8 +152,8 @@ function App() {
                             <PluginChatsProvider>
                                 <ConnectorsProvider>
                                     <MainProvider>
-                                        <ThemedNavigationContainer>
-                                            <AppContent />
+                                        <ThemedNavigationContainer navigationRef={navigationRef}>
+                                            <AppContent navigationRef={navigationRef} />
                                         </ThemedNavigationContainer>
                                     </MainProvider>
                                 </ConnectorsProvider>
@@ -158,9 +166,15 @@ function App() {
     );
 }
 
-function AppContent() {
+function AppContent({ navigationRef }: { navigationRef: React.RefObject<NavigationContainerRef<any> | null> }) {
     const { isAuthenticated, isLoading, token } = useAuth();
     useShareExtension();
+
+    useEffect(() => {
+        if (!navigationRef.current) return;
+        handleLastNotificationResponse(navigationRef.current);
+        return setupNotificationHandlers(navigationRef.current);
+    }, [navigationRef]);
 
     // Global Socket Lifecycle - Auth Token Management
     useEffect(() => {

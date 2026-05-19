@@ -537,6 +537,17 @@ class AgentFactory:
             except Exception as e:
                 logger.warning("[Factory] Failed to add UserMemoryTools: %s", e)
 
+        # Add notification tool (schedule_notification) - available to all agents with a user_id
+        if user_id:
+            try:
+                from src.tools.notification import NotificationTools
+
+                notification_tool = NotificationTools(user_id=user_id)
+                tools = list(tools) + [notification_tool]
+                logger.info("[Factory] Added NotificationTools (schedule_notification) for user=%s", user_id)
+            except Exception as e:
+                logger.warning("[Factory] Failed to add NotificationTools: %s", e)
+
         # Register chat history search tool for single chat mode
         if single_chat_mode and user_id and self._knowledge is not None:
             from src.tools.chat_history import make_search_chat_history

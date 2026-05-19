@@ -17,6 +17,7 @@ import { AuthContextType, User, alertError } from './models';
 import { secureTokenStorage } from '../../services/auth/SecureTokenStorage';
 import { integrationStorage } from '../../services/integrations/IntegrationStorage';
 import { pluginChatStorage } from '../../services/plugins/PluginChatStorage';
+import { requestPermissionAndRegister, deregisterDevice } from '../../services/notifications/NotificationHandler';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -436,6 +437,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             logout: () => logout(),
         });
     }, [token, refreshToken, logout]);
+
+    // Register/deregister push notification device token with auth state
+    useEffect(() => {
+        if (isAuthenticated) {
+            requestPermissionAndRegister().catch(e =>
+                console.warn('[Auth] Failed to register push token:', e)
+            );
+        } else {
+            deregisterDevice().catch(() => { /* best-effort on logout */ });
+        }
+    }, [isAuthenticated]);
 
     const value: AuthContextType = {
         user,

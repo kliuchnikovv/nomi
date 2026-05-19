@@ -95,6 +95,29 @@ type Project struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
+// Notification represents a scheduled push notification
+type Notification struct {
+	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID      uuid.UUID      `gorm:"type:uuid;not null;index"`
+	Type        string         `gorm:"type:varchar(20);not null"` // 'reminder' | 'event' | 'proactive'
+	Title       string         `gorm:"type:text;not null"`
+	Body        string         `gorm:"type:text;not null"`
+	DeepLink    datatypes.JSON `gorm:"type:jsonb"`
+	ScheduledAt time.Time      `gorm:"not null;index"`
+	FiredAt     *time.Time     `gorm:"default:null"`
+	Metadata    datatypes.JSON `gorm:"type:jsonb"`
+	CreatedAt   time.Time      `gorm:"not null"`
+}
+
+// UserDevice stores device tokens for push notification delivery
+type UserDevice struct {
+	ID          uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID      uuid.UUID `gorm:"type:uuid;not null;index"`
+	DeviceToken string    `gorm:"type:text;not null;uniqueIndex:idx_user_device"`
+	Platform    string    `gorm:"type:varchar(10);not null"` // 'ios' | 'android'
+	CreatedAt   time.Time `gorm:"not null"`
+}
+
 // CreateAttachment creates a new attachment record
 func (s *Storage) CreateAttachment(ctx context.Context, attachment *Attachment) error {
 	return s.DB.WithContext(ctx).Create(attachment).Error
