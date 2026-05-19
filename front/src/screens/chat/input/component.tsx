@@ -391,7 +391,7 @@ export default function ChatInput(props: Props) {
 
     useEffect(() => {
         if (!visionSupported && attachments.length > 0) {
-            setAttachments([]);
+            setAttachments(prev => (prev.length > 0 ? [] : prev));
         }
     }, [visionSupported]);
 

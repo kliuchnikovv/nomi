@@ -896,6 +896,9 @@ class RedisSession:
                 if self.current_model_name is None:
                     self.current_model_name = cmd_obj.get("model")
                     self._model_supports_vision_cache = None
+                elif cmd_obj.get("model") and cmd_obj.get("model") != self.current_model_name:
+                    self.current_model_name = cmd_obj.get("model")
+                    self._model_supports_vision_cache = None
 
         tool_names = [t.name for t in self.tools_specs]
         logger.info(
