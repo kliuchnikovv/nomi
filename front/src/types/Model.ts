@@ -3,6 +3,7 @@ export interface Model {
     name: string;
     description?: string;
     provider?: string;
+    supports_vision?: boolean;
 }
 
 export interface ModelDetail {

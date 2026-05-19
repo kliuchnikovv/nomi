@@ -240,7 +240,7 @@ export default function ChatInput(props: Props) {
             const result = await launchImageLibrary({
                 mediaType: 'photo',
                 quality: 0.8,
-                selectionLimit: 1,
+                selectionLimit: 5,
                 includeExtra: true, // Force permission check
             });
             console.log('launchImageLibrary result:', result);
@@ -382,6 +382,19 @@ export default function ChatInput(props: Props) {
         return name;
     }, [availableModels, selectedModel]);
 
+    const visionSupported = useMemo(
+        () =>
+            availableModels.find(m => m.id === selectedModel)?.supports_vision ??
+            false,
+        [availableModels, selectedModel],
+    );
+
+    useEffect(() => {
+        if (!visionSupported && attachments.length > 0) {
+            setAttachments([]);
+        }
+    }, [visionSupported]);
+
     const plusMenuItems: ContextMenuItem[] = useMemo(
         () => [
             {
@@ -390,18 +403,22 @@ export default function ChatInput(props: Props) {
                 icon: <AttachmentIcon width={20} height={20} color="#fff" />,
                 onPress: () => executeWithDelay(pickDocument),
             },
-            {
-                id: 'photos',
-                label: 'Photos',
-                icon: <MediaImage width={20} height={20} color="#fff" />,
-                onPress: () => executeWithDelay(pickImage),
-            },
-            {
-                id: 'camera',
-                label: 'Camera',
-                icon: <Camera width={20} height={20} color="#fff" />,
-                onPress: () => executeWithDelay(takePhoto),
-            },
+            ...(visionSupported
+                ? [
+                      {
+                          id: 'photos',
+                          label: 'Photos',
+                          icon: <MediaImage width={20} height={20} color="#fff" />,
+                          onPress: () => executeWithDelay(pickImage),
+                      },
+                      {
+                          id: 'camera',
+                          label: 'Camera',
+                          icon: <Camera width={20} height={20} color="#fff" />,
+                          onPress: () => executeWithDelay(takePhoto),
+                      },
+                  ]
+                : []),
             {
                 id: 'location',
                 label: 'Location',
@@ -422,6 +439,7 @@ export default function ChatInput(props: Props) {
             },
         ],
         [
+            visionSupported,
             pickDocument,
             pickImage,
             takePhoto,

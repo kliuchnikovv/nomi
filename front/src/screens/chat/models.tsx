@@ -100,6 +100,7 @@ export interface Model {
     description?: string;
     provider?: string;
     supports_thinking?: boolean;
+    supports_vision?: boolean;
     endpoint?: string;
 }
 
