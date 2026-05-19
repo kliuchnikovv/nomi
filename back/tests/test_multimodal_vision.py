@@ -3,7 +3,7 @@
 import base64
 import sys
 import types
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 # Install a real Image stub so we can inspect format/mime_type after construction
@@ -82,3 +82,38 @@ class TestProcessAttachments:
         attachments = [{"file_type": "image/jpeg"}]
         images = session._process_attachments(attachments)
         assert images == []
+
+
+MODELS_JSON_VISION = {
+    "models": [
+        {"id": "gemini-2.5-flash", "supports_vision": True},
+        {"id": "gpt-5-nano", "supports_vision": False},
+    ]
+}
+
+
+class TestModelSupportsVision:
+    def test_returns_true_for_vision_model(self):
+        session = _make_session()
+        session.current_model_name = "gemini-2.5-flash"
+        with patch("builtins.open", MagicMock()), \
+             patch("json.load", return_value=MODELS_JSON_VISION):
+            assert session._model_supports_vision() is True
+
+    def test_returns_false_for_non_vision_model(self):
+        session = _make_session()
+        session.current_model_name = "gpt-5-nano"
+        with patch("builtins.open", MagicMock()), \
+             patch("json.load", return_value=MODELS_JSON_VISION):
+            assert session._model_supports_vision() is False
+
+    def test_returns_false_when_no_model_set(self):
+        session = _make_session()
+        session.current_model_name = None
+        assert session._model_supports_vision() is False
+
+    def test_returns_false_on_config_load_error(self):
+        session = _make_session()
+        session.current_model_name = "gemini-2.5-flash"
+        with patch("builtins.open", side_effect=OSError("not found")):
+            assert session._model_supports_vision() is False
