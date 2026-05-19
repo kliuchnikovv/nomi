@@ -24,8 +24,8 @@ class NotificationTools(Toolkit):
         title: str,
         body: str,
         scheduled_at: str,
-        screen: str,
-        screen_params: dict,
+        screen: str = "chat",
+        screen_params: dict | None = None,
         notification_type: str = "proactive",
     ) -> str:
         """Schedule a push notification to the user at a future time.
@@ -37,9 +37,9 @@ class NotificationTools(Toolkit):
             title: Short notification title (max ~50 chars).
             body: Notification body text.
             scheduled_at: ISO 8601 datetime string (e.g. "2026-05-20T15:00:00Z").
-            screen: Target screen on tap — "chat" or "planner".
-            screen_params: Route params for the screen. For "chat": {"chatId": "<uuid>"}.
-                           For "planner": {"date": "YYYY-MM-DD"}.
+            screen: Target screen on tap — "chat" or "planner". Defaults to "chat".
+            screen_params: Optional route params. For "chat": {"chatId": "<uuid>"}.
+                           For "planner": {"date": "YYYY-MM-DD"}. Can be omitted.
             notification_type: "reminder" | "event" | "proactive".
 
         Returns:
@@ -50,7 +50,7 @@ class NotificationTools(Toolkit):
             "title": title,
             "body": body,
             "scheduled_at": scheduled_at,
-            "deep_link": {"screen": screen, "params": screen_params},
+            "deep_link": {"screen": screen, "params": screen_params or {}},
         }
 
         headers: dict[str, str] = {
