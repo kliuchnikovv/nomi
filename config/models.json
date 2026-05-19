@@ -76,6 +76,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": false,
       "streaming": true,
       "endpoint": "https://openrouter.ai/api/v1"
     },
@@ -155,7 +156,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
-      "supports_vision": false,
+      "supports_vision": true,
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -203,6 +204,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": false,
+      "supports_vision": true,
       "streaming": true,
       "endpoint": ""
     },
@@ -218,6 +220,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
+      "supports_vision": true,
       "streaming": true,
       "endpoint": ""
     }
