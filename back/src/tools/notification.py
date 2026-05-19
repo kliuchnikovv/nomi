@@ -53,11 +53,12 @@ class NotificationTools(Toolkit):
             "deep_link": {"screen": screen, "params": screen_params},
         }
 
-        headers = {
-            "Authorization": f"Bearer {self._service_token}",
+        headers: dict[str, str] = {
             "X-User-ID": self.user_id,
             "Content-Type": "application/json",
         }
+        if self._service_token:
+            headers["Authorization"] = f"Bearer {self._service_token}"
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

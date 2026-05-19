@@ -37,27 +37,26 @@ func GetUserFromContext(ctx context.Context) (*storage.User, bool) {
 // RequireAuth is a middleware for JWT token validation.
 // Also accepts internal service token: Authorization: Bearer <INTERNAL_SERVICE_TOKEN>
 // with X-User-ID header for Python backend calls.
+// When INTERNAL_SERVICE_TOKEN is not configured, X-User-ID alone is accepted
+// for internal service-to-service calls (both services on same host).
 func (am *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Authorization header is required", http.StatusUnauthorized)
-			return
-		}
-
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
-			return
-		}
-
-		// Service token path for internal Python → Go calls
 		serviceToken := os.Getenv("INTERNAL_SERVICE_TOKEN")
-		if serviceToken != "" && parts[1] == serviceToken {
-			userIDStr := r.Header.Get("X-User-ID")
+
+		// Internal service-to-service: X-User-ID present, no JWT needed
+		if userIDStr := r.Header.Get("X-User-ID"); userIDStr != "" {
+			authHeader := r.Header.Get("Authorization")
+			// Validate service token when configured
+			if serviceToken != "" {
+				parts := strings.SplitN(authHeader, " ", 2)
+				if len(parts) != 2 || parts[0] != "Bearer" || parts[1] != serviceToken {
+					http.Error(w, "Invalid service token", http.StatusUnauthorized)
+					return
+				}
+			}
 			userID, err := uuid.Parse(userIDStr)
 			if err != nil {
-				http.Error(w, "X-User-ID required for service token auth", http.StatusUnauthorized)
+				http.Error(w, "Invalid X-User-ID", http.StatusUnauthorized)
 				return
 			}
 			user, err := am.storage.GetUserByID(r.Context(), userID)
@@ -67,6 +66,18 @@ func (am *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 			}
 			ctx := context.WithValue(r.Context(), UserContextKey, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		// Standard JWT path
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header is required", http.StatusUnauthorized)
+			return
+		}
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
 			return
 		}
 
