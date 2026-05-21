@@ -104,6 +104,18 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
             }, SILENCE_TIMEOUT_MS);
         };
 
+        Voice.onSpeechPartialResults = (e) => {
+            const partial = e.value?.[0] ?? '';
+            currentTranscriptRef.current = partial;
+            setLiveTranscript(partial);
+            clearSilenceTimer();
+            silenceTimerRef.current = setTimeout(() => {
+                if (voiceStateRef.current === 'listening') {
+                    handleSendRef.current();
+                }
+            }, SILENCE_TIMEOUT_MS);
+        };
+
         Voice.onSpeechEnd = () => {
             if (voiceStateRef.current === 'listening') {
                 clearSilenceTimer();
