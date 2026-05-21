@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { FlatList, Text, View, StyleSheet } from 'react-native';
+import { shallow } from 'zustand/shallow';
 import { useChatStore } from '../../../store/chatStore';
 import { useTheme } from '../../../context/ThemeContext';
 
@@ -15,7 +16,7 @@ export function VoiceTranscript({ chatId }: Props) {
     const messages = useChatStore((state) => {
         const all = state.chats[chatId] ?? [];
         return all.slice(-MAX_MESSAGES);
-    });
+    }, shallow);
 
     useEffect(() => {
         if (messages.length > 0) {
