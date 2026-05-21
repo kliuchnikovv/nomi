@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -34,7 +34,10 @@ export function VoiceScreen() {
     const { state, liveTranscript, errorKind, interrupt, stop, openSettings } =
         useVoiceConversation({ chatId });
 
+    const closingRef = useRef(false);
     const handleClose = useCallback(() => {
+        if (closingRef.current) return;
+        closingRef.current = true;
         stop();
         navigation.goBack();
     }, [stop, navigation]);
@@ -45,17 +48,18 @@ export function VoiceScreen() {
 
     return (
         <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-            <TouchableWithoutFeedback onPress={handleScreenTap}>
-                <View style={styles.container}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-                            <Text style={[styles.closeText, { color: theme.textSecondary }]}>✕</Text>
-                        </TouchableOpacity>
-                        <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Voice</Text>
-                        <View style={styles.headerSpacer} />
-                    </View>
+            {/* Header stays outside TouchableWithoutFeedback */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close" accessibilityRole="button">
+                    <Text style={[styles.closeText, { color: theme.textSecondary }]}>✕</Text>
+                </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Voice</Text>
+                <View style={styles.headerSpacer} />
+            </View>
 
+            {/* Tap-to-interrupt wraps only the content below the header */}
+            <TouchableWithoutFeedback onPress={handleScreenTap}>
+                <View style={styles.contentArea}>
                     {/* Orb + status */}
                     <View style={styles.orbArea}>
                         <VoiceOrb state={state} />
@@ -77,6 +81,7 @@ export function VoiceScreen() {
                                 {errorKind === 'permission' && (
                                     <Pressable
                                         onPress={openSettings}
+                                        accessibilityRole="button"
                                         style={[styles.settingsBtn, { backgroundColor: theme.accent }]}
                                     >
                                         <Text style={[styles.settingsBtnText, { color: palette.white }]}>Open Settings</Text>
@@ -98,7 +103,7 @@ export function VoiceScreen() {
 
 const styles = StyleSheet.create({
     safe: { flex: 1 },
-    container: { flex: 1 },
+    contentArea: { flex: 1 },
     header: {
         flexDirection: 'row',
         alignItems: 'center',

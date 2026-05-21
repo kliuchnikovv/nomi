@@ -31,6 +31,7 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
 
     const { sendMessage, assistantWorking } = useChat();
 
+    const isMountedRef = useRef(true);
     const voiceStateRef = useRef<VoiceState>('idle');
     const currentTranscriptRef = useRef('');
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -155,10 +156,14 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
                 applyState('speaking');
                 Speech.speak(text, {
                     onDone: () => {
-                        if (voiceStateRef.current === 'speaking') startListeningRef.current();
+                        if (isMountedRef.current && voiceStateRef.current === 'speaking') {
+                            startListeningRef.current();
+                        }
                     },
                     onError: () => {
-                        if (voiceStateRef.current === 'speaking') startListeningRef.current();
+                        if (isMountedRef.current && voiceStateRef.current === 'speaking') {
+                            startListeningRef.current();
+                        }
                     },
                 });
             } else {
@@ -184,13 +189,14 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
     useEffect(() => {
         startListeningRef.current();
         return () => {
+            isMountedRef.current = false;
             Speech.stop();
             clearSilenceTimer();
             if (retryTimerRef.current) {
                 clearTimeout(retryTimerRef.current);
                 retryTimerRef.current = null;
             }
-            Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
+            Voice.destroy().then(() => Voice.removeAllListeners()).catch(() => {});
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -208,7 +214,7 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
             clearTimeout(retryTimerRef.current);
             retryTimerRef.current = null;
         }
-        Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
+        Voice.destroy().then(() => Voice.removeAllListeners()).catch(() => {});
         applyState('idle');
     }, [clearSilenceTimer, applyState]);
 
