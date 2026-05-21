@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { ChatListScreen } from '../screens/chat/chatList/ChatListScreen';
 import { ChatDetailScreen } from '../screens/chat/chatDetail/ChatDetailScreen';
+import { VoiceScreen } from '../screens/chat/voice/VoiceScreen';
 import { useMain, emptyChatID } from '../screens/main/context';
 import { useAuth } from '../screens/auth/context';
 import { ChatProvider } from '../screens/chat/context';
@@ -37,9 +38,7 @@ export function ChatStack() {
         >
             <AskUserProvider>
                 <Stack.Navigator
-                    screenOptions={{
-                        headerShown: false,
-                    }}
+                    screenOptions={{ headerShown: false }}
                     initialRouteName={singleChatMode ? 'ChatDetail' : 'ChatList'}
                 >
                     {!singleChatMode && (
@@ -52,7 +51,12 @@ export function ChatStack() {
                     <Stack.Screen
                         name="ChatDetail"
                         component={ChatDetailScreenWrapper}
-                        options={({ route }) => ({ title: 'Chat' })}
+                        options={{ title: 'Chat' }}
+                    />
+                    <Stack.Screen
+                        name="VoiceScreen"
+                        component={VoiceScreen}
+                        options={{ title: 'Voice', animation: 'slide_from_bottom' }}
                     />
                 </Stack.Navigator>
             </AskUserProvider>

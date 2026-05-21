@@ -11,6 +11,7 @@ export type AuthStackParamList = {
 export type ChatStackParamList = {
   ChatList: undefined;
   ChatDetail: { chatId?: string };
+  VoiceScreen: { chatId: string };
 };
 
 // Settings nested stack (inside the Settings tab)
