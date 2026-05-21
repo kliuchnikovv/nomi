@@ -17,6 +17,7 @@ import {
     MagicWand,
     Code,
     MapPin,
+    Microphone,
 } from 'iconoir-react-native';
 
 import {
@@ -48,6 +49,9 @@ import DocumentPicker from 'react-native-document-picker';
 import { apiClient } from '../../../apiClient';
 import { useMain } from '../../main/context';
 import { getApiUrl, API_URL } from '../../../config';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { ChatStackParamList } from '../../../navigation/types';
 import { AVAILABLE_TEAMS, TeamDetails } from '../teams';
 import { ContextItem, ContextItemCard } from '../components/ContextItemCard';
 import { contextStore } from '../../../services/ContextStore';
@@ -78,6 +82,8 @@ export default function ChatInput(props: Props) {
     const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
 
     const [contextItems, setContextItems] = useState<ContextItem[]>([]);
+
+    const navigation = useNavigation<NativeStackNavigationProp<ChatStackParamList>>();
 
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
@@ -149,6 +155,14 @@ export default function ChatInput(props: Props) {
         thinkingLevel,
         isSubmitting,
     ]);
+
+    const openVoice = useCallback(() => {
+        if (activeChatID) {
+            navigation.navigate('VoiceScreen', { chatId: activeChatID });
+        }
+    }, [activeChatID, navigation]);
+
+    const showMicButton = value.length === 0 && attachments.length === 0;
 
     // Reset input when switching chats
     useEffect(() => {
@@ -792,6 +806,25 @@ export default function ChatInput(props: Props) {
                     </View>
 
                     <View style={styles.rightActions}>
+                        {showMicButton && (
+                            <Pressable
+                                onPress={openVoice}
+                                style={({ pressed }) => [
+                                    styles.sendBtn,
+                                    { backgroundColor: theme.surface },
+                                    pressed && { opacity: 0.7 },
+                                ]}
+                                accessibilityLabel="Voice input"
+                                accessibilityRole="button"
+                            >
+                                <Microphone
+                                    width={20}
+                                    height={20}
+                                    color={theme.accent}
+                                    strokeWidth={2}
+                                />
+                            </Pressable>
+                        )}
                         {assistantWorking ? (
                             <Pressable
                                 onPress={stopGeneration}
