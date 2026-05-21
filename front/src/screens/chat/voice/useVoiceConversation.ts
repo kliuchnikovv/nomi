@@ -8,7 +8,7 @@ import { useChatStore } from '../../../store/chatStore';
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
 export type ErrorKind = 'permission' | 'stt' | null;
 
-interface UseVoiceConversationOptions {
+export interface UseVoiceConversationOptions {
     chatId: string;
 }
 
@@ -34,6 +34,7 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
     const voiceStateRef = useRef<VoiceState>('idle');
     const currentTranscriptRef = useRef('');
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const sttRetryCountRef = useRef(0);
     const assistantWorkingRef = useRef(assistantWorking);
 
@@ -75,7 +76,7 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
             if (sttRetryCountRef.current >= MAX_STT_RETRIES) {
                 sttRetryCountRef.current = 0;
                 setLiveTranscript("Couldn't hear you — try again");
-                setTimeout(() => startListeningRef.current(), 2000);
+                retryTimerRef.current = setTimeout(() => startListeningRef.current(), 2000);
             } else {
                 await startListeningRef.current();
             }
@@ -117,7 +118,7 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
         };
 
         Voice.onSpeechEnd = () => {
-            if (voiceStateRef.current === 'listening') {
+            if (voiceStateRef.current === 'listening' && currentTranscriptRef.current.trim()) {
                 clearSilenceTimer();
                 handleSendRef.current();
             }
@@ -173,6 +174,7 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
                 Speech.stop();
                 Voice.stop().catch(() => {});
                 clearSilenceTimer();
+                applyState('idle');
             }
         });
         return () => sub.remove();
@@ -184,6 +186,10 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
         return () => {
             Speech.stop();
             clearSilenceTimer();
+            if (retryTimerRef.current) {
+                clearTimeout(retryTimerRef.current);
+                retryTimerRef.current = null;
+            }
             Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -198,6 +204,10 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
     const stop = useCallback(() => {
         Speech.stop();
         clearSilenceTimer();
+        if (retryTimerRef.current) {
+            clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = null;
+        }
         Voice.destroy().then(Voice.removeAllListeners).catch(() => {});
         applyState('idle');
     }, [clearSilenceTimer, applyState]);
