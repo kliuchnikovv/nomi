@@ -162,7 +162,7 @@ export default function ChatInput(props: Props) {
         }
     }, [activeChatID, navigation]);
 
-    const showMicButton = value.length === 0 && attachments.length === 0;
+    const showMicButton = value.length === 0 && attachments.length === 0 && !assistantWorking;
 
     // Reset input when switching chats
     useEffect(() => {
