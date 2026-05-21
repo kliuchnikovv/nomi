@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { FlatList, Text, View, StyleSheet } from 'react-native';
 import { useChatStore } from '../../../store/chatStore';
 import { useTheme } from '../../../context/ThemeContext';
@@ -10,7 +10,7 @@ interface Props {
 const MAX_MESSAGES = 20;
 
 export function VoiceTranscript({ chatId }: Props) {
-    const { theme } = useTheme();
+    const { theme, palette } = useTheme();
     const listRef = useRef<FlatList>(null);
     const messages = useChatStore((state) => {
         const all = state.chats[chatId] ?? [];
@@ -19,9 +19,33 @@ export function VoiceTranscript({ chatId }: Props) {
 
     useEffect(() => {
         if (messages.length > 0) {
-            listRef.current?.scrollToEnd({ animated: true });
+            const id = setTimeout(() => {
+                listRef.current?.scrollToEnd({ animated: true });
+            }, 50);
+            return () => clearTimeout(id);
         }
     }, [messages.length]);
+
+    const renderItem = useCallback(
+        ({ item }: { item: (typeof messages)[number] }) => {
+            const isUser = item.role === 'user';
+            return (
+                <View style={[styles.row, isUser && styles.rowUser]}>
+                    <View
+                        style={[
+                            styles.bubble,
+                            { backgroundColor: isUser ? theme.accent : theme.surface },
+                        ]}
+                    >
+                        <Text style={[styles.text, { color: isUser ? palette.white : theme.text }]}>
+                            {item.text.trim() || '…'}
+                        </Text>
+                    </View>
+                </View>
+            );
+        },
+        [theme, palette],
+    );
 
     return (
         <FlatList
@@ -30,23 +54,7 @@ export function VoiceTranscript({ chatId }: Props) {
             keyExtractor={(item) => item.id}
             style={styles.list}
             contentContainerStyle={styles.content}
-            renderItem={({ item }) => {
-                const isUser = item.role === 'user';
-                return (
-                    <View style={[styles.row, isUser && styles.rowUser]}>
-                        <View
-                            style={[
-                                styles.bubble,
-                                { backgroundColor: isUser ? theme.accent : theme.surface },
-                            ]}
-                        >
-                            <Text style={[styles.text, { color: isUser ? '#fff' : theme.text }]}>
-                                {item.text?.trim() || '…'}
-                            </Text>
-                        </View>
-                    </View>
-                );
-            }}
+            renderItem={renderItem}
         />
     );
 }
