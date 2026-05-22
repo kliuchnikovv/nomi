@@ -141,7 +141,7 @@ export function VoiceScreen() {
                             { borderTopColor: theme.border },
                         ]}
                     >
-                        <VoiceTranscript chatId={chatId} />
+                        <VoiceTranscript />
                     </View>
                 </View>
             </TouchableWithoutFeedback>

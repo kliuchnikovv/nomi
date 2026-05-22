@@ -3,7 +3,6 @@ import Voice from '@react-native-voice/voice';
 import * as Speech from 'expo-speech';
 import { AppState, AppStateStatus, Linking } from 'react-native';
 import { useChat } from '../context';
-import { useChatStore } from '../../../store/chatStore';
 
 export type VoiceState =
     | 'idle'
@@ -36,9 +35,11 @@ export function useVoiceConversation({
     const [liveTranscript, setLiveTranscript] = useState('');
     const [errorKind, setErrorKind] = useState<ErrorKind>(null);
 
-    const { sendMessage, assistantWorking } = useChat();
+    const { sendMessage, assistantWorking, messages } = useChat();
 
     const isMountedRef = useRef(true);
+    const messagesRef = useRef(messages);
+    messagesRef.current = messages;
     const voiceStateRef = useRef<VoiceState>('idle');
     const currentTranscriptRef = useRef('');
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -177,8 +178,7 @@ export function useVoiceConversation({
             !assistantWorking &&
             voiceStateRef.current === 'processing'
         ) {
-            const msgs = useChatStore.getState().chats[chatId] ?? [];
-            const lastAssistant = [...msgs]
+            const lastAssistant = [...messagesRef.current]
                 .reverse()
                 .find(m => m.role === 'assistant');
             const text = lastAssistant?.text?.trim() ?? '';

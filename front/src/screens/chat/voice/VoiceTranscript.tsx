@@ -1,22 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { FlatList, Text, View, StyleSheet } from 'react-native';
-import { useChatStore } from '../../../store/chatStore';
 import { useTheme } from '../../../context/ThemeContext';
-import { Message } from '../../../screens/main/models';
-
-interface Props {
-    chatId: string;
-}
+import { useChat } from '../context';
 
 const MAX_MESSAGES = 20;
-const EMPTY: Message[] = [];
 
-export function VoiceTranscript({ chatId }: Props) {
+export function VoiceTranscript() {
     const { theme, palette } = useTheme();
+    const { messages: allMessages } = useChat();
     const listRef = useRef<FlatList>(null);
-    // Select the raw array reference — stable when the chat hasn't changed.
-    // EMPTY is a module-level constant so the ?? fallback is also stable.
-    const allMessages = useChatStore(state => state.chats[chatId] ?? EMPTY);
     const messages = useMemo(
         () => allMessages.slice(-MAX_MESSAGES),
         [allMessages],
