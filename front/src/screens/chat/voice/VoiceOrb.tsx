@@ -24,8 +24,16 @@ export function VoiceOrb({ state }: Props) {
             pulseOpacity.setValue(0.5);
             loopRef.current = Animated.loop(
                 Animated.parallel([
-                    Animated.timing(pulseScale, { toValue: 1.6, duration: 1400, useNativeDriver: true }),
-                    Animated.timing(pulseOpacity, { toValue: 0, duration: 1400, useNativeDriver: true }),
+                    Animated.timing(pulseScale, {
+                        toValue: 1.6,
+                        duration: 1400,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(pulseOpacity, {
+                        toValue: 0,
+                        duration: 1400,
+                        useNativeDriver: true,
+                    }),
                 ]),
             );
             loopRef.current.start();
@@ -33,8 +41,16 @@ export function VoiceOrb({ state }: Props) {
             glowOpacity.setValue(0.3);
             loopRef.current = Animated.loop(
                 Animated.sequence([
-                    Animated.timing(glowOpacity, { toValue: 0.7, duration: 700, useNativeDriver: true }),
-                    Animated.timing(glowOpacity, { toValue: 0.3, duration: 700, useNativeDriver: true }),
+                    Animated.timing(glowOpacity, {
+                        toValue: 0.7,
+                        duration: 700,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(glowOpacity, {
+                        toValue: 0.3,
+                        duration: 700,
+                        useNativeDriver: true,
+                    }),
                 ]),
             );
             loopRef.current.start();
@@ -46,9 +62,11 @@ export function VoiceOrb({ state }: Props) {
     }, [state, pulseScale, pulseOpacity, glowOpacity]);
 
     const orbColor =
-        state === 'error' ? '#ef4444' :
-        state === 'processing' ? '#374151' :
-        theme.accent;
+        state === 'error'
+            ? '#ef4444'
+            : state === 'processing'
+            ? '#374151'
+            : theme.accent;
 
     return (
         <View style={styles.container}>
@@ -66,7 +84,10 @@ export function VoiceOrb({ state }: Props) {
             )}
             {state === 'speaking' && (
                 <Animated.View
-                    style={[styles.glow, { backgroundColor: theme.accent, opacity: glowOpacity }]}
+                    style={[
+                        styles.glow,
+                        { backgroundColor: theme.accent, opacity: glowOpacity },
+                    ]}
                 />
             )}
             <View style={[styles.orb, { backgroundColor: orbColor }]}>
@@ -75,7 +96,10 @@ export function VoiceOrb({ state }: Props) {
                         {[1, 0.6, 0.3].map((opacity, i) => (
                             <View
                                 key={i}
-                                style={[styles.dot, { backgroundColor: theme.accent, opacity }]}
+                                style={[
+                                    styles.dot,
+                                    { backgroundColor: theme.accent, opacity },
+                                ]}
                             />
                         ))}
                     </View>

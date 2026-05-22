@@ -129,6 +129,8 @@ PODS:
     - ExpoModulesCore
   - ExpoSharing (14.0.8):
     - ExpoModulesCore
+  - ExpoSpeech (14.0.8):
+    - ExpoModulesCore
   - ExpoSQLite (14.0.6):
     - ExpoModulesCore
     - "sqlite3 (~> 3.45.3+1)"
@@ -3195,7 +3197,8 @@ DEPENDENCIES:
   - ExpoNetwork (from `../../node_modules/expo-network/ios`)
   - ExpoSecureStore (from `../../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../../node_modules/expo-sharing/ios`)
-  - ExpoSQLite (from `../../node_modules/expo-sqlite/ios`)
+  - ExpoSpeech (from `../../node_modules/expo-speech/ios`)
+  - ExpoSQLite (from `../node_modules/expo-sqlite/ios`)
   - EXTaskManager (from `../../node_modules/expo-task-manager/ios`)
   - fast_float (from `../../node_modules/react-native/third-party-podspecs/fast_float.podspec`)
   - FBLazyVector (from `../../node_modules/react-native/Libraries/FBLazyVector`)
@@ -3340,8 +3343,10 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-secure-store/ios"
   ExpoSharing:
     :path: "../../node_modules/expo-sharing/ios"
+  ExpoSpeech:
+    :path: "../../node_modules/expo-speech/ios"
   ExpoSQLite:
-    :path: "../../node_modules/expo-sqlite/ios"
+    :path: "../node_modules/expo-sqlite/ios"
   EXTaskManager:
     :path: "../../node_modules/expo-task-manager/ios"
   fast_float:
@@ -3546,6 +3551,7 @@ SPEC CHECKSUMS:
   ExpoNetwork: ee1fb67b0de59ab7f36794caf8242955dd8ae046
   ExpoSecureStore: 3f1b632d6d40bcc62b4983ef9199cd079592a50a
   ExpoSharing: 0d983394ed4a80334bab5a0d5384f75710feb7e8
+  ExpoSpeech: d22b56570ccfab5a27112dc9691f1ac83537de26
   ExpoSQLite: 9ed0c4fb3b432f68dee65e795ccd630a7cfabd3c
   EXTaskManager: 0dcaa9b4b058b435f4e5bff4919c863f4f46badc
   fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6

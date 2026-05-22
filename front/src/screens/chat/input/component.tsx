@@ -83,7 +83,8 @@ export default function ChatInput(props: Props) {
 
     const [contextItems, setContextItems] = useState<ContextItem[]>([]);
 
-    const navigation = useNavigation<NativeStackNavigationProp<ChatStackParamList>>();
+    const navigation =
+        useNavigation<NativeStackNavigationProp<ChatStackParamList>>();
 
     const { theme, palette } = useTheme();
     const insets = useSafeAreaInsets();
@@ -162,7 +163,8 @@ export default function ChatInput(props: Props) {
         }
     }, [activeChatID, navigation]);
 
-    const showMicButton = value.length === 0 && attachments.length === 0 && !assistantWorking;
+    const showMicButton =
+        value.length === 0 && attachments.length === 0 && !assistantWorking;
 
     // Reset input when switching chats
     useEffect(() => {
@@ -398,8 +400,8 @@ export default function ChatInput(props: Props) {
 
     const visionSupported = useMemo(
         () =>
-            availableModels.find(m => m.id === selectedModel)?.supports_vision ??
-            false,
+            availableModels.find(m => m.id === selectedModel)
+                ?.supports_vision ?? false,
         [availableModels, selectedModel],
     );
 
@@ -422,7 +424,9 @@ export default function ChatInput(props: Props) {
                       {
                           id: 'photos',
                           label: 'Photos',
-                          icon: <MediaImage width={20} height={20} color="#fff" />,
+                          icon: (
+                              <MediaImage width={20} height={20} color="#fff" />
+                          ),
                           onPress: () => executeWithDelay(pickImage),
                       },
                       {
@@ -586,24 +590,25 @@ export default function ChatInput(props: Props) {
             items.push({
                 id: model.id,
                 label: model.name || model.id,
-                badges: (model.supports_vision || model.supports_thinking) ? (
-                    <>
-                        {model.supports_vision && (
-                            <MediaImage
-                                width={13}
-                                height={13}
-                                color={badgeColor}
-                            />
-                        )}
-                        {model.supports_thinking && (
-                            <MagicWand
-                                width={13}
-                                height={13}
-                                color={badgeColor}
-                            />
-                        )}
-                    </>
-                ) : undefined,
+                badges:
+                    model.supports_vision || model.supports_thinking ? (
+                        <>
+                            {model.supports_vision && (
+                                <MediaImage
+                                    width={13}
+                                    height={13}
+                                    color={badgeColor}
+                                />
+                            )}
+                            {model.supports_thinking && (
+                                <MagicWand
+                                    width={13}
+                                    height={13}
+                                    color={badgeColor}
+                                />
+                            )}
+                        </>
+                    ) : undefined,
                 icon: isSelected ? (
                     <Check width={20} height={20} color={theme.accent} />
                 ) : undefined,

@@ -17,7 +17,10 @@ export function VoiceTranscript({ chatId }: Props) {
     // Select the raw array reference — stable when the chat hasn't changed.
     // EMPTY is a module-level constant so the ?? fallback is also stable.
     const allMessages = useChatStore(state => state.chats[chatId] ?? EMPTY);
-    const messages = useMemo(() => allMessages.slice(-MAX_MESSAGES), [allMessages]);
+    const messages = useMemo(
+        () => allMessages.slice(-MAX_MESSAGES),
+        [allMessages],
+    );
 
     useEffect(() => {
         if (messages.length > 0) {

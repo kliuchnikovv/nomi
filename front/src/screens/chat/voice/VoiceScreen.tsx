@@ -47,13 +47,31 @@ export function VoiceScreen() {
     }, [state, interrupt]);
 
     return (
-        <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+        <SafeAreaView
+            style={[styles.safe, { backgroundColor: theme.background }]}
+        >
             {/* Header stays outside TouchableWithoutFeedback */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close" accessibilityRole="button">
-                    <Text style={[styles.closeText, { color: theme.textSecondary }]}>✕</Text>
+                <TouchableOpacity
+                    onPress={handleClose}
+                    style={styles.closeBtn}
+                    accessibilityLabel="Close"
+                    accessibilityRole="button"
+                >
+                    <Text
+                        style={[
+                            styles.closeText,
+                            { color: theme.textSecondary },
+                        ]}
+                    >
+                        ✕
+                    </Text>
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.textSecondary }]}>Voice</Text>
+                <Text
+                    style={[styles.headerTitle, { color: theme.textSecondary }]}
+                >
+                    Voice
+                </Text>
                 <View style={styles.headerSpacer} />
             </View>
 
@@ -63,17 +81,32 @@ export function VoiceScreen() {
                     {/* Orb + status */}
                     <View style={styles.orbArea}>
                         <VoiceOrb state={state} />
-                        <Text style={[styles.stateLabel, { color: theme.textSecondary }]}>
+                        <Text
+                            style={[
+                                styles.stateLabel,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
                             {STATE_LABELS[state] ?? ''}
                         </Text>
                         {state === 'listening' && liveTranscript !== '' && (
-                            <Text style={[styles.liveTranscript, { color: theme.textPrimary }]}>
+                            <Text
+                                style={[
+                                    styles.liveTranscript,
+                                    { color: theme.textPrimary },
+                                ]}
+                            >
                                 "{liveTranscript}"
                             </Text>
                         )}
                         {state === 'error' && (
                             <View style={styles.errorArea}>
-                                <Text style={[styles.errorText, { color: theme.textSecondary }]}>
+                                <Text
+                                    style={[
+                                        styles.errorText,
+                                        { color: theme.textSecondary },
+                                    ]}
+                                >
                                     {errorKind === 'permission'
                                         ? 'Microphone access required'
                                         : 'Speech recognition unavailable'}
@@ -82,9 +115,19 @@ export function VoiceScreen() {
                                     <Pressable
                                         onPress={openSettings}
                                         accessibilityRole="button"
-                                        style={[styles.settingsBtn, { backgroundColor: theme.accent }]}
+                                        style={[
+                                            styles.settingsBtn,
+                                            { backgroundColor: theme.accent },
+                                        ]}
                                     >
-                                        <Text style={[styles.settingsBtnText, { color: palette.white }]}>Open Settings</Text>
+                                        <Text
+                                            style={[
+                                                styles.settingsBtnText,
+                                                { color: palette.white },
+                                            ]}
+                                        >
+                                            Open Settings
+                                        </Text>
                                     </Pressable>
                                 )}
                             </View>
@@ -92,7 +135,12 @@ export function VoiceScreen() {
                     </View>
 
                     {/* Transcript history */}
-                    <View style={[styles.transcriptArea, { borderTopColor: theme.border }]}>
+                    <View
+                        style={[
+                            styles.transcriptArea,
+                            { borderTopColor: theme.border },
+                        ]}
+                    >
                         <VoiceTranscript chatId={chatId} />
                     </View>
                 </View>
@@ -110,9 +158,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
     },
-    closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+    closeBtn: {
+        width: 36,
+        height: 36,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     closeText: { fontSize: 18 },
-    headerTitle: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '500' },
+    headerTitle: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 15,
+        fontWeight: '500',
+    },
     headerSpacer: { width: 36 },
     orbArea: {
         flex: 1,
@@ -122,10 +180,19 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
     },
     stateLabel: { fontSize: 13, letterSpacing: 0.5 },
-    liveTranscript: { fontSize: 15, fontStyle: 'italic', textAlign: 'center', paddingHorizontal: 32 },
+    liveTranscript: {
+        fontSize: 15,
+        fontStyle: 'italic',
+        textAlign: 'center',
+        paddingHorizontal: 32,
+    },
     errorArea: { alignItems: 'center', gap: 12 },
     errorText: { fontSize: 14, textAlign: 'center' },
-    settingsBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
+    settingsBtn: {
+        paddingHorizontal: 24,
+        paddingVertical: 10,
+        borderRadius: 20,
+    },
     settingsBtnText: { fontSize: 14, fontWeight: '500' },
     transcriptArea: { height: '35%', borderTopWidth: StyleSheet.hairlineWidth },
 });

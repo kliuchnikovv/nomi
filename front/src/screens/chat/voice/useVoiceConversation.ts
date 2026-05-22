@@ -5,7 +5,12 @@ import { AppState, AppStateStatus, Linking } from 'react-native';
 import { useChat } from '../context';
 import { useChatStore } from '../../../store/chatStore';
 
-export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error';
+export type VoiceState =
+    | 'idle'
+    | 'listening'
+    | 'processing'
+    | 'speaking'
+    | 'error';
 export type ErrorKind = 'permission' | 'stt' | null;
 
 export interface UseVoiceConversationOptions {
@@ -24,7 +29,9 @@ export interface UseVoiceConversationResult {
 const SILENCE_TIMEOUT_MS = 1500;
 const MAX_STT_RETRIES = 3;
 
-export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): UseVoiceConversationResult {
+export function useVoiceConversation({
+    chatId,
+}: UseVoiceConversationOptions): UseVoiceConversationResult {
     const [voiceState, setVoiceState] = useState<VoiceState>('idle');
     const [liveTranscript, setLiveTranscript] = useState('');
     const [errorKind, setErrorKind] = useState<ErrorKind>(null);
@@ -60,7 +67,8 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
             applyState('listening');
         } catch (err: any) {
             const msg = String(err?.message ?? '');
-            const isPermission = msg.includes('permission') || msg.includes('not authorized');
+            const isPermission =
+                msg.includes('permission') || msg.includes('not authorized');
             setErrorKind(isPermission ? 'permission' : 'stt');
             applyState('error');
         }
@@ -68,7 +76,9 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
 
     // Stable refs for use inside Voice callbacks (avoid stale closures)
     const startListeningRef = useRef(startListening);
-    useEffect(() => { startListeningRef.current = startListening; }, [startListening]);
+    useEffect(() => {
+        startListeningRef.current = startListening;
+    }, [startListening]);
 
     const handleSendTranscript = useCallback(async () => {
         const text = currentTranscriptRef.current.trim();
@@ -77,24 +87,33 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
             if (sttRetryCountRef.current >= MAX_STT_RETRIES) {
                 sttRetryCountRef.current = 0;
                 setLiveTranscript("Couldn't hear you — try again");
-                retryTimerRef.current = setTimeout(() => startListeningRef.current(), 2000);
+                retryTimerRef.current = setTimeout(
+                    () => startListeningRef.current(),
+                    2000,
+                );
             } else {
                 await startListeningRef.current();
             }
             return;
         }
         sttRetryCountRef.current = 0;
-        try { await Voice.stop(); } catch { /* ignore */ }
+        try {
+            await Voice.stop();
+        } catch {
+            /* ignore */
+        }
         applyState('processing');
         sendMessage(text);
     }, [applyState, sendMessage]);
 
     const handleSendRef = useRef(handleSendTranscript);
-    useEffect(() => { handleSendRef.current = handleSendTranscript; }, [handleSendTranscript]);
+    useEffect(() => {
+        handleSendRef.current = handleSendTranscript;
+    }, [handleSendTranscript]);
 
     // Register Voice listeners once on mount
     useEffect(() => {
-        Voice.onSpeechResults = (e) => {
+        Voice.onSpeechResults = e => {
             const result = e.value?.[0] ?? '';
             currentTranscriptRef.current = result;
             setLiveTranscript(result);
@@ -106,7 +125,7 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
             }, SILENCE_TIMEOUT_MS);
         };
 
-        Voice.onSpeechPartialResults = (e) => {
+        Voice.onSpeechPartialResults = e => {
             const partial = e.value?.[0] ?? '';
             currentTranscriptRef.current = partial;
             setLiveTranscript(partial);
@@ -119,13 +138,16 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
         };
 
         Voice.onSpeechEnd = () => {
-            if (voiceStateRef.current === 'listening' && currentTranscriptRef.current.trim()) {
+            if (
+                voiceStateRef.current === 'listening' &&
+                currentTranscriptRef.current.trim()
+            ) {
                 clearSilenceTimer();
                 handleSendRef.current();
             }
         };
 
-        Voice.onSpeechError = (e) => {
+        Voice.onSpeechError = e => {
             const msg = String(e.error?.message ?? '');
             // "No speech" is normal ambient silence — restart silently
             if (msg.includes('No speech') || msg.includes('recognition_fail')) {
@@ -134,12 +156,15 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
                 }
                 return;
             }
-            const isPermission = msg.includes('permission') || e.error?.code === '5';
+            const isPermission =
+                msg.includes('permission') || e.error?.code === '5';
             setErrorKind(isPermission ? 'permission' : 'stt');
             applyState('error');
         };
 
-        return () => { Voice.removeAllListeners(); };
+        return () => {
+            Voice.removeAllListeners();
+        };
     }, [clearSilenceTimer, applyState]);
 
     // Detect assistant response completion: assistantWorking true → false while in 'processing'
@@ -147,21 +172,33 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
         const wasWorking = assistantWorkingRef.current;
         assistantWorkingRef.current = assistantWorking;
 
-        if (wasWorking && !assistantWorking && voiceStateRef.current === 'processing') {
+        if (
+            wasWorking &&
+            !assistantWorking &&
+            voiceStateRef.current === 'processing'
+        ) {
             const msgs = useChatStore.getState().chats[chatId] ?? [];
-            const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
+            const lastAssistant = [...msgs]
+                .reverse()
+                .find(m => m.role === 'assistant');
             const text = lastAssistant?.text?.trim() ?? '';
 
             if (text && text !== ' ') {
                 applyState('speaking');
                 Speech.speak(text, {
                     onDone: () => {
-                        if (isMountedRef.current && voiceStateRef.current === 'speaking') {
+                        if (
+                            isMountedRef.current &&
+                            voiceStateRef.current === 'speaking'
+                        ) {
                             startListeningRef.current();
                         }
                     },
                     onError: () => {
-                        if (isMountedRef.current && voiceStateRef.current === 'speaking') {
+                        if (
+                            isMountedRef.current &&
+                            voiceStateRef.current === 'speaking'
+                        ) {
                             startListeningRef.current();
                         }
                     },
@@ -174,14 +211,17 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
 
     // Stop audio when app goes to background
     useEffect(() => {
-        const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
-            if (next === 'background' || next === 'inactive') {
-                Speech.stop();
-                Voice.stop().catch(() => {});
-                clearSilenceTimer();
-                applyState('idle');
-            }
-        });
+        const sub = AppState.addEventListener(
+            'change',
+            (next: AppStateStatus) => {
+                if (next === 'background' || next === 'inactive') {
+                    Speech.stop();
+                    Voice.stop().catch(() => {});
+                    clearSilenceTimer();
+                    applyState('idle');
+                }
+            },
+        );
         return () => sub.remove();
     }, [clearSilenceTimer]);
 
@@ -196,7 +236,9 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
                 clearTimeout(retryTimerRef.current);
                 retryTimerRef.current = null;
             }
-            Voice.destroy().then(() => Voice.removeAllListeners()).catch(() => {});
+            Voice.destroy()
+                .then(() => Voice.removeAllListeners())
+                .catch(() => {});
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -214,11 +256,22 @@ export function useVoiceConversation({ chatId }: UseVoiceConversationOptions): U
             clearTimeout(retryTimerRef.current);
             retryTimerRef.current = null;
         }
-        Voice.destroy().then(() => Voice.removeAllListeners()).catch(() => {});
+        Voice.destroy()
+            .then(() => Voice.removeAllListeners())
+            .catch(() => {});
         applyState('idle');
     }, [clearSilenceTimer, applyState]);
 
-    const openSettings = useCallback(() => { Linking.openSettings(); }, []);
+    const openSettings = useCallback(() => {
+        Linking.openSettings();
+    }, []);
 
-    return { state: voiceState, liveTranscript, errorKind, interrupt, stop, openSettings };
+    return {
+        state: voiceState,
+        liveTranscript,
+        errorKind,
+        interrupt,
+        stop,
+        openSettings,
+    };
 }

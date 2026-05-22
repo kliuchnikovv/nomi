@@ -25,7 +25,8 @@ function ChatDetailScreenWrapper() {
 }
 
 export function ChatStack() {
-    const { activeChatID, setActiveChatID, isNewSession, setIsNewSession } = useMain();
+    const { activeChatID, setActiveChatID, isNewSession, setIsNewSession } =
+        useMain();
     const { user } = useAuth();
     const singleChatMode = !!user?.single_chat_mode;
 
@@ -39,7 +40,9 @@ export function ChatStack() {
             <AskUserProvider>
                 <Stack.Navigator
                     screenOptions={{ headerShown: false }}
-                    initialRouteName={singleChatMode ? 'ChatDetail' : 'ChatList'}
+                    initialRouteName={
+                        singleChatMode ? 'ChatDetail' : 'ChatList'
+                    }
                 >
                     {!singleChatMode && (
                         <Stack.Screen
@@ -56,7 +59,10 @@ export function ChatStack() {
                     <Stack.Screen
                         name="VoiceScreen"
                         component={VoiceScreen}
-                        options={{ title: 'Voice', animation: 'slide_from_bottom' }}
+                        options={{
+                            title: 'Voice',
+                            animation: 'slide_from_bottom',
+                        }}
                     />
                 </Stack.Navigator>
             </AskUserProvider>
