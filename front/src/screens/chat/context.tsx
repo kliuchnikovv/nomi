@@ -24,7 +24,10 @@ import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
 import { shallow } from 'zustand/shallow';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
-import { generateChatTitle, generateChatEmoji } from '../../services/chatTitleGenerator';
+import {
+    generateChatTitle,
+    generateChatEmoji,
+} from '../../services/chatTitleGenerator';
 import { extractActions } from '../../services/actionExtractor';
 import { getStoredLocation } from '../../services/location/locationService';
 
@@ -139,14 +142,19 @@ export function ChatProvider({
     const [chatMode, setChatMode] = useState<'agent' | 'team'>('agent');
     const [teamCommand, setTeamCommand] = useState<any>(null);
     const [activeAgentsCount, setActiveAgentsCount] = useState<number>(0);
-    const [generationStatus, setGenerationStatus] = useState<string | null>(null);
-    const [suggestedProjectId, setSuggestedProjectId] = useState<string | null>(null);
+    const [generationStatus, setGenerationStatus] = useState<string | null>(
+        null,
+    );
+    const [suggestedProjectId, setSuggestedProjectId] = useState<string | null>(
+        null,
+    );
     const [classifiedText, setClassifiedText] = useState<string | null>(null);
     // Track which chatId we already attempted classification for (avoid repeated API calls).
     const classifiedChatIdRef = useRef<string | null>(null);
     // Session-level classification state (blocks first send in a new session until project resolved)
     const [pendingMessage, setPendingMessage] = useState<string | null>(null);
-    const [suggestedProjectForSession, setSuggestedProjectForSession] = useState<import('../main/models').Project | null>(null);
+    const [suggestedProjectForSession, setSuggestedProjectForSession] =
+        useState<import('../main/models').Project | null>(null);
     const [sessionClassified, setSessionClassified] = useState(false);
     const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
@@ -157,9 +165,9 @@ export function ChatProvider({
 
     // Model selection state
     const [selectedModel, setSelectedModelInternal] = useState<string | null>(
-        'gpt-5-nano',
+        null,
     );
-    const selectedModelRef = useRef<string | null>('gpt-5-nano');
+    const selectedModelRef = useRef<string | null>(null);
     const selectedProviderRef = useRef<string | undefined>(undefined);
     const manualModelSelectionRef = useRef<boolean>(false);
     const [availableModels, setAvailableModels] = useState<Model[]>([]);
@@ -200,7 +208,9 @@ export function ChatProvider({
     // Error state management
     const [error, setError] = useState<string | null>(null);
     const [isRateLimited, setIsRateLimited] = useState(false);
-    const [pendingInputText, setPendingInputText] = useState<string | null>(initialPendingText ?? null);
+    const [pendingInputText, setPendingInputText] = useState<string | null>(
+        initialPendingText ?? null,
+    );
     const [lastFailedMessage, setLastFailedMessage] = useState<{
         text: string;
         attachments?: any[];
@@ -211,18 +221,23 @@ export function ChatProvider({
     } | null>(null);
 
     // Helper: report error, remove the failed message from store, restore text to input
-    const reportMessageError = useCallback((errorMessage: string) => {
-        setError(errorMessage);
-        setLastFailedMessage(current => {
-            if (current) {
-                if (current.messageId && activeChatID) {
-                    useChatStore.getState().removeMessage(activeChatID, current.messageId);
+    const reportMessageError = useCallback(
+        (errorMessage: string) => {
+            setError(errorMessage);
+            setLastFailedMessage(current => {
+                if (current) {
+                    if (current.messageId && activeChatID) {
+                        useChatStore
+                            .getState()
+                            .removeMessage(activeChatID, current.messageId);
+                    }
+                    setPendingInputText(current.text);
                 }
-                setPendingInputText(current.text);
-            }
-            return null;
-        });
-    }, [activeChatID]);
+                return null;
+            });
+        },
+        [activeChatID],
+    );
 
     // Thinking mode state (persists within chat session)
     const [thinkingLevel, setThinkingLevel] = useState<string>('off');
@@ -237,11 +252,14 @@ export function ChatProvider({
     // Load persisted detail level on mount
     useEffect(() => {
         AsyncStorage.getItem('@genie_detail_level').then(saved => {
-            if (saved && ['hide', 'tool_calls', 'think', 'all'].includes(saved)) {
+            if (
+                saved &&
+                ['hide', 'tool_calls', 'think', 'all'].includes(saved)
+            ) {
                 setDetailLevel(saved as DetailLevel);
             }
         });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Reset session classification state whenever a new session begins
@@ -301,7 +319,12 @@ export function ChatProvider({
         // Reset loading state from previous chat immediately (before animation),
         // but skip if we're actively generating (e.g. new chat created during sendStreamingMessage)
         const isGenerating = generatingForChatRef.current !== null;
-        console.log('[ChatContext] useEffect activeChatID changed:', activeChatID, 'isGenerating=', isGenerating);
+        console.log(
+            '[ChatContext] useEffect activeChatID changed:',
+            activeChatID,
+            'isGenerating=',
+            isGenerating,
+        );
         skipReconnectResetRef.current = isGenerating;
         if (!isGenerating) {
             setAssistantWorking(false);
@@ -369,7 +392,10 @@ export function ChatProvider({
                         console.log(
                             'No model found in history, resetting to default',
                         );
-                        setSelectedModel('gpt-5-nano', false);
+                        setSelectedModel(
+                            availableModels[0]?.id || 'glm-5',
+                            false,
+                        );
                     }
                 }
             } catch (error) {
@@ -412,7 +438,7 @@ export function ChatProvider({
                     `${getApiUrl()}/chats`,
                     {
                         title: title,
-                        model: selectedModelRef.current || 'gpt-5-nano',
+                        model: selectedModelRef.current || 'glm-5',
                         mode: chatMode,
                         team_id: teamIdToSend,
                         project_id: activeChat?.project_id ?? initialProjectId,
@@ -584,17 +610,31 @@ export function ChatProvider({
                                 }
                             })
                             .catch(e => {
-                                console.warn('[ChatContext] Emoji generation failed:', e);
+                                console.warn(
+                                    '[ChatContext] Emoji generation failed:',
+                                    e,
+                                );
                             });
                         // Classify new chat against projects
-                        projectsApi.list()
+                        projectsApi
+                            .list()
                             .then(projects => {
-                                console.log('[ProjectSuggest] projects loaded:', projects?.length ?? 0);
-                                if (!projects || projects.length === 0) return null;
-                                return classifyMessageForProject(text, projects);
+                                console.log(
+                                    '[ProjectSuggest] projects loaded:',
+                                    projects?.length ?? 0,
+                                );
+                                if (!projects || projects.length === 0)
+                                    return null;
+                                return classifyMessageForProject(
+                                    text,
+                                    projects,
+                                );
                             })
                             .then(projectId => {
-                                console.log('[ProjectSuggest] classified:', projectId);
+                                console.log(
+                                    '[ProjectSuggest] classified:',
+                                    projectId,
+                                );
                                 if (projectId) {
                                     setSuggestedProjectId(projectId);
                                     setClassifiedText(text);
@@ -615,21 +655,31 @@ export function ChatProvider({
                     classifiedChatIdRef.current !== chatIdToUse
                 ) {
                     classifiedChatIdRef.current = chatIdToUse;
-                    projectsApi.list()
+                    projectsApi
+                        .list()
                         .then(projects => {
-                            console.log('[ProjectSuggest] existing-chat projects loaded:', projects?.length ?? 0);
+                            console.log(
+                                '[ProjectSuggest] existing-chat projects loaded:',
+                                projects?.length ?? 0,
+                            );
                             if (!projects || projects.length === 0) return null;
                             return classifyMessageForProject(text, projects);
                         })
                         .then(projectId => {
-                            console.log('[ProjectSuggest] existing-chat classified:', projectId);
+                            console.log(
+                                '[ProjectSuggest] existing-chat classified:',
+                                projectId,
+                            );
                             if (projectId) {
                                 setSuggestedProjectId(projectId);
                                 setClassifiedText(text);
                             }
                         })
                         .catch(e => {
-                            console.warn('[ProjectSuggest] existing-chat failed:', e);
+                            console.warn(
+                                '[ProjectSuggest] existing-chat failed:',
+                                e,
+                            );
                         });
                 }
 
@@ -695,7 +745,10 @@ export function ChatProvider({
             const sessionId = `sess_${timestamp}`;
 
             generatingForChatRef.current = chatIdToUse;
-            console.log('[ChatContext] Setting assistantWorking=true, chatId=', chatIdToUse);
+            console.log(
+                '[ChatContext] Setting assistantWorking=true, chatId=',
+                chatIdToUse,
+            );
             setAssistantWorking(true);
 
             // Use Global Socket
@@ -719,7 +772,9 @@ export function ChatProvider({
                 setAssistantWorking(current => {
                     if (current) {
                         setActiveAgentsCount(0);
-                        reportMessageError('No response received. Check your connection and try again.');
+                        reportMessageError(
+                            'No response received. Check your connection and try again.',
+                        );
                         responseTimeoutRef.current = null;
                         return false;
                     }
@@ -747,12 +802,17 @@ export function ChatProvider({
             // If user attached a custom location context item, it takes precedence
             // over the stored location so the agent operates on the chosen point.
             let agentLocation: string | undefined;
-            const attachedLocation = contextItems?.find(ci => ci.sourceType === 'location');
+            const attachedLocation = contextItems?.find(
+                ci => ci.sourceType === 'location',
+            );
             if (attachedLocation) {
                 const { lat, lon } = attachedLocation.metadata ?? {};
-                agentLocation = lat != null && lon != null
-                    ? `${attachedLocation.title} (${Number(lat).toFixed(6)},${Number(lon).toFixed(6)})`
-                    : attachedLocation.title;
+                agentLocation =
+                    lat != null && lon != null
+                        ? `${attachedLocation.title} (${Number(lat).toFixed(
+                              6,
+                          )},${Number(lon).toFixed(6)})`
+                        : attachedLocation.title;
             } else {
                 try {
                     const loc = await getStoredLocation();
@@ -809,21 +869,33 @@ export function ChatProvider({
             // Lazy persistent chat creation for new sessions
             let persistentChatId: string | undefined;
             if (activeChatID === emptyChatID && isNewSession) {
-                const created = await apiClient.post<{ id: string }>(`${getApiUrl()}/chats`, {
-                    title: 'New Chat',
-                    model: selectedModelRef.current || 'gpt-5-nano',
-                    mode: 'agent',
-                    type: 'persistent',
-                });
+                const created = await apiClient.post<{ id: string }>(
+                    `${getApiUrl()}/chats`,
+                    {
+                        title: 'New Chat',
+                        model: selectedModelRef.current || 'glm-5',
+                        mode: 'agent',
+                        type: 'persistent',
+                    },
+                );
                 if (!created) return;
                 persistentChatId = created.id;
                 setActiveChatID(created.id);
                 onSessionStarted?.();
                 generateChatTitle(text)
-                    .then(title => { if (title) renameChat(persistentChatId!, title); })
-                    .catch(e => { console.warn('[ChatContext] Persistent title generation failed:', e); });
+                    .then(title => {
+                        if (title) renameChat(persistentChatId!, title);
+                    })
+                    .catch(e => {
+                        console.warn(
+                            '[ChatContext] Persistent title generation failed:',
+                            e,
+                        );
+                    });
                 generateChatEmoji(text)
-                    .then(emoji => { if (emoji) setChatIcon(persistentChatId!, emoji); })
+                    .then(emoji => {
+                        if (emoji) setChatIcon(persistentChatId!, emoji);
+                    })
                     .catch(() => {});
             }
             await sendStreamingMessage(
@@ -837,18 +909,35 @@ export function ChatProvider({
                 persistentChatId,
             );
         },
-        [activeChatID, isNewSession, onSessionStarted, sendStreamingMessage, setActiveChatID],
+        [
+            activeChatID,
+            isNewSession,
+            onSessionStarted,
+            sendStreamingMessage,
+            setActiveChatID,
+        ],
     );
 
     const sendMessage = useCallback(
-        async (text: string, attachments?: any[], webSearch?: boolean, thinking?: string, role?: string, contextItems?: any[]) => {
+        async (
+            text: string,
+            attachments?: any[],
+            webSearch?: boolean,
+            thinking?: string,
+            role?: string,
+            contextItems?: any[],
+        ) => {
             if (isNewSession && !sessionClassified) {
                 try {
                     const projects = await projectsApi.list();
                     if (projects && projects.length > 0) {
-                        const projectId = await classifyMessageForProject(text, projects);
+                        const projectId = await classifyMessageForProject(
+                            text,
+                            projects,
+                        );
                         if (projectId) {
-                            const matched = projects.find(p => p.id === projectId) ?? null;
+                            const matched =
+                                projects.find(p => p.id === projectId) ?? null;
                             if (matched) {
                                 setPendingMessage(text);
                                 setSuggestedProjectForSession(matched);
@@ -857,11 +946,21 @@ export function ChatProvider({
                         }
                     }
                 } catch (e) {
-                    console.warn('[SessionClassify] classification failed, sending anyway:', e);
+                    console.warn(
+                        '[SessionClassify] classification failed, sending anyway:',
+                        e,
+                    );
                 }
                 setSessionClassified(true);
             }
-            sendMessageInternal(text, attachments, webSearch, thinking, role, contextItems);
+            sendMessageInternal(
+                text,
+                attachments,
+                webSearch,
+                thinking,
+                role,
+                contextItems,
+            );
         },
         [isNewSession, sessionClassified, sendMessageInternal],
     );
@@ -1005,7 +1104,9 @@ export function ChatProvider({
                 clearPendingChatMode?.();
             } else {
                 modeToUse =
-                    sidebarFilter === 'all' || sidebarFilter === 'agent' || sidebarFilter === 'planner'
+                    sidebarFilter === 'all' ||
+                    sidebarFilter === 'agent' ||
+                    sidebarFilter === 'planner'
                         ? 'agent'
                         : 'team';
                 teamIdToUse = modeToUse === 'team' ? sidebarFilter : null;
@@ -1087,8 +1188,16 @@ export function ChatProvider({
                 const models = await modelsApi.getModels();
                 if (mounted && models && models.length > 0) {
                     setAvailableModels(models);
+                    // Set first model as default if no selection has been made yet
+                    if (
+                        !manualModelSelectionRef.current &&
+                        !selectedModelRef.current
+                    ) {
+                        setSelectedModel(models[0].id, false);
+                    }
                     // Initialize provider ref for default model (or currently selected)
-                    const current = selectedModelRef.current || 'gpt-5-nano';
+                    const current =
+                        selectedModelRef.current || models[0]?.id || 'glm-5';
                     selectedProviderRef.current = models.find(
                         m => m.id === current,
                     )?.provider;
@@ -1289,12 +1398,20 @@ export function ChatProvider({
 
                 // Fire-and-forget: extract action buttons from final assistant text via AFM (iOS only)
                 const msgs = useChatStore.getState().chats[chatId] ?? [];
-                const lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant');
+                const lastAssistant = [...msgs]
+                    .reverse()
+                    .find(m => m.role === 'assistant');
                 if (lastAssistant?.text) {
                     extractActions(lastAssistant.text)
                         .then(actions => {
                             if (actions.length > 0) {
-                                useChatStore.getState().appendActions(chatId, lastAssistant.id, actions);
+                                useChatStore
+                                    .getState()
+                                    .appendActions(
+                                        chatId,
+                                        lastAssistant.id,
+                                        actions,
+                                    );
                             }
                         })
                         .catch(() => {});
@@ -1485,7 +1602,10 @@ export function ChatProvider({
         generationStatus,
         suggestedProjectId,
         classifiedText,
-        clearProjectSuggestion: () => { setSuggestedProjectId(null); setClassifiedText(null); },
+        clearProjectSuggestion: () => {
+            setSuggestedProjectId(null);
+            setClassifiedText(null);
+        },
         pendingMessage,
         suggestedProjectForSession,
         sessionClassified,
