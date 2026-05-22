@@ -20,8 +20,8 @@ declare global {
 }
 
 export function initDebugUtils() {
-    if (typeof window !== 'undefined') {
-        window.DEBUG = {
+    if (typeof (globalThis as any).window !== 'undefined') {
+        (globalThis as any).window.DEBUG = {
             /**
              * Manually trigger a background task
              * Usage: await window.DEBUG.triggerBackgroundTask('gmail')

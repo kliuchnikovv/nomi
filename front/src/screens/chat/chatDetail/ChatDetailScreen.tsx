@@ -242,7 +242,7 @@ export function ChatDetailScreen() {
 
     const headerTitle = externalTitle || activeChat?.title || 'Chat';
     const headerSubtitle = useMemo(() => {
-        if (assistantWorking) return 'typing...';
+        if (assistantWorking) return '';
         if (chatMode === 'team') {
             const team = AVAILABLE_TEAMS.find(t => t.id === selectedTeamId);
             return team?.name || '';
@@ -569,12 +569,23 @@ export function ChatDetailScreen() {
                 {/* Right: history + new chat buttons */}
                 <View style={detailStyles.headerRight}>
                     {user?.single_chat_mode && (
-                        <Pressable hitSlop={8} onPress={() => setHistorySheetVisible(true)}>
-                            <Ionicons name="time-outline" size={22} color={theme.accent} />
+                        <Pressable
+                            hitSlop={8}
+                            onPress={() => setHistorySheetVisible(true)}
+                        >
+                            <Ionicons
+                                name="time-outline"
+                                size={22}
+                                color={theme.accent}
+                            />
                         </Pressable>
                     )}
                     <Pressable hitSlop={8} onPress={handleNewChat}>
-                        <Ionicons name="create-outline" size={22} color={theme.accent} />
+                        <Ionicons
+                            name="create-outline"
+                            size={22}
+                            color={theme.accent}
+                        />
                     </Pressable>
                 </View>
             </View>
@@ -592,7 +603,6 @@ export function ChatDetailScreen() {
                     borderColor={theme.border}
                 />
             )}
-
 
             {/* Loaded history separator */}
             {loadedHistoryChat && historyMessages.length > 0 && (

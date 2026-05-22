@@ -56,9 +56,17 @@ export type ThemeColors = {
     blockquoteBorder?: string;
 };
 
+export type ShadowStyle = {
+    shadowColor: string;
+    shadowOffset: { width: number; height: number };
+    shadowOpacity: number;
+    shadowRadius: number;
+    elevation?: number;
+};
+
 export type ThemeEffects = {
-    cardShadowRaised: object;
-    cardShadowInset: object;
+    cardShadowRaised: ShadowStyle;
+    cardShadowInset: ShadowStyle;
     cardBorderRadius: number;
     cardPadding: number;
     glassBackground: string;
@@ -66,8 +74,8 @@ export type ThemeEffects = {
     glassBorderWidth: number;
     blurIntensity: number;
     blurTint: string;
-    buttonShadowRaised: object;
-    buttonShadowPressed: object;
+    buttonShadowRaised: ShadowStyle;
+    buttonShadowPressed: ShadowStyle;
     iconBgBackground: string;
     iconBgBorderColor: string;
 };

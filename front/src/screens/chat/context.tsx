@@ -22,7 +22,7 @@ import { AVAILABLE_TEAMS } from './teams';
 import { useMain } from '../main/context';
 import { useConnectors } from '../settings/connectors/context';
 import { useChatStore } from '../../store/chatStore';
-import { shallow } from 'zustand/shallow';
+import { useShallow } from 'zustand/shallow';
 import { subscribeGenerationDone } from '../../store/generationDoneStore';
 import {
     generateChatTitle,
@@ -64,14 +64,15 @@ export function ChatProvider({
     // Select messages from global store with shallow comparison to prevent re-renders
     // when message content hasn't actually changed
     const messages = useChatStore(
-        useCallback(
-            state =>
-                activeChatID
-                    ? state.chats[activeChatID] ?? EMPTY_MESSAGES
-                    : EMPTY_MESSAGES,
-            [activeChatID],
+        useShallow(
+            useCallback(
+                state =>
+                    activeChatID
+                        ? state.chats[activeChatID] ?? EMPTY_MESSAGES
+                        : EMPTY_MESSAGES,
+                [activeChatID],
+            ),
         ),
-        shallow,
     );
     const setMessagesToStore = useChatStore(state => state.setMessages);
 

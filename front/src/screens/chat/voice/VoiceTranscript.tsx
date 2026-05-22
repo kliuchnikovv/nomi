@@ -34,7 +34,7 @@ export function VoiceTranscript() {
                             {
                                 backgroundColor: isUser
                                     ? theme.accent
-                                    : theme.surface,
+                                    : theme.surfaceHighlight,
                             },
                         ]}
                     >
@@ -64,25 +64,64 @@ export function VoiceTranscript() {
     );
 
     return (
-        <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={item => item.id}
-            style={styles.list}
-            contentContainerStyle={styles.content}
-            renderItem={renderItem}
-        />
+        <View
+            style={[
+                styles.card,
+                {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                },
+            ]}
+        >
+            <View
+                style={[styles.labelRow, { borderBottomColor: theme.border }]}
+            >
+                <Text style={[styles.label, { color: theme.textSecondary }]}>
+                    Transcript
+                </Text>
+            </View>
+            <FlatList
+                ref={listRef}
+                data={messages}
+                keyExtractor={item => item.id}
+                style={styles.list}
+                contentContainerStyle={styles.content}
+                renderItem={renderItem}
+            />
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    card: {
+        flex: 1,
+        borderWidth: 1,
+        borderRadius: 20,
+        overflow: 'hidden',
+    },
+    labelRow: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    label: {
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+    },
     list: { flex: 1, width: '100%' },
-    content: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
+    content: {
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 12,
+        gap: 6,
+    },
     row: { width: '100%' },
     rowUser: { alignItems: 'flex-end' },
     bubble: {
         maxWidth: '80%',
-        borderRadius: 16,
+        borderRadius: 20,
         paddingHorizontal: 14,
         paddingVertical: 8,
     },

@@ -1,4 +1,4 @@
-import { credentialsApi } from '../apiClient';
+import { credentialsApi } from '../../apiClient';
 
 /**
  * CredentialsManager - manages API keys and credentials for server plugins.

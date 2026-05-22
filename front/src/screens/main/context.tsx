@@ -93,7 +93,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setChatsLoading(true);
         try {
             console.log(`${getApiUrl()}/chats`)
-            const data = await apiClient.get<[Chat]>(`${getApiUrl()}/chats`)
+            const data = await apiClient.get<Chat[]>(`${getApiUrl()}/chats`)
             if (!data) {
                 return;
             }
@@ -303,9 +303,13 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setActiveChatID(emptyChatID);
     }
 
-    // Close plugin view
-    function closePlugin() {
+    function closePluginKeepSidebar() {
         setActivePluginView(null);
+    }
+
+    function closePluginWithSidebar() {
+        setActivePluginView(null);
+        setRightSidebarVisible(false);
     }
 
     // Export pending mode for chat context to use
@@ -336,6 +340,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setRightSidebarVisible,
         isNewSession,
         setIsNewSession,
+        closePluginKeepSidebar,
+        closePluginWithSidebar,
     };
 
     return (

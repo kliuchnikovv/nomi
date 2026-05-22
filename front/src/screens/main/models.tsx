@@ -26,6 +26,8 @@ export interface MainContextType {
     setRightSidebarVisible: (visible: boolean) => void;
     isNewSession: boolean;
     setIsNewSession: (v: boolean) => void;
+    closePluginKeepSidebar: () => void;
+    closePluginWithSidebar: () => void;
 }
 
 export type Chat = {

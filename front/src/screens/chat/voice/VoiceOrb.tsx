@@ -7,135 +7,192 @@ interface Props {
     state: VoiceState;
 }
 
-const ORB_SIZE = 120;
+const SIZE = 120;
+const DOT = 7;
+const HALF = DOT / 2;
+
+// Outer ring: 8 dots, radius 48, clockwise from top
+const OUTER_R = 48;
+const outerPositions = Array.from({ length: 8 }, (_, i) => {
+    const a = ((i * 45 - 90) * Math.PI) / 180;
+    return {
+        left: SIZE / 2 + OUTER_R * Math.cos(a) - HALF,
+        top: SIZE / 2 + OUTER_R * Math.sin(a) - HALF,
+    };
+});
+
+// Inner Braille: 2×3 grid, centered
+const B_COL = 20;
+const B_ROW = 18;
+const braillePositions = [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+    [0, 2],
+    [1, 2],
+].map(([c, r]) => ({
+    left: SIZE / 2 - B_COL / 2 + c * B_COL - HALF,
+    top: SIZE / 2 - B_ROW + r * B_ROW - HALF,
+}));
+
+const DIM = 0.12;
 
 export function VoiceOrb({ state }: Props) {
     const { theme } = useTheme();
-    const pulseScale = useRef(new Animated.Value(1)).current;
-    const pulseOpacity = useRef(new Animated.Value(0)).current;
-    const glowOpacity = useRef(new Animated.Value(0.3)).current;
+
+    const outerOps = useRef(
+        outerPositions.map(() => new Animated.Value(DIM)),
+    ).current;
+    const innerOps = useRef(
+        braillePositions.map(() => new Animated.Value(DIM)),
+    ).current;
     const loopRef = useRef<Animated.CompositeAnimation | null>(null);
 
     useEffect(() => {
         loopRef.current?.stop();
+        [...outerOps, ...innerOps].forEach(v => v.setValue(DIM));
 
         if (state === 'listening') {
-            pulseScale.setValue(1);
-            pulseOpacity.setValue(0.5);
+            // Seamless clockwise sweep — each dot has identical period (1400ms)
+            // with phase offset baked in via initial delay that repeats per iteration
+            const PERIOD = 1400;
+            const STAGGER = PERIOD / 8; // 175ms
+            const FLASH = 70;
+            loopRef.current = Animated.parallel(
+                outerOps.map((opacity, i) => {
+                    const phase = i * STAGGER;
+                    const fade = PERIOD - phase - FLASH;
+                    return Animated.loop(
+                        Animated.sequence([
+                            Animated.delay(phase),
+                            Animated.timing(opacity, {
+                                toValue: 1,
+                                duration: FLASH,
+                                useNativeDriver: true,
+                            }),
+                            Animated.timing(opacity, {
+                                toValue: DIM,
+                                duration: fade,
+                                useNativeDriver: true,
+                            }),
+                        ]),
+                    );
+                }),
+            );
+            loopRef.current.start();
+        } else if (state === 'processing') {
+            // Braille dots light up one-by-one in sequence (like being "typed")
             loopRef.current = Animated.loop(
-                Animated.parallel([
-                    Animated.timing(pulseScale, {
-                        toValue: 1.6,
-                        duration: 1400,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(pulseOpacity, {
-                        toValue: 0,
-                        duration: 1400,
-                        useNativeDriver: true,
-                    }),
-                ]),
+                Animated.sequence(
+                    innerOps.map(opacity =>
+                        Animated.sequence([
+                            Animated.timing(opacity, {
+                                toValue: 1,
+                                duration: 100,
+                                useNativeDriver: true,
+                            }),
+                            Animated.timing(opacity, {
+                                toValue: DIM,
+                                duration: 320,
+                                useNativeDriver: true,
+                            }),
+                        ]),
+                    ),
+                ),
             );
             loopRef.current.start();
         } else if (state === 'speaking') {
-            glowOpacity.setValue(0.3);
+            // Outer ring and inner Braille pulse alternately — outer/inner ripple
             loopRef.current = Animated.loop(
                 Animated.sequence([
-                    Animated.timing(glowOpacity, {
-                        toValue: 0.7,
-                        duration: 700,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(glowOpacity, {
-                        toValue: 0.3,
-                        duration: 700,
-                        useNativeDriver: true,
-                    }),
+                    Animated.parallel([
+                        ...outerOps.map(o =>
+                            Animated.timing(o, {
+                                toValue: 0.9,
+                                duration: 350,
+                                useNativeDriver: true,
+                            }),
+                        ),
+                        ...innerOps.map(o =>
+                            Animated.timing(o, {
+                                toValue: DIM,
+                                duration: 350,
+                                useNativeDriver: true,
+                            }),
+                        ),
+                    ]),
+                    Animated.parallel([
+                        ...outerOps.map(o =>
+                            Animated.timing(o, {
+                                toValue: DIM,
+                                duration: 350,
+                                useNativeDriver: true,
+                            }),
+                        ),
+                        ...innerOps.map(o =>
+                            Animated.timing(o, {
+                                toValue: 0.9,
+                                duration: 350,
+                                useNativeDriver: true,
+                            }),
+                        ),
+                    ]),
                 ]),
             );
             loopRef.current.start();
-        } else {
-            pulseScale.setValue(1);
-            pulseOpacity.setValue(0);
-            glowOpacity.setValue(0);
+        } else if (state === 'error') {
+            [...outerOps, ...innerOps].forEach(v => v.setValue(0.85));
         }
-    }, [state, pulseScale, pulseOpacity, glowOpacity]);
+        // idle: stays DIM (already reset above)
+    }, [state]);
 
-    const orbColor =
-        state === 'error'
-            ? '#ef4444'
-            : state === 'processing'
-            ? '#374151'
-            : theme.accent;
+    const dotColor =
+        state === 'error' ? theme.error ?? theme.attention : theme.accent;
 
     return (
         <View style={styles.container}>
-            {state === 'listening' && (
+            {outerPositions.map((pos, i) => (
                 <Animated.View
+                    key={`o${i}`}
                     style={[
-                        styles.ring,
+                        styles.dot,
                         {
-                            borderColor: theme.accent,
-                            transform: [{ scale: pulseScale }],
-                            opacity: pulseOpacity,
+                            left: pos.left,
+                            top: pos.top,
+                            backgroundColor: dotColor,
+                            opacity: outerOps[i],
                         },
                     ]}
                 />
-            )}
-            {state === 'speaking' && (
+            ))}
+            {braillePositions.map((pos, i) => (
                 <Animated.View
+                    key={`b${i}`}
                     style={[
-                        styles.glow,
-                        { backgroundColor: theme.accent, opacity: glowOpacity },
+                        styles.dot,
+                        {
+                            left: pos.left,
+                            top: pos.top,
+                            backgroundColor: dotColor,
+                            opacity: innerOps[i],
+                        },
                     ]}
                 />
-            )}
-            <View style={[styles.orb, { backgroundColor: orbColor }]}>
-                {state === 'processing' && (
-                    <View style={styles.dots}>
-                        {[1, 0.6, 0.3].map((opacity, i) => (
-                            <View
-                                key={i}
-                                style={[
-                                    styles.dot,
-                                    { backgroundColor: theme.accent, opacity },
-                                ]}
-                            />
-                        ))}
-                    </View>
-                )}
-            </View>
+            ))}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        width: ORB_SIZE,
-        height: ORB_SIZE,
-        alignItems: 'center',
-        justifyContent: 'center',
+        width: SIZE,
+        height: SIZE,
     },
-    ring: {
+    dot: {
         position: 'absolute',
-        width: ORB_SIZE,
-        height: ORB_SIZE,
-        borderRadius: ORB_SIZE / 2,
-        borderWidth: 2,
+        width: DOT,
+        height: DOT,
+        borderRadius: HALF,
     },
-    glow: {
-        position: 'absolute',
-        width: ORB_SIZE + 24,
-        height: ORB_SIZE + 24,
-        borderRadius: (ORB_SIZE + 24) / 2,
-    },
-    orb: {
-        width: ORB_SIZE,
-        height: ORB_SIZE,
-        borderRadius: ORB_SIZE / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    dots: { flexDirection: 'row', gap: 6 },
-    dot: { width: 8, height: 8, borderRadius: 4 },
 });

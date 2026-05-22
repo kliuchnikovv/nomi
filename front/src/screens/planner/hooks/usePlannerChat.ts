@@ -121,8 +121,8 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
       }
 
       const partsText = (m.content_parts || [])
-        .filter(p => p.type === 'text' || (p as any).type === 'member_response' || p.type === 'reasoning')
-        .map(p => {
+        .filter((p: any) => p.type === 'text' || p.type === 'member_response' || p.type === 'reasoning')
+        .map((p: any) => {
           if (p.type === 'text') return p.text;
           if ((p as any).type === 'member_response') return (p as any).text;
           if (p.type === 'reasoning') return `\n> Thinking: ${p.reasoning}\n`;

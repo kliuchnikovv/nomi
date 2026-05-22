@@ -46,9 +46,9 @@ class IOSRemindersClient {
         try {
             const reminders: Reminder[] = await IOSRemindersManager.getReminders(
                 list || '',
-                isCompleted,
-                dueDateStart,
-                dueDateEnd,
+                isCompleted ?? null,
+                dueDateStart ?? null,
+                dueDateEnd ?? null,
                 limit
             );
             return reminders;

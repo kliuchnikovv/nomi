@@ -2,6 +2,8 @@
  * Type definitions for iOS native modules
  */
 
+export {};
+
 declare module 'react-native' {
   interface NativeModulesStatic {
     IOSCalendarManager: {
@@ -35,6 +37,7 @@ declare module 'react-native' {
       getLists(): Promise<any[]>;
       checkPermissionStatus(): Promise<'authorized' | 'denied' | 'notDetermined'>;
       requestPermission(): Promise<boolean>;
+      openSettings(): Promise<void>;
     };
     IOSContactsManager: {
       searchContacts(query: string, limit: number): Promise<any[]>;
@@ -45,6 +48,7 @@ declare module 'react-native' {
       getGroups(): Promise<any[]>;
       checkPermissionStatus(): Promise<'authorized' | 'denied' | 'notDetermined'>;
       requestPermission(): Promise<boolean>;
+      openSettings(): Promise<void>;
     };
   }
 }

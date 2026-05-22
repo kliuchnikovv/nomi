@@ -5,10 +5,11 @@ import {
     TouchableOpacity,
     TouchableWithoutFeedback,
     StyleSheet,
-    SafeAreaView,
     Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { Xmark } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { useVoiceConversation } from './useVoiceConversation';
 import { VoiceOrb } from './VoiceOrb';
@@ -17,16 +18,9 @@ import type { ChatStackParamList } from '../../../navigation/types';
 
 type VoiceScreenRoute = RouteProp<ChatStackParamList, 'VoiceScreen'>;
 
-const STATE_LABELS: Record<string, string> = {
-    idle: '',
-    listening: 'Listening…',
-    processing: 'Thinking…',
-    speaking: 'Tap to interrupt',
-    error: '',
-};
-
 export function VoiceScreen() {
     const { theme, palette } = useTheme();
+    const insets = useSafeAreaInsets();
     const navigation = useNavigation();
     const route = useRoute<VoiceScreenRoute>();
     const { chatId } = route.params;
@@ -47,57 +41,66 @@ export function VoiceScreen() {
     }, [state, interrupt]);
 
     return (
-        <SafeAreaView
-            style={[styles.safe, { backgroundColor: theme.background }]}
-        >
+        <View style={[styles.safe, { backgroundColor: theme.background }]}>
             {/* Header stays outside TouchableWithoutFeedback */}
-            <View style={styles.header}>
+            <View
+                style={[
+                    styles.header,
+                    {
+                        paddingTop: insets.top + 12,
+                        backgroundColor: `${theme.accent}1F`,
+                        borderBottomColor: `${theme.accent}40`,
+                    },
+                ]}
+            >
                 <TouchableOpacity
                     onPress={handleClose}
-                    style={styles.closeBtn}
-                    accessibilityLabel="Close"
+                    style={[
+                        styles.headerBtn,
+                        { backgroundColor: `${theme.accent}20` },
+                    ]}
+                    accessibilityLabel="Close voice mode"
                     accessibilityRole="button"
                 >
-                    <Text
-                        style={[
-                            styles.closeText,
-                            { color: theme.textSecondary },
-                        ]}
-                    >
-                        ✕
-                    </Text>
+                    <Xmark
+                        width={20}
+                        height={20}
+                        color={theme.textPrimary}
+                        strokeWidth={2}
+                    />
                 </TouchableOpacity>
                 <Text
-                    style={[styles.headerTitle, { color: theme.textSecondary }]}
+                    style={[styles.headerTitle, { color: theme.textPrimary }]}
                 >
                     Voice
                 </Text>
-                <View style={styles.headerSpacer} />
+                <View style={styles.headerBtn} />
             </View>
 
-            {/* Tap-to-interrupt wraps only the content below the header */}
-            <TouchableWithoutFeedback onPress={handleScreenTap}>
-                <View style={styles.contentArea}>
-                    {/* Orb + status */}
+            <View style={styles.contentArea}>
+                {/* Orb area — tap anywhere here to interrupt */}
+                <TouchableWithoutFeedback onPress={handleScreenTap}>
                     <View style={styles.orbArea}>
                         <VoiceOrb state={state} />
-                        <Text
-                            style={[
-                                styles.stateLabel,
-                                { color: theme.textSecondary },
-                            ]}
-                        >
-                            {STATE_LABELS[state] ?? ''}
-                        </Text>
                         {state === 'listening' && liveTranscript !== '' && (
-                            <Text
+                            <View
                                 style={[
-                                    styles.liveTranscript,
-                                    { color: theme.textPrimary },
+                                    styles.liveTranscriptCard,
+                                    {
+                                        backgroundColor: theme.surface,
+                                        borderColor: theme.border,
+                                    },
                                 ]}
                             >
-                                "{liveTranscript}"
-                            </Text>
+                                <Text
+                                    style={[
+                                        styles.liveTranscript,
+                                        { color: theme.textPrimary },
+                                    ]}
+                                >
+                                    "{liveTranscript}"
+                                </Text>
+                            </View>
                         )}
                         {state === 'error' && (
                             <View style={styles.errorArea}>
@@ -133,19 +136,19 @@ export function VoiceScreen() {
                             </View>
                         )}
                     </View>
+                </TouchableWithoutFeedback>
 
-                    {/* Transcript history */}
-                    <View
-                        style={[
-                            styles.transcriptArea,
-                            { borderTopColor: theme.border },
-                        ]}
-                    >
-                        <VoiceTranscript />
-                    </View>
+                {/* Transcript history — outside TouchableWithoutFeedback so FlatList can scroll */}
+                <View
+                    style={[
+                        styles.transcriptArea,
+                        { paddingBottom: insets.bottom + 16 },
+                    ]}
+                >
+                    <VoiceTranscript />
                 </View>
-            </TouchableWithoutFeedback>
-        </SafeAreaView>
+            </View>
+        </View>
     );
 }
 
@@ -155,36 +158,43 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        borderBottomWidth: 1,
     },
-    closeBtn: {
-        width: 36,
-        height: 36,
+    headerBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    closeText: { fontSize: 18 },
     headerTitle: {
-        flex: 1,
-        textAlign: 'center',
-        fontSize: 15,
-        fontWeight: '500',
+        fontSize: 16,
+        fontWeight: '600',
+        letterSpacing: 0.3,
     },
-    headerSpacer: { width: 36 },
     orbArea: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 16,
-        paddingBottom: 24,
+        gap: 12,
+        paddingVertical: 24,
     },
-    stateLabel: { fontSize: 13, letterSpacing: 0.5 },
+    liveTranscriptCard: {
+        maxWidth: '85%',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 20,
+        borderWidth: 1,
+    },
     liveTranscript: {
         fontSize: 15,
         fontStyle: 'italic',
         textAlign: 'center',
-        paddingHorizontal: 32,
     },
     errorArea: { alignItems: 'center', gap: 12 },
     errorText: { fontSize: 14, textAlign: 'center' },
@@ -194,5 +204,9 @@ const styles = StyleSheet.create({
         borderRadius: 20,
     },
     settingsBtnText: { fontSize: 14, fontWeight: '500' },
-    transcriptArea: { height: '35%', borderTopWidth: StyleSheet.hairlineWidth },
+    transcriptArea: {
+        height: '40%',
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+    },
 });

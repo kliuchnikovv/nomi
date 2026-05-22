@@ -155,7 +155,7 @@ class IntegrationStorage {
 
     async createIntegration(
         integration: Omit<Integration, 'id' | 'createdAt' | 'updatedAt'>,
-        credentials: IntegrationCredentials,
+        credentials?: IntegrationCredentials,
     ): Promise<Integration> {
         const userId = this.requireUserId();
         const db = getDatabase();
@@ -206,20 +206,22 @@ class IntegrationStorage {
             );
         }
 
-        // Insert encrypted credentials
-        const encryptedAccess = await encrypt(credentials.accessToken);
-        const encryptedRefresh = credentials.refreshToken
-            ? await encrypt(credentials.refreshToken)
-            : null;
-        const expiry = credentials.tokenExpiry
-            ? credentials.tokenExpiry.getTime()
-            : null;
+        // Insert encrypted credentials (server-side integrations may omit them)
+        if (credentials) {
+            const encryptedAccess = await encrypt(credentials.accessToken);
+            const encryptedRefresh = credentials.refreshToken
+                ? await encrypt(credentials.refreshToken)
+                : null;
+            const expiry = credentials.tokenExpiry
+                ? credentials.tokenExpiry.getTime()
+                : null;
 
-        await db.runAsync(
-            `INSERT INTO integration_credentials (integration_id, access_token, refresh_token, token_expiry)
-             VALUES (?, ?, ?, ?)`,
-            [id, encryptedAccess, encryptedRefresh, expiry],
-        );
+            await db.runAsync(
+                `INSERT INTO integration_credentials (integration_id, access_token, refresh_token, token_expiry)
+                 VALUES (?, ?, ?, ?)`,
+                [id, encryptedAccess, encryptedRefresh, expiry],
+            );
+        }
 
         return {
             id,

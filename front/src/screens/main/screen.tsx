@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View } from 'react-native';
+import { Modal, View } from 'react-native';
 import { styles } from './styles'
 
 import ChatScreen from '../chat/screen';
@@ -54,10 +54,13 @@ function MainScreenContent() {
                         </View>
                     </ChatProvider>
                 )}
-                <SettingsModal
+                <Modal
                     visible={settingsOpen}
-                    onClose={() => setSettingsOpen(false)}
-                />
+                    animationType="slide"
+                    onRequestClose={() => setSettingsOpen(false)}
+                >
+                    <SettingsModal />
+                </Modal>
             </View>
         </AskUserProvider>
     );

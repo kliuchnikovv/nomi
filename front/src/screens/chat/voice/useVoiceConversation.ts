@@ -29,12 +29,17 @@ const SILENCE_TIMEOUT_MS = 1500;
 const MAX_STT_RETRIES = 3;
 
 // Extract speakable text from a message, including team-mode member_response content_parts.
-function extractSpeakableText(msg: { text: string; content_parts?: any[] }): string {
+function extractSpeakableText(msg: {
+    text: string;
+    content_parts?: any[];
+}): string {
     const mainText = msg.text?.trim() ?? '';
     if (mainText) return mainText;
     if (msg.content_parts && msg.content_parts.length > 0) {
         return msg.content_parts
-            .filter((p: any) => p.type === 'text' || p.type === 'member_response')
+            .filter(
+                (p: any) => p.type === 'text' || p.type === 'member_response',
+            )
             .map((p: any) => p.text ?? '')
             .join(' ')
             .trim();

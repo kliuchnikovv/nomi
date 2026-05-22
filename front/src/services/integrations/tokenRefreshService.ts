@@ -25,13 +25,13 @@ class TokenRefreshService {
             if (creds) {
                 // Migrate to secure storage
                 await secureTokenStorage.saveToken(integrationId, {
-                    accessToken: creds.accessToken,
-                    refreshToken: creds.refreshToken,
+                    accessToken: creds.accessToken ?? '',
+                    refreshToken: creds.refreshToken ?? '',
                     expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0
                 });
                 tokens = {
-                    accessToken: creds.accessToken,
-                    refreshToken: creds.refreshToken,
+                    accessToken: creds.accessToken ?? '',
+                    refreshToken: creds.refreshToken ?? '',
                     expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0
                 };
             }

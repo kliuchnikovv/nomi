@@ -12,11 +12,12 @@ const withAlpha = (hex: string, alpha: number) => {
 
 // Cache for styles to avoid recreating on every render
 const stylesCache = new Map<string, ReturnType<typeof StyleSheet.create>>();
-const markdownStylesCache = new Map<string, ReturnType<typeof createMarkdownStyles>>();
+const markdownStylesCache = new Map<string, Record<string, unknown>>();
 
 // Generate cache key from theme properties
 const getThemeCacheKey = (theme: ThemeColors, palette: ThemePalette): string => {
-    return `${theme.id || 'default'}-${palette.id || 'default'}`;
+    return JSON.stringify({ accent: theme.accent, bg: theme.background, surface: theme.surface,
+        palBg: palette.bg, palFg: palette.fg });
 };
 
 // Create styles based on theme with caching
@@ -37,7 +38,7 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
         daemonHeader: palette.red,
     };
 
-    return StyleSheet.create({
+    const styles = StyleSheet.create({
         container: {
             flexDirection: 'row',
             marginVertical: 4,
@@ -390,7 +391,7 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
 
     // Cache the result (limit cache size to prevent memory leaks)
     if (stylesCache.size > 10) {
-        const firstKey = stylesCache.keys().next().value;
+        const firstKey = stylesCache.keys().next().value!;
         stylesCache.delete(firstKey);
     }
     stylesCache.set(cacheKey, styles);
@@ -399,8 +400,7 @@ export const createStyles = (theme: ThemeColors, palette: ThemePalette) => {
 
 // Markdown styles - theme-aware with caching
 export const createMarkdownStyles = (theme: ThemeColors) => {
-    // Simple cache key based on theme id or fallback
-    const cacheKey = theme.id || theme.name || JSON.stringify({
+    const cacheKey = JSON.stringify({
         textPrimary: theme.textPrimary,
         accent: theme.accent,
         codeBg: theme.codeBg,
@@ -596,7 +596,7 @@ export const createMarkdownStyles = (theme: ThemeColors) => {
 
     // Cache the result (limit cache size)
     if (markdownStylesCache.size > 10) {
-        const firstKey = markdownStylesCache.keys().next().value;
+        const firstKey = markdownStylesCache.keys().next().value!;
         markdownStylesCache.delete(firstKey);
     }
     markdownStylesCache.set(cacheKey, styles);

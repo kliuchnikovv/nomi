@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, ActivityIndicator, Animated, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Animated, StyleSheet } from 'react-native';
 
 type Props = {
     status: string | null;
@@ -11,14 +11,31 @@ type Props = {
     };
 };
 
+const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const INTERVAL_MS = 80;
+
+function ElegantSpinner({ color }: { color: string }) {
+    const [frame, setFrame] = useState(0);
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    useEffect(() => {
+        intervalRef.current = setInterval(() => {
+            setFrame(f => (f + 1) % FRAMES.length);
+        }, INTERVAL_MS);
+        return () => {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        };
+    }, []);
+
+    return <Text style={[styles.spinner, { color }]}>{FRAMES[frame]}</Text>;
+}
+
 export function GenerationStatusBar({ status, theme }: Props) {
     const opacity = useRef(new Animated.Value(0)).current;
     const translateY = useRef(new Animated.Value(8)).current;
-    const prevStatusRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (status !== null) {
-            // Appear: slide up + fade in
             Animated.parallel([
                 Animated.timing(opacity, {
                     toValue: 1,
@@ -32,17 +49,14 @@ export function GenerationStatusBar({ status, theme }: Props) {
                 }),
             ]).start();
         } else {
-            // Disappear: fade out only
             Animated.timing(opacity, {
                 toValue: 0,
                 duration: 150,
                 useNativeDriver: true,
             }).start();
         }
-        prevStatusRef.current = status;
     }, [status]);
 
-    // Keep rendering during fade-out so animation completes
     const textColor = theme.secondaryText ?? theme.text;
     const spinnerColor = theme.primary ?? '#999';
 
@@ -61,10 +75,7 @@ export function GenerationStatusBar({ status, theme }: Props) {
         >
             {status !== null && (
                 <View style={styles.row}>
-                    <ActivityIndicator size="small" color={spinnerColor} style={styles.spinner} />
-                    <Text style={[styles.text, { color: textColor }]} numberOfLines={1}>
-                        {status}
-                    </Text>
+                    <ElegantSpinner color={spinnerColor} />
                 </View>
             )}
         </Animated.View>
@@ -78,9 +89,12 @@ const styles = StyleSheet.create({
     row: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 8,
     },
     spinner: {
-        marginRight: 8,
+        fontSize: 14,
+        lineHeight: 18,
+        fontWeight: '400',
     },
     text: {
         fontSize: 13,
