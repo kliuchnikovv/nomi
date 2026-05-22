@@ -38,14 +38,12 @@ export function useVoiceConversation({
     const { sendMessage, assistantWorking, messages } = useChat();
 
     const isMountedRef = useRef(true);
-    const messagesRef = useRef(messages);
-    messagesRef.current = messages;
     const voiceStateRef = useRef<VoiceState>('idle');
     const currentTranscriptRef = useRef('');
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const sttRetryCountRef = useRef(0);
-    const assistantWorkingRef = useRef(assistantWorking);
+    const lastSpokenMsgIdRef = useRef<string | null>(null);
 
     const applyState = useCallback((s: VoiceState) => {
         voiceStateRef.current = s;
@@ -168,46 +166,57 @@ export function useVoiceConversation({
         };
     }, [clearSilenceTimer, applyState]);
 
-    // Detect assistant response completion: assistantWorking true → false while in 'processing'
+    // Trigger TTS when generation is done and messages have the final text.
+    // Depends on both `messages` (so it fires once text is flushed into the store)
+    // and `assistantWorking` (so it knows generation is complete).
     useEffect(() => {
-        const wasWorking = assistantWorkingRef.current;
-        assistantWorkingRef.current = assistantWorking;
+        if (assistantWorking) return;
+        if (voiceStateRef.current !== 'processing') return;
 
-        if (
-            wasWorking &&
-            !assistantWorking &&
-            voiceStateRef.current === 'processing'
-        ) {
-            const lastAssistant = [...messagesRef.current]
-                .reverse()
-                .find(m => m.role === 'assistant');
-            const text = lastAssistant?.text?.trim() ?? '';
+        const lastAssistant = [...messages]
+            .reverse()
+            .find(m => m.role === 'assistant');
+        if (!lastAssistant) return;
 
-            if (text && text !== ' ') {
-                applyState('speaking');
-                Speech.speak(text, {
-                    onDone: () => {
-                        if (
-                            isMountedRef.current &&
-                            voiceStateRef.current === 'speaking'
-                        ) {
-                            startListeningRef.current();
-                        }
-                    },
-                    onError: () => {
-                        if (
-                            isMountedRef.current &&
-                            voiceStateRef.current === 'speaking'
-                        ) {
-                            startListeningRef.current();
-                        }
-                    },
-                });
-            } else {
+        const text = lastAssistant.text?.trim() ?? '';
+        if (!text) return; // Text not ready yet — effect will re-run when messages update
+
+        if (lastAssistant.id === lastSpokenMsgIdRef.current) return; // Already spoken
+        lastSpokenMsgIdRef.current = lastAssistant.id;
+
+        applyState('speaking');
+        Speech.speak(text, {
+            onDone: () => {
+                if (
+                    isMountedRef.current &&
+                    voiceStateRef.current === 'speaking'
+                ) {
+                    startListeningRef.current();
+                }
+            },
+            onError: () => {
+                if (
+                    isMountedRef.current &&
+                    voiceStateRef.current === 'speaking'
+                ) {
+                    startListeningRef.current();
+                }
+            },
+        });
+    }, [assistantWorking, messages, applyState]);
+
+    // Fallback: if still in 'processing' 500ms after generation ends with no speakable text,
+    // restart listening. Covers tool-call-only responses that never emit text.
+    useEffect(() => {
+        if (assistantWorking) return;
+        if (voiceStateRef.current !== 'processing') return;
+        const timer = setTimeout(() => {
+            if (voiceStateRef.current === 'processing') {
                 startListeningRef.current();
             }
-        }
-    }, [assistantWorking, chatId, applyState]);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [assistantWorking]);
 
     // Stop audio when app goes to background
     useEffect(() => {
