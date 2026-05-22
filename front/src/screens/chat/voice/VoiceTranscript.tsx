@@ -44,7 +44,17 @@ export function VoiceTranscript() {
                                 { color: isUser ? palette.white : theme.text },
                             ]}
                         >
-                            {item.text.trim() || '…'}
+                            {item.text.trim() ||
+                                (item.content_parts ?? [])
+                                    .filter(
+                                        (p: any) =>
+                                            p.type === 'text' ||
+                                            p.type === 'member_response',
+                                    )
+                                    .map((p: any) => p.text ?? '')
+                                    .join(' ')
+                                    .trim() ||
+                                '…'}
                         </Text>
                     </View>
                 </View>
