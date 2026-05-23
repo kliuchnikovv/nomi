@@ -16,10 +16,15 @@ import {
     ActionSheetIOS,
     TouchableWithoutFeedback,
     Keyboard,
-    KeyboardAvoidingView,
-    Platform,
 } from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
+import Animated, {
+    useSharedValue,
+    useAnimatedStyle,
+} from 'react-native-reanimated';
+import {
+    KeyboardAvoidingView,
+    useReanimatedKeyboardAnimation,
+} from 'react-native-keyboard-controller';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageViewing from 'react-native-image-viewing';
@@ -58,6 +63,13 @@ export function ChatDetailScreen() {
     const navigation = useNavigation();
 
     const inputAnimY = useSharedValue(0);
+    const insets = useSafeAreaInsets();
+    const { height: kbHeightAnim } = useReanimatedKeyboardAnimation();
+
+    const bottomInset = insets.bottom;
+    const fadeContainerStyle = useAnimatedStyle(() => ({
+        bottom: Math.max(-kbHeightAnim.value, bottomInset),
+    }));
 
     const { showDialog, dialogState, submitResponse, cancelDialog } =
         useAskUser();
@@ -87,7 +99,6 @@ export function ChatDetailScreen() {
     } = useChat();
     const { user, token } = useAuth();
     const { theme } = useTheme();
-    const insets = useSafeAreaInsets();
     const { activeChat, chats, getChats, isNewSession, setIsNewSession } =
         useMain();
     const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -96,7 +107,7 @@ export function ChatDetailScreen() {
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
 
     const headerHeight = insets.top + 60; // insets.top + 8 padding + 44 pill + 8 padding
-
+    const inputBarHeight = 112;
 
     const giftedMessages = useGiftedMessages(messages, user?.id);
     const chips = useChips();
@@ -736,6 +747,36 @@ export function ChatDetailScreen() {
                 />
             ))}
 
+            {/* Soft fade above input bar — animated with keyboard */}
+            <Animated.View
+                pointerEvents="none"
+                style={[
+                    {
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        zIndex: 7,
+                    },
+                    fadeContainerStyle,
+                ]}
+            >
+                {([0.78, 0.55, 0.35, 0.18, 0.07] as const).map((opacity, i) => (
+                    <View
+                        key={i}
+                        pointerEvents="none"
+                        style={{
+                            position: 'absolute',
+                            bottom: inputBarHeight + i * 6,
+                            left: 0,
+                            right: 0,
+                            height: 6,
+                            backgroundColor: theme.background,
+                            opacity,
+                        }}
+                    />
+                ))}
+            </Animated.View>
+
             {/* Non-session project suggestion banner (existing chats) */}
             {!isNewSession && suggestedProject && (
                 <ProjectSuggestionBanner
@@ -770,11 +811,17 @@ export function ChatDetailScreen() {
                 </View>
             )}
 
-            <View style={{ flex: 1, backgroundColor: theme.background }}>
+            <View
+                style={{
+                    flex: 1,
+                    backgroundColor: theme.background,
+                    paddingBottom: insets.bottom,
+                }}
+            >
                 {showEmptyGreeting ? (
                     <KeyboardAvoidingView
                         style={{ flex: 1 }}
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        behavior="padding"
                         keyboardVerticalOffset={0}
                     >
                         <TouchableWithoutFeedback
@@ -808,6 +855,10 @@ export function ChatDetailScreen() {
                     </KeyboardAvoidingView>
                 ) : (
                     <GiftedChat
+                        keyboardAvoidingViewProps={{
+                            behavior: 'padding',
+                            keyboardVerticalOffset: 0,
+                        }}
                         messages={
                             messagesLoading
                                 ? []
@@ -822,7 +873,7 @@ export function ChatDetailScreen() {
                         isTyping={false}
                         renderFooter={renderFooter}
                         inverted={true}
-                        minInputToolbarHeight={insets.bottom + 112 + 30}
+                        minInputToolbarHeight={112}
                         maxComposerHeight={100}
                         renderAvatar={null}
                         messagesContainerStyle={styles.messagesContainer}
