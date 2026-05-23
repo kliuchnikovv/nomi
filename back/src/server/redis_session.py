@@ -1608,11 +1608,22 @@ class RedisSession:
             if images:
                 kwargs["images"] = images
         elif attachments:
-            logger.info(
-                "[RedisSession] Model %s does not support vision; skipping %d attachment(s)",
-                self.current_model_name,
-                len(attachments),
-            )
+            bridge_model = self._get_vision_bridge_model()
+            if bridge_model:
+                descriptions = await self._vision_bridge_describe_images(attachments, bridge_model)
+                if descriptions:
+                    agent_input = descriptions + "\n\n" + agent_input
+                    logger.info(
+                        "[RedisSession] Vision bridge: described %d image(s) via %s",
+                        len(attachments),
+                        bridge_model,
+                    )
+            else:
+                logger.info(
+                    "[RedisSession] Model %s does not support vision; skipping %d attachment(s)",
+                    self.current_model_name,
+                    len(attachments),
+                )
 
         agent = self.agent
         if not agent:
@@ -1974,6 +1985,97 @@ class RedisSession:
 
         self._model_supports_vision_cache = False
         return False
+
+    def _get_vision_bridge_model(self) -> str | None:
+        """Return the vision bridge model ID for the current model, or None if not configured."""
+        import json as _json
+
+        if not self.current_model_name:
+            return None
+
+        config_path = os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "config", "models.json"
+        )
+        try:
+            with open(config_path) as f:
+                data = _json.load(f)
+            for m in data.get("models", []):
+                if m.get("id") == self.current_model_name:
+                    return m.get("vision_bridge") or None
+        except Exception as exc:
+            logger.warning("[RedisSession] Failed to load model config for vision bridge: %s", exc)
+
+        return None
+
+    async def _vision_bridge_describe_images(
+        self, attachments: list, bridge_model_id: str
+    ) -> str:
+        """Describe image attachments using a vision bridge model.
+
+        Calls the z.ai vision model to convert images to text descriptions,
+        mirroring the Vision Understanding MCP pattern for non-vision GLM models.
+        """
+        import base64 as _base64
+        import httpx
+
+        api_key = os.getenv("ZAI_API_KEY")
+        if not api_key:
+            logger.warning("[RedisSession] ZAI_API_KEY not set; cannot use vision bridge")
+            return ""
+
+        endpoint = "https://api.z.ai/api/coding/paas/v4/chat/completions"
+        descriptions = []
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for i, att in enumerate(attachments, 1):
+                if not isinstance(att, dict):
+                    continue
+                file_type = att.get("file_type", "")
+                if not file_type.startswith("image/"):
+                    continue
+                content = att.get("content")
+                if not content:
+                    continue
+
+                try:
+                    data_uri = f"data:{file_type};base64,{content}"
+                    payload = {
+                        "model": bridge_model_id,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {"url": data_uri},
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "Describe this image in detail, focusing on all visible text, UI elements, data, diagrams, and content.",
+                                    },
+                                ],
+                            }
+                        ],
+                        "max_tokens": 1024,
+                    }
+                    resp = await client.post(
+                        endpoint,
+                        json=payload,
+                        headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                    resp.raise_for_status()
+                    result = resp.json()
+                    description = (
+                        result.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content", "")
+                    )
+                    if description:
+                        descriptions.append(f"[Image {i}]: {description}")
+                except Exception as exc:
+                    logger.error("[RedisSession] Vision bridge error for image %d: %s", i, exc)
+
+        return "\n\n".join(descriptions)
 
     async def _maybe_archive_old_messages(self) -> None:
         """Archive oldest messages to pgvector when history exceeds 75% of context window.

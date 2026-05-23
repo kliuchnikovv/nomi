@@ -25,6 +25,7 @@ type Model struct {
 	SupportsVision    bool   `json:"supports_vision"`
 	Streaming         bool   `json:"streaming"` // if true, do not persist text chunks; only DONE overwrite
 	Endpoint          string `json:"endpoint,omitempty"`
+	VisionBridge      string `json:"vision_bridge,omitempty"`
 }
 
 type ModelsResponse struct {
