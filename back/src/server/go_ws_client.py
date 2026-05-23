@@ -107,7 +107,7 @@ class GoWSClient:
                 logger.info("[GoWSClient] Connecting to %s", self._url)
                 async with websockets.connect(
                     self._url,
-                    extra_headers=headers,
+                    additional_headers=headers,
                     ping_interval=30,
                     ping_timeout=10,
                 ) as ws:
