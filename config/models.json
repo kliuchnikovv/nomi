@@ -1,23 +1,6 @@
 {
   "models": [
     {
-      "id": "glm-4.7",
-      "name": "GLM 4.7",
-      "provider": "z.ai",
-      "description": "GLM-4.7 is a 358B MoE model (32B active) engineered for agentic coding and complex reasoning. SWE-bench Verified: 73.8%. Thinking mode supported via reasoning_content.",
-      "context_window": 200000,
-      "max_output_tokens": 131072,
-      "rpm_limit": 20,
-      "rpd_limit": 2000,
-      "supports_streaming": true,
-      "supports_tools": true,
-      "supports_thinking": true,
-      "supports_vision": true,
-      "vision_bridge": "glm-4.6v",
-      "streaming": true,
-      "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
-    },
-    {
       "id": "glm-4.5-air",
       "name": "GLM 4.5 Air",
       "provider": "z.ai",
@@ -51,6 +34,23 @@
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
     {
+      "id": "glm-4.7",
+      "name": "GLM 4.7",
+      "provider": "z.ai",
+      "description": "GLM-4.7 is a 358B MoE model (32B active) engineered for agentic coding and complex reasoning. SWE-bench Verified: 73.8%. Thinking mode supported via reasoning_content.",
+      "context_window": 200000,
+      "max_output_tokens": 131072,
+      "rpm_limit": 20,
+      "rpd_limit": 2000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": true,
+      "supports_vision": true,
+      "vision_bridge": "glm-4.6v",
+      "streaming": true,
+      "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
+    },
+    {
       "id": "glm-5",
       "name": "GLM 5",
       "provider": "z.ai",
@@ -68,14 +68,14 @@
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
     {
-      "id": "glm-5.1",
-      "name": "GLM 5.1",
+      "id": "glm-5-turbo",
+      "name": "GLM 5 Turbo",
       "provider": "z.ai",
-      "description": "GLM-5.1 is a 754B parameter MoE model (40B activated) optimized for long-horizon agent tasks and SWE benchmarks. Thinking enabled by default; streams reasoning via reasoning_content. SWE-Bench Pro: 58.4 (SOTA).",
+      "description": "GLM-5-Turbo is a fast variant of GLM-5 optimized for low-latency and multi-step agentic workflows. Supports thinking modes and tool calling.",
       "context_window": 202752,
       "max_output_tokens": 131072,
-      "rpm_limit": 20,
-      "rpd_limit": 2000,
+      "rpm_limit": 40,
+      "rpd_limit": 4000,
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
@@ -85,14 +85,14 @@
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
     {
-      "id": "glm-5-turbo",
-      "name": "GLM 5 Turbo",
+      "id": "glm-5.1",
+      "name": "GLM 5.1",
       "provider": "z.ai",
-      "description": "GLM-5-Turbo is a fast variant of GLM-5 optimized for low-latency and multi-step agentic workflows. Supports thinking modes and tool calling.",
+      "description": "GLM-5.1 is a 754B parameter MoE model (40B activated) optimized for long-horizon agent tasks and SWE benchmarks. Thinking enabled by default; streams reasoning via reasoning_content. SWE-Bench Pro: 58.4 (SOTA).",
       "context_window": 202752,
       "max_output_tokens": 131072,
-      "rpm_limit": 40,
-      "rpd_limit": 4000,
+      "rpm_limit": 20,
+      "rpd_limit": 2000,
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
