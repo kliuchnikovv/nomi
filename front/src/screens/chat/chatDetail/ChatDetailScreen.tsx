@@ -68,7 +68,7 @@ export function ChatDetailScreen() {
 
     const bottomInset = insets.bottom;
     const fadeContainerStyle = useAnimatedStyle(() => ({
-        bottom: Math.max(-kbHeightAnim.value, bottomInset),
+        bottom: -kbHeightAnim.value + bottomInset,
     }));
 
     const { showDialog, dialogState, submitResponse, cancelDialog } =
@@ -760,16 +760,22 @@ export function ChatDetailScreen() {
                     fadeContainerStyle,
                 ]}
             >
-                {([0.78, 0.55, 0.35, 0.18, 0.07] as const).map((opacity, i) => (
+                {(
+                    [
+                        1.0, 0.9, 0.8, 0.71, 0.62, 0.54, 0.47, 0.4, 0.34, 0.28,
+                        0.22, 0.18, 0.14, 0.1, 0.07, 0.04, 0.025, 0.011, 0.003,
+                        0,
+                    ] as const
+                ).map((opacity, i) => (
                     <View
                         key={i}
                         pointerEvents="none"
                         style={{
                             position: 'absolute',
-                            bottom: inputBarHeight + i * 6,
+                            bottom: inputBarHeight - 4 + i * 3,
                             left: 0,
                             right: 0,
-                            height: 6,
+                            height: 3,
                             backgroundColor: theme.background,
                             opacity,
                         }}
