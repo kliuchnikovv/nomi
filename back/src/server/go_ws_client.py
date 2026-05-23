@@ -122,7 +122,6 @@ class GoWSClient:
                     await asyncio.gather(
                         self._send_loop(ws),
                         self._recv_loop(ws),
-                        return_exceptions=True,
                     )
             except (ConnectionClosed, WebSocketException, OSError) as e:
                 logger.warning("[GoWSClient] Connection lost: %s", e)
