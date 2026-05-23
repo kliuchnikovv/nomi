@@ -970,14 +970,17 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 		r.logger.Info("generation complete")
 		r.currentModelID = ""
 
-		// Overwrite stored message with canonical full content when provided (RunCompletedEvent).
-		// This fixes duplication and wrong order from chunk accumulation in DB.
+		// Persist message on DONE. When Python provides canonical full content
+		// (RunCompletedEvent), use it to overwrite accumulated chunks (fixes ordering).
+		// When content is absent, persist whatever chunks were accumulated so far.
 		var done DonePayload
-		if err := json.Unmarshal(frame.Payload, &done); err == nil && done.Content != "" && done.MessageID != uuid.Nil {
+		if err := json.Unmarshal(frame.Payload, &done); err == nil && done.MessageID != uuid.Nil {
 			b := r.getOrCreateBuilder(done.MessageID, r.ID)
-			b.SetFinalText(done.Content)
+			if done.Content != "" {
+				b.SetFinalText(done.Content)
+			}
 			if err := b.Persist(context.Background(), r.store, r.initiatorID); err != nil {
-				r.logger.Error("failed to persist DONE final text", zap.Error(err), zap.String("message_id", done.MessageID.String()))
+				r.logger.Error("failed to persist DONE message", zap.Error(err), zap.String("message_id", done.MessageID.String()))
 			}
 		}
 	}
