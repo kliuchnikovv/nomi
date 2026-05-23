@@ -26,6 +26,7 @@ import {
     Pressable,
     Text,
     TextInput,
+    TouchableOpacity,
     View,
     Image,
     ActivityIndicator,
@@ -57,8 +58,15 @@ import { ContextItem, ContextItemCard } from '../components/ContextItemCard';
 import { contextStore } from '../../../services/ContextStore';
 import { LocationPickerModal } from './LocationPickerModal';
 
+type Chip = {
+    label: string;
+    text: string;
+};
+
 type Props = {
     onSend: (text: string) => void;
+    chips?: Chip[];
+    onChipPress?: (text: string) => void;
 };
 
 type LocalAttachment = {
@@ -72,7 +80,7 @@ type LocalAttachment = {
     loading: boolean;
 };
 
-export default function ChatInput(props: Props) {
+export default function ChatInput({ onSend, chips, onChipPress }: Props) {
     const [value, setValue] = useState('');
     const [modelMenuVisible, setModelMenuVisible] = useState(false);
     const [teamMenuVisible, setTeamMenuVisible] = useState(false);
@@ -785,6 +793,30 @@ export default function ChatInput(props: Props) {
                         {selectedModelName}
                     </Text>
                 </Pressable>
+                {chips && chips.length > 0 && onChipPress && (
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ gap: 8 }}
+                    >
+                        {chips.map(chip => (
+                            <TouchableOpacity
+                                key={chip.label}
+                                onPress={() => onChipPress(chip.text)}
+                                activeOpacity={0.7}
+                                style={[
+                                    styles.modelPill,
+                                    { flexShrink: 0 },
+                                ]}
+                            >
+                                <Text style={styles.modelPillText}>
+                                    {chip.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                )}
             </View>
 
             {/* Row 2: Input + action button */}

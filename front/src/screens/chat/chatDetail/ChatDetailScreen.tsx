@@ -12,7 +12,6 @@ import {
     Pressable,
     StyleSheet,
     AppState,
-    TouchableOpacity,
     TouchableWithoutFeedback,
     Keyboard,
 } from 'react-native';
@@ -468,6 +467,12 @@ export function ChatDetailScreen() {
         [],
     );
 
+    const showEmptyChips =
+        isNewSession &&
+        historyMessages.length === 0 &&
+        giftedMessages.length === 0;
+    const showEmptyGreeting = showEmptyChips;
+
     const {
         renderBubble,
         renderFooter,
@@ -489,13 +494,9 @@ export function ChatDetailScreen() {
         attachmentPosition,
         onMessageAction: handleMessageAction,
         inputAnimY,
+        chips: showEmptyChips ? chips : undefined,
+        onChipPress: handleChipPress,
     });
-
-    const showEmptyChips =
-        isNewSession &&
-        historyMessages.length === 0 &&
-        giftedMessages.length === 0;
-    const showEmptyGreeting = showEmptyChips;
 
     const renderInputToolbar = useCallback(
         (props: any) => {
@@ -532,21 +533,29 @@ export function ChatDetailScreen() {
                     },
                 ]}
             >
-                {/* Left: back arrow only */}
+                {/* Left: back button */}
                 <Pressable
                     onPress={() => navigation.goBack()}
-                    style={detailStyles.backBtn}
-                    hitSlop={12}
+                    style={[
+                        detailStyles.backBtn,
+                        { backgroundColor: theme.surface },
+                    ]}
+                    hitSlop={8}
                 >
                     <Ionicons
                         name="chevron-back"
-                        size={28}
-                        color={theme.accent}
+                        size={24}
+                        color={theme.text}
                     />
                 </Pressable>
 
-                {/* Center: title only */}
-                <View style={detailStyles.center}>
+                {/* Center: title pill */}
+                <View
+                    style={[
+                        detailStyles.center,
+                        { backgroundColor: theme.surface },
+                    ]}
+                >
                     <Text
                         style={[detailStyles.title, { color: theme.text }]}
                         numberOfLines={1}
@@ -570,21 +579,30 @@ export function ChatDetailScreen() {
                 <View style={detailStyles.headerRight}>
                     {user?.single_chat_mode && (
                         <Pressable
-                            hitSlop={8}
+                            style={[
+                                detailStyles.pillBtn,
+                                { backgroundColor: theme.surface },
+                            ]}
                             onPress={() => setHistorySheetVisible(true)}
                         >
                             <Ionicons
                                 name="time-outline"
                                 size={22}
-                                color={theme.accent}
+                                color={theme.text}
                             />
                         </Pressable>
                     )}
-                    <Pressable hitSlop={8} onPress={handleNewChat}>
+                    <Pressable
+                        style={[
+                            detailStyles.pillBtn,
+                            { backgroundColor: theme.surface },
+                        ]}
+                        onPress={handleNewChat}
+                    >
                         <Ionicons
                             name="create-outline"
                             size={22}
-                            color={theme.accent}
+                            color={theme.text}
                         />
                     </Pressable>
                 </View>
@@ -648,36 +666,6 @@ export function ChatDetailScreen() {
                                 />
                             </View>
                         </TouchableWithoutFeedback>
-                        {showEmptyChips && chips.length > 0 && (
-                            <View style={detailStyles.chipsRow}>
-                                {chips.map(chip => (
-                                    <TouchableOpacity
-                                        key={chip.label}
-                                        style={[
-                                            detailStyles.chipBtn,
-                                            {
-                                                backgroundColor: theme.surface,
-                                                borderColor:
-                                                    theme.accent + '40',
-                                            },
-                                        ]}
-                                        onPress={() =>
-                                            handleChipPress(chip.text)
-                                        }
-                                        activeOpacity={0.7}
-                                    >
-                                        <Text
-                                            style={[
-                                                detailStyles.chipBtnText,
-                                                { color: theme.textPrimary },
-                                            ]}
-                                        >
-                                            {chip.label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        )}
                         {pendingMessage ? (
                             <View pointerEvents="none" style={{ opacity: 0.4 }}>
                                 {renderInputToolbarBase({})}
@@ -823,23 +811,39 @@ const detailStyles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingBottom: 12,
+        paddingHorizontal: 12,
+        paddingBottom: 8,
+        gap: 8,
         borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    pillBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
     },
     backBtn: {
         width: 44,
-        alignItems: 'flex-start',
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
     },
     center: {
         flex: 1,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 14,
     },
     title: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '600',
-        lineHeight: 20,
+        lineHeight: 18,
     },
     subtitle: {
         fontSize: 11,
@@ -848,9 +852,7 @@ const detailStyles = StyleSheet.create({
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 16,
-        minWidth: 44,
-        justifyContent: 'flex-end',
+        gap: 8,
     },
     historySeparator: {
         alignItems: 'center',
@@ -859,20 +861,4 @@ const detailStyles = StyleSheet.create({
         borderBottomWidth: StyleSheet.hairlineWidth,
     },
     historySeparatorText: { fontSize: 12 },
-    chipsRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-        paddingHorizontal: 12,
-        paddingTop: 8,
-        paddingBottom: 4,
-        justifyContent: 'center',
-    },
-    chipBtn: {
-        paddingHorizontal: 14,
-        paddingVertical: 9,
-        borderRadius: 20,
-        borderWidth: 1,
-    },
-    chipBtnText: { fontSize: 14, fontWeight: '500' },
 });

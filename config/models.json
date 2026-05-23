@@ -12,7 +12,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
-      "supports_vision": false,
+      "supports_vision": true,
       "vision_bridge": "glm-4.6v",
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
@@ -29,7 +29,7 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
-      "supports_vision": false,
+      "supports_vision": true,
       "vision_bridge": "glm-4.6v",
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
@@ -62,7 +62,8 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
-      "supports_vision": false,
+      "supports_vision": true,
+      "vision_bridge": "glm-4.6v",
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -78,7 +79,8 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
-      "supports_vision": false,
+      "supports_vision": true,
+      "vision_bridge": "glm-4.6v",
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
@@ -86,7 +88,7 @@
       "id": "glm-5-turbo",
       "name": "GLM 5 Turbo",
       "provider": "z.ai",
-      "description": "GLM-5-Turbo is a fast variant of GLM-5 optimized for low-latency and multi-step agentic workflows. Supports thinking modes and tool calling. Text-only.",
+      "description": "GLM-5-Turbo is a fast variant of GLM-5 optimized for low-latency and multi-step agentic workflows. Supports thinking modes and tool calling.",
       "context_window": 202752,
       "max_output_tokens": 131072,
       "rpm_limit": 40,
@@ -94,7 +96,8 @@
       "supports_streaming": true,
       "supports_tools": true,
       "supports_thinking": true,
-      "supports_vision": false,
+      "supports_vision": true,
+      "vision_bridge": "glm-4.6v",
       "streaming": true,
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },

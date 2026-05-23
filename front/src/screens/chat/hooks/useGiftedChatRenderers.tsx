@@ -216,6 +216,8 @@ interface GiftedChatRenderersParams {
     onAttachmentPress: (attachment: Attachment) => void;
     attachmentPosition: 'inside' | 'outside';
     onMessageAction?: (messageId: string, action: MessageAction) => void;
+    chips?: { label: string; text: string }[];
+    onChipPress?: (text: string) => void;
 }
 
 export function useGiftedChatRenderers({
@@ -229,6 +231,8 @@ export function useGiftedChatRenderers({
     attachmentPosition,
     onMessageAction,
     inputAnimY,
+    chips,
+    onChipPress,
 }: GiftedChatRenderersParams) {
     const { width: windowWidth } = useWindowDimensions();
     const chatTheme = useMemo(() => createChatTheme(theme), [theme]);
@@ -410,7 +414,11 @@ export function useGiftedChatRenderers({
                             isRateLimited ? handleChangeModel : undefined
                         }
                     />
-                    <ChatInput onSend={onSendRef.current} />
+                    <ChatInput
+                        onSend={onSendRef.current}
+                        chips={chips}
+                        onChipPress={onChipPress}
+                    />
                 </ReAnimated.View>
             );
         },
@@ -425,6 +433,8 @@ export function useGiftedChatRenderers({
             generationStatus,
             theme,
             inputToolbarAnimStyle,
+            chips,
+            onChipPress,
         ],
     );
 

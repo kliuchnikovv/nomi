@@ -1603,11 +1603,7 @@ class RedisSession:
 
         agent_input = self._build_agent_input(text)
 
-        if attachments and self._model_supports_vision():
-            images = self._process_attachments(attachments)
-            if images:
-                kwargs["images"] = images
-        elif attachments:
+        if attachments:
             bridge_model = self._get_vision_bridge_model()
             if bridge_model:
                 descriptions = await self._vision_bridge_describe_images(attachments, bridge_model)
@@ -1618,6 +1614,10 @@ class RedisSession:
                         len(attachments),
                         bridge_model,
                     )
+            elif self._model_supports_vision():
+                images = self._process_attachments(attachments)
+                if images:
+                    kwargs["images"] = images
             else:
                 logger.info(
                     "[RedisSession] Model %s does not support vision; skipping %d attachment(s)",
