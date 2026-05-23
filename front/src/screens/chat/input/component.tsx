@@ -68,6 +68,7 @@ type LocalAttachment = {
     mimeType: string;
     file_type?: string;
     name: string;
+    size?: number;
     loading: boolean;
 };
 
@@ -229,7 +230,12 @@ export default function ChatInput(props: Props) {
             setAttachments(prev =>
                 prev.map(a =>
                     a.id === tempId
-                        ? { ...a, id: uploaded.id, loading: false }
+                        ? {
+                              ...a,
+                              id: uploaded.id,
+                              size: uploaded.size,
+                              loading: false,
+                          }
                         : a,
                 ),
             );
@@ -656,122 +662,139 @@ export default function ChatInput(props: Props) {
 
     return (
         <View style={styles.container}>
-            <View style={[styles.inputWrapper, { paddingBottom: 12 }]}>
-                {/* Context Items Preview */}
-                {contextItems.length > 0 && (
-                    <ScrollView
-                        horizontal
-                        style={{ padding: 8, maxHeight: 100 }}
-                        contentContainerStyle={{ gap: 8 }}
-                    >
-                        {contextItems.map(item => (
-                            <View key={item.id} style={{ width: 230 }}>
-                                <ContextItemCard
-                                    item={item}
-                                    onRemove={removeContextItem}
-                                />
-                            </View>
-                        ))}
-                    </ScrollView>
-                )}
+            {/* Context Items Preview */}
+            {contextItems.length > 0 && (
+                <ScrollView
+                    horizontal
+                    style={{ paddingBottom: 8, maxHeight: 100 }}
+                    contentContainerStyle={{ gap: 8 }}
+                >
+                    {contextItems.map(item => (
+                        <View key={item.id} style={{ width: 230 }}>
+                            <ContextItemCard
+                                item={item}
+                                onRemove={removeContextItem}
+                            />
+                        </View>
+                    ))}
+                </ScrollView>
+            )}
 
-                {/* Attachments Preview */}
-                {attachments.length > 0 && (
-                    <ScrollView
-                        horizontal
-                        style={{
-                            flexDirection: 'row',
-                            padding: 8,
-                            maxHeight: 100,
-                        }}
-                        contentContainerStyle={{ gap: 8 }}
-                    >
-                        {attachments.map(att => (
-                            <View
-                                key={att.id}
-                                style={{
-                                    width: 80,
-                                    height: 80,
-                                    borderRadius: 8,
-                                    overflow: 'hidden',
-                                    position: 'relative',
-                                    backgroundColor: theme.surface,
-                                }}
-                            >
-                                {att.type === 'image' ? (
-                                    <Image
-                                        source={{ uri: att.uri }}
-                                        style={{
-                                            width: '100%',
-                                            height: '100%',
-                                        }}
-                                    />
-                                ) : (
-                                    <View
-                                        style={{
-                                            flex: 1,
-                                            justifyContent: 'center',
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <AttachmentIcon
-                                            width={24}
-                                            height={24}
-                                            color={theme.text}
-                                        />
-                                        <Text
-                                            numberOfLines={1}
-                                            style={{
-                                                fontSize: 10,
-                                                color: theme.text,
-                                                paddingHorizontal: 2,
-                                            }}
-                                        >
-                                            {att.name}
-                                        </Text>
-                                    </View>
-                                )}
-                                {att.loading && (
-                                    <View
-                                        style={{
-                                            ...StyleSheet.absoluteFillObject,
-                                            backgroundColor: 'rgba(0,0,0,0.3)',
-                                            justifyContent: 'center',
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <ActivityIndicator color="#fff" />
-                                    </View>
-                                )}
-                                <Pressable
-                                    onPress={() => removeAttachment(att.id)}
+            {/* Attachments Preview */}
+            {attachments.length > 0 && (
+                <ScrollView
+                    horizontal
+                    style={{ paddingBottom: 8, maxHeight: 100 }}
+                    contentContainerStyle={{ gap: 8 }}
+                >
+                    {attachments.map(att => (
+                        <View
+                            key={att.id}
+                            style={{
+                                width: 80,
+                                height: 80,
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                position: 'relative',
+                                backgroundColor: theme.surface,
+                            }}
+                        >
+                            {att.type === 'image' ? (
+                                <Image
+                                    source={{ uri: att.uri }}
+                                    style={{ width: '100%', height: '100%' }}
+                                />
+                            ) : (
+                                <View
                                     style={{
-                                        position: 'absolute',
-                                        top: 2,
-                                        right: 2,
-                                        backgroundColor: 'rgba(0,0,0,0.5)',
-                                        borderRadius: 10,
-                                        padding: 2,
+                                        flex: 1,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
                                     }}
                                 >
-                                    <XmarkCircle
-                                        width={16}
-                                        height={16}
-                                        color="#fff"
+                                    <AttachmentIcon
+                                        width={24}
+                                        height={24}
+                                        color={theme.text}
                                     />
-                                </Pressable>
-                            </View>
-                        ))}
-                    </ScrollView>
-                )}
+                                    <Text
+                                        numberOfLines={1}
+                                        style={{
+                                            fontSize: 10,
+                                            color: theme.text,
+                                            paddingHorizontal: 2,
+                                        }}
+                                    >
+                                        {att.name}
+                                    </Text>
+                                </View>
+                            )}
+                            {att.loading && (
+                                <View
+                                    style={{
+                                        ...StyleSheet.absoluteFillObject,
+                                        backgroundColor: 'rgba(0,0,0,0.3)',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                    }}
+                                >
+                                    <ActivityIndicator color="#fff" />
+                                </View>
+                            )}
+                            <Pressable
+                                onPress={() => removeAttachment(att.id)}
+                                style={{
+                                    position: 'absolute',
+                                    top: 2,
+                                    right: 2,
+                                    backgroundColor: 'rgba(0,0,0,0.5)',
+                                    borderRadius: 10,
+                                    padding: 2,
+                                }}
+                            >
+                                <XmarkCircle
+                                    width={16}
+                                    height={16}
+                                    color="#fff"
+                                />
+                            </Pressable>
+                        </View>
+                    ))}
+                </ScrollView>
+            )}
 
-                {/* Top row: Input field */}
+            {/* Row 1: Options */}
+            <View style={styles.optionsRow}>
+                <Pressable
+                    onPress={handlePlusPress}
+                    style={({ pressed }) => [
+                        styles.circleBtn,
+                        pressed && styles.circleBtnPressed,
+                    ]}
+                >
+                    <Plus width={22} height={22} color={theme.text} />
+                </Pressable>
+                <Pressable
+                    onPress={showModelPicker}
+                    style={({ pressed }) => [
+                        styles.modelPill,
+                        pressed && styles.modelPillPressed,
+                    ]}
+                >
+                    <Text style={styles.modelPillText} numberOfLines={1}>
+                        {selectedModelName}
+                    </Text>
+                </Pressable>
+            </View>
+
+            {/* Row 2: Input + action button */}
+            <View style={styles.inputRow}>
                 <TextInput
                     multiline
                     autoCapitalize="sentences"
-                    style={styles.input}
+                    style={styles.inputPill}
                     placeholder="Type a message..."
-                    placeholderTextColor="rgba(192, 202, 245, 0.6)"
+                    placeholderTextColor="rgba(192, 202, 245, 0.5)"
                     value={value}
                     onChangeText={setValue}
                     textAlignVertical="center"
@@ -781,100 +804,60 @@ export default function ChatInput(props: Props) {
                     onBlur={() => Keyboard.dismiss()}
                     keyboardAppearance="dark"
                 />
-
-                {/* Bottom row: Buttons */}
-                <View style={styles.buttonRow}>
-                    <View style={styles.leftActions}>
-                        <Pressable
-                            onPress={handlePlusPress}
-                            style={({ pressed }) => [
-                                styles.iconBtn,
-                                pressed && styles.iconBtnPressed,
-                            ]}
-                        >
-                            <Plus width={24} height={24} color={theme.text} />
-                        </Pressable>
-                        <Pressable
-                            onPress={showModelPicker}
-                            style={({ pressed }) => [
-                                styles.modelButton,
-                                pressed && styles.modelButtonPressed,
-                            ]}
-                        >
-                            <Text
-                                style={styles.modelButtonText}
-                                numberOfLines={1}
-                            >
-                                {selectedModelName}
-                            </Text>
-                        </Pressable>
-                    </View>
-
-                    <View style={styles.rightActions}>
-                        {showMicButton && (
-                            <Pressable
-                                onPress={openVoice}
-                                style={({ pressed }) => [
-                                    styles.sendBtn,
-                                    { backgroundColor: theme.surface },
-                                    pressed && { opacity: 0.7 },
-                                ]}
-                                accessibilityLabel="Voice input"
-                                accessibilityRole="button"
-                            >
-                                <Microphone
-                                    width={20}
-                                    height={20}
-                                    color={theme.accent}
-                                    strokeWidth={2}
-                                />
-                            </Pressable>
-                        )}
-                        {assistantWorking ? (
-                            <Pressable
-                                onPress={stopGeneration}
-                                style={({ pressed }) => [
-                                    styles.sendBtn,
-                                    { backgroundColor: '#e74c3c' },
-                                    pressed && { opacity: 0.7 },
-                                ]}
-                            >
-                                <Square
-                                    width={16}
-                                    height={16}
-                                    color={theme.background}
-                                    fill={theme.background}
-                                />
-                            </Pressable>
+                {assistantWorking ? (
+                    <Pressable
+                        onPress={stopGeneration}
+                        style={({ pressed }) => [
+                            styles.circleBtn,
+                            styles.stopCircle,
+                            pressed && styles.circleBtnPressed,
+                        ]}
+                    >
+                        <Square
+                            width={16}
+                            height={16}
+                            color="#fff"
+                            fill="#fff"
+                        />
+                    </Pressable>
+                ) : showMicButton ? (
+                    <Pressable
+                        onPress={openVoice}
+                        style={({ pressed }) => [
+                            styles.circleBtn,
+                            pressed && styles.circleBtnPressed,
+                        ]}
+                        accessibilityLabel="Voice input"
+                        accessibilityRole="button"
+                    >
+                        <Microphone
+                            width={20}
+                            height={20}
+                            color={theme.accent}
+                            strokeWidth={2}
+                        />
+                    </Pressable>
+                ) : (
+                    <Pressable
+                        onPress={handleSend}
+                        style={({ pressed }) => [
+                            styles.circleBtn,
+                            styles.sendCircle,
+                            isSendDisabled && styles.circleBtnDisabled,
+                            pressed &&
+                                !isSendDisabled &&
+                                !isSubmitting &&
+                                styles.circleBtnPressed,
+                        ]}
+                        disabled={isSendDisabled || isSubmitting}
+                    >
+                        {isSubmitting ? (
+                            <ActivityIndicator size="small" color="#fff" />
                         ) : (
-                            <Pressable
-                                onPress={handleSend}
-                                style={({ pressed }) => [
-                                    styles.sendBtn,
-                                    isSendDisabled && styles.iconBtnDisabled,
-                                    pressed &&
-                                        !isSendDisabled &&
-                                        !isSubmitting &&
-                                        styles.sendBtnPressed,
-                                ]}
-                                disabled={isSendDisabled || isSubmitting}
-                            >
-                                {isSubmitting ? (
-                                    <ActivityIndicator
-                                        size="small"
-                                        color={theme.background}
-                                    />
-                                ) : (
-                                    <ArrowUp
-                                        width={24}
-                                        height={24}
-                                        color={theme.background}
-                                    />
-                                )}
-                            </Pressable>
+                            <ArrowUp width={22} height={22} color="#fff" />
                         )}
-                    </View>
-                </View>
+                    </Pressable>
+                )}
             </View>
 
             <ContextMenu

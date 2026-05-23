@@ -49,22 +49,6 @@
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
     {
-      "id": "glm-5v-turbo",
-      "name": "GLM 5V Turbo",
-      "provider": "z.ai",
-      "description": "GLM-5V-Turbo is the vision-capable model in the GLM-5 family. Accepts images and screenshots as input (e.g. UI designs → code). Supports thinking modes and tool calling.",
-      "context_window": 202752,
-      "max_output_tokens": 131072,
-      "rpm_limit": 30,
-      "rpd_limit": 3000,
-      "supports_streaming": true,
-      "supports_tools": true,
-      "supports_thinking": true,
-      "supports_vision": true,
-      "streaming": true,
-      "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
-    },
-    {
       "id": "gemini-2.5-flash-lite",
       "name": "Gemini 2.5 Flash-Lite",
       "provider": "google",

@@ -546,7 +546,7 @@ export function ChatProvider({
                 id: a.id,
                 file_name: a.name,
                 file_type: a.mimeType,
-                size: 0,
+                size: a.size ?? 0,
                 uri: a.uri,
             }));
 
