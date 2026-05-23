@@ -63,7 +63,7 @@ class GoWSClient:
 
     @property
     def is_connected(self) -> bool:
-        return self._ws is not None and not self._ws.closed
+        return self._ws is not None and self._ws.close_code is None
 
     async def send_frame(self, frame: Frame) -> None:
         """Queue a frame for delivery to Go. Non-blocking."""
