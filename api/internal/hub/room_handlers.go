@@ -232,6 +232,7 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			r.generationTimer.Stop()
 			r.generationTimer = nil
 		}
+		r.flushAllBuilders()
 		// Broadcast stop signal to all clients
 		stopFrame := Frame{
 			ID:        0,
@@ -854,6 +855,18 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 	}
 }
 
+// flushAllBuilders persists all in-progress message builders to the DB.
+// Called on graceful shutdown events (STOP, timeout) so partial responses are saved.
+func (r *Room) flushAllBuilders() {
+	ctx := context.Background()
+	for _, builder := range r.messageBuilders {
+		if err := builder.Persist(ctx, r.store, r.initiatorID); err != nil {
+			r.logger.Error("failed to flush builder", zap.Error(err), zap.String("message_id", builder.ID.String()))
+		}
+	}
+	r.messageBuilders = make(map[uuid.UUID]*MessageBuilder)
+}
+
 func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	// DEBUG: Log all incoming LLM frames
 	r.logger.Info("handleLLMMessage received frame",
@@ -898,6 +911,23 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 			close(client.send)
 			delete(r.clients, client)
 		}
+	}
+
+	// Buffer frame for reconnecting clients (capped at maxReplayBuf).
+	if r.generationInProgress || frame.Operation == MessageOperation {
+		var msgID uuid.UUID
+		if frame.ChatID != uuid.Nil {
+			msgID = frame.ChatID
+		}
+		r.replayMu.Lock()
+		r.replaySeq++
+		entry := replayEntry{seq: r.replaySeq, msgID: msgID, data: b}
+		if len(r.replayBuf) >= maxReplayBuf {
+			r.replayBuf = append(r.replayBuf[1:], entry)
+		} else {
+			r.replayBuf = append(r.replayBuf, entry)
+		}
+		r.replayMu.Unlock()
 	}
 
 	// Forward to User Room if this is a Chat Room

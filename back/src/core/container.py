@@ -35,6 +35,7 @@ class Container:
         self._agent_factory: AgentFactory | None = None
         self._redis_worker = None
         self._knowledge = None
+        self._go_ws = None  # GoWSClient, injected by app lifespan after async connect()
 
     @property
     def db(self) -> PostgresDb | None:
@@ -106,9 +107,15 @@ class Container:
         if self._redis_worker is None:
             from src.server.redis_worker import RedisWorker
 
-            self._redis_worker = RedisWorker(self.agent_factory)
+            self._redis_worker = RedisWorker(self.agent_factory, go_ws=self._go_ws)
             logger.info("[Container] RedisWorker initialized")
         return self._redis_worker
+
+    def set_go_ws(self, go_ws) -> None:
+        """Inject GoWSClient after async connect(). Must be called before redis_worker is first accessed."""
+        self._go_ws = go_ws
+        if self._redis_worker is not None:
+            self._redis_worker.go_ws = go_ws
 
     async def close(self):
         """Cleanup resources."""

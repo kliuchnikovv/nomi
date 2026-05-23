@@ -37,20 +37,23 @@ class IOSRemindersClient {
         isCompleted?: boolean,
         dueDateStart?: string,
         dueDateEnd?: string,
-        limit: number = 20
+        limit: number = 20,
     ): Promise<Reminder[]> {
         if (!IOSRemindersManager) {
-            throw new Error('IOSRemindersManager is not available. Make sure iOS native module is properly linked.');
+            throw new Error(
+                'IOSRemindersManager is not available. Make sure iOS native module is properly linked.',
+            );
         }
 
         try {
-            const reminders: Reminder[] = await IOSRemindersManager.getReminders(
-                list || '',
-                isCompleted ?? null,
-                dueDateStart ?? null,
-                dueDateEnd ?? null,
-                limit
-            );
+            const reminders: Reminder[] =
+                await IOSRemindersManager.getReminders(
+                    list || '',
+                    isCompleted ?? null,
+                    dueDateStart ?? null,
+                    dueDateEnd ?? null,
+                    limit,
+                );
             return reminders;
         } catch (error) {
             console.error('[IOSRemindersClient] getReminders error:', error);
@@ -69,13 +72,16 @@ class IOSRemindersClient {
             priority?: number;
             list?: string;
             url?: string;
-        } = {}
+        } = {},
     ): Promise<Reminder> {
         if (!IOSRemindersManager) {
             throw new Error('IOSRemindersManager is not available.');
         }
 
-        const reminder = await IOSRemindersManager.createReminder(title, options);
+        const reminder = await IOSRemindersManager.createReminder(
+            title,
+            options,
+        );
         return reminder;
     }
 
@@ -91,7 +97,7 @@ class IOSRemindersClient {
             isCompleted?: boolean;
             priority?: number;
             url?: string;
-        }
+        },
     ): Promise<Reminder> {
         if (!IOSRemindersManager) {
             throw new Error('IOSRemindersManager is not available.');
@@ -142,29 +148,48 @@ class IOSRemindersClient {
 
         try {
             const now = new Date();
-            const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+            const thirtyDaysLater = new Date(
+                now.getTime() + 30 * 24 * 60 * 60 * 1000,
+            );
 
             const reminders = await this.getReminders(
                 undefined,
                 false,
                 now.toISOString(),
                 thirtyDaysLater.toISOString(),
-                100
+                100,
             );
 
-            const PRIORITY_LABEL: Record<number, string> = { 1: 'HIGH', 5: 'MEDIUM', 9: 'LOW' };
+            const PRIORITY_LABEL: Record<number, string> = {
+                1: 'HIGH',
+                5: 'MEDIUM',
+                9: 'LOW',
+            };
 
-            console.log(`[IOSRemindersClient] Indexing ${reminders.length} reminders:`);
+            console.log(
+                `[IOSRemindersClient] Indexing ${reminders.length} reminders:`,
+            );
             for (const reminder of reminders) {
-                const priorityLabel = PRIORITY_LABEL[reminder.priority] ?? (reminder.priority > 0 ? `p${reminder.priority}` : 'none');
-                const dueStr = reminder.dueDate ? new Date(reminder.dueDate).toLocaleString() : 'no due date';
+                const priorityLabel =
+                    PRIORITY_LABEL[reminder.priority] ??
+                    (reminder.priority > 0 ? `p${reminder.priority}` : 'none');
+                const dueStr = reminder.dueDate
+                    ? new Date(reminder.dueDate).toLocaleString()
+                    : 'no due date';
                 console.log(
-                    `[IOSRemindersClient]   • [${priorityLabel}] "${reminder.title}" — due: ${dueStr}${reminder.list ? ` (${reminder.list})` : ''}`,
+                    `[IOSRemindersClient]   • [${priorityLabel}] "${
+                        reminder.title
+                    }" — due: ${dueStr}${
+                        reminder.list ? ` (${reminder.list})` : ''
+                    }`,
                 );
 
                 let content = `Reminder: ${reminder.title}.`;
                 if (reminder.notes) content += ` Notes: ${reminder.notes}.`;
-                if (reminder.dueDate) content += ` Due: ${new Date(reminder.dueDate).toLocaleString()}.`;
+                if (reminder.dueDate)
+                    content += ` Due: ${new Date(
+                        reminder.dueDate,
+                    ).toLocaleString()}.`;
                 if (reminder.list) content += ` List: ${reminder.list}.`;
 
                 await ragApi.index({
@@ -179,7 +204,9 @@ class IOSRemindersClient {
                 });
             }
 
-            console.log(`[IOSRemindersClient] Indexed ${reminders.length} reminders for RAG`);
+            console.log(
+                `[IOSRemindersClient] Indexed ${reminders.length} reminders for RAG`,
+            );
         } catch (error) {
             console.error('[IOSRemindersClient] indexForRAG error:', error);
         }
@@ -195,16 +222,22 @@ class IOSRemindersClient {
     /**
      * Check current permission status for Reminders access
      */
-    async checkPermissionStatus(): Promise<'authorized' | 'denied' | 'notDetermined'> {
+    async checkPermissionStatus(): Promise<
+        'authorized' | 'denied' | 'notDetermined'
+    > {
         if (!IOSRemindersManager) {
             throw new Error('IOSRemindersManager is not available.');
         }
 
         try {
-            const status: string = await IOSRemindersManager.checkPermissionStatus();
+            const status: string =
+                await IOSRemindersManager.checkPermissionStatus();
             return status as 'authorized' | 'denied' | 'notDetermined';
         } catch (error) {
-            console.error('[IOSRemindersClient] checkPermissionStatus error:', error);
+            console.error(
+                '[IOSRemindersClient] checkPermissionStatus error:',
+                error,
+            );
             throw error;
         }
     }
@@ -219,10 +252,14 @@ class IOSRemindersClient {
         }
 
         try {
-            const granted: boolean = await IOSRemindersManager.requestPermission();
+            const granted: boolean =
+                await IOSRemindersManager.requestPermission();
             return granted;
         } catch (error) {
-            console.error('[IOSRemindersClient] requestPermission error:', error);
+            console.error(
+                '[IOSRemindersClient] requestPermission error:',
+                error,
+            );
             throw error;
         }
     }

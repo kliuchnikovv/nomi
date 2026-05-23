@@ -9,14 +9,22 @@ export interface MainContextType {
     activeChat: Chat | null;
     getChats: (options?: GetChatsOptions) => Promise<void>;
     createNewChat: () => void;
-    createNewChatWithMode: (mode: 'agent' | 'team', teamId: string | null, initialMessage?: string) => void;
+    createNewChatWithMode: (
+        mode: 'agent' | 'team',
+        teamId: string | null,
+        initialMessage?: string,
+    ) => void;
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
     setChatIcon: (chatId: string, icon: string) => Promise<void>;
     deleteChat: (chatId: string) => void;
     setActiveChatID: (id: string | null) => void;
     sidebarFilter: string;
     setSidebarFilter: (filter: string) => void;
-    pendingChatMode?: { mode: 'agent' | 'team'; teamId: string | null; initialMessage?: string } | null;
+    pendingChatMode?: {
+        mode: 'agent' | 'team';
+        teamId: string | null;
+        initialMessage?: string;
+    } | null;
     clearPendingChatMode?: () => void;
     activePluginView: string | null;
     setActivePluginView: (view: string | null) => void;
@@ -31,38 +39,38 @@ export interface MainContextType {
 }
 
 export type Chat = {
-    id: string
-    model: string
-    title: string
-    mode: 'agent' | 'team'     // 'agent' or 'team'
-    team_id: string | null     // null for agent mode
-    created_at: number
-    updated_at: number
-    archived_at: number | null
-    deleted_at: number | null
-    project_id?: string | null
-    messages: Message[]
-    icon?: string
-}
+    id: string;
+    model: string;
+    title: string;
+    mode: 'agent' | 'team'; // 'agent' or 'team'
+    team_id: string | null; // null for agent mode
+    created_at: number;
+    updated_at: number;
+    archived_at: number | null;
+    deleted_at: number | null;
+    project_id?: string | null;
+    messages: Message[];
+    icon?: string;
+};
 
 export type Attachment = {
-    id: string
-    file_name: string
-    file_type: string
-    size: number
-    content?: string
-    uri?: string
-}
+    id: string;
+    file_name: string;
+    file_type: string;
+    size: number;
+    content?: string;
+    uri?: string;
+};
 
 export type MessageAction = {
-    label: string
-    command: string
-    url?: string | null
-    route_url?: string | null
-    prompt?: string | null
-    agent?: string
-    why?: string
-}
+    label: string;
+    command: string;
+    url?: string | null;
+    route_url?: string | null;
+    prompt?: string | null;
+    agent?: string;
+    why?: string;
+};
 
 // Content part types for inline tool call rendering
 export type TextPart = {
@@ -83,43 +91,43 @@ export type ReasoningPart = {
 export type ContentPart = TextPart | ToolCallPart | ReasoningPart;
 
 export type Message = {
-    id: string
-    chat_id: string
-    sender: string
-    role: string
-    text: string
-    agent_id?: string // For multi-agent teams
-    created_at: number
-    actions?: MessageAction[]
-    importance?: string
-    metadata?: Record<string, any>
-    tool_calls?: any[]
-    reasoning_steps?: string[]  // Reasoning/thinking content
-    content_parts?: ContentPart[] // For inline tool call rendering
-    model?: string
-    attachments?: Attachment[]
-    context_items?: any[] // Context items (emails, documents, etc.)
+    id: string;
+    chat_id: string;
+    sender: string;
+    role: string;
+    text: string;
+    agent_id?: string; // For multi-agent teams
+    created_at: number;
+    actions?: MessageAction[];
+    importance?: string;
+    metadata?: Record<string, any>;
+    tool_calls?: any[];
+    reasoning_steps?: string[]; // Reasoning/thinking content
+    content_parts?: ContentPart[]; // For inline tool call rendering
+    model?: string;
+    attachments?: Attachment[];
+    context_items?: any[]; // Context items (emails, documents, etc.)
     /** Last processed stream chunk index (ix); used for dedup when same frame arrives from multiple channels. */
-    _stream_ix?: number
-}
+    _stream_ix?: number;
+};
 
 export type Project = {
-    id: string
-    name: string
-    description: string
-    icon: string
-    chat_count: number
-    created_at: string
-    updated_at: string
-}
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    chat_count: number;
+    created_at: string;
+    updated_at: string;
+};
 
 export type Frame = {
-    id: number
-    chat_id: string
-    timestamp: number
-    channel: string
-    kind: string
-    op: string
-    payload: any
-    error: any
-}
+    id: number;
+    chat_id: string;
+    timestamp: number;
+    channel: string;
+    kind: string;
+    op: string;
+    payload: any;
+    error: any;
+};

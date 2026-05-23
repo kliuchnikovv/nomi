@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class RedisWorker:
-    def __init__(self, agent_factory: AgentFactory):
+    def __init__(self, agent_factory: AgentFactory, go_ws: Any = None):
         self.agent_factory = agent_factory
+        self.go_ws = go_ws  # GoWSClient; None → Redis-only delivery
         self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         self.redis: redis.Redis | None = None
         self.pubsub: Any | None = None
@@ -232,6 +233,7 @@ class RedisWorker:
                 user_id=user_id,
                 chat_id=chat_id,
                 redis_worker=self,
+                go_ws=self.go_ws,
             )
 
             # Create new task

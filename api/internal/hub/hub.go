@@ -17,8 +17,10 @@ import (
 )
 
 type Hub struct {
-	rooms map[uuid.UUID]*Room
-	mu    sync.RWMutex
+	rooms      map[uuid.UUID]*Room
+	userRooms  map[uuid.UUID][]*Room // secondary index: initiatorID → rooms
+	mu         sync.RWMutex
+	workerPool *WorkerPool
 
 	unregister chan *Room
 
@@ -64,6 +66,8 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string, crypt
 
 	h := &Hub{
 		rooms:      make(map[uuid.UUID]*Room),
+		userRooms:  make(map[uuid.UUID][]*Room),
+		workerPool: NewWorkerPool(logger),
 		unregister: make(chan *Room),
 		store:      store,
 		logger:     logger.With(zap.String("component", "hub")),
@@ -87,11 +91,22 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string, crypt
 const channelClientToolResultPattern = "chat:client_tool_result:%s"
 
 func (h *Hub) Run() {
-	// Periodic cleanup or metrics?
 	for room := range h.unregister {
 		h.mu.Lock()
 		if _, ok := h.rooms[room.ID]; ok {
 			delete(h.rooms, room.ID)
+			// Remove from userRooms index
+			uid := room.initiatorID
+			rooms := h.userRooms[uid]
+			for i, r := range rooms {
+				if r.ID == room.ID {
+					h.userRooms[uid] = append(rooms[:i], rooms[i+1:]...)
+					break
+				}
+			}
+			if len(h.userRooms[uid]) == 0 {
+				delete(h.userRooms, uid)
+			}
 			h.logger.Info("room closed", zap.String("room_id", room.ID.String()))
 		}
 		h.mu.Unlock()
@@ -192,6 +207,7 @@ func (h *Hub) GetOrCreateRoom(roomID uuid.UUID, roomType RoomType, userID uuid.U
 	if !ok {
 		room = NewRoom(h, roomID, roomType, userID, h.store, h.logger, h.llmBaseURL, mode, command, timezone)
 		h.rooms[roomID] = room
+		h.userRooms[userID] = append(h.userRooms[userID], room)
 		go room.Run()
 		h.logger.Info("room created", zap.String("room_id", roomID.String()), zap.String("type", string(roomType)), zap.String("mode", mode), zap.String("timezone", timezone))
 	}
@@ -205,23 +221,21 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, frame Frame) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	h.logger.Info("broadcasting to user via redis", zap.String("user_id", userID.String()), zap.Int("total_rooms", len(h.rooms)))
+	rooms := h.userRooms[userID]
+	h.logger.Info("broadcasting to user via redis", zap.String("user_id", userID.String()), zap.Int("user_rooms", len(rooms)))
 
 	found := 0
-	for _, room := range h.rooms {
-		if room.initiatorID != userID {
-			continue
-		}
+	for _, room := range rooms {
 		// Stream chunks (message/data) go only to the chat room for this chat.
 		// User room gets done, signal, error etc. so NotificationContext still receives task updates.
 		if room.Type == RoomTypeUser {
 			if frame.Operation == MessageOperation && frame.Kind == TokenKind {
-				continue // do not send stream chunks to user channel — prevents duplicate addMessage on front
+				continue
 			}
 		}
 		if room.Type == RoomTypeChat {
 			if frame.ChatID != uuid.Nil && frame.ChatID != room.ID {
-				continue // send only to the room that matches this chat
+				continue
 			}
 		}
 		h.logger.Info("found matching room for user", zap.String("room_id", room.ID.String()))
@@ -266,4 +280,9 @@ func (h *Hub) ServeWs(w http.ResponseWriter, r *http.Request, roomID uuid.UUID, 
 // Redis returns the Redis client for use by other components
 func (h *Hub) Redis() *redis.Client {
 	return h.redis
+}
+
+// WorkerPool returns the pool of connected Python workers.
+func (h *Hub) WorkerPool() *WorkerPool {
+	return h.workerPool
 }

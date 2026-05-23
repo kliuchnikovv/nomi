@@ -6,39 +6,38 @@ import React, {
     useState,
 } from 'react';
 import {
-    View,
+    Platform,
+    StyleSheet,
     Text,
     TouchableOpacity,
-    StyleSheet,
-    Platform,
-    Animated,
-    FlatList,
+    View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Spark } from 'iconoir-react-native';
-import Markdown from 'react-native-markdown-display';
 import BottomSheet, {
-    BottomSheetFlatList,
     BottomSheetFooter,
     BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
 import type { BottomSheetFooterProps } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../context/ThemeContext';
-import { ChatMessage, usePlannerChat } from '../hooks/usePlannerChat';
+import { usePlannerChat } from '../hooks/usePlannerChat';
 import { PlanItem } from '../types';
 import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
+import { ChatView } from '../../../components/chat/ChatView';
+import {
+    isAskUserReply,
+    plannerMessageToMessage,
+} from '../../../components/chat/plannerAdapter';
+import { Message, MessageAction } from '../../main/models';
 
 type PlanningLevel = 'quick' | 'standard' | 'full';
 const PLANNER_LEVEL_KEY = 'planner_level';
 
-// Space reserved at the bottom of the FlatList content so the newest
-// message is never hidden behind the absolutely-positioned footer.
+// Space reserved at the bottom of list content so the newest message is
+// never hidden behind the absolutely-positioned BottomSheetFooter.
 const INPUT_BAR_HEIGHT = 56;
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
+const LEVEL_SELECTOR_HEIGHT = 44;
 
 interface Props {
     isOpen: boolean;
@@ -51,11 +50,7 @@ interface Props {
 }
 
 // ---------------------------------------------------------------------------
-// Stable footer — defined OUTSIDE the parent so its identity never changes.
-// Keyboard dismissal was caused by renderFooter changing reference on every
-// keystroke (inputText in deps) → BottomSheet saw a new component type →
-// unmount+remount → TextInput lost focus. Moving input state here and
-// receiving only a stable onSend ref breaks that cycle.
+// Footer content (level selector + input)
 // ---------------------------------------------------------------------------
 
 interface FooterContentProps {
@@ -179,7 +174,11 @@ const ChatFooterContent = React.memo(function ChatFooterContent({
                 activeOpacity={0.7}
                 style={[
                     styles.sendBtn,
-                    { backgroundColor: text.trim() ? '#5856D6' : theme.border },
+                    {
+                        backgroundColor: text.trim()
+                            ? theme.accent
+                            : theme.border,
+                    },
                 ]}
             >
                 <Text style={styles.sendBtnIcon}>↑</Text>
@@ -215,50 +214,18 @@ function buildPlanContext(items: PlanItem[]): string {
         .filter(i => !i.checked && i.text.trim() !== '')
         .map(i => {
             const chips = i.chips
-                .map(c => `[${c.type}:${c.id} ${c.value}${c.source === 'user' ? ' 📌pinned' : ''}]`)
+                .map(
+                    c =>
+                        `[${c.type}:${c.id} ${c.value}${
+                            c.source === 'user' ? ' 📌pinned' : ''
+                        }]`,
+                )
                 .join(' ');
             return `ID:${i.id} ${i.text}${chips ? ' ' + chips : ''}`;
         });
-    return `[Current plan:\n${lines.join('\n')}]\n[Note: chips marked 📌pinned were set by the user — do NOT change or remove them without explicit permission.]`;
-}
-
-// ---------------------------------------------------------------------------
-// ThinkingIndicator
-// ---------------------------------------------------------------------------
-
-function ThinkingIndicator() {
-    const opacity = useRef(new Animated.Value(0.4)).current;
-
-    useEffect(() => {
-        const anim = Animated.loop(
-            Animated.sequence([
-                Animated.timing(opacity, {
-                    toValue: 1,
-                    duration: 600,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(opacity, {
-                    toValue: 0.4,
-                    duration: 600,
-                    useNativeDriver: true,
-                }),
-            ]),
-        );
-        anim.start();
-        return () => anim.stop();
-    }, [opacity]);
-
-    return (
-        <Animated.View
-            style={[
-                styles.bubble,
-                styles.assistantBubble,
-                { opacity, alignSelf: 'flex-start' },
-            ]}
-        >
-            <Text style={styles.thinkingDots}>···</Text>
-        </Animated.View>
-    );
+    return `[Current plan:\n${lines.join(
+        '\n',
+    )}]\n[Note: chips marked 📌pinned were set by the user — do NOT change or remove them without explicit permission.]`;
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +244,6 @@ export function ChatBottomSheet({
     const { theme } = useTheme();
     const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
     const bottomSheetRef = useRef<BottomSheet>(null);
-    const listRef = useRef<FlatList<ChatMessage | 'thinking'>>(null);
     const snapPoints = ['55%', '92%'];
 
     const {
@@ -361,37 +327,48 @@ export function ChatBottomSheet({
         if (!autoSend) autoSentRef.current = false;
     }, [autoSend]);
 
-    // Natural order: oldest → newest; FlatList scrolls to end (bottom = newest)
-    const listData = useMemo(
-        () => [...messages, ...(isThinking ? ['thinking' as const] : [])],
-        [messages, isThinking],
-    );
-
-    // Scroll to bottom helpers
-    const scrollToBottom = useCallback((animated: boolean) => {
-        listRef.current?.scrollToEnd({ animated });
-    }, []);
-
-    // Scroll to bottom whenever new content arrives
-    useEffect(() => {
-        scrollToBottom(true);
-    }, [listData.length, scrollToBottom]);
-
-    // Scroll to bottom (non-animated) when the sheet opens or expands
     const handleSheetChanges = useCallback(
         (index: number) => {
-            if (index === -1) {
-                onClose();
-            } else {
-                setTimeout(() => scrollToBottom(false), 300);
-            }
+            if (index === -1) onClose();
         },
-        [onClose, scrollToBottom],
+        [onClose],
     );
 
-    // ---------------------------------------------------------------------------
-    // Footer — stable reference: only depends on theme (never changes during typing)
-    // ---------------------------------------------------------------------------
+    // Map ChatMessage[] → Message[] for ChatView, filtering empty drafts.
+    const filteredMessages = useMemo(() => {
+        return messages.filter(m => {
+            if (m.role === 'user') return true;
+            const empty = !m.text || m.text.trim().length === 0;
+            const hasOptions = m.askUser && m.askUser.options.length > 0;
+            return !(empty && !hasOptions && !m.isStreaming);
+        });
+    }, [messages]);
+
+    const mappedMessages = useMemo<Message[]>(
+        () => filteredMessages.map(plannerMessageToMessage),
+        [filteredMessages],
+    );
+
+    const streamingIds = useMemo(() => {
+        const set = new Set<string>();
+        for (const m of filteredMessages) if (m.isStreaming) set.add(m.id);
+        return set;
+    }, [filteredMessages]);
+
+    const isStreaming = useCallback(
+        (msg: Message) => streamingIds.has(msg.id),
+        [streamingIds],
+    );
+
+    const handleActionPress = useCallback(
+        async (action: MessageAction) => {
+            if (isAskUserReply(action)) {
+                const reply = action.prompt ?? action.label;
+                replyToAskUser(action.callId, reply);
+            }
+        },
+        [replyToAskUser],
+    );
 
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
@@ -407,55 +384,50 @@ export function ChatBottomSheet({
         [theme, level, setLevel],
     );
 
-    // ---------------------------------------------------------------------------
-    // Render item
-    // ---------------------------------------------------------------------------
-
-    const renderMessage = ({ item }: { item: ChatMessage }) => {
-        const isUser = item.role === 'user';
-        const emptyText = !item.text || item.text.trim().length === 0;
-        const hasOptions = item.askUser && item.askUser.options.length > 0;
-
-        if (!isUser && emptyText && !hasOptions && !item.isStreaming) {
-            return null;
-        }
-
-        const textColor = isUser ? '#FFFFFF' : theme.textPrimary;
-        return (
+    const headerNode = (
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
             <View
-                style={[
-                    styles.bubble,
-                    isUser
-                        ? [styles.userBubble, { backgroundColor: '#5856D6' }]
-                        : [
-                              styles.assistantBubble,
-                              { backgroundColor: theme.surface },
-                          ],
-                ]}
+                style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    flex: 1,
+                }}
             >
-                <Markdown style={markdownStyles(textColor)}>
-                    {item.text + (item.isStreaming ? ' ▍' : '')}
-                </Markdown>
-
-                {item.askUser && item.askUser.options.length > 0 && (
-                    <View style={styles.optionsContainer}>
-                        {item.askUser.options.map(opt => (
-                            <TouchableOpacity
-                                key={opt}
-                                style={styles.optionChip}
-                                onPress={() =>
-                                    replyToAskUser(item.askUser!.callId, opt)
-                                }
-                                activeOpacity={0.75}
-                            >
-                                <Text style={styles.optionText}>{opt}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                )}
+                <Spark width={18} height={18} color={theme.textPrimary} />
+                <Text
+                    style={[styles.headerTitle, { color: theme.textPrimary }]}
+                >
+                    Nomi
+                </Text>
             </View>
-        );
-    };
+            {!isConnected && (
+                <Text
+                    style={[
+                        styles.connectingLabel,
+                        { color: theme.textSecondary },
+                    ]}
+                >
+                    connecting...
+                </Text>
+            )}
+            <TouchableOpacity
+                onPress={onClose}
+                style={styles.closeBtn}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+                <Text
+                    style={[
+                        styles.closeBtnText,
+                        { color: theme.textSecondary },
+                    ]}
+                >
+                    Close
+                </Text>
+            </TouchableOpacity>
+        </View>
+    );
 
     return (
         <BottomSheet
@@ -477,140 +449,46 @@ export function ChatBottomSheet({
             )}
             backgroundStyle={{ backgroundColor: theme.background }}
         >
-            <View style={styles.container}>
-                {/* Header */}
-                <View
-                    style={[styles.header, { borderBottomColor: theme.border }]}
-                >
-                    <View
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 6,
-                            flex: 1,
-                        }}
+            <ChatView
+                listImpl="bottomsheet"
+                messages={mappedMessages}
+                isThinking={isThinking}
+                isStreaming={isStreaming}
+                input={null}
+                loadMore={{ hasMore, onLoadMore: loadMore }}
+                bubbleOptions={{
+                    showToolCalls: false,
+                    showReasoning: false,
+                    showAttachments: false,
+                    showActions: true,
+                    showLocations: false,
+                    showModelLabel: false,
+                    showAgentLabel: false,
+                    maxWidthPct: 80,
+                }}
+                onActionPress={handleActionPress}
+                emptyState={
+                    <Text
+                        style={[
+                            styles.emptyText,
+                            { color: theme.textSecondary },
+                        ]}
                     >
-                        <Spark
-                            width={18}
-                            height={18}
-                            color={theme.textPrimary}
-                        />
-                        <Text
-                            style={[
-                                styles.headerTitle,
-                                { color: theme.textPrimary },
-                            ]}
-                        >
-                            Nomi
-                        </Text>
-                    </View>
-                    {!isConnected && (
-                        <Text
-                            style={[
-                                styles.connectingLabel,
-                                { color: theme.textSecondary },
-                            ]}
-                        >
-                            connecting...
-                        </Text>
-                    )}
-                    <TouchableOpacity
-                        onPress={onClose}
-                        style={styles.closeBtn}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                        <Text
-                            style={[
-                                styles.closeBtnText,
-                                { color: theme.textSecondary },
-                            ]}
-                        >
-                            Close
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Messages */}
-                <BottomSheetFlatList
-                    ref={listRef as any}
-                    data={listData}
-                    keyExtractor={(
-                        item: ChatMessage | 'thinking',
-                        idx: number,
-                    ) =>
-                        item === 'thinking'
-                            ? 'thinking'
-                            : (item as ChatMessage).id ?? String(idx)
-                    }
-                    renderItem={({
-                        item,
-                    }: {
-                        item: ChatMessage | 'thinking';
-                    }) => {
-                        if (item === 'thinking') return <ThinkingIndicator />;
-                        return renderMessage({ item: item as ChatMessage });
-                    }}
-                    style={styles.messagesList}
-                    contentContainerStyle={styles.messageListContent}
-                    keyboardShouldPersistTaps="handled"
-                    onLayout={() => scrollToBottom(false)}
-                    onContentSizeChange={() => scrollToBottom(false)}
-                    ListHeaderComponent={
-                        hasMore ? (
-                            <TouchableOpacity
-                                onPress={loadMore}
-                                style={styles.loadMoreBtn}
-                                activeOpacity={0.7}
-                            >
-                                <Text
-                                    style={[
-                                        styles.loadMoreText,
-                                        { color: theme.textSecondary },
-                                    ]}
-                                >
-                                    Load more
-                                </Text>
-                            </TouchableOpacity>
-                        ) : null
-                    }
-                    ListEmptyComponent={
-                        <Text
-                            style={[
-                                styles.emptyText,
-                                { color: theme.textSecondary },
-                            ]}
-                        >
-                            Ask Nomi about this day…
-                        </Text>
-                    }
-                />
-            </View>
+                        Ask Nomi about this day…
+                    </Text>
+                }
+                header={headerNode}
+                contentContainerStyle={{
+                    paddingTop: 12,
+                    paddingHorizontal: 12,
+                    paddingBottom:
+                        INPUT_BAR_HEIGHT + LEVEL_SELECTOR_HEIGHT + 12,
+                    gap: 8,
+                    flexGrow: 1,
+                }}
+            />
         </BottomSheet>
     );
-}
-
-// ---------------------------------------------------------------------------
-// Markdown styles
-// ---------------------------------------------------------------------------
-
-function markdownStyles(color: string) {
-    return {
-        body: { color, fontSize: 15, lineHeight: 22 },
-        paragraph: { marginTop: 0, marginBottom: 4 },
-        bullet_list: { marginTop: 0, marginBottom: 4 },
-        ordered_list: { marginTop: 0, marginBottom: 4 },
-        list_item: { marginBottom: 2 },
-        bullet_list_content: { flex: 1, flexShrink: 1 },
-        ordered_list_content: { flex: 1, flexShrink: 1 },
-        strong: { fontWeight: '700' as const, color },
-        em: { fontStyle: 'italic' as const, color },
-        code_inline: {
-            fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-            fontSize: 13,
-            color,
-        },
-    };
 }
 
 // ---------------------------------------------------------------------------
@@ -628,12 +506,6 @@ const styles = StyleSheet.create({
         height: 4,
         borderRadius: 2,
         backgroundColor: '#8E8E93',
-    },
-    container: {
-        flex: 1,
-    },
-    messagesList: {
-        flex: 1,
     },
     header: {
         flexDirection: 'row',
@@ -656,61 +528,6 @@ const styles = StyleSheet.create({
     },
     closeBtnText: {
         fontSize: 14,
-    },
-    messageListContent: {
-        paddingTop: 12,
-        paddingHorizontal: 12,
-        // Extra bottom padding reserves space for the absolutely-positioned
-        // footer so the last message is never hidden behind the input bar.
-        paddingBottom: INPUT_BAR_HEIGHT + 12,
-        gap: 8,
-        flexGrow: 1,
-    },
-    bubble: {
-        maxWidth: '80%',
-        borderRadius: 16,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        marginBottom: 6,
-    },
-    userBubble: {
-        alignSelf: 'flex-end',
-        borderBottomRightRadius: 4,
-    },
-    assistantBubble: {
-        alignSelf: 'flex-start',
-        borderBottomLeftRadius: 4,
-    },
-    thinkingDots: {
-        fontSize: 18,
-        color: '#8E8E93',
-        letterSpacing: 2,
-    },
-    optionsContainer: {
-        marginTop: 8,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 6,
-    },
-    optionChip: {
-        backgroundColor: '#EEF0FF',
-        borderRadius: 12,
-        paddingVertical: 5,
-        paddingHorizontal: 10,
-        borderWidth: 1,
-        borderColor: '#5856D6',
-    },
-    optionText: { color: '#5856D6', fontSize: 13, fontWeight: '500' },
-    loadMoreBtn: {
-        alignSelf: 'center',
-        paddingVertical: 6,
-        paddingHorizontal: 16,
-        marginBottom: 8,
-        borderRadius: 14,
-    },
-    loadMoreText: {
-        fontSize: 13,
-        fontWeight: '500',
     },
     emptyText: {
         textAlign: 'center',

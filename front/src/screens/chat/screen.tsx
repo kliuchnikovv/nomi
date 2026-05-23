@@ -1,4 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    memo,
+} from 'react';
 import {
     View,
     Keyboard,
@@ -163,7 +170,14 @@ export default function ChatScreen({
 
     // Track last message ID for optimization
     const lastMessageIdRef = React.useRef<string>('');
-    const extraDataRef = useRef<{ lastMessageId: string; lastMessageUpdated: number; refreshTrigger: number } | undefined>(undefined);
+    const extraDataRef = useRef<
+        | {
+              lastMessageId: string;
+              lastMessageUpdated: number;
+              refreshTrigger: number;
+          }
+        | undefined
+    >(undefined);
     const extraData = useMemo(() => {
         const lastMsg = messages[0];
         const lastId = lastMsg?.id || '';
@@ -172,7 +186,9 @@ export default function ChatScreen({
         const next = {
             lastMessageId: lastId,
             lastMessageUpdated: lastMsg?.created_at ?? 0,
-            refreshTrigger: hasChanged ? Date.now() : (extraDataRef.current?.refreshTrigger ?? 0),
+            refreshTrigger: hasChanged
+                ? Date.now()
+                : extraDataRef.current?.refreshTrigger ?? 0,
         };
         extraDataRef.current = next;
         return next;

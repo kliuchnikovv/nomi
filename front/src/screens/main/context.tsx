@@ -9,13 +9,12 @@ import React, {
 
 import { Alert, Platform, ToastAndroid } from 'react-native';
 import { useAuth } from '../auth/context.tsx';
-import { apiClient, chatsApi } from '../../apiClient.ts'
-import { Chat, GetChatsOptions, MainContextType } from "./models";
+import { apiClient, chatsApi } from '../../apiClient.ts';
+import { Chat, GetChatsOptions, MainContextType } from './models';
 import { getApiUrl } from '../../config.ts';
 import { useChatStore } from '../../store/chatStore';
 
 export const emptyChatID = '00000000-0000-0000-0000-000000000000';
-
 
 const MainContext = createContext<MainContextType | undefined>(undefined);
 
@@ -32,19 +31,21 @@ export function MainProvider({ children }: { children: ReactNode }) {
     const [chatsLoading, setChatsLoading] = useState(false);
     const [activeChatID, setActiveChatID] = useState<string | null>(null);
     const [sidebarFilter, setSidebarFilter] = useState<string>('agent');
-    const [activePluginView, setActivePluginView] = useState<string | null>(null);
-    const [activePluginIntegrationId, setActivePluginIntegrationId] = useState<string | null>(null);
+    const [activePluginView, setActivePluginView] = useState<string | null>(
+        null,
+    );
+    const [activePluginIntegrationId, setActivePluginIntegrationId] = useState<
+        string | null
+    >(null);
     const [rightSidebarVisible, setRightSidebarVisible] = useState(false);
     const [isNewSession, setIsNewSession] = useState(false);
 
     const { isAuthenticated, user } = useAuth();
 
-
     const activeChat = useMemo(
         () => chats.find(c => c.id === activeChatID) ?? null,
         [chats, activeChatID],
     );
-
 
     // const API_URL = 'https://genie.com';
 
@@ -59,14 +60,17 @@ export function MainProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!isAuthenticated || !user?.single_chat_mode) return;
 
-        chatsApi.getPersistentChat()
+        chatsApi
+            .getPersistentChat()
             .then(persistentChat => {
                 // Always start with an empty state on app launch.
                 // Previous session is accessible via the history button.
                 setIsNewSession(true);
                 if (persistentChat) {
                     setChats(prev => {
-                        const exists = prev.some(c => c.id === persistentChat.id);
+                        const exists = prev.some(
+                            c => c.id === persistentChat.id,
+                        );
                         return exists ? prev : [persistentChat, ...prev];
                     });
                 }
@@ -75,16 +79,21 @@ export function MainProvider({ children }: { children: ReactNode }) {
     }, [isAuthenticated, user?.single_chat_mode]);
 
     function rebindPlaceholderChat(newChatId: string) {
-        setChats(prev => prev.map(c => {
-            if (c.id === emptyChatID) {
-                return {
-                    ...c,
-                    id: newChatId,
-                    messages: (c.messages || []).map(m => ({ ...m, chat_id: newChatId })),
-                };
-            }
-            return c;
-        }));
+        setChats(prev =>
+            prev.map(c => {
+                if (c.id === emptyChatID) {
+                    return {
+                        ...c,
+                        id: newChatId,
+                        messages: (c.messages || []).map(m => ({
+                            ...m,
+                            chat_id: newChatId,
+                        })),
+                    };
+                }
+                return c;
+            }),
+        );
         setActiveChatID(newChatId);
     }
 
@@ -92,8 +101,8 @@ export function MainProvider({ children }: { children: ReactNode }) {
         const { preserveActiveChat } = options;
         setChatsLoading(true);
         try {
-            console.log(`${getApiUrl()}/chats`)
-            const data = await apiClient.get<Chat[]>(`${getApiUrl()}/chats`)
+            console.log(`${getApiUrl()}/chats`);
+            const data = await apiClient.get<Chat[]>(`${getApiUrl()}/chats`);
             if (!data) {
                 return;
             }
@@ -112,7 +121,9 @@ export function MainProvider({ children }: { children: ReactNode }) {
             }
 
             setActiveChatID(prev => {
-                const stillExists = prev ? data.some(chat => chat.id === prev) : false;
+                const stillExists = prev
+                    ? data.some(chat => chat.id === prev)
+                    : false;
 
                 // If preserveActiveChat flag is set, preserve the current state
                 if (preserveActiveChat && prev) {
@@ -130,7 +141,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
                 return stillExists ? prev : emptyChatID;
             });
         } catch (error) {
-            alertError(`Can't get chats: ${error}`)
+            alertError(`Can't get chats: ${error}`);
             console.error(`Can't get chats: ${error}`);
             return;
         } finally {
@@ -232,9 +243,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
     async function deleteChat(chatId: string) {
         try {
-            await apiClient.delete<void>(
-                `${getApiUrl()}/chats/${chatId}`
-            )
+            await apiClient.delete<void>(`${getApiUrl()}/chats/${chatId}`);
 
             if (activeChatID === chatId) {
                 setActiveChatID(chats.find(c => c.id !== chatId)?.id || null);
@@ -249,10 +258,9 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
     async function renameChat(chatId: string, newTitle: string) {
         try {
-            await apiClient.put<void>(
-                `${getApiUrl()}/chats/${chatId}`,
-                { title: newTitle }
-            );
+            await apiClient.put<void>(`${getApiUrl()}/chats/${chatId}`, {
+                title: newTitle,
+            });
             await getChats({ preserveActiveChat: true });
         } catch (error) {
             alertError(`Failed to rename chat: ${error}`);
@@ -262,10 +270,9 @@ export function MainProvider({ children }: { children: ReactNode }) {
 
     async function setChatIcon(chatId: string, icon: string) {
         try {
-            await apiClient.put<void>(
-                `${getApiUrl()}/chats/${chatId}`,
-                { icon }
-            );
+            await apiClient.put<void>(`${getApiUrl()}/chats/${chatId}`, {
+                icon,
+            });
             await getChats({ preserveActiveChat: true });
         } catch (error) {
             console.error('Failed to set chat icon:', error);
@@ -286,7 +293,11 @@ export function MainProvider({ children }: { children: ReactNode }) {
         }
 
         // Use current filter as the default mode/team for the new chat
-        if (sidebarFilter === 'all' || sidebarFilter === 'agent' || sidebarFilter === 'planner') {
+        if (
+            sidebarFilter === 'all' ||
+            sidebarFilter === 'agent' ||
+            sidebarFilter === 'planner'
+        ) {
             setPendingChatMode({ mode: 'agent', teamId: null });
         } else {
             setPendingChatMode({ mode: 'team', teamId: sidebarFilter });
@@ -296,9 +307,17 @@ export function MainProvider({ children }: { children: ReactNode }) {
     }
 
     // State to store pending mode/team for new chat
-    const [pendingChatMode, setPendingChatMode] = useState<{ mode: 'agent' | 'team'; teamId: string | null; initialMessage?: string } | null>(null);
+    const [pendingChatMode, setPendingChatMode] = useState<{
+        mode: 'agent' | 'team';
+        teamId: string | null;
+        initialMessage?: string;
+    } | null>(null);
 
-    function createNewChatWithMode(mode: 'agent' | 'team', teamId: string | null, initialMessage?: string) {
+    function createNewChatWithMode(
+        mode: 'agent' | 'team',
+        teamId: string | null,
+        initialMessage?: string,
+    ) {
         setPendingChatMode({ mode, teamId, initialMessage });
         setActiveChatID(emptyChatID);
     }
@@ -345,11 +364,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <MainContext.Provider
-            value={value}
-        >
-            {children}
-        </MainContext.Provider>
+        <MainContext.Provider value={value}>{children}</MainContext.Provider>
     );
 }
 
@@ -358,7 +373,9 @@ function alertError(message: string) {
         Alert.alert('Error', message);
     } catch {
         if (Platform.OS === 'android') {
-            try { ToastAndroid.show(message, ToastAndroid.LONG); } catch { }
+            try {
+                ToastAndroid.show(message, ToastAndroid.LONG);
+            } catch {}
         }
     }
 }

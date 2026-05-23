@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, View } from 'react-native';
-import { styles } from './styles'
+import { styles } from './styles';
 
 import ChatScreen from '../chat/screen';
 import SettingsModal from '../settings/screen';
@@ -11,7 +11,15 @@ import { AskUserProvider } from '../chat/AskUserContext';
 import { getClientPlugin } from '../../plugins/clientRegistry';
 
 function MainScreenContent() {
-    const { activeChatID, setActiveChatID, activePluginView, setActivePluginView, activePluginIntegrationId, closePluginKeepSidebar, closePluginWithSidebar } = useMain();
+    const {
+        activeChatID,
+        setActiveChatID,
+        activePluginView,
+        setActivePluginView,
+        activePluginIntegrationId,
+        closePluginKeepSidebar,
+        closePluginWithSidebar,
+    } = useMain();
     const [settingsOpen, setSettingsOpen] = useState(false);
 
     // Check if we need to render a plugin view
@@ -33,7 +41,9 @@ function MainScreenContent() {
                     >
                         <View style={styles.content}>
                             <PluginComponent
-                                integrationId={activePluginIntegrationId ?? undefined}
+                                integrationId={
+                                    activePluginIntegrationId ?? undefined
+                                }
                                 onClose={(closeSidebar?: boolean) => {
                                     if (closeSidebar) {
                                         closePluginWithSidebar();
@@ -50,7 +60,9 @@ function MainScreenContent() {
                         setActiveChatID={setActiveChatID}
                     >
                         <View style={styles.content}>
-                            <ChatScreen onSettingsPress={() => setSettingsOpen(true)} />
+                            <ChatScreen
+                                onSettingsPress={() => setSettingsOpen(true)}
+                            />
                         </View>
                     </ChatProvider>
                 )}

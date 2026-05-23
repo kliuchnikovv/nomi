@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"context"
 	"encoding/json"
 
 	"fmt"
@@ -62,8 +61,6 @@ func (r *Room) getOrCreateBuilder(msgID, chatID uuid.UUID) *MessageBuilder {
 }
 
 func handleTextPayload(r *Room, data []byte) error {
-	// Persist text chunks even when streaming so GET /messages returns full state
-	// on other devices; DONE frame still overwrites with canonical content.
 	var p TextPayload
 	if err := json.Unmarshal(data, &p); err != nil {
 		return err
@@ -74,7 +71,7 @@ func handleTextPayload(r *Room, data []byte) error {
 	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
 	builder.AppendText(delta)
-	return builder.Persist(context.Background(), r.store, r.initiatorID)
+	return nil
 }
 
 func handleToolCallPayload(r *Room, data []byte) error {
@@ -84,7 +81,7 @@ func handleToolCallPayload(r *Room, data []byte) error {
 	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
 	builder.AddToolCall(p.ToolCall)
-	return builder.Persist(context.Background(), r.store, r.initiatorID)
+	return nil
 }
 
 func handleReasoningPayload(r *Room, data []byte) error {
@@ -98,7 +95,7 @@ func handleReasoningPayload(r *Room, data []byte) error {
 	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
 	builder.AppendReasoning(delta)
-	return builder.Persist(context.Background(), r.store, r.initiatorID)
+	return nil
 }
 
 func handleMemberResponsePayload(r *Room, data []byte) error {
@@ -112,7 +109,7 @@ func handleMemberResponsePayload(r *Room, data []byte) error {
 	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
 	builder.AppendMemberResponse(p.AgentName, delta)
-	return builder.Persist(context.Background(), r.store, r.initiatorID)
+	return nil
 }
 
 func handleMetadataPayload(r *Room, data []byte) error {
@@ -123,7 +120,7 @@ func handleMetadataPayload(r *Room, data []byte) error {
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
 	builder.SetModel(p.Model)
 	builder.SetToolCalls(p.ToolCalls)
-	return builder.Persist(context.Background(), r.store, r.initiatorID)
+	return nil
 }
 
 func handleActionsPayload(r *Room, data []byte) error {
@@ -133,7 +130,7 @@ func handleActionsPayload(r *Room, data []byte) error {
 	}
 	builder := r.getOrCreateBuilder(p.MessageID, r.ID)
 	builder.SetActions(p.Actions)
-	return builder.Persist(context.Background(), r.store, r.initiatorID)
+	return nil
 }
 
 func handleChatUpdatePayload(r *Room, data []byte) error {

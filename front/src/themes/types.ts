@@ -1,4 +1,12 @@
-export type ThemeName = 'tokyoNight' | 'oneDark' | 'visualStudioLight' | 'serikaDark' | 'retroSunset' | 'retroPastel' | 'deepOcean' | 'darkMinimal';
+export type ThemeName =
+    | 'tokyoNight'
+    | 'oneDark'
+    | 'visualStudioLight'
+    | 'serikaDark'
+    | 'retroSunset'
+    | 'retroPastel'
+    | 'deepOcean'
+    | 'darkMinimal';
 
 export type ThemePalette = {
     red: string;
@@ -8,7 +16,7 @@ export type ThemePalette = {
     cyan: string;
     blue: string;
     magenta: string;
-    purple: string;  // Added for ActiveTaskCard component
+    purple: string; // Added for ActiveTaskCard component
     white: string;
     fg: string;
     black: string;

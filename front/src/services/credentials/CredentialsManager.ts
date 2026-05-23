@@ -2,7 +2,7 @@ import { credentialsApi } from '../../apiClient';
 
 /**
  * CredentialsManager - manages API keys and credentials for server plugins.
- * 
+ *
  * Core logic:
  * - Checks if credentials exist in Redis (via /api/credentials/:provider/check)
  * - Sends credentials only if they don't exist (via /api/credentials)
@@ -38,17 +38,22 @@ export class CredentialsManager {
                 config.provider,
                 config.type,
                 config.apiKey,
-                config.extra
+                config.extra,
             );
             if (response?.ok) {
                 this.cachedProviders.add(config.provider);
                 this.lastCheck.set(config.provider, Date.now());
-                console.log(`[CredentialsManager] Saved credentials for ${config.provider}`);
+                console.log(
+                    `[CredentialsManager] Saved credentials for ${config.provider}`,
+                );
                 return true;
             }
             return false;
         } catch (error) {
-            console.error(`[CredentialsManager] Failed to save credentials for ${config.provider}:`, error);
+            console.error(
+                `[CredentialsManager] Failed to save credentials for ${config.provider}:`,
+                error,
+            );
             return false;
         }
     }
@@ -66,17 +71,20 @@ export class CredentialsManager {
         try {
             const response = await credentialsApi.check(provider);
             const exists = response?.exists ?? false;
-            
+
             if (exists) {
                 this.cachedProviders.add(provider);
                 this.lastCheck.set(provider, Date.now());
             } else {
                 this.cachedProviders.delete(provider);
             }
-            
+
             return exists;
         } catch (error) {
-            console.error(`[CredentialsManager] Failed to check credentials for ${provider}:`, error);
+            console.error(
+                `[CredentialsManager] Failed to check credentials for ${provider}:`,
+                error,
+            );
             return false;
         }
     }
@@ -102,7 +110,10 @@ export class CredentialsManager {
             }
             return providers;
         } catch (error) {
-            console.error('[CredentialsManager] Failed to check multiple providers:', error);
+            console.error(
+                '[CredentialsManager] Failed to check multiple providers:',
+                error,
+            );
             return providers;
         }
     }
@@ -116,12 +127,17 @@ export class CredentialsManager {
             if (response?.ok) {
                 this.cachedProviders.delete(provider);
                 this.lastCheck.delete(provider);
-                console.log(`[CredentialsManager] Deleted credentials for ${provider}`);
+                console.log(
+                    `[CredentialsManager] Deleted credentials for ${provider}`,
+                );
                 return true;
             }
             return false;
         } catch (error) {
-            console.error(`[CredentialsManager] Failed to delete credentials for ${provider}:`, error);
+            console.error(
+                `[CredentialsManager] Failed to delete credentials for ${provider}:`,
+                error,
+            );
             return false;
         }
     }
@@ -134,7 +150,10 @@ export class CredentialsManager {
             const response = await credentialsApi.list();
             return response?.providers || [];
         } catch (error) {
-            console.error('[CredentialsManager] Failed to list providers:', error);
+            console.error(
+                '[CredentialsManager] Failed to list providers:',
+                error,
+            );
             return [];
         }
     }
@@ -147,12 +166,16 @@ export class CredentialsManager {
         // First check if they already exist
         const exists = await this.checkCredentials(config.provider);
         if (exists) {
-            console.log(`[CredentialsManager] Credentials for ${config.provider} already exist on server`);
+            console.log(
+                `[CredentialsManager] Credentials for ${config.provider} already exist on server`,
+            );
             return true;
         }
 
         // If not — send them
-        console.log(`[CredentialsManager] Credentials for ${config.provider} not found, sending...`);
+        console.log(
+            `[CredentialsManager] Credentials for ${config.provider} not found, sending...`,
+        );
         return await this.saveCredentials(config);
     }
 

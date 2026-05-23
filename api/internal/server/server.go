@@ -78,6 +78,7 @@ func New(
 		entitiesHandler       = handlers.NewEntitiesHandler(ctr.Storage, logger)
 		notificationsHandler  = handlers.NewNotificationsHandler(ctr.Storage)
 		devicesHandler        = handlers.NewDevicesHandler(ctr.Storage)
+		workerHandler         = handlers.NewWorkerHandler(hubInstance, logger)
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -125,6 +126,8 @@ func New(
 
 	// Chat streaming API (WebSocket only)
 	r.GET("/api/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
+	// Internal: Python workers connect here to deliver response frames directly (bypasses Redis)
+	r.GET("/internal/worker", workerHandler.WorkerWS)
 	// Client tool result (round-trip proxy: device executes tool and sends result back)
 	r.POST("/api/chat/client-tool-result", wrapWithAuth(streamHandler.ClientToolResult, authMiddleware))
 

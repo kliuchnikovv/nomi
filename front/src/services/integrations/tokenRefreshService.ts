@@ -21,18 +21,20 @@ class TokenRefreshService {
 
         // Fallback to database (during migration)
         if (!tokens) {
-            const creds = await integrationStorage.getCredentials(integrationId);
+            const creds = await integrationStorage.getCredentials(
+                integrationId,
+            );
             if (creds) {
                 // Migrate to secure storage
                 await secureTokenStorage.saveToken(integrationId, {
                     accessToken: creds.accessToken ?? '',
                     refreshToken: creds.refreshToken ?? '',
-                    expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0
+                    expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0,
                 });
                 tokens = {
                     accessToken: creds.accessToken ?? '',
                     refreshToken: creds.refreshToken ?? '',
-                    expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0
+                    expiry: creds.tokenExpiry ? creds.tokenExpiry.getTime() : 0,
                 };
             }
         }
@@ -43,7 +45,9 @@ class TokenRefreshService {
             try {
                 return await this.forceRefresh(integrationId);
             } catch (e) {
-                throw new Error('No credentials found for integration and recovery failed');
+                throw new Error(
+                    'No credentials found for integration and recovery failed',
+                );
             }
         }
 
@@ -60,20 +64,29 @@ class TokenRefreshService {
      * Force refresh the token regardless of expiry
      */
     async forceRefresh(integrationId: string): Promise<string> {
-        const integration = await integrationStorage.getIntegration(integrationId);
+        const integration = await integrationStorage.getIntegration(
+            integrationId,
+        );
         if (!integration) {
             throw new Error('Integration not found');
         }
 
-        console.log(`[TokenRefresh] Refreshing token for ${integration.provider}...`);
+        console.log(
+            `[TokenRefresh] Refreshing token for ${integration.provider}...`,
+        );
 
-        if (integration.provider === 'gmail' || integration.provider === 'calendar') {
+        if (
+            integration.provider === 'gmail' ||
+            integration.provider === 'calendar'
+        ) {
             return this.refreshGoogleToken(integrationId);
         }
 
         // Add other providers here if needed...
 
-        throw new Error(`Auto-refresh not supported for provider: ${integration.provider}`);
+        throw new Error(
+            `Auto-refresh not supported for provider: ${integration.provider}`,
+        );
     }
 
     /**
@@ -105,16 +118,22 @@ class TokenRefreshService {
                 tokenExpiry: new Date(newExpiry),
             });
 
-            console.log(`[TokenRefresh] Google token refreshed locally via SDK`);
+            console.log(
+                `[TokenRefresh] Google token refreshed locally via SDK`,
+            );
             return tokens.accessToken;
-
         } catch (error: any) {
-            console.error('[TokenRefresh] Google silent sign-in failed:', error);
+            console.error(
+                '[TokenRefresh] Google silent sign-in failed:',
+                error,
+            );
 
             // If strictly needed, we could fallback to backend refresh IF and ONLY IF we had a refresh token in the backend?
             // But per "Local Hands" architecture, we want to ABANDON backend refresh.
             // So we just throw error. User might need to re-login.
-            throw new Error('Failed to refresh Google token locally. Please re-authenticate.');
+            throw new Error(
+                'Failed to refresh Google token locally. Please re-authenticate.',
+            );
         }
     }
 

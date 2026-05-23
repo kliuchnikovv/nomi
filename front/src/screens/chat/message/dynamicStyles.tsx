@@ -15,9 +15,17 @@ const stylesCache = new Map<string, ReturnType<typeof StyleSheet.create>>();
 const markdownStylesCache = new Map<string, Record<string, unknown>>();
 
 // Generate cache key from theme properties
-const getThemeCacheKey = (theme: ThemeColors, palette: ThemePalette): string => {
-    return JSON.stringify({ accent: theme.accent, bg: theme.background, surface: theme.surface,
-        palBg: palette.bg, palFg: palette.fg });
+const getThemeCacheKey = (
+    theme: ThemeColors,
+    palette: ThemePalette,
+): string => {
+    return JSON.stringify({
+        accent: theme.accent,
+        bg: theme.background,
+        surface: theme.surface,
+        palBg: palette.bg,
+        palFg: palette.fg,
+    });
 };
 
 // Create styles based on theme with caching
@@ -512,11 +520,11 @@ export const createMarkdownStyles = (theme: ThemeColors) => {
         },
         heading1: {
             fontSize: 22,
-            fontWeight: '600'
+            fontWeight: '600',
         },
         heading2: {
             fontSize: 20,
-            fontWeight: '600'
+            fontWeight: '600',
         },
         bullet_list: {
             marginTop: 4,

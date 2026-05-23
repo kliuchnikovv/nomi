@@ -9,7 +9,7 @@ import {
     Clipboard,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
-import { useChat } from '../context';
+import { useChatOptional } from '../context';
 import { ContentPart } from './models';
 import { useTheme } from '../../../context/ThemeContext';
 import { createMarkdownStyles } from './dynamicStyles';
@@ -310,11 +310,17 @@ function isStreamingActive(parts: ContentPart[]): boolean {
 export const ContentPartsRenderer = memo(function ContentPartsRenderer({
     parts,
     onLongPress,
+    showToolCalls: showToolCallsProp,
+    showReasoning: showReasoningProp,
 }: {
     parts: ContentPart[];
     onLongPress: (text: string) => void;
+    showToolCalls?: boolean;
+    showReasoning?: boolean;
 }) {
-    const { showToolCalls, showReasoning } = useChat();
+    const chat = useChatOptional();
+    const showToolCalls = showToolCallsProp ?? chat?.showToolCalls ?? true;
+    const showReasoning = showReasoningProp ?? chat?.showReasoning ?? true;
     const { theme } = useTheme();
 
     // Simple styles for fast text rendering

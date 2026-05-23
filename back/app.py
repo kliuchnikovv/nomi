@@ -154,6 +154,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logging.error("[Lifespan] Plugin startup hook %s failed: %s", hook.__name__, e, exc_info=True)
 
+    # Start direct Go WebSocket connection (eliminates Redis RTT for response frames).
+    go_ws = None
+    try:
+        from src.server.go_ws_client import GoWSClient
+        go_ws = GoWSClient()
+        await go_ws.connect()
+        container.set_go_ws(go_ws)
+        logging.warning("[Lifespan] GoWSClient connected to Go API")
+    except Exception as e:
+        logging.warning("[Lifespan] GoWSClient unavailable, using Redis fallback: %s", e)
+
     logging.warning("[Lifespan] Initializing Redis Worker...")
     try:
         redis_worker = container.redis_worker
@@ -167,6 +178,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logging.warning("[Lifespan] Shutting down resources...")
+    if go_ws:
+        await go_ws.close()
     await container.close()
 
 

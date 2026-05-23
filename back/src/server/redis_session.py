@@ -66,12 +66,14 @@ class RedisSession:
         user_id: str | None = None,
         chat_id: str | None = None,
         redis_worker: Any = None,
+        go_ws: Any = None,
     ):
         self.agent_factory = agent_factory
         self.session_id = session_id
         self.user_id = user_id
         self.chat_id = chat_id or session_id
         self.redis_worker = redis_worker
+        self._go_ws = go_ws  # GoWSClient instance; None → Redis-only path
 
         self.redis_client = None
         self.agent: Any | None = None
@@ -239,8 +241,17 @@ class RedisSession:
             self.redis_client = None
 
     async def _send_frame(self, frame: Frame) -> int:
+        # Direct WS path: deliver to Go without Redis hop when worker WS is available.
+        if self._go_ws is not None and self._go_ws.is_connected:
+            try:
+                await self._go_ws.send_frame(frame)
+                self.next_id = frame.id + 1
+                return self.next_id
+            except Exception as e:
+                logger.warning("[RedisSession] GoWS send failed, falling back to Redis: %s", e)
+
+        # Redis fallback (always available)
         data = frame.marshal()
-        # Target ID: User ID if known, else Session ID (fallback)
         target_id = self.user_id or self.session_id
         channel = f"chat:user:{target_id}"
         payload_json = json.dumps(data)

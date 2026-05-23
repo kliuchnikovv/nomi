@@ -1,76 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { FlatList, Text, View, StyleSheet } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { useChat } from '../context';
+import { ChatView } from '../../../components/chat/ChatView';
 
 const MAX_MESSAGES = 20;
 
 export function VoiceTranscript() {
-    const { theme, palette } = useTheme();
-    const { messages: allMessages } = useChat();
-    const listRef = useRef<FlatList>(null);
-    const messages = useMemo(
-        () => allMessages.slice(-MAX_MESSAGES),
-        [allMessages],
-    );
-
-    useEffect(() => {
-        if (messages.length > 0) {
-            const id = setTimeout(() => {
-                listRef.current?.scrollToEnd({ animated: true });
-            }, 50);
-            return () => clearTimeout(id);
-        }
-    }, [messages.length]);
-
-    const renderItem = useCallback(
-        ({ item }: { item: (typeof messages)[number] }) => {
-            const isUser = item.role === 'user';
-            return (
-                <View style={[styles.row, isUser && styles.rowUser]}>
-                    <View
-                        style={[
-                            styles.bubble,
-                            {
-                                backgroundColor: isUser
-                                    ? theme.accent
-                                    : theme.surfaceHighlight,
-                            },
-                        ]}
-                    >
-                        <Text
-                            style={[
-                                styles.text,
-                                { color: isUser ? palette.white : theme.text },
-                            ]}
-                        >
-                            {item.text.trim() ||
-                                (item.content_parts ?? [])
-                                    .filter(
-                                        (p: any) =>
-                                            p.type === 'text' ||
-                                            p.type === 'member_response',
-                                    )
-                                    .map((p: any) => p.text ?? '')
-                                    .join(' ')
-                                    .trim() ||
-                                '…'}
-                        </Text>
-                    </View>
-                </View>
-            );
-        },
-        [theme, palette],
-    );
+    const { theme } = useTheme();
+    const { messages } = useChat();
 
     return (
         <View
             style={[
                 styles.card,
-                {
-                    backgroundColor: theme.surface,
-                    borderColor: theme.border,
-                },
+                { backgroundColor: theme.surface, borderColor: theme.border },
             ]}
         >
             <View
@@ -80,13 +24,20 @@ export function VoiceTranscript() {
                     Transcript
                 </Text>
             </View>
-            <FlatList
-                ref={listRef}
-                data={messages}
-                keyExtractor={item => item.id}
-                style={styles.list}
-                contentContainerStyle={styles.content}
-                renderItem={renderItem}
+            <ChatView
+                messages={messages}
+                maxMessages={MAX_MESSAGES}
+                input={null}
+                bubbleOptions={{
+                    showToolCalls: false,
+                    showReasoning: false,
+                    showAttachments: false,
+                    showActions: false,
+                    showLocations: false,
+                    showModelLabel: false,
+                    showAgentLabel: false,
+                    maxWidthPct: 80,
+                }}
             />
         </View>
     );
@@ -110,20 +61,4 @@ const styles = StyleSheet.create({
         letterSpacing: 0.8,
         textTransform: 'uppercase',
     },
-    list: { flex: 1, width: '100%' },
-    content: {
-        paddingHorizontal: 16,
-        paddingTop: 8,
-        paddingBottom: 12,
-        gap: 6,
-    },
-    row: { width: '100%' },
-    rowUser: { alignItems: 'flex-end' },
-    bubble: {
-        maxWidth: '80%',
-        borderRadius: 20,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-    },
-    text: { fontSize: 14, lineHeight: 20 },
 });

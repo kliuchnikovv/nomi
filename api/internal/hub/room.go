@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,14 @@ const (
 	RoomTypeUser RoomType = "user"
 )
 
+type replayEntry struct {
+	seq   int
+	msgID uuid.UUID
+	data  []byte
+}
+
+const maxReplayBuf = 1000
+
 type Room struct {
 	ID     uuid.UUID
 	Type   RoomType
@@ -28,12 +37,17 @@ type Room struct {
 
 	clients    map[*Client]bool
 	ingress    chan *ClientMessage
-	broadcast  chan Frame // Channel for direct broadcasting (bypassing logic)
+	broadcast  chan Frame
 	register   chan *Client
 	unregister chan *Client
 
-	// Ingress for LLM frames from Redis (e.g. from Python team agents)
+	// Ingress for LLM frames from Redis/worker
 	llmIngress chan Frame
+
+	// Replay buffer: frames accumulated during active generation for reconnecting clients
+	replayBuf []replayEntry
+	replayMu  sync.RWMutex
+	replaySeq int
 
 	// Team Mode
 	mode string // "agent" or "team"
@@ -64,11 +78,11 @@ func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, s
 		store:               store,
 		initiatorID:         initiatorID,
 		clients:             make(map[*Client]bool),
-		ingress:             make(chan *ClientMessage),
-		broadcast:           make(chan Frame),
+		ingress:             make(chan *ClientMessage, 32),
+		broadcast:           make(chan Frame, 64),
 		register:            make(chan *Client),
 		unregister:          make(chan *Client),
-		llmIngress:          make(chan Frame),
+		llmIngress:          make(chan Frame, 64),
 		mode:                mode,
 		command:             command,
 		messageBuilders:     make(map[uuid.UUID]*MessageBuilder),
@@ -102,9 +116,7 @@ func (r *Room) Run() {
 	for {
 		select {
 		case client := <-r.register:
-			// One client per user per room: disconnect any existing connection from the same user
-			// so rapid close+connect (e.g. switching chats or Strict Mode) doesn't leave two
-			// clients in the room both receiving the same broadcast.
+			// One client per user per room: evict existing connection for the same user.
 			for c := range r.clients {
 				if c.userID == client.userID {
 					delete(r.clients, c)
@@ -114,7 +126,22 @@ func (r *Room) Run() {
 			}
 			r.clients[client] = true
 			r.logger.Info("client joined room", zap.String("user_id", client.userID.String()))
-			// Send initial sync if needed? Client fetches DB history.
+			// Replay buffered frames if generation is in progress (client reconnected mid-stream).
+			if r.generationInProgress {
+				r.replayMu.RLock()
+				entries := make([]replayEntry, len(r.replayBuf))
+				copy(entries, r.replayBuf)
+				r.replayMu.RUnlock()
+				if len(entries) > 0 {
+					r.logger.Info("replaying frames to reconnected client", zap.Int("count", len(entries)), zap.String("user_id", client.userID.String()))
+					for _, e := range entries {
+						select {
+						case client.send <- e.data:
+						default:
+						}
+					}
+				}
+			}
 			resetTimer()
 
 		case client := <-r.unregister:
@@ -156,6 +183,7 @@ func (r *Room) Run() {
 		case <-timer.C:
 			if len(r.clients) == 0 && !r.generationInProgress {
 				r.logger.Info("room idle timeout, closing")
+				r.flushAllBuilders()
 				r.hub.unregister <- r
 				return
 			}
@@ -171,6 +199,7 @@ func (r *Room) Run() {
 				r.logger.Warn("generation timeout reached, forcing stop")
 				r.generationInProgress = false
 				r.generationTimer = nil
+				r.flushAllBuilders()
 				r.sendGenerationTimeoutError()
 			}
 

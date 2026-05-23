@@ -52,6 +52,10 @@ export function useChat() {
     return context;
 }
 
+export function useChatOptional(): ChatContextType | undefined {
+    return useContext(ChatContext);
+}
+
 export function ChatProvider({
     children,
     activeChatID,
