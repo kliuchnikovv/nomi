@@ -1616,7 +1616,10 @@ class RedisSession:
             if bridge_model:
                 descriptions = await self._vision_bridge_describe_images(attachments, bridge_model)
                 if descriptions:
-                    agent_input = descriptions + "\n\n" + agent_input
+                    agent_input = (
+                        f"[The user has attached an image. A vision model analyzed it and produced the following description:\n{descriptions}]\n\n"
+                        f"{agent_input}"
+                    )
                     logger.info(
                         "[RedisSession] Vision bridge: described %d image(s) via %s",
                         len(attachments),
