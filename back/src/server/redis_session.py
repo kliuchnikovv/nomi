@@ -1937,6 +1937,21 @@ class RedisSession:
         except Exception as e:
             logger.warning("[RedisSession] Memory deduplication failed: %s", e)
 
+    @staticmethod
+    def _find_models_config() -> str | None:
+        """Find config/models.json trying several locations (local dev and Docker)."""
+        here = os.path.dirname(__file__)
+        candidates = [
+            os.environ.get("MODELS_CONFIG_PATH"),
+            os.path.join(here, "..", "..", "config", "models.json"),       # /app/config (Docker)
+            os.path.join(here, "..", "..", "..", "config", "models.json"), # repo root (local dev)
+            "/app/config/models.json",                                      # Docker absolute fallback
+        ]
+        for path in candidates:
+            if path and os.path.isfile(path):
+                return path
+        return None
+
     def _get_model_context_limit(self, model_name: str) -> int:
         """Return token context limit for the model from config/models.json. Falls back to 128_000."""
         import json as _json
@@ -1944,18 +1959,17 @@ class RedisSession:
         if self._model_context_limit is not None:
             return self._model_context_limit
 
-        config_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "config", "models.json"
-        )
-        try:
-            with open(config_path) as f:
-                data = _json.load(f)
-            for m in data.get("models", []):
-                if m.get("id") == model_name:
-                    self._model_context_limit = m.get("context_window", 128_000)
-                    return self._model_context_limit
-        except Exception as exc:
-            logger.warning("[RedisSession] Failed to load model config: %s", exc)
+        config_path = self._find_models_config()
+        if config_path:
+            try:
+                with open(config_path) as f:
+                    data = _json.load(f)
+                for m in data.get("models", []):
+                    if m.get("id") == model_name:
+                        self._model_context_limit = m.get("context_window", 128_000)
+                        return self._model_context_limit
+            except Exception as exc:
+                logger.warning("[RedisSession] Failed to load model config: %s", exc)
 
         self._model_context_limit = 128_000
         return self._model_context_limit
@@ -1970,18 +1984,17 @@ class RedisSession:
         if self._model_supports_vision_cache is not None:
             return self._model_supports_vision_cache
 
-        config_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "config", "models.json"
-        )
-        try:
-            with open(config_path) as f:
-                data = _json.load(f)
-            for m in data.get("models", []):
-                if m.get("id") == self.current_model_name:
-                    self._model_supports_vision_cache = bool(m.get("supports_vision", False))
-                    return self._model_supports_vision_cache
-        except Exception as exc:
-            logger.warning("[RedisSession] Failed to load model config for vision check: %s", exc)
+        config_path = self._find_models_config()
+        if config_path:
+            try:
+                with open(config_path) as f:
+                    data = _json.load(f)
+                for m in data.get("models", []):
+                    if m.get("id") == self.current_model_name:
+                        self._model_supports_vision_cache = bool(m.get("supports_vision", False))
+                        return self._model_supports_vision_cache
+            except Exception as exc:
+                logger.warning("[RedisSession] Failed to load model config for vision check: %s", exc)
 
         self._model_supports_vision_cache = False
         return False
@@ -1993,17 +2006,16 @@ class RedisSession:
         if not self.current_model_name:
             return None
 
-        config_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "config", "models.json"
-        )
-        try:
-            with open(config_path) as f:
-                data = _json.load(f)
-            for m in data.get("models", []):
-                if m.get("id") == self.current_model_name:
-                    return m.get("vision_bridge") or None
-        except Exception as exc:
-            logger.warning("[RedisSession] Failed to load model config for vision bridge: %s", exc)
+        config_path = self._find_models_config()
+        if config_path:
+            try:
+                with open(config_path) as f:
+                    data = _json.load(f)
+                for m in data.get("models", []):
+                    if m.get("id") == self.current_model_name:
+                        return m.get("vision_bridge") or None
+            except Exception as exc:
+                logger.warning("[RedisSession] Failed to load model config for vision bridge: %s", exc)
 
         return None
 

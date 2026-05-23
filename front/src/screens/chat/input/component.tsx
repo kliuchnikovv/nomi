@@ -805,10 +805,7 @@ export default function ChatInput({ onSend, chips, onChipPress }: Props) {
                                 key={chip.label}
                                 onPress={() => onChipPress(chip.text)}
                                 activeOpacity={0.7}
-                                style={[
-                                    styles.modelPill,
-                                    { flexShrink: 0 },
-                                ]}
+                                style={[styles.modelPill, { flexShrink: 0 }]}
                             >
                                 <Text style={styles.modelPillText}>
                                     {chip.label}

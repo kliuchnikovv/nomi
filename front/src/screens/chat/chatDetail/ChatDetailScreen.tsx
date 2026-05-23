@@ -10,16 +10,16 @@ import {
     RefreshControl,
     Text,
     Pressable,
+    ScrollView,
     StyleSheet,
     AppState,
+    ActionSheetIOS,
     TouchableWithoutFeedback,
     Keyboard,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
-import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-} from 'react-native-reanimated';
+import { useSharedValue } from 'react-native-reanimated';
 import { GiftedChat, IMessage } from 'react-native-gifted-chat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ImageViewing from 'react-native-image-viewing';
@@ -58,7 +58,6 @@ export function ChatDetailScreen() {
     const navigation = useNavigation();
 
     const inputAnimY = useSharedValue(0);
-    const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
 
     const { showDialog, dialogState, submitResponse, cancelDialog } =
         useAskUser();
@@ -89,16 +88,15 @@ export function ChatDetailScreen() {
     const { user, token } = useAuth();
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
-    const { activeChat, getChats, isNewSession, setIsNewSession } = useMain();
+    const { activeChat, chats, getChats, isNewSession, setIsNewSession } =
+        useMain();
+    const [dropdownVisible, setDropdownVisible] = useState(false);
 
     const styles = useMemo(() => createStyles(theme), [theme]);
     const assistantContainerMaxWidth = `${ASSISTANT_BUBBLE_WIDTH_RATIO * 100}%`;
 
-    const animatedKeyboardStyle = useAnimatedStyle(() => ({
-        flex: 1,
-        backgroundColor: theme.background,
-        paddingBottom: Math.max(-keyboardHeight.value, insets.bottom),
-    }));
+    const headerHeight = insets.top + 60; // insets.top + 8 padding + 44 pill + 8 padding
+
 
     const giftedMessages = useGiftedMessages(messages, user?.id);
     const chips = useChips();
@@ -239,7 +237,7 @@ export function ChatDetailScreen() {
         [user?.id],
     );
 
-    const headerTitle = externalTitle || activeChat?.title || 'Chat';
+    const headerTitle = externalTitle || activeChat?.title || 'New Chat';
     const headerSubtitle = useMemo(() => {
         if (assistantWorking) return '';
         if (chatMode === 'team') {
@@ -522,14 +520,129 @@ export function ChatDetailScreen() {
                 },
             ]}
         >
-            {/* Header */}
+            {/* Dropdown backdrop */}
+            {dropdownVisible && (
+                <Pressable
+                    style={[StyleSheet.absoluteFillObject, { zIndex: 10 }]}
+                    onPress={() => setDropdownVisible(false)}
+                />
+            )}
+
+            {/* Chat dropdown list */}
+            {dropdownVisible && (
+                <View
+                    style={[
+                        detailStyles.dropdown,
+                        {
+                            top: headerHeight,
+                            backgroundColor: theme.surface,
+                            zIndex: 11,
+                        },
+                    ]}
+                >
+                    <ScrollView
+                        bounces={false}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {chats
+                            .filter(c => c.id !== emptyChatID)
+                            .map(chat => (
+                                <Pressable
+                                    key={chat.id}
+                                    style={({ pressed }) => [
+                                        detailStyles.dropdownRow,
+                                        {
+                                            borderBottomColor: theme.border,
+                                            opacity: pressed ? 0.7 : 1,
+                                        },
+                                        chat.id === activeChat?.id && {
+                                            backgroundColor:
+                                                theme.accent + '20',
+                                        },
+                                    ]}
+                                    onPress={() => {
+                                        setDropdownVisible(false);
+                                        (navigation as any).replace(
+                                            'ChatDetail',
+                                            { chatId: chat.id },
+                                        );
+                                    }}
+                                >
+                                    <View
+                                        style={[
+                                            detailStyles.dropdownIcon,
+                                            {
+                                                backgroundColor:
+                                                    theme.background,
+                                            },
+                                        ]}
+                                    >
+                                        {chat.icon &&
+                                        /\p{Emoji}/u.test(chat.icon) &&
+                                        !/^[0-9#*]$/.test(chat.icon) ? (
+                                            <Text style={{ fontSize: 16 }}>
+                                                {chat.icon}
+                                            </Text>
+                                        ) : (
+                                            <Ionicons
+                                                name="sparkles"
+                                                size={15}
+                                                color={theme.accent}
+                                            />
+                                        )}
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text
+                                            style={[
+                                                detailStyles.dropdownTitle,
+                                                { color: theme.text },
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {chat.title || 'New Chat'}
+                                        </Text>
+                                        <Text
+                                            style={[
+                                                detailStyles.dropdownDate,
+                                                { color: theme.textSecondary },
+                                            ]}
+                                        >
+                                            {formatSessionDate(chat.updated_at)}
+                                        </Text>
+                                    </View>
+                                    {chat.id === activeChat?.id && (
+                                        <Ionicons
+                                            name="checkmark"
+                                            size={16}
+                                            color={theme.accent}
+                                        />
+                                    )}
+                                </Pressable>
+                            ))}
+                        {chats.filter(c => c.id !== emptyChatID).length ===
+                            0 && (
+                            <Text
+                                style={[
+                                    detailStyles.dropdownEmpty,
+                                    { color: theme.textSecondary },
+                                ]}
+                            >
+                                No previous chats
+                            </Text>
+                        )}
+                    </ScrollView>
+                </View>
+            )}
+
+            {/* Header — absolute, frosted bg */}
             <View
                 style={[
                     detailStyles.header,
                     {
                         paddingTop: insets.top + 8,
-                        backgroundColor: theme.background,
-                        borderBottomColor: theme.border,
+                        backgroundColor: theme.background + 'D0',
+                        zIndex: 12,
                     },
                 ]}
             >
@@ -549,20 +662,34 @@ export function ChatDetailScreen() {
                     />
                 </Pressable>
 
-                {/* Center: title pill */}
-                <View
-                    style={[
+                {/* Center: title pill — tap to open dropdown */}
+                <Pressable
+                    style={({ pressed }) => [
                         detailStyles.center,
-                        { backgroundColor: theme.surface },
+                        {
+                            backgroundColor: theme.surface,
+                            opacity: pressed ? 0.7 : 1,
+                        },
                     ]}
+                    onPress={() => setDropdownVisible(v => !v)}
                 >
-                    <Text
-                        style={[detailStyles.title, { color: theme.text }]}
-                        numberOfLines={1}
-                    >
-                        {headerTitle}
-                    </Text>
-                    {headerSubtitle ? (
+                    <View style={detailStyles.titleRow}>
+                        <Text
+                            style={[detailStyles.title, { color: theme.text }]}
+                            numberOfLines={1}
+                        >
+                            {headerTitle}
+                        </Text>
+                        <Ionicons
+                            name={
+                                dropdownVisible ? 'chevron-up' : 'chevron-down'
+                            }
+                            size={14}
+                            color={theme.textSecondary}
+                            style={{ marginLeft: 4, marginTop: 1 }}
+                        />
+                    </View>
+                    {activeChat?.updated_at ? (
                         <Text
                             style={[
                                 detailStyles.subtitle,
@@ -570,43 +697,44 @@ export function ChatDetailScreen() {
                             ]}
                             numberOfLines={1}
                         >
-                            {headerSubtitle}
+                            {formatSessionDate(activeChat.updated_at)}
                         </Text>
                     ) : null}
-                </View>
+                </Pressable>
 
-                {/* Right: history + new chat buttons */}
-                <View style={detailStyles.headerRight}>
-                    {user?.single_chat_mode && (
-                        <Pressable
-                            style={[
-                                detailStyles.pillBtn,
-                                { backgroundColor: theme.surface },
-                            ]}
-                            onPress={() => setHistorySheetVisible(true)}
-                        >
-                            <Ionicons
-                                name="time-outline"
-                                size={22}
-                                color={theme.text}
-                            />
-                        </Pressable>
-                    )}
-                    <Pressable
-                        style={[
-                            detailStyles.pillBtn,
-                            { backgroundColor: theme.surface },
-                        ]}
-                        onPress={handleNewChat}
-                    >
-                        <Ionicons
-                            name="create-outline"
-                            size={22}
-                            color={theme.text}
-                        />
-                    </Pressable>
-                </View>
+                {/* Right: new chat button */}
+                <Pressable
+                    style={[
+                        detailStyles.pillBtn,
+                        { backgroundColor: theme.surface },
+                    ]}
+                    hitSlop={8}
+                    onPress={handleNewChat}
+                >
+                    <Ionicons
+                        name="create-outline"
+                        size={22}
+                        color={theme.text}
+                    />
+                </Pressable>
             </View>
+
+            {/* Soft fade from header into chat — JS-only gradient simulation */}
+            {(['CC', '99', '66', '33', '11'] as const).map((alpha, i) => (
+                <View
+                    key={alpha}
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute',
+                        top: headerHeight + i * 6,
+                        left: 0,
+                        right: 0,
+                        height: 6,
+                        backgroundColor: theme.background + alpha,
+                        zIndex: 9,
+                    }}
+                />
+            ))}
 
             {/* Non-session project suggestion banner (existing chats) */}
             {!isNewSession && suggestedProject && (
@@ -642,9 +770,13 @@ export function ChatDetailScreen() {
                 </View>
             )}
 
-            <Animated.View style={animatedKeyboardStyle}>
+            <View style={{ flex: 1, backgroundColor: theme.background }}>
                 {showEmptyGreeting ? (
-                    <>
+                    <KeyboardAvoidingView
+                        style={{ flex: 1 }}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        keyboardVerticalOffset={0}
+                    >
                         <TouchableWithoutFeedback
                             onPress={Keyboard.dismiss}
                             accessible={false}
@@ -673,7 +805,7 @@ export function ChatDetailScreen() {
                         ) : (
                             renderInputToolbarBase({})
                         )}
-                    </>
+                    </KeyboardAvoidingView>
                 ) : (
                     <GiftedChat
                         messages={
@@ -690,7 +822,7 @@ export function ChatDetailScreen() {
                         isTyping={false}
                         renderFooter={renderFooter}
                         inverted={true}
-                        minInputToolbarHeight={insets.bottom + 112}
+                        minInputToolbarHeight={insets.bottom + 112 + 30}
                         maxComposerHeight={100}
                         renderAvatar={null}
                         messagesContainerStyle={styles.messagesContainer}
@@ -717,6 +849,9 @@ export function ChatDetailScreen() {
                                               colors={[theme.accent]}
                                           />
                                       ),
+                                      contentContainerStyle: {
+                                          paddingBottom: headerHeight,
+                                      },
                                       maintainVisibleContentPosition: undefined,
                                       maxToRenderPerBatch: 10,
                                       windowSize: 10,
@@ -724,6 +859,9 @@ export function ChatDetailScreen() {
                                       updateCellsBatchingPeriod: 50,
                                   }
                                 : {
+                                      contentContainerStyle: {
+                                          paddingBottom: headerHeight,
+                                      },
                                       maxToRenderPerBatch: 10,
                                       windowSize: 10,
                                       initialNumToRender: 15,
@@ -731,7 +869,7 @@ export function ChatDetailScreen() {
                         }
                     />
                 )}
-            </Animated.View>
+            </View>
 
             {/* Blocking project suggestion banner for new sessions (above input) */}
             {suggestedProjectForSession && (
@@ -758,7 +896,7 @@ export function ChatDetailScreen() {
                         left: 0,
                         right: 0,
                         height: insets.bottom,
-                        backgroundColor: `${theme.accent}1F`,
+                        backgroundColor: 'transparent',
                     }}
                 />
             )}
@@ -809,12 +947,52 @@ export function ChatDetailScreen() {
 
 const detailStyles = StyleSheet.create({
     header: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
         paddingBottom: 8,
         gap: 8,
+    },
+    dropdown: {
+        position: 'absolute',
+        left: 12,
+        right: 12,
+        borderRadius: 16,
+        overflow: 'hidden',
+        maxHeight: 320,
+    },
+    dropdownRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        gap: 10,
         borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    dropdownIcon: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
+    dropdownTitle: {
+        fontSize: 15,
+        fontWeight: '500',
+    },
+    dropdownDate: {
+        fontSize: 12,
+        marginTop: 2,
+    },
+    dropdownEmpty: {
+        textAlign: 'center',
+        padding: 24,
+        fontSize: 14,
     },
     pillBtn: {
         width: 44,
@@ -839,6 +1017,10 @@ const detailStyles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 14,
+    },
+    titleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     title: {
         fontSize: 15,

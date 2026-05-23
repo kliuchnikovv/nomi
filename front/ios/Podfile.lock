@@ -84,6 +84,8 @@ PODS:
     - ExpoModulesCore
   - ExpoBackgroundFetch (13.0.6):
     - ExpoModulesCore
+  - ExpoBlur (15.0.8):
+    - ExpoModulesCore
   - ExpoCrypto (15.0.8):
     - ExpoModulesCore
   - ExpoFileSystem (19.0.21):
@@ -3188,6 +3190,7 @@ DEPENDENCIES:
   - "ExpoAdapterGoogleSignIn (from `../../node_modules/@react-native-google-signin/google-signin/expo/ios`)"
   - ExpoAsset (from `../../node_modules/expo-asset/ios`)
   - ExpoBackgroundFetch (from `../../node_modules/expo-background-fetch/ios`)
+  - ExpoBlur (from `../../node_modules/expo-blur/ios`)
   - ExpoCrypto (from `../../node_modules/expo-crypto/ios`)
   - ExpoFileSystem (from `../../node_modules/expo-file-system/ios`)
   - ExpoFont (from `../../node_modules/expo-font/ios`)
@@ -3198,7 +3201,7 @@ DEPENDENCIES:
   - ExpoSecureStore (from `../../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../../node_modules/expo-sharing/ios`)
   - ExpoSpeech (from `../../node_modules/expo-speech/ios`)
-  - ExpoSQLite (from `../node_modules/expo-sqlite/ios`)
+  - ExpoSQLite (from `../../node_modules/expo-sqlite/ios`)
   - EXTaskManager (from `../../node_modules/expo-task-manager/ios`)
   - fast_float (from `../../node_modules/react-native/third-party-podspecs/fast_float.podspec`)
   - FBLazyVector (from `../../node_modules/react-native/Libraries/FBLazyVector`)
@@ -3325,6 +3328,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-asset/ios"
   ExpoBackgroundFetch:
     :path: "../../node_modules/expo-background-fetch/ios"
+  ExpoBlur:
+    :path: "../../node_modules/expo-blur/ios"
   ExpoCrypto:
     :path: "../../node_modules/expo-crypto/ios"
   ExpoFileSystem:
@@ -3346,7 +3351,7 @@ EXTERNAL SOURCES:
   ExpoSpeech:
     :path: "../../node_modules/expo-speech/ios"
   ExpoSQLite:
-    :path: "../node_modules/expo-sqlite/ios"
+    :path: "../../node_modules/expo-sqlite/ios"
   EXTaskManager:
     :path: "../../node_modules/expo-task-manager/ios"
   fast_float:
@@ -3542,6 +3547,7 @@ SPEC CHECKSUMS:
   ExpoAdapterGoogleSignIn: 21ff1daeef3d21cb0b45772d8029102cc728d6b1
   ExpoAsset: f867e55ceb428aab99e1e8c082b5aee7c159ea18
   ExpoBackgroundFetch: 72d9978cf6addacc6fb5e211ef99f74146a52d76
+  ExpoBlur: b90747a3f22a8b6ceffd9cb0dc41a4184efdc656
   ExpoCrypto: b6105ebaa15d6b38a811e71e43b52cd934945322
   ExpoFileSystem: 858a44267a3e6e9057e0888ad7c7cfbf55d52063
   ExpoFont: f543ce20a228dd702813668b1a07b46f51878d47
