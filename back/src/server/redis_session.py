@@ -2075,7 +2075,12 @@ class RedisSession:
                         json=payload,
                         headers={"Authorization": f"Bearer {api_key}"},
                     )
-                    resp.raise_for_status()
+                    if not resp.is_success:
+                        logger.error(
+                            "[RedisSession] Vision bridge HTTP %d for image %d: %s",
+                            resp.status_code, i, resp.text[:500],
+                        )
+                        continue
                     result = resp.json()
                     description = (
                         result.get("choices", [{}])[0]
@@ -2085,7 +2090,10 @@ class RedisSession:
                     if description:
                         descriptions.append(f"[Image {i}]: {description}")
                 except Exception as exc:
-                    logger.error("[RedisSession] Vision bridge error for image %d: %s", i, exc)
+                    logger.error(
+                        "[RedisSession] Vision bridge error for image %d: %r",
+                        i, exc, exc_info=True,
+                    )
 
         return "\n\n".join(descriptions)
 
