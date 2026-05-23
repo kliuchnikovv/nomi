@@ -402,24 +402,6 @@ export function useGiftedChatRenderers({
                         inputToolbarAnimStyle,
                     ]}
                 >
-                    {/* Soft fade above input bar */}
-                    {([0.07, 0.18, 0.35, 0.55, 0.78] as const).map(
-                        (opacity, i) => (
-                            <View
-                                key={i}
-                                pointerEvents="none"
-                                style={{
-                                    position: 'absolute',
-                                    top: -(5 - i) * 6,
-                                    left: 0,
-                                    right: 0,
-                                    height: 6,
-                                    backgroundColor: theme.background,
-                                    opacity,
-                                }}
-                            />
-                        ),
-                    )}
                     {!error && (
                         <GenerationStatusBar
                             status={generationStatus}
