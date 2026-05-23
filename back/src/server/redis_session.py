@@ -245,6 +245,10 @@ class RedisSession:
         if self._go_ws is not None and self._go_ws.is_connected:
             try:
                 await self._go_ws.send_frame(frame)
+                logger.info(
+                    "[RedisSession] Frame queued via GoWS op=%s chat=%s id=%d",
+                    frame.op, frame.chat_id, frame.id,
+                )
                 self.next_id = frame.id + 1
                 return self.next_id
             except Exception as e:
@@ -254,6 +258,10 @@ class RedisSession:
         data = frame.marshal()
         target_id = self.user_id or self.session_id
         channel = f"chat:user:{target_id}"
+        logger.info(
+            "[RedisSession] Frame sent via Redis op=%s chat=%s id=%d channel=%s",
+            frame.op, frame.chat_id, frame.id, channel,
+        )
         payload_json = json.dumps(data)
 
         if self.redis_client:
