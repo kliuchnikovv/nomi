@@ -30,7 +30,15 @@ export class ChatSocket {
     private idleTimer: any = null;
     private idleTimeoutMs = 5 * 60 * 1000; // 5 minutes
 
-    private readonly instanceId = `${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 8)}`;
+    // Stall watchdog: while a generation is in flight, expect frames to keep arriving.
+    // If the WS goes silent (e.g. iOS QUIC migration on network handoff), force a
+    // reconnect so the next attempt re-establishes a working stream.
+    private stallTimer: any = null;
+    private stallTimeoutMs = 15000;
+
+    private readonly instanceId = `${Date.now().toString(36)}_${Math.random()
+        .toString(16)
+        .slice(2, 8)}`;
     private shouldReconnect = false;
     private reconnectDelay = 1000;
     private reconnectTimer: any = null;
@@ -45,7 +53,7 @@ export class ChatSocket {
     // Actually, team commands are sent once per session usually. But in a global socket, we might switch contexts.
     // For now, let's keep it simple: we send commands when sending a message if needed, or rely on the backend session.
 
-    constructor() { }
+    constructor() {}
 
     getDebugState() {
         return {
@@ -73,10 +81,18 @@ export class ChatSocket {
     }
 
     setChatId(chatId: string | null) {
-        const changed = chatId !== null && this.connectedChatId !== null && chatId !== this.connectedChatId;
+        const changed =
+            chatId !== null &&
+            this.connectedChatId !== null &&
+            chatId !== this.connectedChatId;
         this.chatId = chatId;
         if (changed && this.isReady() && this.channel === 'chat') {
-            console.log('[Socket] chatId changed, reconnecting from', this.connectedChatId, 'to', chatId);
+            console.log(
+                '[Socket] chatId changed, reconnecting from',
+                this.connectedChatId,
+                'to',
+                chatId,
+            );
             this.isIntentionallyClosed = false;
             this.shouldReconnect = true;
             this.close();
@@ -121,10 +137,36 @@ export class ChatSocket {
         this.scheduleIdleClose();
     }
 
+    private startStallWatchdog() {
+        this.clearStallWatchdog();
+        this.stallTimer = setTimeout(() => {
+            console.warn(
+                '[Socket] Stall detected during generation — forcing reconnect',
+            );
+            this.stallTimer = null;
+            this.shouldReconnect = true;
+            this.isIntentionallyClosed = false;
+            try {
+                this.ws?.close();
+            } catch {}
+        }, this.stallTimeoutMs);
+    }
+
+    private clearStallWatchdog() {
+        if (this.stallTimer) {
+            clearTimeout(this.stallTimer);
+            this.stallTimer = null;
+        }
+    }
+
     isReady(): boolean {
         const ready = !!this.ws && this.ws.readyState === 1;
         if (this.ws && !ready) {
-            console.log(`[Socket] Not ready: ws exists=${!!this.ws}, readyState=${this.ws?.readyState}`);
+            console.log(
+                `[Socket] Not ready: ws exists=${!!this.ws}, readyState=${
+                    this.ws?.readyState
+                }`,
+            );
         }
         return ready;
     }
@@ -148,7 +190,9 @@ export class ChatSocket {
      */
     private pushToOutbox(msg: any) {
         if (this.outbox.length >= MAX_OUTBOX_SIZE) {
-            console.warn(`[Socket] Outbox full (${MAX_OUTBOX_SIZE}), dropping oldest message`);
+            console.warn(
+                `[Socket] Outbox full (${MAX_OUTBOX_SIZE}), dropping oldest message`,
+            );
             this.outbox.shift();
         }
         this.outbox.push(msg);
@@ -173,7 +217,7 @@ export class ChatSocket {
     open() {
         const token = this.token;
         if (!token) {
-            console.log("WS open blocked: missing token");
+            console.log('WS open blocked: missing token');
             return;
         }
 
@@ -195,7 +239,7 @@ export class ChatSocket {
             const wsState = this.ws.readyState;
             console.log(`[Socket] Connection in progress, state: ${wsState}`, {
                 readyState: wsState,
-                isConnecting: this.isConnecting
+                isConnecting: this.isConnecting,
             });
             // If WebSocket is already connected (1), skip
             if (wsState === 1) {
@@ -205,19 +249,25 @@ export class ChatSocket {
             // If WebSocket is in connecting state (0), wait a bit before retrying
             // This prevents closing connections that are still establishing
             if (wsState === 0) {
-                console.log('[Socket] Connection still establishing, skipping duplicate attempt');
+                console.log(
+                    '[Socket] Connection still establishing, skipping duplicate attempt',
+                );
                 return;
             }
             // If closing (2) or closed (3), allow retry
             if (wsState === 2 || wsState === 3) {
-                console.log('[Socket] Connection closing/closed, allowing retry');
+                console.log(
+                    '[Socket] Connection closing/closed, allowing retry',
+                );
                 try {
                     this.ws.close();
-                } catch { }
+                } catch {}
                 this.ws = null;
                 this.isConnecting = false;
             } else {
-                console.log('[Socket] Connection already in progress, skipping');
+                console.log(
+                    '[Socket] Connection already in progress, skipping',
+                );
                 return;
             }
         }
@@ -229,7 +279,7 @@ export class ChatSocket {
         if (this.ws) {
             try {
                 this.ws.close();
-            } catch { }
+            } catch {}
             this.ws = null;
         }
 
@@ -273,7 +323,9 @@ export class ChatSocket {
         // Set a timeout to reset isConnecting flag if connection takes too long
         const connectionTimeout = setTimeout(() => {
             if (this.isConnecting && this.ws && this.ws.readyState !== 1) {
-                console.warn('[Socket] Connection timeout, resetting isConnecting flag');
+                console.warn(
+                    '[Socket] Connection timeout, resetting isConnecting flag',
+                );
                 this.isConnecting = false;
             }
         }, 10000); // 10 seconds timeout
@@ -282,14 +334,16 @@ export class ChatSocket {
             const ws: any = new (WebSocket as any)(
                 wsUrl,
                 [],
-                token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+                token
+                    ? { headers: { Authorization: `Bearer ${token}` } }
+                    : undefined,
             );
             this.ws = ws;
 
             ws.onopen = () => {
                 console.log('[Socket] Connected successfully', {
                     readyState: ws.readyState,
-                    url: wsUrl.substring(0, 50) + '...'
+                    url: wsUrl.substring(0, 50) + '...',
                 });
                 (ws as any)._wasConnected = true;
                 this.connectedChatId = this.chatId;
@@ -306,6 +360,8 @@ export class ChatSocket {
 
             ws.onmessage = async (e: any) => {
                 this.touchActivity();
+                // Any inbound frame proves the stream is alive — postpone the stall trip.
+                if (this.stallTimer) this.startStallWatchdog();
                 const raw = typeof e.data === 'string' ? e.data : '';
 
                 const lines = raw.split('\n');
@@ -323,7 +379,8 @@ export class ChatSocket {
                         const frame = rawJson as Frame;
                         const op = frame.op;
 
-                        const isStreamingText = op === 'message' &&
+                        const isStreamingText =
+                            op === 'message' &&
                             frame.kind === 'data' &&
                             frame.payload?.type === 'text' &&
                             frame.payload?.delta;
@@ -333,24 +390,40 @@ export class ChatSocket {
                             if (streamingCount > MAX_STREAMING_BATCH) continue;
                             const chatId = frame.chat_id;
                             if (chatId) {
-                                useChatStore.getState().addMessage(chatId, frame.payload);
+                                useChatStore
+                                    .getState()
+                                    .addMessage(chatId, frame.payload);
                             }
                             continue;
                         }
 
-                        if (op === 'message' || op === 'tools' || op === 'model' || op === 'done' || op === 'signal') {
+                        if (
+                            op === 'message' ||
+                            op === 'tools' ||
+                            op === 'model' ||
+                            op === 'done' ||
+                            op === 'signal'
+                        ) {
                             const chatId = frame.chat_id;
                             if (chatId) {
                                 if (op === 'message' && frame.kind === 'data') {
-                                    useChatStore.getState().addMessage(chatId, frame.payload);
-                                    if (frame.payload?.type === 'client_action') {
-                                        emitPlannerAction(chatId, frame.payload);
+                                    useChatStore
+                                        .getState()
+                                        .addMessage(chatId, frame.payload);
+                                    if (
+                                        frame.payload?.type === 'client_action'
+                                    ) {
+                                        emitPlannerAction(
+                                            chatId,
+                                            frame.payload,
+                                        );
                                     }
                                 }
 
                                 if (op === 'message' && frame.kind === 'data') {
                                     this.handlers.onMessage?.(frame);
                                 } else if (op === 'done') {
+                                    this.clearStallWatchdog();
                                     emitGenerationDone(String(chatId));
                                     this.handlers.onDone?.(frame);
                                 } else if (op === 'signal') {
@@ -367,22 +440,41 @@ export class ChatSocket {
                                 this.handlers.onPing?.(frame);
                                 break;
                             case 'error':
-                                const errorInfo = frame.error || frame.payload?.error || frame.payload;
-                                const errorCode = errorInfo?.code || frame.payload?.code;
-                                const errorMessage = errorInfo?.message || frame.payload?.message || 'An error occurred';
-                                const errorDetails = errorInfo?.details || frame.payload?.details;
+                                const errorInfo =
+                                    frame.error ||
+                                    frame.payload?.error ||
+                                    frame.payload;
+                                const errorCode =
+                                    errorInfo?.code || frame.payload?.code;
+                                const errorMessage =
+                                    errorInfo?.message ||
+                                    frame.payload?.message ||
+                                    'An error occurred';
+                                const errorDetails =
+                                    errorInfo?.details ||
+                                    frame.payload?.details;
 
                                 if (errorDetails) {
-                                    console.error('Error details:', errorDetails);
+                                    console.error(
+                                        'Error details:',
+                                        errorDetails,
+                                    );
                                 }
 
                                 // Handle 401 unauthorized
-                                if (errorCode === 401 || frame.payload?.code === 401) {
+                                if (
+                                    errorCode === 401 ||
+                                    frame.payload?.code === 401
+                                ) {
                                     if (!retried) {
                                         retried = true;
-                                        const ok = await (this.handlers.onUnauthorized?.() ?? false);
+                                        const ok =
+                                            await (this.handlers.onUnauthorized?.() ??
+                                                false);
                                         if (ok) {
-                                            try { ws.close(); } catch { }
+                                            try {
+                                                ws.close();
+                                            } catch {}
                                             this.open();
                                         }
                                     }
@@ -390,26 +482,40 @@ export class ChatSocket {
                                     // Map error codes to user-friendly messages
                                     let userMessage = errorMessage;
                                     if (errorCode) {
-                                        const errorMessages: Record<string, string> = {
-                                            'parse_failed': 'Error processing message',
-                                            'save_failed': 'Error saving data',
-                                            'redis_failed': 'Error connecting to server',
-                                            'marshal_failed': 'Error processing response',
-                                            'dispatch_failed': 'Error saving response',
-                                            'attachment_failed': 'Error uploading attachments',
-                                            'agent_failed': 'Error executing task',
-                                            'agent_error': 'Error executing task',
-                                            'agent_not_found': 'Agent not found',
-                                            'task_failed': 'Error processing request',
-                                            'worker_error': 'Server error',
-                                            'build_failed': 'Initialization error',
-                                            'stream_failed': 'Error generating response',
-                                            'timeout': 'Timeout exceeded',
-                                            'not_found': 'Resource not found',
+                                        const errorMessages: Record<
+                                            string,
+                                            string
+                                        > = {
+                                            parse_failed:
+                                                'Error processing message',
+                                            save_failed: 'Error saving data',
+                                            redis_failed:
+                                                'Error connecting to server',
+                                            marshal_failed:
+                                                'Error processing response',
+                                            dispatch_failed:
+                                                'Error saving response',
+                                            attachment_failed:
+                                                'Error uploading attachments',
+                                            agent_failed:
+                                                'Error executing task',
+                                            agent_error: 'Error executing task',
+                                            agent_not_found: 'Agent not found',
+                                            task_failed:
+                                                'Error processing request',
+                                            worker_error: 'Server error',
+                                            build_failed:
+                                                'Initialization error',
+                                            stream_failed:
+                                                'Error generating response',
+                                            timeout: 'Timeout exceeded',
+                                            not_found: 'Resource not found',
                                             'not-found': 'Resource not found',
-                                            'rate_limited': 'Rate limit exceeded',
+                                            rate_limited: 'Rate limit exceeded',
                                         };
-                                        userMessage = errorMessages[errorCode] || errorMessage;
+                                        userMessage =
+                                            errorMessages[errorCode] ||
+                                            errorMessage;
                                     }
 
                                     emitChatError(this.chatId ?? '', {
@@ -425,7 +531,8 @@ export class ChatSocket {
                                             code: errorCode,
                                             message: userMessage,
                                             details: errorDetails,
-                                            isRateLimited: errorCode === 'rate_limited',
+                                            isRateLimited:
+                                                errorCode === 'rate_limited',
                                         },
                                         message: userMessage,
                                     });
@@ -433,7 +540,11 @@ export class ChatSocket {
                                 break;
                         }
                     } catch (err) {
-                        console.warn('Failed to parse WS message:', err, trimmed);
+                        console.warn(
+                            'Failed to parse WS message:',
+                            err,
+                            trimmed,
+                        );
                     }
                 }
             };
@@ -445,11 +556,16 @@ export class ChatSocket {
             };
 
             ws.onclose = async (e: any) => {
-                console.log('[Socket] WebSocket onclose event:', e.code, e.reason, {
-                    shouldReconnect: this.shouldReconnect,
-                    isIntentionallyClosed: this.isIntentionallyClosed,
-                    readyState: ws.readyState
-                });
+                console.log(
+                    '[Socket] WebSocket onclose event:',
+                    e.code,
+                    e.reason,
+                    {
+                        shouldReconnect: this.shouldReconnect,
+                        isIntentionallyClosed: this.isIntentionallyClosed,
+                        readyState: ws.readyState,
+                    },
+                );
                 clearTimeout(connectionTimeout);
                 this.isConnecting = false;
                 if (this.ws === ws) this.ws = null;
@@ -457,24 +573,33 @@ export class ChatSocket {
 
                 // Don't reconnect if intentionally closed
                 if (this.isIntentionallyClosed) {
-                    console.log('[Socket] Connection intentionally closed, skipping reconnect');
+                    console.log(
+                        '[Socket] Connection intentionally closed, skipping reconnect',
+                    );
                     return;
                 }
 
                 // Code 0 usually means connection closed before establishment or network error
                 // Don't reconnect immediately for code 0 - it might be a server rejection
                 if (code === 0) {
-                    console.log('[Socket] Connection closed with code 0 (before establishment or network error)');
+                    console.log(
+                        '[Socket] Connection closed with code 0 (before establishment or network error)',
+                    );
                     // Code 0 with readyState 3 (CLOSED) means connection never fully established
                     // This is likely a server rejection or network error - don't reconnect immediately
                     // Only reconnect if we were actually connected (readyState was 1) before closing
                     // But readyState in onclose is always 3 (CLOSED), so we need to track connection state
-                    const wasConnected = ws.readyState === 1 || (ws as any)._wasConnected;
+                    const wasConnected =
+                        ws.readyState === 1 || (ws as any)._wasConnected;
                     if (wasConnected && this.shouldReconnect) {
-                        console.log('[Socket] Was connected before close, scheduling reconnect');
+                        console.log(
+                            '[Socket] Was connected before close, scheduling reconnect',
+                        );
                         this.scheduleReconnect();
                     } else {
-                        console.log('[Socket] Connection never fully established (code 0), not reconnecting to avoid loop');
+                        console.log(
+                            '[Socket] Connection never fully established (code 0), not reconnecting to avoid loop',
+                        );
                         // Don't reconnect - this prevents infinite reconnection loops
                         // The connection will be retried when token changes or user action triggers it
                     }
@@ -482,10 +607,17 @@ export class ChatSocket {
                 }
 
                 // Unauthorized
-                if ((code === 4401 || code === 4001 || code === 1008 || code === 1006) && !retried) {
+                if (
+                    (code === 4401 ||
+                        code === 4001 ||
+                        code === 1008 ||
+                        code === 1006) &&
+                    !retried
+                ) {
                     retried = true;
                     this.shouldReconnect = false; // Stop auto-reconnect on auth error
-                    const ok = await (this.handlers.onUnauthorized?.() ?? false);
+                    const ok = await (this.handlers.onUnauthorized?.() ??
+                        false);
                     if (ok) {
                         this.connect();
                         return;
@@ -496,7 +628,9 @@ export class ChatSocket {
                 // Normal closure (1000) - only reconnect if shouldReconnect is true
                 // This handles cases where server closes connection normally but we want to stay connected
                 if (code === 1000 && !this.shouldReconnect) {
-                    console.log('[Socket] Normal closure with shouldReconnect=false, skipping reconnect');
+                    console.log(
+                        '[Socket] Normal closure with shouldReconnect=false, skipping reconnect',
+                    );
                     return;
                 }
 
@@ -505,7 +639,6 @@ export class ChatSocket {
                     this.scheduleReconnect();
                 }
             };
-
         } catch (e) {
             clearTimeout(connectionTimeout);
             this.isConnecting = false;
@@ -578,6 +711,7 @@ export class ChatSocket {
             try {
                 this.ws.send(JSON.stringify(msg));
                 this.touchActivity();
+                this.startStallWatchdog();
             } catch (err) {
                 this.pushToOutbox(msg);
             }
@@ -598,11 +732,15 @@ export class ChatSocket {
      */
     sendStoreFacts(chatId: string, userId: string, extractedFacts: string[]) {
         if (!userId || !extractedFacts?.length) {
-            console.log('[Socket] sendStoreFacts: no userId or empty facts, skipping');
+            console.log(
+                '[Socket] sendStoreFacts: no userId or empty facts, skipping',
+            );
             return;
         }
 
-        console.log(`[Socket] Sending ${extractedFacts.length} extracted fact(s) to server for user ${userId}`);
+        console.log(
+            `[Socket] Sending ${extractedFacts.length} extracted fact(s) to server for user ${userId}`,
+        );
         extractedFacts.forEach((fact, idx) => {
             console.log(`[Socket]   Fact ${idx + 1}: ${fact}`);
         });
@@ -624,13 +762,18 @@ export class ChatSocket {
                 console.log('[Socket] ✓ Facts sent successfully via WebSocket');
             } catch (err) {
                 // Non-critical: put in outbox so it gets sent when connection is restored
-                console.warn('[Socket] sendStoreFacts failed, queuing for retry', err);
+                console.warn(
+                    '[Socket] sendStoreFacts failed, queuing for retry',
+                    err,
+                );
                 this.pushToOutbox(msg);
             }
         } else {
             // Queue for later — same as sendMessage; processOutbox will send when socket connects
             this.pushToOutbox(msg);
-            console.log('[Socket] Facts queued (socket not ready), will send when connected');
+            console.log(
+                '[Socket] Facts queued (socket not ready), will send when connected',
+            );
         }
     }
 
@@ -641,7 +784,7 @@ export class ChatSocket {
             kind: 'meta',
             op: op,
             chat_id: chatId,
-            payload: payload
+            payload: payload,
         };
 
         if (this.isReady()) {
@@ -670,7 +813,7 @@ export class ChatSocket {
 
         try {
             this.ws?.close();
-        } catch { }
+        } catch {}
         this.ws = null;
         this.connectedChatId = null;
         this.outbox = [];

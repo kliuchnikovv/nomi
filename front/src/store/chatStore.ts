@@ -28,7 +28,11 @@ interface ChatStore {
     removeMessage: (chatId: string, messageId: string) => void;
     clearChat: (chatId: string) => void;
     flushPendingUpdates: (chatId: string) => void;
-    appendActions: (chatId: string, messageId: string, actions: MessageAction[]) => void;
+    appendActions: (
+        chatId: string,
+        messageId: string,
+        actions: MessageAction[],
+    ) => void;
 }
 
 // Throttling state (outside store to avoid re-renders)
@@ -47,7 +51,9 @@ function touchChatAccess(chatId: string) {
     chatAccessOrder.push(chatId);
 }
 
-function evictOldChats(chats: Record<string, Message[]>): Record<string, Message[]> {
+function evictOldChats(
+    chats: Record<string, Message[]>,
+): Record<string, Message[]> {
     if (chatAccessOrder.length <= MAX_CHATS_IN_MEMORY) {
         return chats;
     }
@@ -79,7 +85,11 @@ function trimMessages(messages: Message[], limit: number): Message[] {
 // Flush accumulated streaming updates for a chat
 function flushPendingUpdates(
     chatId: string,
-    set: (fn: (state: { chats: Record<string, Message[]> }) => { chats: Record<string, Message[]> }) => void
+    set: (
+        fn: (state: { chats: Record<string, Message[]> }) => {
+            chats: Record<string, Message[]>;
+        },
+    ) => void,
 ) {
     // Clear any pending timer
     const existingTimer = throttleTimers.get(chatId);
@@ -100,12 +110,16 @@ function flushPendingUpdates(
     // Batch all accumulated chunks into a single low-priority store update.
     // startTransition marks this as interruptible so taps/gestures get priority.
     startTransition(() => {
-        set((state) => {
+        set(state => {
             let currentMessages = state.chats[chatId] || [];
             let newMessages = currentMessages;
 
             for (const update of updates) {
-                const result = onReceivedMessage(update.payload, newMessages, chatId);
+                const result = onReceivedMessage(
+                    update.payload,
+                    newMessages,
+                    chatId,
+                );
                 if (result !== newMessages) {
                     newMessages = result;
                 }
@@ -138,12 +152,15 @@ export const useChatStore = create<ChatStore>()(
 
             setMessages: (chatId, messages) => {
                 // Flush any pending streaming updates before replacing messages
-                if (pendingUpdates.has(chatId) && pendingUpdates.get(chatId)!.length > 0) {
+                if (
+                    pendingUpdates.has(chatId) &&
+                    pendingUpdates.get(chatId)!.length > 0
+                ) {
                     flushPendingUpdates(chatId, set);
                 }
                 touchChatAccess(chatId);
                 const trimmed = trimMessages(messages, MAX_MESSAGES_PER_CHAT);
-                set((state) => ({
+                set(state => ({
                     chats: evictOldChats({
                         ...state.chats,
                         [chatId]: trimmed,
@@ -154,13 +171,16 @@ export const useChatStore = create<ChatStore>()(
             mergeMessages: (chatId, incoming) => {
                 if (!incoming || incoming.length === 0) return;
                 touchChatAccess(chatId);
-                set((state) => {
+                set(state => {
                     const existing = state.chats[chatId] ?? [];
-                    const existingIds = new Set(existing.map((m) => m.id));
-                    const toAdd = incoming.filter((m) => !existingIds.has(m.id));
+                    const existingIds = new Set(existing.map(m => m.id));
+                    const toAdd = incoming.filter(m => !existingIds.has(m.id));
                     if (toAdd.length === 0) return state;
                     // History messages (toAdd) are older — prepend before in-flight existing messages
-                    const merged = trimMessages([...toAdd, ...existing], MAX_MESSAGES_PER_CHAT);
+                    const merged = trimMessages(
+                        [...toAdd, ...existing],
+                        MAX_MESSAGES_PER_CHAT,
+                    );
                     return {
                         chats: evictOldChats({
                             ...state.chats,
@@ -171,7 +191,7 @@ export const useChatStore = create<ChatStore>()(
             },
 
             removeMessage: (chatId, messageId) => {
-                set((state) => {
+                set(state => {
                     const messages = state.chats[chatId];
                     if (!messages) return state;
                     return {
@@ -183,7 +203,7 @@ export const useChatStore = create<ChatStore>()(
                 });
             },
 
-            clearChat: (chatId) => {
+            clearChat: chatId => {
                 // Clear any pending updates for this chat
                 pendingUpdates.delete(chatId);
                 const existingTimer = throttleTimers.get(chatId);
@@ -198,23 +218,26 @@ export const useChatStore = create<ChatStore>()(
                     chatAccessOrder.splice(lruIdx, 1);
                 }
 
-                set((state) => {
+                set(state => {
                     const newChats = { ...state.chats };
                     delete newChats[chatId];
                     return { chats: newChats };
                 });
             },
 
-            flushPendingUpdates: (chatId) => {
+            flushPendingUpdates: chatId => {
                 // Manually flush any pending updates for this chat
-                if (pendingUpdates.has(chatId) && pendingUpdates.get(chatId)!.length > 0) {
+                if (
+                    pendingUpdates.has(chatId) &&
+                    pendingUpdates.get(chatId)!.length > 0
+                ) {
                     flushPendingUpdates(chatId, set);
                 }
             },
 
             appendActions: (chatId, messageId, actions) => {
                 if (actions.length === 0) return;
-                set((state) => {
+                set(state => {
                     const msgs = state.chats[chatId];
                     if (!msgs) return state;
                     const idx = msgs.findIndex(m => m.id === messageId);
@@ -235,7 +258,8 @@ export const useChatStore = create<ChatStore>()(
 
             addMessage: (chatId, payload) => {
                 // Check if this is a streaming text chunk that should be throttled
-                const isStreamingChunk = payload?.type === 'text' &&
+                const isStreamingChunk =
+                    payload?.type === 'text' &&
                     payload?.delta &&
                     !payload?.done;
 
@@ -246,7 +270,7 @@ export const useChatStore = create<ChatStore>()(
                     }
                     pendingUpdates.get(chatId)!.push({
                         payload,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
                     });
 
                     const now = Date.now();
@@ -254,13 +278,20 @@ export const useChatStore = create<ChatStore>()(
                     const timeSinceLastFlush = now - lastFlush;
 
                     // Calculate accumulated text length since last flush
-                    const accumulatedLength = pendingUpdates.get(chatId)!
-                        .reduce((sum, u) => sum + (u.payload.delta?.length || 0), 0);
+                    const accumulatedLength = pendingUpdates
+                        .get(chatId)!
+                        .reduce(
+                            (sum, u) => sum + (u.payload.delta?.length || 0),
+                            0,
+                        );
 
                     // Flush immediately if:
                     // 1. Enough time has passed since last flush, OR
                     // 2. We've accumulated enough characters
-                    if (timeSinceLastFlush >= STREAM_THROTTLE_MS || accumulatedLength >= STREAM_FLUSH_THRESHOLD) {
+                    if (
+                        timeSinceLastFlush >= STREAM_THROTTLE_MS ||
+                        accumulatedLength >= STREAM_FLUSH_THRESHOLD
+                    ) {
                         flushPendingUpdates(chatId, set);
                     } else if (!throttleTimers.has(chatId)) {
                         // Schedule a flush
@@ -273,21 +304,31 @@ export const useChatStore = create<ChatStore>()(
                 }
 
                 // Non-streaming messages: flush any pending updates first, then process immediately
-                if (pendingUpdates.has(chatId) && pendingUpdates.get(chatId)!.length > 0) {
+                if (
+                    pendingUpdates.has(chatId) &&
+                    pendingUpdates.get(chatId)!.length > 0
+                ) {
                     flushPendingUpdates(chatId, set);
                 }
 
                 touchChatAccess(chatId);
                 startTransition(() => {
-                    set((state) => {
+                    set(state => {
                         const currentMessages = state.chats[chatId] || [];
-                        let newMessages = onReceivedMessage(payload, currentMessages, chatId);
+                        let newMessages = onReceivedMessage(
+                            payload,
+                            currentMessages,
+                            chatId,
+                        );
 
                         if (newMessages === currentMessages) {
                             return state;
                         }
 
-                        newMessages = trimMessages(newMessages, MAX_MESSAGES_PER_CHAT);
+                        newMessages = trimMessages(
+                            newMessages,
+                            MAX_MESSAGES_PER_CHAT,
+                        );
                         return {
                             chats: evictOldChats({
                                 ...state.chats,
@@ -302,22 +343,31 @@ export const useChatStore = create<ChatStore>()(
             name: 'chat-storage',
             storage: createJSONStorage(() => AsyncStorage),
             // Only persist a subset of chats with fewer messages to limit AsyncStorage size
-            partialize: (state) => {
-                const recentChatIds = chatAccessOrder.slice(-MAX_PERSISTED_CHATS);
+            partialize: state => {
+                const recentChatIds = chatAccessOrder.slice(
+                    -MAX_PERSISTED_CHATS,
+                );
                 const persistedChats: Record<string, Message[]> = {};
                 for (const chatId of recentChatIds) {
                     const messages = state.chats[chatId];
                     if (messages) {
-                        persistedChats[chatId] = trimMessages(messages, MAX_PERSISTED_MESSAGES);
+                        persistedChats[chatId] = trimMessages(
+                            messages,
+                            MAX_PERSISTED_MESSAGES,
+                        );
                     }
                 }
                 return { chats: persistedChats };
             },
-        }
-    )
+        },
+    ),
 );
 
-function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: string): Message[] {
+function onReceivedMessage(
+    payload: any,
+    prevMessages: Message[],
+    activeChatID: string,
+): Message[] {
     const messageID = payload.message_id;
     if (!messageID) {
         return prevMessages;
@@ -332,7 +382,9 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
         const item = prevMessages[i];
         if (item.id !== messageID) continue;
         if (payload.agent_name && item.agent_id) {
-            if (item.agent_id.toLowerCase() !== payload.agent_name.toLowerCase()) {
+            if (
+                item.agent_id.toLowerCase() !== payload.agent_name.toLowerCase()
+            ) {
                 continue;
             }
         }
@@ -380,13 +432,26 @@ function onReceivedMessage(payload: any, prevMessages: Message[], activeChatID: 
     }
     const role = payload.role || 'assistant';
     const sender = payload.sender || (role === 'user' ? 'user' : 'assistant');
+
+    // A fresh assistant turn must not inherit the previous turn's throttle window —
+    // otherwise the first delta of the second message waits behind a stale
+    // STREAM_THROTTLE_MS timer and the placeholder loader never gets a chance to render.
+    if (role === 'assistant') {
+        lastFlushTime.delete(activeChatID);
+        const t = throttleTimers.get(activeChatID);
+        if (t) {
+            clearTimeout(t);
+            throttleTimers.delete(activeChatID);
+        }
+    }
+
     newMessages.push({
         id: messageID,
         chat_id: activeChatID,
         sender: sender,
         role: role,
         agent_id: payload.agent_name,
-        text: role === 'user' ? (payload.message || "") : " ",
+        text: role === 'user' ? payload.message || '' : ' ',
         created_at: Date.now(),
         content_parts: role === 'user' ? undefined : [],
         attachments: payload.attachments,

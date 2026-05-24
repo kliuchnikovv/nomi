@@ -82,6 +82,9 @@ export interface UsePlannerChatResult {
             webSearch?: boolean;
             context?: string;
             level?: 'quick' | 'standard' | 'full';
+            model?: string;
+            provider?: string;
+            attachmentIds?: string[];
         },
     ) => void;
     replyToAskUser: (callId: string, answer: string) => void;
@@ -363,6 +366,9 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
                 webSearch?: boolean;
                 context?: string;
                 level?: 'quick' | 'standard' | 'full';
+                model?: string;
+                provider?: string;
+                attachmentIds?: string[];
             },
         ) => {
             const trimmed = text.trim();
@@ -427,12 +433,20 @@ export function usePlannerChat(date: string): UsePlannerChatResult {
                 ? `${trimmed}\n\n${options.context}`
                 : trimmed;
 
+            if (options?.model) {
+                chatModelRef.current = options.model;
+                chatProviderRef.current =
+                    options.provider ?? chatProviderRef.current;
+            }
+
             socket.sendMessage(
                 payload,
                 resolvedId,
                 `planner_${Date.now()}`,
                 userMsgId,
-                undefined, // 5th: attachmentIDs
+                options?.attachmentIds?.length
+                    ? options.attachmentIds
+                    : undefined, // 5th: attachmentIDs
                 options?.webSearch ?? false, // 6th: webSearch
                 undefined, // 7th: thinking
                 'user', // 8th: role

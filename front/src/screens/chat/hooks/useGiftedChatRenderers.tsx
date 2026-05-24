@@ -222,6 +222,7 @@ interface GiftedChatRenderersParams {
 
 export function useGiftedChatRenderers({
     assistantContainerMaxWidth,
+    assistantWorking,
     theme,
     onSend,
     error,
@@ -318,6 +319,10 @@ export function useGiftedChatRenderers({
                     <Bubble
                         {...props}
                         onLongPress={handleLongPress}
+                        containerStyle={{
+                            left: { backgroundColor: 'transparent' },
+                            right: undefined,
+                        }}
                         wrapperStyle={{
                             right: {
                                 backgroundColor: theme.accent,

@@ -9,7 +9,7 @@ import { createStyles } from './styles.tsx';
 import { useTheme } from '../../context/ThemeContext.tsx';
 import { themes } from '../../themes';
 import { initApiUrl } from '../../config';
-import { authApi, botIdentityApi, modelsApi } from '../../apiClient';
+import { authApi, botIdentityApi } from '../../apiClient';
 
 import { getStoredLocation } from '../../services/location/locationService';
 import { SettingsSection } from './components/SettingsSection';
@@ -24,7 +24,6 @@ type EmailAnalysisMode = 'device' | 'server';
 
 export const PLANNER_MODEL_KEY = '@genie_planner_model';
 export const PLANNER_PROVIDER_KEY = '@genie_planner_provider';
-const PLANNER_MODEL_DEFAULT = 'glm-4.7';
 
 type Nav = NativeStackNavigationProp<SettingsStackParamList, 'SettingsHome'>;
 
@@ -42,9 +41,6 @@ export default function SettingsHomeScreen() {
 
     const [emailAnalysisMode, setEmailAnalysisMode] =
         useState<EmailAnalysisMode>('device');
-    const [plannerModelName, setPlannerModelName] = useState(
-        PLANNER_MODEL_DEFAULT,
-    );
     const [botName, setBotName] = useState('Souper');
     const [locationDisplay, setLocationDisplay] = useState('');
     const [currentThemeName, setCurrentThemeName] = useState(
@@ -57,26 +53,32 @@ export default function SettingsHomeScreen() {
         user?.agent_storage_mode === 'agno',
     );
 
-    const handleSingleChatModeToggle = useCallback(async (value: boolean) => {
-        try {
-            await authApi.updateMe({ single_chat_mode: value });
-            setSingleChatMode(value);
-            if (user) updateUser({ ...user, single_chat_mode: value });
-        } catch (e) {
-            console.error('Failed to update single chat mode', e);
-        }
-    }, [user, updateUser]);
+    const handleSingleChatModeToggle = useCallback(
+        async (value: boolean) => {
+            try {
+                await authApi.updateMe({ single_chat_mode: value });
+                setSingleChatMode(value);
+                if (user) updateUser({ ...user, single_chat_mode: value });
+            } catch (e) {
+                console.error('Failed to update single chat mode', e);
+            }
+        },
+        [user, updateUser],
+    );
 
-    const handleAgnoSessionsToggle = useCallback(async (value: boolean) => {
-        try {
-            const mode = value ? 'agno' : 'payload';
-            await authApi.updateMe({ agent_storage_mode: mode });
-            setAgnoSessions(value);
-            if (user) updateUser({ ...user, agent_storage_mode: mode });
-        } catch (e) {
-            console.error('Failed to update agent storage mode', e);
-        }
-    }, [user, updateUser]);
+    const handleAgnoSessionsToggle = useCallback(
+        async (value: boolean) => {
+            try {
+                const mode = value ? 'agno' : 'payload';
+                await authApi.updateMe({ agent_storage_mode: mode });
+                setAgnoSessions(value);
+                if (user) updateUser({ ...user, agent_storage_mode: mode });
+            } catch (e) {
+                console.error('Failed to update agent storage mode', e);
+            }
+        },
+        [user, updateUser],
+    );
 
     // Refresh preview values each time this screen comes into focus
     useFocusEffect(
@@ -89,16 +91,6 @@ export default function SettingsHomeScreen() {
             AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
                 if (mode === 'server' || mode === 'device')
                     setEmailAnalysisMode(mode);
-            });
-            AsyncStorage.getItem(PLANNER_MODEL_KEY).then(async savedId => {
-                if (!savedId) return;
-                try {
-                    const models = await modelsApi.getModels();
-                    const found = models.find(m => m.id === savedId);
-                    setPlannerModelName(found?.name ?? savedId);
-                } catch {
-                    setPlannerModelName(savedId);
-                }
             });
             botIdentityApi
                 .get()
@@ -119,7 +111,9 @@ export default function SettingsHomeScreen() {
             </View>
             <ScrollView
                 style={styles.body}
-                contentContainerStyle={{ paddingBottom: insets.bottom + TAB_BAR_ICON_HEIGHT + 32 }}
+                contentContainerStyle={{
+                    paddingBottom: insets.bottom + TAB_BAR_ICON_HEIGHT + 32,
+                }}
             >
                 <SettingsSection header="Appearance">
                     <SettingsRow
@@ -159,7 +153,9 @@ export default function SettingsHomeScreen() {
                 <SettingsSection header="Integrations">
                     <SettingsRow
                         label="Integrations"
-                        onPress={() => navigation.navigate('IntegrationsScreen')}
+                        onPress={() =>
+                            navigation.navigate('IntegrationsScreen')
+                        }
                         isFirst
                         isLast
                     />
@@ -185,15 +181,6 @@ export default function SettingsHomeScreen() {
                             );
                         }}
                         isFirst
-                    />
-                    <SettingsRow
-                        label="Planner Model"
-                        value={plannerModelName}
-                        onPress={() =>
-                            navigation.navigate('PlannerModelScreen')
-                        }
-                        isFirst={false}
-                        isLast={false}
                     />
                     <SettingsToggleRow
                         label="Single Chat Mode"

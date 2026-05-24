@@ -6,20 +6,39 @@ import React, {
     useState,
 } from 'react';
 import {
+    Alert,
+    Image,
     Platform,
+    Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Spark } from 'iconoir-react-native';
+import {
+    Spark,
+    Plus,
+    Check,
+    Eye,
+    EyeClosed,
+    Code,
+    MagicWand,
+    MediaImage,
+    Attachment as AttachmentIcon,
+    Camera,
+    MapPin,
+    XmarkCircle,
+} from 'iconoir-react-native';
 import BottomSheet, {
     BottomSheetFooter,
     BottomSheetTextInput,
 } from '@gorhom/bottom-sheet';
 import type { BottomSheetFooterProps } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import DocumentPicker from 'react-native-document-picker';
 import { useTheme } from '../../../context/ThemeContext';
 import { usePlannerChat } from '../hooks/usePlannerChat';
 import { PlanItem } from '../types';
@@ -30,14 +49,35 @@ import {
     plannerMessageToMessage,
 } from '../../../components/chat/plannerAdapter';
 import { Message, MessageAction } from '../../main/models';
+import {
+    ContextMenu,
+    ContextMenuItem,
+    ContextMenuSection,
+} from '../../../components/ContextMenu';
+import { apiClient, modelsApi } from '../../../apiClient';
+import { ModelDetail } from '../../../types/Model';
+import { PLANNER_MODEL_KEY, PLANNER_PROVIDER_KEY } from '../../settings/screen';
+import { LocationPickerModal } from '../../../screens/chat/input/LocationPickerModal';
 
 type PlanningLevel = 'quick' | 'standard' | 'full';
-const PLANNER_LEVEL_KEY = 'planner_level';
+type DetailLevel = 'hide' | 'tool_calls' | 'think' | 'all';
 
-// Space reserved at the bottom of list content so the newest message is
-// never hidden behind the absolutely-positioned BottomSheetFooter.
+type LocalAttachment = {
+    id: string;
+    uri: string;
+    type: 'image' | 'file';
+    name: string;
+    loading: boolean;
+};
+
+const LEVEL_LABELS: Record<PlanningLevel, string> = {
+    quick: '⚡ Quick',
+    standard: '📋 Standard',
+    full: '🔍 Full',
+};
+
 const INPUT_BAR_HEIGHT = 56;
-const LEVEL_SELECTOR_HEIGHT = 44;
+const OPTIONS_ROW_HEIGHT = 60;
 
 interface Props {
     isOpen: boolean;
@@ -50,139 +90,216 @@ interface Props {
 }
 
 // ---------------------------------------------------------------------------
-// Footer content (level selector + input)
+// Footer content
 // ---------------------------------------------------------------------------
 
 interface FooterContentProps {
     theme: any;
     onSend: React.MutableRefObject<(text: string) => void>;
+    selectedModelName: string;
+    levelLabel: string;
+    onModelPress: () => void;
+    onLevelPress: () => void;
+    onPlusPress: () => void;
+    attachments: LocalAttachment[];
+    onRemoveAttachment: (id: string) => void;
 }
-
-const LEVELS: { id: PlanningLevel; label: string }[] = [
-    { id: 'quick', label: '⚡ Quick' },
-    { id: 'standard', label: '📋 Standard' },
-    { id: 'full', label: '🔍 Full' },
-];
-
-const LevelSelector = React.memo(function LevelSelector({
-    theme,
-    level,
-    setLevel,
-}: {
-    theme: any;
-    level: PlanningLevel;
-    setLevel: (l: PlanningLevel) => void;
-}) {
-    return (
-        <View style={levelStyles.row}>
-            {LEVELS.map(({ id, label }) => (
-                <TouchableOpacity
-                    key={id}
-                    onPress={() => setLevel(id)}
-                    style={[
-                        levelStyles.btn,
-                        {
-                            borderColor:
-                                level === id ? theme.accent : theme.border,
-                        },
-                        level === id && {
-                            backgroundColor: `${theme.accent}18`,
-                        },
-                    ]}
-                    activeOpacity={0.7}
-                >
-                    <Text
-                        style={[
-                            levelStyles.btnText,
-                            {
-                                color:
-                                    level === id
-                                        ? theme.accent
-                                        : theme.textSecondary,
-                            },
-                        ]}
-                    >
-                        {label}
-                    </Text>
-                </TouchableOpacity>
-            ))}
-        </View>
-    );
-});
-
-const levelStyles = StyleSheet.create({
-    row: {
-        flexDirection: 'row',
-        gap: 6,
-        paddingHorizontal: 12,
-        paddingTop: 8,
-        paddingBottom: 2,
-    },
-    btn: {
-        flex: 1,
-        alignItems: 'center',
-        paddingVertical: 5,
-        borderRadius: 8,
-        borderWidth: 1,
-    },
-    btnText: { fontSize: 12, fontWeight: '500' },
-});
 
 const ChatFooterContent = React.memo(function ChatFooterContent({
     theme,
     onSend,
+    selectedModelName,
+    levelLabel,
+    onModelPress,
+    onLevelPress,
+    onPlusPress,
+    attachments,
+    onRemoveAttachment,
 }: FooterContentProps) {
     const [text, setText] = useState('');
 
     const handleSend = () => {
         const t = text.trim();
-        if (!t) return;
+        if (!t && attachments.length === 0) return;
         onSend.current(t);
         setText('');
     };
 
     return (
-        <View
-            style={[
-                styles.inputBar,
-                {
-                    borderTopColor: theme.border,
-                    backgroundColor: theme.background,
-                },
-            ]}
-        >
-            <BottomSheetTextInput
-                style={StyleSheet.flatten([
-                    styles.textInput,
-                    {
-                        color: theme.textPrimary,
-                        backgroundColor: theme.surface,
-                        borderColor: theme.border,
-                    },
-                ])}
-                placeholder="Message Nomi…"
-                placeholderTextColor={theme.textSecondary}
-                value={text}
-                onChangeText={setText}
-                returnKeyType="send"
-                onSubmitEditing={handleSend}
-                blurOnSubmit={false}
-            />
-            <TouchableOpacity
-                onPress={handleSend}
-                disabled={!text.trim()}
-                activeOpacity={0.7}
-                style={[
-                    styles.sendBtn,
-                    {
-                        backgroundColor: text.trim()
-                            ? theme.accent
-                            : theme.border,
-                    },
-                ]}
-            >
-                <Text style={styles.sendBtnIcon}>↑</Text>
-            </TouchableOpacity>
+        <View style={{ backgroundColor: theme.background + 'D0' }}>
+            {/* Attachment preview strip */}
+            {attachments.length > 0 && (
+                <ScrollView
+                    horizontal
+                    style={{
+                        paddingHorizontal: 12,
+                        paddingTop: 8,
+                        maxHeight: 96,
+                    }}
+                    contentContainerStyle={{ gap: 8 }}
+                >
+                    {attachments.map(att => (
+                        <View
+                            key={att.id}
+                            style={{
+                                width: 76,
+                                height: 76,
+                                borderRadius: 10,
+                                overflow: 'hidden',
+                                backgroundColor: theme.surface,
+                            }}
+                        >
+                            {att.type === 'image' ? (
+                                <Image
+                                    source={{ uri: att.uri }}
+                                    style={{ width: '100%', height: '100%' }}
+                                />
+                            ) : (
+                                <View
+                                    style={{
+                                        flex: 1,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <AttachmentIcon
+                                        width={24}
+                                        height={24}
+                                        color={theme.textPrimary}
+                                    />
+                                    <Text
+                                        numberOfLines={1}
+                                        style={{
+                                            fontSize: 10,
+                                            color: theme.textPrimary,
+                                            paddingHorizontal: 4,
+                                            marginTop: 4,
+                                        }}
+                                    >
+                                        {att.name}
+                                    </Text>
+                                </View>
+                            )}
+                            {att.loading && (
+                                <View
+                                    style={{
+                                        ...StyleSheet.absoluteFillObject,
+                                        backgroundColor: 'rgba(0,0,0,0.4)',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    <Text
+                                        style={{ color: '#fff', fontSize: 11 }}
+                                    >
+                                        uploading…
+                                    </Text>
+                                </View>
+                            )}
+                            <Pressable
+                                onPress={() => onRemoveAttachment(att.id)}
+                                style={{
+                                    position: 'absolute',
+                                    top: 2,
+                                    right: 2,
+                                    backgroundColor: 'rgba(0,0,0,0.5)',
+                                    borderRadius: 10,
+                                    padding: 2,
+                                }}
+                            >
+                                <XmarkCircle
+                                    width={14}
+                                    height={14}
+                                    color="#fff"
+                                />
+                            </Pressable>
+                        </View>
+                    ))}
+                </ScrollView>
+            )}
+
+            {/* Options row: + | model pill | level pill */}
+            <View style={styles.optionsRow}>
+                <Pressable
+                    onPress={onPlusPress}
+                    style={({ pressed }) => [
+                        styles.circleBtn,
+                        {
+                            backgroundColor: theme.surface,
+                            opacity: pressed ? 0.7 : 1,
+                        },
+                    ]}
+                >
+                    <Plus width={22} height={22} color={theme.text} />
+                </Pressable>
+                <Pressable
+                    onPress={onModelPress}
+                    style={({ pressed }) => [
+                        styles.modelPill,
+                        {
+                            backgroundColor: theme.surface,
+                            opacity: pressed ? 0.7 : 1,
+                        },
+                    ]}
+                >
+                    <Text
+                        style={[styles.modelPillText, { color: theme.text }]}
+                        numberOfLines={1}
+                    >
+                        {selectedModelName}
+                    </Text>
+                </Pressable>
+                <Pressable
+                    onPress={onLevelPress}
+                    style={({ pressed }) => [
+                        styles.levelPill,
+                        {
+                            backgroundColor: theme.surface,
+                            opacity: pressed ? 0.7 : 1,
+                        },
+                    ]}
+                >
+                    <Text style={[styles.modelPillText, { color: theme.text }]}>
+                        {levelLabel}
+                    </Text>
+                </Pressable>
+            </View>
+
+            {/* Input row */}
+            <View style={styles.inputBar}>
+                <BottomSheetTextInput
+                    style={StyleSheet.flatten([
+                        styles.textInput,
+                        {
+                            color: theme.textPrimary,
+                            backgroundColor: theme.surface,
+                        },
+                    ])}
+                    placeholder="Message Nomi…"
+                    placeholderTextColor={theme.textSecondary}
+                    value={text}
+                    onChangeText={setText}
+                    returnKeyType="send"
+                    onSubmitEditing={handleSend}
+                    blurOnSubmit={false}
+                />
+                <Pressable
+                    onPress={handleSend}
+                    disabled={!text.trim() && attachments.length === 0}
+                    style={({ pressed }) => [
+                        styles.sendBtn,
+                        {
+                            backgroundColor:
+                                text.trim() || attachments.length > 0
+                                    ? theme.accent
+                                    : theme.border,
+                            opacity: pressed ? 0.7 : 1,
+                        },
+                    ]}
+                >
+                    <Text style={styles.sendBtnIcon}>↑</Text>
+                </Pressable>
+            </View>
         </View>
     );
 });
@@ -256,25 +373,388 @@ export function ChatBottomSheet({
         loadMore,
     } = usePlannerChat(date);
 
-    // Planning level state — persisted across sessions
-    const [level, setLevelState] = useState<PlanningLevel>('standard');
-    const levelRef = useRef<PlanningLevel>('standard');
+    // ---------------------------------------------------------------------------
+    // Model state
+    // ---------------------------------------------------------------------------
+
+    const [models, setModels] = useState<ModelDetail[]>([]);
+    const [selectedModelId, setSelectedModelId] = useState('');
+    const [selectedProvider, setSelectedProvider] = useState('');
+
     useEffect(() => {
-        AsyncStorage.getItem(PLANNER_LEVEL_KEY).then(v => {
-            if (v === 'quick' || v === 'standard' || v === 'full') {
-                setLevelState(v);
-                levelRef.current = v;
-            }
+        Promise.all([
+            modelsApi.getModels().catch(() => [] as ModelDetail[]),
+            AsyncStorage.getItem(PLANNER_MODEL_KEY),
+            AsyncStorage.getItem(PLANNER_PROVIDER_KEY),
+        ]).then(([allModels, savedId, savedProvider]) => {
+            setModels(allModels.filter((m: ModelDetail) => m.supports_tools));
+            if (savedId) setSelectedModelId(savedId);
+            if (savedProvider) setSelectedProvider(savedProvider);
         });
     }, []);
-    const setLevel = useCallback((l: PlanningLevel) => {
-        setLevelState(l);
-        levelRef.current = l;
-        AsyncStorage.setItem(PLANNER_LEVEL_KEY, l);
+
+    const selectedModelName = useMemo(() => {
+        const found = models.find(m => m.id === selectedModelId);
+        if (found) return found.name || found.id;
+        if (selectedModelId)
+            return selectedModelId
+                .split('-')
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(' ');
+        return models[0]?.name ?? 'Model';
+    }, [models, selectedModelId]);
+
+    // ---------------------------------------------------------------------------
+    // Attachment state
+    // ---------------------------------------------------------------------------
+
+    const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
+    const [isPickerActive, setPickerActive] = useState(false);
+    const [locationPickerVisible, setLocationPickerVisible] = useState(false);
+
+    const uploadFile = useCallback(
+        async (
+            uri: string,
+            name: string,
+            mimeType: string,
+            type: 'image' | 'file',
+        ): Promise<string | null> => {
+            const tempId = `tmp-${Date.now()}`;
+            setAttachments(prev => [
+                ...prev,
+                { id: tempId, uri, type, name, loading: true },
+            ]);
+            try {
+                const result = await (apiClient as any).uploadFile({
+                    uri,
+                    name,
+                    type: mimeType,
+                });
+                setAttachments(prev =>
+                    prev.map(a =>
+                        a.id === tempId
+                            ? { ...a, id: result.id, loading: false }
+                            : a,
+                    ),
+                );
+                return result.id;
+            } catch {
+                setAttachments(prev => prev.filter(a => a.id !== tempId));
+                Alert.alert('Upload failed', 'Could not upload the file.');
+                return null;
+            }
+        },
+        [],
+    );
+
+    const executeWithDelay = useCallback(
+        (action: () => Promise<void>) => {
+            if (isPickerActive) return;
+            setPlusMenuVisible(false);
+            setPickerActive(true);
+            setTimeout(async () => {
+                try {
+                    await action();
+                } finally {
+                    setPickerActive(false);
+                }
+            }, 500);
+        },
+        [isPickerActive],
+    );
+
+    const pickImage = useCallback(async () => {
+        const res = await launchImageLibrary({
+            mediaType: 'photo',
+            quality: 0.8,
+        });
+        if (res.assets?.[0]) {
+            const { uri, fileName, type } = res.assets[0];
+            if (uri)
+                await uploadFile(
+                    uri,
+                    fileName ?? 'photo.jpg',
+                    type ?? 'image/jpeg',
+                    'image',
+                );
+        }
+    }, [uploadFile]);
+
+    const takePhoto = useCallback(async () => {
+        const res = await launchCamera({ mediaType: 'photo', quality: 0.8 });
+        if (res.assets?.[0]) {
+            const { uri, fileName, type } = res.assets[0];
+            if (uri)
+                await uploadFile(
+                    uri,
+                    fileName ?? 'photo.jpg',
+                    type ?? 'image/jpeg',
+                    'image',
+                );
+        }
+    }, [uploadFile]);
+
+    const pickDocument = useCallback(async () => {
+        try {
+            const res = await DocumentPicker.pickSingle({
+                type: [DocumentPicker.types.allFiles],
+            });
+            if (res.uri)
+                await uploadFile(
+                    res.uri,
+                    res.name ?? 'file',
+                    res.type ?? 'application/octet-stream',
+                    'file',
+                );
+        } catch (e) {
+            if (!DocumentPicker.isCancel(e))
+                Alert.alert('Error', 'Failed to pick document.');
+        }
+    }, [uploadFile]);
+
+    const removeAttachment = useCallback((id: string) => {
+        setAttachments(prev => prev.filter(a => a.id !== id));
     }, []);
 
-    // Stable send ref — ChatFooterContent reads this ref so renderFooter
-    // never needs to change identity when items/sendMessage change.
+    // ---------------------------------------------------------------------------
+    // Level / detail
+    // ---------------------------------------------------------------------------
+
+    const [level, setLevel] = useState<PlanningLevel>('standard');
+    const levelRef = useRef<PlanningLevel>('standard');
+    const [detailLevel, setDetailLevel] = useState<DetailLevel>('hide');
+
+    // ---------------------------------------------------------------------------
+    // Menu visibility
+    // ---------------------------------------------------------------------------
+
+    const [modelMenuVisible, setModelMenuVisible] = useState(false);
+    const [levelMenuVisible, setLevelMenuVisible] = useState(false);
+    const [plusMenuVisible, setPlusMenuVisible] = useState(false);
+    const [detailMenuVisible, setDetailMenuVisible] = useState(false);
+
+    // ---------------------------------------------------------------------------
+    // Context menu items
+    // ---------------------------------------------------------------------------
+
+    const modelMenuSections: ContextMenuSection[] = useMemo(() => {
+        const byProvider = new Map<string, ContextMenuItem[]>();
+        for (const model of models) {
+            const provider = model.provider ?? 'other';
+            const providerItems = byProvider.get(provider) ?? [];
+            const isSelected = model.id === selectedModelId;
+            providerItems.push({
+                id: model.id,
+                label: model.name || model.id,
+                badges: model.supports_vision ? (
+                    <MediaImage
+                        width={13}
+                        height={13}
+                        color={isSelected ? theme.accent : theme.textSecondary}
+                    />
+                ) : undefined,
+                icon: isSelected ? (
+                    <Check width={20} height={20} color={theme.accent} />
+                ) : undefined,
+                onPress: async () => {
+                    setSelectedModelId(model.id);
+                    setSelectedProvider(model.provider ?? '');
+                    setModelMenuVisible(false);
+                    await AsyncStorage.setItem(PLANNER_MODEL_KEY, model.id);
+                    await AsyncStorage.setItem(
+                        PLANNER_PROVIDER_KEY,
+                        model.provider ?? '',
+                    );
+                },
+            });
+            byProvider.set(provider, providerItems);
+        }
+        const cap = (s: string) =>
+            s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        return Array.from(byProvider.entries()).map(([p, items]) => ({
+            title: cap(p),
+            items,
+        }));
+    }, [models, selectedModelId, theme.accent, theme.textSecondary]);
+
+    const levelMenuItems: ContextMenuItem[] = useMemo(
+        () => [
+            {
+                id: 'quick',
+                label: '⚡ Quick',
+                icon:
+                    level === 'quick' ? (
+                        <Check width={20} height={20} color={theme.accent} />
+                    ) : undefined,
+                onPress: () => {
+                    setLevel('quick');
+                    levelRef.current = 'quick';
+                    setLevelMenuVisible(false);
+                },
+            },
+            {
+                id: 'standard',
+                label: '📋 Standard',
+                icon:
+                    level === 'standard' ? (
+                        <Check width={20} height={20} color={theme.accent} />
+                    ) : undefined,
+                onPress: () => {
+                    setLevel('standard');
+                    levelRef.current = 'standard';
+                    setLevelMenuVisible(false);
+                },
+            },
+            {
+                id: 'full',
+                label: '🔍 Full',
+                icon:
+                    level === 'full' ? (
+                        <Check width={20} height={20} color={theme.accent} />
+                    ) : undefined,
+                onPress: () => {
+                    setLevel('full');
+                    levelRef.current = 'full';
+                    setLevelMenuVisible(false);
+                },
+            },
+        ],
+        [level, theme.accent],
+    );
+
+    const detailMenuItems: ContextMenuItem[] = useMemo(
+        () => [
+            {
+                id: 'hide',
+                label: 'Hide Details',
+                icon: (
+                    <EyeClosed
+                        width={20}
+                        height={20}
+                        color={detailLevel === 'hide' ? theme.accent : '#fff'}
+                    />
+                ),
+                onPress: () => {
+                    setDetailLevel('hide');
+                    setDetailMenuVisible(false);
+                },
+            },
+            {
+                id: 'tool_calls',
+                label: 'Tool Calls Only',
+                icon: (
+                    <Code
+                        width={20}
+                        height={20}
+                        color={
+                            detailLevel === 'tool_calls' ? theme.accent : '#fff'
+                        }
+                    />
+                ),
+                onPress: () => {
+                    setDetailLevel('tool_calls');
+                    setDetailMenuVisible(false);
+                },
+            },
+            {
+                id: 'think',
+                label: 'Thinking Only',
+                icon: (
+                    <MagicWand
+                        width={20}
+                        height={20}
+                        color={detailLevel === 'think' ? theme.accent : '#fff'}
+                    />
+                ),
+                onPress: () => {
+                    setDetailLevel('think');
+                    setDetailMenuVisible(false);
+                },
+            },
+            {
+                id: 'all',
+                label: 'Show Everything',
+                icon: (
+                    <Eye
+                        width={20}
+                        height={20}
+                        color={detailLevel === 'all' ? theme.accent : '#fff'}
+                    />
+                ),
+                onPress: () => {
+                    setDetailLevel('all');
+                    setDetailMenuVisible(false);
+                },
+            },
+        ],
+        [detailLevel, theme.accent],
+    );
+
+    const plusMenuItems: ContextMenuItem[] = useMemo(
+        () => [
+            {
+                id: 'files',
+                label: 'Files',
+                icon: <AttachmentIcon width={20} height={20} color="#fff" />,
+                onPress: () => executeWithDelay(pickDocument),
+            },
+            {
+                id: 'photos',
+                label: 'Photos',
+                icon: <MediaImage width={20} height={20} color="#fff" />,
+                onPress: () => executeWithDelay(pickImage),
+            },
+            {
+                id: 'camera',
+                label: 'Camera',
+                icon: <Camera width={20} height={20} color="#fff" />,
+                onPress: () => executeWithDelay(takePhoto),
+            },
+            {
+                id: 'location',
+                label: 'Location',
+                icon: <MapPin width={20} height={20} color="#34A853" />,
+                onPress: () => {
+                    setPlusMenuVisible(false);
+                    setTimeout(() => setLocationPickerVisible(true), 300);
+                },
+            },
+            {
+                id: 'detail_level',
+                label: 'Detail Level',
+                icon: <Eye width={20} height={20} color={theme.accent} />,
+                onPress: () => {
+                    setPlusMenuVisible(false);
+                    setTimeout(() => setDetailMenuVisible(true), 300);
+                },
+            },
+        ],
+        [executeWithDelay, pickDocument, pickImage, takePhoto, theme.accent],
+    );
+
+    // ---------------------------------------------------------------------------
+    // Bubble options (wired to detailLevel)
+    // ---------------------------------------------------------------------------
+
+    const bubbleOptions = useMemo(
+        () => ({
+            showToolCalls:
+                detailLevel === 'tool_calls' || detailLevel === 'all',
+            showReasoning: detailLevel === 'think' || detailLevel === 'all',
+            showAttachments: true,
+            showActions: true,
+            showLocations: false,
+            showModelLabel: false,
+            showAgentLabel: false,
+            maxWidthPct: 80,
+        }),
+        [detailLevel],
+    );
+
+    // ---------------------------------------------------------------------------
+    // Send ref
+    // ---------------------------------------------------------------------------
+
     const onSendRef = useRef<(text: string) => void>(() => {});
     useEffect(() => {
         onSendRef.current = (text: string) => {
@@ -283,20 +763,35 @@ export function ChatBottomSheet({
                 : [];
             const context =
                 namedItems.length > 0 ? buildPlanContext(items!) : undefined;
-            sendMessage(text, { context, level: levelRef.current });
+            const readyAttachmentIds = attachments
+                .filter(a => !a.loading)
+                .map(a => a.id);
+            sendMessage(text, {
+                context,
+                level: levelRef.current,
+                model: selectedModelId || undefined,
+                provider: selectedProvider || undefined,
+                attachmentIds: readyAttachmentIds.length
+                    ? readyAttachmentIds
+                    : undefined,
+            });
+            setAttachments([]);
         };
-    }, [items, sendMessage]);
+    }, [items, sendMessage, selectedModelId, selectedProvider, attachments]);
 
-    // Sync open/close → sheet index
+    // ---------------------------------------------------------------------------
+    // Sheet open/close
+    // ---------------------------------------------------------------------------
+
     useEffect(() => {
-        if (isOpen) {
-            bottomSheetRef.current?.snapToIndex(0);
-        } else {
-            bottomSheetRef.current?.close();
-        }
+        if (isOpen) bottomSheetRef.current?.snapToIndex(0);
+        else bottomSheetRef.current?.close();
     }, [isOpen]);
 
+    // ---------------------------------------------------------------------------
     // Auto-send
+    // ---------------------------------------------------------------------------
+
     const autoSentRef = useRef(false);
     const itemsRef = useRef(items);
     useEffect(() => {
@@ -306,10 +801,11 @@ export function ChatBottomSheet({
     useEffect(() => {
         if (isOpen && isConnected && autoSend && !autoSentRef.current) {
             autoSentRef.current = true;
-            const prompt = buildPlanningPrompt(itemsRef.current ?? [], date);
-            sendMessage(prompt, {
+            sendMessage(buildPlanningPrompt(itemsRef.current ?? [], date), {
                 webSearch: autoSendWebSearch ?? false,
                 level: levelRef.current,
+                model: selectedModelId || undefined,
+                provider: selectedProvider || undefined,
             });
             onAutoSendHandled?.();
         }
@@ -321,6 +817,8 @@ export function ChatBottomSheet({
         sendMessage,
         onAutoSendHandled,
         autoSendWebSearch,
+        selectedModelId,
+        selectedProvider,
     ]);
 
     useEffect(() => {
@@ -334,15 +832,20 @@ export function ChatBottomSheet({
         [onClose],
     );
 
-    // Map ChatMessage[] → Message[] for ChatView, filtering empty drafts.
-    const filteredMessages = useMemo(() => {
-        return messages.filter(m => {
-            if (m.role === 'user') return true;
-            const empty = !m.text || m.text.trim().length === 0;
-            const hasOptions = m.askUser && m.askUser.options.length > 0;
-            return !(empty && !hasOptions && !m.isStreaming);
-        });
-    }, [messages]);
+    // ---------------------------------------------------------------------------
+    // Messages
+    // ---------------------------------------------------------------------------
+
+    const filteredMessages = useMemo(
+        () =>
+            messages.filter(m => {
+                if (m.role === 'user') return true;
+                const empty = !m.text || m.text.trim().length === 0;
+                const hasOptions = m.askUser && m.askUser.options.length > 0;
+                return !(empty && !hasOptions && !m.isStreaming);
+            }),
+        [messages],
+    );
 
     const mappedMessages = useMemo<Message[]>(
         () => filteredMessages.map(plannerMessageToMessage),
@@ -362,30 +865,42 @@ export function ChatBottomSheet({
 
     const handleActionPress = useCallback(
         async (action: MessageAction) => {
-            if (isAskUserReply(action)) {
-                const reply = action.prompt ?? action.label;
-                replyToAskUser(action.callId, reply);
-            }
+            if (isAskUserReply(action))
+                replyToAskUser(action.callId, action.prompt ?? action.label);
         },
         [replyToAskUser],
     );
 
+    // ---------------------------------------------------------------------------
+    // Footer
+    // ---------------------------------------------------------------------------
+
     const renderFooter = useCallback(
         (props: BottomSheetFooterProps) => (
             <BottomSheetFooter {...props}>
-                <LevelSelector
+                <ChatFooterContent
                     theme={theme}
-                    level={level}
-                    setLevel={setLevel}
+                    onSend={onSendRef}
+                    selectedModelName={selectedModelName}
+                    levelLabel={LEVEL_LABELS[level]}
+                    onModelPress={() => setModelMenuVisible(true)}
+                    onLevelPress={() => setLevelMenuVisible(true)}
+                    onPlusPress={() => setPlusMenuVisible(true)}
+                    attachments={attachments}
+                    onRemoveAttachment={removeAttachment}
                 />
-                <ChatFooterContent theme={theme} onSend={onSendRef} />
             </BottomSheetFooter>
         ),
-        [theme, level, setLevel],
+        [theme, selectedModelName, level, attachments, removeAttachment],
     );
 
     const headerNode = (
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
+        <View
+            style={[
+                styles.header,
+                { backgroundColor: theme.background + 'D0' },
+            ]}
+        >
             <View
                 style={{
                     flexDirection: 'row',
@@ -413,15 +928,12 @@ export function ChatBottomSheet({
             )}
             <TouchableOpacity
                 onPress={onClose}
-                style={styles.closeBtn}
+                style={[styles.closeBtn, { backgroundColor: theme.surface }]}
                 activeOpacity={0.7}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
                 <Text
-                    style={[
-                        styles.closeBtnText,
-                        { color: theme.textSecondary },
-                    ]}
+                    style={[styles.closeBtnText, { color: theme.textPrimary }]}
                 >
                     Close
                 </Text>
@@ -456,16 +968,7 @@ export function ChatBottomSheet({
                 isStreaming={isStreaming}
                 input={null}
                 loadMore={{ hasMore, onLoadMore: loadMore }}
-                bubbleOptions={{
-                    showToolCalls: false,
-                    showReasoning: false,
-                    showAttachments: false,
-                    showActions: true,
-                    showLocations: false,
-                    showModelLabel: false,
-                    showAgentLabel: false,
-                    maxWidthPct: 80,
-                }}
+                bubbleOptions={bubbleOptions}
                 onActionPress={handleActionPress}
                 emptyState={
                     <Text
@@ -481,11 +984,43 @@ export function ChatBottomSheet({
                 contentContainerStyle={{
                     paddingTop: 12,
                     paddingHorizontal: 12,
-                    paddingBottom:
-                        INPUT_BAR_HEIGHT + LEVEL_SELECTOR_HEIGHT + 12,
+                    paddingBottom: INPUT_BAR_HEIGHT + OPTIONS_ROW_HEIGHT + 12,
                     gap: 8,
                     flexGrow: 1,
                 }}
+            />
+
+            <ContextMenu
+                visible={modelMenuVisible}
+                onClose={() => setModelMenuVisible(false)}
+                sections={modelMenuSections}
+                position="bottom-left"
+                title="Select Model"
+            />
+            <ContextMenu
+                visible={levelMenuVisible}
+                onClose={() => setLevelMenuVisible(false)}
+                items={levelMenuItems}
+                position="bottom-left"
+                title="Planning Level"
+            />
+            <ContextMenu
+                visible={plusMenuVisible}
+                onClose={() => setPlusMenuVisible(false)}
+                items={plusMenuItems}
+                position="bottom-left"
+            />
+            <ContextMenu
+                visible={detailMenuVisible}
+                onClose={() => setDetailMenuVisible(false)}
+                items={detailMenuItems}
+                position="bottom-left"
+                title="Detail Level"
+            />
+
+            <LocationPickerModal
+                visible={locationPickerVisible}
+                onClose={() => setLocationPickerVisible(false)}
             />
         </BottomSheet>
     );
@@ -496,11 +1031,7 @@ export function ChatBottomSheet({
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-    handleContainer: {
-        alignItems: 'center',
-        paddingTop: 8,
-        paddingBottom: 4,
-    },
+    handleContainer: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
     handle: {
         width: 36,
         height: 4,
@@ -510,53 +1041,81 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
         gap: 8,
     },
-    headerTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        flex: 1,
-    },
-    connectingLabel: {
-        fontSize: 12,
-    },
+    headerTitle: { fontSize: 16, fontWeight: '700', flex: 1 },
+    connectingLabel: { fontSize: 12 },
     closeBtn: {
-        paddingHorizontal: 4,
+        paddingHorizontal: 14,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    closeBtnText: {
-        fontSize: 14,
+    closeBtnText: { fontSize: 13, fontWeight: '600' },
+    emptyText: { textAlign: 'center', marginTop: 32, fontSize: 14 },
+    optionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        paddingBottom: 4,
+        gap: 8,
     },
-    emptyText: {
-        textAlign: 'center',
-        marginTop: 32,
+    circleBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
+    modelPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        height: 44,
+        borderRadius: 22,
+        flexShrink: 1,
+    },
+    levelPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        height: 44,
+        borderRadius: 22,
+        flexShrink: 0,
+    },
+    modelPillText: {
         fontSize: 14,
+        fontWeight: '600',
     },
     inputBar: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 10,
+        paddingVertical: 8,
         gap: 8,
-        borderTopWidth: StyleSheet.hairlineWidth,
     },
     textInput: {
         flex: 1,
         fontSize: 15,
-        borderRadius: 18,
-        borderWidth: 1,
-        paddingHorizontal: 14,
-        paddingVertical: Platform.OS === 'ios' ? 8 : 6,
-        minHeight: 36,
+        borderRadius: 22,
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 12,
+        minHeight: 44,
+        maxHeight: 120,
     },
     sendBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
     },
     sendBtnIcon: {
         color: '#FFFFFF',

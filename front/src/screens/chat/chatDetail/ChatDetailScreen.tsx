@@ -57,6 +57,12 @@ import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 import type { ChatStackParamList } from '../../../navigation/types';
 import type { Chat, Message } from '../../main/models';
 
+const FADE_OPACITIES = [
+    0.816, 0.734, 0.653, 0.579, 0.506, 0.441, 0.383, 0.326, 0.277, 0.228, 0.18,
+    0.147, 0.114, 0.082, 0.057, 0.033, 0.02, 0.009, 0.002, 0,
+] as const;
+const FADE_STRIP_H = 3;
+
 export function ChatDetailScreen() {
     const route = useRoute<RouteProp<ChatStackParamList, 'ChatDetail'>>();
     const chatId = route.params?.chatId ?? emptyChatID;
@@ -68,7 +74,7 @@ export function ChatDetailScreen() {
 
     const bottomInset = insets.bottom;
     const fadeContainerStyle = useAnimatedStyle(() => ({
-        bottom: -kbHeightAnim.value + bottomInset,
+        bottom: Math.max(bottomInset, -kbHeightAnim.value),
     }));
 
     const { showDialog, dialogState, submitResponse, cancelDialog } =
@@ -507,20 +513,9 @@ export function ChatDetailScreen() {
         onChipPress: handleChipPress,
     });
 
-    const renderInputToolbar = useCallback(
-        (props: any) => {
-            const toolbar = renderInputToolbarBase(props);
-            if (pendingMessage) {
-                return (
-                    <View pointerEvents="none" style={{ opacity: 0.4 }}>
-                        {toolbar}
-                    </View>
-                );
-            }
-            return toolbar;
-        },
-        [pendingMessage, renderInputToolbarBase],
-    );
+    const floatingInputStyle = useAnimatedStyle(() => ({
+        bottom: Math.max(0, -kbHeightAnim.value - bottomInset),
+    }));
 
     return (
         <View
@@ -730,18 +725,19 @@ export function ChatDetailScreen() {
                 </Pressable>
             </View>
 
-            {/* Soft fade from header into chat — JS-only gradient simulation */}
-            {(['CC', '99', '66', '33', '11'] as const).map((alpha, i) => (
+            {/* Soft fade from header into chat */}
+            {FADE_OPACITIES.map((opacity, i) => (
                 <View
-                    key={alpha}
+                    key={i}
                     pointerEvents="none"
                     style={{
                         position: 'absolute',
-                        top: headerHeight + i * 6,
+                        top: headerHeight + i * FADE_STRIP_H,
                         left: 0,
                         right: 0,
-                        height: 6,
-                        backgroundColor: theme.background + alpha,
+                        height: FADE_STRIP_H,
+                        backgroundColor: theme.background,
+                        opacity,
                         zIndex: 9,
                     }}
                 />
@@ -760,22 +756,16 @@ export function ChatDetailScreen() {
                     fadeContainerStyle,
                 ]}
             >
-                {(
-                    [
-                        1.0, 0.9, 0.8, 0.71, 0.62, 0.54, 0.47, 0.4, 0.34, 0.28,
-                        0.22, 0.18, 0.14, 0.1, 0.07, 0.04, 0.025, 0.011, 0.003,
-                        0,
-                    ] as const
-                ).map((opacity, i) => (
+                {FADE_OPACITIES.map((opacity, i) => (
                     <View
                         key={i}
                         pointerEvents="none"
                         style={{
                             position: 'absolute',
-                            bottom: inputBarHeight - 4 + i * 3,
+                            bottom: inputBarHeight - 4 + i * FADE_STRIP_H,
                             left: 0,
                             right: 0,
-                            height: 3,
+                            height: FADE_STRIP_H,
                             backgroundColor: theme.background,
                             opacity,
                         }}
@@ -821,7 +811,6 @@ export function ChatDetailScreen() {
                 style={{
                     flex: 1,
                     backgroundColor: theme.background,
-                    paddingBottom: insets.bottom,
                 }}
             >
                 {showEmptyGreeting ? (
@@ -851,13 +840,6 @@ export function ChatDetailScreen() {
                                 />
                             </View>
                         </TouchableWithoutFeedback>
-                        {pendingMessage ? (
-                            <View pointerEvents="none" style={{ opacity: 0.4 }}>
-                                {renderInputToolbarBase({})}
-                            </View>
-                        ) : (
-                            renderInputToolbarBase({})
-                        )}
                     </KeyboardAvoidingView>
                 ) : (
                     <GiftedChat
@@ -875,16 +857,19 @@ export function ChatDetailScreen() {
                         renderMessage={renderMessage}
                         renderBubble={renderBubble}
                         renderMessageText={renderMessageText}
-                        renderInputToolbar={renderInputToolbar}
+                        renderInputToolbar={() => null}
                         isTyping={false}
                         renderFooter={renderFooter}
                         inverted={true}
-                        minInputToolbarHeight={112}
+                        minInputToolbarHeight={0}
                         maxComposerHeight={100}
                         renderAvatar={null}
                         messagesContainerStyle={styles.messagesContainer}
                         placeholder="Type a message..."
                         scrollToBottom
+                        scrollToBottomStyle={{
+                            bottom: inputBarHeight + insets.bottom + 8,
+                        }}
                         alwaysShowSend
                         isAlignedTop={false}
                         isScrollToBottomEnabled={true}
@@ -908,6 +893,8 @@ export function ChatDetailScreen() {
                                       ),
                                       contentContainerStyle: {
                                           paddingBottom: headerHeight,
+                                          paddingTop:
+                                              inputBarHeight + insets.bottom,
                                       },
                                       maintainVisibleContentPosition: undefined,
                                       maxToRenderPerBatch: 10,
@@ -918,6 +905,8 @@ export function ChatDetailScreen() {
                                 : {
                                       contentContainerStyle: {
                                           paddingBottom: headerHeight,
+                                          paddingTop:
+                                              inputBarHeight + insets.bottom,
                                       },
                                       maxToRenderPerBatch: 10,
                                       windowSize: 10,
@@ -943,6 +932,24 @@ export function ChatDetailScreen() {
                 />
             )}
 
+            {/* Floating input toolbar — absolute, follows keyboard */}
+            <Animated.View
+                pointerEvents={pendingMessage ? 'none' : 'auto'}
+                style={[
+                    {
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        paddingBottom: insets.bottom,
+                        zIndex: 8,
+                        opacity: pendingMessage ? 0.4 : 1,
+                    },
+                    floatingInputStyle,
+                ]}
+            >
+                {renderInputToolbarBase({})}
+            </Animated.View>
+
             {/* Cover the safe-area gap (behind input toolbar) with the input's background color */}
             {insets.bottom > 0 && (
                 <View
@@ -953,7 +960,8 @@ export function ChatDetailScreen() {
                         left: 0,
                         right: 0,
                         height: insets.bottom,
-                        backgroundColor: 'transparent',
+                        backgroundColor: theme.background + 'D0',
+                        zIndex: 8,
                     }}
                 />
             )}

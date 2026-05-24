@@ -11,14 +11,24 @@ import {
     Keyboard,
     Linking,
 } from 'react-native';
-import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
+import DraggableFlatList, {
+    RenderItemParams,
+    ScaleDecorator,
+} from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ChatBubble, Calendar as CalendarIcon, Plus } from 'iconoir-react-native';
+import {
+    ChatBubble,
+    Calendar as CalendarIcon,
+    Plus,
+} from 'iconoir-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { TAB_BAR_ICON_HEIGHT } from '../../navigation/MainTabs';
 import { PlanItem } from './types';
 import { PlanDocumentContext } from './PlanDocumentContext';
-import { registerApplyPatches, unregisterApplyPatches } from './planDocumentRegistry';
+import {
+    registerApplyPatches,
+    unregisterApplyPatches,
+} from './planDocumentRegistry';
 import { usePlanDocument } from './hooks/usePlanDocument';
 import { usePlanRemindersSync } from './hooks/usePlanRemindersSync';
 import { PlanItemRow } from './components/PlanItemRow';
@@ -28,6 +38,10 @@ import { DocumentHeader } from './components/DocumentHeader';
 import { AddChipMenu } from './components/AddChipMenu';
 import { TimePickerModal } from './components/TimePickerModal';
 import { PlanLocationPickerModal } from './components/PlanLocationPickerModal';
+import {
+    todayString as today,
+    shiftDateString as shiftDate,
+} from './dateUtils';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -35,21 +49,6 @@ import { PlanLocationPickerModal } from './components/PlanLocationPickerModal';
 
 function generateId(): string {
     return `${Date.now().toString(36)}-${Math.random().toString(16).slice(2)}`;
-}
-
-// ---------------------------------------------------------------------------
-// Date helpers
-// ---------------------------------------------------------------------------
-
-function today(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function shiftDate(date: string, delta: number): string {
-    const d = new Date(date + 'T00:00:00');
-    d.setDate(d.getDate() + delta);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,21 +74,34 @@ export function PlannerScreen() {
         clearBanner,
     } = usePlanDocument(date);
 
-    const { isSyncing, sync: syncToReminders } = usePlanRemindersSync(date, items);
+    const { isSyncing, sync: syncToReminders } = usePlanRemindersSync(
+        date,
+        items,
+    );
 
     const [chatOpen, setChatOpen] = useState(false);
     const [autoSendTrigger, setAutoSendTrigger] = useState(false);
     const [keyboardVisible, setKeyboardVisible] = useState(false);
     const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
     const [chipMenuItemId, setChipMenuItemId] = useState<string | null>(null);
-    const [timePickerItemId, setTimePickerItemId] = useState<string | null>(null);
-    const [locationPickerItemId, setLocationPickerItemId] = useState<string | null>(null);
-
+    const [timePickerItemId, setTimePickerItemId] = useState<string | null>(
+        null,
+    );
+    const [locationPickerItemId, setLocationPickerItemId] = useState<
+        string | null
+    >(null);
 
     useEffect(() => {
-        const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
-        const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false));
-        return () => { show.remove(); hide.remove(); };
+        const show = Keyboard.addListener('keyboardWillShow', () =>
+            setKeyboardVisible(true),
+        );
+        const hide = Keyboard.addListener('keyboardWillHide', () =>
+            setKeyboardVisible(false),
+        );
+        return () => {
+            show.remove();
+            hide.remove();
+        };
     }, []);
 
     // ---------------------------------------------------------------------------
@@ -98,7 +110,9 @@ export function PlannerScreen() {
 
     useEffect(() => {
         registerApplyPatches(applyPatches);
-        return () => { unregisterApplyPatches(); };
+        return () => {
+            unregisterApplyPatches();
+        };
     }, [applyPatches]);
 
     // ---------------------------------------------------------------------------
@@ -108,10 +122,13 @@ export function PlannerScreen() {
     const itemInputRefsMap = useRef<Map<string, TextInput>>(new Map());
     const pendingFocusIdRef = useRef<string | null>(null);
 
-    const registerInputRef = useCallback((id: string, ref: TextInput | null) => {
-        if (ref) itemInputRefsMap.current.set(id, ref);
-        else itemInputRefsMap.current.delete(id);
-    }, []);
+    const registerInputRef = useCallback(
+        (id: string, ref: TextInput | null) => {
+            if (ref) itemInputRefsMap.current.set(id, ref);
+            else itemInputRefsMap.current.delete(id);
+        },
+        [],
+    );
 
     useEffect(() => {
         const id = pendingFocusIdRef.current;
@@ -142,46 +159,58 @@ export function PlannerScreen() {
     // Item handlers
     // ---------------------------------------------------------------------------
 
-    const handleRemoveItem = useCallback((id: string) => {
-        const idx = items.findIndex(i => i.id === id);
-        if (idx > 0) {
-            pendingFocusIdRef.current = items[idx - 1].id;
-        }
-        removeItem(id);
-    }, [items, removeItem]);
-
-    const handleAddAfter = useCallback((afterId?: string) => {
-        const lastItem = items[items.length - 1];
-        if (lastItem && lastItem.text.trim() === '') {
-            pendingFocusIdRef.current = lastItem.id;
-            return;
-        }
-        const newId = addItem(afterId);
-        pendingFocusIdRef.current = newId;
-    }, [items, addItem]);
-
-    const handleLocationChipPress = useCallback((itemId: string) => {
-        // Apple Maps uses + for spaces, not %20
-        const encodeStop = (s: string) => encodeURIComponent(s).replace(/%20/g, '+');
-        const stops: string[] = [];
-        for (const item of items) {
-            const locationChip = item.chips.find(c => c.type === 'location');
-            const isTapped = item.id === itemId;
-            // Collect unchecked items; always include tapped item as destination
-            if (locationChip && (!item.checked || isTapped)) {
-                stops.push(locationChip.value);
+    const handleRemoveItem = useCallback(
+        (id: string) => {
+            const idx = items.findIndex(i => i.id === id);
+            if (idx > 0) {
+                pendingFocusIdRef.current = items[idx - 1].id;
             }
-            if (isTapped) break;
-        }
-        if (stops.length === 0) return;
-        const encoded = stops.map(encodeStop);
-        // Omit saddr — Apple Maps defaults to current location.
-        // Multi-stop: daddr=first+to:second+to:third
-        const url = `maps://?daddr=${encoded.join('+to:')}`;
-        Linking.openURL(url).catch((err: unknown) => {
-            console.warn('Failed to open Maps:', err);
-        });
-    }, [items]);
+            removeItem(id);
+        },
+        [items, removeItem],
+    );
+
+    const handleAddAfter = useCallback(
+        (afterId?: string) => {
+            const lastItem = items[items.length - 1];
+            if (lastItem && lastItem.text.trim() === '') {
+                pendingFocusIdRef.current = lastItem.id;
+                return;
+            }
+            const newId = addItem(afterId);
+            pendingFocusIdRef.current = newId;
+        },
+        [items, addItem],
+    );
+
+    const handleLocationChipPress = useCallback(
+        (itemId: string) => {
+            // Apple Maps uses + for spaces, not %20
+            const encodeStop = (s: string) =>
+                encodeURIComponent(s).replace(/%20/g, '+');
+            const stops: string[] = [];
+            for (const item of items) {
+                const locationChip = item.chips.find(
+                    c => c.type === 'location',
+                );
+                const isTapped = item.id === itemId;
+                // Collect unchecked items; always include tapped item as destination
+                if (locationChip && (!item.checked || isTapped)) {
+                    stops.push(locationChip.value);
+                }
+                if (isTapped) break;
+            }
+            if (stops.length === 0) return;
+            const encoded = stops.map(encodeStop);
+            // Omit saddr — Apple Maps defaults to current location.
+            // Multi-stop: daddr=first+to:second+to:third
+            const url = `maps://?daddr=${encoded.join('+to:')}`;
+            Linking.openURL(url).catch((err: unknown) => {
+                console.warn('Failed to open Maps:', err);
+            });
+        },
+        [items],
+    );
 
     // ---------------------------------------------------------------------------
     // "Plan day" — opens chat with auto-prompt
@@ -200,52 +229,83 @@ export function PlannerScreen() {
     // Render item
     // ---------------------------------------------------------------------------
 
-    const handleTimeChipConfirm = useCallback((value: string) => {
-        if (!timePickerItemId) return;
-        const item = items.find(i => i.id === timePickerItemId);
-        if (!item) return;
-        updateItem(timePickerItemId, {
-            chips: [
-                ...item.chips.filter(c => c.type !== 'time'),
-                { id: generateId(), type: 'time', value, isNew: true, source: 'user' },
-            ],
-        });
-        setTimePickerItemId(null);
-    }, [timePickerItemId, items, updateItem]);
+    const handleTimeChipConfirm = useCallback(
+        (value: string) => {
+            if (!timePickerItemId) return;
+            const item = items.find(i => i.id === timePickerItemId);
+            if (!item) return;
+            updateItem(timePickerItemId, {
+                chips: [
+                    ...item.chips.filter(c => c.type !== 'time'),
+                    {
+                        id: generateId(),
+                        type: 'time',
+                        value,
+                        isNew: true,
+                        source: 'user',
+                    },
+                ],
+            });
+            setTimePickerItemId(null);
+        },
+        [timePickerItemId, items, updateItem],
+    );
 
-    const handleLocationChipAdd = useCallback((value: string) => {
-        if (!locationPickerItemId) return;
-        const item = items.find(i => i.id === locationPickerItemId);
-        if (!item) return;
-        updateItem(locationPickerItemId, {
-            chips: [
-                ...item.chips.filter(c => c.type !== 'location'),
-                { id: generateId(), type: 'location', value, isNew: true, source: 'user' },
-            ],
-        });
-        setLocationPickerItemId(null);
-    }, [locationPickerItemId, items, updateItem]);
+    const handleLocationChipAdd = useCallback(
+        (value: string) => {
+            if (!locationPickerItemId) return;
+            const item = items.find(i => i.id === locationPickerItemId);
+            if (!item) return;
+            updateItem(locationPickerItemId, {
+                chips: [
+                    ...item.chips.filter(c => c.type !== 'location'),
+                    {
+                        id: generateId(),
+                        type: 'location',
+                        value,
+                        isNew: true,
+                        source: 'user',
+                    },
+                ],
+            });
+            setLocationPickerItemId(null);
+        },
+        [locationPickerItemId, items, updateItem],
+    );
 
-    const renderItem = useCallback(({ item, drag, isActive }: RenderItemParams<PlanItem>) => (
-        <ScaleDecorator>
-            <PlanItemRow
-                item={item}
-                onCheck={() => toggleChecked(item.id)}
-                onTextChange={(text) => updateItem(item.id, { text })}
-                onIndent={(delta) => indentItem(item.id, delta)}
-                onDelete={() => handleRemoveItem(item.id)}
-                onAddAfter={() => handleAddAfter(item.id)}
-                onChipRemove={(chipId) =>
-                    updateItem(item.id, { chips: item.chips.filter(c => c.id !== chipId) })
-                }
-                onFocus={() => setFocusedItemId(item.id)}
-                onLocationChipPress={() => handleLocationChipPress(item.id)}
-                drag={drag}
-                isActive={isActive}
-                inputRef={(ref) => registerInputRef(item.id, ref)}
-            />
-        </ScaleDecorator>
-    ), [toggleChecked, updateItem, indentItem, handleRemoveItem, handleAddAfter, registerInputRef, handleLocationChipPress]);
+    const renderItem = useCallback(
+        ({ item, drag, isActive }: RenderItemParams<PlanItem>) => (
+            <ScaleDecorator>
+                <PlanItemRow
+                    item={item}
+                    onCheck={() => toggleChecked(item.id)}
+                    onTextChange={text => updateItem(item.id, { text })}
+                    onIndent={delta => indentItem(item.id, delta)}
+                    onDelete={() => handleRemoveItem(item.id)}
+                    onAddAfter={() => handleAddAfter(item.id)}
+                    onChipRemove={chipId =>
+                        updateItem(item.id, {
+                            chips: item.chips.filter(c => c.id !== chipId),
+                        })
+                    }
+                    onFocus={() => setFocusedItemId(item.id)}
+                    onLocationChipPress={() => handleLocationChipPress(item.id)}
+                    drag={drag}
+                    isActive={isActive}
+                    inputRef={ref => registerInputRef(item.id, ref)}
+                />
+            </ScaleDecorator>
+        ),
+        [
+            toggleChecked,
+            updateItem,
+            indentItem,
+            handleRemoveItem,
+            handleAddAfter,
+            registerInputRef,
+            handleLocationChipPress,
+        ],
+    );
 
     // ---------------------------------------------------------------------------
     // Render
@@ -253,35 +313,56 @@ export function PlannerScreen() {
 
     return (
         <PlanDocumentContext.Provider value={{ applyPatches }}>
-            <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
+            <GestureHandlerRootView
+                style={{ flex: 1, backgroundColor: theme.background }}
+            >
                 <View style={{ flex: 1, backgroundColor: theme.background }}>
-                    <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
+                    <SafeAreaView
+                        style={[
+                            styles.root,
+                            { backgroundColor: theme.background },
+                        ]}
+                    >
                         <KeyboardAvoidingView
-                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                            behavior={
+                                Platform.OS === 'ios' ? 'padding' : undefined
+                            }
                             style={{ flex: 1 }}
                         >
                             {/* Header + list fill all available space above the bottom bar */}
                             <View style={{ flex: 1 }}>
-                                <View style={[styles.screenHeader, { borderBottomColor: theme.border }]}>
-                                    <Text style={[styles.screenTitle, { color: theme.textPrimary }]}>Planner</Text>
+                                <View style={styles.screenHeader}>
+                                    <Text
+                                        style={[
+                                            styles.screenTitle,
+                                            { color: theme.textPrimary },
+                                        ]}
+                                    >
+                                        Planner
+                                    </Text>
                                 </View>
                                 <DocumentHeader
                                     date={date}
                                     onPrev={() => setDate(shiftDate(date, -1))}
                                     onNext={() => setDate(shiftDate(date, 1))}
+                                    onPickDate={setDate}
                                     isSyncing={isSyncing}
                                     onSync={syncToReminders}
                                 />
 
                                 <DraggableFlatList
                                     data={items}
-                                    keyExtractor={(item) => item.id}
+                                    keyExtractor={item => item.id}
                                     renderItem={renderItem}
-                                    onDragEnd={({ from, to }) => moveItem(from, to)}
+                                    onDragEnd={({ from, to }) =>
+                                        moveItem(from, to)
+                                    }
                                     containerStyle={{ flex: 1 }}
                                     contentContainerStyle={styles.listContent}
                                     keyboardShouldPersistTaps="handled"
-                                    ListFooterComponent={<View style={styles.listFooter} />}
+                                    ListFooterComponent={
+                                        <View style={styles.listFooter} />
+                                    }
                                 />
                             </View>
 
@@ -289,49 +370,98 @@ export function PlannerScreen() {
                             <View
                                 style={[
                                     styles.bottomBar,
-                                    { borderTopColor: theme.border, backgroundColor: theme.background },
+                                    {
+                                        backgroundColor:
+                                            theme.background + 'D0',
+                                    },
                                 ]}
                             >
                                 <TouchableOpacity
-                                    onPress={() => focusedItemId && setChipMenuItemId(focusedItemId)}
+                                    onPress={() =>
+                                        focusedItemId &&
+                                        setChipMenuItemId(focusedItemId)
+                                    }
                                     style={[
                                         styles.addChipBtn,
-                                        { borderColor: theme.border, backgroundColor: theme.surface, opacity: focusedItemId ? 1 : 0.35 },
+                                        {
+                                            backgroundColor: theme.surface,
+                                            opacity: focusedItemId ? 1 : 0.4,
+                                        },
                                     ]}
                                     activeOpacity={0.7}
                                     disabled={!focusedItemId}
                                 >
-                                    <Plus width={18} height={18} color={theme.textPrimary} />
+                                    <Plus
+                                        width={18}
+                                        height={18}
+                                        color={theme.textPrimary}
+                                    />
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    onPress={() => { Keyboard.dismiss(); setChatOpen(true); }}
-                                    style={[styles.bottomBtn, styles.chatBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                                    onPress={() => {
+                                        Keyboard.dismiss();
+                                        setChatOpen(true);
+                                    }}
+                                    style={[
+                                        styles.bottomBtn,
+                                        { backgroundColor: theme.surface },
+                                    ]}
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.bottomBtnContent}>
-                                        <ChatBubble width={16} height={16} color={theme.textPrimary} />
-                                        <Text style={[styles.bottomBtnText, { color: theme.textPrimary }]}>Chat</Text>
+                                        <ChatBubble
+                                            width={16}
+                                            height={16}
+                                            color={theme.textPrimary}
+                                        />
+                                        <Text
+                                            style={[
+                                                styles.bottomBtnText,
+                                                { color: theme.textPrimary },
+                                            ]}
+                                        >
+                                            Chat
+                                        </Text>
                                     </View>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
                                     onPress={handlePlanDay}
-                                    style={[styles.bottomBtn, styles.planBtn]}
+                                    style={[
+                                        styles.bottomBtn,
+                                        { backgroundColor: theme.accent },
+                                    ]}
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.bottomBtnContent}>
-                                        <CalendarIcon width={16} height={16} color="#FFFFFF" />
-                                        <Text style={[styles.bottomBtnText, { color: '#FFFFFF' }]}>Plan</Text>
+                                        <CalendarIcon
+                                            width={16}
+                                            height={16}
+                                            color="#FFFFFF"
+                                        />
+                                        <Text
+                                            style={[
+                                                styles.bottomBtnText,
+                                                { color: '#FFFFFF' },
+                                            ]}
+                                        >
+                                            Plan
+                                        </Text>
                                     </View>
                                 </TouchableOpacity>
                             </View>
 
                             {/* Spacer so bottom bar clears the floating tab bar (hidden when keyboard is open) */}
-                            {!keyboardVisible && <View style={{ height: TAB_BAR_ICON_HEIGHT }} />}
+                            {!keyboardVisible && (
+                                <View style={{ height: TAB_BAR_ICON_HEIGHT }} />
+                            )}
 
                             {/* AI edit banner */}
-                            <AIEditBanner message={bannerMessage} onDismiss={clearBanner} />
+                            <AIEditBanner
+                                message={bannerMessage}
+                                onDismiss={clearBanner}
+                            />
                         </KeyboardAvoidingView>
                     </SafeAreaView>
 
@@ -363,7 +493,9 @@ export function PlannerScreen() {
                     visible={timePickerItemId !== null}
                     initialValue={
                         timePickerItemId
-                            ? items.find(i => i.id === timePickerItemId)?.chips.find(c => c.type === 'time')?.value
+                            ? items
+                                  .find(i => i.id === timePickerItemId)
+                                  ?.chips.find(c => c.type === 'time')?.value
                             : undefined
                     }
                     onConfirm={handleTimeChipConfirm}
@@ -392,7 +524,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingTop: 8,
         paddingBottom: 10,
-        borderBottomWidth: StyleSheet.hairlineWidth,
     },
     screenTitle: {
         fontSize: 28,
@@ -409,28 +540,20 @@ const styles = StyleSheet.create({
         gap: 8,
         paddingHorizontal: 16,
         paddingVertical: 10,
-        borderTopWidth: StyleSheet.hairlineWidth,
     },
     bottomBtn: {
         flex: 1,
-        paddingVertical: 10,
-        borderRadius: 10,
+        paddingVertical: 12,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
     },
     addChipBtn: {
         width: 44,
-        paddingVertical: 10,
-        borderRadius: 10,
-        borderWidth: 1,
+        height: 44,
+        borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    chatBtn: {
-        borderWidth: 1,
-    },
-    planBtn: {
-        backgroundColor: '#5856D6',
     },
     bottomBtnContent: {
         flexDirection: 'row',

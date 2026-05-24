@@ -66,15 +66,28 @@ class GoWSClient:
         return self._ws is not None and self._ws.close_code is None
 
     async def send_frame(self, frame: Frame) -> None:
-        """Queue a frame for delivery to Go. Non-blocking."""
-        payload = json.dumps(frame.marshal())
-        await self._send_queue.put(payload)
-        # Track last queued frame per chatID so we can build RESUME on reconnect.
+        """Queue a frame for delivery to Go. Non-blocking.
+
+        RedisSession resets its local next_id to 0 for every user message, so
+        session-local IDs are NOT monotonic across messages in the same chat.
+        Go's WorkerConn de-dup (lastFrameID per chat) and the _send_loop de-dup
+        (frame_id <= last_acked) both assume monotonically increasing IDs — they
+        silently drop an entire second message when its IDs restart below the
+        previous message's high-water mark.
+
+        Fix: assign a globally monotonic ID per chat here, overriding the
+        session-local frame.id before the payload is serialised.
+        """
         if frame.chat_id:
             async with self._last_sent_lock:
-                prev = self._last_sent.get(frame.chat_id, 0)
-                if frame.id > prev:
-                    self._last_sent[frame.chat_id] = frame.id
+                global_id = self._last_sent.get(frame.chat_id, 0) + 1
+                self._last_sent[frame.chat_id] = global_id
+            frame_dict = frame.marshal()
+            frame_dict["id"] = global_id
+            payload = json.dumps(frame_dict)
+        else:
+            payload = json.dumps(frame.marshal())
+        await self._send_queue.put(payload)
 
     # ------------------------------------------------------------------ #
     # Internal                                                              #
