@@ -312,6 +312,19 @@ export const eventsApi = {
         }
         return result;
     },
+
+    // TODO(backend): POST /api/events/{eventId}/state requires a small Go-side addition
+    // (handler in api/internal/handlers/events.go + route registration). The endpoint is
+    // called correctly here; once the Go PR lands it will start returning 200 instead of 404.
+    async setState(
+        eventId: string,
+        state: 'dismissed' | 'discussed',
+    ): Promise<void> {
+        await apiClient.post<void>(
+            `${API_URL()}/events/${eventId}/state`,
+            { state },
+        );
+    },
 };
 
 export interface BotIdentity {

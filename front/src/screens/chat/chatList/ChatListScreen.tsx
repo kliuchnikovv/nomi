@@ -79,13 +79,14 @@ export function ChatListScreen() {
     }, [theme]);
 
     const filteredChats = useMemo(() => {
-        let data = chats;
+        // Always exclude the Updates (proactive) chat — it has its own entry on Dashboard
+        let data = chats.filter(c => c.chat_type !== 'updates');
         if (sidebarFilter === 'agent') {
-            data = chats.filter(c => (!c.mode || c.mode === 'agent') && !isPlannerChat(c));
+            data = data.filter(c => (!c.mode || c.mode === 'agent') && !isPlannerChat(c));
         } else if (sidebarFilter === 'planner') {
-            data = chats.filter(c => isPlannerChat(c));
+            data = data.filter(c => isPlannerChat(c));
         } else if (sidebarFilter !== 'all') {
-            data = chats.filter(c => c.mode === 'team' && c.team_id === sidebarFilter);
+            data = data.filter(c => c.mode === 'team' && c.team_id === sidebarFilter);
         }
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();

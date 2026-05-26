@@ -16,6 +16,7 @@ import { CalendarWidget } from './components/CalendarWidget';
 import { WeatherWidget } from './components/WeatherWidget';
 import { DateWidget } from './components/DateWidget';
 import { RecentChatsWidget } from './components/RecentChatsWidget';
+import { UpdatesCard } from './components/UpdatesCard';
 import { PlaceholderWidget } from './components/PlaceholderWidget';
 import { TAB_BAR_ICON_HEIGHT } from '../../navigation/MainTabs';
 import type { RootTabParamList } from '../../navigation/types';
@@ -80,6 +81,9 @@ export const DashboardScreen = () => {
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
                 </TouchableOpacity>*/}
+
+                {/* Updates card — proactive messages chat (hidden when no updates_chat_id) */}
+                <UpdatesCard />
 
                 {/* Row 2: Recent Chats (full width) */}
                 <RecentChatsWidget />

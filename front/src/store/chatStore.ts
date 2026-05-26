@@ -445,6 +445,19 @@ function onReceivedMessage(
         }
     }
 
+    // Map proactive_event from WebSocket payload → meta field on Message.
+    // Python side (back/src/proactive/judge_worker.py) emits { proactive_event: { event_id, event_type } }.
+    const proactiveMeta = payload.proactive_event
+        ? {
+              source: 'proactive' as const,
+              event_id: payload.proactive_event.event_id as string | undefined,
+              event_type: payload.proactive_event.event_type as
+                  | 'calendar_upcoming'
+                  | 'email_new'
+                  | undefined,
+          }
+        : undefined;
+
     newMessages.push({
         id: messageID,
         chat_id: activeChatID,
@@ -456,6 +469,7 @@ function onReceivedMessage(
         content_parts: role === 'user' ? undefined : [],
         attachments: payload.attachments,
         context_items: payload.context_items,
+        meta: proactiveMeta,
     });
 
     if (role === 'user') {

@@ -6,6 +6,8 @@ export type User = {
     email: string;
     single_chat_mode?: boolean;
     agent_storage_mode?: 'payload' | 'agno';
+    // TODO(backend): populated once Go's /auth/me response includes users.updates_chat_id
+    updates_chat_id?: string | null;
 }
 
 export interface AuthContextType {
