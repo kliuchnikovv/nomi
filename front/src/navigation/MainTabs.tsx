@@ -1,14 +1,10 @@
 import React, { useEffect } from 'react';
-import { LayoutChangeEvent } from 'react-native';
+import { LayoutChangeEvent, Pressable, View, StyleSheet } from 'react-native';
 import {
     createBottomTabNavigator,
-    BottomTabBar,
     BottomTabBarProps,
 } from '@react-navigation/bottom-tabs';
-import {
-    getFocusedRouteNameFromRoute,
-    type RouteProp,
-} from '@react-navigation/native';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
     useSharedValue,
@@ -20,9 +16,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../screens/auth/context';
 import { useMain, emptyChatID } from '../screens/main/context';
 
-// Height of the tab bar icon area above the safe-area inset (≈ input bar / 1.5).
-// Used by screens that need a bottom spacer to clear the floating tab bar.
-export const TAB_BAR_ICON_HEIGHT = 60; // px above insets.bottom
+// Height of the floating dock area above the safe-area inset.
+// Used by screens that need a bottom spacer to clear the dock.
+export const TAB_BAR_ICON_HEIGHT = 72; // px above insets.bottom (56 pill + 8 gap + breathing room)
 
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { PlannerScreen } from '../screens/planner/PlannerScreen';
@@ -35,38 +31,16 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 
 const SPRING_CONFIG = { damping: 22, stiffness: 180 };
 
-
 function AnimatedTabBar(props: BottomTabBarProps & { initialHeight: number }) {
     const { state, initialHeight } = props;
     const { theme } = useTheme();
-    const { user } = useAuth();
 
     // ── Determine visibility synchronously, before hooks ──────────────────────
     // This lets us seed progress with the correct initial value so there is no
     // first-frame flash of the bar on screens where it should be hidden.
 
     const activeTabName = state.routes[state.index]?.name;
-    const chatRoute = state.routes.find(r => r.name === 'Chat');
     const projectsRoute = state.routes.find(r => r.name === 'Projects');
-
-    // getFocusedRouteNameFromRoute returns undefined for the initial (root) route.
-    // We also inspect the nested route state directly so single_chat_mode, which
-    // uses ChatDetail as the initial Chat-stack route, is handled correctly.
-    const chatFocusedRoute = chatRoute
-        ? getFocusedRouteNameFromRoute(chatRoute)
-        : undefined;
-    const chatNestedRouteName = chatRoute?.state
-        ? (chatRoute.state.routes[chatRoute.state.index ?? 0] as any)?.name
-        : undefined;
-    const isInChatDetail =
-        activeTabName === 'Chat' &&
-        (
-            // In single_chat_mode, ChatList is not registered in the stack —
-            // the Chat tab always shows ChatDetail regardless of params.screen.
-            !!user?.single_chat_mode ||
-            (chatFocusedRoute !== undefined && chatFocusedRoute !== 'ChatList') ||
-            chatNestedRouteName === 'ChatDetail'
-        );
 
     const projectsFocusedRoute = projectsRoute
         ? getFocusedRouteNameFromRoute(projectsRoute)
@@ -76,7 +50,7 @@ function AnimatedTabBar(props: BottomTabBarProps & { initialHeight: number }) {
         projectsFocusedRoute !== undefined &&
         projectsFocusedRoute !== 'ProjectsList';
 
-    const shouldHide = isInChatDetail || isInProjectChatDetail;
+    const shouldHide = isInProjectChatDetail;
 
     // ── Shared values ─────────────────────────────────────────────────────────
     // heightSV is pre-seeded so the translateY calculation is correct on the
@@ -109,29 +83,220 @@ function AnimatedTabBar(props: BottomTabBarProps & { initialHeight: number }) {
         // Slide down while fading — gives a natural exit feel.
         transform: [{ translateY: heightSV.value * (1 - opacity.value) }],
         opacity: opacity.value,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
     }));
 
     return (
         <Animated.View
-            style={[
-                containerStyle,
-                {
-                    borderWidth: 1,
-                    borderBottomWidth: 0,
-                    borderColor: `${theme.accent}40`,
-                },
-            ]}
+            pointerEvents="box-none"
+            style={containerStyle}
             onLayout={handleLayout}
         >
-            <BottomTabBar {...props} />
+            <DockFade color={theme.background} />
+            <FloatingDock {...props} />
         </Animated.View>
     );
 }
 
-export function MainTabs() {
+// Stacked-band faux gradient — used instead of expo-linear-gradient so we don't
+// require a native rebuild. Eight bands stepping from transparent at the top to
+// solid `color` at the bottom give a smooth-enough fade behind the floating dock.
+function DockFade({ color }: { color: string }) {
+    const STEPS = 24;
+    const toHex2 = (n: number) =>
+        Math.round(Math.min(1, Math.max(0, n)) * 255)
+            .toString(16)
+            .padStart(2, '0');
+    return (
+        <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+            {Array.from({ length: STEPS }).map((_, i) => {
+                const alpha = ((i + 1) / STEPS) ** 1.8;
+                return (
+                    <View
+                        key={i}
+                        style={{
+                            position: 'absolute',
+                            left: 0,
+                            right: 0,
+                            top: `${(i * 100) / STEPS}%`,
+                            height: `${100 / STEPS + 0.5}%`,
+                            backgroundColor: `${color}${toHex2(alpha)}`,
+                        }}
+                    />
+                );
+            })}
+        </View>
+    );
+}
+
+function getTabIcon(
+    routeName: string,
+    focused: boolean,
+): keyof typeof Ionicons.glyphMap {
+    switch (routeName) {
+        case 'Dashboard':
+            return focused ? 'home' : 'home-outline';
+        case 'Planning':
+            return focused ? 'calendar' : 'calendar-outline';
+        case 'Chat':
+            return focused ? 'chatbubbles' : 'chatbubbles-outline';
+        case 'Projects':
+            return focused ? 'folder' : 'folder-outline';
+        case 'Settings':
+            return focused ? 'settings' : 'settings-outline';
+        default:
+            return 'ellipse';
+    }
+}
+
+function FloatingDock({ state, descriptors, navigation }: BottomTabBarProps) {
     const { theme } = useTheme();
+    const insets = useSafeAreaInsets();
+    const { user } = useAuth();
+    const { activeChatID } = useMain();
+
+    const translateX = useSharedValue(0);
+    const slotWidth = useSharedValue(0);
+
+    const onRowLayout = (e: LayoutChangeEvent) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && state.routes.length > 0) {
+            const next = w / state.routes.length;
+            slotWidth.value = next;
+            translateX.value = next * state.index;
+        }
+    };
+
+    useEffect(() => {
+        if (slotWidth.value > 0) {
+            translateX.value = withSpring(
+                slotWidth.value * state.index,
+                SPRING_CONFIG,
+            );
+        }
+    }, [state.index]);
+
+    const activePillStyle = useAnimatedStyle(() => ({
+        position: 'absolute' as const,
+        top: 0,
+        bottom: 0,
+        width: slotWidth.value,
+        transform: [{ translateX: translateX.value }],
+    }));
+
+    return (
+        <View
+            pointerEvents="box-none"
+            style={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 8 }}
+        >
+            <View
+                style={[
+                    dockStyles.dock,
+                    {
+                        backgroundColor: theme.surface,
+                        borderColor: `${theme.accent}40`,
+                    },
+                ]}
+            >
+                <View style={dockStyles.row} onLayout={onRowLayout}>
+                    <Animated.View
+                        pointerEvents="none"
+                        style={[
+                            activePillStyle,
+                            dockStyles.activePill,
+                            { backgroundColor: `${theme.accent}2E` },
+                        ]}
+                    />
+                    {state.routes.map((route, index) => {
+                        const focused = state.index === index;
+                        const { options } = descriptors[route.key];
+                        const color = focused
+                            ? theme.accent
+                            : 'rgba(255,255,255,0.55)';
+
+                        const onPress = () => {
+                            const event = navigation.emit({
+                                type: 'tabPress',
+                                target: route.key,
+                                canPreventDefault: true,
+                            });
+                            if (event.defaultPrevented) return;
+
+                            if (route.name === 'Chat') {
+                                if (user?.single_chat_mode) {
+                                    navigation.navigate('Chat', {
+                                        screen: 'ChatDetail',
+                                        params: {
+                                            chatId: activeChatID || emptyChatID,
+                                        },
+                                    });
+                                } else {
+                                    navigation.navigate('Chat', {
+                                        screen: 'ChatList',
+                                    });
+                                }
+                                return;
+                            }
+
+                            if (!focused) {
+                                navigation.navigate(route.name);
+                            }
+                        };
+
+                        return (
+                            <Pressable
+                                key={route.key}
+                                onPress={onPress}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: focused }}
+                                accessibilityLabel={
+                                    options.tabBarAccessibilityLabel ??
+                                    route.name
+                                }
+                                style={dockStyles.slot}
+                            >
+                                <Ionicons
+                                    name={getTabIcon(route.name, focused)}
+                                    size={26}
+                                    color={color}
+                                />
+                            </Pressable>
+                        );
+                    })}
+                </View>
+            </View>
+        </View>
+    );
+}
+
+const dockStyles = StyleSheet.create({
+    dock: {
+        height: 56,
+        borderRadius: 28,
+        borderWidth: 1,
+        padding: 6,
+        shadowColor: '#000',
+        shadowOpacity: 0.18,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 12,
+    },
+    row: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        position: 'relative',
+    },
+    activePill: {
+        borderRadius: 22,
+    },
+    slot: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+});
+
+export function MainTabs() {
     const insets = useSafeAreaInsets();
     const { user } = useAuth();
     const { activeChatID } = useMain();
@@ -140,56 +305,13 @@ export function MainTabs() {
 
     return (
         <Tab.Navigator
-            tabBar={props => <AnimatedTabBar {...props} initialHeight={tabBarHeight} />}
-            screenOptions={({
-                route,
-            }: {
-                route: RouteProp<RootTabParamList, keyof RootTabParamList>;
-            }) => ({
+            tabBar={props => (
+                <AnimatedTabBar {...props} initialHeight={tabBarHeight} />
+            )}
+            screenOptions={{
                 headerShown: false,
-                tabBarStyle: {
-                    backgroundColor: theme.surface,
-                    borderTopWidth: 0,
-                    height: tabBarHeight,
-                    paddingTop: 12,
-                },
-                tabBarActiveTintColor: theme.accent,
-                tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
-                tabBarShowLabel: false,
-                tabBarIcon: ({
-                    focused,
-                    color,
-                }: {
-                    focused: boolean;
-                    color: string;
-                }) => {
-                    let iconName: keyof typeof Ionicons.glyphMap;
-
-                    switch (route.name) {
-                        case 'Dashboard':
-                            iconName = focused ? 'home' : 'home-outline';
-                            break;
-                        case 'Planning':
-                            iconName = focused ? 'calendar' : 'calendar-outline';
-                            break;
-                        case 'Chat':
-                            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-                            break;
-                        case 'Projects':
-                            iconName = focused ? 'folder' : 'folder-outline';
-                            break;
-                        case 'Settings':
-                            iconName = focused
-                                ? 'settings'
-                                : 'settings-outline';
-                            break;
-                        default:
-                            iconName = 'ellipse';
-                    }
-
-                    return <Ionicons name={iconName} size={28} color={color} />;
-                },
-            })}
+                tabBarStyle: { display: 'none' },
+            }}
         >
             <Tab.Screen name="Dashboard" component={DashboardScreen} />
             <Tab.Screen name="Planning" component={PlannerScreen} />
