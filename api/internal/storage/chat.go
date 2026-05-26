@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -272,14 +273,22 @@ func (s *Storage) ListPersistentChats(ctx context.Context, userID uuid.UUID) ([]
 	return chats, nil
 }
 
-// EnsureUpdatesChat creates the "Updates" chat for a user inside an existing
-// transaction (or creates its own if tx is nil). It sets users.updates_chat_id
-// and returns the chat ID. It is idempotent: if updates_chat_id is already set
-// it returns the existing value without touching the DB.
+// EnsureUpdatesChat creates the "Updates" chat for a user inside its own
+// transaction. It sets users.updates_chat_id and returns the chat ID. It is
+// idempotent: if updates_chat_id is already set it returns the existing value
+// without touching the DB. Concurrent calls are safe: a unique index on
+// (user_id) WHERE chat_type = 'updates' guards against duplicate inserts and
+// the unique-violation is handled by re-querying for the existing chat.
 func (s *Storage) EnsureUpdatesChat(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	return s.ensureUpdatesChatTx(ctx, s.DB.WithContext(ctx), userID)
+}
+
+// ensureUpdatesChatTx is the internal implementation that operates on an
+// already-scoped DB handle (plain DB or an in-progress transaction).
+func (s *Storage) ensureUpdatesChatTx(ctx context.Context, db *gorm.DB, userID uuid.UUID) (uuid.UUID, error) {
 	// Check whether the user already has an updates chat.
 	var user User
-	if err := s.DB.WithContext(ctx).
+	if err := db.WithContext(ctx).
 		Select("updates_chat_id").
 		Where("id = ?", userID).
 		First(&user).Error; err != nil {
@@ -289,32 +298,40 @@ func (s *Storage) EnsureUpdatesChat(ctx context.Context, userID uuid.UUID) (uuid
 		return *user.UpdatesChatID, nil
 	}
 
-	var chatID uuid.UUID
-	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		chatModel := &Chat{
-			ID:        uuid.New(),
-			UserID:    userID,
-			Model:     defaultUpdatesChatModel,
-			Title:     "Updates",
-			Mode:      "agent",
-			Type:      "regular",
-			ChatType:  "updates",
-			Icon:      "",
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+	chatModel := &Chat{
+		ID:        uuid.New(),
+		UserID:    userID,
+		Model:     defaultUpdatesChatModel, // TODO(PR2): pull from config
+		Title:     "Updates",
+		Mode:      "agent",
+		Type:      "regular",
+		ChatType:  "updates",
+		Icon:      "",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := db.WithContext(ctx).Create(chatModel).Error; err != nil {
+		// Handle concurrent insert: unique index on (user_id) WHERE chat_type='updates'
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			// Another goroutine won the race — re-fetch the existing chat ID.
+			var existing Chat
+			if qErr := db.WithContext(ctx).
+				Where("user_id = ? AND chat_type = 'updates'", userID).
+				First(&existing).Error; qErr != nil {
+				return uuid.Nil, qErr
+			}
+			return existing.ID, nil
 		}
-		if err := tx.Create(chatModel).Error; err != nil {
-			return err
-		}
-		chatID = chatModel.ID
-		return tx.Model(&User{}).
-			Where("id = ?", userID).
-			Update("updates_chat_id", chatID).Error
-	})
-	if err != nil {
 		return uuid.Nil, err
 	}
-	return chatID, nil
+
+	if err := db.WithContext(ctx).Model(&User{}).
+		Where("id = ?", userID).
+		Update("updates_chat_id", chatModel.ID).Error; err != nil {
+		return uuid.Nil, err
+	}
+	return chatModel.ID, nil
 }
 
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {

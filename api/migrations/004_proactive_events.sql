@@ -35,7 +35,11 @@ CREATE INDEX IF NOT EXISTS idx_proactive_events_user_state
 CREATE INDEX IF NOT EXISTS idx_proactive_events_state_fire_at
   ON proactive_events (state, fire_at);
 
--- ── 4. Backfill: create an Updates chat for every existing user that lacks one ──
+-- ── 4. Unique guard: one updates chat per user ────────────────────────────────
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_user_updates_unique
+  ON chats(user_id) WHERE chat_type = 'updates' AND deleted_at IS NULL;
+
+-- ── 5. Backfill: create an Updates chat for every existing user that lacks one ──
 DO $$
 DECLARE
   r RECORD;

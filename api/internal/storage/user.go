@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,19 +50,25 @@ func (s *Storage) CreateUser(ctx context.Context, email, password, name string) 
 		Name:         name,
 	}
 
-	if err := s.DB.WithContext(ctx).Create(user).Error; err != nil {
-		return nil, err
-	}
+	err = s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
 
-	// Provision the Updates chat immediately after creation so the user always
-	// has one. EnsureUpdatesChat is idempotent so this is safe on retry.
-	chatID, err := s.EnsureUpdatesChat(ctx, user.ID)
-	if err != nil {
-		// Non-fatal: the backfill DO block in migration 004 will cover any gaps.
-		// Log-worthy but shouldn't block registration.
-		_ = chatID
-	} else {
+		// Provision the Updates chat inside the same transaction so a user
+		// is never persisted without an Updates chat.
+		chatID, err := s.ensureUpdatesChatTx(ctx, tx, user.ID)
+		if err != nil {
+			return fmt.Errorf("create updates chat for user %s: %w", user.ID, err)
+		}
 		user.UpdatesChatID = &chatID
+
+		return tx.Model(&User{}).
+			Where("id = ?", user.ID).
+			Update("updates_chat_id", chatID).Error
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return user, nil
