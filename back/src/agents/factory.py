@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from collections.abc import Awaitable, Callable
@@ -645,3 +646,59 @@ class AgentFactory:
                 exc_info=True,
             )
             raise
+
+
+def build_proactive_prompt(event_type: str, payload: dict) -> str:
+    """Build a synthesized user-facing prompt from a proactive event.
+
+    Args:
+        event_type: The type of proactive event (e.g. 'calendar_upcoming', 'email_new').
+        payload: The event payload dict.
+
+    Returns:
+        A prompt string to feed to the agent as if the user sent it.
+    """
+    if event_type == "calendar_upcoming":
+        title = payload.get("title", "Untitled event")
+        start_time = payload.get("start_time", "unknown time")
+        end_time = payload.get("end_time", "unknown time")
+        participants = payload.get("participants", [])
+        participants_csv = ", ".join(participants) if participants else "none"
+        location = payload.get("location") or "none"
+        return (
+            f"A calendar event is coming up in ~15 minutes:\n"
+            f"- Title: {title}\n"
+            f"- Time: {start_time} – {end_time}\n"
+            f"- Participants: {participants_csv}\n"
+            f"- Location: {location}\n"
+            f"\n"
+            f"Prepare a brief for the user:\n"
+            f"1. One-paragraph context from your memory about this meeting / these participants / this topic.\n"
+            f"2. 2-3 likely open questions or things to bring.\n"
+            f"3. Anything from past conversations or notes that's relevant.\n"
+            f"Be concise — this is a heads-up, not an essay."
+        )
+
+    if event_type == "email_new":
+        sender = payload.get("sender", "unknown sender")
+        subject = payload.get("subject", "(no subject)")
+        snippet = payload.get("snippet", "")
+        return (
+            f"A new email just arrived:\n"
+            f"- From: {sender}\n"
+            f"- Subject: {subject}\n"
+            f"- Snippet: {snippet}\n"
+            f"\n"
+            f"Triage for the user:\n"
+            f"1. One-line summary of what this email is about and why it matters (or doesn't).\n"
+            f"2. Suggested action (reply / archive / delegate / no-op).\n"
+            f"3. If a reply is warranted, draft a 2-3 sentence response the user can review.\n"
+            f"Keep it tight."
+        )
+
+    # Fallback for unknown event types
+    return (
+        f"A proactive event of type {event_type} occurred. "
+        f"Payload: {json.dumps(payload)}. "
+        f"Decide if and how to inform the user."
+    )

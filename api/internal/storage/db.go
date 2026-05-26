@@ -49,6 +49,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&PlanDocument{},
 		&Notification{},
 		&UserDevice{},
+		// ProactiveEvent schema is managed by migrations/004_proactive_events.sql
 	); err != nil {
 		return nil, err
 	}

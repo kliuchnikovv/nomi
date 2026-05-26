@@ -16,6 +16,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/container"
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
+	"github.com/kliuchnikovv/genie-api/internal/proactive"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
@@ -79,6 +80,9 @@ func New(
 		notificationsHandler  = handlers.NewNotificationsHandler(ctr.Storage)
 		devicesHandler        = handlers.NewDevicesHandler(ctr.Storage)
 		workerHandler         = handlers.NewWorkerHandler(hubInstance, logger)
+
+		proactiveDispatcher = proactive.NewDispatcher(ctr.Storage, hubInstance.Redis(), logger)
+		proactiveHandler    = proactive.NewHandler(ctr.Storage, proactiveDispatcher)
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -184,6 +188,11 @@ func New(
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.POST("/api/devices", wrapWithAuth(devicesHandler.Register, authMiddleware))
 	r.DELETE("/api/devices/:token", wrapWithAuth(devicesHandler.Deregister, authMiddleware))
+
+	// Proactive event ingest + state transitions (reactive-agent pipeline)
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.POST("/api/events/ingest", wrapWithAuth(proactiveHandler.IngestEvent, authMiddleware))
+	r.POST("/api/events/:id/state", wrapWithAuth(proactiveHandler.SetEventState, authMiddleware))
 
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path

@@ -1,0 +1,206 @@
+/**
+ * UpdatesChatExtras — proactive badge + Discuss / Dismiss buttons.
+ *
+ * INTEGRATION NOTE (follow-up required):
+ * This component is NOT yet embedded in ChatDetailScreen.tsx because that file
+ * has unrelated uncommitted changes that must not be touched in this PR.
+ *
+ * To wire it in, import and render it just below (or above) each assistant
+ * message bubble in ChatDetailScreen's renderMessage / renderBubble:
+ *
+ *   import { UpdatesChatExtras } from './UpdatesChatExtras';
+ *   // inside the message renderer, after the bubble:
+ *   <UpdatesChatExtras message={message} chatId={activeChatID} />
+ *
+ * The component self-hides when message.meta?.source !== 'proactive', so it is
+ * safe to render for every message — non-proactive messages produce null.
+ */
+
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTheme } from '../../../context/ThemeContext';
+import { useMain } from '../../main/context';
+import { eventsApi } from '../../../apiClient';
+import type { Message, ProactiveMeta } from '../../main/models';
+import type { ChatStackParamList } from '../../../navigation/types';
+import { emptyChatID } from '../../main/context';
+
+type NavProp = NativeStackNavigationProp<ChatStackParamList, 'ChatDetail'>;
+
+/** Map event_type → human-readable source label shown in the badge. */
+function sourceLabel(eventType?: ProactiveMeta['event_type']): string {
+    switch (eventType) {
+        case 'calendar_upcoming':
+            return '📅 Calendar';
+        case 'email_new':
+            return '✉️ Email';
+        default:
+            return '🔔 Update';
+    }
+}
+
+interface Props {
+    message: Message;
+    /** The chat ID of the Updates chat (used for context when opening a Discuss thread). */
+    chatId: string;
+}
+
+export function UpdatesChatExtras({ message, chatId }: Props) {
+    const { theme } = useTheme();
+    const { createNewChatWithMode } = useMain();
+    const navigation = useNavigation<NavProp>();
+    const [dismissed, setDismissed] = useState(false);
+
+    const meta = message.meta;
+
+    // Only render for proactive assistant messages
+    if (!meta || meta.source !== 'proactive') return null;
+
+    const eventId = meta.event_id;
+    const label = sourceLabel(meta.event_type);
+
+    async function handleDiscuss() {
+        if (eventId) {
+            try {
+                await eventsApi.setState(eventId, 'discussed');
+            } catch (e) {
+                // Non-fatal: state endpoint may 404 until Go PR lands
+                console.warn(
+                    '[UpdatesChatExtras] setState(discussed) failed:',
+                    e,
+                );
+            }
+        }
+        // Open a new agent chat pre-seeded with the proactive message text as context
+        createNewChatWithMode('agent', null, message.text);
+        navigation.replace('ChatDetail', { chatId: emptyChatID });
+    }
+
+    async function handleDismiss() {
+        if (eventId) {
+            try {
+                await eventsApi.setState(eventId, 'dismissed');
+            } catch (e) {
+                console.warn(
+                    '[UpdatesChatExtras] setState(dismissed) failed:',
+                    e,
+                );
+            }
+        }
+        setDismissed(true);
+    }
+
+    return (
+        <View style={styles.wrapper}>
+            {/* Source badge */}
+            <View
+                style={[
+                    styles.badge,
+                    {
+                        backgroundColor: `${theme.accent}18`,
+                        borderColor: `${theme.accent}40`,
+                    },
+                ]}
+            >
+                <Text style={[styles.badgeText, { color: theme.accent }]}>
+                    {label}
+                </Text>
+            </View>
+
+            {/* Dismissed overlay */}
+            {dismissed ? (
+                <Text
+                    style={[
+                        styles.dismissedText,
+                        { color: theme.textSecondary },
+                    ]}
+                >
+                    Dismissed
+                </Text>
+            ) : (
+                <View style={styles.buttonRow}>
+                    <TouchableOpacity
+                        style={[
+                            styles.btn,
+                            styles.discussBtn,
+                            { backgroundColor: theme.accent },
+                        ]}
+                        onPress={handleDiscuss}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={styles.discussText}>Discuss</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[
+                            styles.btn,
+                            styles.dismissBtn,
+                            { borderColor: theme.border },
+                        ]}
+                        onPress={handleDismiss}
+                        activeOpacity={0.8}
+                    >
+                        <Text
+                            style={[
+                                styles.dismissText,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
+                            Dismiss
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    wrapper: {
+        marginTop: 6,
+        marginBottom: 2,
+        gap: 6,
+        alignItems: 'flex-start',
+    },
+    badge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 10,
+        borderWidth: 1,
+    },
+    badgeText: {
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    buttonRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    btn: {
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 14,
+    },
+    discussBtn: {
+        // background set inline via theme.accent
+    },
+    dismissBtn: {
+        borderWidth: 1,
+    },
+    discussText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    dismissText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    dismissedText: {
+        fontSize: 12,
+        fontStyle: 'italic',
+    },
+});
