@@ -296,6 +296,24 @@ export const ragApi = {
     }) => apiClient.post<{ ok: boolean }>(`${API_URL()}/rag/index`, doc),
 };
 
+export const eventsApi = {
+    async ingest(payload: {
+        source: 'calendar' | 'email';
+        event_type: 'calendar_upcoming' | 'email_new';
+        payload: Record<string, unknown>;
+        fire_at?: string;
+    }): Promise<{ id: string; state: string }> {
+        const result = await apiClient.post<{ id: string; state: string }>(
+            `${API_URL()}/events/ingest`,
+            payload,
+        );
+        if (!result) {
+            throw new Error('Empty response from events/ingest');
+        }
+        return result;
+    },
+};
+
 export interface BotIdentity {
     user_id?: string;
     name: string;
