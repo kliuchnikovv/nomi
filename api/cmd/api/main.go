@@ -19,6 +19,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
+	"github.com/kliuchnikovv/genie-api/internal/proactive"
 	"github.com/kliuchnikovv/genie-api/internal/scheduler"
 	"github.com/kliuchnikovv/genie-api/internal/server"
 	"go.uber.org/zap"
@@ -115,6 +116,13 @@ func main() {
 
 	notifScheduler := scheduler.New(ctr.Storage, logger, ctr.Hub.Redis())
 	go notifScheduler.Start(ctx)
+
+	decisionListener := proactive.NewDecisionListener(ctr.Storage, ctr.Hub.Redis(), logger)
+	go func() {
+		if err := decisionListener.Start(ctx); err != nil && err != context.Canceled {
+			logger.Error("decision listener stopped", zap.Error(err))
+		}
+	}()
 
 	go func() {
 		logger.Info("Server is listening", zap.Int("port", cfg.Server.Port))

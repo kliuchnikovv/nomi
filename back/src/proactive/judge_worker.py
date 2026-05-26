@@ -227,10 +227,16 @@ class JudgeWorker:
                 logger.info(
                     "[JudgeWorker] Surfaced event_id=%s to channel=%s", event_id, channel
                 )
+                # Also notify Go so it can mark event state=surfaced.
+                decision_channel = CHANNEL_DECISION_FMT.format(event_id=event_id)
+                await self.redis.publish(
+                    decision_channel,
+                    json.dumps({"decision": "surface", "reason": reason}),
+                )
 
         else:
-            # decision == "skip": publish to proactive:decision:{event_id} for
-            # optional Go-side handling.  PR2 or a follow-up can subscribe.
+            # decision == "skip": publish to proactive:decision:{event_id} so
+            # Go's decision_listener marks the event state=judge_rejected.
             decision_channel = CHANNEL_DECISION_FMT.format(event_id=event_id)
             decision_msg = json.dumps({"decision": "skip", "reason": reason})
             if self.redis:

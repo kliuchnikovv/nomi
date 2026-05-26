@@ -76,7 +76,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, ev *storage.ProactiveEvent) e
 	case DecisionAccept:
 		return d.surface(ctx, ev, user)
 	default: // gray
-		return d.judge(ctx, ev)
+		return d.judge(ctx, ev, user)
 	}
 }
 
@@ -155,11 +155,27 @@ func (d *Dispatcher) surface(ctx context.Context, ev *storage.ProactiveEvent, us
 	return d.store.UpdateEventState(ctx, ev.ID, "surfaced", "")
 }
 
-// judge publishes to proactive:judge:{event_id} for the PR3 judge worker.
-// The event state stays "pending"; the judge worker will update it via a
-// separate endpoint once PR3 lands.
-func (d *Dispatcher) judge(ctx context.Context, ev *storage.ProactiveEvent) error {
-	judgePayload, err := json.Marshal(ev)
+// judge publishes to proactive:judge:{event_id} for the Python judge worker.
+// The event state stays "pending"; decision_listener updates state once the
+// judge worker publishes back on proactive:decision:{event_id}.
+func (d *Dispatcher) judge(ctx context.Context, ev *storage.ProactiveEvent, user *storage.User) error {
+	if user.UpdatesChatID == nil || *user.UpdatesChatID == uuid.Nil {
+		chatID, err := d.store.EnsureUpdatesChat(ctx, user.ID)
+		if err != nil {
+			return fmt.Errorf("ensure updates chat: %w", err)
+		}
+		user.UpdatesChatID = &chatID
+	}
+
+	// Shape matches what back/src/proactive/judge_worker.py expects.
+	judgePayload, err := json.Marshal(map[string]any{
+		"event_id":        ev.ID.String(),
+		"user_id":         ev.UserID.String(),
+		"event_type":      ev.EventType,
+		"source":          ev.Source,
+		"payload":         json.RawMessage(ev.Payload),
+		"updates_chat_id": user.UpdatesChatID.String(),
+	})
 	if err != nil {
 		return fmt.Errorf("marshal event for judge: %w", err)
 	}
