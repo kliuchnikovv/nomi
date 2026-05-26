@@ -52,6 +52,9 @@ export default function SettingsHomeScreen() {
     const [agnoSessions, setAgnoSessions] = useState(
         user?.agent_storage_mode === 'agno',
     );
+    const [proactiveEnabled, setProactiveEnabled] = useState(
+        user?.proactive_enabled ?? false,
+    );
 
     const handleSingleChatModeToggle = useCallback(
         async (value: boolean) => {
@@ -80,6 +83,19 @@ export default function SettingsHomeScreen() {
         [user, updateUser],
     );
 
+    const handleProactiveToggle = useCallback(
+        async (value: boolean) => {
+            try {
+                await authApi.updateMe({ proactive_enabled: value });
+                setProactiveEnabled(value);
+                if (user) updateUser({ ...user, proactive_enabled: value });
+            } catch (e) {
+                console.error('Failed to update proactive_enabled', e);
+            }
+        },
+        [user, updateUser],
+    );
+
     // Refresh preview values each time this screen comes into focus
     useFocusEffect(
         useCallback(() => {
@@ -87,6 +103,7 @@ export default function SettingsHomeScreen() {
             setCurrentThemeName(themes[themeName].name);
             setSingleChatMode(user?.single_chat_mode ?? false);
             setAgnoSessions(user?.agent_storage_mode === 'agno');
+            setProactiveEnabled(user?.proactive_enabled ?? false);
 
             AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
                 if (mode === 'server' || mode === 'device')
@@ -194,6 +211,13 @@ export default function SettingsHomeScreen() {
                         subtitle="Store session history in Agno instead of payload"
                         value={agnoSessions}
                         onToggle={handleAgnoSessionsToggle}
+                        isFirst={false}
+                    />
+                    <SettingsToggleRow
+                        label="Proactive Agent"
+                        subtitle="Let Nomi surface calendar and email updates"
+                        value={proactiveEnabled}
+                        onToggle={handleProactiveToggle}
                         isFirst={false}
                         isLast
                     />

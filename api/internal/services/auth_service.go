@@ -174,6 +174,7 @@ type UpdateUserRequest struct {
 	WebSearchEnabled *bool   `json:"web_search_enabled"`
 	SingleChatMode   *bool   `json:"single_chat_mode"`
 	AgentStorageMode *string `json:"agent_storage_mode"`
+	ProactiveEnabled *bool   `json:"proactive_enabled"`
 }
 
 // UpdateUser updates user data
@@ -188,6 +189,9 @@ func (s *AuthService) UpdateUser(ctx context.Context, user *storage.User, req *U
 		if *req.AgentStorageMode == "agno" || *req.AgentStorageMode == "payload" {
 			user.AgentStorageMode = *req.AgentStorageMode
 		}
+	}
+	if req.ProactiveEnabled != nil {
+		user.ProactiveEnabled = *req.ProactiveEnabled
 	}
 
 	if err := s.userRepo.UpdateUser(ctx, user); err != nil {
