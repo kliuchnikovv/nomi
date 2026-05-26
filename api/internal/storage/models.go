@@ -11,12 +11,13 @@ import (
 
 // Chat represents a chat in the database
 type Chat struct {
-	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	UserID uuid.UUID `gorm:"type:uuid;not null;index:idx_chats_user_updated,priority:1"`
-	Model  string    `gorm:"type:text;not null"`
-	Title  string    `gorm:"not null"`
-	Mode   string    `gorm:"type:varchar(20);not null;default:'agent'"` // 'agent' or 'team'
-	Type   string    `gorm:"type:varchar(20);not null;default:'regular'"` // 'regular' or 'persistent'
+	ID       uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID   uuid.UUID `gorm:"type:uuid;not null;index:idx_chats_user_updated,priority:1"`
+	Model    string    `gorm:"type:text;not null"`
+	Title    string    `gorm:"not null"`
+	Mode     string    `gorm:"type:varchar(20);not null;default:'agent'"`   // 'agent' or 'team'
+	Type     string    `gorm:"type:varchar(20);not null;default:'regular'"` // 'regular' or 'persistent'
+	ChatType string    `gorm:"type:text;not null;default:'standard'"`       // 'standard' or 'updates'
 
 	TeamID     *string    `gorm:"type:varchar(50);default:null"` // e.g. 'dnd_team', 'travel_planning'
 	ProjectID  *uuid.UUID `gorm:"type:uuid;default:null;index:idx_chats_project_id"`
@@ -107,6 +108,20 @@ type Notification struct {
 	FiredAt     *time.Time     `gorm:"default:null"`
 	Metadata    datatypes.JSON `gorm:"type:jsonb"`
 	CreatedAt   time.Time      `gorm:"not null"`
+}
+
+// ProactiveEvent represents a candidate event surfaced by a reactive source.
+type ProactiveEvent struct {
+	ID             uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID         uuid.UUID      `gorm:"type:uuid;not null;index:idx_proactive_events_user_state,priority:1"`
+	Source         string         `gorm:"type:text;not null"` // 'calendar' | 'email'
+	EventType      string         `gorm:"type:text;not null"` // 'calendar_upcoming' | 'email_new'
+	Payload        datatypes.JSON `gorm:"type:jsonb;not null"`
+	FireAt         *time.Time     `gorm:"default:null;index:idx_proactive_events_state_fire_at,priority:2"`
+	State          string         `gorm:"type:text;not null;default:'pending';index:idx_proactive_events_user_state,priority:2;index:idx_proactive_events_state_fire_at,priority:1"`
+	DecisionReason *string        `gorm:"type:text;default:null"`
+	CreatedAt      time.Time      `gorm:"not null"`
+	ProcessedAt    *time.Time     `gorm:"default:null"`
 }
 
 // UserDevice stores device tokens for push notification delivery

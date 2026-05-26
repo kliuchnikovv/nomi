@@ -30,6 +30,7 @@ func newTestDBWithMessages(t *testing.T) *storage.Storage {
 			title      TEXT NOT NULL DEFAULT '',
 			mode       TEXT NOT NULL DEFAULT 'agent',
 			type       TEXT NOT NULL DEFAULT 'regular',
+			chat_type  TEXT NOT NULL DEFAULT 'standard',
 			team_id    TEXT,
 			project_id TEXT,
 			icon       TEXT NOT NULL DEFAULT '',

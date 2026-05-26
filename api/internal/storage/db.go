@@ -49,6 +49,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&PlanDocument{},
 		&Notification{},
 		&UserDevice{},
+		&ProactiveEvent{},
 	); err != nil {
 		return nil, err
 	}

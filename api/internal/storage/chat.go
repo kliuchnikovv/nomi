@@ -10,6 +10,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// defaultUpdatesChatModel is used when creating the per-user Updates chat.
+const defaultUpdatesChatModel = "glm-5"
+
 func (s *Storage) CreateChat(ctx context.Context, userID uuid.UUID, c *chat.Chat) (*chat.Chat, error) {
 	// Default mode to 'agent' if not specified, or 'team' if team_id is present
 	mode := c.Mode
@@ -267,6 +270,51 @@ func (s *Storage) ListPersistentChats(ctx context.Context, userID uuid.UUID) ([]
 		}
 	}
 	return chats, nil
+}
+
+// EnsureUpdatesChat creates the "Updates" chat for a user inside an existing
+// transaction (or creates its own if tx is nil). It sets users.updates_chat_id
+// and returns the chat ID. It is idempotent: if updates_chat_id is already set
+// it returns the existing value without touching the DB.
+func (s *Storage) EnsureUpdatesChat(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	// Check whether the user already has an updates chat.
+	var user User
+	if err := s.DB.WithContext(ctx).
+		Select("updates_chat_id").
+		Where("id = ?", userID).
+		First(&user).Error; err != nil {
+		return uuid.Nil, err
+	}
+	if user.UpdatesChatID != nil && *user.UpdatesChatID != uuid.Nil {
+		return *user.UpdatesChatID, nil
+	}
+
+	var chatID uuid.UUID
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		chatModel := &Chat{
+			ID:        uuid.New(),
+			UserID:    userID,
+			Model:     defaultUpdatesChatModel,
+			Title:     "Updates",
+			Mode:      "agent",
+			Type:      "regular",
+			ChatType:  "updates",
+			Icon:      "",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		if err := tx.Create(chatModel).Error; err != nil {
+			return err
+		}
+		chatID = chatModel.ID
+		return tx.Model(&User{}).
+			Where("id = ?", userID).
+			Update("updates_chat_id", chatID).Error
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return chatID, nil
 }
 
 func (s *Storage) DeleteChat(ctx context.Context, userID uuid.UUID, chatID uuid.UUID) error {

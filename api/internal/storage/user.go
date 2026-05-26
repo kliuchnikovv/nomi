@@ -15,9 +15,14 @@ type User struct {
 	Email            string         `json:"email" gorm:"uniqueIndex;not null"`
 	PasswordHash     string         `json:"-" gorm:"not null"`
 	Name             string         `json:"name"`
-	WebSearchEnabled  bool           `json:"web_search_enabled" gorm:"default:false"`
-	SingleChatMode    bool           `json:"single_chat_mode" gorm:"default:false"`
-	AgentStorageMode  string         `json:"agent_storage_mode" gorm:"default:'payload'"`
+	WebSearchEnabled bool           `json:"web_search_enabled" gorm:"default:false"`
+	SingleChatMode   bool           `json:"single_chat_mode" gorm:"default:false"`
+	AgentStorageMode string         `json:"agent_storage_mode" gorm:"default:'payload'"`
+	// Proactive / reactive-agent fields
+	UpdatesChatID    *uuid.UUID     `json:"updates_chat_id,omitempty" gorm:"type:uuid;default:null"`
+	QuietHoursStart  *string        `json:"quiet_hours_start,omitempty" gorm:"type:time;default:null"`
+	QuietHoursEnd    *string        `json:"quiet_hours_end,omitempty" gorm:"type:time;default:null"`
+	ProactiveEnabled bool           `json:"proactive_enabled" gorm:"default:false"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
@@ -30,7 +35,8 @@ func (base *User) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
-// CreateUser creates a new user
+// CreateUser creates a new user and provisions their Updates chat in one
+// transaction. The user is returned with UpdatesChatID already set.
 func (s *Storage) CreateUser(ctx context.Context, email, password, name string) (*User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -43,9 +49,19 @@ func (s *Storage) CreateUser(ctx context.Context, email, password, name string) 
 		Name:         name,
 	}
 
-	result := s.DB.WithContext(ctx).Create(user)
-	if result.Error != nil {
-		return nil, result.Error
+	if err := s.DB.WithContext(ctx).Create(user).Error; err != nil {
+		return nil, err
+	}
+
+	// Provision the Updates chat immediately after creation so the user always
+	// has one. EnsureUpdatesChat is idempotent so this is safe on retry.
+	chatID, err := s.EnsureUpdatesChat(ctx, user.ID)
+	if err != nil {
+		// Non-fatal: the backfill DO block in migration 004 will cover any gaps.
+		// Log-worthy but shouldn't block registration.
+		_ = chatID
+	} else {
+		user.UpdatesChatID = &chatID
 	}
 
 	return user, nil
