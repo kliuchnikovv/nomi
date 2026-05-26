@@ -5,7 +5,7 @@
 
 import { NativeModules, Platform } from 'react-native';
 import { integrationStorage } from '../IntegrationStorage';
-import { ragApi } from '../../../apiClient';
+import { eventsApi, ragApi } from '../../../apiClient';
 
 const { IOSMailManager } = NativeModules;
 
@@ -330,6 +330,9 @@ class IMAPEmailClient {
     ): Promise<Email[]> {
         const syncState = await this.getSyncState(integrationId, mailbox);
         const sinceUid = syncState?.lastUid || 0;
+        // sinceUid === 0 means this is the initial backfill — do NOT emit proactive
+        // events for those emails. Only emit when we already have a sync baseline.
+        const isInitialSync = sinceUid === 0;
 
         const emails = await this.fetchEmails(
             integrationId,
@@ -343,9 +346,53 @@ class IMAPEmailClient {
             await this.updateSyncState(integrationId, mailbox, maxUid);
 
             await this.indexEmailsForRAG(integrationId, emails);
+
+            if (!isInitialSync) {
+                await this.emitNewEmailEvents(emails);
+            }
         }
 
         return emails;
+    }
+
+    /**
+     * Emit proactive events for newly-detected emails (not backfill).
+     */
+    private async emitNewEmailEvents(emails: Email[]): Promise<void> {
+        for (const email of emails) {
+            try {
+                // Extract bare sender email (lowercased) from "Name <email>" or plain address.
+                const bracketMatch = email.from.match(/<([^>]+)>/);
+                const senderEmail = (
+                    bracketMatch ? bracketMatch[1] : email.from
+                )
+                    .trim()
+                    .toLowerCase();
+
+                const snippet = email.snippet
+                    ? email.snippet.slice(0, 200)
+                    : (email.body ? email.body.slice(0, 200) : '');
+
+                await eventsApi.ingest({
+                    source: 'email',
+                    event_type: 'email_new',
+                    payload: {
+                        message_id: String(email.uid),
+                        sender: email.from,
+                        sender_email: senderEmail,
+                        subject: email.subject,
+                        snippet,
+                        received_at: email.date,
+                    },
+                });
+            } catch (error) {
+                console.error(
+                    `[IMAPEmailClient] Failed to emit proactive event for uid ${email.uid}:`,
+                    error,
+                );
+                // Non-fatal — continue processing remaining emails.
+            }
+        }
     }
 
     /**
