@@ -113,7 +113,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	notifScheduler := scheduler.New(ctr.Storage, logger)
+	notifScheduler := scheduler.New(ctr.Storage, logger, ctr.Hub.Redis())
 	go notifScheduler.Start(ctx)
 
 	go func() {

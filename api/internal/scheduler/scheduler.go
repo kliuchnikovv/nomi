@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kliuchnikovv/genie-api/internal/proactive"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -18,6 +20,7 @@ type Scheduler struct {
 	storage    *storage.Storage
 	httpClient *http.Client
 	logger     *zap.Logger
+	dispatcher *proactive.Dispatcher
 }
 
 type expoPushMessage struct {
@@ -39,11 +42,12 @@ type expoPushResponse struct {
 	} `json:"data"`
 }
 
-func New(store *storage.Storage, logger *zap.Logger) *Scheduler {
+func New(store *storage.Storage, logger *zap.Logger, redisClient *redis.Client) *Scheduler {
 	return &Scheduler{
 		storage:    store,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		logger:     logger,
+		dispatcher: proactive.NewDispatcher(store, redisClient, logger),
 	}
 }
 
@@ -70,6 +74,21 @@ func (s *Scheduler) dispatch(ctx context.Context) {
 
 	for _, n := range notifications {
 		s.send(ctx, n)
+	}
+
+	// Process due proactive events.
+	events, err := s.storage.ListPendingDueEvents(ctx, 100)
+	if err != nil {
+		s.logger.Error("scheduler: failed to list pending proactive events", zap.Error(err))
+		return
+	}
+	for _, ev := range events {
+		if err := s.dispatcher.Dispatch(ctx, ev); err != nil {
+			s.logger.Error("scheduler: failed to dispatch proactive event",
+				zap.String("event_id", ev.ID.String()),
+				zap.Error(err),
+			)
+		}
 	}
 }
 
