@@ -1125,6 +1125,21 @@ class RedisSession:
         text = payload.get("message", "")
         message_id = str(uuid.uuid4())
 
+        # --- PROACTIVE BRANCH ---
+        # If the payload has source="proactive" and a proactive_event key, synthesize
+        # the agent input from the event rather than waiting for user text.
+        if payload.get("source") == "proactive" and payload.get("proactive_event"):
+            from src.agents.factory import build_proactive_prompt
+            proactive_event = payload["proactive_event"]
+            event_type = proactive_event.get("event_type", "unknown")
+            event_payload = proactive_event.get("payload", {})
+            text = build_proactive_prompt(event_type, event_payload)
+            logger.info(
+                "[RedisSession] Proactive event received: type=%s, synthesized prompt len=%d",
+                event_type,
+                len(text),
+            )
+
         # --- NEW LOGIC: Init from Payload ---
 
         # Reset delivery context at the start of each request
@@ -1162,6 +1177,7 @@ class RedisSession:
                 "attachments",
                 "extracted_facts",
                 "context_items",
+                "proactive_event",
             }
             self._delivery_context = {
                 k: v for k, v in payload.items() if k not in standard_keys

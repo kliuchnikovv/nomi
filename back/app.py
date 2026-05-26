@@ -173,6 +173,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.error("[Lifespan] Failed to start Redis Worker: %s", e, exc_info=True)
 
+    logging.warning("[Lifespan] Initializing Judge Worker...")
+    try:
+        from src.proactive.judge_worker import JudgeWorker
+        judge_worker = JudgeWorker()
+        await judge_worker.start()
+        logging.warning("[Lifespan] Judge Worker started successfully")
+    except Exception as e:
+        logging.error("[Lifespan] Failed to start Judge Worker: %s", e, exc_info=True)
+
     logging.warning("[Lifespan] Startup complete — ready to serve requests")
     yield
 
