@@ -189,9 +189,10 @@ func New(
 	r.POST("/api/devices", wrapWithAuth(devicesHandler.Register, authMiddleware))
 	r.DELETE("/api/devices/:token", wrapWithAuth(devicesHandler.Deregister, authMiddleware))
 
-	// Proactive event ingest (reactive-agent pipeline)
+	// Proactive event ingest + state transitions (reactive-agent pipeline)
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.POST("/api/events/ingest", wrapWithAuth(proactiveHandler.IngestEvent, authMiddleware))
+	r.POST("/api/events/:id/state", wrapWithAuth(proactiveHandler.SetEventState, authMiddleware))
 
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path

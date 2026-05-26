@@ -67,7 +67,10 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
                 await eventsApi.setState(eventId, 'discussed');
             } catch (e) {
                 // Non-fatal: state endpoint may 404 until Go PR lands
-                console.warn('[UpdatesChatExtras] setState(discussed) failed:', e);
+                console.warn(
+                    '[UpdatesChatExtras] setState(discussed) failed:',
+                    e,
+                );
             }
         }
         // Open a new agent chat pre-seeded with the proactive message text as context
@@ -80,7 +83,10 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
             try {
                 await eventsApi.setState(eventId, 'dismissed');
             } catch (e) {
-                console.warn('[UpdatesChatExtras] setState(dismissed) failed:', e);
+                console.warn(
+                    '[UpdatesChatExtras] setState(dismissed) failed:',
+                    e,
+                );
             }
         }
         setDismissed(true);
@@ -89,28 +95,60 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
     return (
         <View style={styles.wrapper}>
             {/* Source badge */}
-            <View style={[styles.badge, { backgroundColor: `${theme.accent}18`, borderColor: `${theme.accent}40` }]}>
-                <Text style={[styles.badgeText, { color: theme.accent }]}>{label}</Text>
+            <View
+                style={[
+                    styles.badge,
+                    {
+                        backgroundColor: `${theme.accent}18`,
+                        borderColor: `${theme.accent}40`,
+                    },
+                ]}
+            >
+                <Text style={[styles.badgeText, { color: theme.accent }]}>
+                    {label}
+                </Text>
             </View>
 
             {/* Dismissed overlay */}
             {dismissed ? (
-                <Text style={[styles.dismissedText, { color: theme.textSecondary }]}>Dismissed</Text>
+                <Text
+                    style={[
+                        styles.dismissedText,
+                        { color: theme.textSecondary },
+                    ]}
+                >
+                    Dismissed
+                </Text>
             ) : (
                 <View style={styles.buttonRow}>
                     <TouchableOpacity
-                        style={[styles.btn, styles.discussBtn, { backgroundColor: theme.accent }]}
+                        style={[
+                            styles.btn,
+                            styles.discussBtn,
+                            { backgroundColor: theme.accent },
+                        ]}
                         onPress={handleDiscuss}
                         activeOpacity={0.8}
                     >
                         <Text style={styles.discussText}>Discuss</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.btn, styles.dismissBtn, { borderColor: theme.border }]}
+                        style={[
+                            styles.btn,
+                            styles.dismissBtn,
+                            { borderColor: theme.border },
+                        ]}
                         onPress={handleDismiss}
                         activeOpacity={0.8}
                     >
-                        <Text style={[styles.dismissText, { color: theme.textSecondary }]}>Dismiss</Text>
+                        <Text
+                            style={[
+                                styles.dismissText,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
+                            Dismiss
+                        </Text>
                     </TouchableOpacity>
                 </View>
             )}

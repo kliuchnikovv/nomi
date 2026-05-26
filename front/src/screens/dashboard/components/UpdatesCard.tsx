@@ -20,7 +20,10 @@ export function UpdatesCard() {
 
     return (
         <TouchableOpacity
-            style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            style={[
+                styles.card,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
             onPress={() =>
                 navigation.navigate('Chat', {
                     screen: 'ChatDetail',
@@ -29,11 +32,18 @@ export function UpdatesCard() {
             }
             activeOpacity={0.8}
         >
-            <View style={[styles.iconBg, { backgroundColor: `${theme.accent}20` }]}>
+            <View
+                style={[
+                    styles.iconBg,
+                    { backgroundColor: `${theme.accent}20` },
+                ]}
+            >
                 <Ionicons name="notifications" size={20} color={theme.accent} />
             </View>
             <View style={styles.textBlock}>
-                <Text style={[styles.title, { color: theme.textPrimary }]}>Updates</Text>
+                <Text style={[styles.title, { color: theme.textPrimary }]}>
+                    Updates
+                </Text>
                 <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
                     Proactive messages from Nomi
                 </Text>

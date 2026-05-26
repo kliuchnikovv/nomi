@@ -371,7 +371,9 @@ class IMAPEmailClient {
 
                 const snippet = email.snippet
                     ? email.snippet.slice(0, 200)
-                    : (email.body ? email.body.slice(0, 200) : '');
+                    : email.body
+                    ? email.body.slice(0, 200)
+                    : '';
 
                 await eventsApi.ingest({
                     source: 'email',

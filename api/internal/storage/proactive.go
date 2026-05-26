@@ -24,6 +24,15 @@ func (s *Storage) CreateProactiveEvent(ctx context.Context, ev *ProactiveEvent) 
 	return ev, nil
 }
 
+// GetProactiveEvent returns a single ProactiveEvent by ID.
+func (s *Storage) GetProactiveEvent(ctx context.Context, id uuid.UUID) (*ProactiveEvent, error) {
+	var ev ProactiveEvent
+	if err := s.DB.WithContext(ctx).First(&ev, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &ev, nil
+}
+
 // ListPendingDueEvents returns up to limit proactive events that are in state
 // "pending" and whose fire_at is either NULL or in the past.
 func (s *Storage) ListPendingDueEvents(ctx context.Context, limit int) ([]*ProactiveEvent, error) {

@@ -56,6 +56,7 @@ import { AskUserDialog } from '../components/AskUserDialog';
 import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 import type { ChatStackParamList } from '../../../navigation/types';
 import type { Chat, Message } from '../../main/models';
+import { UpdatesChatExtras } from './UpdatesChatExtras';
 
 const FADE_OPACITIES = [
     0.816, 0.734, 0.653, 0.579, 0.506, 0.441, 0.383, 0.326, 0.277, 0.228, 0.18,
@@ -74,7 +75,10 @@ export function ChatDetailScreen() {
 
     const bottomInset = insets.bottom;
     const fadeContainerStyle = useAnimatedStyle(() => ({
-        bottom: Math.max(bottomInset, -kbHeightAnim.value),
+        bottom: Math.max(
+            bottomInset + TAB_BAR_ICON_HEIGHT,
+            -kbHeightAnim.value,
+        ),
     }));
 
     const { showDialog, dialogState, submitResponse, cancelDialog } =
@@ -513,8 +517,30 @@ export function ChatDetailScreen() {
         onChipPress: handleChipPress,
     });
 
+    const isUpdatesChat = activeChat?.chat_type === 'updates';
+    const renderMessageWithExtras = useCallback(
+        (props: any) => {
+            const base = renderMessage(props);
+            if (!isUpdatesChat) return base;
+            const msg = messages.find(
+                m => m.id === String(props.currentMessage?._id),
+            );
+            if (!msg) return base;
+            return (
+                <React.Fragment key={props.currentMessage?._id}>
+                    {base}
+                    <UpdatesChatExtras message={msg} chatId={chatId} />
+                </React.Fragment>
+            );
+        },
+        [renderMessage, isUpdatesChat, messages, chatId],
+    );
+
     const floatingInputStyle = useAnimatedStyle(() => ({
-        bottom: Math.max(0, -kbHeightAnim.value - bottomInset),
+        bottom: Math.max(
+            TAB_BAR_ICON_HEIGHT,
+            -kbHeightAnim.value - bottomInset,
+        ),
     }));
 
     return (
@@ -854,7 +880,7 @@ export function ChatDetailScreen() {
                         }
                         onSend={handleSend}
                         user={currentUser}
-                        renderMessage={renderMessage}
+                        renderMessage={renderMessageWithExtras}
                         renderBubble={renderBubble}
                         renderMessageText={renderMessageText}
                         renderInputToolbar={() => null}
@@ -868,7 +894,11 @@ export function ChatDetailScreen() {
                         placeholder="Type a message..."
                         scrollToBottom
                         scrollToBottomStyle={{
-                            bottom: inputBarHeight + insets.bottom + 8,
+                            bottom:
+                                inputBarHeight +
+                                insets.bottom +
+                                TAB_BAR_ICON_HEIGHT +
+                                8,
                         }}
                         alwaysShowSend
                         isAlignedTop={false}
@@ -894,7 +924,9 @@ export function ChatDetailScreen() {
                                       contentContainerStyle: {
                                           paddingBottom: headerHeight,
                                           paddingTop:
-                                              inputBarHeight + insets.bottom,
+                                              inputBarHeight +
+                                              insets.bottom +
+                                              TAB_BAR_ICON_HEIGHT,
                                       },
                                       maintainVisibleContentPosition: undefined,
                                       maxToRenderPerBatch: 10,
@@ -906,7 +938,9 @@ export function ChatDetailScreen() {
                                       contentContainerStyle: {
                                           paddingBottom: headerHeight,
                                           paddingTop:
-                                              inputBarHeight + insets.bottom,
+                                              inputBarHeight +
+                                              insets.bottom +
+                                              TAB_BAR_ICON_HEIGHT,
                                       },
                                       maxToRenderPerBatch: 10,
                                       windowSize: 10,

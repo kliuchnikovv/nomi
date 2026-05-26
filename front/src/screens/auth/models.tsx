@@ -8,7 +8,7 @@ export type User = {
     agent_storage_mode?: 'payload' | 'agno';
     // TODO(backend): populated once Go's /auth/me response includes users.updates_chat_id
     updates_chat_id?: string | null;
-}
+};
 
 export interface AuthContextType {
     user: User | null;
@@ -32,4 +32,3 @@ export function alertError(message: string) {
         console.error(error);
     }
 }
-

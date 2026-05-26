@@ -119,3 +119,49 @@ func (h *Handler) IngestEvent(c *gin.Context) {
 		"state": created.State,
 	})
 }
+
+type stateRequest struct {
+	State string `json:"state"` // "dismissed" | "discussed"
+}
+
+// SetEventState handles POST /api/events/:id/state.
+func (h *Handler) SetEventState(c *gin.Context) {
+	user, ok := auth.GetUserFromContext(c.Request.Context())
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	eventID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid event id"})
+		return
+	}
+
+	var req stateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.State != "dismissed" && req.State != "discussed" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "state must be dismissed or discussed"})
+		return
+	}
+
+	ev, err := h.store.GetProactiveEvent(c.Request.Context(), eventID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "event not found"})
+		return
+	}
+	if ev.UserID != user.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	if err := h.store.UpdateEventState(c.Request.Context(), eventID, req.State, ""); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update state"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"state": req.State})
+}

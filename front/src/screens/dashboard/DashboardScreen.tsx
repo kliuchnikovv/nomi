@@ -46,7 +46,10 @@ export const DashboardScreen = () => {
                 style={styles.scroll}
                 contentContainerStyle={[
                     styles.content,
-                    { paddingTop: insets.top + 16, paddingBottom: TAB_BAR_ICON_HEIGHT + insets.bottom + 16 },
+                    {
+                        paddingTop: insets.top + 16,
+                        paddingBottom: TAB_BAR_ICON_HEIGHT + insets.bottom + 16,
+                    },
                 ]}
                 showsVerticalScrollIndicator={false}
             >
