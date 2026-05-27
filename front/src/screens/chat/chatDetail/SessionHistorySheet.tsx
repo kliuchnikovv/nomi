@@ -81,46 +81,42 @@ export function SessionHistorySheet({
         (item: Chat) => {
             const displayTitle =
                 item.title || formatSessionDate(item.updated_at);
-            ActionSheetIOS.showActionSheetWithOptions(
-                {
-                    options: ['Rename', 'Delete', 'Cancel'],
-                    destructiveButtonIndex: 1,
-                    cancelButtonIndex: 2,
-                },
-                idx => {
-                    if (idx === 0) {
-                        Alert.prompt(
-                            'Rename Session',
-                            '',
-                            [
-                                { text: 'Cancel', style: 'cancel' },
-                                {
-                                    text: 'Rename',
-                                    onPress: (newTitle?: string) => {
-                                        const trimmed = newTitle?.trim();
-                                        if (!trimmed) return;
-                                        renameChat(item.id, trimmed);
-                                        setSessions(prev =>
-                                            prev.map(s =>
-                                                s.id === item.id
-                                                    ? { ...s, title: trimmed }
-                                                    : s,
-                                            ),
-                                        );
+            // Close modal first — ActionSheetIOS doesn't render correctly inside Modal on iOS
+            onClose();
+            setTimeout(() => {
+                ActionSheetIOS.showActionSheetWithOptions(
+                    {
+                        options: ['Rename', 'Delete', 'Cancel'],
+                        destructiveButtonIndex: 1,
+                        cancelButtonIndex: 2,
+                    },
+                    idx => {
+                        if (idx === 0) {
+                            Alert.prompt(
+                                'Rename Session',
+                                '',
+                                [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                        text: 'Rename',
+                                        onPress: (newTitle?: string) => {
+                                            const trimmed = newTitle?.trim();
+                                            if (!trimmed) return;
+                                            renameChat(item.id, trimmed);
+                                        },
                                     },
-                                },
-                            ],
-                            'plain-text',
-                            displayTitle,
-                        );
-                    } else if (idx === 1) {
-                        deleteChat(item.id);
-                        setSessions(prev => prev.filter(s => s.id !== item.id));
-                    }
-                },
-            );
+                                ],
+                                'plain-text',
+                                displayTitle,
+                            );
+                        } else if (idx === 1) {
+                            deleteChat(item.id);
+                        }
+                    },
+                );
+            }, 350);
         },
-        [renameChat, deleteChat],
+        [renameChat, deleteChat, onClose],
     );
 
     const renderItem = useCallback(

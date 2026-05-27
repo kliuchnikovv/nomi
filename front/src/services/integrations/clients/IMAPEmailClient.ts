@@ -443,7 +443,7 @@ class IMAPEmailClient {
         }
 
         try {
-            const db = await import('../database/database').then(m =>
+            const db = await import('../../database/database').then(m =>
                 m.getDatabase(),
             );
             const row = await db.getFirstAsync<{
@@ -483,7 +483,7 @@ class IMAPEmailClient {
         }
 
         try {
-            const db = await import('../database/database').then(m =>
+            const db = await import('../../database/database').then(m =>
                 m.getDatabase(),
             );
             const now = Date.now();

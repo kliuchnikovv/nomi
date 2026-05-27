@@ -1,5 +1,6 @@
 import {
     ActivityIndicator,
+    Keyboard,
     KeyboardAvoidingView,
     Pressable,
     ScrollView,
@@ -20,56 +21,68 @@ import { getIntegrationMetadata } from '../../../../services/integrations/regist
 import { IOSRemindersClient } from '../../../../services/integrations/clients/IOSRemindersClient';
 import { IOSHealthClient } from '../../../../services/integrations/clients/IOSHealthClient';
 
+const ICLOUD_DOMAINS = ['icloud.com', 'me.com', 'mac.com'];
+const isICloudEmail = (email: string) =>
+    ICLOUD_DOMAINS.some(d => email.toLowerCase().endsWith(`@${d}`));
+
 export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
-    const { startOAuth, toggleTool, connectTelegram, connectImap } = useConnectors();
+    const { startOAuth, toggleTool, connectTelegram, connectImap } =
+        useConnectors();
     const { theme, palette } = useTheme();
-    const sharedStyles = useMemo(() => getStyles(theme, palette), [theme, palette]);
+    const sharedStyles = useMemo(
+        () => getStyles(theme, palette),
+        [theme, palette],
+    );
 
     // Local styles for Grid
-    const styles = useMemo(() => StyleSheet.create({
-        grid: {
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 16,
-            paddingVertical: 8,
-            paddingHorizontal: 4,
-        },
-        card: {
-            backgroundColor: theme.surfaceHighlight,
-            borderRadius: 16,
-            padding: 16,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderWidth: 1,
-            borderColor: theme.border,
-            width: '47%',
-            height: 140,
-        },
-        cardPressed: {
-            opacity: 0.8,
-            backgroundColor: theme.surfaceAlt,
-        },
-        iconBubble: {
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 12,
-        },
-        title: {
-            color: theme.text,
-            fontWeight: '600',
-            fontSize: 16,
-            textAlign: 'center',
-        },
-        description: {
-            color: theme.fadedText,
-            fontSize: 12,
-            textAlign: 'center',
-            marginTop: 4,
-        },
-    }), [theme, palette]);
+    const styles = useMemo(
+        () =>
+            StyleSheet.create({
+                grid: {
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 16,
+                    paddingVertical: 8,
+                    paddingHorizontal: 4,
+                },
+                card: {
+                    backgroundColor: theme.surfaceHighlight,
+                    borderRadius: 16,
+                    padding: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    width: '47%',
+                    height: 140,
+                },
+                cardPressed: {
+                    opacity: 0.8,
+                    backgroundColor: theme.surfaceAlt,
+                },
+                iconBubble: {
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 12,
+                },
+                title: {
+                    color: theme.text,
+                    fontWeight: '600',
+                    fontSize: 16,
+                    textAlign: 'center',
+                },
+                description: {
+                    color: theme.fadedText,
+                    fontSize: 12,
+                    textAlign: 'center',
+                    marginTop: 4,
+                },
+            }),
+        [theme, palette],
+    );
 
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [telegramModalVisible, setTelegramModalVisible] = useState(false);
@@ -87,7 +100,7 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
     const handleConnectorPress = async (connector: Connector) => {
         setErrorMsg(null);
         const metadata = getIntegrationMetadata(connector.id);
-        
+
         // Client-only integrations (no auth) - request permissions if needed
         if (metadata?.authType === 'none') {
             try {
@@ -103,11 +116,15 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                         const granted = await client.requestPermission();
 
                         if (!granted) {
-                            setErrorMsg('Reminders access was denied. Please enable it in Settings.');
+                            setErrorMsg(
+                                'Reminders access was denied. Please enable it in Settings.',
+                            );
                             return;
                         }
                     } else if (status === 'denied') {
-                        setErrorMsg('Reminders access is denied. Please enable it in Settings → Privacy → Reminders.');
+                        setErrorMsg(
+                            'Reminders access is denied. Please enable it in Settings → Privacy → Reminders.',
+                        );
                         return;
                     }
                     // If 'authorized', continue to enable the integration
@@ -115,41 +132,56 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
 
                 // Special handling for ios_health: request permission before enabling (iOS only)
                 if (connector.id === 'ios_health' && Platform.OS === 'ios') {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b9378a78-49c7-400b-ab56-9b516cc8a8fb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'front/src/screens/settings/connectors/tabs/BrowserTab.tsx:111',message:'Attempting to enable ios_health',data:{connectorId:connector.id,platformOS:Platform.OS},timestamp:Date.now()})}).catch(()=>{});
-                    // #endregion
                     const healthClient = new IOSHealthClient();
 
                     // Check current permission status
                     const status = await healthClient.checkPermissionStatus();
 
                     if (!status.available) {
-                        setErrorMsg('HealthKit is not available on this device.');
+                        setErrorMsg(
+                            'HealthKit is not available on this device.',
+                        );
                         return;
                     }
 
                     // Request permissions for all categories
-                    const allCategories: Array<'activity' | 'heart' | 'sleep' | 'body' | 'nutrition' | 'workouts'> = [
+                    const allCategories: Array<
+                        | 'activity'
+                        | 'heart'
+                        | 'sleep'
+                        | 'body'
+                        | 'nutrition'
+                        | 'workouts'
+                    > = [
                         'activity',
                         'heart',
                         'sleep',
                         'body',
                         'nutrition',
-                        'workouts'
+                        'workouts',
                     ];
 
                     try {
-                        const result = await healthClient.requestPermission(allCategories);
+                        const result = await healthClient.requestPermission(
+                            allCategories,
+                        );
 
                         if (!result.granted) {
-                            setErrorMsg('Health data access was denied. Please enable it in Settings.');
+                            setErrorMsg(
+                                'Health data access was denied. Please enable it in Settings.',
+                            );
                             return;
                         }
 
                         // If granted, continue to enable the integration
                     } catch (err) {
-                        console.error('[BrowserTab] Failed to request health permissions', err);
-                        setErrorMsg('Failed to request health permissions. Please try again.');
+                        console.error(
+                            '[BrowserTab] Failed to request health permissions',
+                            err,
+                        );
+                        setErrorMsg(
+                            'Failed to request health permissions. Please try again.',
+                        );
                         return;
                     }
                 }
@@ -158,7 +190,11 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                 onSuccess?.();
             } catch (err) {
                 console.warn(`Failed to enable ${connector.id}`, err);
-                setErrorMsg(err instanceof Error ? err.message : `Failed to enable ${connector.name}`);
+                setErrorMsg(
+                    err instanceof Error
+                        ? err.message
+                        : `Failed to enable ${connector.name}`,
+                );
             }
             return;
         }
@@ -182,8 +218,15 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
             await startOAuth(connector.oauthProvider);
             onSuccess?.();
         } catch (err) {
-            console.warn(`Failed to start ${connector.oauthProvider} OAuth`, err);
-            setErrorMsg(err instanceof Error ? err.message : `Failed to start ${connector.oauthProvider} OAuth`);
+            console.warn(
+                `Failed to start ${connector.oauthProvider} OAuth`,
+                err,
+            );
+            setErrorMsg(
+                err instanceof Error
+                    ? err.message
+                    : `Failed to start ${connector.oauthProvider} OAuth`,
+            );
         }
     };
 
@@ -205,7 +248,17 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
             setImapPassword('');
             onSuccess?.();
         } catch (e) {
-            setImapError(e instanceof Error ? e.message : 'Failed to connect');
+            const msg = e instanceof Error ? e.message : 'Failed to connect';
+            if (
+                isICloudEmail(imapEmail) &&
+                msg.toLowerCase().includes('login failed')
+            ) {
+                setImapError(
+                    'Login failed. iCloud requires an app-specific password — generate one at appleid.apple.com.',
+                );
+            } else {
+                setImapError(msg);
+            }
         } finally {
             setImapLoading(false);
         }
@@ -224,7 +277,9 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
             setTelegramCode('');
             onSuccess?.();
         } catch (e) {
-            setTelegramError(e instanceof Error ? e.message : 'Failed to link Telegram');
+            setTelegramError(
+                e instanceof Error ? e.message : 'Failed to link Telegram',
+            );
         } finally {
             setTelegramLoading(false);
         }
@@ -245,7 +300,9 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
         if (connectors.length === 0) return null;
         return (
             <View key={title} style={{ marginBottom: 24 }}>
-                <Text style={[sharedStyles.sectionTitle, { marginBottom: 12 }]}>{title}</Text>
+                <Text style={[sharedStyles.sectionTitle, { marginBottom: 12 }]}>
+                    {title}
+                </Text>
                 <View style={styles.grid}>
                     {connectors.map(connector => (
                         <ConnectorCard
@@ -263,18 +320,31 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
 
     return (
         <ScrollView
-            contentContainerStyle={[sharedStyles.scrollContent, { paddingTop: 12 }]}
+            contentContainerStyle={[
+                sharedStyles.scrollContent,
+                { paddingTop: 12 },
+            ]}
             showsVerticalScrollIndicator={false}
         >
             {SECTIONS.map(section => {
-                const connectors = section.ids.length > 0
-                    ? section.ids.flatMap(id => CONNECTORS.filter(c => c.id === id))
-                    : otherConnectors;
+                const connectors =
+                    section.ids.length > 0
+                        ? section.ids.flatMap(id =>
+                              CONNECTORS.filter(c => c.id === id),
+                          )
+                        : otherConnectors;
                 return renderSection(section.title, connectors);
             })}
 
             {errorMsg && (
-                <Text style={[sharedStyles.syncStatus, { marginTop: 8, color: palette.red }]}>{errorMsg}</Text>
+                <Text
+                    style={[
+                        sharedStyles.syncStatus,
+                        { marginTop: 8, color: palette.red },
+                    ]}
+                >
+                    {errorMsg}
+                </Text>
             )}
 
             {/* IMAP Credentials Modal */}
@@ -288,80 +358,166 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                     style={{ flex: 1 }}
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
-                <View style={modalStyles.overlay}>
-                    <View style={[modalStyles.container, { backgroundColor: theme.surface }]}>
-                        <Text style={[modalStyles.title, { color: theme.text }]}>Connect Email</Text>
-                        <Text style={[modalStyles.subtitle, { color: theme.fadedText }]}>
-                            Server settings will be detected automatically based on your email domain.
-                        </Text>
-
-                        <TextInput
-                            style={[modalStyles.input, {
-                                color: theme.text,
-                                backgroundColor: theme.surfaceHighlight,
-                                borderColor: imapError ? palette.red : theme.border,
-                                fontSize: 16,
-                                letterSpacing: 0,
-                                fontWeight: '400',
-                            }]}
-                            value={imapEmail}
-                            onChangeText={(t) => { setImapEmail(t); setImapError(null); }}
-                            placeholder="email@example.com"
-                            placeholderTextColor={theme.fadedText}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            autoFocus
-                            textAlign="left"
-                        />
-
-                        <TextInput
-                            style={[modalStyles.input, {
-                                color: theme.text,
-                                backgroundColor: theme.surfaceHighlight,
-                                borderColor: imapError ? palette.red : theme.border,
-                                fontSize: 16,
-                                letterSpacing: 0,
-                                fontWeight: '400',
-                                marginTop: 8,
-                            }]}
-                            value={imapPassword}
-                            onChangeText={(t) => { setImapPassword(t); setImapError(null); }}
-                            placeholder="Password or app password"
-                            placeholderTextColor={theme.fadedText}
-                            secureTextEntry
-                            textAlign="left"
-                        />
-
-                        {imapError && (
-                            <Text style={[modalStyles.error, { color: palette.red }]}>{imapError}</Text>
-                        )}
-
-                        <View style={modalStyles.buttons}>
-                            <Pressable
-                                style={[modalStyles.button, { backgroundColor: theme.surfaceHighlight }]}
-                                onPress={() => setImapModalVisible(false)}
-                                disabled={imapLoading}
+                    <View style={modalStyles.overlay}>
+                        <View
+                            style={[
+                                modalStyles.container,
+                                { backgroundColor: theme.surface },
+                            ]}
+                        >
+                            <Text
+                                style={[
+                                    modalStyles.title,
+                                    { color: theme.text },
+                                ]}
                             >
-                                <Text style={[modalStyles.buttonText, { color: theme.text }]}>Cancel</Text>
-                            </Pressable>
-                            <Pressable
-                                style={[modalStyles.button, {
-                                    backgroundColor: theme.accent,
-                                    opacity: imapLoading ? 0.6 : 1,
-                                }]}
-                                onPress={handleImapSubmit}
-                                disabled={imapLoading}
+                                Connect Email
+                            </Text>
+                            <Text
+                                style={[
+                                    modalStyles.subtitle,
+                                    { color: theme.fadedText },
+                                ]}
                             >
-                                {imapLoading ? (
-                                    <ActivityIndicator color="#fff" size="small" />
-                                ) : (
-                                    <Text style={[modalStyles.buttonText, { color: '#fff' }]}>Connect</Text>
-                                )}
-                            </Pressable>
+                                Server settings will be detected automatically
+                                based on your email domain.
+                            </Text>
+
+                            <TextInput
+                                style={[
+                                    modalStyles.input,
+                                    {
+                                        color: theme.text,
+                                        backgroundColor: theme.surfaceHighlight,
+                                        borderColor: imapError
+                                            ? palette.red
+                                            : theme.border,
+                                        fontSize: 16,
+                                        letterSpacing: 0,
+                                        fontWeight: '400',
+                                    },
+                                ]}
+                                value={imapEmail}
+                                onChangeText={t => {
+                                    setImapEmail(t);
+                                    setImapError(null);
+                                }}
+                                placeholder="email@example.com"
+                                placeholderTextColor={theme.fadedText}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                autoFocus
+                                textAlign="left"
+                            />
+
+                            <TextInput
+                                style={[
+                                    modalStyles.input,
+                                    {
+                                        color: theme.text,
+                                        backgroundColor: theme.surfaceHighlight,
+                                        borderColor: imapError
+                                            ? palette.red
+                                            : theme.border,
+                                        fontSize: 16,
+                                        letterSpacing: 0,
+                                        fontWeight: '400',
+                                        marginTop: 8,
+                                    },
+                                ]}
+                                value={imapPassword}
+                                onChangeText={t => {
+                                    setImapPassword(t);
+                                    setImapError(null);
+                                }}
+                                placeholder="Password or app password"
+                                placeholderTextColor={theme.fadedText}
+                                secureTextEntry
+                                textAlign="left"
+                                returnKeyType="go"
+                                onSubmitEditing={handleImapSubmit}
+                                blurOnSubmit={false}
+                            />
+
+                            {isICloudEmail(imapEmail) && !imapError && (
+                                <Text
+                                    style={[
+                                        modalStyles.hint,
+                                        { color: theme.fadedText },
+                                    ]}
+                                >
+                                    {
+                                        'iCloud requires an app-specific password.\nGenerate one at appleid.apple.com → Sign-In and Security.'
+                                    }
+                                </Text>
+                            )}
+
+                            {imapError && (
+                                <Text
+                                    style={[
+                                        modalStyles.error,
+                                        { color: palette.red },
+                                    ]}
+                                >
+                                    {imapError}
+                                </Text>
+                            )}
+
+                            <View style={modalStyles.buttons}>
+                                <Pressable
+                                    style={[
+                                        modalStyles.button,
+                                        {
+                                            backgroundColor:
+                                                theme.surfaceHighlight,
+                                        },
+                                    ]}
+                                    onPress={() => setImapModalVisible(false)}
+                                    disabled={imapLoading}
+                                >
+                                    <Text
+                                        style={[
+                                            modalStyles.buttonText,
+                                            { color: theme.text },
+                                        ]}
+                                    >
+                                        Cancel
+                                    </Text>
+                                </Pressable>
+                                <Pressable
+                                    style={[
+                                        modalStyles.button,
+                                        {
+                                            backgroundColor: theme.accent,
+                                            opacity: imapLoading ? 0.6 : 1,
+                                        },
+                                    ]}
+                                    onPressIn={() => {
+                                        Keyboard.dismiss();
+                                        handleImapSubmit();
+                                    }}
+                                    disabled={imapLoading}
+                                >
+                                    {imapLoading ? (
+                                        <ActivityIndicator
+                                            color="#fff"
+                                            size="small"
+                                        />
+                                    ) : (
+                                        <Text
+                                            style={[
+                                                modalStyles.buttonText,
+                                                { color: '#fff' },
+                                            ]}
+                                        >
+                                            Connect
+                                        </Text>
+                                    )}
+                                </Pressable>
+                            </View>
                         </View>
                     </View>
-                </View>
                 </KeyboardAvoidingView>
             </Modal>
 
@@ -373,21 +529,47 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                 onRequestClose={() => setTelegramModalVisible(false)}
             >
                 <View style={modalStyles.overlay}>
-                    <View style={[modalStyles.container, { backgroundColor: theme.surface }]}>
-                        <Text style={[modalStyles.title, { color: theme.text }]}>Connect Telegram</Text>
-                        <Text style={[modalStyles.subtitle, { color: theme.fadedText }]}>
-                            Send <Text style={{ fontWeight: '700' }}>/start</Text> to <Text style={{ fontWeight: '700' }}>@genie_bot</Text> in Telegram, then enter the 6-digit code here.
+                    <View
+                        style={[
+                            modalStyles.container,
+                            { backgroundColor: theme.surface },
+                        ]}
+                    >
+                        <Text
+                            style={[modalStyles.title, { color: theme.text }]}
+                        >
+                            Connect Telegram
+                        </Text>
+                        <Text
+                            style={[
+                                modalStyles.subtitle,
+                                { color: theme.fadedText },
+                            ]}
+                        >
+                            Send{' '}
+                            <Text style={{ fontWeight: '700' }}>/start</Text> to{' '}
+                            <Text style={{ fontWeight: '700' }}>
+                                @genie_bot
+                            </Text>{' '}
+                            in Telegram, then enter the 6-digit code here.
                         </Text>
 
                         <TextInput
-                            style={[modalStyles.input, {
-                                color: theme.text,
-                                backgroundColor: theme.surfaceHighlight,
-                                borderColor: telegramError ? palette.red : theme.border,
-                            }]}
+                            style={[
+                                modalStyles.input,
+                                {
+                                    color: theme.text,
+                                    backgroundColor: theme.surfaceHighlight,
+                                    borderColor: telegramError
+                                        ? palette.red
+                                        : theme.border,
+                                },
+                            ]}
                             value={telegramCode}
-                            onChangeText={(t) => {
-                                setTelegramCode(t.replace(/[^0-9]/g, '').slice(0, 6));
+                            onChangeText={t => {
+                                setTelegramCode(
+                                    t.replace(/[^0-9]/g, '').slice(0, 6),
+                                );
                                 setTelegramError(null);
                             }}
                             placeholder="000000"
@@ -399,29 +581,65 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                         />
 
                         {telegramError && (
-                            <Text style={[modalStyles.error, { color: palette.red }]}>{telegramError}</Text>
+                            <Text
+                                style={[
+                                    modalStyles.error,
+                                    { color: palette.red },
+                                ]}
+                            >
+                                {telegramError}
+                            </Text>
                         )}
 
                         <View style={modalStyles.buttons}>
                             <Pressable
-                                style={[modalStyles.button, { backgroundColor: theme.surfaceHighlight }]}
+                                style={[
+                                    modalStyles.button,
+                                    { backgroundColor: theme.surfaceHighlight },
+                                ]}
                                 onPress={() => setTelegramModalVisible(false)}
                                 disabled={telegramLoading}
                             >
-                                <Text style={[modalStyles.buttonText, { color: theme.text }]}>Cancel</Text>
+                                <Text
+                                    style={[
+                                        modalStyles.buttonText,
+                                        { color: theme.text },
+                                    ]}
+                                >
+                                    Cancel
+                                </Text>
                             </Pressable>
                             <Pressable
-                                style={[modalStyles.button, {
-                                    backgroundColor: '#0088cc',
-                                    opacity: telegramCode.length !== 6 || telegramLoading ? 0.5 : 1,
-                                }]}
+                                style={[
+                                    modalStyles.button,
+                                    {
+                                        backgroundColor: '#0088cc',
+                                        opacity:
+                                            telegramCode.length !== 6 ||
+                                            telegramLoading
+                                                ? 0.5
+                                                : 1,
+                                    },
+                                ]}
                                 onPress={handleTelegramSubmit}
-                                disabled={telegramCode.length !== 6 || telegramLoading}
+                                disabled={
+                                    telegramCode.length !== 6 || telegramLoading
+                                }
                             >
                                 {telegramLoading ? (
-                                    <ActivityIndicator color="#fff" size="small" />
+                                    <ActivityIndicator
+                                        color="#fff"
+                                        size="small"
+                                    />
                                 ) : (
-                                    <Text style={[modalStyles.buttonText, { color: '#fff' }]}>Connect</Text>
+                                    <Text
+                                        style={[
+                                            modalStyles.buttonText,
+                                            { color: '#fff' },
+                                        ]}
+                                    >
+                                        Connect
+                                    </Text>
                                 )}
                             </Pressable>
                         </View>
@@ -432,7 +650,12 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
     );
 }
 
-const ConnectorCard = ({ connector, onPress, styles, palette }: {
+const ConnectorCard = ({
+    connector,
+    onPress,
+    styles,
+    palette,
+}: {
     connector: Connector;
     onPress: () => void;
     styles: any;
@@ -442,7 +665,15 @@ const ConnectorCard = ({ connector, onPress, styles, palette }: {
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         onPress={onPress}
     >
-        <View style={[styles.iconBubble, { backgroundColor: palette[connector.colorKey] || palette.blue }]}>
+        <View
+            style={[
+                styles.iconBubble,
+                {
+                    backgroundColor:
+                        palette[connector.colorKey] || palette.blue,
+                },
+            ]}
+        >
             <PluginIcon provider={connector.id} size={32} color="#fff" />
         </View>
         <Text style={styles.title}>{connector.name}</Text>
@@ -494,6 +725,12 @@ const modalStyles = StyleSheet.create({
         fontSize: 13,
         textAlign: 'center',
         marginBottom: 8,
+    },
+    hint: {
+        fontSize: 12,
+        textAlign: 'center',
+        marginBottom: 8,
+        lineHeight: 17,
     },
     buttons: {
         flexDirection: 'row',

@@ -38,7 +38,7 @@ export const imapEmailPlugin: ClientPluginHandler = {
                 const mailbox = params.mailbox || 'INBOX';
                 const limit = params.limit || 20;
 
-                const emails = await client.getRecentEmails(integrationId, mailbox, limit);
+                const emails = await client.fetchEmails(integrationId, mailbox, limit);
                 if (emails.length === 0) {
                     return 'No emails found. Try syncing first with sync_emails.';
                 }
@@ -123,7 +123,7 @@ export const imapEmailPlugin: ClientPluginHandler = {
                 if (result.success) {
                     return `Moved email ${uid} from ${mailbox} to ${destinationMailbox}`;
                 }
-                return `Failed to move email: ${result.message || JSON.stringify(result)}`;
+                return `Failed to move email: ${JSON.stringify(result)}`;
             }
 
             case 'archive_email': {

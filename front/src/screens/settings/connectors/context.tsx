@@ -10,6 +10,7 @@ import { Linking } from 'react-native';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 
 import { ConnectorContextType, Tool, Integration } from './models';
+import { useAuth } from '../../auth/context';
 import { pluginsApi, authStore } from '../../../apiClient.ts';
 import { OAUTH_CALLBACK_URL, getApiUrl } from '../../../config.ts';
 import * as DatabaseModule from '../../../services/database/database';
@@ -59,6 +60,7 @@ export function useConnectors() {
 }
 
 export function ConnectorsProvider({ children }: { children: ReactNode }) {
+    const { user } = useAuth();
     const [tools, setTools] = useState<Tool[]>([]);
     const [configs, setConfigs] = useState<Integration[]>([]);
     const [pendingProvider, setPendingProvider] = useState<string | null>(null);
@@ -90,12 +92,13 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         }
     }, [dbReady]);
 
-    // Load integrations once database is ready
+    // Load integrations once database is ready AND user is authenticated.
+    // Both conditions needed: db may be ready before auth loads from AsyncStorage.
     useEffect(() => {
-        if (dbReady) {
+        if (dbReady && user?.id) {
             getIntegrations();
         }
-    }, [dbReady]);
+    }, [dbReady, user?.id]);
 
     async function getTools() {
         await getIntegrations();
@@ -552,7 +555,10 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                             method: 'DELETE',
                             headers: { Authorization: `Bearer ${token}` },
                         });
-                    } else if (integration && integration.params?.account_email) {
+                    } else if (
+                        integration &&
+                        integration.params?.account_email
+                    ) {
                         const response = await fetch(`${apiUrl}/integrations`, {
                             headers: { Authorization: `Bearer ${token}` },
                         });
@@ -669,47 +675,54 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         [getIntegrations],
     );
 
-    const connectImap = React.useCallback(async (email: string, password: string) => {
-        const { IMAPEmailClient } = await import('../../../services/integrations/clients/IMAPEmailClient');
-        const config = IMAPEmailClient.autoDetectConfig(email, password);
-        const fullConfig = {
-            imapHost: config.imapHost || `imap.${email.split('@')[1]}`,
-            imapPort: config.imapPort || 993,
-            imapUseTLS: config.imapUseTLS ?? true,
-            smtpHost: config.smtpHost || `smtp.${email.split('@')[1]}`,
-            smtpPort: config.smtpPort || 465,
-            smtpUseTLS: config.smtpUseTLS ?? true,
-            username: email,
-            password,
-            displayName: email,
-        };
+    const connectImap = React.useCallback(
+        async (email: string, password: string) => {
+            const { IMAPEmailClient } = await import(
+                '../../../services/integrations/clients/IMAPEmailClient'
+            );
+            const config = IMAPEmailClient.autoDetectConfig(email, password);
+            const fullConfig = {
+                imapHost: config.imapHost || `imap.${email.split('@')[1]}`,
+                imapPort: config.imapPort || 993,
+                imapUseTLS: config.imapUseTLS ?? true,
+                smtpHost: config.smtpHost || `smtp.${email.split('@')[1]}`,
+                smtpPort: config.smtpPort || 465,
+                smtpUseTLS: config.smtpUseTLS ?? true,
+                username: email,
+                password,
+                displayName: email,
+            };
 
-        const client = new IMAPEmailClient();
-        const test = await client.testConnection(fullConfig);
-        if (!test.success) {
-            throw new Error(test.message || 'Connection failed');
-        }
+            const client = new IMAPEmailClient();
+            const test = await client.testConnection(fullConfig);
+            if (!test.success) {
+                throw new Error(test.message || 'Connection failed');
+            }
 
-        const metadata = getIntegrationMetadata('imap');
-        await integrationStorage.createIntegration(
-            {
-                provider: 'imap' as any,
-                name: `Email (${email})`,
-                enabled: true,
-                accountEmail: email,
-                storageType: metadata?.storageType,
-                supportsBackgroundTasks: metadata?.supportsBackgroundTasks,
-                systemEventListeners: metadata?.systemEventListeners,
-            },
-            {
-                accessToken: JSON.stringify(fullConfig),
-                refreshToken: '',
-                tokenExpiry: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000),
-            },
-        );
+            const metadata = getIntegrationMetadata('imap');
+            await integrationStorage.createIntegration(
+                {
+                    provider: 'imap' as any,
+                    name: `Email (${email})`,
+                    enabled: true,
+                    accountEmail: email,
+                    storageType: metadata?.storageType,
+                    supportsBackgroundTasks: metadata?.supportsBackgroundTasks,
+                    systemEventListeners: metadata?.systemEventListeners,
+                },
+                {
+                    accessToken: JSON.stringify(fullConfig),
+                    refreshToken: '',
+                    tokenExpiry: new Date(
+                        Date.now() + 10 * 365 * 24 * 60 * 60 * 1000,
+                    ),
+                },
+            );
 
-        await getIntegrations();
-    }, [getIntegrations]);
+            await getIntegrations();
+        },
+        [getIntegrations],
+    );
 
     const value: ConnectorContextType = {
         tools,

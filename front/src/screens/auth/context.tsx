@@ -17,7 +17,10 @@ import { AuthContextType, User, alertError } from './models';
 import { secureTokenStorage } from '../../services/auth/SecureTokenStorage';
 import { integrationStorage } from '../../services/integrations/IntegrationStorage';
 import { pluginChatStorage } from '../../services/plugins/PluginChatStorage';
-import { requestPermissionAndRegister, deregisterDevice } from '../../services/notifications/NotificationHandler';
+import {
+    requestPermissionAndRegister,
+    deregisterDevice,
+} from '../../services/notifications/NotificationHandler';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -50,7 +53,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     'refreshToken',
                 );
                 if (storedToken && storedUser && storedRefreshToken) {
-                    setUser(JSON.parse(storedUser));
+                    const parsedUser = JSON.parse(storedUser);
+                    // Set synchronously so storage singletons have the correct user
+                    // before any effects fire on the subsequent re-render.
+                    integrationStorage.setCurrentUserId(parsedUser?.id ?? null);
+                    pluginChatStorage.setCurrentUserId(parsedUser?.id ?? null);
+                    setUser(parsedUser);
                     setToken(storedToken);
                     setRefreshTokenValue(storedRefreshToken);
                 }
@@ -442,10 +450,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         if (isAuthenticated) {
             requestPermissionAndRegister().catch(e =>
-                console.warn('[Auth] Failed to register push token:', e)
+                console.warn('[Auth] Failed to register push token:', e),
             );
         } else {
-            deregisterDevice().catch(() => { /* best-effort on logout */ });
+            deregisterDevice().catch(() => {
+                /* best-effort on logout */
+            });
         }
     }, [isAuthenticated]);
 

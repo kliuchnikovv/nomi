@@ -1,4 +1,4 @@
-name: imap_email
+name: imap
 display_name: Email (IMAP)
 description: Universal IMAP/SMTP email integration — iCloud, Gmail, Outlook, any provider
 version: 1.0.0

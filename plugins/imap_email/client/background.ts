@@ -2,16 +2,15 @@
  * Background task handler for IMAP email plugin
  */
 
-import { imapEmailClient } from '@genie/front/services/integrations/clients/IMAPEmailClient';
-
 export async function backgroundTask(): Promise<void> {
     console.log('[IMAP Email Background Task] Started');
 
     try {
         const { integrationStorage } = await import('@genie/front/services/integrations/IntegrationStorage');
+        const { imapEmailClient } = await import('@genie/front/services/integrations/clients/IMAPEmailClient');
 
         const integrations = await integrationStorage.getIntegrations();
-        const imapIntegrations = integrations.filter(i => i.provider === 'imap_email' && i.enabled);
+        const imapIntegrations = integrations.filter(i => i.provider === 'imap' && i.enabled);
 
         for (const integration of imapIntegrations) {
             try {

@@ -678,21 +678,8 @@ export function ChatDetailScreen() {
                     },
                 ]}
             >
-                {/* Left: back button */}
-                <Pressable
-                    onPress={() => navigation.goBack()}
-                    style={[
-                        detailStyles.backBtn,
-                        { backgroundColor: theme.surface },
-                    ]}
-                    hitSlop={8}
-                >
-                    <Ionicons
-                        name="chevron-back"
-                        size={24}
-                        color={theme.text}
-                    />
-                </Pressable>
+                {/* Left: placeholder (back button removed) */}
+                <View style={detailStyles.backBtn} />
 
                 {/* Center: title pill — tap to open dropdown */}
                 <Pressable
@@ -769,36 +756,6 @@ export function ChatDetailScreen() {
                 />
             ))}
 
-            {/* Soft fade above input bar — animated with keyboard */}
-            <Animated.View
-                pointerEvents="none"
-                style={[
-                    {
-                        position: 'absolute',
-                        left: 0,
-                        right: 0,
-                        zIndex: 7,
-                    },
-                    fadeContainerStyle,
-                ]}
-            >
-                {FADE_OPACITIES.map((opacity, i) => (
-                    <View
-                        key={i}
-                        pointerEvents="none"
-                        style={{
-                            position: 'absolute',
-                            bottom: inputBarHeight - 4 + i * FADE_STRIP_H,
-                            left: 0,
-                            right: 0,
-                            height: FADE_STRIP_H,
-                            backgroundColor: theme.background,
-                            opacity,
-                        }}
-                    />
-                ))}
-            </Animated.View>
-
             {/* Non-session project suggestion banner (existing chats) */}
             {!isNewSession && suggestedProject && (
                 <ProjectSuggestionBanner
@@ -870,8 +827,7 @@ export function ChatDetailScreen() {
                 ) : (
                     <GiftedChat
                         keyboardAvoidingViewProps={{
-                            behavior: 'padding',
-                            keyboardVerticalOffset: 0,
+                            enabled: false,
                         }}
                         messages={
                             messagesLoading

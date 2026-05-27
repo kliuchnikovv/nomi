@@ -401,7 +401,7 @@ export function useGiftedChatRenderers({
                 <ReAnimated.View
                     style={[
                         {
-                            backgroundColor: theme.background + 'D0',
+                            backgroundColor: 'transparent',
                             overflow: 'visible',
                         },
                         inputToolbarAnimStyle,

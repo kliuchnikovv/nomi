@@ -78,7 +78,7 @@ export const createStyles = (theme: ThemeColors) => {
             backgroundColor: theme.background,
         },
         inputToolbarContainer: {
-            backgroundColor: theme.background,
+            backgroundColor: 'transparent',
             borderTopWidth: 0,
             paddingTop: 0,
             paddingBottom: 0,

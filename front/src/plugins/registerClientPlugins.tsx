@@ -91,13 +91,18 @@ export function registerClientPlugins(): Promise<void> {
         try {
             console.log('[registerClientPlugins] Loading Gmail plugin...');
             const { gmailPlugin } = await import('@genie/plugin-gmail/client');
-            console.log('[registerClientPlugins] Gmail plugin loaded, loading background module...');
+            console.log(
+                '[registerClientPlugins] Gmail plugin loaded, loading background module...',
+            );
             const gmailBackgroundModule = await import(
                 '@genie/plugin-gmail/background'
             );
             const { backgroundTask: gmailBackgroundTask } =
                 gmailBackgroundModule;
-            console.log('[registerClientPlugins] Gmail backgroundTask loaded:', typeof gmailBackgroundTask);
+            console.log(
+                '[registerClientPlugins] Gmail backgroundTask loaded:',
+                typeof gmailBackgroundTask,
+            );
             const { GmailMainScreen } = await import(
                 '@genie/plugin-gmail/components/GmailMainScreen'
             );
@@ -121,10 +126,36 @@ export function registerClientPlugins(): Promise<void> {
                 priority: 20,
                 Component: GmailPluginScreen,
             });
-            console.log('[registerClientPlugins] ✅ Gmail plugin registered with background task');
+            console.log(
+                '[registerClientPlugins] ✅ Gmail plugin registered with background task',
+            );
         } catch (e) {
             console.warn(
                 '[registerClientPlugins] ❌ Failed to load Gmail plugin:',
+                e,
+            );
+        }
+
+        // IMAP Email
+        try {
+            const { imapEmailPlugin } = await import(
+                '@genie/plugin-imap_email/client'
+            );
+            const imapBackgroundModule = await import(
+                '@genie/plugin-imap_email/background'
+            );
+            const { backgroundTask: imapBackgroundTask } = imapBackgroundModule;
+
+            registerClientPlugin('imap', {
+                ...imapEmailPlugin,
+                backgroundTask: imapBackgroundTask,
+            });
+            console.log(
+                '[registerClientPlugins] ✅ IMAP Email plugin registered with background task',
+            );
+        } catch (e) {
+            console.warn(
+                '[registerClientPlugins] ❌ Failed to load IMAP Email plugin:',
                 e,
             );
         }
@@ -325,14 +356,19 @@ export function registerClientPlugins(): Promise<void> {
 
         // Day Planner
         try {
-            const { PlannerScreen } = await import('../screens/planner/PlannerScreen');
+            const { PlannerScreen } = await import(
+                '../screens/planner/PlannerScreen'
+            );
             registerClientPlugin('planner', {
                 execute: async () => '',
                 MainComponent: PlannerScreen,
             });
             console.log('[registerClientPlugins] Day Planner registered');
         } catch (e) {
-            console.warn('[registerClientPlugins] Failed to register Day Planner:', e);
+            console.warn(
+                '[registerClientPlugins] Failed to register Day Planner:',
+                e,
+            );
         }
 
         registered = true;
