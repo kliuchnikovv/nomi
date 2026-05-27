@@ -241,4 +241,4 @@ storage:
   encrypted: true
 
 tools:
-  include: false
+  include: true
