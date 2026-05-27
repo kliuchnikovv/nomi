@@ -151,6 +151,16 @@ def build_client_proxy_tools(
             # Build base params schema from manifest
             params_schema = _build_parameters_schema(m.get("parameters"))
 
+            # Strip integration_id — the proxy injects it automatically from the
+            # registered accounts list; exposing it confuses the model.
+            if params_schema and "properties" in params_schema:
+                params_schema["properties"].pop("integration_id", None)
+                required = params_schema.get("required", [])
+                if "integration_id" in required:
+                    params_schema["required"] = [r for r in required if r != "integration_id"]
+                    if not params_schema["required"]:
+                        params_schema.pop("required", None)
+
             # Inject account_id parameter when multiple accounts are available
             account_id_prop = _build_account_id_param(accounts)
             if account_id_prop is not None:
