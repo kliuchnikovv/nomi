@@ -15,6 +15,11 @@
       "import": "./client/executor.ts",
       "require": "./client/executor.ts",
       "types": "./client/executor.ts"
+    },
+    "./background": {
+      "import": "./client/background.ts",
+      "require": "./client/background.ts",
+      "types": "./client/background.ts"
     }
   },
   "peerDependencies": {
