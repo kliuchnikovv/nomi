@@ -29,7 +29,10 @@ const SECTIONS: { title: string; ids: string[] }[] = [
     { title: 'Mail', ids: ['gmail', 'imap'] },
     { title: 'Calendars', ids: ['calendar', 'ios_calendar'] },
     { title: 'Messengers', ids: ['telegram'] },
-    { title: 'Tools', ids: ['github', 'ios_reminders', 'jules', 'ios_health', 'ios_contacts'] },
+    {
+        title: 'Tools',
+        ids: ['github', 'ios_reminders', 'jules', 'ios_health', 'ios_contacts'],
+    },
 ];
 const KNOWN_IDS = new Set(SECTIONS.flatMap(s => s.ids));
 
@@ -68,18 +71,35 @@ function IntegrationItem({
                         color={iconColor}
                     />
                     <View style={styles.nameBlock}>
-                        <Text style={[styles.pluginName, { color: theme.textPrimary }]}>
+                        <Text
+                            style={[
+                                styles.pluginName,
+                                { color: theme.textPrimary },
+                            ]}
+                        >
                             {integration.name}
                         </Text>
                         {!integration.connected && (
-                            <Text style={[styles.disabledLabel, { color: theme.textSecondary }]}>
+                            <Text
+                                style={[
+                                    styles.disabledLabel,
+                                    { color: theme.textSecondary },
+                                ]}
+                            >
                                 Disabled
                             </Text>
                         )}
                     </View>
                     {unreadCount > 0 && (
-                        <View style={[styles.unreadBadge, { backgroundColor: iconColor }]}>
-                            <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+                        <View
+                            style={[
+                                styles.unreadBadge,
+                                { backgroundColor: iconColor },
+                            ]}
+                        >
+                            <Text style={styles.unreadBadgeText}>
+                                {unreadCount}
+                            </Text>
                         </View>
                     )}
                 </View>
@@ -142,9 +162,14 @@ export function IntegrationsScreen() {
     }, [integrations, pluginsReady]);
 
     const getUnreadCount = (provider: string): number => {
-        const plugin = plugins.find(p => p.provider.toLowerCase() === provider.toLowerCase());
+        const plugin = plugins.find(
+            p => p.provider.toLowerCase() === provider.toLowerCase(),
+        );
         if (!plugin) return 0;
-        return plugin.chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
+        return plugin.chats.reduce(
+            (sum, chat) => sum + (chat.unreadCount || 0),
+            0,
+        );
     };
 
     const handlePress = (integration: Integration) => {
@@ -160,24 +185,22 @@ export function IntegrationsScreen() {
     const handleToggle = async () => {
         if (!menuTarget) return;
         await toggleTool(menuTarget.id, !menuTarget.connected);
-        setMenuTarget(prev => prev ? { ...prev, connected: !prev.connected } : null);
+        setMenuTarget(prev =>
+            prev ? { ...prev, connected: !prev.connected } : null,
+        );
     };
 
     const handleDelete = () => {
         if (!menuTarget) return;
         setMenuVisible(false);
-        Alert.alert(
-            'Remove Integration',
-            `Remove ${menuTarget.name}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Remove',
-                    style: 'destructive',
-                    onPress: () => deleteIntegration(menuTarget.id),
-                },
-            ],
-        );
+        Alert.alert('Remove Integration', `Remove ${menuTarget.name}?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Remove',
+                style: 'destructive',
+                onPress: () => deleteIntegration(menuTarget.id),
+            },
+        ]);
     };
 
     const contextMenuItems: ContextMenuItem[] = menuTarget
@@ -209,10 +232,16 @@ export function IntegrationsScreen() {
                         style={styles.backBtn}
                         hitSlop={12}
                     >
-                        <NavArrowLeft width={24} height={24} color={theme.textPrimary} />
+                        <NavArrowLeft
+                            width={24}
+                            height={24}
+                            color={theme.textPrimary}
+                        />
                     </Pressable>
                 )}
-                <Text style={[styles.title, { color: theme.textPrimary }]}>Integrations</Text>
+                <Text style={[styles.title, { color: theme.textPrimary }]}>
+                    Integrations
+                </Text>
                 <Pressable
                     onPress={() => setAddOpen(true)}
                     style={[styles.addBtn, { backgroundColor: theme.accent }]}
@@ -223,7 +252,10 @@ export function IntegrationsScreen() {
 
             <ScrollView
                 style={styles.list}
-                contentContainerStyle={[styles.listContent, isEmpty && styles.listEmpty]}
+                contentContainerStyle={[
+                    styles.listContent,
+                    isEmpty && styles.listEmpty,
+                ]}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -235,28 +267,53 @@ export function IntegrationsScreen() {
             >
                 {isEmpty ? (
                     <View style={styles.emptyState}>
-                        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                        <Text
+                            style={[
+                                styles.emptyText,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
                             No integrations
                         </Text>
-                        <Text style={[styles.emptySubText, { color: theme.textSecondary }]}>
+                        <Text
+                            style={[
+                                styles.emptySubText,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
                             Tap "+ Add" to connect an integration
                         </Text>
                     </View>
                 ) : (
                     sections.map(section => (
                         <View key={section.title}>
-                            <Text style={[styles.sectionHeader, { color: theme.textSecondary }]}>
+                            <Text
+                                style={[
+                                    styles.sectionHeader,
+                                    { color: theme.textSecondary },
+                                ]}
+                            >
                                 {section.title}
                             </Text>
                             {section.items.map(item => {
-                                const hasScreen = !!getClientPlugin(item.provider)?.MainComponent;
+                                const hasScreen = !!getClientPlugin(
+                                    item.provider,
+                                )?.MainComponent;
                                 return (
                                     <IntegrationItem
                                         key={item.id}
                                         integration={item}
-                                        unreadCount={getUnreadCount(item.provider)}
-                                        onPress={hasScreen ? () => handlePress(item) : null}
-                                        onLongPress={() => handleLongPress(item)}
+                                        unreadCount={getUnreadCount(
+                                            item.provider,
+                                        )}
+                                        onPress={
+                                            hasScreen
+                                                ? () => handlePress(item)
+                                                : null
+                                        }
+                                        onLongPress={() =>
+                                            handleLongPress(item)
+                                        }
                                     />
                                 );
                             })}
@@ -282,17 +339,47 @@ export function IntegrationsScreen() {
                 onRequestClose={() => setAddOpen(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <Pressable style={styles.modalBackdrop} onPress={() => setAddOpen(false)} />
-                    <View style={[styles.modalSheet, { backgroundColor: theme.background }]}>
-                        <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-                            <Text style={[styles.modalTitle, { color: theme.textPrimary }]}>
+                    <Pressable
+                        style={styles.modalBackdrop}
+                        onPress={() => setAddOpen(false)}
+                    />
+                    <View
+                        style={[
+                            styles.modalSheet,
+                            { backgroundColor: theme.background },
+                        ]}
+                    >
+                        <View
+                            style={[
+                                styles.modalHeader,
+                                { borderBottomColor: theme.border },
+                            ]}
+                        >
+                            <Text
+                                style={[
+                                    styles.modalTitle,
+                                    { color: theme.textPrimary },
+                                ]}
+                            >
                                 Add Integration
                             </Text>
-                            <Pressable onPress={() => setAddOpen(false)} style={styles.closeBtn}>
-                                <Xmark width={22} height={22} color={theme.fadedText} />
+                            <Pressable
+                                onPress={() => setAddOpen(false)}
+                                style={styles.closeBtn}
+                            >
+                                <Xmark
+                                    width={22}
+                                    height={22}
+                                    color={theme.fadedText}
+                                />
                             </Pressable>
                         </View>
-                        <View style={[styles.modalBody, { paddingBottom: insets.bottom }]}>
+                        <View
+                            style={[
+                                styles.modalBody,
+                                { paddingBottom: insets.bottom },
+                            ]}
+                        >
                             <BrowserTab onSuccess={() => setAddOpen(false)} />
                         </View>
                     </View>

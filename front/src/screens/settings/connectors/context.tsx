@@ -6,7 +6,7 @@ import React, {
     useEffect,
     useRef,
 } from 'react';
-import { Linking } from 'react-native';
+import { Linking, InteractionManager } from 'react-native';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 
 import { ConnectorContextType, Tool, Integration } from './models';
@@ -212,6 +212,12 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
 
             console.log(
                 `[ConnectorsProvider] Loaded ${normalized.length} integrations from local storage`,
+                normalized.map(n => ({
+                    id: n.id,
+                    provider: n.provider,
+                    hasParams: !!n.params,
+                    accessTokenLen: n.params?.access_token?.length,
+                })),
             );
 
             // Register system event handlers for each integration
@@ -238,13 +244,17 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
             setConfigs([]);
             setTools([]);
         } finally {
-            // Always refresh background tasks so they stay registered even if integration
-            // loading partially fails. refreshBackgroundTasks() has its own DB read.
-            refreshBackgroundTasks().catch(e => {
-                console.error(
-                    '[ConnectorsProvider] Failed to refresh background tasks:',
-                    e,
-                );
+            // Defer background task refresh until after all UIKit animations complete.
+            // Calling TaskManager/BackgroundFetch native APIs while a navigation transition
+            // or sheet dismissal is animating causes a dispatch_semaphore deadlock on the
+            // UIKit animation manager thread, freezing the UI.
+            InteractionManager.runAfterInteractions(() => {
+                refreshBackgroundTasks().catch(e => {
+                    console.error(
+                        '[ConnectorsProvider] Failed to refresh background tasks:',
+                        e,
+                    );
+                });
             });
         }
     }, [dbReady]);

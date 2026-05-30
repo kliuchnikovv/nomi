@@ -6,10 +6,19 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { StatusBar, useColorScheme, AppState, AppStateStatus } from 'react-native';
+import {
+    StatusBar,
+    useColorScheme,
+    AppState,
+    AppStateStatus,
+} from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { NavigationContainer, DarkTheme, NavigationContainerRef } from '@react-navigation/native';
+import {
+    NavigationContainer,
+    DarkTheme,
+    NavigationContainerRef,
+} from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MainProvider } from './src/screens/main/context';
@@ -31,7 +40,10 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 import { SplashScreen } from './src/screens/splash/SplashScreen';
 import { useShareExtension } from './src/share-extension/useShareExtension';
-import { handleLastNotificationResponse, setupNotificationHandlers } from './src/services/notifications/NotificationHandler';
+import {
+    handleLastNotificationResponse,
+    setupNotificationHandlers,
+} from './src/services/notifications/NotificationHandler';
 
 // Initialize debug utilities
 initDebugUtils();
@@ -55,7 +67,14 @@ function ThemedNavigationContainer({
             primary: theme.accent,
         },
     };
-    return <NavigationContainer ref={navigationRef as React.RefObject<NavigationContainerRef<any>>} theme={navTheme}>{children}</NavigationContainer>;
+    return (
+        <NavigationContainer
+            ref={navigationRef as React.RefObject<NavigationContainerRef<any>>}
+            theme={navTheme}
+        >
+            {children}
+        </NavigationContainer>
+    );
 }
 
 function App() {
@@ -70,7 +89,10 @@ function App() {
             try {
                 // Timeout promise
                 const timeout = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Initialization timed out')), 5000)
+                    setTimeout(
+                        () => reject(new Error('Initialization timed out')),
+                        5000,
+                    ),
                 );
 
                 setInitStatus('Initializing API...');
@@ -80,7 +102,9 @@ function App() {
                 setInitStatus('Initializing Database...');
                 await Promise.race([initDatabase(), timeout]);
                 console.log('[App] Database initialized');
-                console.log('[App] Local RAG logging enabled. You will see [Local RAG Search] and [Client Tool Executor] when the agent runs a local search (e.g. "search my emails" or "find in my notes").');
+                console.log(
+                    '[App] Local RAG logging enabled. You will see [Local RAG Search] and [Client Tool Executor] when the agent runs a local search (e.g. "search my emails" or "find in my notes").',
+                );
 
                 // IMPORTANT: wait for all plugins to register BEFORE defining background tasks.
                 // defineAllBackgroundTasks() reads the plugin handler map synchronously;
@@ -88,15 +112,16 @@ function App() {
                 setInitStatus('Registering plugins...');
                 await registerClientPlugins();
                 defineAllBackgroundTasks();
-                console.log('[App] Background tasks defined after plugin registration');
+                console.log(
+                    '[App] Background tasks defined after plugin registration',
+                );
 
                 // Auto-detect location on launch (best-effort, does not block startup)
                 updateLocationFromGPS().catch(e =>
-                    console.warn('[App] Location auto-detect failed:', e)
+                    console.warn('[App] Location auto-detect failed:', e),
                 );
-
             } catch (e) {
-                console.error("Failed to initialize app:", e);
+                console.error('Failed to initialize app:', e);
                 setInitStatus('Initialization completed with errors');
             } finally {
                 setConfigReady(true);
@@ -152,8 +177,12 @@ function App() {
                             <PluginChatsProvider>
                                 <ConnectorsProvider>
                                     <MainProvider>
-                                        <ThemedNavigationContainer navigationRef={navigationRef}>
-                                            <AppContent navigationRef={navigationRef} />
+                                        <ThemedNavigationContainer
+                                            navigationRef={navigationRef}
+                                        >
+                                            <AppContent
+                                                navigationRef={navigationRef}
+                                            />
                                         </ThemedNavigationContainer>
                                     </MainProvider>
                                 </ConnectorsProvider>
@@ -166,7 +195,11 @@ function App() {
     );
 }
 
-function AppContent({ navigationRef }: { navigationRef: React.RefObject<NavigationContainerRef<any> | null> }) {
+function AppContent({
+    navigationRef,
+}: {
+    navigationRef: React.RefObject<NavigationContainerRef<any> | null>;
+}) {
     const { isAuthenticated, isLoading, token } = useAuth();
     useShareExtension();
 

@@ -21,7 +21,10 @@ export function ConnectedTab() {
     const styles = useMemo(() => getStyles(theme, palette), [theme, palette]);
 
     const gmailIntegrations = useMemo(
-        () => integrations.filter(p => p.provider === 'gmail' || p.provider === 'imap'),
+        () =>
+            integrations.filter(
+                p => p.provider === 'gmail' || p.provider === 'imap',
+            ),
         [integrations],
     );
     const calendarIntegrations = useMemo(
@@ -33,34 +36,45 @@ export function ConnectedTab() {
         [integrations],
     );
     const otherIntegrations = useMemo(
-        () => integrations.filter(p =>
-            p.provider !== 'gmail' &&
-            p.provider !== 'imap' &&
-            p.provider !== 'calendar' &&
-            p.provider !== 'github'
-        ),
+        () =>
+            integrations.filter(
+                p =>
+                    p.provider !== 'gmail' &&
+                    p.provider !== 'imap' &&
+                    p.provider !== 'calendar' &&
+                    p.provider !== 'github',
+            ),
         [integrations],
     );
     const enabledTools = otherIntegrations.filter(t => t.connected);
 
     const getConnectorDetails = (provider: string) => {
-        return CONNECTORS.find(c =>
-            c.id.toLowerCase() === provider.toLowerCase()
-            || c.toolKey.toLowerCase() === provider.toLowerCase()
-            || c.oauthProvider.toLowerCase() === provider.toLowerCase()
+        return CONNECTORS.find(
+            c =>
+                c.id.toLowerCase() === provider.toLowerCase() ||
+                c.toolKey.toLowerCase() === provider.toLowerCase() ||
+                c.oauthProvider.toLowerCase() === provider.toLowerCase(),
         );
     };
 
-    const getIntegrationStatus = (integration: (typeof integrations)[number]) => {
-        return integration.state?.email
-            || integration.state?.account_email
-            || (integration.state as any)?.params?.account_email
-            || integration.params?.account_email
-            || (integration.info as any)?.account_email
-            || null;
+    const getIntegrationStatus = (
+        integration: (typeof integrations)[number],
+    ) => {
+        return (
+            integration.state?.email ||
+            integration.state?.account_email ||
+            (integration.state as any)?.params?.account_email ||
+            integration.params?.account_email ||
+            (integration.info as any)?.account_email ||
+            null
+        );
     };
 
-    const renderSection = (title: string, items: typeof integrations, providerKey?: string) => {
+    const renderSection = (
+        title: string,
+        items: typeof integrations,
+        providerKey?: string,
+    ) => {
         if (items.length === 0) return null;
 
         return (
@@ -68,19 +82,24 @@ export function ConnectedTab() {
                 <Text style={styles.sectionTitle}>{title}</Text>
                 <View style={styles.card}>
                     {items.map((integration, i) => {
-                        const details = getConnectorDetails(integration.provider);
+                        const details = getConnectorDetails(
+                            integration.provider,
+                        );
                         // Fallback glyph/color if details not found
                         let glyph = details?.glyph;
                         let colorKey = details?.colorKey;
 
                         if (!glyph) {
                             if (providerKey === 'gmail') glyph = 'gmail';
-                            else if (providerKey === 'calendar') glyph = 'calendar';
+                            else if (providerKey === 'calendar')
+                                glyph = 'calendar';
                             else if (providerKey === 'github') glyph = 'github';
                             else glyph = 'application';
                         }
 
-                        const color = (colorKey ? palette[colorKey] : palette.blue) || '#3b82f6';
+                        const color =
+                            (colorKey ? palette[colorKey] : palette.blue) ||
+                            '#3b82f6';
                         const glyphStr: string = glyph ?? 'application';
 
                         return (
@@ -91,14 +110,26 @@ export function ConnectedTab() {
                                     provider={integration.provider}
                                     color={color}
                                     configID={integration.id}
-                                    statusText={getIntegrationStatus(integration)}
+                                    statusText={getIntegrationStatus(
+                                        integration,
+                                    )}
                                     onDelete={() => {
                                         Alert.alert(
                                             'Remove Integration',
                                             `Remove ${integration.name}?`,
                                             [
-                                                { text: 'Cancel', style: 'cancel' },
-                                                { text: 'Remove', style: 'destructive', onPress: () => deleteIntegration(integration.id) },
+                                                {
+                                                    text: 'Cancel',
+                                                    style: 'cancel',
+                                                },
+                                                {
+                                                    text: 'Remove',
+                                                    style: 'destructive',
+                                                    onPress: () =>
+                                                        deleteIntegration(
+                                                            integration.id,
+                                                        ),
+                                                },
                                             ],
                                         );
                                     }}
@@ -114,7 +145,8 @@ export function ConnectedTab() {
         );
     };
 
-    const isEmpty = gmailIntegrations.length === 0 &&
+    const isEmpty =
+        gmailIntegrations.length === 0 &&
         calendarIntegrations.length === 0 &&
         githubIntegrations.length === 0 &&
         enabledTools.length === 0;
@@ -140,7 +172,15 @@ export function ConnectedTab() {
     );
 }
 
-const Item = ({ name, enabled, color, provider, configID, statusText, onDelete }: {
+const Item = ({
+    name,
+    enabled,
+    color,
+    provider,
+    configID,
+    statusText,
+    onDelete,
+}: {
     name: string;
     enabled: boolean;
     provider: string;
@@ -201,9 +241,17 @@ const Item = ({ name, enabled, color, provider, configID, statusText, onDelete }
             {onDelete ? (
                 <Pressable
                     onPress={onDelete}
-                    style={({ pressed }) => ({ padding: 6, opacity: pressed ? 0.7 : 1 })}
+                    style={({ pressed }) => ({
+                        padding: 6,
+                        opacity: pressed ? 0.7 : 1,
+                    })}
                 >
-                    <Trash width={20} height={20} color="rgba(192, 202, 245, 0.8)" strokeWidth={2} />
+                    <Trash
+                        width={20}
+                        height={20}
+                        color="rgba(192, 202, 245, 0.8)"
+                        strokeWidth={2}
+                    />
                 </Pressable>
             ) : (
                 <NavArrowRight

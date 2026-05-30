@@ -67,15 +67,19 @@ export function SessionHistorySheet({
     const insets = useSafeAreaInsets();
     const { renameChat, deleteChat } = useMain();
 
-    useEffect(() => {
-        if (!visible) return;
+    const loadSessions = useCallback(() => {
         setLoading(true);
         chatsApi
             .getPersistentChats()
             .then(chats => setSessions(chats ?? []))
             .catch(() => setSessions([]))
             .finally(() => setLoading(false));
-    }, [visible]);
+    }, []);
+
+    useEffect(() => {
+        if (!visible) return;
+        loadSessions();
+    }, [visible, loadSessions]);
 
     const handleLongPress = useCallback(
         (item: Chat) => {
@@ -99,10 +103,11 @@ export function SessionHistorySheet({
                                     { text: 'Cancel', style: 'cancel' },
                                     {
                                         text: 'Rename',
-                                        onPress: (newTitle?: string) => {
+                                        onPress: async (newTitle?: string) => {
                                             const trimmed = newTitle?.trim();
                                             if (!trimmed) return;
-                                            renameChat(item.id, trimmed);
+                                            await renameChat(item.id, trimmed);
+                                            loadSessions();
                                         },
                                     },
                                 ],
@@ -110,13 +115,13 @@ export function SessionHistorySheet({
                                 displayTitle,
                             );
                         } else if (idx === 1) {
-                            deleteChat(item.id);
+                            deleteChat(item.id).then(() => loadSessions());
                         }
                     },
                 );
             }, 350);
         },
-        [renameChat, deleteChat, onClose],
+        [renameChat, deleteChat, onClose, loadSessions],
     );
 
     const renderItem = useCallback(

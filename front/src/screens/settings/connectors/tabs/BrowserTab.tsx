@@ -25,6 +25,38 @@ const ICLOUD_DOMAINS = ['icloud.com', 'me.com', 'mac.com'];
 const isICloudEmail = (email: string) =>
     ICLOUD_DOMAINS.some(d => email.toLowerCase().endsWith(`@${d}`));
 
+const GMAIL_DOMAINS = ['gmail.com', 'googlemail.com'];
+const isGmailEmail = (email: string) =>
+    GMAIL_DOMAINS.some(d => email.toLowerCase().endsWith(`@${d}`));
+
+const MAILRU_DOMAINS = ['mail.ru', 'bk.ru', 'inbox.ru', 'list.ru'];
+const isMailRuEmail = (email: string) =>
+    MAILRU_DOMAINS.some(d => email.toLowerCase().endsWith(`@${d}`));
+
+const OUTLOOK_DOMAINS = ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'];
+const isOutlookEmail = (email: string) =>
+    OUTLOOK_DOMAINS.some(d => email.toLowerCase().endsWith(`@${d}`));
+
+const YAHOO_DOMAINS = [
+    'yahoo.com',
+    'yahoo.co.uk',
+    'yahoo.fr',
+    'yahoo.de',
+    'ymail.com',
+];
+const isYahooEmail = (email: string) =>
+    YAHOO_DOMAINS.some(d => email.toLowerCase().endsWith(`@${d}`));
+
+const YANDEX_DOMAINS = [
+    'yandex.ru',
+    'yandex.com',
+    'ya.ru',
+    'yandex.kz',
+    'yandex.by',
+];
+const isYandexEmail = (email: string) =>
+    YANDEX_DOMAINS.some(d => email.toLowerCase().endsWith(`@${d}`));
+
 export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
     const { startOAuth, toggleTool, connectTelegram, connectImap } =
         useConnectors();
@@ -246,15 +278,46 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
             setImapModalVisible(false);
             setImapEmail('');
             setImapPassword('');
-            onSuccess?.();
+            // Stagger outer modal close: iOS cannot handle two simultaneous Modal dismissals.
+            // Dismissing both in the same React batch leaves a stuck UIView backdrop that
+            // intercepts all touches, making the app appear frozen.
+            if (onSuccess) {
+                setTimeout(onSuccess, 350);
+            }
         } catch (e) {
-            const msg = e instanceof Error ? e.message : 'Failed to connect';
-            if (
-                isICloudEmail(imapEmail) &&
-                msg.toLowerCase().includes('login failed')
-            ) {
+            const msg =
+                (e instanceof Error ? e.message : '') || 'Connection failed';
+            const lower = msg.toLowerCase();
+            const isAuthError =
+                lower.includes('login failed') ||
+                lower.includes('authentication') ||
+                lower.includes('invalid credentials') ||
+                lower.includes('auth') ||
+                lower.includes('password');
+
+            if (isICloudEmail(imapEmail) && isAuthError) {
                 setImapError(
-                    'Login failed. iCloud requires an app-specific password — generate one at appleid.apple.com.',
+                    'Login failed. iCloud requires an app-specific password — generate one at appleid.apple.com → Sign-In and Security.',
+                );
+            } else if (isGmailEmail(imapEmail)) {
+                setImapError(
+                    'Gmail requires an app password. Enable 2-step verification, then generate one at myaccount.google.com → Security → App passwords.',
+                );
+            } else if (isMailRuEmail(imapEmail) && isAuthError) {
+                setImapError(
+                    'Mail.ru requires an app password. Enable it in mail.ru Settings → Security → App passwords.',
+                );
+            } else if (isOutlookEmail(imapEmail) && isAuthError) {
+                setImapError(
+                    'Outlook/Hotmail requires an app password. Generate one at account.microsoft.com → Security → Advanced security options → App passwords.',
+                );
+            } else if (isYahooEmail(imapEmail) && isAuthError) {
+                setImapError(
+                    'Yahoo requires an app password. Generate one at login.yahoo.com → Account Security → Generate app password.',
+                );
+            } else if (isYandexEmail(imapEmail) && isAuthError) {
+                setImapError(
+                    'Yandex requires an app password. Enable it at passport.yandex.ru → Security → App passwords.',
                 );
             } else {
                 setImapError(msg);
@@ -275,7 +338,9 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
             await connectTelegram(telegramCode);
             setTelegramModalVisible(false);
             setTelegramCode('');
-            onSuccess?.();
+            if (onSuccess) {
+                setTimeout(onSuccess, 350);
+            }
         } catch (e) {
             setTelegramError(
                 e instanceof Error ? e.message : 'Failed to link Telegram',
@@ -440,7 +505,7 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                                 blurOnSubmit={false}
                             />
 
-                            {isICloudEmail(imapEmail) && !imapError && (
+                            {!imapError && isICloudEmail(imapEmail) && (
                                 <Text
                                     style={[
                                         modalStyles.hint,
@@ -449,6 +514,66 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                                 >
                                     {
                                         'iCloud requires an app-specific password.\nGenerate one at appleid.apple.com → Sign-In and Security.'
+                                    }
+                                </Text>
+                            )}
+                            {!imapError && isGmailEmail(imapEmail) && (
+                                <Text
+                                    style={[
+                                        modalStyles.hint,
+                                        { color: theme.fadedText },
+                                    ]}
+                                >
+                                    {
+                                        'For Gmail, use the Gmail card instead — it connects via OAuth without a password.\n\nIf you need IMAP specifically, generate an app password at myaccount.google.com → Security → App passwords (requires 2-step verification).'
+                                    }
+                                </Text>
+                            )}
+                            {!imapError && isMailRuEmail(imapEmail) && (
+                                <Text
+                                    style={[
+                                        modalStyles.hint,
+                                        { color: theme.fadedText },
+                                    ]}
+                                >
+                                    {
+                                        'Mail.ru requires an app password.\nGenerate one in mail.ru Settings → Security → App passwords.'
+                                    }
+                                </Text>
+                            )}
+                            {!imapError && isOutlookEmail(imapEmail) && (
+                                <Text
+                                    style={[
+                                        modalStyles.hint,
+                                        { color: theme.fadedText },
+                                    ]}
+                                >
+                                    {
+                                        'Outlook/Hotmail requires an app password.\nGenerate one at account.microsoft.com → Security → Advanced security options → App passwords.'
+                                    }
+                                </Text>
+                            )}
+                            {!imapError && isYahooEmail(imapEmail) && (
+                                <Text
+                                    style={[
+                                        modalStyles.hint,
+                                        { color: theme.fadedText },
+                                    ]}
+                                >
+                                    {
+                                        'Yahoo requires an app password.\nGenerate one at login.yahoo.com → Account Security → Generate app password.'
+                                    }
+                                </Text>
+                            )}
+                            {!imapError && isYandexEmail(imapEmail) && (
+                                <Text
+                                    style={[
+                                        modalStyles.hint,
+                                        { color: theme.fadedText },
+                                    ]}
+                                >
+                                    {
+                                        'Yandex requires an app password.\nGenerate one at passport.yandex.ru → Security → App passwords.'
                                     }
                                 </Text>
                             )}
