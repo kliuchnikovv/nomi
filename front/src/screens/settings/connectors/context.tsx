@@ -11,7 +11,7 @@ import InAppBrowser from 'react-native-inappbrowser-reborn';
 
 import { ConnectorContextType, Tool, Integration } from './models';
 import { useAuth } from '../../auth/context';
-import { pluginsApi, authStore } from '../../../apiClient.ts';
+import { pluginsApi, authStore, integrationsApi } from '../../../apiClient.ts';
 import { OAUTH_CALLBACK_URL, getApiUrl } from '../../../config.ts';
 import * as DatabaseModule from '../../../services/database/database';
 import {
@@ -728,6 +728,28 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                     ),
                 },
             );
+
+            // Push credentials to the server so the brain can run email tools
+            // server-side (creds are encrypted at rest by the API).
+            try {
+                await integrationsApi.storeImapCredentials({
+                    account_email: email,
+                    display_name: fullConfig.displayName,
+                    username: fullConfig.username,
+                    password: fullConfig.password,
+                    imap_host: fullConfig.imapHost,
+                    imap_port: fullConfig.imapPort,
+                    imap_use_tls: fullConfig.imapUseTLS,
+                    smtp_host: fullConfig.smtpHost,
+                    smtp_port: fullConfig.smtpPort,
+                    smtp_use_tls: fullConfig.smtpUseTLS,
+                });
+            } catch (e) {
+                console.error(
+                    '[ConnectorsProvider] Failed to store IMAP credentials server-side:',
+                    e,
+                );
+            }
 
             await getIntegrations();
         },

@@ -246,6 +246,24 @@ export const integrationsApi = {
         apiClient.patch<void>(`${API_URL()}/integrations/${id}`, body),
     delete: (id: string) =>
         apiClient.delete<void>(`${API_URL()}/integrations/${id}`),
+    // Store IMAP/SMTP credentials server-side so the brain can run email tools
+    // without the device (creds are encrypted at rest by the API).
+    storeImapCredentials: (body: {
+        account_email: string;
+        display_name?: string;
+        username: string;
+        password: string;
+        imap_host: string;
+        imap_port: number;
+        imap_use_tls: boolean;
+        smtp_host: string;
+        smtp_port: number;
+        smtp_use_tls: boolean;
+    }) =>
+        apiClient.post<{ status: string; account_email: string }>(
+            `${API_URL()}/integrations/imap/credentials`,
+            body,
+        ),
 };
 
 export const inboxApi = {

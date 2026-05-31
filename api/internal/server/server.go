@@ -207,6 +207,8 @@ func New(
 	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))
 	r.GET("/api/integrations/:id", wrapWithAuth(integrationsHandler.GetIntegration, authMiddleware))
 	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
+	// IMAP credentials stored server-side so the brain can run email tools without the device.
+	r.POST("/api/integrations/imap/credentials", wrapWithAuth(mobileOAuthHandler.StoreImapCredentials, authMiddleware))
 
 	// File Upload API
 	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))

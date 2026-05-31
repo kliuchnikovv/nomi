@@ -488,6 +488,103 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// StoreImapCredentials persists IMAP/SMTP credentials server-side so the brain
+// can run email tools without the device. The secret blob (username/password/
+// hosts) is encrypted into oauth_tokens (provider="imap"); non-secret host
+// metadata is mirrored into the integrations row for discovery.
+// POST /api/integrations/imap/credentials
+func (h *MobileOAuthHandler) StoreImapCredentials(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID := c.MustGet("userID").(uuid.UUID)
+
+	var req struct {
+		AccountEmail string `json:"account_email"`
+		DisplayName  string `json:"display_name"`
+		Username     string `json:"username"`
+		Password     string `json:"password"`
+		ImapHost     string `json:"imap_host"`
+		ImapPort     int    `json:"imap_port"`
+		ImapUseTLS   bool   `json:"imap_use_tls"`
+		SmtpHost     string `json:"smtp_host"`
+		SmtpPort     int    `json:"smtp_port"`
+		SmtpUseTLS   bool   `json:"smtp_use_tls"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	if req.Username == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username and password are required"})
+		return
+	}
+	accountEmail := req.AccountEmail
+	if accountEmail == "" {
+		accountEmail = req.Username
+	}
+
+	creds := map[string]interface{}{
+		"username":     req.Username,
+		"password":     req.Password,
+		"imap_host":    req.ImapHost,
+		"imap_port":    req.ImapPort,
+		"imap_use_tls": req.ImapUseTLS,
+		"smtp_host":    req.SmtpHost,
+		"smtp_port":    req.SmtpPort,
+		"smtp_use_tls": req.SmtpUseTLS,
+		"display_name": req.DisplayName,
+		"account_email": accountEmail,
+	}
+	blob, err := json.Marshal(creds)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode credentials"})
+		return
+	}
+	encrypted, err := crypto.Encrypt(h.cryptoKey, blob)
+	if err != nil {
+		h.logger.Error("failed to encrypt imap credentials", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store credentials"})
+		return
+	}
+	if err := h.storage.SaveOAuthToken(ctx, &storage.OAuthToken{
+		UserID:         userID,
+		Provider:       "imap",
+		AccountEmail:   accountEmail,
+		TokenEncrypted: encrypted,
+	}); err != nil {
+		h.logger.Error("failed to save imap credentials", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store credentials"})
+		return
+	}
+
+	// Mirror non-secret host metadata into the integrations row for discovery.
+	hostParams, _ := json.Marshal(map[string]interface{}{
+		"imap_host":    req.ImapHost,
+		"imap_port":    req.ImapPort,
+		"imap_use_tls": req.ImapUseTLS,
+		"smtp_host":    req.SmtpHost,
+		"smtp_port":    req.SmtpPort,
+		"smtp_use_tls": req.SmtpUseTLS,
+		"account_email": accountEmail,
+	})
+	name := req.DisplayName
+	if name == "" {
+		name = accountEmail
+	}
+	if err := h.storage.UpsertIntegration(&storage.Integration{
+		UserID:       userID,
+		Provider:     "imap",
+		AccountEmail: accountEmail,
+		Name:         name,
+		Params:       string(hostParams),
+		Enabled:      true,
+	}); err != nil {
+		h.logger.Warn("failed to upsert imap integration row", zap.Error(err))
+	}
+
+	h.logger.Info("stored imap credentials", zap.String("account_email", accountEmail))
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "account_email": accountEmail})
+}
+
 // userFromCtx is duplicated from oauth.go - consider refactoring
 func userFromCtxMobile(ctx context.Context) (*storage.User, error) {
 	user, ok := auth.GetUserFromContext(ctx)

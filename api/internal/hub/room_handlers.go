@@ -578,6 +578,30 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			providerCredentials[integ.Provider] = tokenData
 		}
 
+		// IMAP credentials are stored server-side without OAuth, keyed by account
+		// email, so the brain can run email tools without the device.
+		imapCredsByEmail := make(map[string]map[string]interface{})
+		for _, integ := range integrations {
+			if integ.Provider != "imap" {
+				continue
+			}
+			tok, err := r.store.GetOAuthTokenByUserAndEmail(
+				context.Background(), r.initiatorID, "imap", integ.AccountEmail,
+			)
+			if err != nil {
+				continue
+			}
+			decrypted, err := crypto.Decrypt(r.hub.cryptoKey, tok.TokenEncrypted)
+			if err != nil {
+				continue
+			}
+			var credData map[string]interface{}
+			if err := json.Unmarshal(decrypted, &credData); err != nil {
+				continue
+			}
+			imapCredsByEmail[integ.AccountEmail] = credData
+		}
+
 		// Inject provider credentials into server-side integrations that lack them
 		for providerName, params := range dbIntegrations {
 			providerCreds, hasCreds := providerCredentials[providerName]
@@ -705,6 +729,35 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 								zap.String("provider", providerName),
 								zap.String("account_id", accID),
 							)
+						}
+					}
+				}
+
+				// IMAP: inject per-account credentials matched by account email.
+				if entry, ok := providerMap["imap"]; ok {
+					for _, accParams := range entry.mergedParams {
+						cm, ok := accParams.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						email, _ := cm["account_email"].(string)
+						if email == "" {
+							if dn, ok := cm["display_name"].(string); ok {
+								email = dn
+							}
+						}
+						creds, ok := imapCredsByEmail[email]
+						if !ok && len(imapCredsByEmail) == 1 {
+							// Single-account fallback when the email can't be matched.
+							for _, c := range imapCredsByEmail {
+								creds = c
+							}
+							ok = true
+						}
+						if ok {
+							for k, v := range creds {
+								cm[k] = v
+							}
 						}
 					}
 				}

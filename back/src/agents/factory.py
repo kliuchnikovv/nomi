@@ -427,6 +427,11 @@ class AgentFactory:
 
                         manifest_name = manifest.get("name", "")
 
+                        # Email now runs server-side via UnifiedEmailTools; never
+                        # expose it as a device-executed client proxy tool.
+                        if manifest_name.lower() in ("imap", "gmail"):
+                            continue
+
                         # Add each manifest only once (multiple per-account entries share the same manifest)
                         if manifest_name not in seen_manifest_names:
                             seen_manifest_names.add(manifest_name)

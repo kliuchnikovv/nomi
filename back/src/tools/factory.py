@@ -30,6 +30,11 @@ VIRTUAL_TOOLS = frozenset({
     "knowledge_search",       # Agno auto-registers search_knowledge_base tool
 })
 
+# Email providers are consolidated into a single server-side UnifiedEmailTools
+# (see src/email/) rather than one Toolkit per account, so they are handled by a
+# dedicated pre-pass and skipped in the generic builder loop.
+EMAIL_PROVIDER_NAMES = frozenset({"gmail", "imap"})
+
 
 @dataclass
 class ToolItem:
@@ -173,6 +178,66 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
     TOOL_BUILDERS[name] = builder
 
 
+def _collect_email_specs(
+    config: ToolsConfig, user_id: str | None
+) -> tuple[list[dict[str, Any]], set[str]]:
+    """Gather per-account specs for every email provider in the config.
+
+    Returns (account_specs, handled_item_names). Each spec is
+    {"provider_name", "account_id", "display_name", "creds"} consumable by
+    ``src.email.unified.build_unified_email_tools``.
+    """
+    specs: list[dict[str, Any]] = []
+    handled: set[str] = set()
+    for item in config:
+        name = item.name.lower()
+        if name not in EMAIL_PROVIDER_NAMES:
+            continue
+        handled.add(item.name)
+        accounts = item.params.get("accounts")
+        credentials = item.params.get("credentials")
+        if accounts and isinstance(credentials, dict):
+            for account in accounts:
+                aid = account.get("id")
+                if not aid:
+                    continue
+                creds = credentials.get(aid)
+                if not isinstance(creds, dict):
+                    continue
+                creds = dict(creds)
+                if user_id:
+                    creds.setdefault("user_id", user_id)
+                specs.append(
+                    {
+                        "provider_name": name,
+                        "account_id": aid,
+                        "display_name": account.get("display_name") or aid[:8],
+                        "creds": creds,
+                    }
+                )
+        else:
+            # Single-account fallback: params carries the credentials directly.
+            creds = dict(item.params)
+            aid = (
+                creds.get("account_id")
+                or creds.get("account_email")
+                or name
+            )
+            if user_id:
+                creds.setdefault("user_id", user_id)
+            specs.append(
+                {
+                    "provider_name": name,
+                    "account_id": aid,
+                    "display_name": creds.get("display_name")
+                    or creds.get("account_email")
+                    or name,
+                    "creds": creds,
+                }
+            )
+    return specs, handled
+
+
 async def build(
     config: ToolsConfig,
     user_id: str | None = None,
@@ -196,8 +261,28 @@ async def build(
                 item.params["knowledge"] = knowledge
                 logger.debug("[Tools] Injected knowledge into user_memory tool params")
 
+    # Consolidate every email provider/account into one UnifiedEmailTools.
+    email_specs, email_item_names = _collect_email_specs(config, user_id)
+    if email_specs:
+        try:
+            from src.email.unified import build_unified_email_tools
+
+            email_tool = build_unified_email_tools(email_specs)
+            if email_tool is not None:
+                tools.append(email_tool)
+                logger.info(
+                    "[Tools] Built UnifiedEmailTools from %d account spec(s)",
+                    len(email_specs),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[Tools] Failed to build unified email tools: %s", exc)
+
     for item in config:
         logger.debug("[Tools] Processing tool item: %s", item.name)
+
+        # Email providers are handled by the unified pre-pass above.
+        if item.name in email_item_names:
+            continue
 
         # Check via registry if this is server-side integration
         # Client-side integrations should not be processed here
