@@ -99,14 +99,25 @@ class UnifiedEmailTools(Toolkit):
                 return acct, e
 
         results = await asyncio.gather(*(run(a) for a in scope))
-        blocks: list[str] = []
+
+        # Merge every account's emails into a single list ordered newest-first
+        # (by received time), so the freshest messages are always at the top
+        # regardless of which account they came from.
+        merged: list[tuple[EmailAccount, EmailMessage]] = []
+        errors: list[str] = []
         for acct, res in results:
             label = f"{acct.display_name} [{acct.provider_name}]"
             if isinstance(res, Exception):
-                blocks.append(f"[{label}]\nError: {res}")
+                errors.append(f"[{label}] Error: {res}")
             else:
-                blocks.append(f"[{label}]\n{_format_messages(res)}")
-        return "\n\n---\n\n".join(blocks)
+                merged.extend((acct, msg) for msg in res)
+
+        merged.sort(key=lambda am: am[1].received_ts, reverse=True)
+
+        body = _format_messages(merged) if merged else "(no emails)"
+        if errors:
+            body += "\n\n" + "\n".join(errors)
+        return body
 
     # -- read tools ----------------------------------------------------------
 
@@ -253,14 +264,16 @@ class UnifiedEmailTools(Toolkit):
         return await provider.delete(ref["id"], ref["mailbox"])
 
 
-def _format_messages(messages: list[EmailMessage]) -> str:
-    if not messages:
+def _format_messages(items: list[tuple[EmailAccount, EmailMessage]]) -> str:
+    """Render a merged, newest-first list; each entry shows its account."""
+    if not items:
         return "(no emails)"
     lines: list[str] = []
-    for i, m in enumerate(messages, 1):
+    for i, (acct, m) in enumerate(items, 1):
         unread = "● " if m.unread else "  "
         lines.append(
             f"{i}. {unread}{m.subject or '(no subject)'}\n"
+            f"   account: {acct.display_name} [{acct.provider_name}]\n"
             f"   from: {m.from_}\n"
             f"   date: {m.date}\n"
             f"   handle: {m.handle}"

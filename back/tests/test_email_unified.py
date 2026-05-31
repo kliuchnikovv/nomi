@@ -61,8 +61,8 @@ def _build_tools():
 def test_search_fans_out_across_all_accounts():
     tools, _, _ = _build_tools()
     out = asyncio.run(tools.search_emails(query="hello"))
-    assert "[alice [fake]]" in out
-    assert "[bob [fake]]" in out
+    assert "alice [fake]" in out
+    assert "bob [fake]" in out
     assert "Hello from alice" in out
     assert "Hello from bob" in out
     assert "handle:" in out
@@ -78,14 +78,72 @@ def test_search_scoped_to_one_account():
 def test_handle_routes_write_to_correct_account():
     tools, p1, p2 = _build_tools()
     out = asyncio.run(tools.search_emails())
-    # Pull a handle out of bob's block.
-    bob_block = out.split("[bob [fake]]")[1]
+    # Pull bob's handle from his entry in the merged list.
+    bob_block = out.split("Hello from bob")[1]
     handle = bob_block.split("handle:")[1].split("\n")[0].strip()
 
     result = asyncio.run(tools.mark_email(handle=handle, status="read"))
     assert "marked:a2" in result
     assert p2.marked == [("1", "read")]
     assert p1.marked == []
+
+
+def test_results_sorted_newest_first_across_accounts():
+    class DatedProvider(EmailProvider):
+        def __init__(self, account_id, display_name, msgs):
+            self.account_id = account_id
+            self.display_name = display_name
+            self.provider_name = "fake"
+            self._msgs = msgs
+
+        async def search(self, filt):
+            return [
+                EmailMessage(
+                    account_id=self.account_id,
+                    provider="fake",
+                    id=mid,
+                    subject=subj,
+                    date=date,
+                )
+                for mid, subj, date in self._msgs
+            ]
+
+        async def get_message(self, msg_id, mailbox="INBOX"):
+            raise NotImplementedError
+
+        async def list_mailboxes(self):
+            return []
+
+        async def send(self, *a, **k):
+            return ""
+
+        async def reply(self, *a, **k):
+            return ""
+
+        async def mark(self, *a, **k):
+            return ""
+
+    # alice has an old + a very recent email; bob has a mid-dated one.
+    p1 = DatedProvider(
+        "a1",
+        "alice",
+        [
+            ("1", "OLD", "Mon, 01 Jan 2024 10:00:00 +0000"),
+            ("2", "NEWEST", "Fri, 10 May 2024 10:00:00 +0000"),
+        ],
+    )
+    p2 = DatedProvider(
+        "a2", "bob", [("3", "MIDDLE", "Wed, 01 Mar 2024 10:00:00 +0000")]
+    )
+    tools = UnifiedEmailTools(
+        [
+            EmailAccount("a1", "alice", "fake", p1),
+            EmailAccount("a2", "bob", "fake", p2),
+        ]
+    )
+    out = asyncio.run(tools.search_emails())
+    # Subjects must appear newest -> oldest.
+    assert out.index("NEWEST") < out.index("MIDDLE") < out.index("OLD")
 
 
 def test_get_email_returns_body():

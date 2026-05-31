@@ -9,6 +9,7 @@ specific result returned from a multi-account fan-out search.
 from __future__ import annotations
 
 import base64
+import email.utils
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -41,6 +42,22 @@ class EmailMessage:
     def handle(self) -> str:
         """Opaque, URL-safe handle encoding (account, provider, mailbox, id)."""
         return encode_handle(self.account_id, self.provider, self.mailbox, self.id)
+
+    @property
+    def received_ts(self) -> float:
+        """Received time as a UTC epoch for sorting; 0.0 if unparseable.
+
+        Used to order results newest-first across all accounts.
+        """
+        if not self.date:
+            return 0.0
+        try:
+            dt = email.utils.parsedate_to_datetime(self.date)
+            if dt is None:
+                return 0.0
+            return dt.timestamp()
+        except (TypeError, ValueError, OverflowError):
+            return 0.0
 
     def to_dict(self, include_body: bool = True) -> dict[str, Any]:
         d = asdict(self)

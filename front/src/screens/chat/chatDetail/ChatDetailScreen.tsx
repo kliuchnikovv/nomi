@@ -20,6 +20,8 @@ import {
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
+    useAnimatedReaction,
+    runOnJS,
 } from 'react-native-reanimated';
 import {
     KeyboardAvoidingView,
@@ -74,6 +76,15 @@ export function ChatDetailScreen() {
     const { height: kbHeightAnim } = useReanimatedKeyboardAnimation();
 
     const bottomInset = insets.bottom;
+
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+    useAnimatedReaction(
+        () => kbHeightAnim.value,
+        current => {
+            runOnJS(setKeyboardHeight)(Math.max(0, -current));
+        },
+    );
+
     const fadeContainerStyle = useAnimatedStyle(() => ({
         bottom: Math.max(
             bottomInset + TAB_BAR_ICON_HEIGHT,
@@ -881,8 +892,11 @@ export function ChatDetailScreen() {
                                           paddingBottom: headerHeight,
                                           paddingTop:
                                               inputBarHeight +
-                                              insets.bottom +
-                                              TAB_BAR_ICON_HEIGHT,
+                                              Math.max(
+                                                  insets.bottom +
+                                                      TAB_BAR_ICON_HEIGHT,
+                                                  keyboardHeight,
+                                              ),
                                       },
                                       maintainVisibleContentPosition: undefined,
                                       maxToRenderPerBatch: 10,
@@ -895,8 +909,11 @@ export function ChatDetailScreen() {
                                           paddingBottom: headerHeight,
                                           paddingTop:
                                               inputBarHeight +
-                                              insets.bottom +
-                                              TAB_BAR_ICON_HEIGHT,
+                                              Math.max(
+                                                  insets.bottom +
+                                                      TAB_BAR_ICON_HEIGHT,
+                                                  keyboardHeight,
+                                              ),
                                       },
                                       maxToRenderPerBatch: 10,
                                       windowSize: 10,
