@@ -22,6 +22,7 @@ import { AVAILABLE_TEAMS } from '../teams';
 import { Chat } from '../../main/models';
 import type { ChatStackParamList } from '../../../navigation/types';
 import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
+import { UpdatesBellButton } from '../components/UpdatesBellButton';
 
 type NavProp = NativeStackNavigationProp<ChatStackParamList, 'ChatList'>;
 
@@ -320,17 +321,20 @@ export function ChatListScreen() {
                 ]}
             >
                 <Text style={[styles.title, { color: theme.text }]}>Chats</Text>
-                {!user?.single_chat_mode && (
-                    <Pressable
-                        onPress={handleNewChat}
-                        style={[
-                            styles.newBtn,
-                            { backgroundColor: theme.accent },
-                        ]}
-                    >
-                        <Ionicons name="add" size={20} color="#fff" />
-                    </Pressable>
-                )}
+                <View style={styles.headerRight}>
+                    <UpdatesBellButton />
+                    {!user?.single_chat_mode && (
+                        <Pressable
+                            onPress={handleNewChat}
+                            style={[
+                                styles.newBtn,
+                                { backgroundColor: theme.accent },
+                            ]}
+                        >
+                            <Ionicons name="add" size={20} color="#fff" />
+                        </Pressable>
+                    )}
+                </View>
             </View>
 
             {/* Search */}
@@ -467,6 +471,11 @@ const styles = StyleSheet.create({
         paddingBottom: 12,
     },
     title: { fontSize: 28, fontWeight: '700' },
+    headerRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
     newBtn: {
         width: 36,
         height: 36,

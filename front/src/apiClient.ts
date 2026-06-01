@@ -392,6 +392,10 @@ export const chatsApi = {
         apiClient.get<import('./screens/main/models').Chat[]>(
             `${API_URL()}/chats/persistent/all`,
         ),
+    getMessages: (chatId: string) =>
+        apiClient.get<import('./screens/main/models').Message[]>(
+            `${API_URL()}/chats/${chatId}/messages`,
+        ),
 };
 
 export const projectsApi = {

@@ -22,6 +22,7 @@ import {
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { MainProvider } from './src/screens/main/context';
+import { UpdatesProvider } from './src/screens/chat/hooks/useUpdatesUnread';
 import * as PCPModel from './src/screens/integrationsSidebar/PluginChatsProviderImpl';
 const { PluginChatsProvider } = PCPModel;
 
@@ -191,13 +192,17 @@ function App() {
                             <PluginChatsProvider>
                                 <ConnectorsProvider>
                                     <MainProvider>
-                                        <ThemedNavigationContainer
-                                            navigationRef={navigationRef}
-                                        >
-                                            <AppContent
+                                        <UpdatesProvider>
+                                            <ThemedNavigationContainer
                                                 navigationRef={navigationRef}
-                                            />
-                                        </ThemedNavigationContainer>
+                                            >
+                                                <AppContent
+                                                    navigationRef={
+                                                        navigationRef
+                                                    }
+                                                />
+                                            </ThemedNavigationContainer>
+                                        </UpdatesProvider>
                                     </MainProvider>
                                 </ConnectorsProvider>
                             </PluginChatsProvider>

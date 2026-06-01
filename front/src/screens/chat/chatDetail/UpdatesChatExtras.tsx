@@ -1,19 +1,8 @@
 /**
- * UpdatesChatExtras — proactive badge + Discuss / Dismiss buttons.
- *
- * INTEGRATION NOTE (follow-up required):
- * This component is NOT yet embedded in ChatDetailScreen.tsx because that file
- * has unrelated uncommitted changes that must not be touched in this PR.
- *
- * To wire it in, import and render it just below (or above) each assistant
- * message bubble in ChatDetailScreen's renderMessage / renderBubble:
- *
- *   import { UpdatesChatExtras } from './UpdatesChatExtras';
- *   // inside the message renderer, after the bubble:
- *   <UpdatesChatExtras message={message} chatId={activeChatID} />
- *
- * The component self-hides when message.meta?.source !== 'proactive', so it is
- * safe to render for every message — non-proactive messages produce null.
+ * UpdatesChatExtras — proactive source badge + Discuss / Dismiss buttons,
+ * rendered under each proactive assistant message in the Updates chat. Wired
+ * into ChatDetailScreen via renderMessageWithExtras. Self-hides when
+ * message.meta?.source !== 'proactive', so it is safe to render for any message.
  */
 
 import React, { useState } from 'react';

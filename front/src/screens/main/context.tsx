@@ -361,8 +361,7 @@ export function MainProvider({ children }: { children: ReactNode }) {
         setIsNewSession,
         closePluginKeepSidebar,
         closePluginWithSidebar,
-        // TODO(backend): user.updates_chat_id is populated once Go's /auth/me response
-        // includes the users.updates_chat_id column added in the reactive-agent migration.
+        // Populated from the users.updates_chat_id column via /auth/me.
         updatesChatId: user?.updates_chat_id ?? null,
     };
 

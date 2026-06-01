@@ -59,6 +59,9 @@ import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 import type { ChatStackParamList } from '../../../navigation/types';
 import type { Chat, Message } from '../../main/models';
 import { UpdatesChatExtras } from './UpdatesChatExtras';
+import { UpdatesInlineBanner } from './UpdatesInlineBanner';
+import { UpdatesBellButton } from '../components/UpdatesBellButton';
+import { useUpdates } from '../hooks/useUpdatesUnread';
 
 const FADE_OPACITIES = [
     0.816, 0.734, 0.653, 0.579, 0.506, 0.441, 0.383, 0.326, 0.277, 0.228, 0.18,
@@ -547,6 +550,12 @@ export function ChatDetailScreen() {
         [renderMessage, isUpdatesChat, messages, chatId],
     );
 
+    // Opening the Updates chat marks all proactive messages as seen (clears badge + banner).
+    const { markUpdatesSeen } = useUpdates();
+    useEffect(() => {
+        if (isUpdatesChat) markUpdatesSeen();
+    }, [isUpdatesChat, markUpdatesSeen]);
+
     const floatingInputStyle = useAnimatedStyle(() => ({
         bottom: Math.max(
             TAB_BAR_ICON_HEIGHT,
@@ -689,8 +698,8 @@ export function ChatDetailScreen() {
                     },
                 ]}
             >
-                {/* Left: placeholder (back button removed) */}
-                <View style={detailStyles.backBtn} />
+                {/* Left: Updates inbox entry point (renders a spacer when no updates chat) */}
+                <UpdatesBellButton />
 
                 {/* Center: title pill — tap to open dropdown */}
                 <Pressable
@@ -766,6 +775,21 @@ export function ChatDetailScreen() {
                     }}
                 />
             ))}
+
+            {/* Inbox banner: "N new updates" — only on the persistent chat, not the Updates chat itself */}
+            {chatId !== emptyChatID && !isUpdatesChat && (
+                <View
+                    style={{
+                        position: 'absolute',
+                        top: headerHeight,
+                        left: 0,
+                        right: 0,
+                        zIndex: 11,
+                    }}
+                >
+                    <UpdatesInlineBanner />
+                </View>
+            )}
 
             {/* Non-session project suggestion banner (existing chats) */}
             {!isNewSession && suggestedProject && (
