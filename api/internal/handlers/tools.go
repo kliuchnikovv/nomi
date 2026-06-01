@@ -316,8 +316,28 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 	// to the server DB. We auto-include them here so the discovery tool can route to them.
 	// Execution happens on the device via client_action WebSocket frames; permissions
 	// are checked at execution time by the client executor.
+	//
+	// Device gate: client-only tools can only run on the user's device. In server-side
+	// flows (e.g. Telegram) there is no device to reach unless the user has the app
+	// installed with a push token registered. If the user has no registered device,
+	// omit client tools entirely so the brain never advertises a tool it cannot reach
+	// (which would otherwise make a client_action hang ~90s waiting for a result that
+	// never arrives). Fail-open on a transient DB error so tool discovery keeps working.
+	hasDevice := true
+	if tokens, err := h.store.DeviceTokensForUser(c.Request.Context(), userID); err != nil {
+		h.logger.Warn("failed to check user devices for client tools; including by default", zap.Error(err))
+	} else {
+		hasDevice = len(tokens) > 0
+	}
+	if !hasDevice {
+		h.logger.Info("omitting client-only plugins: user has no registered device", zap.String("user_id", userID.String()))
+	}
+
 	for _, manifest := range plugins.Manifests {
 		if manifest.Execution.Type != "client" {
+			continue
+		}
+		if !hasDevice {
 			continue
 		}
 		// Skip if include=false in manifest

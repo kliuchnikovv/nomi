@@ -35,6 +35,11 @@ import { defineAllBackgroundTasks } from './src/services/integrations/Background
 import { registerClientPlugins } from './src/plugins/registerClientPlugins';
 import { updateLocationFromGPS } from './src/services/location/locationService';
 import { socket } from './src/socket';
+import {
+    startDeviceActionListener,
+    stopDeviceActionListener,
+    ensureDeviceActionListener,
+} from './src/services/deviceActions/deviceActionListener';
 import { initDebugUtils } from './src/debug/DebugUtils';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ConnectorsProvider } from './src/screens/settings/connectors/context';
@@ -141,6 +146,7 @@ function App() {
                     socket.connect();
                 }
                 socket.processOutbox(); // Push queue
+                ensureDeviceActionListener();
             }
         };
         const sub = AppState.addEventListener('change', handleAppStateChange);
@@ -154,6 +160,7 @@ function App() {
                     socket.connect();
                 }
                 socket.processOutbox();
+                ensureDeviceActionListener();
             }
         });
 
@@ -215,11 +222,14 @@ function AppContent({
         if (token) {
             socket.setToken(token);
             // IMPORTANT: do not auto-connect here.
-            // Chat sockets must include chat_id; notification sockets are handled by NotificationProvider.
+            // Chat sockets must include chat_id; the always-on user-channel
+            // listener (below) handles server-originated client_actions.
+            startDeviceActionListener(token);
         } else {
             console.log('[App] Token cleared. Closing global socket.');
             socket.close();
             socket.setToken(null);
+            stopDeviceActionListener();
         }
     }, [token]);
 

@@ -1002,10 +1002,33 @@ export function ChatProvider({
     }, [lastFailedMessage, sendStreamingMessage]);
 
     const handleClientAction = useCallback(
-        async (payload: any) => {
+        async (payload: any, sourceChatId?: string) => {
             console.log('[ChatContext] Handling client action:', payload);
 
             const { call_id: callId, tool, method, params } = payload;
+
+            // Dedupe across connections: the same client_action can arrive on
+            // both this chat socket and the always-on user-channel device
+            // listener. Claim the call_id so it executes exactly once.
+            const { claimClientAction } = await import(
+                '../../services/deviceActions/dedupe'
+            );
+            if (!claimClientAction(callId)) {
+                console.log(
+                    '[ChatContext] Skipping already-claimed client_action call_id=',
+                    callId,
+                );
+                return;
+            }
+
+            // Reply on the chat/session the action originated from (the frame's
+            // chat_id), NOT the chat the user happens to have open. For actions
+            // originating from a server-side flow (e.g. Telegram), the originating
+            // session_id differs from activeChatID; replying on activeChatID would
+            // publish the result to the wrong Redis channel and the brain would
+            // never receive it (round-trip timeout). Falls back to activeChatID
+            // for the normal in-app flow where they are identical.
+            const replyChatId = sourceChatId || activeChatID;
 
             try {
                 const { clientToolExecutor } = await import(
@@ -1030,7 +1053,7 @@ export function ChatProvider({
                     const { sendClientToolResult } = await import(
                         '../../apiClient'
                     );
-                    await sendClientToolResult(activeChatID, callId, result);
+                    await sendClientToolResult(replyChatId, callId, result);
                     console.log(
                         '[ChatContext] ✅ Round-trip: sent client tool result for call_id=',
                         callId,
@@ -1054,7 +1077,7 @@ export function ChatProvider({
                         '../../apiClient'
                     );
                     await sendClientToolResult(
-                        activeChatID,
+                        replyChatId,
                         callId,
                         `Error: ${errMsg}`,
                     );
@@ -1358,7 +1381,10 @@ export function ChatProvider({
                         payload.method,
                         payload.params,
                     );
-                    handleClientAction(payload);
+                    // Pass the frame's chat_id so the result round-trips on the
+                    // originating session's channel (e.g. a Telegram-sourced action),
+                    // not whatever chat is currently open in the app.
+                    handleClientAction(payload, frame.chat_id);
                 }
             },
             onReconnect: () => {
