@@ -37,7 +37,9 @@ export async function drainPendingActions(): Promise<boolean> {
         if (!actions.length) {
             return false;
         }
-        const { clientToolExecutor } = await import('../tools/ClientToolExecutor');
+        const { clientToolExecutor } = await import(
+            '../tools/ClientToolExecutor'
+        );
         for (const action of actions) {
             // Dedupe with the live user-channel listener: if the action already
             // executed live, skip re-running it here.
@@ -102,11 +104,14 @@ export async function registerPendingActionsDrain(): Promise<void> {
         if (isRegistered) {
             return;
         }
-        await BackgroundFetch.registerTaskAsync(BACKGROUND_PENDING_ACTIONS_TASK, {
-            minimumInterval: 15 * 60, // 15 minutes (iOS floor is best-effort)
-            stopOnTerminate: false,
-            startOnBoot: true,
-        });
+        await BackgroundFetch.registerTaskAsync(
+            BACKGROUND_PENDING_ACTIONS_TASK,
+            {
+                minimumInterval: 15 * 60, // 15 minutes (iOS floor is best-effort)
+                stopOnTerminate: false,
+                startOnBoot: true,
+            },
+        );
         console.log('[drainPendingActions] background task registered');
     } catch (err) {
         console.error('[drainPendingActions] failed to register task', err);
@@ -121,8 +126,13 @@ export async function unregisterPendingActionsDrain(): Promise<void> {
         if (!isRegistered) {
             return;
         }
-        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_PENDING_ACTIONS_TASK);
+        await BackgroundFetch.unregisterTaskAsync(
+            BACKGROUND_PENDING_ACTIONS_TASK,
+        );
     } catch (err) {
-        console.warn('[drainPendingActions] failed to unregister task (ignored)', err);
+        console.warn(
+            '[drainPendingActions] failed to unregister task (ignored)',
+            err,
+        );
     }
 }

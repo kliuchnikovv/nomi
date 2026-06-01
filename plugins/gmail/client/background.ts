@@ -15,6 +15,7 @@ import { IOSRemindersClient } from "@genie/front/services/integrations/clients/I
 import { pluginChatStorage } from "@genie/front/services/plugins/PluginChatStorage";
 import { analyzeEmailWithLog, isPromotionalEmail } from "./emailAnalyzer";
 import { backgroundLogger, type EmailLogEntry } from "./backgroundLogger";
+import { eventsApi } from "@genie/front/apiClient";
 
 export async function backgroundTask(integrationId: string): Promise<void> {
   const startTime = Date.now();
@@ -91,6 +92,39 @@ export async function backgroundTask(integrationId: string): Promise<void> {
         durationMs: Date.now() - emailStart,
       });
       continue;
+    }
+
+    // 4b. Emit a proactive event so the backend pipeline (rules → judge → agent)
+    // can triage this email and surface it in the Updates chat. Deduped per email
+    // via SQLite so we don't re-emit the same unread message on every 15-min wake.
+    // Independent of the iOS Reminder path below (which is a separate local action).
+    if (chatData.proactiveEmitted !== true) {
+      try {
+        const senderLabel = email.fromName
+          ? `${email.fromName} <${from}>`
+          : from;
+        await eventsApi.ingest({
+          source: "email",
+          event_type: "email_new",
+          payload: {
+            message_id: email.gmailId,
+            sender: senderLabel,
+            sender_email: from.toLowerCase(),
+            subject,
+            snippet: (email.snippet || "").slice(0, 200),
+            received_at: email.date?.toISOString() || new Date().toISOString(),
+          },
+        });
+        await pluginChatStorage.updateChatData(email.gmailId, {
+          proactiveEmitted: true,
+        });
+      } catch (e) {
+        console.warn(
+          `[Gmail background] Failed to emit proactive event for ${email.gmailId}:`,
+          e
+        );
+        // Non-fatal — continue with the reminder logic below.
+      }
     }
 
     const analysis = await analyzeEmailWithLog(email);

@@ -1,7 +1,7 @@
 /**
  * UpdatesBellButton — header entry point to the Updates (proactive) chat with an
- * unread badge. Renders an empty same-size spacer when the user has no Updates
- * chat, so it can safely sit in a fixed header slot without shifting layout.
+ * unread badge. Always rendered so the inbox affordance is consistently visible;
+ * navigation is a no-op until the user's Updates chat id is known.
  */
 
 import React from 'react';
@@ -20,11 +20,6 @@ export function UpdatesBellButton() {
     const { updatesChatId } = useMain();
     const { unreadCount } = useUpdates();
 
-    // Keep a same-size spacer so the header stays balanced when hidden.
-    if (!updatesChatId) {
-        return <View style={styles.button} />;
-    }
-
     const hasUnread = unreadCount > 0;
     const badgeText = unreadCount > 99 ? '99+' : String(unreadCount);
 
@@ -32,12 +27,13 @@ export function UpdatesBellButton() {
         <Pressable
             style={[styles.button, { backgroundColor: theme.surface }]}
             hitSlop={8}
-            onPress={() =>
+            onPress={() => {
+                if (!updatesChatId) return;
                 navigation.navigate('Chat', {
                     screen: 'ChatDetail',
                     params: { chatId: updatesChatId },
-                })
-            }
+                });
+            }}
         >
             <Ionicons
                 name={hasUnread ? 'notifications' : 'notifications-outline'}
