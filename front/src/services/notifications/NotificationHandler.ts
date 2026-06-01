@@ -5,6 +5,10 @@ import { Platform } from 'react-native';
 import { apiClient } from '../../apiClient';
 import { getApiUrl } from '../../config';
 import { handleDeepLink, type DeepLink } from './deepLinkRouter';
+import { ensureDeviceActionListener } from '../deviceActions/deviceActionListener';
+
+// Must match push.WakeActionType on the Go side (api/internal/push/service.go).
+const WAKE_ACTION_TYPE = 'client_action_wake';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -90,8 +94,21 @@ export function setupNotificationHandlers(navigation: NavigationContainerRef<any
     handleDeepLink(deepLink ?? null, navigation);
   });
 
+  // Silent wake push from the brain: when a server-side flow (e.g. Telegram)
+  // needs to execute a client-only tool but no device is connected, the backend
+  // sends a content-available push. Reconnect the user-channel device listener
+  // so the device can receive and execute the pending client action.
+  const receivedSub = Notifications.addNotificationReceivedListener(notification => {
+    const data = notification.request.content.data;
+    if (data?.type === WAKE_ACTION_TYPE) {
+      console.log('[Notifications] Received client_action wake push');
+      ensureDeviceActionListener();
+    }
+  });
+
   return () => {
     tapSub.remove();
+    receivedSub.remove();
   };
 }
 
