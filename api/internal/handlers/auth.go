@@ -129,6 +129,14 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Guarantee the user has an Updates chat so the client always has a valid
+	// inbox target (the bell entry point). Idempotent; non-fatal on failure.
+	if user.UpdatesChatID == nil {
+		if chatID, err := h.service.EnsureUpdatesChat(r.Context(), user.ID); err == nil {
+			user.UpdatesChatID = &chatID
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
 }

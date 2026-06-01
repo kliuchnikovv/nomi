@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/kliuchnikovv/genie-api/internal/storage/repositories"
@@ -27,6 +28,12 @@ func NewAuthService(userRepo repositories.UserRepository, tokenManager *auth.Tok
 		tokenManager: tokenManager,
 		storage:      storage,
 	}
+}
+
+// EnsureUpdatesChat guarantees the user has an "Updates" chat and returns its
+// ID. Idempotent — returns the existing chat ID if one is already set.
+func (s *AuthService) EnsureUpdatesChat(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	return s.storage.EnsureUpdatesChat(ctx, userID)
 }
 
 // RegisterRequest represents a registration request
