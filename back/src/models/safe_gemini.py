@@ -38,6 +38,8 @@ class SafeGemini(Gemini):
     and include_thoughts parameters (compatible with function calling).
     """
 
+    _warned_tools: set[str] = set()
+
     def __init__(
         self,
         id: str = "gemini-2.5-flash",
@@ -79,13 +81,9 @@ class SafeGemini(Gemini):
                 # IMPORTANT: Never filter out system messages, even if they have None content
                 # This prevents "contents are required" errors when system messages are missing content
                 if msg.role == "system":
-                    logger.debug(
-                        "[SafeGemini] Keeping system message with None content"
-                    )
                     filtered_messages.append(msg)
                     continue
                 # Skip other messages with no content at all
-                logger.debug("[SafeGemini] Skipping message with None content")
                 continue
 
             # If content is a string, check if it's empty
@@ -235,19 +233,25 @@ class SafeGemini(Gemini):
 
                     if len(filtered) != len(original):
                         removed = set(original) - set(filtered)
-                        logger.warning(
-                            "[SafeGemini] Dropping required fields from '%s': %s",
-                            func_info.get("name", "?"),
-                            removed,
-                        )
+                        tool_key = f"drop:{func_info.get('name', '?')}:{frozenset(removed)}"
+                        if tool_key not in SafeGemini._warned_tools:
+                            SafeGemini._warned_tools.add(tool_key)
+                            logger.debug(
+                                "[SafeGemini] Dropping required fields from '%s': %s",
+                                func_info.get("name", "?"),
+                                removed,
+                            )
                         modified = True
 
                     # Remove empty required arrays entirely
                     if not filtered:
-                        logger.debug(
-                            "[SafeGemini] Removing empty required[] from '%s'",
-                            func_info.get("name", "?"),
-                        )
+                        tool_key = f"empty:{func_info.get('name', '?')}"
+                        if tool_key not in SafeGemini._warned_tools:
+                            SafeGemini._warned_tools.add(tool_key)
+                            logger.debug(
+                                "[SafeGemini] Removing empty required[] from '%s'",
+                                func_info.get("name", "?"),
+                            )
                         params = {k: v for k, v in params.items() if k != "required"}
                         modified = True
                     else:
