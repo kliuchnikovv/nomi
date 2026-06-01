@@ -9,6 +9,7 @@ import redis.asyncio as redis
 from src.agents.factory import AgentFactory
 from src.constants import Redis
 from src.server.models import Frame, Op
+from src.server.redis_client import make_redis_client
 from src.server.redis_session import RedisSession
 from src.server.utils import make_error
 
@@ -46,7 +47,7 @@ class RedisWorker:
 
         while self.running:
             try:
-                self.redis = redis.from_url(self.redis_url, decode_responses=True)
+                self.redis = make_redis_client(self.redis_url)
                 self.pubsub = self.redis.pubsub()
 
                 await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
@@ -121,15 +122,37 @@ class RedisWorker:
             await asyncio.sleep(delay)
             delay = min(delay * 2, max_delay)
 
-            # Reconnect pubsub on error
+            # Reconnect pubsub on error. Close the old client/pubsub first so we
+            # don't leak connections toward Redis maxclients on every retry, and
+            # bound the (re)subscribe so an unreachable Redis can't wedge the loop.
+            await self._close_connection()
             try:
-                self.redis = redis.from_url(self.redis_url, decode_responses=True)
+                self.redis = make_redis_client(self.redis_url)
                 self.pubsub = self.redis.pubsub()
-                await self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*"))
-                await self.pubsub.subscribe(Redis.CHANNEL_JULES_MONITOR, Redis.CHANNEL_STORE_FACTS)
+                await asyncio.wait_for(
+                    self.pubsub.psubscribe(Redis.CHANNEL_REQUEST.replace("{}", "*")),
+                    timeout=15,
+                )
+                await asyncio.wait_for(
+                    self.pubsub.subscribe(Redis.CHANNEL_JULES_MONITOR, Redis.CHANNEL_STORE_FACTS),
+                    timeout=15,
+                )
                 delay = base_delay
-            except Exception as e:
-                logger.error("[RedisWorker] Reconnect failed: %s", e, exc_info=True)
+            except (Exception, asyncio.TimeoutError) as e:
+                logger.warning("[RedisWorker] Reconnect failed: %s, retrying in %.1fs...", e, delay)
+
+    async def _close_connection(self):
+        """Close pubsub + redis client, ignoring errors (used before reconnect)."""
+        if self.pubsub:
+            try:
+                await self.pubsub.aclose()
+            except Exception:
+                pass
+        if self.redis:
+            try:
+                await self.redis.aclose()
+            except Exception:
+                pass
 
     async def _process_messages(self):
         """Process messages from Redis pub/sub."""
@@ -144,7 +167,8 @@ class RedisWorker:
                 if message:
                     await self._handle_message(message)
         except Exception as e:
-            logger.error("[RedisWorker] Message processing error: %s", e, exc_info=True)
+            # Expected on transient Redis disconnects — _run_loop will reconnect.
+            logger.warning("[RedisWorker] Message loop interrupted: %s", e)
 
     async def _handle_message(self, message: dict):
         # Normalize channel: redis-py may return bytes or str; psubscribe uses "pattern"

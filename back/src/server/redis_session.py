@@ -8,7 +8,6 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Any
 
-import redis.asyncio as redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from agno.media import Image
 from src.agents.factory import AgentFactory
@@ -17,6 +16,7 @@ from src.storage.backend import PayloadBackend, StorageBackend
 from src.storage.factory import create_storage_backend
 from src.constants import Redis as RedisConstants
 from src.server.models import Frame, Op, Kind
+from src.server.redis_client import make_redis_client
 from src.server.utils import (
     make_meta,
     make_error,
@@ -88,7 +88,7 @@ class RedisSession:
 
         # Initialize Redis for sending responses
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        self.redis_client = redis.from_url(redis_url, decode_responses=True)
+        self.redis_client = make_redis_client(redis_url)
         self.next_id = 0
         self.cancel_event = asyncio.Event()
 
@@ -234,7 +234,7 @@ class RedisSession:
                 except Exception:
                     pass
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-            self.redis_client = redis.from_url(redis_url, decode_responses=True)
+            self.redis_client = make_redis_client(redis_url)
             logger.info("[RedisSession] Reconnected to Redis")
         except Exception as e:
             logger.error("[RedisSession] Failed to reconnect to Redis: %s", e)

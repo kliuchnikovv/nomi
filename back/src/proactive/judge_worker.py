@@ -23,6 +23,7 @@ from typing import Any
 import redis.asyncio as redis
 
 from src.proactive.judge import run_judge
+from src.server.redis_client import make_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class JudgeWorker:
 
         while self.running:
             try:
-                self.redis = redis.from_url(self.redis_url, decode_responses=True)
+                self.redis = make_redis_client(self.redis_url)
                 self.pubsub = self.redis.pubsub()
                 await self.pubsub.psubscribe(CHANNEL_JUDGE_PATTERN)
 
@@ -114,13 +115,32 @@ class JudgeWorker:
             await asyncio.sleep(delay)
             delay = min(delay * 2, max_delay)
 
+            # Close the old client/pubsub before reconnecting so we don't leak
+            # connections toward Redis maxclients, and bound the resubscribe so
+            # an unreachable Redis can't wedge the loop forever.
+            await self._close_connection()
             try:
-                self.redis = redis.from_url(self.redis_url, decode_responses=True)
+                self.redis = make_redis_client(self.redis_url)
                 self.pubsub = self.redis.pubsub()
-                await self.pubsub.psubscribe(CHANNEL_JUDGE_PATTERN)
+                await asyncio.wait_for(
+                    self.pubsub.psubscribe(CHANNEL_JUDGE_PATTERN), timeout=15
+                )
                 delay = base_delay
-            except Exception as e:
-                logger.error("[JudgeWorker] Reconnect failed: %s", e, exc_info=True)
+            except (Exception, asyncio.TimeoutError) as e:
+                logger.warning("[JudgeWorker] Reconnect failed: %s, retrying in %.1fs...", e, delay)
+
+    async def _close_connection(self):
+        """Close pubsub + redis client, ignoring errors (used before reconnect)."""
+        if self.pubsub:
+            try:
+                await self.pubsub.aclose()
+            except Exception:
+                pass
+        if self.redis:
+            try:
+                await self.redis.aclose()
+            except Exception:
+                pass
 
     async def _process_messages(self):
         if not self.pubsub:
@@ -134,7 +154,8 @@ class JudgeWorker:
                 if message:
                     await self._handle_message(message)
         except Exception as e:
-            logger.error("[JudgeWorker] Message processing error: %s", e, exc_info=True)
+            # Expected on transient Redis disconnects — _run_loop will reconnect.
+            logger.warning("[JudgeWorker] Message loop interrupted: %s", e)
 
     async def _handle_message(self, message: dict):
         channel = message.get("channel") or message.get("pattern") or ""
