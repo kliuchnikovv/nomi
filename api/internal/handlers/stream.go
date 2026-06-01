@@ -12,6 +12,7 @@ import (
 
 	"github.com/kliuchnikovv/genie-api/internal/credentials"
 	"github.com/kliuchnikovv/genie-api/internal/hub"
+	"github.com/kliuchnikovv/genie-api/internal/push"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
 
@@ -20,6 +21,7 @@ type StreamHandler struct {
 	logger    *zap.Logger
 	store     *storage.Storage
 	credStore credentials.Store
+	push      *push.Service
 }
 
 func NewStreamHandler(
@@ -33,6 +35,7 @@ func NewStreamHandler(
 		logger:    logger.With(zap.String("handler", "stream")),
 		store:     store,
 		credStore: credStore,
+		push:      push.New(store, logger),
 	}
 }
 

@@ -50,6 +50,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Notification{},
 		&UserDevice{},
 		&ProactiveEvent{},
+		&PendingClientAction{},
 	); err != nil {
 		return nil, err
 	}

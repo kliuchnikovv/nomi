@@ -39,6 +39,8 @@ go test ./...
 go mod download
 ```
 
+**Database migrations: use GORM.** The schema is owned by GORM `AutoMigrate` in `api/internal/storage/db.go` — define/modify the model struct in `api/internal/storage/models.go` and add it to the `AutoMigrate(...)` list. AutoMigrate runs on server start and keeps the schema in sync (it adds tables/columns/indexes but does not drop them). The `.sql` files in `api/migrations/` are supplementary documentation and for things AutoMigrate can't express (data backfills, conditional unique indexes); they are NOT a standalone migration runner. When adding a table/column, change the GORM model first.
+
 ### Agent Service (Python)
 
 ```bash

@@ -90,6 +90,12 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string, crypt
 
 const channelClientToolResultPattern = "chat:client_tool_result:%s"
 
+// channelDeferredActionResult carries results of queued (deferred) client
+// actions that were drained by the device after the originating brain run had
+// already finished. A Python subscriber loads the delivery context and sends a
+// follow-up message on the originating channel (e.g. Telegram).
+const channelDeferredActionResult = "chat:deferred_action_result"
+
 func (h *Hub) Run() {
 	for room := range h.unregister {
 		h.mu.Lock()
@@ -129,6 +135,34 @@ func (h *Hub) PublishClientToolResult(ctx context.Context, sessionID, callID, re
 		zap.Int("result_len", len(result)),
 	)
 	return h.redis.Publish(ctx, channel, payloadBytes).Err()
+}
+
+// PublishDeferredActionResult publishes a drained queued-action result to the
+// deferred-result channel so a Python subscriber can deliver a follow-up to the
+// originating channel. rawDeliveryContext is the JSONB delivery_context bytes
+// (may be nil).
+func (h *Hub) PublishDeferredActionResult(ctx context.Context, source, sessionID, callID, result string, rawDeliveryContext []byte) error {
+	var deliveryContext map[string]interface{}
+	if len(rawDeliveryContext) > 0 {
+		_ = json.Unmarshal(rawDeliveryContext, &deliveryContext)
+	}
+	payload := map[string]interface{}{
+		"source":           source,
+		"session_id":       sessionID,
+		"call_id":          callID,
+		"result":           result,
+		"delivery_context": deliveryContext,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	h.logger.Info("Publishing deferred action result",
+		zap.String("channel", channelDeferredActionResult),
+		zap.String("call_id", callID),
+		zap.String("source", source),
+	)
+	return h.redis.Publish(ctx, channelDeferredActionResult, payloadBytes).Err()
 }
 
 func (h *Hub) subscribeRedis() {

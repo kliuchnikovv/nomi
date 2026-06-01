@@ -124,6 +124,35 @@ type ProactiveEvent struct {
 	ProcessedAt    *time.Time     `gorm:"default:null"`
 }
 
+// PendingClientAction is a client-only tool call (e.g. iOS reminder) that the
+// brain could not execute immediately because no device was connected. It is
+// queued here and drained by the device when it next comes online (foreground,
+// silent-push wake, or background fetch). The result is delivered back to the
+// originating channel (e.g. Telegram) via the stored delivery context.
+type PendingClientAction struct {
+	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID uuid.UUID `gorm:"type:uuid;not null;index:idx_pending_actions_user_status,priority:1"`
+	// Source is the originating delivery channel, e.g. "telegram".
+	Source string `gorm:"type:text;not null"`
+	// DeliveryContext carries what the delivery handler needs to send a follow-up
+	// (e.g. {"telegram_chat_id": 123, "user_id": "..."}).
+	DeliveryContext datatypes.JSON `gorm:"type:jsonb"`
+	// SessionID is the originating session (the client_action frame's chat_id);
+	// the device echoes it back so the result round-trips on the right channel.
+	SessionID     string         `gorm:"type:text;not null"`
+	CallID        string         `gorm:"type:text;not null;uniqueIndex:idx_pending_actions_call_id"`
+	Tool          string         `gorm:"type:text;not null"`
+	Method        string         `gorm:"type:text;not null"`
+	Params        datatypes.JSON `gorm:"type:jsonb"`
+	IntegrationID *string        `gorm:"type:text;default:null"`
+	// Status: 'pending' | 'done' | 'failed' | 'expired'.
+	Status      string     `gorm:"type:text;not null;default:'pending';index:idx_pending_actions_user_status,priority:2"`
+	Result      *string    `gorm:"type:text;default:null"`
+	ExpiresAt   *time.Time `gorm:"default:null;index:idx_pending_actions_expires_at"`
+	CreatedAt   time.Time  `gorm:"not null"`
+	DeliveredAt *time.Time `gorm:"default:null"`
+}
+
 // UserDevice stores device tokens for push notification delivery
 type UserDevice struct {
 	ID          uuid.UUID `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`

@@ -12,6 +12,9 @@ class Redis:
     # Per-session channel for client tool results (prevents cross-session delivery)
     # Format: chat:client_tool_result:{session_id}
     CHANNEL_CLIENT_TOOL_RESULT = "chat:client_tool_result:{}"
+    # Results of deferred (queued) client actions drained by the device after the
+    # originating brain run ended; consumed here to deliver a follow-up message.
+    CHANNEL_DEFERRED_ACTION_RESULT = "chat:deferred_action_result"
 
 
 class Polling:

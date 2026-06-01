@@ -137,6 +137,35 @@ export async function sendClientToolResult(
     );
 }
 
+/** A queued client action awaiting execution on this device. */
+export interface PendingAction {
+    call_id: string;
+    session_id: string;
+    tool: string;
+    method: string;
+    params: Record<string, any>;
+    integration_id?: string;
+}
+
+/** Fetch client actions queued for this device (offline outbox drain). */
+export async function fetchPendingActions(): Promise<PendingAction[]> {
+    const resp = await apiClient.get<{ actions?: PendingAction[] }>(
+        `${API_URL()}/pending-actions`,
+    );
+    return resp?.actions ?? [];
+}
+
+/** Report the result of a drained queued action. */
+export async function sendPendingActionResult(
+    callId: string,
+    result: string,
+): Promise<void> {
+    await apiClient.post<{ ok?: boolean }>(
+        `${API_URL()}/pending-actions/result`,
+        { call_id: callId, result },
+    );
+}
+
 export const apiClient = {
     get: <T>(endpoint: string, options?: RequestInit) =>
         request<T>(endpoint, { ...options, method: 'GET' }),

@@ -4,8 +4,9 @@ import logging
 import os
 import uuid
 import time
+import httpx
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -32,6 +33,15 @@ from src.workflows.planning import _planning_steps as _run_planning_steps
 from src.workflows.planning import STAGE_STATUS_TEXT
 
 logger = logging.getLogger(__name__)
+
+# Base URL of the Go API for server-to-server calls (pending-action outbox).
+_GO_API_URL = os.getenv("GO_API_URL", "http://localhost:8080").rstrip("/")
+
+# Method-name prefixes treated as read-only. Deferred reads expire quickly (a
+# late answer to a question is useless); writes are kept longer.
+_READ_METHOD_PREFIXES = ("get", "list", "search", "read", "find", "fetch")
+_DEFERRED_READ_TTL_SECONDS = 5 * 60
+_DEFERRED_WRITE_TTL_SECONDS = 24 * 60 * 60
 
 
 def _parse_tasks_from_message(message: str) -> list[dict]:
@@ -584,6 +594,64 @@ class RedisSession:
 
         return emitted
 
+    async def _enqueue_pending_action(
+        self, call_id: str, plugin: str, method: str, params: dict[str, Any]
+    ) -> bool:
+        """Persist a client action to the server-side outbox and trigger a silent
+        wake push (handled by the Go endpoint). Best-effort: failures are logged
+        and do not abort the live attempt."""
+        if not self.user_id:
+            return False
+        try:
+            is_read = method.lower().startswith(_READ_METHOD_PREFIXES)
+            ttl = _DEFERRED_READ_TTL_SECONDS if is_read else _DEFERRED_WRITE_TTL_SECONDS
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
+            body: dict[str, Any] = {
+                "user_id": str(self.user_id),
+                "source": self._delivery_source or "",
+                "delivery_context": self._delivery_context or {},
+                "session_id": self.session_id,
+                "call_id": call_id,
+                "tool": plugin,
+                "method": method,
+                "params": params,
+                "expires_at": expires_at.isoformat(),
+            }
+            integration_id = params.get("integration_id")
+            if integration_id:
+                body["integration_id"] = str(integration_id)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{_GO_API_URL}/internal/pending-actions/enqueue", json=body
+                )
+                resp.raise_for_status()
+            logger.info("[ClientTool] Enqueued pending action call_id=%s", call_id)
+            return True
+        except Exception as exc:
+            logger.warning(
+                "[ClientTool] Failed to enqueue pending action call_id=%s: %s",
+                call_id,
+                exc,
+            )
+            return False
+
+    async def _finalize_pending_action(
+        self, call_id: str, status: str = "done", result: str = ""
+    ) -> None:
+        """Mark a queued action as resolved so the device won't re-drain it."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    f"{_GO_API_URL}/internal/pending-actions/finalize",
+                    json={"call_id": call_id, "status": status, "result": result},
+                )
+        except Exception as exc:
+            logger.warning(
+                "[ClientTool] Failed to finalize pending action call_id=%s: %s",
+                call_id,
+                exc,
+            )
+
     async def _send_client_action_and_wait(
         self, plugin: str, method: str, params: dict[str, Any]
     ) -> str:
@@ -636,11 +704,45 @@ class RedisSession:
             }
             if integration_id:
                 payload_data["integration_id"] = integration_id
+
+            # Server-side flow (e.g. Telegram): the device may be offline. Persist
+            # the action to the outbox and trigger a silent wake push BEFORE
+            # sending, so a backgrounded/terminated app can come online and drain
+            # it even if it never receives this live frame.
+            if self._delivery_source:
+                await self._enqueue_pending_action(call_id, plugin, method, params)
+
             await self._send_frame(
                 make_data(self.next_id, Op.MESSAGE, self.chat_id, payload_data)
             )
 
             logger.info("[ClientTool] Sent client_action for call_id=%s", call_id)
+
+            # Deferred path: if this is a server-side flow, wait only a short
+            # window for a live device. If it doesn't answer, the action stays
+            # queued (drained on next app launch / background wake) and we return
+            # an optimistic sentinel so the user is told it will run shortly.
+            if self._delivery_source:
+                DEFERRED_TIMEOUT = 30.0
+                try:
+                    result = await asyncio.wait_for(future, timeout=DEFERRED_TIMEOUT)
+                    if result is None:
+                        return "Error: Client returned no result (None)."
+                    await self._finalize_pending_action(call_id, "done", str(result))
+                    if self.redis_client:
+                        await self.redis_client.delete(idempotency_key)
+                    return str(result)
+                except asyncio.TimeoutError:
+                    logger.info(
+                        "[ClientTool] Deferred: device offline, action queued call_id=%s",
+                        call_id,
+                    )
+                    return (
+                        "The user's device is currently offline, so this action "
+                        "could not be performed immediately. It has been queued and "
+                        "will run automatically the next time their app comes "
+                        "online. Let the user know it will be completed shortly."
+                    )
 
             # Exponential backoff retry
             MAX_RETRIES = 3

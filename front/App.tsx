@@ -40,6 +40,11 @@ import {
     stopDeviceActionListener,
     ensureDeviceActionListener,
 } from './src/services/deviceActions/deviceActionListener';
+import {
+    drainPendingActions,
+    registerPendingActionsDrain,
+    unregisterPendingActionsDrain,
+} from './src/services/deviceActions/drainPendingActions';
 import { initDebugUtils } from './src/debug/DebugUtils';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { ConnectorsProvider } from './src/screens/settings/connectors/context';
@@ -147,6 +152,7 @@ function App() {
                 }
                 socket.processOutbox(); // Push queue
                 ensureDeviceActionListener();
+                void drainPendingActions();
             }
         };
         const sub = AppState.addEventListener('change', handleAppStateChange);
@@ -161,6 +167,7 @@ function App() {
                 }
                 socket.processOutbox();
                 ensureDeviceActionListener();
+                void drainPendingActions();
             }
         });
 
@@ -225,11 +232,14 @@ function AppContent({
             // Chat sockets must include chat_id; the always-on user-channel
             // listener (below) handles server-originated client_actions.
             startDeviceActionListener(token);
+            void registerPendingActionsDrain();
+            void drainPendingActions();
         } else {
             console.log('[App] Token cleared. Closing global socket.');
             socket.close();
             socket.setToken(null);
             stopDeviceActionListener();
+            void unregisterPendingActionsDrain();
         }
     }, [token]);
 

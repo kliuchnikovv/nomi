@@ -135,6 +135,14 @@ func New(
 	// Client tool result (round-trip proxy: device executes tool and sends result back)
 	r.POST("/api/chat/client-tool-result", wrapWithAuth(streamHandler.ClientToolResult, authMiddleware))
 
+	// Pending client actions (offline outbox).
+	// Internal (Python brain): enqueue + wake device; finalize when result arrived in time.
+	r.POST("/internal/pending-actions/enqueue", streamHandler.EnqueuePendingAction)
+	r.POST("/internal/pending-actions/finalize", streamHandler.FinalizePendingAction)
+	// Device-facing (authenticated): drain queue + report results.
+	r.GET("/api/pending-actions", wrapWithAuth(streamHandler.ListPendingActions, authMiddleware))
+	r.POST("/api/pending-actions/result", wrapWithAuth(streamHandler.PendingActionResult, authMiddleware))
+
 	// Message API (protected)
 	r.POST("/api/chats/:id/messages", wrapWithAuth(messageHandler.CreateMessage, authMiddleware))
 	r.GET("/api/chats/:id/messages", wrapWithAuth(messageHandler.GetMessages, authMiddleware))

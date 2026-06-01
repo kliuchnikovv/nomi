@@ -54,13 +54,14 @@ class RedisWorker:
                 await self.pubsub.subscribe(
                     Redis.CHANNEL_JULES_MONITOR,
                     Redis.CHANNEL_STORE_FACTS,
+                    Redis.CHANNEL_DEFERRED_ACTION_RESULT,
                 )
 
                 # Wait for subscription confirmations with get_message() to avoid
                 # blocking aclose() when breaking from async-for pubsub.listen()
                 confirmed = 0
                 deadline = asyncio.get_event_loop().time() + 5.0
-                while confirmed < 3 and asyncio.get_event_loop().time() < deadline:
+                while confirmed < 4 and asyncio.get_event_loop().time() < deadline:
                     message = await self.pubsub.get_message(
                         ignore_subscribe_messages=False, timeout=1.0
                     )
@@ -134,7 +135,11 @@ class RedisWorker:
                     timeout=15,
                 )
                 await asyncio.wait_for(
-                    self.pubsub.subscribe(Redis.CHANNEL_JULES_MONITOR, Redis.CHANNEL_STORE_FACTS),
+                    self.pubsub.subscribe(
+                        Redis.CHANNEL_JULES_MONITOR,
+                        Redis.CHANNEL_STORE_FACTS,
+                        Redis.CHANNEL_DEFERRED_ACTION_RESULT,
+                    ),
                     timeout=15,
                 )
                 delay = base_delay
@@ -189,6 +194,14 @@ class RedisWorker:
 
         # NOTE: Global client_tool_result handling removed - now per-session in RedisSession
 
+        # Case: Deferred client-action result (queued action drained by device
+        # after the originating run ended) → deliver a follow-up message.
+        if channel == Redis.CHANNEL_DEFERRED_ACTION_RESULT:
+            task = asyncio.create_task(self._handle_deferred_action_result(data))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+            return
+
         # Case: Chat Request (pattern match)
         # channel: chat:request:<chat_id>
         parts = channel.split(":")
@@ -202,6 +215,43 @@ class RedisWorker:
             task = asyncio.create_task(self._process_request(chat_id, data))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
+
+    async def _handle_deferred_action_result(self, raw_data: str):
+        """Deliver a follow-up for a queued client action that the device
+        executed after the originating run had already ended."""
+        try:
+            payload = json.loads(raw_data)
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.warning("[RedisWorker] Bad deferred action result payload: %s", exc)
+            return
+
+        source = payload.get("source")
+        result = payload.get("result") or ""
+        context = payload.get("delivery_context") or {}
+        if not source:
+            logger.warning("[RedisWorker] Deferred action result missing source")
+            return
+
+        from src.server.delivery import DeliveryRegistry
+
+        handler = DeliveryRegistry.get(source)
+        if not handler:
+            logger.warning(
+                "[RedisWorker] No delivery handler for deferred result source=%s", source
+            )
+            return
+
+        try:
+            await handler.deliver(result, context)
+            logger.info(
+                "[RedisWorker] Delivered deferred action follow-up via source=%s", source
+            )
+        except Exception as exc:
+            logger.error(
+                "[RedisWorker] Failed to deliver deferred action follow-up: %s",
+                exc,
+                exc_info=True,
+            )
 
     async def _process_request(self, chat_id: str, raw_data: str):
         """Process the request logic."""
