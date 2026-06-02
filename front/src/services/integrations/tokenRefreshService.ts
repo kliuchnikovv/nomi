@@ -3,10 +3,10 @@
  * Handles automatic token refresh before expiry using Client-Side SDKs where possible
  */
 
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { integrationStorage } from './IntegrationStorage';
 import { secureTokenStorage } from '../auth/SecureTokenStorage';
 import { getApiUrl } from '../../config';
+import { apiClient } from '../../apiClient';
 
 // Refresh tokens 5 minutes before expiry
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
@@ -90,49 +90,60 @@ class TokenRefreshService {
     }
 
     /**
-     * Refresh Google Token using the Client SDK
-     * This keeps the refresh logic purely on the client side (Local Hands).
+     * Refresh a Google access token via the backend.
+     *
+     * Google integrations are connected through the server OAuth flow, which
+     * stores the refresh token encrypted server-side (the device never holds
+     * it). This asks the backend to mint a fresh access token from that stored
+     * refresh token — the device only ever caches the short-lived access token.
      */
     private async refreshGoogleToken(integrationId: string): Promise<string> {
+        const integration = await integrationStorage.getIntegration(
+            integrationId,
+        );
+        if (!integration) {
+            throw new Error('Integration not found');
+        }
+
         try {
-            // Ensure Play Services are available
-            await GoogleSignin.hasPlayServices();
+            const res = await apiClient.post<{
+                access_token: string;
+                token_expiry: number;
+            }>(`${getApiUrl()}/oauth/${integration.provider}/access-token`, {});
 
-            // signInSilently() usually returns fresh tokens if the user is already signed in.
-            // If fails, we might need clear cache or re-login.
-            const userInfo = await GoogleSignin.signInSilently();
-            const tokens = await GoogleSignin.getTokens();
+            if (!res?.access_token) {
+                throw new Error('No access_token in refresh response');
+            }
 
-            const newExpiry = Date.now() + 3500 * 1000; // Assume 1 hour usually, take a bit off
+            // Backend returns Unix seconds; fall back to ~1h if absent/invalid.
+            const expiry =
+                res.token_expiry && res.token_expiry > 0
+                    ? res.token_expiry * 1000
+                    : Date.now() + 3500 * 1000;
 
             await secureTokenStorage.saveToken(integrationId, {
-                accessToken: tokens.accessToken,
-                refreshToken: 'google-signin-managed',
-                expiry: newExpiry,
+                accessToken: res.access_token,
+                refreshToken: 'server-managed',
+                expiry,
             });
 
-            // Sync with IntegrationStorage just in case legacy code reads it
-            // (Though we should aim to remove this dependency)
+            // Sync with IntegrationStorage just in case legacy code reads it.
             await integrationStorage.updateCredentials(integrationId, {
-                accessToken: tokens.accessToken,
-                tokenExpiry: new Date(newExpiry),
+                accessToken: res.access_token,
+                tokenExpiry: new Date(expiry),
             });
 
             console.log(
-                `[TokenRefresh] Google token refreshed locally via SDK`,
+                `[TokenRefresh] ${integration.provider} token refreshed via backend`,
             );
-            return tokens.accessToken;
+            return res.access_token;
         } catch (error: any) {
             console.error(
-                '[TokenRefresh] Google silent sign-in failed:',
+                '[TokenRefresh] Backend token refresh failed:',
                 error,
             );
-
-            // If strictly needed, we could fallback to backend refresh IF and ONLY IF we had a refresh token in the backend?
-            // But per "Local Hands" architecture, we want to ABANDON backend refresh.
-            // So we just throw error. User might need to re-login.
             throw new Error(
-                'Failed to refresh Google token locally. Please re-authenticate.',
+                'Failed to refresh Google token. Please re-authenticate.',
             );
         }
     }

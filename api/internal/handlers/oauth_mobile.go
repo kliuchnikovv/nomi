@@ -488,6 +488,101 @@ func (h *MobileOAuthHandler) RefreshToken(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// GetAccessToken returns a fresh access token for an authenticated device using
+// the refresh token stored server-side at connect time. This is the device-facing
+// counterpart to RefreshToken (which requires the caller to supply the refresh
+// token, which client-only devices do not hold). Used by the mobile token-refresh
+// service for server-backed ("hybrid") Google integrations.
+// POST /api/oauth/:provider/access-token
+func (h *MobileOAuthHandler) GetAccessToken(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	user, err := userFromCtxMobile(ctx)
+	if err != nil || user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	providerName := c.Param("provider")
+	if _, ok := integrations.GetProvider(providerName); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("provider %s not supported", providerName)})
+		return
+	}
+
+	// Load the encrypted token stored server-side at connect time.
+	oauthToken, err := h.storage.GetOAuthTokenByUser(ctx, user.ID, providerName)
+	if err != nil || oauthToken == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "oauth token not found - please re-authenticate"})
+		return
+	}
+
+	decrypted, err := crypto.Decrypt(h.cryptoKey, oauthToken.TokenEncrypted)
+	if err != nil {
+		h.logger.Error("failed to decrypt token", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decrypt token"})
+		return
+	}
+
+	var tokenData map[string]interface{}
+	if err := json.Unmarshal(decrypted, &tokenData); err != nil {
+		h.logger.Error("failed to parse token data", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse token data"})
+		return
+	}
+
+	refreshToken, _ := tokenData["refresh_token"].(string)
+	if refreshToken == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no refresh token stored - please re-authenticate"})
+		return
+	}
+
+	// Permissions for the provider (mirrors RefreshToken).
+	var permissions []string
+	switch providerName {
+	case "gmail":
+		permissions = []string{"gmail:read", "gmail:write"}
+	case "calendar":
+		permissions = []string{"calendar:read", "calendar:write"}
+	default:
+		permissions = []string{}
+	}
+
+	oauthConfig, err := h.oauthFactory.BuildOAuthConfig(providerName, permissions)
+	if err != nil {
+		h.logger.Error("failed to build OAuth config", zap.Error(err), zap.String("provider", providerName))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "provider configuration missing"})
+		return
+	}
+
+	tokenSource := oauthConfig.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken})
+	newToken, err := tokenSource.Token()
+	if err != nil {
+		h.logger.Error("token refresh failed", zap.String("provider", providerName), zap.Error(err))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "token refresh failed - please re-authenticate"})
+		return
+	}
+
+	// Persist the refreshed access token back into the encrypted blob so the
+	// server copy stays current (the refresh token is preserved).
+	tokenData["access_token"] = newToken.AccessToken
+	if !newToken.Expiry.IsZero() {
+		tokenData["expiry"] = newToken.Expiry.Format(time.RFC3339)
+	}
+	if updatedJSON, mErr := json.Marshal(tokenData); mErr == nil {
+		if encrypted, eErr := crypto.Encrypt(h.cryptoKey, updatedJSON); eErr == nil {
+			oauthToken.TokenEncrypted = encrypted
+			if uErr := h.storage.UpdateOAuthToken(ctx, oauthToken); uErr != nil {
+				h.logger.Warn("failed to persist refreshed token", zap.Error(uErr))
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, RefreshTokenResponse{
+		AccessToken: newToken.AccessToken,
+		TokenExpiry: newToken.Expiry.Unix(),
+	})
+}
+
 // StoreImapCredentials persists IMAP/SMTP credentials server-side so the brain
 // can run email tools without the device. The secret blob (username/password/
 // hosts) is encrypted into oauth_tokens (provider="imap"); non-secret host
