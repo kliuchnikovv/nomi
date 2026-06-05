@@ -103,6 +103,15 @@ class TelegramService:
             },
         )
 
+    async def send_chat_action(self, chat_id: int, action: str = "typing") -> None:
+        """Send a chat action (e.g. 'typing') to indicate the bot is busy."""
+        try:
+            await self._call_api(
+                "sendChatAction", {"chat_id": chat_id, "action": action}
+            )
+        except Exception as e:  # noqa: BLE001 - non-critical UX hint
+            logger.warning("Failed to send chat action: %s", e)
+
     async def _call_api(self, method: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Make a request to Telegram Bot API."""
         url = f"{self.base_url}/{method}"
@@ -116,6 +125,34 @@ class TelegramService:
                     logger.error("Telegram API error: %s - %s", resp.status, error_desc)
                     raise Exception(f"Telegram API error: {resp.status} - {error_desc}")
                 return result.get("result", {})
+
+    # ─── File download (voice / media) ────────────────────
+
+    async def _get_file_path(self, file_id: str) -> str:
+        """Resolve a Telegram file_id to a downloadable file path via getFile."""
+        result = await self._call_api("getFile", {"file_id": file_id})
+        return result.get("file_path", "")
+
+    async def _download_file(self, file_path: str) -> bytes:
+        """Download a file from Telegram's file CDN."""
+        url = f"{TELEGRAM_API_BASE}/file/bot{self.bot_token}/{file_path}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Telegram file download failed: {resp.status}")
+                return await resp.read()
+
+    async def _transcribe_voice(self, file_id: str) -> str:
+        """Download a voice/audio file by file_id and transcribe it to text."""
+        from src.core.transcription import transcribe
+
+        file_path = await self._get_file_path(file_id)
+        if not file_path:
+            return ""
+        audio = await self._download_file(file_path)
+        return await transcribe(audio)
 
     # ─── Webhook Registration ─────────────────────────────
 
@@ -512,9 +549,21 @@ class TelegramService:
 
         genie_user_id = str(row["user_id"])
         text = message.get("text", "")
+        is_voice = False
         if not text:
-            photos = message.get("photo")
-            if photos:
+            from src.core.transcription import is_stt_enabled
+
+            voice = message.get("voice") or message.get("audio")
+            if voice and voice.get("file_id") and is_stt_enabled():
+                await self.send_chat_action(chat_id, "typing")
+                text = await self._transcribe_voice(voice["file_id"])
+                if not text:
+                    await self.send_message(
+                        chat_id, "Не удалось распознать голосовое сообщение."
+                    )
+                    return
+                is_voice = True
+            elif message.get("photo"):
                 text = "[Photo received]"
             else:
                 return
@@ -541,6 +590,7 @@ class TelegramService:
                     "telegram_chat_id": chat_id,
                     "role": "user",
                     "text": text,
+                    "input_type": "voice" if is_voice else "text",
                 }),
             )
         except Exception as e:

@@ -44,25 +44,20 @@ class GmailClient {
         console.log(`[GmailClient] onWake triggered for ${integrationId}`);
 
         try {
-            // 1. Determine search window: since last successful run, or fallback to 24 hours ago
-            // const rawTs = await AsyncStorage.getItem(lastRunKey(integrationId));
-            // const afterEpoch = rawTs
-            //     ? parseInt(rawTs, 10)
-            //     : Math.floor((Date.now() - 24 * 3600 * 1000) / 1000);
-            const afterEpoch = Math.floor(
-                (Date.now() - 24 * 3600 * 1000) / 1000,
-            );
-            const query = `is:unread after:${afterEpoch}`;
+            // 1. Pull the latest inbox emails regardless of read state or age.
+            // Gmail returns newest-first; downstream dedup (plugin chat existence
+            // and the proactiveEmitted flag) prevents re-processing the same email.
+            const query = 'in:inbox';
             console.log(`[GmailClient] Search query: ${query}`);
 
-            // 2. Fetch unread emails since last run
-            const emails = await this.searchEmails(integrationId, query, 10);
+            // 2. Fetch the latest emails
+            const emails = await this.searchEmails(integrationId, query, 5);
             console.log(
-                `[GmailClient] Fetched ${emails.length} unread emails from Gmail`,
+                `[GmailClient] Fetched ${emails.length} emails from Gmail`,
             );
 
             if (emails.length === 0) {
-                console.log('[GmailClient] No unread emails to process');
+                console.log('[GmailClient] No emails to process');
                 return [];
             }
 

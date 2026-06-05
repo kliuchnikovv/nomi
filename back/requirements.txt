@@ -61,3 +61,7 @@ mcp
 PyGithub
 openai>=1.0.0
 websockets>=12.0
+
+# Speech-to-text (open-source, local) for voice messages.
+# PyAV + ctranslate2 ship manylinux wheels with bundled ffmpeg — no apt packages needed.
+faster-whisper>=1.0.0
