@@ -255,7 +255,7 @@ class RedisSession:
         if self._go_ws is not None and self._go_ws.is_connected:
             try:
                 await self._go_ws.send_frame(frame)
-                logger.info(
+                logger.debug(
                     "[RedisSession] Frame queued via GoWS op=%s chat=%s id=%d",
                     frame.op, frame.chat_id, frame.id,
                 )
@@ -268,7 +268,7 @@ class RedisSession:
         data = frame.marshal()
         target_id = self.user_id or self.session_id
         channel = f"chat:user:{target_id}"
-        logger.info(
+        logger.debug(
             "[RedisSession] Frame sent via Redis op=%s chat=%s id=%d channel=%s",
             frame.op, frame.chat_id, frame.id, channel,
         )
@@ -1730,6 +1730,19 @@ class RedisSession:
         agent_input = self._build_agent_input(text)
 
         if attachments:
+            # Extract text from document attachments (e.g. PDFs) so the agent can
+            # read them directly, without depending on the sandbox.
+            pdf_texts = self._extract_document_texts(attachments)
+            if pdf_texts:
+                agent_input = (
+                    "[The user attached document(s). Extracted text content "
+                    f"below:\n{pdf_texts}\n]\n\n{agent_input}"
+                )
+                logger.info(
+                    "[RedisSession] Extracted %d chars of document text from attachments",
+                    len(pdf_texts),
+                )
+
             bridge_model = self._get_vision_bridge_model()
             if bridge_model:
                 descriptions = await self._vision_bridge_describe_images(attachments, bridge_model)
@@ -1897,6 +1910,49 @@ class RedisSession:
                 except Exception as e:
                     logger.error("[RedisSession] Image decode error: %s", e)
         return images
+
+    def _extract_document_texts(self, attachments: list) -> str:
+        """Extract plain text from document attachments (currently PDFs).
+
+        Returns the concatenated text, or "" if nothing could be extracted.
+        Truncates very large documents to keep the prompt within budget.
+        """
+        import base64 as _base64
+
+        MAX_CHARS_PER_DOC = 50_000
+
+        sections: list[str] = []
+        for att in attachments:
+            if not isinstance(att, dict):
+                continue
+            if att.get("file_type", "") != "application/pdf":
+                continue
+            content = att.get("content")
+            if not content:
+                continue
+            try:
+                from pypdf import PdfReader
+            except ImportError:
+                logger.warning(
+                    "[RedisSession] pypdf not installed; cannot read PDF attachment"
+                )
+                return ""
+            try:
+                import io
+
+                pdf_bytes = _base64.b64decode(content)
+                reader = PdfReader(io.BytesIO(pdf_bytes))
+                pages = [page.extract_text() or "" for page in reader.pages]
+                text = "\n".join(pages).strip()
+                if not text:
+                    continue
+                if len(text) > MAX_CHARS_PER_DOC:
+                    text = text[:MAX_CHARS_PER_DOC] + "\n…[truncated]"
+                name = att.get("file_name", "document.pdf")
+                sections.append(f"--- {name} ---\n{text}")
+            except Exception as e:
+                logger.error("[RedisSession] PDF extract error: %s", e)
+        return "\n\n".join(sections)
 
     async def _invoke_agent(
         self, agent: Any, agent_input: str, kwargs: dict[str, Any]

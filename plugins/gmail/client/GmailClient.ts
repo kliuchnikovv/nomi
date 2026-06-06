@@ -242,9 +242,12 @@ Keep your response brief and actionable.`;
             integrationId,
         );
 
-        // Get list of message IDs
+        // Get list of message IDs. List recent INBOX mail (read + unread); the
+        // repeated `labelIds=INBOX&labelIds=UNREAD` form is AND semantics in the
+        // Gmail API, so it returned nothing whenever the inbox had no unread mail.
+        // Unread state is still preserved per-message via parseGmailMessage().
         const listResponse = await fetch(
-            `${GMAIL_API_BASE}/messages?maxResults=${maxResults}&labelIds=INBOX&labelIds=UNREAD`,
+            `${GMAIL_API_BASE}/messages?maxResults=${maxResults}&labelIds=INBOX`,
             {
                 headers: { Authorization: `Bearer ${accessToken}` },
             },

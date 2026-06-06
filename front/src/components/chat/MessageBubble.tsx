@@ -90,6 +90,7 @@ function AttachmentImage({ attachment }: { attachment: Attachment }) {
                 style={{ width: '100%', height: '100%' }}
                 resizeMode="cover"
                 onLoadEnd={() => setLoading(false)}
+                onError={() => setLoading(false)}
             />
             {loading && (
                 <View

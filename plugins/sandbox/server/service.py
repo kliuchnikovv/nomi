@@ -2,6 +2,7 @@
 Sandbox service singleton for HTTP client to controller.
 """
 
+import asyncio
 import logging
 import os
 from typing import Any, Dict, Optional
@@ -48,29 +49,46 @@ class SandboxService:
             # Sandbox was deleted, remove from cache
             del self._sandbox_cache[cache_key]
 
-        # Create new sandbox
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/api/sandboxes"
-            payload = {"user_id": user_id, "project_id": project_id}
+        # Create new sandbox. Retry transient connection errors with backoff —
+        # the controller may briefly reset connections under load or while starting.
+        url = f"{self.base_url}/api/sandboxes"
+        payload = {"user_id": user_id, "project_id": project_id}
+        timeout = aiohttp.ClientTimeout(total=30)
+        max_attempts = 3
+        last_error: Optional[Exception] = None
 
+        for attempt in range(1, max_attempts + 1):
             try:
-                async with session.post(
-                    url, json=payload, headers=self._get_headers()
-                ) as response:
-                    if response.status == 201:
-                        data = await response.json()
-                        sandbox_id = data["id"]
-                        self._sandbox_cache[cache_key] = sandbox_id
-                        logger.info(f"Created sandbox {sandbox_id} for user {user_id}")
-                        return sandbox_id
-                    else:
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(
+                        url, json=payload, headers=self._get_headers()
+                    ) as response:
+                        if response.status == 201:
+                            data = await response.json()
+                            sandbox_id = data["id"]
+                            self._sandbox_cache[cache_key] = sandbox_id
+                            logger.info(
+                                f"Created sandbox {sandbox_id} for user {user_id}"
+                            )
+                            return sandbox_id
+                        # Non-2xx is a controller-side error, not transient — fail fast.
                         error_text = await response.text()
                         raise Exception(f"Failed to create sandbox: {error_text}")
-            except aiohttp.ClientError as e:
-                raise Exception(
-                    f"Sandbox is currently unavailable. Please try again later. "
-                    f"(Connection error: {type(e).__name__})"
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                last_error = e
+                logger.warning(
+                    "Sandbox create attempt %d/%d failed: %s",
+                    attempt,
+                    max_attempts,
+                    type(e).__name__,
                 )
+                if attempt < max_attempts:
+                    await asyncio.sleep(0.5 * attempt)
+
+        raise Exception(
+            f"Sandbox is currently unavailable. Please try again later. "
+            f"(Connection error: {type(last_error).__name__})"
+        )
 
     async def get_sandbox_status(self, sandbox_id: str) -> Optional[Dict[str, Any]]:
         """Get sandbox status."""

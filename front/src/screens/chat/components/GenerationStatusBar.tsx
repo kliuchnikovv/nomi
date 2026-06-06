@@ -65,7 +65,7 @@ export function GenerationStatusBar({ status, theme }: Props) {
             style={[
                 styles.container,
                 {
-                    backgroundColor: theme.background,
+                    backgroundColor: 'transparent',
                     opacity,
                     transform: [{ translateY }],
                     paddingVertical: status !== null ? 6 : 0,

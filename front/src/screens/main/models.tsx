@@ -16,7 +16,7 @@ export interface MainContextType {
     ) => void;
     renameChat: (chatId: string, newTitle: string) => Promise<void>;
     setChatIcon: (chatId: string, icon: string) => Promise<void>;
-    deleteChat: (chatId: string) => void;
+    deleteChat: (chatId: string) => Promise<void>;
     setActiveChatID: (id: string | null) => void;
     sidebarFilter: string;
     setSidebarFilter: (filter: string) => void;

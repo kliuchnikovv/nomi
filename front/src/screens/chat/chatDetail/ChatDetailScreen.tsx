@@ -428,7 +428,7 @@ export function ChatDetailScreen() {
                     images.push({ uri });
                 } else if (attachment.id) {
                     images.push({
-                        uri: `${attachment.id}`,
+                        uri: `${getApiUrl()}/attachments/${attachment.id}`,
                         headers: { Authorization: `Bearer ${token}` },
                     });
                 }
