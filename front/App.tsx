@@ -33,6 +33,11 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext.tsx';
 import { initApiUrl } from './src/config';
 import { initDatabase } from './src/services/database/database';
 import { defineAllBackgroundTasks } from './src/services/integrations/BackgroundTaskManager';
+import {
+    defineHeartbeatTask,
+    registerHeartbeatTask,
+    unregisterHeartbeatTask,
+} from './src/services/diagnostics/HeartbeatTask';
 import { registerClientPlugins } from './src/plugins/registerClientPlugins';
 import { updateLocationFromGPS } from './src/services/location/locationService';
 import { socket } from './src/socket';
@@ -123,6 +128,8 @@ function App() {
                 setInitStatus('Registering plugins...');
                 await registerClientPlugins();
                 defineAllBackgroundTasks();
+                // Standalone diagnostic heartbeat task — independent of integrations
+                defineHeartbeatTask();
                 console.log(
                     '[App] Background tasks defined after plugin registration',
                 );
@@ -239,12 +246,15 @@ function AppContent({
             startDeviceActionListener(token);
             void registerPendingActionsDrain();
             void drainPendingActions();
+            // Register the diagnostic heartbeat background task once authenticated
+            void registerHeartbeatTask();
         } else {
             console.log('[App] Token cleared. Closing global socket.');
             socket.close();
             socket.setToken(null);
             stopDeviceActionListener();
             void unregisterPendingActionsDrain();
+            void unregisterHeartbeatTask();
         }
     }, [token]);
 

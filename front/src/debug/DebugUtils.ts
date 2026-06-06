@@ -6,6 +6,12 @@
 import { manuallyTriggerBackgroundTask } from '../services/integrations/BackgroundTaskManager';
 import { getIntegrationMetadata } from '../services/integrations/registry';
 import { resetDatabase, getDatabaseSafe } from '../services/database/database';
+import {
+    triggerHeartbeatNow,
+    getHeartbeatLog,
+} from '../services/diagnostics/HeartbeatTask';
+import { apiClient } from '../apiClient';
+import { getApiUrl } from '../config';
 
 declare global {
     interface Window {
@@ -15,6 +21,9 @@ declare global {
             listIntegrations: () => void;
             resetDatabase: () => Promise<void>;
             getDatabaseVersion: () => Promise<number | null>;
+            triggerHeartbeat: () => Promise<void>;
+            heartbeatLog: () => Promise<unknown>;
+            heartbeatStatus: () => Promise<unknown>;
         };
     }
 }
@@ -96,6 +105,35 @@ export function initDebugUtils() {
                 const version = result?.version ?? 0;
                 console.log(`🧪 DEBUG: Current database version: ${version}`);
                 return version;
+            },
+
+            /**
+             * Fire a diagnostic heartbeat now (foreground test).
+             * Usage: await window.DEBUG.triggerHeartbeat()
+             */
+            triggerHeartbeat: async () => {
+                console.log('🧪 DEBUG: Triggering manual heartbeat...');
+                await triggerHeartbeatNow('manual');
+            },
+
+            /**
+             * Read the local heartbeat log (newest first).
+             * Usage: await window.DEBUG.heartbeatLog()
+             */
+            heartbeatLog: async () => {
+                const log = await getHeartbeatLog();
+                console.log('🧪 DEBUG: Heartbeat log:', log);
+                return log;
+            },
+
+            /**
+             * Fetch server-side heartbeat status (the source of truth).
+             * Usage: await window.DEBUG.heartbeatStatus()
+             */
+            heartbeatStatus: async () => {
+                const status = await apiClient.get(`${getApiUrl()}/heartbeat`);
+                console.log('🧪 DEBUG: Server heartbeat status:', status);
+                return status;
             },
         };
 

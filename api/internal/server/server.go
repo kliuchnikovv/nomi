@@ -79,6 +79,7 @@ func New(
 		entitiesHandler       = handlers.NewEntitiesHandler(ctr.Storage, logger)
 		notificationsHandler  = handlers.NewNotificationsHandler(ctr.Storage)
 		devicesHandler        = handlers.NewDevicesHandler(ctr.Storage)
+		heartbeatHandler      = handlers.NewHeartbeatHandler(ctr.Storage, logger)
 		workerHandler         = handlers.NewWorkerHandler(hubInstance, logger)
 
 		proactiveDispatcher = proactive.NewDispatcher(ctr.Storage, hubInstance.Redis(), logger)
@@ -196,6 +197,10 @@ func New(
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.POST("/api/devices", wrapWithAuth(devicesHandler.Register, authMiddleware))
 	r.DELETE("/api/devices/:token", wrapWithAuth(devicesHandler.Deregister, authMiddleware))
+
+	// Diagnostic heartbeat — used to confirm mobile background tasks actually run
+	r.POST("/api/heartbeat", wrapWithAuth(heartbeatHandler.Record, authMiddleware))
+	r.GET("/api/heartbeat", wrapWithAuth(heartbeatHandler.List, authMiddleware))
 
 	// Proactive event ingest + state transitions (reactive-agent pipeline)
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route

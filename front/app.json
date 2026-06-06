@@ -23,6 +23,9 @@
                     "fetch",
                     "processing",
                     "remote-notification"
+                ],
+                "BGTaskSchedulerPermittedIdentifiers": [
+                    "diagnostic-heartbeat"
                 ]
             }
         }

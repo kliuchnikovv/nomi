@@ -82,6 +82,7 @@
 		<string>integration-background-ios_reminders</string>
 		<string>integration-background-ios_contacts</string>
 		<string>background-email-sync</string>
+		<string>diagnostic-heartbeat</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
