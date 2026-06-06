@@ -42,6 +42,12 @@ func (d *Dispatcher) Dispatch(ctx context.Context, ev *storage.ProactiveEvent) e
 		return d.reject(ctx, ev, "proactive_disabled")
 	}
 
+	// 2a. Scheduled daily brief fires at a user-chosen local time, so it bypasses
+	// both the rules engine and quiet-hours deferral — surface it directly.
+	if ev.EventType == "daily_brief" {
+		return d.surface(ctx, ev, user)
+	}
+
 	// 3. Quiet-hours check — only defer events that have no explicit fire_at.
 	if ev.FireAt == nil && InQuietHours(time.Now(), user.QuietHoursStart, user.QuietHoursEnd) {
 		return d.defer_(ctx, ev, user)
@@ -60,6 +66,10 @@ func (d *Dispatcher) Dispatch(ctx context.Context, ev *storage.ProactiveEvent) e
 	case "email":
 		// TODO(V2): load priority senders from DB per user.
 		result = EvaluateEmail(payloadMap, nil)
+	case "reminders":
+		result = EvaluateReminder(payloadMap)
+	case "health":
+		result = EvaluateHealth(payloadMap)
 	default:
 		result = RuleResult{DecisionGray, fmt.Sprintf("unknown source %q", ev.Source)}
 	}

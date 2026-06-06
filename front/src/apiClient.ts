@@ -450,8 +450,12 @@ export const ragApi = {
 
 export const eventsApi = {
     async ingest(payload: {
-        source: 'calendar' | 'email';
-        event_type: 'calendar_upcoming' | 'email_new';
+        source: 'calendar' | 'email' | 'reminders' | 'health';
+        event_type:
+            | 'calendar_upcoming'
+            | 'email_new'
+            | 'reminder_due'
+            | 'health_anomaly';
         payload: Record<string, unknown>;
         fire_at?: string;
     }): Promise<{ id: string; state: string }> {

@@ -98,7 +98,12 @@ export type ContentPart = TextPart | ToolCallPart | ReasoningPart;
 export type ProactiveMeta = {
     source?: 'proactive';
     event_id?: string;
-    event_type?: 'calendar_upcoming' | 'email_new';
+    event_type?:
+        | 'calendar_upcoming'
+        | 'email_new'
+        | 'reminder_due'
+        | 'daily_brief'
+        | 'health_anomaly';
 };
 
 export type Message = {

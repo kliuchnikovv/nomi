@@ -55,6 +55,9 @@ export default function SettingsHomeScreen() {
     const [proactiveEnabled, setProactiveEnabled] = useState(
         user?.proactive_enabled ?? false,
     );
+    const [dailyBriefTime, setDailyBriefTime] = useState<string | null>(
+        user?.daily_brief_time ?? null,
+    );
 
     const handleSingleChatModeToggle = useCallback(
         async (value: boolean) => {
@@ -96,6 +99,32 @@ export default function SettingsHomeScreen() {
         [user, updateUser],
     );
 
+    // Cycle the daily-brief time through a few presets (Off → 08:00 → 12:00 →
+    // 18:00 → Off). Timezone is captured automatically from the device so the
+    // server fires the brief at the user's local time.
+    const handleDailyBriefCycle = useCallback(async () => {
+        const cycle: (string | null)[] = [null, '08:00', '12:00', '18:00'];
+        const idx = cycle.findIndex(v => v === dailyBriefTime);
+        const next = cycle[(idx + 1) % cycle.length];
+        const timezone =
+            Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        try {
+            await authApi.updateMe({
+                daily_brief_time: next ?? '',
+                timezone,
+            });
+            setDailyBriefTime(next);
+            if (user)
+                updateUser({
+                    ...user,
+                    daily_brief_time: next,
+                    timezone,
+                });
+        } catch (e) {
+            console.error('Failed to update daily_brief_time', e);
+        }
+    }, [dailyBriefTime, user, updateUser]);
+
     // Refresh preview values each time this screen comes into focus
     useFocusEffect(
         useCallback(() => {
@@ -104,6 +133,7 @@ export default function SettingsHomeScreen() {
             setSingleChatMode(user?.single_chat_mode ?? false);
             setAgnoSessions(user?.agent_storage_mode === 'agno');
             setProactiveEnabled(user?.proactive_enabled ?? false);
+            setDailyBriefTime(user?.daily_brief_time ?? null);
 
             AsyncStorage.getItem(EMAIL_ANALYSIS_MODE_KEY).then(mode => {
                 if (mode === 'server' || mode === 'device')
@@ -218,6 +248,12 @@ export default function SettingsHomeScreen() {
                         subtitle="Let Nomi surface calendar and email updates"
                         value={proactiveEnabled}
                         onToggle={handleProactiveToggle}
+                        isFirst={false}
+                    />
+                    <SettingsRow
+                        label="Daily Brief"
+                        value={dailyBriefTime ?? 'Off'}
+                        onPress={handleDailyBriefCycle}
                         isFirst={false}
                         isLast
                     />

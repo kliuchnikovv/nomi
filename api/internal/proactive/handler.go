@@ -14,13 +14,19 @@ import (
 
 // validSources and validEventTypes are the only accepted enum values.
 var validSources = map[string]bool{
-	"calendar": true,
-	"email":    true,
+	"calendar":  true,
+	"email":     true,
+	"reminders": true,
+	"health":    true,
+	"system":    true, // server-generated (e.g. scheduled daily brief)
 }
 
 var validEventTypes = map[string]bool{
 	"calendar_upcoming": true,
 	"email_new":         true,
+	"reminder_due":      true,
+	"health_anomaly":    true,
+	"daily_brief":       true,
 }
 
 // Handler exposes the proactive event ingest HTTP endpoint.

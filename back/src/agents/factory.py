@@ -701,6 +701,57 @@ def build_proactive_prompt(event_type: str, payload: dict) -> str:
             f"Keep it tight."
         )
 
+    if event_type == "reminder_due":
+        title = payload.get("title", "Untitled reminder")
+        due_date = payload.get("due_date", "soon")
+        notes = payload.get("notes") or ""
+        list_name = payload.get("list") or ""
+        return (
+            f"A reminder is coming due:\n"
+            f"- Title: {title}\n"
+            f"- Due: {due_date}\n"
+            f"- List: {list_name or 'none'}\n"
+            f"- Notes: {notes or 'none'}\n"
+            f"\n"
+            f"Nudge the user:\n"
+            f"1. One-line restatement of the task and when it's due.\n"
+            f"2. Anything from memory or past conversations that helps complete it.\n"
+            f"3. If useful, offer a concrete next step or to break it down.\n"
+            f"Keep it short and actionable."
+        )
+
+    if event_type == "daily_brief":
+        local_date = payload.get("local_date", "today")
+        return (
+            f"It's the start of the user's day ({local_date}). "
+            f"Prepare a concise morning brief using your available tools and memory:\n"
+            f"1. Today's calendar — meetings/events and any prep needed.\n"
+            f"2. Important unread emails worth their attention (skip noise).\n"
+            f"3. Tasks or reminders due today.\n"
+            f"4. Anything relevant from past conversations or notes.\n"
+            f"Lead with what matters most. Use short bullet points, not an essay. "
+            f"If a section has nothing noteworthy, omit it rather than padding."
+        )
+
+    if event_type == "health_anomaly":
+        metric = payload.get("metric", "a health metric")
+        value = payload.get("value", "unknown")
+        threshold = payload.get("threshold", "expected range")
+        date = payload.get("date", "recently")
+        return (
+            f"A health signal looks off:\n"
+            f"- Metric: {metric}\n"
+            f"- Value: {value}\n"
+            f"- Expected: {threshold}\n"
+            f"- When: {date}\n"
+            f"\n"
+            f"Gently check in with the user:\n"
+            f"1. Note the observation without alarm or medical claims.\n"
+            f"2. Offer one practical, non-judgmental suggestion if appropriate.\n"
+            f"3. Invite them to share context — don't diagnose.\n"
+            f"Be warm and brief. You are not a doctor."
+        )
+
     # Fallback for unknown event types
     return (
         f"A proactive event of type {event_type} occurred. "

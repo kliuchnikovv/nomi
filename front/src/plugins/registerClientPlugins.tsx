@@ -342,9 +342,15 @@ export function registerClientPlugins(): Promise<void> {
             const { iosHealthPlugin } = await import(
                 '@genie/plugin-ios_health/client'
             );
+            const iosHealthBackgroundModule = await import(
+                '@genie/plugin-ios_health/background'
+            );
+            const { backgroundTask: iosHealthBackgroundTask } =
+                iosHealthBackgroundModule;
 
             registerClientPlugin('ios_health', {
                 ...iosHealthPlugin,
+                backgroundTask: iosHealthBackgroundTask,
             });
             console.log('[registerClientPlugins] iOS Health plugin registered');
         } catch (e) {

@@ -5,6 +5,32 @@ import (
 	"time"
 )
 
+// ── Reminders ───────────────────────────────────────────────────────────────
+
+func TestEvaluateReminder_Accept(t *testing.T) {
+	res := EvaluateReminder(map[string]any{
+		"title":    "Submit tax form",
+		"due_date": "2026-06-07T09:00:00Z",
+	})
+	if res.Decision != DecisionAccept {
+		t.Fatalf("expected accept, got %s (%s)", res.Decision, res.Reason)
+	}
+}
+
+func TestEvaluateReminder_Reject_NoTitle(t *testing.T) {
+	res := EvaluateReminder(map[string]any{"title": "  "})
+	if res.Decision != DecisionReject {
+		t.Fatalf("expected reject, got %s (%s)", res.Decision, res.Reason)
+	}
+}
+
+func TestEvaluateReminder_Gray_NoDueDate(t *testing.T) {
+	res := EvaluateReminder(map[string]any{"title": "Buy milk"})
+	if res.Decision != DecisionGray {
+		t.Fatalf("expected gray, got %s (%s)", res.Decision, res.Reason)
+	}
+}
+
 // ── Calendar ────────────────────────────────────────────────────────────────
 
 func TestEvaluateCalendar_Accept(t *testing.T) {

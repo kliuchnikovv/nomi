@@ -101,6 +101,44 @@ func EvaluateEmail(payload map[string]any, prioritySenders []string) RuleResult 
 	return RuleResult{DecisionGray, "sender not classified"}
 }
 
+// EvaluateReminder applies reminder-specific rules to the decoded payload.
+//
+// Reminders are user-authored, so relevance is inherently high.
+//
+// Rules:
+//   - payload must have non-empty "title" string → otherwise reject
+//   - has a non-empty "due_date" → accept (a concrete deadline is worth surfacing)
+//   - otherwise → gray (let the judge decide)
+func EvaluateReminder(payload map[string]any) RuleResult {
+	title, _ := payload["title"].(string)
+	if strings.TrimSpace(title) == "" {
+		return RuleResult{DecisionReject, "missing or empty title"}
+	}
+
+	dueDate, _ := payload["due_date"].(string)
+	if strings.TrimSpace(dueDate) != "" {
+		return RuleResult{DecisionAccept, "reminder has a due date"}
+	}
+
+	return RuleResult{DecisionGray, "reminder without due date"}
+}
+
+// EvaluateHealth applies health-anomaly rules to the decoded payload.
+//
+// Health anomalies are subjective (a "low" sleep figure depends on the person),
+// so we keep deterministic rules minimal and defer judgement to the LLM judge.
+//
+// Rules:
+//   - payload must have a non-empty "metric" string → otherwise reject
+//   - otherwise → gray (let the judge decide whether it's worth surfacing)
+func EvaluateHealth(payload map[string]any) RuleResult {
+	metric, _ := payload["metric"].(string)
+	if strings.TrimSpace(metric) == "" {
+		return RuleResult{DecisionReject, "missing or empty metric"}
+	}
+	return RuleResult{DecisionGray, "health anomaly — defer to judge"}
+}
+
 // InQuietHours reports whether now falls inside the configured quiet-hours window.
 //
 // start and end are wall-clock strings in "HH:MM" or "HH:MM:SS" format (as stored

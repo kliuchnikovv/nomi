@@ -25,6 +25,12 @@ function sourceLabel(eventType?: ProactiveMeta['event_type']): string {
             return '📅 Calendar';
         case 'email_new':
             return '✉️ Email';
+        case 'reminder_due':
+            return '✅ Reminder';
+        case 'daily_brief':
+            return '☀️ Daily brief';
+        case 'health_anomaly':
+            return '❤️ Health';
         default:
             return '🔔 Update';
     }

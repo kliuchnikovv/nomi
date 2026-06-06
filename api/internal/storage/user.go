@@ -24,6 +24,10 @@ type User struct {
 	QuietHoursStart  *string        `json:"quiet_hours_start,omitempty" gorm:"type:time;default:null"`
 	QuietHoursEnd    *string        `json:"quiet_hours_end,omitempty" gorm:"type:time;default:null"`
 	ProactiveEnabled bool           `json:"proactive_enabled" gorm:"default:false"`
+	// Scheduled daily-brief fields (proactive agent run at a user-chosen local time).
+	Timezone           *string    `json:"timezone,omitempty" gorm:"type:text;default:null"`            // IANA, e.g. "Europe/Moscow"
+	DailyBriefTime     *string    `json:"daily_brief_time,omitempty" gorm:"type:text;default:null"`    // "HH:MM" local time; null = disabled
+	DailyBriefLastSent *time.Time `json:"daily_brief_last_sent,omitempty" gorm:"default:null"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
 	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
@@ -107,4 +111,42 @@ func (s *Storage) UpdateUser(ctx context.Context, user *User) error {
 		return result.Error
 	}
 	return nil
+}
+
+// ListDailyBriefCandidates returns users who have opted into proactive updates
+// and configured a daily-brief time. The scheduler evaluates each candidate's
+// local clock to decide whether to fire today's brief.
+func (s *Storage) ListDailyBriefCandidates(ctx context.Context) ([]User, error) {
+	var users []User
+	result := s.DB.WithContext(ctx).
+		Where("proactive_enabled = ? AND daily_brief_time IS NOT NULL", true).
+		Find(&users)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return users, nil
+}
+
+// MarkDailyBriefSent records the timestamp at which a user's daily brief was
+// last dispatched, used for once-per-day idempotency.
+func (s *Storage) MarkDailyBriefSent(ctx context.Context, userID uuid.UUID, t time.Time) error {
+	return s.DB.WithContext(ctx).
+		Model(&User{}).
+		Where("id = ?", userID).
+		Update("daily_brief_last_sent", t).Error
+}
+
+// SetDailyBrief updates a user's timezone and daily-brief time. A nil briefTime
+// disables the daily brief (column set to NULL).
+func (s *Storage) SetDailyBrief(ctx context.Context, userID uuid.UUID, timezone, briefTime *string) error {
+	updates := map[string]any{
+		"daily_brief_time": briefTime, // nil → NULL (disable)
+	}
+	if timezone != nil {
+		updates["timezone"] = *timezone
+	}
+	return s.DB.WithContext(ctx).
+		Model(&User{}).
+		Where("id = ?", userID).
+		Updates(updates).Error
 }

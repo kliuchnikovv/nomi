@@ -8,6 +8,10 @@ export type User = {
     agent_storage_mode?: 'payload' | 'agno';
     updates_chat_id?: string | null;
     proactive_enabled?: boolean;
+    /** IANA timezone, e.g. "Europe/Moscow". */
+    timezone?: string | null;
+    /** Local "HH:MM" for the scheduled daily brief; null/absent = disabled. */
+    daily_brief_time?: string | null;
 };
 
 export interface AuthContextType {

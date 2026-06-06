@@ -162,6 +162,18 @@ type UserDevice struct {
 	CreatedAt   time.Time `gorm:"not null"`
 }
 
+// Heartbeat is a diagnostic record written when a background task wakes up.
+// Used to confirm that mobile background execution actually runs.
+type Heartbeat struct {
+	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
+	UserID      uuid.UUID      `gorm:"type:uuid;not null;index:idx_heartbeats_user_received,priority:1"`
+	Source      string         `gorm:"type:varchar(40);not null"` // e.g. 'ios-bg', 'ios-manual'
+	Trigger     string         `gorm:"type:varchar(40);not null"` // 'background-fetch' | 'manual'
+	TriggeredAt *time.Time     `gorm:"default:null"`              // client-reported wake time
+	ReceivedAt  time.Time      `gorm:"not null;index:idx_heartbeats_user_received,priority:2,sort:desc"`
+	Meta        datatypes.JSON `gorm:"type:jsonb"`
+}
+
 // CreateAttachment creates a new attachment record
 func (s *Storage) CreateAttachment(ctx context.Context, attachment *Attachment) error {
 	return s.DB.WithContext(ctx).Create(attachment).Error

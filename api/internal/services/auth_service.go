@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"time"
 
@@ -182,6 +183,10 @@ type UpdateUserRequest struct {
 	SingleChatMode   *bool   `json:"single_chat_mode"`
 	AgentStorageMode *string `json:"agent_storage_mode"`
 	ProactiveEnabled *bool   `json:"proactive_enabled"`
+	// Timezone is an IANA name (e.g. "Europe/Moscow"); nil = leave unchanged.
+	Timezone *string `json:"timezone"`
+	// DailyBriefTime is local "HH:MM"; "" disables the brief; nil = leave unchanged.
+	DailyBriefTime *string `json:"daily_brief_time"`
 }
 
 // UpdateUser updates user data
@@ -205,7 +210,43 @@ func (s *AuthService) UpdateUser(ctx context.Context, user *storage.User, req *U
 		return nil, err
 	}
 
+	// Daily-brief / timezone need explicit handling so an empty string can clear
+	// the column to NULL (struct-based Updates skips nil pointers).
+	if req.DailyBriefTime != nil || req.Timezone != nil {
+		var briefTime *string
+		if req.DailyBriefTime != nil {
+			if trimmed := strings.TrimSpace(*req.DailyBriefTime); trimmed != "" {
+				if _, _, ok := parseHHMM(trimmed); !ok {
+					return nil, ErrInvalidRequest
+				}
+				briefTime = &trimmed
+			}
+			// empty string → briefTime stays nil → column set to NULL (disabled)
+		} else {
+			// Timezone-only update: preserve the current brief time.
+			briefTime = user.DailyBriefTime
+		}
+		if err := s.storage.SetDailyBrief(ctx, user.ID, req.Timezone, briefTime); err != nil {
+			return nil, err
+		}
+		user.DailyBriefTime = briefTime
+		if req.Timezone != nil {
+			user.Timezone = req.Timezone
+		}
+	}
+
 	return user, nil
+}
+
+// parseHHMM validates a "HH:MM" (or "HH:MM:SS") local-time string.
+func parseHHMM(s string) (hour, minute int, ok bool) {
+	if _, err := fmt.Sscanf(s, "%d:%d", &hour, &minute); err != nil {
+		return 0, 0, false
+	}
+	if hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return 0, 0, false
+	}
+	return hour, minute, true
 }
 
 // generateTokens generates access and refresh tokens for a user

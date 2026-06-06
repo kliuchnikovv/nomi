@@ -303,7 +303,9 @@ methods:
       required: [record_type, record_id]
 
 background_tasks:
-  enabled: false
+  enabled: true
+  system_events:
+    - app_lifecycle
 
 storage:
   type: client_only
