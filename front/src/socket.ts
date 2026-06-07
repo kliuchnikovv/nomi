@@ -579,6 +579,34 @@ export class ChatSocket {
                     return;
                 }
 
+                // Handshake rejected by the server with a 4xx (e.g. 403 "chat not
+                // found or access denied", 404). RN surfaces this as code 1006 with
+                // the HTTP status in `reason`. This is fatal for the current target —
+                // a stale/deleted chat_id will never succeed, and retrying just hammers
+                // the server in a hot loop. Stop auto-reconnecting and surface the error
+                // so the app can fall back to a valid chat.
+                const reason = String(e?.reason ?? '');
+                if (code === 1006 && /\b(403|404)\b/.test(reason)) {
+                    console.log(
+                        '[Socket] Handshake rejected by server, not reconnecting:',
+                        reason,
+                    );
+                    this.shouldReconnect = false;
+                    if (this.chatId) {
+                        emitChatError(this.chatId, {
+                            kind: 'forbidden',
+                            code,
+                            reason,
+                        });
+                    }
+                    this.handlers.onError?.({
+                        kind: 'forbidden',
+                        code,
+                        reason,
+                    });
+                    return;
+                }
+
                 // Code 0 usually means connection closed before establishment or network error
                 // Don't reconnect immediately for code 0 - it might be a server rejection
                 if (code === 0) {

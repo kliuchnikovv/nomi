@@ -14,7 +14,6 @@
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		796AD9192F4CFF14001F9C89 /* IOSMailManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */; };
 		796AD91A2F4CFF14001F9C89 /* IOSShortcutsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */; };
-		7AA0B1022F4D00110011AA11 /* NomiAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */; };
 		79797DFF2F4393E90022FF81 /* DateExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797DFD2F4393E90022FF81 /* DateExtensions.swift */; };
 		79797E062F4396200022FF81 /* IOSCalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797E012F4396200022FF81 /* IOSCalendarManager.swift */; };
 		79797E072F4396200022FF81 /* IOSRemindersManager.clean.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797E042F4396200022FF81 /* IOSRemindersManager.clean.swift */; };
@@ -22,6 +21,7 @@
 		79797ECC2F4396200022FF81 /* ProjectClassifierModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797EDD2F4396200022FF81 /* ProjectClassifierModule.swift */; };
 		79A9FF432F438DE900ED05DC /* IOSHealthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */; };
 		79A9FF462F438DE900ED05DC /* IOSNativeModules.m in Sources */ = {isa = PBXBuildFile; fileRef = 79A9FF412F438DE900ED05DC /* IOSNativeModules.m */; };
+		7AA0B1022F4D00110011AA11 /* NomiAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
@@ -47,7 +47,6 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = genie/AppDelegate.swift; sourceTree = "<group>"; };
 		796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSMailManager.swift; path = genie/IOSMailManager.swift; sourceTree = "<group>"; };
 		796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSShortcutsManager.swift; path = genie/IOSShortcutsManager.swift; sourceTree = "<group>"; };
-		7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NomiAppIntents.swift; path = genie/NomiAppIntents.swift; sourceTree = "<group>"; };
 		79797DFD2F4393E90022FF81 /* DateExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DateExtensions.swift; path = genie/DateExtensions.swift; sourceTree = "<group>"; };
 		79797E012F4396200022FF81 /* IOSCalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSCalendarManager.swift; path = genie/IOSCalendarManager.swift; sourceTree = "<group>"; };
 		79797E022F4396200022FF81 /* IOSContactsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSContactsManager.swift; path = genie/IOSContactsManager.swift; sourceTree = "<group>"; };
@@ -57,6 +56,7 @@
 		79A9FF402F438DE900ED05DC /* IOSHealthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSHealthManager.swift; path = genie/IOSHealthManager.swift; sourceTree = "<group>"; };
 		79A9FF412F438DE900ED05DC /* IOSNativeModules.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = IOSNativeModules.m; path = genie/IOSNativeModules.m; sourceTree = "<group>"; };
 		79A9FF482F438E3200ED05DC /* genie.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = genie.entitlements; path = genie/genie.entitlements; sourceTree = "<group>"; };
+		7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NomiAppIntents.swift; path = genie/NomiAppIntents.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = genie/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		D3039251C689D2B66356D26C /* Pods-genie.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-genie.release.xcconfig"; path = "Target Support Files/Pods-genie/Pods-genie.release.xcconfig"; sourceTree = "<group>"; };
 		ECD1B15595A118097F48B914 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-genie/ExpoModulesProvider.swift"; sourceTree = "<group>"; };

@@ -129,12 +129,13 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Guarantee the user has an Updates chat so the client always has a valid
-	// inbox target (the bell entry point). Idempotent; non-fatal on failure.
-	if user.UpdatesChatID == nil {
-		if chatID, err := h.service.EnsureUpdatesChat(r.Context(), user.ID); err == nil {
-			user.UpdatesChatID = &chatID
-		}
+	// Guarantee the user has a *valid* Updates chat so the client always has a
+	// working inbox target (the bell entry point). Called unconditionally so it
+	// also self-heals a dangling updates_chat_id (chat deleted out from under the
+	// pointer), which otherwise causes a WS 403 reconnect loop on the client.
+	// Idempotent; non-fatal on failure.
+	if chatID, err := h.service.EnsureUpdatesChat(r.Context(), user.ID); err == nil {
+		user.UpdatesChatID = &chatID
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -10,7 +10,8 @@
   "scripts": {
     "front": "yarn workspace genie",
     "gmail": "yarn workspace @genie/plugin-gmail",
-    "calendar": "yarn workspace @genie/plugin-calendar"
+    "calendar": "yarn workspace @genie/plugin-calendar",
+    "postinstall": "node scripts/fix-whisper-exports.js"
   },
   "engines": {
     "node": ">=20"

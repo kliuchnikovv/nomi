@@ -94,6 +94,8 @@ PODS:
     - ExpoModulesCore
   - ExpoKeepAwake (15.0.8):
     - ExpoModulesCore
+  - ExpoLinearGradient (15.0.8):
+    - ExpoModulesCore
   - ExpoLocation (19.0.8):
     - ExpoModulesCore
   - ExpoModulesCore (3.0.29):
@@ -2730,6 +2732,8 @@ PODS:
     - React-perflogger (= 0.81.1)
     - React-utils (= 0.81.1)
     - SocketRocket
+  - RNAudioPcmStream (1.1.4):
+    - React
   - RNCAsyncStorage (2.2.0):
     - boost
     - DoubleConversion
@@ -3177,6 +3181,36 @@ PODS:
   - "sqlite3/fts5 (3.45.3+1)":
     - sqlite3/common
   - UMAppLoader (5.0.1)
+  - whisper-rn (0.6.0):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React
+    - React-callinvoker
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -3195,13 +3229,14 @@ DEPENDENCIES:
   - ExpoFileSystem (from `../../node_modules/expo-file-system/ios`)
   - ExpoFont (from `../../node_modules/expo-font/ios`)
   - ExpoKeepAwake (from `../../node_modules/expo-keep-awake/ios`)
+  - ExpoLinearGradient (from `../../node_modules/expo-linear-gradient/ios`)
   - ExpoLocation (from `../../node_modules/expo-location/ios`)
   - ExpoModulesCore (from `../../node_modules/expo-modules-core`)
   - ExpoNetwork (from `../../node_modules/expo-network/ios`)
   - ExpoSecureStore (from `../../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../../node_modules/expo-sharing/ios`)
   - ExpoSpeech (from `../../node_modules/expo-speech/ios`)
-  - ExpoSQLite (from `../../node_modules/expo-sqlite/ios`)
+  - ExpoSQLite (from `../node_modules/expo-sqlite/ios`)
   - EXTaskManager (from `../../node_modules/expo-task-manager/ios`)
   - fast_float (from `../../node_modules/react-native/third-party-podspecs/fast_float.podspec`)
   - FBLazyVector (from `../../node_modules/react-native/Libraries/FBLazyVector`)
@@ -3281,6 +3316,7 @@ DEPENDENCIES:
   - ReactAppDependencyProvider (from `build/generated/ios`)
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../../node_modules/react-native/ReactCommon`)
+  - "RNAudioPcmStream (from `../../node_modules/@fugood/react-native-audio-pcm-stream`)"
   - "RNCAsyncStorage (from `../../node_modules/@react-native-async-storage/async-storage`)"
   - "RNCClipboard (from `../../node_modules/@react-native-clipboard/clipboard`)"
   - RNGestureHandler (from `../../node_modules/react-native-gesture-handler`)
@@ -3293,6 +3329,7 @@ DEPENDENCIES:
   - RNVectorIcons (from `../../node_modules/react-native-vector-icons`)
   - SocketRocket (~> 0.7.1)
   - UMAppLoader (from `../../node_modules/unimodules-app-loader/ios`)
+  - whisper-rn (from `../../node_modules/whisper.rn`)
   - Yoga (from `../../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -3338,6 +3375,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-font/ios"
   ExpoKeepAwake:
     :path: "../../node_modules/expo-keep-awake/ios"
+  ExpoLinearGradient:
+    :path: "../../node_modules/expo-linear-gradient/ios"
   ExpoLocation:
     :path: "../../node_modules/expo-location/ios"
   ExpoModulesCore:
@@ -3351,7 +3390,7 @@ EXTERNAL SOURCES:
   ExpoSpeech:
     :path: "../../node_modules/expo-speech/ios"
   ExpoSQLite:
-    :path: "../../node_modules/expo-sqlite/ios"
+    :path: "../node_modules/expo-sqlite/ios"
   EXTaskManager:
     :path: "../../node_modules/expo-task-manager/ios"
   fast_float:
@@ -3509,6 +3548,8 @@ EXTERNAL SOURCES:
     :path: build/generated/ios
   ReactCommon:
     :path: "../../node_modules/react-native/ReactCommon"
+  RNAudioPcmStream:
+    :path: "../../node_modules/@fugood/react-native-audio-pcm-stream"
   RNCAsyncStorage:
     :path: "../../node_modules/@react-native-async-storage/async-storage"
   RNCClipboard:
@@ -3531,6 +3572,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/react-native-vector-icons"
   UMAppLoader:
     :path: "../../node_modules/unimodules-app-loader/ios"
+  whisper-rn:
+    :path: "../../node_modules/whisper.rn"
   Yoga:
     :path: "../../node_modules/react-native/ReactCommon/yoga"
 
@@ -3552,6 +3595,7 @@ SPEC CHECKSUMS:
   ExpoFileSystem: 858a44267a3e6e9057e0888ad7c7cfbf55d52063
   ExpoFont: f543ce20a228dd702813668b1a07b46f51878d47
   ExpoKeepAwake: 55f75eca6499bb9e4231ebad6f3e9cb8f99c0296
+  ExpoLinearGradient: 809102bdb979f590083af49f7fa4805cd931bd58
   ExpoLocation: d5b61cb4970fa982e39ca94246a206a0c3b812ca
   ExpoModulesCore: d86dab8a6c8f1184f9b0b0503ace93919882aa15
   ExpoNetwork: ee1fb67b0de59ab7f36794caf8242955dd8ae046
@@ -3642,6 +3686,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 3eb9096cb139eb433965693bbe541d96eb3d3ec9
   ReactCodegen: c881aa301b4194d7d08b2a1afcb0b9e108917629
   ReactCommon: ce5d4226dfaf9d5dacbef57b4528819e39d3a120
+  RNAudioPcmStream: 7f54645cfad8a18daebdc45111ebc7be99b4c2a3
   RNCAsyncStorage: 29f0230e1a25f36c20b05f65e2eb8958d6526e82
   RNCClipboard: 4b58c780f63676367640f23c8e114e9bd0cf86ac
   RNGestureHandler: e37bdb684df1ac17c7e1d8f71a3311b2793c186b
@@ -3655,6 +3700,7 @@ SPEC CHECKSUMS:
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   sqlite3: 02d1f07eaaa01f80a1c16b4b31dfcbb3345ee01a
   UMAppLoader: 7e7e0eaa7854ffd652c00a68c443afb28c3bedba
+  whisper-rn: dfbc22e7e07bd13687d7f85e051b9b8cd3d6bd80
   Yoga: 11c9686a21e2cd82a094a723649d9f4507200fb0
 
 PODFILE CHECKSUM: 90c3cc90799272040a3b5145d1abb9c48faaf050

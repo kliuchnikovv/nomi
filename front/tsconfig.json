@@ -5,6 +5,8 @@
     "paths": {
       "react-native-gifted-chat": ["src/types/gifted-chat-shim.d.ts"],
       "react-native-gifted-chat/*": ["src/types/gifted-chat-shim.d.ts"],
+      "whisper.rn": ["../node_modules/whisper.rn/src/index.ts"],
+      "whisper.rn/*": ["../node_modules/whisper.rn/src/*"],
       "@genie/front/*": ["src/*"],
       "@genie/plugin-gmail": ["../plugins/gmail"],
       "@genie/plugin-gmail/*": ["../plugins/gmail/*"],

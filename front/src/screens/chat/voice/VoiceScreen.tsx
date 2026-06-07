@@ -6,6 +6,7 @@ import {
     TouchableWithoutFeedback,
     StyleSheet,
     Pressable,
+    ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -25,8 +26,21 @@ export function VoiceScreen() {
     const route = useRoute<VoiceScreenRoute>();
     const { chatId } = route.params;
 
-    const { state, liveTranscript, errorKind, interrupt, stop, openSettings } =
-        useVoiceConversation({ chatId });
+    const {
+        state,
+        liveTranscript,
+        errorKind,
+        detectedLanguage,
+        modelProgress,
+        interrupt,
+        stop,
+        openSettings,
+    } = useVoiceConversation({ chatId });
+
+    const modelPercent =
+        modelProgress?.progress != null
+            ? Math.round(modelProgress.progress * 100)
+            : null;
 
     const closingRef = useRef(false);
     const handleClose = useCallback(() => {
@@ -82,6 +96,42 @@ export function VoiceScreen() {
                 <TouchableWithoutFeedback onPress={handleScreenTap}>
                     <View style={styles.orbArea}>
                         <VoiceOrb state={state} />
+                        {state === 'loading' && (
+                            <View style={styles.errorArea}>
+                                <ActivityIndicator color={theme.accent} />
+                                <Text
+                                    style={[
+                                        styles.errorText,
+                                        { color: theme.textSecondary },
+                                    ]}
+                                >
+                                    {modelPercent != null
+                                        ? `Preparing voice model… ${modelPercent}%`
+                                        : 'Preparing voice model…'}
+                                </Text>
+                            </View>
+                        )}
+                        {detectedLanguage != null &&
+                            (state === 'listening' || state === 'speaking') && (
+                                <View
+                                    style={[
+                                        styles.langBadge,
+                                        {
+                                            backgroundColor: `${theme.accent}20`,
+                                            borderColor: `${theme.accent}40`,
+                                        },
+                                    ]}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.langBadgeText,
+                                            { color: theme.textSecondary },
+                                        ]}
+                                    >
+                                        {detectedLanguage.toUpperCase()}
+                                    </Text>
+                                </View>
+                            )}
                         {state === 'listening' && liveTranscript !== '' && (
                             <View
                                 style={[
@@ -197,6 +247,17 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
     errorArea: { alignItems: 'center', gap: 12 },
+    langBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    langBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+    },
     errorText: { fontSize: 14, textAlign: 'center' },
     settingsBtn: {
         paddingHorizontal: 24,
