@@ -14,6 +14,7 @@
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		796AD9192F4CFF14001F9C89 /* IOSMailManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */; };
 		796AD91A2F4CFF14001F9C89 /* IOSShortcutsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */; };
+		7AA0B1022F4D00110011AA11 /* NomiAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */; };
 		79797DFF2F4393E90022FF81 /* DateExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797DFD2F4393E90022FF81 /* DateExtensions.swift */; };
 		79797E062F4396200022FF81 /* IOSCalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797E012F4396200022FF81 /* IOSCalendarManager.swift */; };
 		79797E072F4396200022FF81 /* IOSRemindersManager.clean.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79797E042F4396200022FF81 /* IOSRemindersManager.clean.swift */; };
@@ -46,6 +47,7 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = genie/AppDelegate.swift; sourceTree = "<group>"; };
 		796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSMailManager.swift; path = genie/IOSMailManager.swift; sourceTree = "<group>"; };
 		796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSShortcutsManager.swift; path = genie/IOSShortcutsManager.swift; sourceTree = "<group>"; };
+		7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NomiAppIntents.swift; path = genie/NomiAppIntents.swift; sourceTree = "<group>"; };
 		79797DFD2F4393E90022FF81 /* DateExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DateExtensions.swift; path = genie/DateExtensions.swift; sourceTree = "<group>"; };
 		79797E012F4396200022FF81 /* IOSCalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSCalendarManager.swift; path = genie/IOSCalendarManager.swift; sourceTree = "<group>"; };
 		79797E022F4396200022FF81 /* IOSContactsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = IOSContactsManager.swift; path = genie/IOSContactsManager.swift; sourceTree = "<group>"; };
@@ -80,6 +82,7 @@
 				79797E012F4396200022FF81 /* IOSCalendarManager.swift */,
 				796AD9172F4CFF14001F9C89 /* IOSMailManager.swift */,
 				796AD9182F4CFF14001F9C89 /* IOSShortcutsManager.swift */,
+				7AA0B1012F4D00110011AA10 /* NomiAppIntents.swift */,
 				79797E022F4396200022FF81 /* IOSContactsManager.swift */,
 				79797E042F4396200022FF81 /* IOSRemindersManager.clean.swift */,
 				79797DFD2F4393E90022FF81 /* DateExtensions.swift */,
@@ -344,6 +347,7 @@
 				13112A72D0FA9E6D45F5B7C2 /* ExpoModulesProvider.swift in Sources */,
 				796AD9192F4CFF14001F9C89 /* IOSMailManager.swift in Sources */,
 				796AD91A2F4CFF14001F9C89 /* IOSShortcutsManager.swift in Sources */,
+				7AA0B1022F4D00110011AA11 /* NomiAppIntents.swift in Sources */,
 				79A9FF432F438DE900ED05DC /* IOSHealthManager.swift in Sources */,
 				79A9FF462F438DE900ED05DC /* IOSNativeModules.m in Sources */,
 				79797ECC2F4396200022FF81 /* ProjectClassifierModule.swift in Sources */,

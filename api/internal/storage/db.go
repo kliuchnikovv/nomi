@@ -50,6 +50,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&Notification{},
 		&UserDevice{},
 		&ProactiveEvent{},
+		&WatchReminder{},
 		&PendingClientAction{},
 		&Heartbeat{},
 	); err != nil {

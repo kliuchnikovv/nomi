@@ -14,6 +14,7 @@ import {
     StyleSheet,
     AppState,
     ActionSheetIOS,
+    Alert,
     TouchableWithoutFeedback,
     Keyboard,
 } from 'react-native';
@@ -123,8 +124,15 @@ export function ChatDetailScreen() {
     } = useChat();
     const { user, token } = useAuth();
     const { theme } = useTheme();
-    const { activeChat, chats, getChats, isNewSession, setIsNewSession } =
-        useMain();
+    const {
+        activeChat,
+        chats,
+        getChats,
+        isNewSession,
+        setIsNewSession,
+        renameChat,
+        deleteChat,
+    } = useMain();
     const [dropdownVisible, setDropdownVisible] = useState(false);
 
     const styles = useMemo(() => createStyles(theme), [theme]);
@@ -413,6 +421,69 @@ export function ChatDetailScreen() {
         (navigation as any).replace('ChatDetail', { chatId: emptyChatID });
     }, [navigation, setIsNewSession]);
 
+    // Long-press on a session row in the header dropdown → rename / delete.
+    // Native alerts present reliably; ActionSheetIOS does not render over the dropdown.
+    const handleSessionLongPress = useCallback(
+        (chat: Chat) => {
+            const displayTitle =
+                chat.title || formatSessionDate(chat.updated_at);
+            setDropdownVisible(false);
+            Alert.alert(displayTitle, undefined, [
+                {
+                    text: 'Rename',
+                    onPress: () => {
+                        Alert.prompt(
+                            'Rename Chat',
+                            '',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Rename',
+                                    onPress: async (newTitle?: string) => {
+                                        const trimmed = newTitle?.trim();
+                                        if (!trimmed) return;
+                                        await renameChat(chat.id, trimmed);
+                                        getChats();
+                                    },
+                                },
+                            ],
+                            'plain-text',
+                            displayTitle,
+                        );
+                    },
+                },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        Alert.alert(
+                            'Delete Chat',
+                            'This chat will be permanently deleted.',
+                            [
+                                { text: 'Cancel', style: 'cancel' },
+                                {
+                                    text: 'Delete',
+                                    style: 'destructive',
+                                    onPress: async () => {
+                                        const wasActive =
+                                            chat.id === activeChat?.id;
+                                        await deleteChat(chat.id);
+                                        getChats();
+                                        if (wasActive) {
+                                            handleNewChat();
+                                        }
+                                    },
+                                },
+                            ],
+                        );
+                    },
+                },
+                { text: 'Cancel', style: 'cancel' },
+            ]);
+        },
+        [renameChat, deleteChat, getChats, activeChat, handleNewChat],
+    );
+
     const handleAttachmentPress = useCallback(
         async (attachment: Attachment) => {
             if (attachment.file_type?.startsWith('image/')) {
@@ -620,6 +691,10 @@ export function ChatDetailScreen() {
                                             { chatId: chat.id },
                                         );
                                     }}
+                                    onLongPress={() =>
+                                        handleSessionLongPress(chat)
+                                    }
+                                    delayLongPress={300}
                                 >
                                     <View
                                         style={[

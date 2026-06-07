@@ -124,6 +124,19 @@ type ProactiveEvent struct {
 	ProcessedAt    *time.Time     `gorm:"default:null"`
 }
 
+// WatchReminder is a self-reminder the agent set on the user's behalf
+// ("remind me about Y at time T"). The scheduler converts due rows into
+// proactive "watch_reminder" events on each tick.
+type WatchReminder struct {
+	ID        uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID    uuid.UUID  `gorm:"type:uuid;not null;index:idx_watch_user_state,priority:1"`
+	Context   string     `gorm:"type:text;not null"`                                                                                               // what to resurface (free text from the agent)
+	FireAt    time.Time  `gorm:"not null;index:idx_watch_state_fire,priority:2"`                                                                   // when (UTC)
+	State     string     `gorm:"type:text;not null;default:'pending';index:idx_watch_user_state,priority:2;index:idx_watch_state_fire,priority:1"` // pending|fired|cancelled
+	CreatedAt time.Time  `gorm:"not null"`
+	FiredAt   *time.Time `gorm:"default:null"`
+}
+
 // PendingClientAction is a client-only tool call (e.g. iOS reminder) that the
 // brain could not execute immediately because no device was connected. It is
 // queued here and drained by the device when it next comes online (foreground,

@@ -118,6 +118,10 @@ class RedisSession:
         self._delivery_source: str | None = None
         self._delivery_context: dict[str, Any] = {}
 
+        # Proactive event meta (set per-request when source=proactive); carried
+        # onto the response meta frame so the client renders badge + deep-link.
+        self._proactive_meta: dict[str, Any] | None = None
+
         # Storage backend (set per-request from agent_storage_mode flag)
         self.storage_backend: StorageBackend = PayloadBackend(chat_history=[])
 
@@ -1230,12 +1234,25 @@ class RedisSession:
         # --- PROACTIVE BRANCH ---
         # If the payload has source="proactive" and a proactive_event key, synthesize
         # the agent input from the event rather than waiting for user text.
+        # Reset per-message proactive metadata; set below if this is a proactive event.
+        self._proactive_meta = None
         if payload.get("source") == "proactive" and payload.get("proactive_event"):
-            from src.agents.factory import build_proactive_prompt
+            from src.agents.factory import (
+                build_proactive_deep_link,
+                build_proactive_prompt,
+            )
             proactive_event = payload["proactive_event"]
             event_type = proactive_event.get("event_type", "unknown")
             event_payload = proactive_event.get("payload", {})
             text = build_proactive_prompt(event_type, event_payload)
+            # Carry meta (incl. native deep_link) onto the response so the client can
+            # render the source badge + "Open" button. This is the single point that
+            # propagates proactive meta for every surface path (direct + judge).
+            self._proactive_meta = {
+                "event_id": proactive_event.get("event_id"),
+                "event_type": event_type,
+                "deep_link": build_proactive_deep_link(event_type, event_payload),
+            }
             logger.info(
                 "[RedisSession] Proactive event received: type=%s, synthesized prompt len=%d",
                 event_type,
@@ -1366,12 +1383,15 @@ class RedisSession:
         # No, this message_id is for the Response.
         # We still send it.
         # FIX: Added "type": "metadata" to satisfy Go backend validation
+        meta_payload: dict[str, Any] = {"message_id": message_id, "type": "metadata"}
+        if self._proactive_meta is not None:
+            meta_payload["proactive_event"] = self._proactive_meta
         await self._send_frame(
             make_meta(
                 self.next_id,
                 Op.MESSAGE,
                 msg_chat_id,
-                {"message_id": message_id, "type": "metadata"},
+                meta_payload,
             )
         )
 

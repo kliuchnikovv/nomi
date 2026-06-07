@@ -74,6 +74,19 @@ func (s *Storage) SetEventFireAt(ctx context.Context, id uuid.UUID, fireAt time.
 		Update("fire_at", fireAt).Error
 }
 
+// CountSurfacedEventsInWindow returns how many proactive events for a user
+// reached the "surfaced" state within the trailing window. Used to rate-cap
+// autonomous (device-sourced) events.
+func (s *Storage) CountSurfacedEventsInWindow(ctx context.Context, userID uuid.UUID, window time.Duration) (int64, error) {
+	cutoff := time.Now().UTC().Add(-window)
+	var count int64
+	err := s.DB.WithContext(ctx).
+		Model(&ProactiveEvent{}).
+		Where("user_id = ? AND state = ? AND created_at > ?", userID, "surfaced", cutoff).
+		Count(&count).Error
+	return count, err
+}
+
 // UpdateEventPayload overwrites the JSONB payload of an event (used by tests / corrections).
 func (s *Storage) UpdateEventPayload(ctx context.Context, id uuid.UUID, payload datatypes.JSON) error {
 	return s.DB.WithContext(ctx).

@@ -6,7 +6,13 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    Linking,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../context/ThemeContext';
@@ -31,6 +37,8 @@ function sourceLabel(eventType?: ProactiveMeta['event_type']): string {
             return '☀️ Daily brief';
         case 'health_anomaly':
             return '❤️ Health';
+        case 'watch_reminder':
+            return '⏰ Reminder';
         default:
             return '🔔 Update';
     }
@@ -55,6 +63,22 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
 
     const eventId = meta.event_id;
     const label = sourceLabel(meta.event_type);
+    const deepLink = meta.deep_link;
+
+    function handleOpen() {
+        if (!deepLink) return;
+        // Internal nomi:// routes navigate in-app; everything else launches the
+        // matching native app (Calendar, Reminders, …). A missing/unhandled
+        // native scheme fails softly via the catch.
+        if (deepLink.startsWith('nomi://')) {
+            const route = deepLink.slice('nomi://'.length);
+            if (route === 'planning') {
+                navigation.getParent()?.navigate('Planning' as never);
+            }
+            return;
+        }
+        Linking.openURL(deepLink).catch(() => {});
+    }
 
     async function handleDiscuss() {
         if (eventId) {
@@ -116,6 +140,26 @@ export function UpdatesChatExtras({ message, chatId }: Props) {
                 </Text>
             ) : (
                 <View style={styles.buttonRow}>
+                    {deepLink ? (
+                        <TouchableOpacity
+                            style={[
+                                styles.btn,
+                                styles.dismissBtn,
+                                { borderColor: theme.border },
+                            ]}
+                            onPress={handleOpen}
+                            activeOpacity={0.8}
+                        >
+                            <Text
+                                style={[
+                                    styles.dismissText,
+                                    { color: theme.accent },
+                                ]}
+                            >
+                                Open
+                            </Text>
+                        </TouchableOpacity>
+                    ) : null}
                     <TouchableOpacity
                         style={[
                             styles.btn,

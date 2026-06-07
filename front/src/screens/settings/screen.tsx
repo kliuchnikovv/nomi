@@ -1,5 +1,13 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import {
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -58,6 +66,9 @@ export default function SettingsHomeScreen() {
     const [dailyBriefTime, setDailyBriefTime] = useState<string | null>(
         user?.daily_brief_time ?? null,
     );
+    const [showTimePicker, setShowTimePicker] = useState(false);
+    const [pickerHour, setPickerHour] = useState(8);
+    const [pickerMinute, setPickerMinute] = useState(0);
 
     const handleSingleChatModeToggle = useCallback(
         async (value: boolean) => {
@@ -99,31 +110,36 @@ export default function SettingsHomeScreen() {
         [user, updateUser],
     );
 
-    // Cycle the daily-brief time through a few presets (Off → 08:00 → 12:00 →
-    // 18:00 → Off). Timezone is captured automatically from the device so the
-    // server fires the brief at the user's local time.
-    const handleDailyBriefCycle = useCallback(async () => {
-        const cycle: (string | null)[] = [null, '08:00', '12:00', '18:00'];
-        const idx = cycle.findIndex(v => v === dailyBriefTime);
-        const next = cycle[(idx + 1) % cycle.length];
-        const timezone =
-            Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-        try {
-            await authApi.updateMe({
-                daily_brief_time: next ?? '',
-                timezone,
-            });
-            setDailyBriefTime(next);
-            if (user)
-                updateUser({
-                    ...user,
-                    daily_brief_time: next,
+    const openTimePicker = useCallback(() => {
+        if (dailyBriefTime) {
+            const [h, m] = dailyBriefTime.split(':').map(Number);
+            setPickerHour(h);
+            setPickerMinute(m);
+        } else {
+            setPickerHour(8);
+            setPickerMinute(0);
+        }
+        setShowTimePicker(true);
+    }, [dailyBriefTime]);
+
+    const saveDailyBriefTime = useCallback(
+        async (time: string | null) => {
+            const timezone =
+                Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            try {
+                await authApi.updateMe({
+                    daily_brief_time: time ?? '',
                     timezone,
                 });
-        } catch (e) {
-            console.error('Failed to update daily_brief_time', e);
-        }
-    }, [dailyBriefTime, user, updateUser]);
+                setDailyBriefTime(time);
+                if (user)
+                    updateUser({ ...user, daily_brief_time: time, timezone });
+            } catch (e) {
+                console.error('Failed to update daily_brief_time', e);
+            }
+        },
+        [user, updateUser],
+    );
 
     // Refresh preview values each time this screen comes into focus
     useFocusEffect(
@@ -253,7 +269,7 @@ export default function SettingsHomeScreen() {
                     <SettingsRow
                         label="Daily Brief"
                         value={dailyBriefTime ?? 'Off'}
-                        onPress={handleDailyBriefCycle}
+                        onPress={openTimePicker}
                         isFirst={false}
                         isLast
                     />
@@ -278,6 +294,379 @@ export default function SettingsHomeScreen() {
                     />
                 </SettingsSection>
             </ScrollView>
+
+            <TimePickerModal
+                visible={showTimePicker}
+                hour={pickerHour}
+                minute={pickerMinute}
+                enabled={dailyBriefTime !== null}
+                theme={theme}
+                onChangeHour={setPickerHour}
+                onChangeMinute={setPickerMinute}
+                onToggleEnabled={async enabled => {
+                    if (!enabled) {
+                        setShowTimePicker(false);
+                        await saveDailyBriefTime(null);
+                    }
+                }}
+                onCancel={() => setShowTimePicker(false)}
+                onConfirm={async () => {
+                    const hh = String(pickerHour).padStart(2, '0');
+                    const mm = String(pickerMinute).padStart(2, '0');
+                    setShowTimePicker(false);
+                    await saveDailyBriefTime(`${hh}:${mm}`);
+                }}
+            />
         </View>
     );
 }
+
+// ─── Time Picker Modal ────────────────────────────────────────────────────────
+
+const ITEM_HEIGHT = 44;
+const VISIBLE_ITEMS = 5;
+const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
+
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+
+interface TimePickerModalProps {
+    visible: boolean;
+    hour: number;
+    minute: number;
+    enabled: boolean;
+    theme: any;
+    onChangeHour: (h: number) => void;
+    onChangeMinute: (m: number) => void;
+    onToggleEnabled: (enabled: boolean) => void;
+    onCancel: () => void;
+    onConfirm: () => void;
+}
+
+function TimePickerModal({
+    visible,
+    hour,
+    minute,
+    enabled,
+    theme,
+    onChangeHour,
+    onChangeMinute,
+    onToggleEnabled,
+    onCancel,
+    onConfirm,
+}: TimePickerModalProps) {
+    const hourRef = useRef<ScrollView>(null);
+    const minuteRef = useRef<ScrollView>(null);
+
+    const scrollTo = useCallback(
+        (ref: React.RefObject<ScrollView | null>, index: number) => {
+            ref.current?.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
+        },
+        [],
+    );
+
+    return (
+        <Modal
+            visible={visible}
+            transparent
+            animationType="fade"
+            onRequestClose={onCancel}
+        >
+            <Pressable style={pickerStyles.backdrop} onPress={onCancel}>
+                <Pressable
+                    style={[
+                        pickerStyles.card,
+                        { backgroundColor: theme.surface },
+                    ]}
+                >
+                    <Text style={[pickerStyles.title, { color: theme.text }]}>
+                        Daily Brief
+                    </Text>
+
+                    {/* On / Off toggle */}
+                    <View style={pickerStyles.toggleRow}>
+                        <Text
+                            style={[
+                                pickerStyles.toggleLabel,
+                                { color: theme.textSecondary },
+                            ]}
+                        >
+                            {enabled ? 'Enabled' : 'Disabled'}
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => onToggleEnabled(!enabled)}
+                            style={[
+                                pickerStyles.pill,
+                                {
+                                    backgroundColor: enabled
+                                        ? theme.accent
+                                        : theme.border,
+                                },
+                            ]}
+                        >
+                            <View
+                                style={[
+                                    pickerStyles.pillKnob,
+                                    {
+                                        transform: [
+                                            { translateX: enabled ? 20 : 0 },
+                                        ],
+                                    },
+                                ]}
+                            />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Wheel columns */}
+                    {enabled && (
+                        <View style={pickerStyles.wheelsRow}>
+                            {/* Hours */}
+                            <WheelColumn
+                                scrollRef={hourRef}
+                                items={HOURS}
+                                selected={hour}
+                                onSelect={h => {
+                                    onChangeHour(h);
+                                    scrollTo(hourRef, h);
+                                }}
+                                format={v => String(v).padStart(2, '0')}
+                                theme={theme}
+                            />
+
+                            <Text
+                                style={[
+                                    pickerStyles.colon,
+                                    { color: theme.text },
+                                ]}
+                            >
+                                :
+                            </Text>
+
+                            {/* Minutes */}
+                            <WheelColumn
+                                scrollRef={minuteRef}
+                                items={MINUTES}
+                                selected={minute}
+                                onSelect={m => {
+                                    onChangeMinute(m);
+                                    scrollTo(minuteRef, MINUTES.indexOf(m));
+                                }}
+                                format={v => String(v).padStart(2, '0')}
+                                theme={theme}
+                            />
+                        </View>
+                    )}
+
+                    {/* Actions */}
+                    <View style={pickerStyles.actions}>
+                        <TouchableOpacity
+                            onPress={onCancel}
+                            style={pickerStyles.btn}
+                        >
+                            <Text
+                                style={[
+                                    pickerStyles.btnText,
+                                    { color: theme.textSecondary },
+                                ]}
+                            >
+                                Cancel
+                            </Text>
+                        </TouchableOpacity>
+                        {enabled && (
+                            <TouchableOpacity
+                                onPress={onConfirm}
+                                style={[
+                                    pickerStyles.btn,
+                                    pickerStyles.btnPrimary,
+                                    { backgroundColor: theme.accent },
+                                ]}
+                            >
+                                <Text
+                                    style={[
+                                        pickerStyles.btnText,
+                                        { color: '#fff' },
+                                    ]}
+                                >
+                                    Save
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+}
+
+interface WheelColumnProps {
+    scrollRef: React.RefObject<ScrollView | null>;
+    items: number[];
+    selected: number;
+    onSelect: (v: number) => void;
+    format: (v: number) => string;
+    theme: any;
+}
+
+function WheelColumn({
+    scrollRef,
+    items,
+    selected,
+    onSelect,
+    format,
+    theme,
+}: WheelColumnProps) {
+    const handleScroll = useCallback(
+        (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+            const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
+            const clamped = Math.max(0, Math.min(items.length - 1, idx));
+            if (items[clamped] !== selected) onSelect(items[clamped]);
+        },
+        [items, selected, onSelect],
+    );
+
+    return (
+        <View style={pickerStyles.wheelWrap}>
+            {/* centre highlight */}
+            <View
+                style={[
+                    pickerStyles.highlight,
+                    { borderColor: theme.accent, top: ITEM_HEIGHT * 2 },
+                ]}
+                pointerEvents="none"
+            />
+            <ScrollView
+                ref={scrollRef}
+                style={{ height: PICKER_HEIGHT }}
+                showsVerticalScrollIndicator={false}
+                snapToInterval={ITEM_HEIGHT}
+                decelerationRate="fast"
+                onMomentumScrollEnd={handleScroll}
+                contentContainerStyle={{ paddingVertical: ITEM_HEIGHT * 2 }}
+                onLayout={() => {
+                    const idx = items.indexOf(selected);
+                    if (idx >= 0) {
+                        scrollRef.current?.scrollTo({
+                            y: idx * ITEM_HEIGHT,
+                            animated: false,
+                        });
+                    }
+                }}
+            >
+                {items.map(v => (
+                    <TouchableOpacity
+                        key={v}
+                        style={pickerStyles.wheelItem}
+                        onPress={() => onSelect(v)}
+                    >
+                        <Text
+                            style={[
+                                pickerStyles.wheelText,
+                                {
+                                    color:
+                                        v === selected
+                                            ? theme.text
+                                            : theme.textSecondary,
+                                },
+                                v === selected &&
+                                    pickerStyles.wheelTextSelected,
+                            ]}
+                        >
+                            {format(v)}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
+        </View>
+    );
+}
+
+const pickerStyles = StyleSheet.create({
+    backdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    card: {
+        width: 300,
+        borderRadius: 16,
+        padding: 20,
+        gap: 16,
+    },
+    title: {
+        fontSize: 17,
+        fontWeight: '600',
+        textAlign: 'center',
+    },
+    toggleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    toggleLabel: {
+        fontSize: 15,
+    },
+    pill: {
+        width: 48,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        paddingHorizontal: 3,
+    },
+    pillKnob: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#fff',
+    },
+    wheelsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+    },
+    colon: {
+        fontSize: 24,
+        fontWeight: '600',
+        paddingBottom: 4,
+    },
+    wheelWrap: {
+        width: 72,
+        overflow: 'hidden',
+    },
+    highlight: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: ITEM_HEIGHT,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        zIndex: 1,
+    },
+    wheelItem: {
+        height: ITEM_HEIGHT,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    wheelText: {
+        fontSize: 20,
+    },
+    wheelTextSelected: {
+        fontWeight: '600',
+    },
+    actions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 8,
+    },
+    btn: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+    },
+    btnPrimary: {},
+    btnText: {
+        fontSize: 15,
+        fontWeight: '500',
+    },
+});

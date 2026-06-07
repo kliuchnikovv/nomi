@@ -46,6 +46,13 @@ func (s *Scheduler) Start(ctx context.Context) {
 }
 
 func (s *Scheduler) dispatch(ctx context.Context) {
+	// Hygiene: expire stale pending client actions so they are not drained later.
+	if affected, err := s.storage.ExpireStalePendingActions(ctx); err != nil {
+		s.logger.Error("scheduler: failed to expire stale pending actions", zap.Error(err))
+	} else if affected > 0 {
+		s.logger.Info("scheduler: expired pending actions", zap.Int64("count", affected))
+	}
+
 	notifications, err := s.storage.ListPendingDue(ctx, time.Now())
 	if err != nil {
 		s.logger.Error("scheduler: failed to list pending notifications", zap.Error(err))
@@ -74,6 +81,57 @@ func (s *Scheduler) dispatch(ctx context.Context) {
 	// Fire scheduled daily briefs for users whose local clock has reached their
 	// configured time.
 	s.dispatchDailyBriefs(ctx)
+
+	// Fire agent-set watch reminders whose fire_at has passed.
+	s.fireDueWatchReminders(ctx)
+}
+
+// fireDueWatchReminders converts due WatchReminder rows into "watch_reminder"
+// proactive events and dispatches them. Each row is flipped to "fired"
+// immediately after the event is created, so the 60s tick cannot fire it twice.
+func (s *Scheduler) fireDueWatchReminders(ctx context.Context) {
+	reminders, err := s.storage.ListDueWatchReminders(ctx, time.Now(), 100)
+	if err != nil {
+		s.logger.Error("scheduler: failed to list due watch reminders", zap.Error(err))
+		return
+	}
+
+	for _, w := range reminders {
+		payload := map[string]any{
+			"context":  w.Context,
+			"watch_id": w.ID.String(),
+		}
+		payloadBytes, merr := json.Marshal(payload)
+		if merr != nil {
+			s.logger.Error("scheduler: marshal watch-reminder payload", zap.Error(merr))
+			continue
+		}
+
+		ev, cerr := s.storage.CreateProactiveEvent(ctx, &storage.ProactiveEvent{
+			ID:        uuid.New(),
+			UserID:    w.UserID,
+			Source:    "watch",
+			EventType: "watch_reminder",
+			Payload:   datatypes.JSON(payloadBytes),
+			State:     "pending",
+		})
+		if cerr != nil {
+			s.logger.Error("scheduler: create watch-reminder event",
+				zap.String("watch_id", w.ID.String()), zap.Error(cerr))
+			continue
+		}
+
+		// Mark fired before dispatch so a dispatch error never re-fires the reminder.
+		if merr := s.storage.MarkWatchFired(ctx, w.ID); merr != nil {
+			s.logger.Error("scheduler: mark watch fired",
+				zap.String("watch_id", w.ID.String()), zap.Error(merr))
+		}
+
+		if derr := s.dispatcher.Dispatch(ctx, ev); derr != nil {
+			s.logger.Error("scheduler: dispatch watch-reminder event",
+				zap.String("watch_id", w.ID.String()), zap.Error(derr))
+		}
+	}
 }
 
 // dispatchDailyBriefs fires a once-per-day "daily_brief" proactive event for

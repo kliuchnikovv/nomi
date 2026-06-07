@@ -454,6 +454,13 @@ function onReceivedMessage(
               event_type: payload.proactive_event.event_type as
                   | 'calendar_upcoming'
                   | 'email_new'
+                  | 'reminder_due'
+                  | 'daily_brief'
+                  | 'health_anomaly'
+                  | 'watch_reminder'
+                  | undefined,
+              deep_link: payload.proactive_event.deep_link as
+                  | string
                   | undefined,
           }
         : undefined;

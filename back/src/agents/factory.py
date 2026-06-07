@@ -554,6 +554,17 @@ class AgentFactory:
             except Exception as e:
                 logger.warning("[Factory] Failed to add NotificationTools: %s", e)
 
+        # Add watch tool (self-reminders) - available to all agents with a user_id
+        if user_id:
+            try:
+                from src.tools.watch import WatchTools
+
+                watch_tool = WatchTools(user_id=user_id)
+                tools = list(tools) + [watch_tool]
+                logger.info("[Factory] Added WatchTools (create/list/cancel reminder) for user=%s", user_id)
+            except Exception as e:
+                logger.warning("[Factory] Failed to add WatchTools: %s", e)
+
         # Register chat history search tool for single chat mode
         if single_chat_mode and user_id and self._knowledge is not None:
             from src.tools.chat_history import make_search_chat_history
@@ -752,9 +763,59 @@ def build_proactive_prompt(event_type: str, payload: dict) -> str:
             f"Be warm and brief. You are not a doctor."
         )
 
+    if event_type == "watch_reminder":
+        context = payload.get("context", "something you wanted to revisit")
+        return (
+            f"You earlier set yourself a reminder to come back to:\n"
+            f"- {context}\n"
+            f"\n"
+            f"Resurface it for the user:\n"
+            f"1. Restate the reminder in one line.\n"
+            f"2. Pull any relevant context from memory or past conversations.\n"
+            f"3. Suggest a concrete next step.\n"
+            f"Keep it short and actionable."
+        )
+
     # Fallback for unknown event types
     return (
         f"A proactive event of type {event_type} occurred. "
         f"Payload: {json.dumps(payload)}. "
         f"Decide if and how to inform the user."
     )
+
+
+def build_proactive_deep_link(event_type: str, payload: dict) -> str | None:
+    """Compute a native deep-link URL for a proactive event, or None.
+
+    The link launches the relevant device app (Calendar, Reminders, …) when the
+    user taps "Open" on the proactive card. Returns an internal nomi:// route
+    for app-owned destinations (daily brief), or None when no useful target
+    exists for this event/payload.
+    """
+    if event_type == "calendar_upcoming":
+        # iOS Calendar opens to a date via calshow:<seconds-since-2001-reference>,
+        # but a plain Unix timestamp also works on modern iOS. Use start_ts if present.
+        start_ts = payload.get("start_ts")
+        if isinstance(start_ts, (int, float)):
+            return f"calshow:{int(start_ts)}"
+        return "calshow:"
+
+    if event_type in ("reminder_due", "watch_reminder"):
+        # Opens the iOS Reminders app.
+        return "x-apple-reminderkit://"
+
+    if event_type == "email_new":
+        # Prefer a provider-specific deep link when we have a message id.
+        message_id = payload.get("message_id") or payload.get("id")
+        if message_id:
+            return f"message://{message_id}"
+        return "message://"
+
+    if event_type == "daily_brief":
+        # App-owned destination: the Planning tab.
+        return "nomi://planning"
+
+    if event_type == "health_anomaly":
+        return "x-apple-health://"
+
+    return None

@@ -17,6 +17,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/proactive"
+	"github.com/kliuchnikovv/genie-api/internal/watch"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
@@ -84,6 +85,7 @@ func New(
 
 		proactiveDispatcher = proactive.NewDispatcher(ctr.Storage, hubInstance.Redis(), logger)
 		proactiveHandler    = proactive.NewHandler(ctr.Storage, proactiveDispatcher)
+		watchHandler        = watch.NewHandler(ctr.Storage)
 	)
 
 	// existing handlers are standard http handlers; wrap them so they work
@@ -206,6 +208,12 @@ func New(
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.POST("/api/events/ingest", wrapWithAuth(proactiveHandler.IngestEvent, authMiddleware))
 	r.POST("/api/events/:id/state", wrapWithAuth(proactiveHandler.SetEventState, authMiddleware))
+
+	// Agent-set watch reminders ("remind me about Y at time T")
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.POST("/api/watches", wrapWithAuth(watchHandler.Create, authMiddleware))
+	r.GET("/api/watches", wrapWithAuth(watchHandler.List, authMiddleware))
+	r.DELETE("/api/watches/:id", wrapWithAuth(watchHandler.Cancel, authMiddleware))
 
 	// Generic plugin proxy — forwards all requests to Python plugins
 	// Routes: /api/{plugin}/*path -> /api/plugins/{plugin}/*path

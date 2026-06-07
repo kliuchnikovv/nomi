@@ -103,7 +103,10 @@ export type ProactiveMeta = {
         | 'email_new'
         | 'reminder_due'
         | 'daily_brief'
-        | 'health_anomaly';
+        | 'health_anomaly'
+        | 'watch_reminder';
+    /** Native URL scheme or nomi:// route to open the underlying object, if any. */
+    deep_link?: string;
 };
 
 export type Message = {

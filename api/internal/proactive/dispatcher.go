@@ -12,6 +12,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// maxAutonomousPer24h caps how many autonomous (device-sourced) proactive
+// events may be surfaced to a user in a rolling 24h window. User-explicit
+// events (daily_brief, watch_reminder) are exempt. TODO(V2): make configurable.
+const maxAutonomousPer24h = 20
+
 // Dispatcher runs the decide-and-surface pipeline for a single ProactiveEvent.
 type Dispatcher struct {
 	store  *storage.Storage
@@ -42,10 +47,22 @@ func (d *Dispatcher) Dispatch(ctx context.Context, ev *storage.ProactiveEvent) e
 		return d.reject(ctx, ev, "proactive_disabled")
 	}
 
-	// 2a. Scheduled daily brief fires at a user-chosen local time, so it bypasses
-	// both the rules engine and quiet-hours deferral — surface it directly.
-	if ev.EventType == "daily_brief" {
+	// 2a. User-explicit events (scheduled daily brief, agent-set watch reminder)
+	// fire at a user-chosen time, so they bypass the rules engine, quiet-hours
+	// deferral, and the autonomous rate cap — surface them directly.
+	if ev.EventType == "daily_brief" || ev.EventType == "watch_reminder" {
 		return d.surface(ctx, ev, user)
+	}
+
+	// 2b. Rate cap for autonomous (device-sourced) events — don't flood the user.
+	if n, err := d.store.CountSurfacedEventsInWindow(ctx, user.ID, 24*time.Hour); err == nil {
+		if n >= maxAutonomousPer24h {
+			return d.reject(ctx, ev, "rate_capped")
+		}
+	} else {
+		// Fail open: a count error must not block legitimate events.
+		d.logger.Warn("rate-cap count failed; allowing event",
+			zap.String("user_id", user.ID.String()), zap.Error(err))
 	}
 
 	// 3. Quiet-hours check — only defer events that have no explicit fire_at.

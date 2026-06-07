@@ -56,6 +56,7 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ConnectorsProvider } from './src/screens/settings/connectors/context';
 import { SplashScreen } from './src/screens/splash/SplashScreen';
 import { useShareExtension } from './src/share-extension/useShareExtension';
+import { useVoiceLaunchLink } from './src/share-extension/useVoiceLaunchLink';
 import {
     handleLastNotificationResponse,
     setupNotificationHandlers,
@@ -228,6 +229,7 @@ function AppContent({
 }) {
     const { isAuthenticated, isLoading, token } = useAuth();
     useShareExtension();
+    useVoiceLaunchLink(navigationRef);
 
     useEffect(() => {
         if (!navigationRef.current) return;

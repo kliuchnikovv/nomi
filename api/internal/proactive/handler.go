@@ -19,6 +19,7 @@ var validSources = map[string]bool{
 	"reminders": true,
 	"health":    true,
 	"system":    true, // server-generated (e.g. scheduled daily brief)
+	"watch":     true, // agent-set self-reminder fired by the scheduler
 }
 
 var validEventTypes = map[string]bool{
@@ -27,6 +28,7 @@ var validEventTypes = map[string]bool{
 	"reminder_due":      true,
 	"health_anomaly":    true,
 	"daily_brief":       true,
+	"watch_reminder":    true,
 }
 
 // Handler exposes the proactive event ingest HTTP endpoint.
