@@ -63,8 +63,6 @@ export function SessionHistorySheet({
 }: Props) {
     const [sessions, setSessions] = useState<Chat[]>([]);
     const [loading, setLoading] = useState(false);
-    // Session targeted by a long-press; drives the in-sheet action menu.
-    const [actionTarget, setActionTarget] = useState<Chat | null>(null);
     const insets = useSafeAreaInsets();
     const { renameChat, deleteChat } = useMain();
 
@@ -82,15 +80,8 @@ export function SessionHistorySheet({
         loadSessions();
     }, [visible, loadSessions]);
 
-    // Long-press opens an in-sheet action menu rendered inside this Modal.
-    // (ActionSheetIOS does not present reliably from within a Modal on iOS.)
-    const handleLongPress = useCallback((item: Chat) => {
-        setActionTarget(item);
-    }, []);
-
     const handleRename = useCallback(
         (item: Chat) => {
-            setActionTarget(null);
             const displayTitle =
                 item.title || formatSessionDate(item.updated_at);
             // Alert.prompt is a native alert and presents reliably over a Modal.
@@ -118,7 +109,6 @@ export function SessionHistorySheet({
 
     const handleDelete = useCallback(
         (item: Chat) => {
-            setActionTarget(null);
             Alert.alert(
                 'Delete Session',
                 'This session will be permanently deleted.',
@@ -135,6 +125,25 @@ export function SessionHistorySheet({
             );
         },
         [deleteChat, loadSessions],
+    );
+
+    // Long-press shows a native action alert. Native alerts present reliably
+    // over a Modal on iOS (unlike ActionSheetIOS, which silently fails here).
+    const handleLongPress = useCallback(
+        (item: Chat) => {
+            const displayTitle =
+                item.title || formatSessionDate(item.updated_at);
+            Alert.alert(displayTitle, undefined, [
+                { text: 'Rename', onPress: () => handleRename(item) },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => handleDelete(item),
+                },
+                { text: 'Cancel', style: 'cancel' },
+            ]);
+        },
+        [handleRename, handleDelete],
     );
 
     const renderItem = useCallback(
@@ -263,80 +272,6 @@ export function SessionHistorySheet({
                     />
                 )}
             </View>
-
-            {actionTarget && (
-                <View style={styles.actionOverlay}>
-                    <Pressable
-                        style={styles.actionBackdrop}
-                        onPress={() => setActionTarget(null)}
-                    />
-                    <View
-                        style={[
-                            styles.actionCard,
-                            {
-                                backgroundColor: surfaceColor,
-                                marginBottom: insets.bottom + 12,
-                            },
-                        ]}
-                    >
-                        <Text
-                            style={[
-                                styles.actionCardTitle,
-                                { color: textSecondaryColor },
-                            ]}
-                            numberOfLines={1}
-                        >
-                            {actionTarget.title ||
-                                formatSessionDate(actionTarget.updated_at)}
-                        </Text>
-                        <TouchableOpacity
-                            style={[
-                                styles.actionItem,
-                                { borderTopColor: borderColor },
-                            ]}
-                            onPress={() => handleRename(actionTarget)}
-                        >
-                            <Text
-                                style={[
-                                    styles.actionLabel,
-                                    { color: textPrimaryColor },
-                                ]}
-                            >
-                                Rename
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.actionItem,
-                                { borderTopColor: borderColor },
-                            ]}
-                            onPress={() => handleDelete(actionTarget)}
-                        >
-                            <Text
-                                style={[styles.actionLabel, styles.actionDanger]}
-                            >
-                                Delete
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.actionItem,
-                                { borderTopColor: borderColor },
-                            ]}
-                            onPress={() => setActionTarget(null)}
-                        >
-                            <Text
-                                style={[
-                                    styles.actionLabel,
-                                    { color: accentColor },
-                                ]}
-                            >
-                                Cancel
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            )}
         </Modal>
     );
 }
@@ -378,30 +313,4 @@ const styles = StyleSheet.create({
     date: { fontSize: 12, marginBottom: 2 },
     title: { fontSize: 15 },
     empty: { textAlign: 'center', margin: 32, fontSize: 14 },
-    actionOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'flex-end',
-    },
-    actionBackdrop: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: '#00000066',
-    },
-    actionCard: {
-        marginHorizontal: 12,
-        borderRadius: 14,
-        overflow: 'hidden',
-    },
-    actionCardTitle: {
-        fontSize: 13,
-        textAlign: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-    },
-    actionItem: {
-        paddingVertical: 16,
-        alignItems: 'center',
-        borderTopWidth: StyleSheet.hairlineWidth,
-    },
-    actionLabel: { fontSize: 16, fontWeight: '500' },
-    actionDanger: { color: '#FF3B30' },
 });

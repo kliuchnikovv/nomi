@@ -54,7 +54,7 @@ def _extract_json(text: str) -> dict:
 def _build_model() -> Any:
     from src.models.safe_gemini import SafeGemini
 
-    return SafeGemini(id="gemini-2.0-flash", api_key=os.getenv("GOOGLE_API_KEY", ""))
+    return SafeGemini(id="gemini-2.5-flash-lite", api_key=os.getenv("GOOGLE_API_KEY", ""))
 
 
 def _run_agent_text(system_prompt: str, user_prompt: str) -> str:

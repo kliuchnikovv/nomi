@@ -6,8 +6,8 @@ Loads configuration from environment variables.
 import os
 
 from agno.db.postgres import PostgresDb
-from agno.models.google import Gemini
 from agno.knowledge.embedder.google import GeminiEmbedder
+from src.models.safe_gemini import SafeGemini
 from src.tools.config import ToolConfigClient
 
 
@@ -39,13 +39,13 @@ class Config:
 
         return PostgresDb(self.db_dsn)
 
-    def get_model(self) -> Gemini:
+    def get_model(self) -> SafeGemini:
         """Get Gemini model instance."""
         if not self.google_api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
-        return Gemini(
-            id="gemini-2.0-flash",
+        return SafeGemini(
+            id="gemini-2.5-flash-lite",
             api_key=self.google_api_key,
         )
 

@@ -11,7 +11,7 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-ROUTER_MODEL = "gemini-2.0-flash-lite"
+ROUTER_MODEL = "gemini-2.5-flash-lite"
 
 SYSTEM_PROMPT = """\
 You are a tool router. Given a user request and a list of available tools,

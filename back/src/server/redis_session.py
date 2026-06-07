@@ -1128,7 +1128,7 @@ class RedisSession:
                 return
 
             model = self.agent_factory.build_model(
-                self.current_model_name or "gemini-2.0-flash",
+                self.current_model_name or "gemini-2.5-flash-lite",
                 thinking="off",
             )
 
@@ -2212,7 +2212,6 @@ class RedisSession:
         Calls the z.ai vision model to convert images to text descriptions,
         mirroring the Vision Understanding MCP pattern for non-vision GLM models.
         """
-        import base64 as _base64
         import httpx
 
         api_key = os.getenv("ZAI_API_KEY")
