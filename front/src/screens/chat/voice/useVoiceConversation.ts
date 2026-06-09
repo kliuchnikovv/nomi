@@ -2,8 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Speech from 'expo-speech';
 import * as FileSystem from 'expo-file-system';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import { AppState, AppStateStatus, Linking } from 'react-native';
-import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
+import { AppState, AppStateStatus, Linking, Platform } from 'react-native';
+import {
+    ExpoSpeechRecognitionModule,
+    AVAudioSessionCategory,
+    AVAudioSessionCategoryOptions,
+    AVAudioSessionMode,
+} from 'expo-speech-recognition';
 import { useChat } from '../context';
 import { useAuth } from '../../auth/context';
 import { ttsApi } from '../../../apiClient';
@@ -367,6 +372,23 @@ export function useVoiceConversation({
         await FileSystem.writeAsStringAsync(uri, audioB64, {
             encoding: 'base64',
         });
+        // The recognizer leaves the iOS audio session in playAndRecord/measurement,
+        // which plays back quietly / to the earpiece. Force a loud loudspeaker
+        // category before playing (the next listen's start() resets it).
+        if (Platform.OS === 'ios') {
+            try {
+                ExpoSpeechRecognitionModule.setCategoryIOS({
+                    category: AVAudioSessionCategory.playAndRecord,
+                    categoryOptions: [
+                        AVAudioSessionCategoryOptions.defaultToSpeaker,
+                        AVAudioSessionCategoryOptions.allowBluetooth,
+                    ],
+                    mode: AVAudioSessionMode.default,
+                });
+            } catch {
+                /* best-effort */
+            }
+        }
         try {
             await new Promise<void>(resolve => {
                 playEndResolveRef.current = () => {
