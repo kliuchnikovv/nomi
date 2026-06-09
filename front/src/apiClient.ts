@@ -448,6 +448,18 @@ export const ragApi = {
     }) => apiClient.post<{ ok: boolean }>(`${API_URL()}/rag/index`, doc),
 };
 
+export const ttsApi = {
+    /**
+     * Server-side Gemini TTS. Returns base64-encoded WAV for the given text.
+     * Used by the `server_gemini` voice source.
+     */
+    synthesize: (body: { text: string; voice?: string }) =>
+        apiClient.post<{ audio: string; mime: string }>(
+            `${API_URL()}/voice/tts`,
+            body,
+        ),
+};
+
 export const eventsApi = {
     async ingest(payload: {
         source: 'calendar' | 'email' | 'reminders' | 'health';

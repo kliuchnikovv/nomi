@@ -19,6 +19,9 @@ type User struct {
 	WebSearchEnabled bool           `json:"web_search_enabled" gorm:"default:false"`
 	SingleChatMode   bool           `json:"single_chat_mode" gorm:"default:false"`
 	AgentStorageMode string         `json:"agent_storage_mode" gorm:"default:'payload'"`
+	// VoiceSource selects how the voice screen produces speech:
+	// 'on_device' (expo-speech, default) or 'server_gemini' (server-side Gemini TTS).
+	VoiceSource      string         `json:"voice_source" gorm:"default:'on_device'"`
 	// Proactive / reactive-agent fields
 	UpdatesChatID    *uuid.UUID     `json:"updates_chat_id,omitempty" gorm:"type:uuid;default:null"`
 	QuietHoursStart  *string        `json:"quiet_hours_start,omitempty" gorm:"type:time;default:null"`

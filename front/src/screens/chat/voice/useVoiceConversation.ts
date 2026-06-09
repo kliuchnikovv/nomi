@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Speech from 'expo-speech';
+import * as FileSystem from 'expo-file-system';
+import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import { AppState, AppStateStatus, Linking } from 'react-native';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useChat } from '../context';
+import { useAuth } from '../../auth/context';
+import { ttsApi } from '../../../apiClient';
 
 export type VoiceState =
     | 'loading'
@@ -192,6 +196,7 @@ export function useVoiceConversation({
     const [language, setLanguageState] = useState<string>(DEFAULT_LANGUAGE);
 
     const { sendMessage, assistantWorking, messages } = useChat();
+    const { user } = useAuth();
 
     const isMountedRef = useRef(true);
     const voiceStateRef = useRef<VoiceState>('loading');
@@ -225,6 +230,17 @@ export function useVoiceConversation({
     // Best available device voice per language prefix (e.g. 'ru' -> identifier),
     // resolved once from getAvailableVoicesAsync, preferring Enhanced quality.
     const voiceByLangRef = useRef<Record<string, string>>({});
+
+    // --- Server-side Gemini TTS backend (experimental `server_gemini` source) --
+    const serverTtsRef = useRef(user?.voice_source === 'server_gemini');
+    useEffect(() => {
+        serverTtsRef.current = user?.voice_source === 'server_gemini';
+    }, [user?.voice_source]);
+    // Sequential play chain so streamed sentences play in order.
+    const serverChainRef = useRef<Promise<void>>(Promise.resolve());
+    const serverPlayingRef = useRef(false); // a clip is actively playing
+    const playEndResolveRef = useRef<(() => void) | null>(null);
+    const ttsFileSeqRef = useRef(0);
 
     const applyState = useCallback((s: VoiceState) => {
         voiceStateRef.current = s;
@@ -339,6 +355,92 @@ export function useVoiceConversation({
         relistenRef.current = relisten;
     }, [relisten]);
 
+    // ---- Server-side Gemini TTS backend -------------------------------------
+
+    // Play one base64 WAV clip; resolves when playback ends (or on error/stop).
+    const playServerClip = useCallback(async (audioB64: string) => {
+        const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+        // Rotate through a small fixed set of filenames (writeAsStringAsync
+        // overwrites) so temp clips never accumulate unbounded.
+        ttsFileSeqRef.current = (ttsFileSeqRef.current + 1) % 8;
+        const uri = `${dir}nomi-tts-${ttsFileSeqRef.current}.wav`;
+        await FileSystem.writeAsStringAsync(uri, audioB64, {
+            encoding: 'base64',
+        });
+        try {
+            await new Promise<void>(resolve => {
+                playEndResolveRef.current = () => {
+                    playEndResolveRef.current = null;
+                    resolve();
+                };
+                AudioRecorderPlayer.addPlaybackEndListener(() => {
+                    AudioRecorderPlayer.removePlaybackEndListener();
+                    playEndResolveRef.current?.();
+                });
+                AudioRecorderPlayer.startPlayer(uri).catch(() => {
+                    AudioRecorderPlayer.removePlaybackEndListener();
+                    playEndResolveRef.current?.();
+                });
+            });
+        } finally {
+            // Temp clips live in the OS-managed cache dir; we reuse a small set
+            // of rotating filenames (see ttsFileSeqRef) so they don't accumulate.
+        }
+    }, []);
+
+    // Synthesize `text` on the server and play it (driven by the chain below).
+    // `serverPlayingRef` stays true across BOTH synth and playback so the resume
+    // watchdog doesn't mistake a slow synthesis for a stalled turn.
+    const speakViaServer = useCallback(
+        async (text: string) => {
+            serverPlayingRef.current = true;
+            try {
+                const res = await ttsApi.synthesize({ text });
+                if (res?.audio) await playServerClip(res.audio);
+            } finally {
+                serverPlayingRef.current = false;
+            }
+        },
+        [playServerClip],
+    );
+
+    // Stop whatever is playing and clear the queue (server backend).
+    const stopServerTts = useCallback(() => {
+        serverChainRef.current = Promise.resolve();
+        AudioRecorderPlayer.stopPlayer().catch(() => {});
+        AudioRecorderPlayer.removePlaybackEndListener();
+        serverPlayingRef.current = false;
+        if (playEndResolveRef.current) {
+            const resolve = playEndResolveRef.current;
+            playEndResolveRef.current = null;
+            resolve();
+        }
+    }, []);
+
+    // Backend-aware stop: server player or on-device expo-speech.
+    const stopTts = useCallback(() => {
+        if (serverTtsRef.current) stopServerTts();
+        else Speech.stop();
+    }, [stopServerTts]);
+    const stopTtsRef = useRef(stopTts);
+    useEffect(() => {
+        stopTtsRef.current = stopTts;
+    }, [stopTts]);
+
+    // Backend-aware "is audio currently playing?" for the resume watchdog.
+    const isSpeakingTts = useCallback(async () => {
+        if (serverTtsRef.current) return serverPlayingRef.current;
+        try {
+            return await Speech.isSpeakingAsync();
+        } catch {
+            return false;
+        }
+    }, []);
+    const isSpeakingTtsRef = useRef(isSpeakingTts);
+    useEffect(() => {
+        isSpeakingTtsRef.current = isSpeakingTts;
+    }, [isSpeakingTts]);
+
     // ---- Streaming TTS -------------------------------------------------------
 
     const onUtteranceDone = useCallback(() => {
@@ -359,11 +461,27 @@ export function useVoiceConversation({
             const clean = stripForSpeech(sentence);
             // Sentence was only emoji/whitespace — nothing to say, don't count it.
             if (!clean) return;
+            ttsActiveCountRef.current += 1;
+            lastTtsActivityAtRef.current = Date.now();
+
+            // Server-side Gemini voice: synthesize + play sequentially. The
+            // chain preserves sentence order; onUtteranceDone drives resume.
+            if (serverTtsRef.current) {
+                serverChainRef.current = serverChainRef.current
+                    .then(() => speakViaServer(clean))
+                    .catch(e =>
+                        console.warn(
+                            '[voice] server tts failed',
+                            e?.message ?? e,
+                        ),
+                    )
+                    .finally(() => onUtteranceDone());
+                return;
+            }
+
             const prefix = (ttsLangRef.current ?? '')
                 .toLowerCase()
                 .split('-')[0];
-            ttsActiveCountRef.current += 1;
-            lastTtsActivityAtRef.current = Date.now();
             Speech.speak(clean, {
                 language: ttsLangRef.current,
                 voice: voiceByLangRef.current[prefix],
@@ -378,7 +496,7 @@ export function useVoiceConversation({
                 onError: onUtteranceDone,
             });
         },
-        [onUtteranceDone],
+        [onUtteranceDone, speakViaServer],
     );
 
     // Speak assistant text sentence-by-sentence as it streams in.
@@ -452,7 +570,8 @@ export function useVoiceConversation({
                     startListeningRef.current();
                 }
             } else if (idleMs >= TTS_STALL_MS) {
-                Speech.isSpeakingAsync()
+                isSpeakingTtsRef
+                    .current()
                     .then(speaking => {
                         if (speaking) return;
                         if (assistantWorkingRef.current) return;
@@ -463,7 +582,7 @@ export function useVoiceConversation({
                         // just stop the stalled tail and resume. Leave
                         // currentAssistantId/spokenOffset intact so the reply
                         // isn't re-spoken on the next render (cf. Fix 2).
-                        Speech.stop();
+                        stopTtsRef.current();
                         ttsActiveCountRef.current = 0;
                         startListeningRef.current();
                     })
@@ -666,7 +785,7 @@ export function useVoiceConversation({
             'change',
             (next: AppStateStatus) => {
                 if (next === 'background' || next === 'inactive') {
-                    Speech.stop();
+                    stopTtsRef.current();
                     ttsActiveCountRef.current = 0;
                     try {
                         ExpoSpeechRecognitionModule.abort();
@@ -686,7 +805,7 @@ export function useVoiceConversation({
     useEffect(() => {
         return () => {
             isMountedRef.current = false;
-            Speech.stop();
+            stopTtsRef.current();
             clearRetryTimer();
             try {
                 ExpoSpeechRecognitionModule.abort();
@@ -712,7 +831,7 @@ export function useVoiceConversation({
 
     const interrupt = useCallback(() => {
         if (voiceStateRef.current === 'speaking') {
-            Speech.stop();
+            stopTtsRef.current();
             ttsActiveCountRef.current = 0;
             // Abandon the cut-off reply so it isn't re-spoken before the next
             // one (cf. Fix 2). Start a fresh clean listen — a tap doesn't mean
@@ -723,7 +842,7 @@ export function useVoiceConversation({
     }, []);
 
     const stop = useCallback(() => {
-        Speech.stop();
+        stopTtsRef.current();
         ttsActiveCountRef.current = 0;
         clearRetryTimer();
         try {

@@ -60,6 +60,9 @@ export default function SettingsHomeScreen() {
     const [agnoSessions, setAgnoSessions] = useState(
         user?.agent_storage_mode === 'agno',
     );
+    const [serverVoice, setServerVoice] = useState(
+        user?.voice_source === 'server_gemini',
+    );
     const [proactiveEnabled, setProactiveEnabled] = useState(
         user?.proactive_enabled ?? false,
     );
@@ -92,6 +95,20 @@ export default function SettingsHomeScreen() {
                 if (user) updateUser({ ...user, agent_storage_mode: mode });
             } catch (e) {
                 console.error('Failed to update agent storage mode', e);
+            }
+        },
+        [user, updateUser],
+    );
+
+    const handleServerVoiceToggle = useCallback(
+        async (value: boolean) => {
+            try {
+                const source = value ? 'server_gemini' : 'on_device';
+                await authApi.updateMe({ voice_source: source });
+                setServerVoice(value);
+                if (user) updateUser({ ...user, voice_source: source });
+            } catch (e) {
+                console.error('Failed to update voice source', e);
             }
         },
         [user, updateUser],
@@ -148,6 +165,7 @@ export default function SettingsHomeScreen() {
             setCurrentThemeName(themes[themeName].name);
             setSingleChatMode(user?.single_chat_mode ?? false);
             setAgnoSessions(user?.agent_storage_mode === 'agno');
+            setServerVoice(user?.voice_source === 'server_gemini');
             setProactiveEnabled(user?.proactive_enabled ?? false);
             setDailyBriefTime(user?.daily_brief_time ?? null);
 
@@ -257,6 +275,13 @@ export default function SettingsHomeScreen() {
                         subtitle="Store session history in Agno instead of payload"
                         value={agnoSessions}
                         onToggle={handleAgnoSessionsToggle}
+                        isFirst={false}
+                    />
+                    <SettingsToggleRow
+                        label="Server Voice (Gemini)"
+                        subtitle="Experimental: speak replies with a Gemini voice from the server"
+                        value={serverVoice}
+                        onToggle={handleServerVoiceToggle}
                         isFirst={false}
                     />
                     <SettingsToggleRow
