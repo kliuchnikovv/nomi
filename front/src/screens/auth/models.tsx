@@ -27,6 +27,12 @@ export interface AuthContextType {
     refreshToken: () => Promise<boolean>;
     signInWithGoogle: () => Promise<void>;
     updateUser: (user: User) => Promise<void>;
+    /**
+     * Re-fetch the current user from /auth/me and persist it. Triggers the
+     * backend's Updates-chat self-heal (recreates a deleted/dangling updates
+     * chat) and refreshes updates_chat_id. Non-fatal on failure.
+     */
+    refreshUser: () => Promise<void>;
 }
 
 export function alertError(message: string) {

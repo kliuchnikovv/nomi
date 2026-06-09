@@ -1,22 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Speech from 'expo-speech';
 import { AppState, AppStateStatus, Linking } from 'react-native';
-import {
-    initWhisper,
-    initWhisperVad,
-    type WhisperContext,
-    type WhisperVadContext,
-} from 'whisper.rn';
-import {
-    RealtimeTranscriber,
-    RingBufferVad,
-} from 'whisper.rn/realtime-transcription';
-import { AudioPcmStreamAdapter } from 'whisper.rn/realtime-transcription/adapters/AudioPcmStreamAdapter';
+import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useChat } from '../context';
-import {
-    ensureWhisperModels,
-    type ModelDownloadProgress,
-} from './whisperModel';
 
 export type VoiceState =
     | 'loading'
@@ -31,44 +17,89 @@ export interface UseVoiceConversationOptions {
     chatId: string;
 }
 
+// Languages offered in the in-call switcher. `code` is a BCP-47 locale passed to
+// the native recognizer; `label` is shown on the toggle; `short` drives TTS.
+export interface VoiceLanguageOption {
+    code: string;
+    label: string;
+    short: string;
+}
+export const VOICE_LANGUAGES: VoiceLanguageOption[] = [
+    { code: 'ru-RU', label: 'RU', short: 'ru' },
+    { code: 'en-US', label: 'EN', short: 'en' },
+];
+const DEFAULT_LANGUAGE = 'ru-RU';
+
 export interface UseVoiceConversationResult {
     state: VoiceState;
     liveTranscript: string;
     errorKind: ErrorKind;
     /** Detected language code of the user's speech (e.g. 'ru', 'en'), or null. */
     detectedLanguage: string | null;
-    /** Model download progress while in 'loading' state, or null once ready. */
-    modelProgress: ModelDownloadProgress | null;
+    /** Model download progress — always null now (native engine, no download). */
+    modelProgress: null;
+    /** Current recognition locale (BCP-47, e.g. 'ru-RU'). */
+    language: string;
+    /** Switch the recognition language; restarts capture mid-call if listening. */
+    setLanguage(code: string): void;
     interrupt(): void;
     stop(): void;
     openSettings(): void;
 }
 
-// Backstop after the VAD reports end-of-speech: if no further speech or
-// transcription arrives within this window, finalize the turn. The VAD itself
-// is the primary end-of-turn signal; this guards against missed events.
-const SILENCE_TIMEOUT_MS = 900;
-const MAX_STT_RETRIES = 3;
+// We run the native recognizer in `continuous` mode and own end-of-turn
+// detection ourselves: a turn finalizes only after a real trailing silence once
+// speech has actually been heard. This avoids iOS's eager endpointing, which
+// (with `continuous: false`) ends the session on the first pause / first
+// `isFinal` and drops speech the user was still saying.
+const END_SILENCE_MS = 1300; // trailing silence after speech before finalizing
+const ENDPOINT_CHECK_INTERVAL_MS = 250;
 
-// --- Barge-in (interrupt the assistant by speaking) -------------------------
-// Keeping the mic open while TTS plays risks the assistant transcribing its own
-// voice (no hardware echo cancellation guaranteed by the audio stream lib), so
-// barge-in is conservative and easy to disable if it misbehaves on device:
-//  - mic only runs during 'speaking' (not while the assistant is "thinking"),
-//  - a stricter VAD threshold during playback resists self-triggering,
-//  - speech must be sustained before it counts as an interruption.
-// The tap-to-interrupt gesture in VoiceScreen remains as a fallback.
-const BARGE_IN_ENABLED = true;
-const BARGE_IN_MIN_SPEECH_MS = 350;
-const VAD_THRESHOLD_LISTEN = 0.5; // normal sensitivity when it's the user's turn
-const VAD_THRESHOLD_SPEAKING = 0.7; // less sensitive while TTS is playing
+// Silent re-listen debounce when a session ends with no speech (user hasn't
+// spoken yet) — keep listening instead of nagging the user.
+const RELISTEN_DEBOUNCE_MS = 300;
+
+// Wedged-recognizer safety net: if the session keeps ending empty in rapid
+// succession (no speech ever captured), surface an error instead of looping.
+const MAX_EMPTY_RESTARTS = 8;
+const EMPTY_RESTART_WINDOW_MS = 8000;
+
+// Start TTS as early as possible: for the FIRST chunk of a reply we break on a
+// clause boundary (or this many characters) instead of waiting for a full
+// sentence, cutting time-to-first-audio. Later chunks use sentence boundaries.
+const FIRST_CHUNK_MIN_CHARS = 12;
 
 // Sentence terminators across Latin / CJK scripts, used to chunk streaming
 // assistant text for incremental TTS.
 const SENTENCE_RE = /[^.!?…。！？\n]*[.!?…。！？\n]+/g;
+// Clause boundaries (commas, dashes, colons, newline) used only to emit the
+// first spoken chunk sooner.
+const CLAUSE_RE = /[^,;:—–\n]*[,;:—–\n]+/g;
 
-// Map a 2-letter language code (from Whisper auto-detect) to a TTS-friendly
-// BCP-47 locale. Falls back to the raw code, which expo-speech also accepts.
+// TTS voice tuning. The biggest lever on naturalness is the device voice
+// (Enhanced/Premium) chosen below; rate/pitch are kept near-neutral.
+const TTS_RATE = 1.0; // 1.0 = system default speaking rate
+const TTS_PITCH = 1.0; // 1.0 = normal pitch
+
+// Strip emoji / pictographs before speaking so the TTS engine doesn't read them
+// aloud (e.g. "smiling face", "party popper"). Explicit Unicode ranges (with the
+// `u` flag) are used for engine portability instead of \p{Extended_Pictographic}.
+const EMOJI_RE =
+    /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2300}-\u{23FF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{2122}\u{2139}]/gu;
+function stripForSpeech(text: string): string {
+    return text.replace(EMOJI_RE, '').replace(/\s+/g, ' ').trim();
+}
+
+// --- Resume-after-TTS watchdog ----------------------------------------------
+// Resuming to 'listening' after a reply hangs off expo-speech's onDone/onError
+// callbacks, which are unreliable on iOS. This watchdog runs once generation is
+// done: resume when the TTS queue drains, or force-resume if the engine reports
+// it is idle while utterances are still queued (a lost onDone).
+const TTS_WATCHDOG_INTERVAL_MS = 400;
+const TTS_DRAIN_GRACE_MS = 500;
+const TTS_STALL_MS = 1500;
+
+// Map a 2-letter language code to a TTS-friendly BCP-47 locale.
 const TTS_LOCALE: Record<string, string> = {
     ru: 'ru-RU',
     en: 'en-US',
@@ -104,10 +135,14 @@ function extractSpeakableText(msg: {
 
 // Pull complete sentences off the front of `text`. When `flush` is true, also
 // emit a trailing partial sentence (generation finished, nothing more coming).
-// Returns the sentences and how many characters were consumed.
+// When `earlyFirst` is true (nothing spoken yet for this reply) and no full
+// sentence is available, emit one early chunk on the first clause boundary at or
+// past FIRST_CHUNK_MIN_CHARS — this lowers time-to-first-audio without making
+// the whole reply choppy.
 function takeSentences(
     text: string,
     flush: boolean,
+    earlyFirst = false,
 ): { sentences: string[]; consumed: number } {
     const sentences: string[] = [];
     let consumed = 0;
@@ -123,60 +158,73 @@ function takeSentences(
         if (tail) sentences.push(tail);
         consumed = text.length;
     }
+    // No complete sentence yet, but we haven't spoken anything for this reply —
+    // try to emit a first clause so audio starts sooner.
+    if (!flush && earlyFirst && sentences.length === 0) {
+        CLAUSE_RE.lastIndex = 0;
+        const c = CLAUSE_RE.exec(text);
+        if (c && c.index + c[0].length >= FIRST_CHUNK_MIN_CHARS) {
+            const chunk = c[0].trim();
+            if (chunk) {
+                sentences.push(chunk);
+                consumed = CLAUSE_RE.lastIndex;
+            }
+        }
+    }
     return { sentences, consumed };
 }
 
 // Choose the TTS locale from the response text's script (most reliable for the
-// common ru/en split) with the Whisper-detected language as a fallback.
-function pickTtsLanguage(text: string, detected: string | null): string | undefined {
+// common ru/en split) with the user's selected language as a fallback.
+function pickTtsLanguage(text: string, fallbackShort: string): string {
     if (/[Ѐ-ӿ]/.test(text)) return 'ru-RU'; // Cyrillic
     if (/[぀-ヿ]/.test(text)) return 'ja-JP'; // Kana
     if (/[가-힯]/.test(text)) return 'ko-KR'; // Hangul
-    if (detected) return TTS_LOCALE[detected] ?? detected;
-    return undefined; // system default voice
+    return TTS_LOCALE[fallbackShort] ?? fallbackShort;
 }
 
 export function useVoiceConversation({
-    chatId,
+    chatId: _chatId,
 }: UseVoiceConversationOptions): UseVoiceConversationResult {
     const [voiceState, setVoiceState] = useState<VoiceState>('loading');
     const [liveTranscript, setLiveTranscript] = useState('');
     const [errorKind, setErrorKind] = useState<ErrorKind>(null);
-    const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
-    const [modelProgress, setModelProgress] =
-        useState<ModelDownloadProgress | null>(null);
+    const [language, setLanguageState] = useState<string>(DEFAULT_LANGUAGE);
 
     const { sendMessage, assistantWorking, messages } = useChat();
 
     const isMountedRef = useRef(true);
     const voiceStateRef = useRef<VoiceState>('loading');
     const assistantWorkingRef = useRef(assistantWorking);
+    const languageRef = useRef<string>(DEFAULT_LANGUAGE);
+    const onDeviceRef = useRef(false);
+    const recognizingRef = useRef(false);
 
-    // whisper.rn engine handles
-    const whisperCtxRef = useRef<WhisperContext | null>(null);
-    const vadCtxRef = useRef<WhisperVadContext | null>(null);
-    const transcriberRef = useRef<RealtimeTranscriber | null>(null);
-    const engineRunningRef = useRef(false);
-
-    // Current listening turn accumulation
-    const turnSegmentsRef = useRef<string[]>([]); // stabilized slice texts
-    const liveSliceRef = useRef(''); // in-progress slice text
+    // Current listening turn accumulation.
+    const finalTextRef = useRef(''); // consolidated final transcript(s)
+    const interimRef = useRef(''); // latest in-progress transcript
     const hasSpeechRef = useRef(false);
     const finalizingRef = useRef(false);
-    const detectedLangRef = useRef<string | null>(null);
-    const turnEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastResultAtRef = useRef(0); // last time the transcript changed
+    const endpointingRef = useRef(false); // we called stop() to finalize the turn
+    // Safety-net bookkeeping for rapid empty re-listens (wedged recognizer).
+    const emptyRestartCountRef = useRef(0);
+    const emptyRestartWindowAtRef = useRef(0);
     const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const sttRetryCountRef = useRef(0);
 
-    // Barge-in tracking: timestamp (ms) of speech onset detected during playback.
-    const bargeInStartRef = useRef<number | null>(null);
-
-    // Streaming-TTS bookkeeping
-    const spokenOffsetRef = useRef(0); // chars of current assistant msg enqueued
+    // Streaming-TTS bookkeeping.
+    const spokenOffsetRef = useRef(0);
     const currentAssistantIdRef = useRef<string | null>(null);
-    const ttsActiveCountRef = useRef(0); // queued-but-not-finished utterances
+    // Reply that was interrupted (tap or barge-in): never speak it again, even
+    // if it keeps streaming. A genuinely new reply has a different id.
+    const interruptedAssistantIdRef = useRef<string | null>(null);
+    const ttsActiveCountRef = useRef(0);
     const ttsLangRef = useRef<string | undefined>(undefined);
     const lastFullLenRef = useRef(0);
+    const lastTtsActivityAtRef = useRef(0);
+    // Best available device voice per language prefix (e.g. 'ru' -> identifier),
+    // resolved once from getAvailableVoicesAsync, preferring Enhanced quality.
+    const voiceByLangRef = useRef<Record<string, string>>({});
 
     const applyState = useCallback((s: VoiceState) => {
         voiceStateRef.current = s;
@@ -187,327 +235,145 @@ export function useVoiceConversation({
         assistantWorkingRef.current = assistantWorking;
     }, [assistantWorking]);
 
-    const clearTurnEndTimer = useCallback(() => {
-        if (turnEndTimerRef.current) {
-            clearTimeout(turnEndTimerRef.current);
-            turnEndTimerRef.current = null;
-        }
-    }, []);
-
     const currentTurnText = useCallback(() => {
-        return [...turnSegmentsRef.current, liveSliceRef.current]
+        return [finalTextRef.current, interimRef.current]
             .join(' ')
             .replace(/\s+/g, ' ')
             .trim();
     }, []);
 
-    // ---- Audio engine on/off -------------------------------------------------
-
-    const startEngine = useCallback(async () => {
-        if (engineRunningRef.current) return;
-        await transcriberRef.current?.start();
-        engineRunningRef.current = true;
-    }, []);
-    const startEngineRef = useRef(startEngine);
-    useEffect(() => {
-        startEngineRef.current = startEngine;
-    }, [startEngine]);
-
-    const stopEngine = useCallback(async () => {
-        if (!engineRunningRef.current) return;
-        engineRunningRef.current = false;
-        try {
-            await transcriberRef.current?.stop();
-        } catch {
-            /* ignore */
+    const clearRetryTimer = useCallback(() => {
+        if (retryTimerRef.current) {
+            clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = null;
         }
     }, []);
-    const stopEngineRef = useRef(stopEngine);
-    useEffect(() => {
-        stopEngineRef.current = stopEngine;
-    }, [stopEngine]);
 
-    // ---- Listening lifecycle -------------------------------------------------
+    // ---- Recognition lifecycle ----------------------------------------------
 
-    const clearTurnAccumulation = useCallback(() => {
-        turnSegmentsRef.current = [];
-        liveSliceRef.current = '';
+    const startListening = useCallback(async () => {
+        if (!isMountedRef.current) return;
+        clearRetryTimer();
+        finalTextRef.current = '';
+        interimRef.current = '';
         hasSpeechRef.current = false;
         finalizingRef.current = false;
-        bargeInStartRef.current = null;
+        endpointingRef.current = false;
+        lastResultAtRef.current = Date.now();
         setLiveTranscript('');
-    }, []);
-
-    // Resume a fresh listening turn. `keepAudio` is set by barge-in, where the
-    // mic is already capturing the user's interrupting speech and must not be
-    // reset (which would clip the first words).
-    const resumeListening = useCallback(
-        async (keepAudio = false) => {
-            const t = transcriberRef.current;
-            if (!t) return;
-            clearTurnEndTimer();
-            clearTurnAccumulation();
-            try {
-                t.updateVadOptions({ threshold: VAD_THRESHOLD_LISTEN });
-                await startEngineRef.current();
-                if (!keepAudio) t.reset();
-                applyState('listening');
-            } catch (err: any) {
-                const msg = String(err?.message ?? '').toLowerCase();
-                const isPermission =
-                    msg.includes('permission') ||
-                    msg.includes('not authorized');
-                setErrorKind(isPermission ? 'permission' : 'stt');
-                applyState('error');
+        try {
+            // The native engine throws if a session is already active — make
+            // sure the previous one is fully torn down before (re)starting.
+            if (recognizingRef.current) {
+                try {
+                    ExpoSpeechRecognitionModule.abort();
+                } catch {
+                    /* ignore */
+                }
             }
-        },
-        [applyState, clearTurnAccumulation, clearTurnEndTimer],
-    );
-    const resumeListeningRef = useRef(resumeListening);
-    useEffect(() => {
-        resumeListeningRef.current = resumeListening;
-    }, [resumeListening]);
-
-    const finalizeTurn = useCallback(async () => {
-        if (voiceStateRef.current !== 'listening') return;
-        if (finalizingRef.current) return;
-        clearTurnEndTimer();
-
-        const text = currentTurnText();
-        if (!text) {
-            // Nothing recognized — count as a miss and retry / give up gracefully.
-            sttRetryCountRef.current += 1;
-            if (sttRetryCountRef.current >= MAX_STT_RETRIES) {
-                sttRetryCountRef.current = 0;
-                setLiveTranscript("Couldn't hear you — try again");
-                retryTimerRef.current = setTimeout(
-                    () => resumeListeningRef.current(),
-                    2000,
-                );
-            } else {
-                resumeListeningRef.current();
-            }
-            return;
+            ExpoSpeechRecognitionModule.start({
+                lang: languageRef.current,
+                interimResults: true,
+                // We own end-of-turn detection (trailing-silence endpointer
+                // below). Continuous keeps the mic open so iOS doesn't end the
+                // session on the first pause and drop the user's speech.
+                continuous: true,
+                requiresOnDeviceRecognition: onDeviceRef.current,
+                addsPunctuation: true,
+                iosTaskHint: 'dictation',
+            });
+            applyState('listening');
+        } catch (err: any) {
+            console.warn('[voice] start failed', err?.message ?? err);
+            setErrorKind('stt');
+            applyState('error');
         }
+    }, [applyState, clearRetryTimer]);
+    const startListeningRef = useRef(startListening);
+    useEffect(() => {
+        startListeningRef.current = startListening;
+    }, [startListening]);
 
-        finalizingRef.current = true;
-        sttRetryCountRef.current = 0;
-        setDetectedLanguage(detectedLangRef.current);
-        // Stop the mic while the assistant thinks — no recording, no feedback.
-        await stopEngineRef.current();
-        applyState('processing');
-        sendMessage(text);
-    }, [applyState, clearTurnEndTimer, currentTurnText, sendMessage]);
-
+    const finalizeTurn = useCallback(
+        (text: string) => {
+            if (finalizingRef.current) return;
+            finalizingRef.current = true;
+            // A captured turn means the recognizer is healthy — reset the
+            // wedged-recognizer safety net.
+            emptyRestartCountRef.current = 0;
+            applyState('processing');
+            sendMessage(text);
+        },
+        [applyState, sendMessage],
+    );
     const finalizeTurnRef = useRef(finalizeTurn);
     useEffect(() => {
         finalizeTurnRef.current = finalizeTurn;
     }, [finalizeTurn]);
 
-    const armTurnEnd = useCallback(() => {
-        clearTurnEndTimer();
-        turnEndTimerRef.current = setTimeout(() => {
-            if (voiceStateRef.current === 'listening' && hasSpeechRef.current) {
-                finalizeTurnRef.current();
-            }
-        }, SILENCE_TIMEOUT_MS);
-    }, [clearTurnEndTimer]);
-
-    // ---- Barge-in ------------------------------------------------------------
-
-    // Open the mic for the duration of playback so the user can interrupt.
-    const armBargeIn = useCallback(() => {
-        if (!BARGE_IN_ENABLED) return;
-        bargeInStartRef.current = null;
-        try {
-            transcriberRef.current?.updateVadOptions({
-                threshold: VAD_THRESHOLD_SPEAKING,
-            });
-        } catch {
-            /* ignore */
+    // The session ended with no speech (user simply hasn't spoken yet). Keep
+    // listening silently — no nagging. Only bail to an error if the recognizer
+    // is wedged: many empty sessions in rapid succession with zero speech.
+    const relisten = useCallback(() => {
+        clearRetryTimer();
+        const now = Date.now();
+        if (now - emptyRestartWindowAtRef.current > EMPTY_RESTART_WINDOW_MS) {
+            emptyRestartWindowAtRef.current = now;
+            emptyRestartCountRef.current = 0;
         }
-        startEngineRef.current().catch(() => {});
-    }, []);
-    const armBargeInRef = useRef(armBargeIn);
-    useEffect(() => {
-        armBargeInRef.current = armBargeIn;
-    }, [armBargeIn]);
-
-    // User interrupted: cut the assistant off and capture what they're saying.
-    const triggerBargeIn = useCallback(() => {
-        Speech.stop();
-        ttsActiveCountRef.current = 0;
-        currentAssistantIdRef.current = null;
-        spokenOffsetRef.current = 0;
-        try {
-            transcriberRef.current?.updateVadOptions({
-                threshold: VAD_THRESHOLD_LISTEN,
-            });
-        } catch {
-            /* ignore */
+        emptyRestartCountRef.current += 1;
+        if (emptyRestartCountRef.current >= MAX_EMPTY_RESTARTS) {
+            emptyRestartCountRef.current = 0;
+            console.warn('[voice] recognizer wedged — surfacing stt error');
+            setErrorKind('stt');
+            applyState('error');
+            return;
         }
-        // Keep the engine running — it is mid-capture of the user's speech.
-        clearTurnEndTimer();
-        turnSegmentsRef.current = [];
-        liveSliceRef.current = '';
-        hasSpeechRef.current = true;
-        finalizingRef.current = false;
-        bargeInStartRef.current = null;
-        setLiveTranscript('');
-        applyState('listening');
-        armTurnEnd();
-    }, [applyState, armTurnEnd, clearTurnEndTimer]);
-    const triggerBargeInRef = useRef(triggerBargeIn);
+        retryTimerRef.current = setTimeout(
+            () => startListeningRef.current(),
+            RELISTEN_DEBOUNCE_MS,
+        );
+    }, [applyState, clearRetryTimer]);
+    const relistenRef = useRef(relisten);
     useEffect(() => {
-        triggerBargeInRef.current = triggerBargeIn;
-    }, [triggerBargeIn]);
-
-    // ---- Engine initialization ----------------------------------------------
-
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const { sttPath, vadPath } = await ensureWhisperModels(p => {
-                    if (!cancelled) setModelProgress(p);
-                });
-                if (cancelled) return;
-                setModelProgress(null);
-
-                const whisperCtx = await initWhisper({
-                    filePath: sttPath,
-                    useGpu: true,
-                    useFlashAttn: true,
-                });
-                if (cancelled) {
-                    whisperCtx.release();
-                    return;
-                }
-                whisperCtxRef.current = whisperCtx;
-
-                const vadCtx = await initWhisperVad({
-                    filePath: vadPath,
-                    useGpu: true,
-                });
-                if (cancelled) {
-                    vadCtx.release();
-                    return;
-                }
-                vadCtxRef.current = vadCtx;
-
-                const ringVad = new RingBufferVad(vadCtx, {
-                    vadPreset: 'default',
-                });
-                const audioStream = new AudioPcmStreamAdapter();
-
-                const transcriber = new RealtimeTranscriber(
-                    {
-                        whisperContext: whisperCtx,
-                        vadContext: ringVad,
-                        audioStream,
-                    },
-                    {
-                        // 'auto' → Whisper detects the spoken language per slice.
-                        // Auto-slicing on speech-end is driven by the VAD context.
-                        transcribeOptions: { language: 'auto' },
-                        audioSliceSec: 30,
-                    },
-                    {
-                        onVad: event => {
-                            const st = voiceStateRef.current;
-                            if (st === 'listening') {
-                                if (event.type === 'speech_start') {
-                                    hasSpeechRef.current = true;
-                                    clearTurnEndTimer();
-                                } else if (
-                                    event.type === 'speech_end' ||
-                                    event.type === 'silence'
-                                ) {
-                                    if (hasSpeechRef.current) armTurnEnd();
-                                }
-                            } else if (st === 'speaking' && BARGE_IN_ENABLED) {
-                                if (event.type === 'speech_start') {
-                                    bargeInStartRef.current = Date.now();
-                                } else if (event.type === 'speech_continue') {
-                                    const started = bargeInStartRef.current;
-                                    if (
-                                        started != null &&
-                                        Date.now() - started >=
-                                            BARGE_IN_MIN_SPEECH_MS
-                                    ) {
-                                        triggerBargeInRef.current();
-                                    }
-                                } else {
-                                    bargeInStartRef.current = null;
-                                }
-                            }
-                        },
-                        onTranscribe: event => {
-                            if (voiceStateRef.current !== 'listening') return;
-                            const data = event.data;
-                            if (!data) return;
-                            if (data.language) {
-                                detectedLangRef.current = data.language;
-                            }
-                            const partial = data.result?.trim() ?? '';
-                            if (partial) {
-                                liveSliceRef.current = partial;
-                                hasSpeechRef.current = true;
-                                setLiveTranscript(currentTurnText());
-                                armTurnEnd();
-                            }
-                        },
-                        onSliceTranscriptionStabilized: text => {
-                            if (voiceStateRef.current !== 'listening') return;
-                            const t = text?.trim() ?? '';
-                            if (t) {
-                                turnSegmentsRef.current.push(t);
-                                liveSliceRef.current = '';
-                                hasSpeechRef.current = true;
-                                setLiveTranscript(currentTurnText());
-                                armTurnEnd();
-                            }
-                        },
-                        onError: () => {
-                            // Transient stream/transcription errors — keep listening.
-                        },
-                    },
-                );
-                transcriberRef.current = transcriber;
-
-                if (cancelled) return;
-                await resumeListeningRef.current();
-            } catch (err: any) {
-                if (cancelled) return;
-                setErrorKind('model');
-                applyState('error');
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [applyState, armTurnEnd, clearTurnEndTimer, currentTurnText]);
+        relistenRef.current = relisten;
+    }, [relisten]);
 
     // ---- Streaming TTS -------------------------------------------------------
 
     const onUtteranceDone = useCallback(() => {
         ttsActiveCountRef.current = Math.max(0, ttsActiveCountRef.current - 1);
+        lastTtsActivityAtRef.current = Date.now();
         if (
             ttsActiveCountRef.current === 0 &&
             !assistantWorkingRef.current &&
             voiceStateRef.current === 'speaking' &&
             spokenOffsetRef.current >= lastFullLenRef.current
         ) {
-            resumeListeningRef.current();
+            startListeningRef.current();
         }
     }, []);
 
     const enqueueSpeak = useCallback(
         (sentence: string) => {
+            const clean = stripForSpeech(sentence);
+            // Sentence was only emoji/whitespace — nothing to say, don't count it.
+            if (!clean) return;
+            const prefix = (ttsLangRef.current ?? '')
+                .toLowerCase()
+                .split('-')[0];
             ttsActiveCountRef.current += 1;
-            Speech.speak(sentence, {
+            lastTtsActivityAtRef.current = Date.now();
+            Speech.speak(clean, {
                 language: ttsLangRef.current,
+                voice: voiceByLangRef.current[prefix],
+                rate: TTS_RATE,
+                pitch: TTS_PITCH,
+                // Use a dedicated playback session instead of the recognizer's.
+                // The recognizer leaves the shared AVAudioSession in
+                // playAndRecord/measurement, which routes TTS to the quiet
+                // earpiece; a separate session plays at full loudspeaker volume.
+                useApplicationAudioSession: false,
                 onDone: onUtteranceDone,
                 onError: onUtteranceDone,
             });
@@ -515,8 +381,7 @@ export function useVoiceConversation({
         [onUtteranceDone],
     );
 
-    // Speak assistant text sentence-by-sentence as it streams in, instead of
-    // waiting for the whole response. Runs while handling a response turn.
+    // Speak assistant text sentence-by-sentence as it streams in.
     useEffect(() => {
         const state = voiceStateRef.current;
         if (state !== 'processing' && state !== 'speaking') return;
@@ -530,24 +395,33 @@ export function useVoiceConversation({
             currentAssistantIdRef.current = lastAssistant.id;
             spokenOffsetRef.current = 0;
             ttsLangRef.current = undefined;
+            // A genuinely new reply — clear any prior interruption marker.
+            interruptedAssistantIdRef.current = null;
         }
+
+        // This reply was interrupted (tap or barge-in): never speak it again,
+        // even if it keeps streaming.
+        if (lastAssistant.id === interruptedAssistantIdRef.current) return;
 
         const full = extractSpeakableText(lastAssistant);
         lastFullLenRef.current = full.length;
 
         const pending = full.slice(spokenOffsetRef.current);
-        const { sentences, consumed } = takeSentences(pending, !assistantWorking);
+        const { sentences, consumed } = takeSentences(
+            pending,
+            !assistantWorking,
+            spokenOffsetRef.current === 0, // earlyFirst: nothing spoken yet
+        );
 
         if (sentences.length > 0) {
             if (ttsLangRef.current === undefined) {
                 ttsLangRef.current = pickTtsLanguage(
                     full,
-                    detectedLangRef.current,
+                    languageRef.current.split('-')[0],
                 );
             }
             if (voiceStateRef.current === 'processing') {
                 applyState('speaking');
-                armBargeInRef.current(); // open mic so the user can interrupt
             }
             sentences.forEach(enqueueSpeak);
             spokenOffsetRef.current += consumed;
@@ -560,25 +434,230 @@ export function useVoiceConversation({
             voiceStateRef.current === 'processing' &&
             full.length === 0
         ) {
-            resumeListeningRef.current();
+            startListeningRef.current();
         }
     }, [assistantWorking, messages, applyState, enqueueSpeak]);
 
-    // Safety net: stuck in 'processing' shortly after generation ends with no
-    // speakable text and no queued audio — resume listening.
+    // Resume-after-TTS watchdog (covers lost expo-speech onDone, late updates).
     useEffect(() => {
         if (assistantWorking) return;
-        if (voiceStateRef.current !== 'processing') return;
-        const timer = setTimeout(() => {
-            if (
-                voiceStateRef.current === 'processing' &&
-                ttsActiveCountRef.current === 0
-            ) {
-                resumeListeningRef.current();
+        if (voiceState !== 'processing' && voiceState !== 'speaking') return;
+        const id = setInterval(() => {
+            const st = voiceStateRef.current;
+            if (st !== 'processing' && st !== 'speaking') return;
+            if (assistantWorkingRef.current) return;
+            const idleMs = Date.now() - lastTtsActivityAtRef.current;
+            if (ttsActiveCountRef.current === 0) {
+                if (idleMs >= TTS_DRAIN_GRACE_MS) {
+                    startListeningRef.current();
+                }
+            } else if (idleMs >= TTS_STALL_MS) {
+                Speech.isSpeakingAsync()
+                    .then(speaking => {
+                        if (speaking) return;
+                        if (assistantWorkingRef.current) return;
+                        const s = voiceStateRef.current;
+                        if (s !== 'processing' && s !== 'speaking') return;
+                        if (ttsActiveCountRef.current === 0) return;
+                        // The reply finished streaming and was fully consumed;
+                        // just stop the stalled tail and resume. Leave
+                        // currentAssistantId/spokenOffset intact so the reply
+                        // isn't re-spoken on the next render (cf. Fix 2).
+                        Speech.stop();
+                        ttsActiveCountRef.current = 0;
+                        startListeningRef.current();
+                    })
+                    .catch(() => {});
             }
-        }, 400);
-        return () => clearTimeout(timer);
-    }, [assistantWorking]);
+        }, TTS_WATCHDOG_INTERVAL_MS);
+        return () => clearInterval(id);
+    }, [assistantWorking, voiceState]);
+
+    // ---- Trailing-silence endpointer -----------------------------------------
+    // The recognizer runs in continuous mode, so ending the turn is ours to
+    // decide: once speech has been heard, finalize after END_SILENCE_MS with no
+    // transcript change by asking the engine to stop() (→ final result → onEnd
+    // → finalizeTurn). Before any speech we do nothing and keep listening.
+    useEffect(() => {
+        if (voiceState !== 'listening') return;
+        const id = setInterval(() => {
+            if (voiceStateRef.current !== 'listening') return;
+            if (!hasSpeechRef.current) return;
+            if (finalizingRef.current || endpointingRef.current) return;
+            if (Date.now() - lastResultAtRef.current < END_SILENCE_MS) return;
+            endpointingRef.current = true;
+            try {
+                ExpoSpeechRecognitionModule.stop();
+            } catch {
+                /* onEnd/onError will recover the turn */
+            }
+        }, ENDPOINT_CHECK_INTERVAL_MS);
+        return () => clearInterval(id);
+    }, [voiceState]);
+
+    // ---- Engine init + native event wiring ----------------------------------
+
+    useEffect(() => {
+        let cancelled = false;
+        const subs: Array<{ remove: () => void }> = [];
+
+        // Last transcript we stamped the endpointer clock for — guard against
+        // iOS re-emitting an identical interim result (which would otherwise
+        // keep resetting the trailing-silence timer and never endpoint).
+        let lastStampedText = '';
+
+        const onResult = (event: any) => {
+            if (voiceStateRef.current !== 'listening') return;
+            const transcript: string = event?.results?.[0]?.transcript ?? '';
+            if (event?.isFinal) {
+                finalTextRef.current = [finalTextRef.current, transcript]
+                    .join(' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                interimRef.current = '';
+            } else {
+                interimRef.current = transcript;
+            }
+            const text = currentTurnText();
+            if (text) {
+                hasSpeechRef.current = true;
+                setLiveTranscript(text);
+                // Advance the trailing-silence clock only when the transcript
+                // actually changed; the endpointer below finalizes once it
+                // stops changing for END_SILENCE_MS.
+                if (text !== lastStampedText) {
+                    lastStampedText = text;
+                    lastResultAtRef.current = Date.now();
+                }
+            }
+        };
+
+        const onEnd = () => {
+            recognizingRef.current = false;
+            lastStampedText = '';
+            if (voiceStateRef.current !== 'listening') return;
+            const text = currentTurnText();
+            if (text) {
+                // Covers both our endpointing stop() and any spontaneous iOS end.
+                finalizeTurnRef.current(text);
+            } else {
+                // No speech this session — keep listening silently.
+                relistenRef.current();
+            }
+        };
+
+        const onError = (event: any) => {
+            recognizingRef.current = false;
+            lastStampedText = '';
+            const code: string = event?.error ?? '';
+            console.warn('[voice] recognition error', code, event?.message);
+            if (voiceStateRef.current !== 'listening') return;
+            if (code === 'not-allowed' || code === 'service-not-allowed') {
+                setErrorKind('permission');
+                applyState('error');
+                return;
+            }
+            // If we already captured speech this turn, finalize it rather than
+            // discarding it on a late transient error.
+            const text = currentTurnText();
+            if (text) {
+                finalizeTurnRef.current(text);
+                return;
+            }
+            // 'no-speech', 'aborted', 'busy', 'interrupted' — keep listening.
+            relistenRef.current();
+        };
+
+        const onStart = () => {
+            recognizingRef.current = true;
+        };
+
+        (async () => {
+            try {
+                if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+                    setErrorKind('stt');
+                    applyState('error');
+                    return;
+                }
+                const perm =
+                    await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+                if (cancelled) return;
+                if (!perm.granted) {
+                    setErrorKind('permission');
+                    applyState('error');
+                    return;
+                }
+                try {
+                    onDeviceRef.current =
+                        ExpoSpeechRecognitionModule.supportsOnDeviceRecognition();
+                } catch {
+                    onDeviceRef.current = false;
+                }
+
+                // Resolve the best voice per language for more natural TTS.
+                // Enhanced/Premium voices sound far better than the default but
+                // must be downloaded by the user (iOS: Settings > Accessibility
+                // > Spoken Content > Voices); we pick the best one available.
+                try {
+                    const voices = await Speech.getAvailableVoicesAsync();
+                    if (!cancelled && Array.isArray(voices)) {
+                        const byLang: Record<
+                            string,
+                            { id: string; score: number }
+                        > = {};
+                        for (const v of voices) {
+                            const prefix = v.language
+                                ?.toLowerCase()
+                                .split('-')[0];
+                            if (!prefix || !v.identifier) continue;
+                            const score =
+                                v.quality === Speech.VoiceQuality.Enhanced
+                                    ? 2
+                                    : 1;
+                            const best = byLang[prefix];
+                            if (!best || score > best.score) {
+                                byLang[prefix] = { id: v.identifier, score };
+                            }
+                        }
+                        voiceByLangRef.current = Object.fromEntries(
+                            Object.entries(byLang).map(([k, v]) => [k, v.id]),
+                        );
+                    }
+                } catch {
+                    /* fall back to the system default voice */
+                }
+
+                subs.push(
+                    ExpoSpeechRecognitionModule.addListener('start', onStart),
+                    ExpoSpeechRecognitionModule.addListener('result', onResult),
+                    ExpoSpeechRecognitionModule.addListener('end', onEnd),
+                    ExpoSpeechRecognitionModule.addListener('error', onError),
+                );
+
+                if (cancelled) return;
+                await startListeningRef.current();
+            } catch (err: any) {
+                if (cancelled) return;
+                console.error(
+                    '[voice] engine init failed:',
+                    err?.message ?? err,
+                );
+                setErrorKind('stt');
+                applyState('error');
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+            subs.forEach(s => {
+                try {
+                    s.remove();
+                } catch {
+                    /* ignore */
+                }
+            });
+        };
+    }, [applyState, currentTurnText]);
 
     // ---- App background ------------------------------------------------------
 
@@ -589,14 +668,18 @@ export function useVoiceConversation({
                 if (next === 'background' || next === 'inactive') {
                     Speech.stop();
                     ttsActiveCountRef.current = 0;
-                    stopEngineRef.current();
-                    clearTurnEndTimer();
+                    try {
+                        ExpoSpeechRecognitionModule.abort();
+                    } catch {
+                        /* ignore */
+                    }
+                    recognizingRef.current = false;
                     applyState('idle');
                 }
             },
         );
         return () => sub.remove();
-    }, [clearTurnEndTimer, applyState]);
+    }, [applyState]);
 
     // ---- Mount / unmount -----------------------------------------------------
 
@@ -604,55 +687,53 @@ export function useVoiceConversation({
         return () => {
             isMountedRef.current = false;
             Speech.stop();
-            clearTurnEndTimer();
-            if (retryTimerRef.current) {
-                clearTimeout(retryTimerRef.current);
-                retryTimerRef.current = null;
+            clearRetryTimer();
+            try {
+                ExpoSpeechRecognitionModule.abort();
+            } catch {
+                /* ignore */
             }
-            const t = transcriberRef.current;
-            transcriberRef.current = null;
-            engineRunningRef.current = false;
-            (async () => {
-                try {
-                    await t?.release();
-                } catch {
-                    /* ignore */
-                }
-                try {
-                    await whisperCtxRef.current?.release();
-                } catch {
-                    /* ignore */
-                }
-                try {
-                    await vadCtxRef.current?.release();
-                } catch {
-                    /* ignore */
-                }
-            })();
+            recognizingRef.current = false;
         };
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [clearRetryTimer]);
+
+    // ---- Public actions ------------------------------------------------------
+
+    const setLanguage = useCallback((code: string) => {
+        if (code === languageRef.current) return;
+        languageRef.current = code;
+        setLanguageState(code);
+        // Apply immediately if we're mid-listen; otherwise the next turn
+        // (resume after TTS) picks it up.
+        if (voiceStateRef.current === 'listening') {
+            startListeningRef.current();
+        }
+    }, []);
 
     const interrupt = useCallback(() => {
         if (voiceStateRef.current === 'speaking') {
             Speech.stop();
             ttsActiveCountRef.current = 0;
-            currentAssistantIdRef.current = null;
-            spokenOffsetRef.current = 0;
-            resumeListeningRef.current();
+            // Abandon the cut-off reply so it isn't re-spoken before the next
+            // one (cf. Fix 2). Start a fresh clean listen — a tap doesn't mean
+            // the user is already mid-sentence.
+            interruptedAssistantIdRef.current = currentAssistantIdRef.current;
+            startListeningRef.current();
         }
     }, []);
 
     const stop = useCallback(() => {
         Speech.stop();
         ttsActiveCountRef.current = 0;
-        clearTurnEndTimer();
-        if (retryTimerRef.current) {
-            clearTimeout(retryTimerRef.current);
-            retryTimerRef.current = null;
+        clearRetryTimer();
+        try {
+            ExpoSpeechRecognitionModule.abort();
+        } catch {
+            /* ignore */
         }
-        stopEngineRef.current();
+        recognizingRef.current = false;
         applyState('idle');
-    }, [clearTurnEndTimer, applyState]);
+    }, [clearRetryTimer, applyState]);
 
     const openSettings = useCallback(() => {
         Linking.openSettings();
@@ -662,8 +743,10 @@ export function useVoiceConversation({
         state: voiceState,
         liveTranscript,
         errorKind,
-        detectedLanguage,
-        modelProgress,
+        detectedLanguage: language.split('-')[0],
+        modelProgress: null,
+        language,
+        setLanguage,
         interrupt,
         stop,
         openSettings,

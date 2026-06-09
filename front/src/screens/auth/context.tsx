@@ -8,10 +8,11 @@ import React, {
     useState,
 } from 'react';
 
+import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
-import { apiClient, setupApiClient } from '../../apiClient';
+import { apiClient, authApi, setupApiClient } from '../../apiClient';
 import { getApiUrl } from '../../config';
 import { AuthContextType, User, alertError } from './models';
 import { secureTokenStorage } from '../../services/auth/SecureTokenStorage';
@@ -430,6 +431,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
     };
 
+    // Re-fetch the user from /auth/me and persist it. The backend self-heals a
+    // deleted/dangling Updates chat on this call (EnsureUpdatesChat) and returns
+    // a fresh updates_chat_id, so the client's Updates inbox target stays valid.
+    // Non-fatal: a transient failure keeps the cached user; a 401 is handled by
+    // the apiClient refresh/logout flow.
+    const refreshUser = useCallback(async () => {
+        try {
+            const data = await authApi.getMe();
+            if (data?.id) {
+                setUser(data);
+                await AsyncStorage.setItem('user', JSON.stringify(data));
+            }
+        } catch (e) {
+            console.warn('[Auth] refreshUser failed', e);
+        }
+    }, []);
+
     // Sync current user ID into storage singletons for user-space isolation
     useEffect(() => {
         const userId = user?.id ?? null;
@@ -445,6 +463,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             logout: () => logout(),
         });
     }, [token, refreshToken, logout]);
+
+    // Refresh the user from the server on login and whenever the app returns to
+    // the foreground, so the backend recreates a deleted Updates chat and the
+    // cached updates_chat_id never goes stale during normal use.
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        refreshUser();
+        const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+            if (s === 'active') refreshUser();
+        });
+        return () => sub.remove();
+    }, [isAuthenticated, refreshUser]);
 
     // Register/deregister push notification device token with auth state
     useEffect(() => {
@@ -470,6 +500,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshToken,
         signInWithGoogle,
         updateUser,
+        refreshUser,
     };
 
     return (

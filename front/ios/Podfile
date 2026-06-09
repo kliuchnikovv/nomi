@@ -7,6 +7,11 @@ require Pod::Executable.execute_command('node', ['-p',
 
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 
+# react-native-permissions: enable the Microphone handler pod so voice mode can
+# actually query/request iOS mic access (without this, check() returns
+# 'unavailable' and the PCM audio stream silently yields no frames).
+require File.join(File.dirname(`node --print "require.resolve('react-native-permissions/package.json')"`), "scripts/setup")
+
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
@@ -19,6 +24,9 @@ end
 target 'genie' do
   use_expo_modules!
   config = use_native_modules!
+
+  # Microphone permission handler for voice mode (whisper.rn STT).
+  setup_permissions(['Microphone'])
 
   use_react_native!(
     :path => config[:reactNativePath],

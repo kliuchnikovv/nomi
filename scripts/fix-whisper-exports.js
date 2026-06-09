@@ -48,11 +48,21 @@ function main() {
         return;
     }
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    pkg.exports = pkg.exports || {};
-    if (pkg.exports['.'] && pkg.exports['./package.json']) {
-        return; // already patched
-    }
-    pkg.exports = {
+
+    // Build an explicit conditional entry pointing at concrete files. The
+    // wildcard `"./*": "src/*"` can't be used for subpaths because package-exports
+    // resolution does NOT append source extensions — `whisper.rn/realtime-transcription`
+    // would map to the extensionless `src/realtime-transcription`, which Metro
+    // "resolves" but never bundles, throwing `Cannot find module` at runtime. So we
+    // pin each subpath we import to real files (with extensions).
+    const entry = sub => ({
+        types: `./lib/typescript/${sub}.d.ts`,
+        'react-native': `./src/${sub}.ts`,
+        import: `./lib/module/${sub}.js`,
+        require: `./lib/commonjs/${sub}.js`,
+    });
+
+    const desired = {
         '.': {
             types: './lib/typescript/index.d.ts',
             'react-native': './src/index.ts',
@@ -60,8 +70,20 @@ function main() {
             require: './lib/commonjs/index.js',
         },
         './package.json': './package.json',
-        ...pkg.exports,
+        './realtime-transcription': entry('realtime-transcription/index'),
+        './realtime-transcription/adapters/AudioPcmStreamAdapter': entry(
+            'realtime-transcription/adapters/AudioPcmStreamAdapter',
+        ),
     };
+
+    const existing = pkg.exports || {};
+    // Idempotent: skip if every desired key is already present.
+    const alreadyPatched = Object.keys(desired).every(k => existing[k]);
+    if (alreadyPatched) {
+        return;
+    }
+    // Explicit subpaths first, then the original wildcard fallback.
+    pkg.exports = { ...desired, ...existing };
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
     console.log('[fix-whisper-exports] patched whisper.rn exports map');
 }

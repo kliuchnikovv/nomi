@@ -10,6 +10,13 @@
                 {
                     "color": "#ffffff"
                 }
+            ],
+            [
+                "expo-speech-recognition",
+                {
+                    "microphonePermission": "Nomi uses the microphone for voice conversations.",
+                    "speechRecognitionPermission": "Nomi uses speech recognition to transcribe what you say in voice mode."
+                }
             ]
         ],
         "extra": {
