@@ -63,6 +63,33 @@ def _pcm_to_wav(pcm: bytes) -> bytes:
     return buf.getvalue()
 
 
+def _extract_pcm(response) -> bytes:
+    """Pull the audio bytes out of the response, searching all parts.
+
+    The preview TTS model occasionally emits a text part instead of audio; in
+    that case there is no inline_data and we raise so the caller retries.
+    """
+    for candidate in response.candidates or []:
+        content = getattr(candidate, "content", None)
+        for part in getattr(content, "parts", None) or []:
+            inline = getattr(part, "inline_data", None)
+            if inline and inline.data:
+                return inline.data
+    raise _RetryableTTSError("Gemini TTS returned no audio data (text part?)")
+
+
+class _RetryableTTSError(Exception):
+    """Internal marker for a TTS failure worth retrying."""
+
+
+def _is_retryable(e: Exception) -> bool:
+    if isinstance(e, (errors.ServerError, _RetryableTTSError)):
+        return True
+    # The preview model intermittently 400s with this exact message when it
+    # tries to emit text instead of audio — retrying usually succeeds.
+    return "should only be used for TTS" in str(e)
+
+
 def _generate(text: str, voice: str) -> bytes:
     response = _get_client().models.generate_content(
         model=TTS_MODEL,
@@ -78,16 +105,14 @@ def _generate(text: str, voice: str) -> bytes:
             ),
         ),
     )
-    pcm = response.candidates[0].content.parts[0].inline_data.data
-    if not pcm:
-        raise ValueError("Gemini TTS returned no audio data")
-    return _pcm_to_wav(pcm)
+    return _pcm_to_wav(_extract_pcm(response))
 
 
 def synthesize(text: str, voice: str | None = None) -> bytes:
     """Synthesize `text` to a WAV byte string using Gemini TTS.
 
-    Retries transient 5xx errors from the preview model. Raises on persistent
+    Retries the preview model's intermittent failures (5xx, and the 400
+    "should only be used for TTS" / empty-audio cases). Raises on persistent
     failure; the caller maps that to an HTTP 5xx.
     """
     voice = voice or DEFAULT_VOICE
@@ -95,10 +120,12 @@ def synthesize(text: str, voice: str | None = None) -> bytes:
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
             return _generate(text, voice)
-        except errors.ServerError as e:  # 5xx — usually transient
+        except Exception as e:
+            if not _is_retryable(e):
+                raise
             last_err = e
             logger.warning(
-                "Gemini TTS 5xx (model=%s, attempt %d/%d): %s",
+                "Gemini TTS retryable failure (model=%s, attempt %d/%d): %s",
                 TTS_MODEL,
                 attempt,
                 _MAX_ATTEMPTS,

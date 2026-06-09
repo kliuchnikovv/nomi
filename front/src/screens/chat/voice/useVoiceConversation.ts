@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as Speech from 'expo-speech';
-import * as FileSystem from 'expo-file-system';
+// SDK 54: the string-based file API (writeAsStringAsync + cacheDirectory) lives
+// in the legacy entrypoint; importing it from the main module now throws.
+import * as FileSystem from 'expo-file-system/legacy';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import { AppState, AppStateStatus, Linking, Platform } from 'react-native';
-import {
-    ExpoSpeechRecognitionModule,
-    AVAudioSessionCategory,
-    AVAudioSessionCategoryOptions,
-    AVAudioSessionMode,
-} from 'expo-speech-recognition';
+import { AppState, AppStateStatus, Linking } from 'react-native';
+import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useChat } from '../context';
 import { useAuth } from '../../auth/context';
 import { ttsApi } from '../../../apiClient';
@@ -363,6 +360,9 @@ export function useVoiceConversation({
     // ---- Server-side Gemini TTS backend -------------------------------------
 
     // Play one base64 WAV clip; resolves when playback ends (or on error/stop).
+    // AudioRecorderPlayer configures its own playback audio session — we must
+    // NOT touch the session ourselves (doing so churns the audio route and
+    // kills both playback and the recognizer engine).
     const playServerClip = useCallback(async (audioB64: string) => {
         const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
         // Rotate through a small fixed set of filenames (writeAsStringAsync
@@ -372,42 +372,38 @@ export function useVoiceConversation({
         await FileSystem.writeAsStringAsync(uri, audioB64, {
             encoding: 'base64',
         });
-        // The recognizer leaves the iOS audio session in playAndRecord/measurement,
-        // which plays back quietly / to the earpiece. Force a loud loudspeaker
-        // category before playing (the next listen's start() resets it).
-        if (Platform.OS === 'ios') {
-            try {
-                ExpoSpeechRecognitionModule.setCategoryIOS({
-                    category: AVAudioSessionCategory.playAndRecord,
-                    categoryOptions: [
-                        AVAudioSessionCategoryOptions.defaultToSpeaker,
-                        AVAudioSessionCategoryOptions.allowBluetooth,
-                    ],
-                    mode: AVAudioSessionMode.default,
-                });
-            } catch {
-                /* best-effort */
-            }
-        }
-        try {
-            await new Promise<void>(resolve => {
-                playEndResolveRef.current = () => {
-                    playEndResolveRef.current = null;
-                    resolve();
-                };
-                AudioRecorderPlayer.addPlaybackEndListener(() => {
+
+        await new Promise<void>(resolve => {
+            let finished = false;
+            const done = () => {
+                if (finished) return;
+                finished = true;
+                try {
+                    AudioRecorderPlayer.removePlayBackListener();
+                } catch {
+                    /* ignore */
+                }
+                try {
                     AudioRecorderPlayer.removePlaybackEndListener();
-                    playEndResolveRef.current?.();
-                });
-                AudioRecorderPlayer.startPlayer(uri).catch(() => {
-                    AudioRecorderPlayer.removePlaybackEndListener();
-                    playEndResolveRef.current?.();
-                });
+                } catch {
+                    /* ignore */
+                }
+                AudioRecorderPlayer.stopPlayer().catch(() => {});
+                playEndResolveRef.current = null;
+                resolve();
+            };
+            // Lets stopServerTts()/interrupt cut the current clip short.
+            playEndResolveRef.current = done;
+            AudioRecorderPlayer.addPlaybackEndListener(() => done());
+            // Fallback completion: some builds don't emit playbackEnd reliably,
+            // so also finish once playback position reaches the duration.
+            AudioRecorderPlayer.addPlayBackListener((e: any) => {
+                const pos = Number(e?.currentPosition ?? 0);
+                const dur = Number(e?.duration ?? 0);
+                if (dur > 0 && pos >= dur - 50) done();
             });
-        } finally {
-            // Temp clips live in the OS-managed cache dir; we reuse a small set
-            // of rotating filenames (see ttsFileSeqRef) so they don't accumulate.
-        }
+            AudioRecorderPlayer.startPlayer(uri).catch(() => done());
+        });
     }, []);
 
     // Synthesize `text` on the server and play it (driven by the chain below).
@@ -546,12 +542,30 @@ export function useVoiceConversation({
         const full = extractSpeakableText(lastAssistant);
         lastFullLenRef.current = full.length;
 
+        // Server Gemini TTS is billed/quota-limited per request (free tier:
+        // ~10 req/min). Per-sentence synthesis blows that budget instantly and
+        // the SDK then retries every 429, cascading. So in server mode we wait
+        // for the *complete* reply and synthesize it in a SINGLE request. The
+        // on-device path keeps the low-latency per-sentence streaming.
         const pending = full.slice(spokenOffsetRef.current);
-        const { sentences, consumed } = takeSentences(
-            pending,
-            !assistantWorking,
-            spokenOffsetRef.current === 0, // earlyFirst: nothing spoken yet
-        );
+        let sentences: string[];
+        let consumed: number;
+        if (serverTtsRef.current) {
+            if (assistantWorking) {
+                sentences = [];
+                consumed = 0;
+            } else {
+                const whole = pending.trim();
+                sentences = whole ? [whole] : [];
+                consumed = pending.length;
+            }
+        } else {
+            ({ sentences, consumed } = takeSentences(
+                pending,
+                !assistantWorking,
+                spokenOffsetRef.current === 0, // earlyFirst: nothing spoken yet
+            ));
+        }
 
         if (sentences.length > 0) {
             if (ttsLangRef.current === undefined) {
