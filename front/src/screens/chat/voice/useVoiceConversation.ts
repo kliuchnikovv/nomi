@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as Speech from 'expo-speech';
 // SDK 54: the string-based file API (writeAsStringAsync + cacheDirectory) lives
 // in the legacy entrypoint; importing it from the main module now throws.
@@ -39,6 +39,8 @@ const DEFAULT_LANGUAGE = 'ru-RU';
 export interface UseVoiceConversationResult {
     state: VoiceState;
     liveTranscript: string;
+    /** Speakable text of the latest assistant reply (the model's current message). */
+    assistantText: string;
     errorKind: ErrorKind;
     /** Detected language code of the user's speech (e.g. 'ru', 'en'), or null. */
     detectedLanguage: string | null;
@@ -244,6 +246,13 @@ export function useVoiceConversation({
     const playEndResolveRef = useRef<(() => void) | null>(null);
     const ttsFileSeqRef = useRef(0);
 
+    // The model's current message — speakable text of the latest assistant reply.
+    // Updates live as the reply streams in; shown on-screen during the turn.
+    const assistantText = useMemo(() => {
+        const last = [...messages].reverse().find(m => m.role === 'assistant');
+        return last ? extractSpeakableText(last) : '';
+    }, [messages]);
+
     const applyState = useCallback((s: VoiceState) => {
         voiceStateRef.current = s;
         setVoiceState(s);
@@ -373,16 +382,23 @@ export function useVoiceConversation({
             encoding: 'base64',
         });
 
+        // Compute the clip's true duration from the WAV we generated ourselves
+        // (24 kHz, 16-bit, mono => 48000 bytes/sec). The player is a singleton
+        // and reports a STALE duration from the previous clip on its first
+        // progress callbacks, so a `position >= duration` check stops playback
+        // a fraction of a second in. A self-computed duration is reliable.
+        const decodedBytes = Math.floor((audioB64.length * 3) / 4);
+        const pcmBytes = Math.max(0, decodedBytes - 44); // minus WAV header
+        const expectedMs = Math.max(800, Math.round(pcmBytes / 48 + 700));
+
         await new Promise<void>(resolve => {
             let finished = false;
+            let startedAt = 0;
+            let timer: ReturnType<typeof setTimeout> | null = null;
             const done = () => {
                 if (finished) return;
                 finished = true;
-                try {
-                    AudioRecorderPlayer.removePlayBackListener();
-                } catch {
-                    /* ignore */
-                }
+                if (timer) clearTimeout(timer);
                 try {
                     AudioRecorderPlayer.removePlaybackEndListener();
                 } catch {
@@ -394,14 +410,15 @@ export function useVoiceConversation({
             };
             // Lets stopServerTts()/interrupt cut the current clip short.
             playEndResolveRef.current = done;
-            AudioRecorderPlayer.addPlaybackEndListener(() => done());
-            // Fallback completion: some builds don't emit playbackEnd reliably,
-            // so also finish once playback position reaches the duration.
-            AudioRecorderPlayer.addPlayBackListener((e: any) => {
-                const pos = Number(e?.currentPosition ?? 0);
-                const dur = Number(e?.duration ?? 0);
-                if (dur > 0 && pos >= dur - 50) done();
+            // Honor a native end event, but only after most of the clip has
+            // actually played — guards against an early/spurious end callback.
+            AudioRecorderPlayer.addPlaybackEndListener(() => {
+                const elapsed = startedAt ? Date.now() - startedAt : 0;
+                if (elapsed >= expectedMs * 0.6) done();
             });
+            startedAt = Date.now();
+            // Deterministic completion: play for the clip's real duration.
+            timer = setTimeout(done, expectedMs);
             AudioRecorderPlayer.startPlayer(uri).catch(() => done());
         });
     }, []);
@@ -552,8 +569,21 @@ export function useVoiceConversation({
         let consumed: number;
         if (serverTtsRef.current) {
             if (assistantWorking) {
-                sentences = [];
-                consumed = 0;
+                // Reply still streaming: synthesize ONLY the first sentence, as
+                // soon as it's complete, so audio starts tracking the text
+                // instead of waiting for the whole reply. Everything after it is
+                // sent as one more request at flush — 2 TTS calls/turn, which
+                // stays within the free-tier 10/min budget.
+                if (spokenOffsetRef.current === 0) {
+                    SENTENCE_RE.lastIndex = 0;
+                    const sm = SENTENCE_RE.exec(pending);
+                    const chunk = sm ? sm[0].trim() : '';
+                    sentences = chunk ? [chunk] : [];
+                    consumed = chunk ? SENTENCE_RE.lastIndex : 0;
+                } else {
+                    sentences = [];
+                    consumed = 0;
+                }
             } else {
                 const whole = pending.trim();
                 sentences = whole ? [whole] : [];
@@ -897,6 +927,7 @@ export function useVoiceConversation({
     return {
         state: voiceState,
         liveTranscript,
+        assistantText,
         errorKind,
         detectedLanguage: language.split('-')[0],
         modelProgress: null,

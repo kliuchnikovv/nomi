@@ -36,17 +36,53 @@ type Tuning = {
 
 const TUNING: Record<VoiceState, Tuning> = {
     // Engine warming up — gentle, unhurried.
-    loading: { breathTo: 1.04, breathDur: 2200, rotDur: 16000, rippleDur: 0, rippleOpacity: 0 },
+    loading: {
+        breathTo: 1.04,
+        breathDur: 2200,
+        rotDur: 16000,
+        rippleDur: 0,
+        rippleOpacity: 0,
+    },
     // Calm resting breath.
-    idle: { breathTo: 1.06, breathDur: 2600, rotDur: 14000, rippleDur: 3200, rippleOpacity: 0.16 },
+    idle: {
+        breathTo: 1.06,
+        breathDur: 2600,
+        rotDur: 14000,
+        rippleDur: 3200,
+        rippleOpacity: 0.16,
+    },
     // The orb "hears" — brighter, quicker, waves emanate outward.
-    listening: { breathTo: 1.1, breathDur: 1500, rotDur: 9000, rippleDur: 1900, rippleOpacity: 0.36 },
+    listening: {
+        breathTo: 1.1,
+        breathDur: 1500,
+        rotDur: 9000,
+        rippleDur: 1900,
+        rippleOpacity: 0.36,
+    },
     // Thinking — tight quick pulse, fast swirl, ripples muted.
-    processing: { breathTo: 1.05, breathDur: 900, rotDur: 4200, rippleDur: 0, rippleOpacity: 0 },
+    processing: {
+        breathTo: 1.05,
+        breathDur: 900,
+        rotDur: 4200,
+        rippleDur: 0,
+        rippleOpacity: 0,
+    },
     // The orb "talks" — rhythmic, rapid wave emission.
-    speaking: { breathTo: 1.12, breathDur: 720, rotDur: 7000, rippleDur: 640, rippleOpacity: 0.42 },
+    speaking: {
+        breathTo: 1.12,
+        breathDur: 720,
+        rotDur: 7000,
+        rippleDur: 640,
+        rippleOpacity: 0.42,
+    },
     // Static, no motion.
-    error: { breathTo: 1, breathDur: 0, rotDur: 0, rippleDur: 0, rippleOpacity: 0 },
+    error: {
+        breathTo: 1,
+        breathDur: 0,
+        rotDur: 0,
+        rippleDur: 0,
+        rippleOpacity: 0,
+    },
 };
 
 export function VoiceOrb({ state }: Props) {
@@ -138,9 +174,21 @@ export function VoiceOrb({ state }: Props) {
     return (
         <View style={styles.region} pointerEvents="none">
             {/* Ripple waves */}
-            <Ripple progress={r0} intensity={rippleIntensity} color={rippleColor} />
-            <Ripple progress={r1} intensity={rippleIntensity} color={rippleColor} />
-            <Ripple progress={r2} intensity={rippleIntensity} color={rippleColor} />
+            <Ripple
+                progress={r0}
+                intensity={rippleIntensity}
+                color={rippleColor}
+            />
+            <Ripple
+                progress={r1}
+                intensity={rippleIntensity}
+                color={rippleColor}
+            />
+            <Ripple
+                progress={r2}
+                intensity={rippleIntensity}
+                color={rippleColor}
+            />
 
             {/* Soft outer glow */}
             <Animated.View style={[styles.glow, glowStyle]}>
@@ -188,14 +236,16 @@ function Ripple({ progress, intensity, color }: RippleProps) {
         opacity: intensity.value * (1 - progress.value),
         transform: [
             {
-                scale: interpolate(progress.value, [0, 1], [0.85, RIPPLE_MAX_SCALE]),
+                scale: interpolate(
+                    progress.value,
+                    [0, 1],
+                    [0.85, RIPPLE_MAX_SCALE],
+                ),
             },
         ],
     }));
     return (
-        <Animated.View
-            style={[styles.ripple, { borderColor: color }, style]}
-        />
+        <Animated.View style={[styles.ripple, { borderColor: color }, style]} />
     );
 }
 

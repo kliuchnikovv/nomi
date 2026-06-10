@@ -6,15 +6,15 @@ import {
     TouchableWithoutFeedback,
     StyleSheet,
     Pressable,
+    ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Xmark } from 'iconoir-react-native';
 import { useTheme } from '../../../context/ThemeContext';
-import { useVoiceConversation, VOICE_LANGUAGES } from './useVoiceConversation';
+import { useVoiceConversation } from './useVoiceConversation';
 import { VoiceOrb } from './VoiceOrb';
-import { VoiceTranscript } from './VoiceTranscript';
 import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 import type { ChatStackParamList } from '../../../navigation/types';
 import type { VoiceState } from './useVoiceConversation';
@@ -49,13 +49,16 @@ export function VoiceScreen() {
     const {
         state,
         liveTranscript,
+        assistantText,
         errorKind,
-        language,
-        setLanguage,
         interrupt,
         stop,
         openSettings,
     } = useVoiceConversation({ chatId });
+
+    const showAssistantText =
+        (state === 'speaking' || state === 'processing') &&
+        assistantText !== '';
 
     const closingRef = useRef(false);
     const handleClose = useCallback(() => {
@@ -80,7 +83,7 @@ export function VoiceScreen() {
                 pointerEvents="none"
             />
 
-            {/* Floating header — controls row + absolutely-centered title. */}
+            {/* Floating header — close button + absolutely-centered title. */}
             <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
                 <View style={styles.headerControls}>
                     <TouchableOpacity
@@ -102,61 +105,25 @@ export function VoiceScreen() {
                             strokeWidth={2}
                         />
                     </TouchableOpacity>
-
-                    {/* In-call language switcher — changes the recognition locale.
-                        Applies immediately while listening, otherwise next turn. */}
-                    <View
-                        style={[
-                            styles.langToggle,
-                            {
-                                backgroundColor: theme.surface,
-                                borderColor: theme.border,
-                            },
-                        ]}
-                    >
-                        {VOICE_LANGUAGES.map(opt => {
-                            const active = language === opt.code;
-                            return (
-                                <TouchableOpacity
-                                    key={opt.code}
-                                    onPress={() => setLanguage(opt.code)}
-                                    style={[
-                                        styles.langToggleBtn,
-                                        active && {
-                                            backgroundColor: theme.accent,
-                                        },
-                                    ]}
-                                    accessibilityRole="button"
-                                    accessibilityState={{ selected: active }}
-                                    accessibilityLabel={`Recognize ${opt.label}`}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.langToggleText,
-                                            {
-                                                color: active
-                                                    ? palette.white
-                                                    : theme.textSecondary,
-                                            },
-                                        ]}
-                                    >
-                                        {opt.label}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
                 </View>
 
                 <View
                     style={[styles.headerTitleWrap, { top: insets.top + 8 }]}
                     pointerEvents="none"
                 >
-                    <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
+                    <Text
+                        style={[
+                            styles.headerTitle,
+                            { color: theme.textPrimary },
+                        ]}
+                    >
                         Voice
                     </Text>
                     <Text
-                        style={[styles.headerStatus, { color: theme.textSecondary }]}
+                        style={[
+                            styles.headerStatus,
+                            { color: theme.textSecondary },
+                        ]}
                         numberOfLines={1}
                     >
                         {statusLabel(state, errorKind === 'permission')}
@@ -211,19 +178,31 @@ export function VoiceScreen() {
                     </View>
                 </TouchableWithoutFeedback>
 
-                {/* Transcript history — outside TouchableWithoutFeedback so FlatList can scroll.
-                    Reserve the floating dock height so the card clears the tab bar. */}
-                <View
-                    style={[
-                        styles.transcriptArea,
-                        {
-                            paddingBottom:
-                                insets.bottom + TAB_BAR_ICON_HEIGHT + 16,
-                        },
-                    ]}
-                >
-                    <VoiceTranscript />
-                </View>
+                {/* The model's current message — shown while it thinks/speaks.
+                    Outside TouchableWithoutFeedback so long replies can scroll.
+                    Reserve the floating dock height so it clears the tab bar. */}
+                {showAssistantText && (
+                    <ScrollView
+                        style={styles.messageArea}
+                        contentContainerStyle={[
+                            styles.messageScroll,
+                            {
+                                paddingBottom:
+                                    insets.bottom + TAB_BAR_ICON_HEIGHT + 16,
+                            },
+                        ]}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <Text
+                            style={[
+                                styles.message,
+                                { color: theme.textPrimary },
+                            ]}
+                        >
+                            {assistantText}
+                        </Text>
+                    </ScrollView>
+                )}
             </View>
         </View>
     );
@@ -233,6 +212,11 @@ const styles = StyleSheet.create({
     safe: { flex: 1 },
     contentArea: { flex: 1 },
     header: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 2,
         paddingHorizontal: 16,
         paddingBottom: 8,
     },
@@ -287,34 +271,25 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         textAlign: 'center',
     },
-    langToggle: {
-        flexDirection: 'row',
-        borderRadius: 16,
-        padding: 2,
-        gap: 2,
-        borderWidth: StyleSheet.hairlineWidth,
-    },
-    langToggleBtn: {
-        minWidth: 34,
-        paddingHorizontal: 8,
-        paddingVertical: 6,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    langToggleText: {
-        fontSize: 13,
-        fontWeight: '600',
-        letterSpacing: 0.5,
-    },
     settingsBtn: {
         paddingHorizontal: 24,
         paddingVertical: 10,
         borderRadius: 20,
     },
     settingsBtnText: { fontSize: 14, fontWeight: '500' },
-    transcriptArea: {
-        height: '44%',
-        paddingHorizontal: 16,
+    messageArea: {
+        maxHeight: '42%',
+        paddingHorizontal: 24,
+    },
+    messageScroll: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        paddingTop: 8,
+    },
+    message: {
+        fontSize: 18,
+        lineHeight: 26,
+        fontWeight: '500',
+        textAlign: 'center',
     },
 });

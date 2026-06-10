@@ -11,28 +11,24 @@ export function handleDeepLink(
 ): void {
     if (!link?.screen) return;
 
+    // The root navigator is the bottom Tab navigator (MainTabs is rendered
+    // directly in AppNavigator, not registered as a named route), so we
+    // navigate straight to the tab route — there is no 'MainTabs' route to
+    // target.
     switch (link.screen) {
         case 'chat':
-            navigation.navigate('MainTabs', {
-                screen: 'Chat',
-                params: {
-                    screen: 'ChatDetail',
-                    params: { chatId: link.params.chatId },
-                },
+            navigation.navigate('Chat', {
+                screen: 'ChatDetail',
+                params: { chatId: link.params.chatId },
             });
             break;
         case 'planner':
-            navigation.navigate('MainTabs', {
-                screen: 'Planning',
-            });
+            navigation.navigate('Planning');
             break;
         case 'voice':
-            navigation.navigate('MainTabs', {
-                screen: 'Chat',
-                params: {
-                    screen: 'VoiceScreen',
-                    params: { chatId: link.params.chatId },
-                },
+            navigation.navigate('Chat', {
+                screen: 'VoiceScreen',
+                params: { chatId: link.params.chatId },
             });
             break;
     }

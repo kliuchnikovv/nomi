@@ -103,6 +103,28 @@ Your memory operates automatically. Never ask the user to tell you what to remem
 - When corrected, call `update_memory(memory_id, corrected_fact)` with the accurate text (no prefix)."""
 
 
+def build_learning_machine(model, db, user_id: str, *, extract: bool) -> LearningMachine:
+    """Build the profile + entity LearningMachine.
+
+    `extract=False` (mode AGENTIC): the reply agent still READS existing learnings
+    into its prompt (``build_context``/``recall`` are not mode-gated) but performs
+    NO extraction LLM calls during the turn. `extract=True` (mode ALWAYS): used by
+    the deferred background job (see ``redis_session``) to actually extract and
+    persist profile/entities after the turn, off the reply path.
+    """
+    mode = LearningMode.ALWAYS if extract else LearningMode.AGENTIC
+    return LearningMachine(
+        db=db,
+        model=model,
+        user_profile=UserProfileConfig(mode=mode),
+        session_context=None,
+        entity_memory=EntityMemoryConfig(
+            mode=mode,
+            namespace=f"user:{user_id}:personal",
+        ),
+    )
+
+
 class NomiAgent(Agent):
     def __init__(
         self,
@@ -179,15 +201,17 @@ class NomiAgent(Agent):
             stream=True,
             stream_events=True,
             memory_manager=MemoryManager(model=model, db=db),
-            enable_agentic_memory=True,
-            learning=LearningMachine(
-                user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
-                session_context=None,
-                entity_memory=EntityMemoryConfig(
-                    mode=LearningMode.ALWAYS,
-                    namespace=f"user:{user_id}:personal",
-                ),
-            ),
+            # Read existing memories into the prompt, but do NOT extract during
+            # the reply turn. enable_agentic_memory=False removes the inline
+            # memory tool/extraction; add_memories_to_context keeps the
+            # <memories_from_previous_interactions> block. Memory extraction runs
+            # in the deferred background job (redis_session._schedule_deferred_learning).
+            enable_agentic_memory=False,
+            add_memories_to_context=True,
+            # AGENTIC mode = read profile/entities into context (build_context is
+            # not mode-gated) with NO extraction LLM calls on the reply path. The
+            # deferred job rebuilds this with extract=True (mode ALWAYS) to learn.
+            learning=build_learning_machine(model, db, user_id, extract=False),
             markdown=True,
             telemetry=False,
             send_media_to_model=True,

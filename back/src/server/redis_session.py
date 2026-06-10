@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import uuid
 import time
 import httpx
@@ -11,8 +12,10 @@ from typing import Any
 
 from redis.exceptions import ConnectionError as RedisConnectionError
 from agno.media import Image
+from agno.memory.manager import MemoryManager
+from agno.models.message import Message
 from src.agents.factory import AgentFactory
-from src.agents.nomi import NomiAgent
+from src.agents.nomi import NomiAgent, build_learning_machine
 from src.storage.backend import PayloadBackend, StorageBackend
 from src.storage.factory import create_storage_backend
 from src.constants import Redis as RedisConstants
@@ -66,6 +69,105 @@ def _parse_tasks_from_message(message: str) -> list[dict]:
         if task_text:
             tasks.append({"id": task_id, "title": task_text})
     return tasks
+
+
+# --- Deferred, debounced learning (profile + entity + memory extraction) ------
+# Extraction is moved OFF the reply path. The reply agent only READS learnings
+# into its prompt (see nomi.build_learning_machine(extract=False)); the extraction
+# LLM calls used to run inline during the turn and contended with reply
+# generation. Instead, after each turn we accumulate the (user, assistant)
+# messages per chat and (re)arm a short idle timer; when the user pauses, ONE
+# background pass extracts profile + entities + memories. This never overlaps an
+# active reply and batches a burst of turns into a single extraction.
+_LEARN_DEBOUNCE_MS = int(os.getenv("VOICE_LEARN_DEBOUNCE_MS", "6000"))
+_learn_state: dict[str, dict[str, Any]] = {}
+_learn_bg_tasks: set[asyncio.Task] = set()
+
+
+def _learn_entry(chat_id: str) -> dict[str, Any]:
+    entry = _learn_state.get(chat_id)
+    if entry is None:
+        entry = {"messages": [], "timer": None, "lock": asyncio.Lock(), "ctx": None}
+        _learn_state[chat_id] = entry
+    return entry
+
+
+def _dedup_memories(db: Any, user_id: str) -> None:
+    """Remove exact-duplicate user memories created by the extraction pass."""
+    try:
+        all_memories = db.get_user_memories(user_id=user_id)
+        if not all_memories or len(all_memories) < 2:
+            return
+        seen: set[str] = set()
+        to_delete: list[str] = []
+        for mem in all_memories:
+            key = re.sub(r"\s+", " ", (mem.memory or "").lower().strip())
+            if key in seen:
+                if mem.memory_id:
+                    to_delete.append(mem.memory_id)
+            else:
+                seen.add(key)
+        if to_delete:
+            db.delete_user_memories(to_delete, user_id=user_id)
+            logger.info(
+                "[RedisSession] Deferred learning removed %d duplicate memories for user %s",
+                len(to_delete),
+                user_id,
+            )
+    except Exception as e:
+        logger.warning("[RedisSession] Memory dedup failed (non-fatal): %s", e)
+
+
+async def _run_deferred_learning(chat_id: str) -> None:
+    """Extract profile + entities + memories for an idle chat's accumulated burst."""
+    entry = _learn_state.get(chat_id)
+    if not entry:
+        return
+    async with entry["lock"]:
+        messages = entry.get("messages") or []
+        ctx = entry.get("ctx")
+        if not messages or not ctx:
+            return
+        # Consume the accumulated burst so a later turn starts fresh.
+        entry["messages"] = []
+        db = ctx.get("db")
+        user_id = ctx.get("user_id")
+        agent_factory = ctx.get("agent_factory")
+        if db is None or not user_id or agent_factory is None:
+            return
+        try:
+            model = agent_factory.build_model(
+                ctx.get("model_name") or "gemini-2.5-flash-lite",
+                thinking="off",
+            )
+            lm = build_learning_machine(model, db, user_id, extract=True)
+            await lm.aprocess(
+                messages=list(messages),
+                user_id=user_id,
+                session_id=ctx.get("session_id"),
+            )
+            mm = MemoryManager(model=model, db=db)
+            await mm.acreate_user_memories(messages=list(messages), user_id=user_id)
+            _dedup_memories(db, user_id)
+            logger.info(
+                "[RedisSession] Deferred learning completed for chat %s (%d msgs)",
+                chat_id,
+                len(messages),
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(
+                "[RedisSession] Deferred learning failed (non-fatal): %s", e
+            )
+
+
+async def _deferred_learning_timer(chat_id: str) -> None:
+    try:
+        await asyncio.sleep(_LEARN_DEBOUNCE_MS / 1000)
+    except asyncio.CancelledError:
+        return  # superseded by a newer turn — that turn re-armed the timer
+    await _run_deferred_learning(chat_id)
 
 
 class RedisSession:
@@ -1226,6 +1328,44 @@ class RedisSession:
                 extra={"user_id": user_id},
             )
 
+    def _schedule_deferred_learning(
+        self, chat_id: str, user_text: str, assistant_text: Any
+    ) -> None:
+        """Accumulate this turn and (re)arm the idle debounce timer for learning.
+
+        Extraction (profile/entities/memories) runs only after the user pauses
+        (``LEARN_DEBOUNCE_MS``), so it never competes with an active reply; a
+        burst of back-to-back turns batches into a single extraction pass.
+        """
+        if not self.user_id or not (user_text or "").strip():
+            return
+        try:
+            entry = _learn_entry(chat_id)
+            entry["messages"].append(Message(role="user", content=user_text))
+            if assistant_text:
+                entry["messages"].append(
+                    Message(role="assistant", content=str(assistant_text))
+                )
+            entry["ctx"] = {
+                "agent_factory": self.agent_factory,
+                "db": getattr(self.agent_factory, "_db", None),
+                "user_id": self.user_id,
+                "session_id": self.session_id,
+                "model_name": self.current_model_name,
+            }
+            timer = entry.get("timer")
+            if timer is not None and not timer.done():
+                timer.cancel()
+            t = asyncio.create_task(_deferred_learning_timer(chat_id))
+            entry["timer"] = t
+            _learn_bg_tasks.add(t)
+            t.add_done_callback(_learn_bg_tasks.discard)
+        except Exception as e:
+            logger.warning(
+                "[RedisSession] Failed to schedule deferred learning (non-fatal): %s",
+                e,
+            )
+
     async def handle_user_message(self, frame: Frame):
         payload = frame.payload or {}
         text = payload.get("message", "")
@@ -1504,8 +1644,17 @@ class RedisSession:
                                     full_text, self._delivery_context
                                 )
 
-                        # Drain the remaining stream in background so learning/memory
-                        # tasks can finish without blocking the client.
+                        # Profile/entity/memory extraction is deferred OFF the
+                        # reply path: accumulate this turn and (re)arm the idle
+                        # debounce timer (extraction runs only after the user
+                        # pauses, so it never contends with reply generation).
+                        if payload.get("role") != "system":
+                            self._schedule_deferred_learning(
+                                msg_chat_id, text, completed_content
+                            )
+
+                        # Drain the remaining stream in background so the agent
+                        # run finishes cleanly without blocking the client.
                         async def _drain_remaining(it):
                             try:
                                 async for ev in it:
@@ -1523,8 +1672,6 @@ class RedisSession:
                                     "[RedisSession] Error draining post-done stream: %s",
                                     e,
                                 )
-                            # Deduplicate after learning/memory tasks have had a chance to run
-                            await self._dedup_user_memories()
 
                         asyncio.create_task(_drain_remaining(stream_iter))
                         break
@@ -1692,6 +1839,11 @@ class RedisSession:
                 await self._send_frame(
                     make_done(self.next_id, msg_chat_id, done_payload_fb)
                 )
+                # Defer learning here too (content_done path didn't run).
+                if payload.get("role") != "system":
+                    self._schedule_deferred_learning(
+                        msg_chat_id, text, completed_content
+                    )
                 # Deliver to external channel via plugin delivery handler (fallback path)
                 if delivery_handler:
                     full_text = "".join(delivery_text_buffer)
