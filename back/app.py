@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import json
 import os
@@ -318,8 +317,9 @@ async def voice_tts(
     request: dict,
     x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ):
-    """Synthesize assistant reply text to speech via Gemini (experimental
-    `server_gemini` voice source). Returns base64-encoded WAV."""
+    """Synthesize assistant reply text to speech (experimental server voice
+    source). Provider is set by VOICE_TTS_PROVIDER (edge=MP3 default, gemini=WAV).
+    Returns base64 audio + mime + duration_ms."""
     if not x_user_id:
         return JSONResponse({"error": "X-User-ID header is required"}, status_code=401)
 
@@ -331,8 +331,12 @@ async def voice_tts(
     try:
         from src.core.tts import synthesize
 
-        wav = await asyncio.to_thread(synthesize, text, voice)
-        return {"audio": base64.b64encode(wav).decode("ascii"), "mime": "audio/wav"}
+        res = await synthesize(text, voice)
+        return {
+            "audio": base64.b64encode(res.audio).decode("ascii"),
+            "mime": res.mime,
+            "duration_ms": res.duration_ms,
+        }
     except Exception as e:
         logging.error("Voice TTS failed: %s", e, exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)

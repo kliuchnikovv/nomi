@@ -450,11 +450,12 @@ export const ragApi = {
 
 export const ttsApi = {
     /**
-     * Server-side Gemini TTS. Returns base64-encoded WAV for the given text.
-     * Used by the `server_gemini` voice source.
+     * Server-side TTS for the `server_gemini` voice source. Returns base64
+     * audio (MP3 from Edge TTS by default, or WAV from Gemini), its mime type,
+     * and the clip duration in ms (used to drive playback completion).
      */
     synthesize: (body: { text: string; voice?: string }) =>
-        apiClient.post<{ audio: string; mime: string }>(
+        apiClient.post<{ audio: string; mime: string; duration_ms?: number }>(
             `${API_URL()}/voice/tts`,
             body,
         ),

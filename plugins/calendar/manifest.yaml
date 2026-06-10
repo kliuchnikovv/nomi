@@ -10,7 +10,7 @@ execution:
 
 auth:
   type: oauth2
-  oauth_config_key: google
+  oauth_config_key: google_calendar
   oidc_issuer_url: https://accounts.google.com
   permissions:
     - calendar:read

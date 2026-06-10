@@ -196,6 +196,12 @@ export function ChatProvider({
 
             if (isManual) {
                 manualModelSelectionRef.current = true;
+                // Remember the user's explicit choice globally so new chats
+                // default to it. Only manual picks are persisted — models
+                // auto-loaded from history must not overwrite the default.
+                AsyncStorage.setItem('@genie_selected_model', model).catch(
+                    () => {},
+                );
             }
 
             // Notify WebSocket about model change if connection is active
@@ -1216,12 +1222,25 @@ export function ChatProvider({
                 const models = await modelsApi.getModels();
                 if (mounted && models && models.length > 0) {
                     setAvailableModels(models);
-                    // Set first model as default if no selection has been made yet
+                    // Pick a default if no selection has been made yet:
+                    // prefer the last model the user chose globally (when it
+                    // still exists), otherwise fall back to the first model.
                     if (
                         !manualModelSelectionRef.current &&
                         !selectedModelRef.current
                     ) {
-                        setSelectedModel(models[0].id, false);
+                        let preferred: string | null = null;
+                        try {
+                            const saved = await AsyncStorage.getItem(
+                                '@genie_selected_model',
+                            );
+                            if (saved && models.some(m => m.id === saved)) {
+                                preferred = saved;
+                            }
+                        } catch {
+                            /* ignore — fall back to first model */
+                        }
+                        setSelectedModel(preferred ?? models[0].id, false);
                     }
                     // Initialize provider ref for default model (or currently selected)
                     const current =

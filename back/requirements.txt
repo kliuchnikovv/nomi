@@ -11,6 +11,8 @@ itsdangerous>=2.0.0
 
 # Google AI (use google-genai, google-generativeai is deprecated)
 google-genai>=1.47.0
+# Free Microsoft Edge TTS (server voice source; no API key). Returns MP3.
+edge-tts>=7.0.0
 google-api-python-client>=2.100.0
 google-auth>=2.20.0
 google-auth-oauthlib>=1.0.0

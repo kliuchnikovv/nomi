@@ -72,6 +72,14 @@ const RELISTEN_DEBOUNCE_MS = 300;
 const MAX_EMPTY_RESTARTS = 8;
 const EMPTY_RESTART_WINDOW_MS = 8000;
 
+// When the recognizer wedges (rapid empty sessions in a tight window), don't
+// dead-end at an error. First try to RECOVER: fully tear the engine down and
+// restart after a longer backoff (lets iOS release/reset the recognizer +
+// audio session). Only after several failed recovery cycles do we surface a
+// hard STT error. A calm window (recognizer healthy again) resets the counter.
+const RECOVERY_BACKOFF_MS = 1500;
+const MAX_RECOVERIES = 3;
+
 // Start TTS as early as possible: for the FIRST chunk of a reply we break on a
 // clause boundary (or this many characters) instead of waiting for a full
 // sentence, cutting time-to-first-audio. Later chunks use sentence boundaries.
@@ -219,6 +227,8 @@ export function useVoiceConversation({
     // Safety-net bookkeeping for rapid empty re-listens (wedged recognizer).
     const emptyRestartCountRef = useRef(0);
     const emptyRestartWindowAtRef = useRef(0);
+    // How many wedge-recovery cycles we've done in the current wedged streak.
+    const recoveryAttemptsRef = useRef(0);
     const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Streaming-TTS bookkeeping.
@@ -326,8 +336,9 @@ export function useVoiceConversation({
             if (finalizingRef.current) return;
             finalizingRef.current = true;
             // A captured turn means the recognizer is healthy — reset the
-            // wedged-recognizer safety net.
+            // wedged-recognizer safety net and any recovery streak.
             emptyRestartCountRef.current = 0;
+            recoveryAttemptsRef.current = 0;
             applyState('processing');
             sendMessage(text);
         },
@@ -345,15 +356,44 @@ export function useVoiceConversation({
         clearRetryTimer();
         const now = Date.now();
         if (now - emptyRestartWindowAtRef.current > EMPTY_RESTART_WINDOW_MS) {
+            // A calm gap since the last empty streak — the recognizer is healthy
+            // (user was just silent), so clear the wedge + recovery counters.
             emptyRestartWindowAtRef.current = now;
             emptyRestartCountRef.current = 0;
+            recoveryAttemptsRef.current = 0;
         }
         emptyRestartCountRef.current += 1;
         if (emptyRestartCountRef.current >= MAX_EMPTY_RESTARTS) {
+            // Wedged: many empty sessions in a tight window. Reset the window
+            // counters and try to recover before giving up.
             emptyRestartCountRef.current = 0;
-            console.warn('[voice] recognizer wedged — surfacing stt error');
-            setErrorKind('stt');
-            applyState('error');
+            emptyRestartWindowAtRef.current = now;
+            if (recoveryAttemptsRef.current >= MAX_RECOVERIES) {
+                recoveryAttemptsRef.current = 0;
+                console.warn(
+                    '[voice] recognizer wedged — recovery exhausted, surfacing stt error',
+                );
+                setErrorKind('stt');
+                applyState('error');
+                return;
+            }
+            recoveryAttemptsRef.current += 1;
+            console.warn(
+                `[voice] recognizer wedged — recovering (attempt ${recoveryAttemptsRef.current}/${MAX_RECOVERIES})`,
+            );
+            // Force a full engine teardown, then restart after a longer backoff
+            // so iOS can release/reset the recognizer + audio session. Stay in
+            // 'listening' (no error flash) — recovery is silent.
+            try {
+                ExpoSpeechRecognitionModule.abort();
+            } catch {
+                /* ignore */
+            }
+            recognizingRef.current = false;
+            retryTimerRef.current = setTimeout(
+                () => startListeningRef.current(),
+                RECOVERY_BACKOFF_MS,
+            );
             return;
         }
         retryTimerRef.current = setTimeout(
@@ -372,24 +412,38 @@ export function useVoiceConversation({
     // AudioRecorderPlayer configures its own playback audio session — we must
     // NOT touch the session ourselves (doing so churns the audio route and
     // kills both playback and the recognizer engine).
-    const playServerClip = useCallback(async (audioB64: string) => {
+    const playServerClip = useCallback(
+        async (audioB64: string, mime?: string, durationMs?: number) => {
         const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+        // Edge TTS returns MP3, Gemini returns WAV — pick the extension from the
+        // mime so AVAudioPlayer detects the format correctly.
+        const isMp3 =
+            !!mime && (mime.includes('mpeg') || mime.includes('mp3'));
+        const ext = isMp3 ? 'mp3' : 'wav';
         // Rotate through a small fixed set of filenames (writeAsStringAsync
         // overwrites) so temp clips never accumulate unbounded.
         ttsFileSeqRef.current = (ttsFileSeqRef.current + 1) % 8;
-        const uri = `${dir}nomi-tts-${ttsFileSeqRef.current}.wav`;
+        const uri = `${dir}nomi-tts-${ttsFileSeqRef.current}.${ext}`;
         await FileSystem.writeAsStringAsync(uri, audioB64, {
             encoding: 'base64',
         });
 
-        // Compute the clip's true duration from the WAV we generated ourselves
-        // (24 kHz, 16-bit, mono => 48000 bytes/sec). The player is a singleton
-        // and reports a STALE duration from the previous clip on its first
-        // progress callbacks, so a `position >= duration` check stops playback
-        // a fraction of a second in. A self-computed duration is reliable.
-        const decodedBytes = Math.floor((audioB64.length * 3) / 4);
-        const pcmBytes = Math.max(0, decodedBytes - 44); // minus WAV header
-        const expectedMs = Math.max(800, Math.round(pcmBytes / 48 + 700));
+        // Clip completion is driven by a self-computed duration, NOT the player's
+        // reported one: the singleton player reports a STALE duration from the
+        // previous clip on its first progress callbacks, which would stop
+        // playback a fraction of a second in. Prefer the server-supplied
+        // duration (codec-agnostic); fall back to WAV byte-math, then a default.
+        let expectedMs: number;
+        if (durationMs && durationMs > 0) {
+            expectedMs = Math.max(800, Math.round(durationMs + 700));
+        } else if (!isMp3) {
+            // WAV: derive from PCM byte length (24 kHz·16-bit·mono = 48 B/ms).
+            const decodedBytes = Math.floor((audioB64.length * 3) / 4);
+            const pcmBytes = Math.max(0, decodedBytes - 44); // minus WAV header
+            expectedMs = Math.max(800, Math.round(pcmBytes / 48 + 700));
+        } else {
+            expectedMs = 6000; // safe default if the server sent no duration
+        }
 
         await new Promise<void>(resolve => {
             let finished = false;
@@ -399,6 +453,11 @@ export function useVoiceConversation({
                 if (finished) return;
                 finished = true;
                 if (timer) clearTimeout(timer);
+                try {
+                    AudioRecorderPlayer.removePlayBackListener();
+                } catch {
+                    /* ignore */
+                }
                 try {
                     AudioRecorderPlayer.removePlaybackEndListener();
                 } catch {
@@ -410,6 +469,13 @@ export function useVoiceConversation({
             };
             // Lets stopServerTts()/interrupt cut the current clip short.
             playEndResolveRef.current = done;
+            // A no-op progress listener MUST be registered: without it the
+            // native player tears down its own play timer on the first tick
+            // ("player or listener is nil") which breaks end-detection. We
+            // intentionally IGNORE its position/duration (the singleton reports a
+            // stale duration from the previous clip — that was the early-cutoff
+            // bug); completion is driven by the self-computed timer below.
+            AudioRecorderPlayer.addPlayBackListener(() => {});
             // Honor a native end event, but only after most of the clip has
             // actually played — guards against an early/spurious end callback.
             AudioRecorderPlayer.addPlaybackEndListener(() => {
@@ -431,7 +497,8 @@ export function useVoiceConversation({
             serverPlayingRef.current = true;
             try {
                 const res = await ttsApi.synthesize({ text });
-                if (res?.audio) await playServerClip(res.audio);
+                if (res?.audio)
+                    await playServerClip(res.audio, res.mime, res.duration_ms);
             } finally {
                 serverPlayingRef.current = false;
             }

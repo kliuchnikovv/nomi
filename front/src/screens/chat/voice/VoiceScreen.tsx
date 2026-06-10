@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
     View,
     Text,
@@ -7,19 +7,40 @@ import {
     StyleSheet,
     Pressable,
     ScrollView,
+    Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Xmark } from 'iconoir-react-native';
+import Markdown from 'react-native-markdown-display';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { useTheme } from '../../../context/ThemeContext';
 import { useVoiceConversation } from './useVoiceConversation';
 import { VoiceOrb } from './VoiceOrb';
+import { useAskUser } from '../AskUserContext';
+import { AskUserDialog } from '../components/AskUserDialog';
+import { createMarkdownStyles } from '../message/dynamicStyles';
+import { createMarkdownRules } from '../message/markdownRules';
+import { showToast } from '../../../utils/toast';
 import { TAB_BAR_ICON_HEIGHT } from '../../../navigation/MainTabs';
 import type { ChatStackParamList } from '../../../navigation/types';
 import type { VoiceState } from './useVoiceConversation';
 
 type VoiceScreenRoute = RouteProp<ChatStackParamList, 'VoiceScreen'>;
+
+// Shared chat markdown rules — copy code / open + copy links.
+const markdownRules = createMarkdownRules({
+    onCodeCopy: code => {
+        Clipboard.setString(code);
+        showToast('Code copied');
+    },
+    onLinkPress: url => Linking.openURL(url).catch(() => {}),
+    onLinkCopy: url => {
+        Clipboard.setString(url);
+        showToast('Link copied');
+    },
+});
 
 function statusLabel(state: VoiceState, permissionError: boolean): string {
     switch (state) {
@@ -56,9 +77,23 @@ export function VoiceScreen() {
         openSettings,
     } = useVoiceConversation({ chatId });
 
+    // ask_user runs as a client tool while the model is working. The dialog is
+    // rendered per-screen, so the voice screen needs its own instance — the
+    // shared AskUserProvider (ChatStack) holds the state for all chat screens.
+    const { dialogState, submitResponse, cancelDialog } = useAskUser();
+
     const showAssistantText =
         (state === 'speaking' || state === 'processing') &&
         assistantText !== '';
+
+    // Reuse the chat markdown styles, bumped slightly for the voice caption.
+    const markdownStyles = useMemo(() => {
+        const base = createMarkdownStyles(theme) as Record<string, any>;
+        return {
+            ...base,
+            body: { ...base.body, fontSize: 17, lineHeight: 25 },
+        };
+    }, [theme]);
 
     const closingRef = useRef(false);
     const handleClose = useCallback(() => {
@@ -193,17 +228,24 @@ export function VoiceScreen() {
                         ]}
                         showsVerticalScrollIndicator={false}
                     >
-                        <Text
-                            style={[
-                                styles.message,
-                                { color: theme.textPrimary },
-                            ]}
+                        <Markdown
+                            style={markdownStyles as any}
+                            rules={markdownRules}
                         >
                             {assistantText}
-                        </Text>
+                        </Markdown>
                     </ScrollView>
                 )}
             </View>
+
+            <AskUserDialog
+                visible={dialogState.visible}
+                question={dialogState.question}
+                options={dialogState.options}
+                onSubmit={submitResponse}
+                onCancel={cancelDialog}
+                theme={theme}
+            />
         </View>
     );
 }
@@ -285,11 +327,5 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         justifyContent: 'center',
         paddingTop: 8,
-    },
-    message: {
-        fontSize: 18,
-        lineHeight: 26,
-        fontWeight: '500',
-        textAlign: 'center',
     },
 });

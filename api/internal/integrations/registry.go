@@ -55,8 +55,10 @@ type OAuthConfig struct {
 
 // knownOAuthEndpoints maps oauth_config_key to oauth2.Endpoint for known providers
 var knownOAuthEndpoints = map[string]oauth2.Endpoint{
-	"google": google.Endpoint,
-	"github": github.Endpoint,
+	"google":          google.Endpoint,
+	"google_gmail":    google.Endpoint,
+	"google_calendar": google.Endpoint,
+	"github":          github.Endpoint,
 }
 
 var (

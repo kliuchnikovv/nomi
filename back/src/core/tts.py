@@ -1,26 +1,74 @@
-"""Server-side text-to-speech via Gemini.
+"""Server-side text-to-speech for the experimental server voice source.
 
-Used by the experimental `server_gemini` voice source: the assistant's reply
-text (produced by the normal Nomi/Agno pipeline) is synthesized here, one
-sentence at a time, and the resulting WAV is streamed back to the device which
-plays it instead of on-device `expo-speech`.
+Two providers, selected by the `VOICE_TTS_PROVIDER` env var:
 
-Gemini TTS returns raw 24 kHz, 16-bit, mono PCM; we wrap it in a WAV container
-so the mobile player can play it directly.
+- ``edge`` (default) — Microsoft Edge's free online TTS via the ``edge-tts``
+  library. No API key, neural RU/EN voices, no meaningful rate limit. Returns
+  **MP3** (`audio/mpeg`).
+- ``gemini`` — Google Gemini TTS (paid/quota-limited preview model). Returns a
+  24 kHz/16-bit/mono **WAV** (`audio/wav`). Kept as a fallback (set the env var).
+
+`synthesize()` returns a `TTSResult(audio, mime, duration_ms)`. We compute
+`duration_ms` ourselves (the mobile player drives clip completion off it, so it
+must not depend on the codec) — for MP3 from the constant bitrate, for WAV from
+the PCM byte length.
 """
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import os
+import re
 import time
 import wave
-
-from google import genai
-from google.genai import errors, types
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TTSResult:
+    audio: bytes
+    mime: str
+    duration_ms: int
+
+
+# --- Edge TTS (default, free) ------------------------------------------------
+
+# edge-tts default output is `audio-24khz-48kbitrate-mono-mp3` → 48 kbit/s mono,
+# i.e. 6000 bytes/sec. Lets us compute clip duration from the byte length.
+_EDGE_MP3_BYTES_PER_SEC = 6000
+_CYRILLIC_RE = re.compile(r"[Ѐ-ӿ]")
+
+
+def _pick_edge_voice(text: str, voice: str | None) -> str:
+    """Pick an Edge voice: explicit Neural voice wins, else by script (RU/EN)."""
+    if voice and "Neural" in voice:
+        return voice
+    if _CYRILLIC_RE.search(text or ""):
+        return os.getenv("VOICE_EDGE_VOICE_RU", "ru-RU-DmitryNeural")
+    return os.getenv("VOICE_EDGE_VOICE_EN", "en-US-AriaNeural")
+
+
+async def _edge_synthesize(text: str, voice: str | None) -> tuple[bytes, str, int]:
+    import edge_tts  # lazy: only needed when provider == "edge"
+
+    edge_voice = _pick_edge_voice(text, voice)
+    comm = edge_tts.Communicate(text, edge_voice)
+    chunks: list[bytes] = []
+    async for chunk in comm.stream():
+        if chunk.get("type") == "audio" and chunk.get("data"):
+            chunks.append(chunk["data"])
+    audio = b"".join(chunks)
+    if not audio:
+        raise RuntimeError(f"edge-tts returned no audio (voice={edge_voice})")
+    duration_ms = round(len(audio) / _EDGE_MP3_BYTES_PER_SEC * 1000)
+    return audio, "audio/mpeg", duration_ms
+
+
+# --- Gemini TTS (fallback) ---------------------------------------------------
 
 # The TTS preview models intermittently return 500 INTERNAL ("Please retry").
 # Retry a few times with backoff before giving up.
@@ -38,13 +86,21 @@ DEFAULT_VOICE = os.getenv("VOICE_TTS_VOICE", "Kore")
 _SAMPLE_RATE = 24000
 _SAMPLE_WIDTH = 2  # 16-bit
 _CHANNELS = 1
+# 24 kHz * 2 bytes * 1 channel = 48000 bytes/sec → 48 bytes per millisecond.
+_WAV_BYTES_PER_MS = _SAMPLE_RATE * _SAMPLE_WIDTH * _CHANNELS // 1000
 
-_client: genai.Client | None = None
+_client = None  # type: ignore[var-annotated]
 
 
-def _get_client() -> genai.Client:
+class _RetryableTTSError(Exception):
+    """Internal marker for a TTS failure worth retrying."""
+
+
+def _get_client():
     global _client
     if _client is None:
+        from google import genai
+
         key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not key:
             raise ValueError("GOOGLE_API_KEY environment variable not set")
@@ -78,11 +134,9 @@ def _extract_pcm(response) -> bytes:
     raise _RetryableTTSError("Gemini TTS returned no audio data (text part?)")
 
 
-class _RetryableTTSError(Exception):
-    """Internal marker for a TTS failure worth retrying."""
-
-
 def _is_retryable(e: Exception) -> bool:
+    from google.genai import errors
+
     if isinstance(e, (errors.ServerError, _RetryableTTSError)):
         return True
     # The preview model intermittently 400s with this exact message when it
@@ -90,7 +144,9 @@ def _is_retryable(e: Exception) -> bool:
     return "should only be used for TTS" in str(e)
 
 
-def _generate(text: str, voice: str) -> bytes:
+def _gemini_generate(text: str, voice: str) -> bytes:
+    from google.genai import types
+
     response = _get_client().models.generate_content(
         model=TTS_MODEL,
         contents=text,
@@ -108,18 +164,13 @@ def _generate(text: str, voice: str) -> bytes:
     return _pcm_to_wav(_extract_pcm(response))
 
 
-def synthesize(text: str, voice: str | None = None) -> bytes:
-    """Synthesize `text` to a WAV byte string using Gemini TTS.
-
-    Retries the preview model's intermittent failures (5xx, and the 400
-    "should only be used for TTS" / empty-audio cases). Raises on persistent
-    failure; the caller maps that to an HTTP 5xx.
-    """
+def _gemini_synthesize_wav(text: str, voice: str | None = None) -> bytes:
+    """Synthesize `text` to a WAV byte string using Gemini TTS (with retries)."""
     voice = voice or DEFAULT_VOICE
     last_err: Exception | None = None
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
-            return _generate(text, voice)
+            return _gemini_generate(text, voice)
         except Exception as e:
             if not _is_retryable(e):
                 raise
@@ -134,3 +185,21 @@ def synthesize(text: str, voice: str | None = None) -> bytes:
             if attempt < _MAX_ATTEMPTS:
                 time.sleep(_BACKOFF_SEC * attempt)
     raise last_err  # type: ignore[misc]
+
+
+# --- Public API --------------------------------------------------------------
+
+
+async def synthesize(text: str, voice: str | None = None) -> TTSResult:
+    """Synthesize `text` to speech using the configured provider.
+
+    Returns the raw audio bytes, their mime type, and the clip duration in ms
+    (computed here so the client's playback timer is codec-agnostic).
+    """
+    provider = os.getenv("VOICE_TTS_PROVIDER", "edge").lower()
+    if provider == "gemini":
+        wav = await asyncio.to_thread(_gemini_synthesize_wav, text, voice)
+        duration_ms = round(max(0, len(wav) - 44) / _WAV_BYTES_PER_MS)
+        return TTSResult(wav, "audio/wav", duration_ms)
+    audio, mime, duration_ms = await _edge_synthesize(text, voice)
+    return TTSResult(audio, mime, duration_ms)
