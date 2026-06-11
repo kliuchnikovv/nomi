@@ -15,7 +15,9 @@ Tool schemas are also sanitized to remove fields incompatible with z.ai/GLM:
 - Empty ``required: []`` arrays removed (causes "Tool type cannot be empty")
 """
 
+import json
 import logging
+import os
 
 from agno.models.openai import OpenAIChat
 from agno.models.message import Message
@@ -295,6 +297,26 @@ class SafeOpenAI(OpenAIChat):
                 tool_calls_removed,
             )
 
+        # Coerce list-valued message content into a plain string.
+        #
+        # Agno emits ``tool`` result messages with ``content`` as a *list of
+        # strings* (one entry per parallel tool call). z.ai/GLM treats a list as
+        # multimodal content-parts and requires each part to be a typed object
+        # ({"type": "text", ...}); a bare string part has no ``type``, so the API
+        # rejects the whole request with ``400`` code 1214
+        # ("messages[N].content[0].type: cannot be empty" / "Tool type cannot be
+        # empty"). Join pure-string lists into one string. Lists whose parts are
+        # already typed dicts (e.g. vision ``image_url``/``text`` parts) are left
+        # untouched.
+        for m in normalized_messages:
+            content = getattr(m, "content", None)
+            if (
+                isinstance(content, list)
+                and content
+                and all(isinstance(part, str) for part in content)
+            ):
+                m.content = "\n\n".join(content)
+
         if not normalized_messages:
             logger.warning(
                 "[SafeOpenAI] All messages were filtered out. Returning original messages to avoid empty list."
@@ -302,6 +324,53 @@ class SafeOpenAI(OpenAIChat):
             return messages
 
         return normalized_messages
+
+    # ------------------------------------------------------------------
+    # Diagnostic payload capture (env-gated)
+    # ------------------------------------------------------------------
+
+    _dump_seq = 0
+
+    def _maybe_dump_payload(self, method: str, messages, tools) -> None:
+        """When ``ZAI_DUMP_PAYLOAD`` is set, emit the EXACT final request body.
+
+        Captures the post-normalization messages and post-sanitization tools so
+        the body can be replayed/bisected with ``back/scripts/zai_diagnose.py``
+        to pin down the z.ai ``400: Tool type cannot be empty`` (1214) offender.
+
+        Emitted two ways so capture works anywhere:
+        - one non-truncated ``[ZAI_DUMP]`` log line (copyable from Railway logs)
+        - a file under ``back/scripts/zai_dumps/`` (when the fs is writable, e.g.
+          local runs)
+        """
+        if not os.getenv("ZAI_DUMP_PAYLOAD"):
+            return
+        try:
+            body = {
+                "model": getattr(self, "id", None),
+                "messages": [
+                    m.to_dict() if hasattr(m, "to_dict") else m for m in messages
+                ],
+                "tools": tools,
+            }
+            blob = json.dumps(body, default=str)
+        except Exception as e:  # never let diagnostics break a real request
+            logger.warning("[ZAI_DUMP] failed to serialize payload: %s", e)
+            return
+
+        logger.warning("[ZAI_DUMP] method=%s %s", method, blob)
+
+        try:
+            SafeOpenAI._dump_seq += 1
+            dump_dir = os.path.join(
+                os.path.dirname(__file__), "..", "..", "scripts", "zai_dumps"
+            )
+            os.makedirs(dump_dir, exist_ok=True)
+            path = os.path.join(dump_dir, f"{SafeOpenAI._dump_seq:04d}-{method}.json")
+            with open(path, "w") as fh:
+                fh.write(blob)
+        except Exception as e:
+            logger.debug("[ZAI_DUMP] could not write dump file: %s", e)
 
     def _format_tools(self, tools):
         """Override to fully sanitize tool schemas for z.ai/GLM.
@@ -319,6 +388,7 @@ class SafeOpenAI(OpenAIChat):
         normalized = self._normalize_messages(messages)
         if "tools" in kwargs:
             kwargs["tools"] = self._sanitize_tools(kwargs["tools"])
+        self._maybe_dump_payload("invoke", normalized, kwargs.get("tools"))
         logger.info(
             "[SafeOpenAI] invoke() passing %d messages to super()", len(normalized)
         )
@@ -329,6 +399,7 @@ class SafeOpenAI(OpenAIChat):
         normalized = self._normalize_messages(messages)
         if "tools" in kwargs:
             kwargs["tools"] = self._sanitize_tools(kwargs["tools"])
+        self._maybe_dump_payload("ainvoke", normalized, kwargs.get("tools"))
         logger.info(
             "[SafeOpenAI] ainvoke() passing %d messages to super()", len(normalized)
         )
@@ -341,6 +412,7 @@ class SafeOpenAI(OpenAIChat):
         normalized = self._normalize_messages(messages)
         if "tools" in kwargs:
             kwargs["tools"] = self._sanitize_tools(kwargs["tools"])
+        self._maybe_dump_payload("invoke_stream", normalized, kwargs.get("tools"))
         logger.info(
             "[SafeOpenAI] invoke_stream() passing %d messages to super()",
             len(normalized),
@@ -354,6 +426,7 @@ class SafeOpenAI(OpenAIChat):
         normalized = self._normalize_messages(messages)
         if "tools" in kwargs:
             kwargs["tools"] = self._sanitize_tools(kwargs["tools"])
+        self._maybe_dump_payload("ainvoke_stream", normalized, kwargs.get("tools"))
         logger.info(
             "[SafeOpenAI] ainvoke_stream() passing %d messages to super()",
             len(normalized),

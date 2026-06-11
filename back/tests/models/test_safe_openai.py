@@ -76,6 +76,47 @@ class TestNormalizeMessages:
         assert result == messages
 
 
+class TestListContentCoercion:
+    """z.ai/GLM rejects ``tool`` messages whose ``content`` is a list of bare
+    strings (Agno's shape for parallel tool results) with 400 code 1214
+    ("messages[N].content[0].type: cannot be empty" / "Tool type cannot be
+    empty"), because it treats a list as typed content-parts. They must be
+    joined into a single string.
+    """
+
+    def test_tool_list_content_joined_to_string(self):
+        model = SafeOpenAI()
+        messages = [
+            Message(role="user", content="hi"),
+            Message(
+                role="tool",
+                content=["[calendar results]", "(no emails)", "offline"],
+                tool_call_id="abc",
+            ),
+            Message(role="user", content="ok"),
+        ]
+        result = model._normalize_messages(messages)
+        tool_msg = next(m for m in result if m.role == "tool")
+        assert tool_msg.content == "[calendar results]\n\n(no emails)\n\noffline"
+
+    def test_string_content_unchanged(self):
+        model = SafeOpenAI()
+        messages = [Message(role="tool", content="single result", tool_call_id="x")]
+        result = model._normalize_messages(messages)
+        assert result[0].content == "single result"
+
+    def test_typed_part_list_preserved(self):
+        # Vision messages carry a list of typed dict parts — must NOT be flattened.
+        parts = [
+            {"type": "image_url", "image_url": {"url": "data:..."}},
+            {"type": "text", "text": "describe"},
+        ]
+        model = SafeOpenAI()
+        messages = [Message(role="user", content=parts)]
+        result = model._normalize_messages(messages)
+        assert result[0].content == parts
+
+
 class TestInvokeMethods:
     @patch("src.models.safe_openai.OpenAIChat.invoke")
     def test_invoke_calls_parent_with_normalized(self, mock_invoke):

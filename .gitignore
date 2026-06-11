@@ -36,3 +36,7 @@ conversations
 docs
 .worktrees/
 .aider*
+
+# z.ai diagnostic captures (env-gated payload dumps)
+back/scripts/zai_dumps/
+back/scripts/zai_payload.json

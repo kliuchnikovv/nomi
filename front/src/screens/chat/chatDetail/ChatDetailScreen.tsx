@@ -1076,37 +1076,50 @@ export function ChatDetailScreen() {
                 ))}
             </Animated.View>
 
-            {/* Blocking project suggestion banner for new sessions (above input) */}
-            {suggestedProjectForSession && (
-                <ProjectSuggestionBanner
-                    project={suggestedProjectForSession}
-                    onAccept={handleAcceptSessionProjectSuggestion}
-                    onDismiss={clearProjectSuggestionForSession}
-                    accentColor={theme.accent}
-                    surfaceColor={theme.surface}
-                    textPrimaryColor={theme.textPrimary}
-                    textSecondaryColor={theme.textSecondary}
-                    borderColor={theme.border}
-                    showNoButton={true}
-                />
-            )}
-
-            {/* Floating input toolbar — absolute, follows keyboard */}
+            {/* Floating bottom stack — absolute, follows keyboard. The blocking
+                project-suggestion banner sits visibly ABOVE the input; only the
+                input itself is dimmed/disabled while a suggestion is pending. */}
             <Animated.View
-                pointerEvents={pendingMessage ? 'none' : 'auto'}
                 style={[
                     {
                         position: 'absolute',
                         left: 0,
                         right: 0,
-                        paddingBottom: insets.bottom,
                         zIndex: 8,
-                        opacity: pendingMessage ? 0.4 : 1,
                     },
                     floatingInputStyle,
                 ]}
             >
-                {renderInputToolbarBase({})}
+                {/* Banner stays interactive even while the input below is disabled */}
+                {suggestedProjectForSession && (
+                    <ProjectSuggestionBanner
+                        project={suggestedProjectForSession}
+                        onAccept={handleAcceptSessionProjectSuggestion}
+                        onDismiss={clearProjectSuggestionForSession}
+                        accentColor={theme.accent}
+                        surfaceColor={theme.surface}
+                        textPrimaryColor={theme.textPrimary}
+                        textSecondaryColor={theme.textSecondary}
+                        borderColor={theme.border}
+                        showNoButton={true}
+                    />
+                )}
+                <Animated.View
+                    pointerEvents={
+                        pendingMessage && suggestedProjectForSession
+                            ? 'none'
+                            : 'auto'
+                    }
+                    style={{
+                        paddingBottom: insets.bottom,
+                        opacity:
+                            pendingMessage && suggestedProjectForSession
+                                ? 0.4
+                                : 1,
+                    }}
+                >
+                    {renderInputToolbarBase({})}
+                </Animated.View>
             </Animated.View>
 
             {/* Cover the safe-area gap (behind input toolbar) with the input's background color */}
