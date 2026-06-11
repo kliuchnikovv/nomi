@@ -58,6 +58,9 @@ type Message struct {
 	CreatedAt    time.Time      `gorm:"not null;index:idx_messages_chat_created,priority:2,sort:desc"`
 	UpdatedAt    time.Time      `gorm:"not null"`
 	Archived     bool           `gorm:"not null;default:false"`
+	// StoppedAt is set when the user explicitly stopped generation for this turn.
+	// The client uses it to suppress automatic re-submission of the user message.
+	StoppedAt *time.Time `gorm:"default:null"`
 }
 
 type Integration struct {

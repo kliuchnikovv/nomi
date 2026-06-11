@@ -28,6 +28,10 @@ class RedisWorker:
 
         # Task registry (instance variable)
         self.active_tasks: dict[str, asyncio.Task] = {}
+        # request_id currently being processed per chat — lets us tell a genuine
+        # new turn (debounce-cancel) apart from a hub re-publish of the same turn
+        # (ignore, so we don't kill the in-flight generation).
+        self.active_request_ids: dict[str, str] = {}
 
         # Pending client tool results: call_id -> Future[str]
         self.pending_client_tool_results: dict[str, asyncio.Future] = {}
@@ -287,19 +291,36 @@ class RedisWorker:
                 )
                 return
 
-            # For MESSAGE, we cancel previous task if any (debouncing/restart)
+            # Implement logic to handle session
+            frame_payload = frame.payload or {}
+            user_id = frame_payload.get("user_id") or frame_payload.get("sender")
+            request_id = frame_payload.get("request_id") or frame_payload.get(
+                "message_id"
+            )
+
+            # A hub re-publish of the same turn carries the same request_id. If that
+            # turn is already running, ignore the duplicate — cancelling and
+            # restarting would kill an in-flight generation that is about to reply.
+            if (
+                request_id
+                and chat_id in self.active_tasks
+                and self.active_request_ids.get(chat_id) == request_id
+            ):
+                logger.info(
+                    "[RedisWorker] Ignoring duplicate re-publish for chat %s request %s",
+                    chat_id,
+                    request_id,
+                )
+                return
+
+            # For a genuine new MESSAGE, cancel the previous task (debounce/restart).
             if chat_id in self.active_tasks:
                 logger.info(
                     "[RedisWorker] Cancelling existing task for chat %s", chat_id
                 )
                 self.active_tasks[chat_id].cancel()
-                # Wait a bit? Or just overwrite.
                 # Ideally, we should wait for it to cleanup, but for now we just overwrite in dict
                 # and let the old task die in background.
-
-            # Implement logic to handle session
-            frame_payload = frame.payload or {}
-            user_id = frame_payload.get("user_id") or frame_payload.get("sender")
 
             session = RedisSession(
                 agent_factory=self.agent_factory,
@@ -352,16 +373,24 @@ class RedisWorker:
                     # Cleanup: Remove from active tasks registry
                     if self.active_tasks.get(chat_id) == current_task:
                         del self.active_tasks[chat_id]
+                        if self.active_request_ids.get(chat_id) == request_id:
+                            del self.active_request_ids[chat_id]
                         logger.info(
                             "[RedisWorker] Cleaned up task registry for chat %s",
                             chat_id,
                         )
+                    # NOTE: the chat:req:{request_id} idempotency guard is left to
+                    # expire on its short TTL rather than deleted here — deleting it
+                    # would be unsafe across multiple worker processes (a duplicate
+                    # that hit the guard must not release the original's key).
 
             # We need reference to current_task inside, but we can't get it before creation.
             # So we create it first.
             t = asyncio.create_task(wrapped_task())
             current_task = t
             self.active_tasks[chat_id] = t
+            if request_id:
+                self.active_request_ids[chat_id] = request_id
 
             await t
 

@@ -83,9 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         GoogleSignin.configure({
             webClientId:
-                '174083236719-itfjiur5c404ndjjhj3rukinl85sug66.apps.googleusercontent.com',
+                '294499144277-249g8bd226pd5fqaledtgjnl56lnsvbg.apps.googleusercontent.com',
             iosClientId:
-                '174083236719-ume8kgknccr5drb5qbjfrap6t4kgg88p.apps.googleusercontent.com',
+                '294499144277-u8gr39urgpdott3sheeqk3977h2486tm.apps.googleusercontent.com',
             offlineAccess: true,
             scopes: [
                 'https://www.googleapis.com/auth/gmail.readonly',

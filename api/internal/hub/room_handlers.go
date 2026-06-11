@@ -75,6 +75,55 @@ func (r *Room) sendErrorFrame(code string, message string, err error, traceID st
 	}
 }
 
+// sendWarningFrame surfaces a non-fatal degradation (e.g. some tools unavailable,
+// history could not be loaded) to clients as a signal frame, and logs it. Unlike
+// sendErrorFrame it does not terminate the turn — generation continues.
+func (r *Room) sendWarningFrame(code string, message string) {
+	r.logger.Warn("sending warning frame to clients",
+		zap.String("warning_code", code),
+		zap.String("chat_id", r.ID.String()),
+		zap.String("user_id", r.initiatorID.String()),
+		zap.String("message", message),
+	)
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"type":    "warning",
+		"code":    code,
+		"message": message,
+	})
+	if err != nil {
+		r.logger.Error("failed to marshal warning payload", zap.Error(err))
+		return
+	}
+
+	warnFrame := Frame{
+		ID:        0,
+		ChatID:    r.ID,
+		Kind:      SignalKind,
+		Operation: SignalOperation,
+		Timestamp: time.Now().UTC(),
+		Payload:   payload,
+	}
+	b, marshalErr := json.Marshal(warnFrame)
+	if marshalErr != nil {
+		r.logger.Error("failed to marshal warning frame", zap.Error(marshalErr))
+		return
+	}
+	b = append(b, '\n')
+
+	for client := range r.clients {
+		if client.send == nil {
+			continue
+		}
+		select {
+		case client.send <- b:
+		default:
+			close(client.send)
+			delete(r.clients, client)
+		}
+	}
+}
+
 func (r *Room) InjectMessage(userID uuid.UUID, payload []byte) {
 	// Create a "fake" client message
 	msg := &ClientMessage{
@@ -232,7 +281,17 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			r.generationTimer.Stop()
 			r.generationTimer = nil
 		}
+		if r.ackTimer != nil {
+			r.ackTimer.Stop()
+			r.ackTimer = nil
+		}
+		r.currentRequestID = ""
 		r.flushAllBuilders()
+		// Mark the turn as explicitly stopped so the client can distinguish a
+		// user-stopped turn from an interrupted one and skip auto re-submission.
+		if err := r.store.MarkChatStopped(context.Background(), r.ID, time.Now().UTC()); err != nil {
+			r.logger.Warn("failed to mark chat stopped", zap.Error(err))
+		}
 		// Broadcast stop signal to all clients
 		stopFrame := Frame{
 			ID:        0,
@@ -242,7 +301,11 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			Timestamp: time.Now().UTC(),
 			Payload:   json.RawMessage(`{"type": "stopped"}`),
 		}
-		b, _ := json.Marshal(stopFrame)
+		b, err := json.Marshal(stopFrame)
+		if err != nil {
+			r.logger.Error("failed to marshal stop frame", zap.Error(err))
+			return
+		}
 		b = append(b, '\n')
 		for client := range r.clients {
 			select {
@@ -368,6 +431,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			historyMessages, err = r.store.GetMessages(ctx, r.initiatorID, r.ID, 50)
 			if err != nil {
 				r.logger.Warn("failed to load history for bundling", zap.Error(err))
+				// The agent will reply without prior context — tell the user rather
+				// than silently degrading the conversation.
+				r.sendWarningFrame("history_unavailable", "Couldn't load earlier messages; replying without full context.")
 			}
 		}
 
@@ -390,7 +456,9 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 
 		// A user message is always considered meaningful chat activity.
-		_ = r.store.TouchChatActivity(ctx, r.ID, time.Now().UTC())
+		if err := r.store.TouchChatActivity(ctx, r.ID, time.Now().UTC()); err != nil {
+			r.logger.Warn("failed to touch chat activity", zap.Error(err))
+		}
 
 		// Update Chat Title if empty (or default)
 		// Reuse the same ctx for updating title and activity.
@@ -548,6 +616,10 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 
 		// Load OAuth tokens per provider.
 		// Each provider uses its own credentials — no fallback to shared tokens.
+		// Track integrations whose credentials could not be resolved so we can warn
+		// the user that those tools are unavailable this turn (instead of silently
+		// dropping them).
+		skippedIntegrations := make(map[string]bool)
 		providerCredentials := make(map[string]map[string]interface{})
 		for _, integ := range integrations {
 			provider, ok := intgr.GetProvider(integ.Provider)
@@ -561,18 +633,28 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				context.Background(), r.initiatorID, integ.Provider, integ.AccountEmail,
 			)
 			if err != nil {
+				r.logger.Warn("failed to fetch oauth token for integration",
+					zap.String("provider", integ.Provider), zap.Error(err))
+				skippedIntegrations[integ.Provider] = true
 				continue
 			}
 			decrypted, err := crypto.Decrypt(r.hub.cryptoKey, oauthToken.TokenEncrypted)
 			if err != nil {
+				r.logger.Warn("failed to decrypt oauth token for integration",
+					zap.String("provider", integ.Provider), zap.Error(err))
+				skippedIntegrations[integ.Provider] = true
 				continue
 			}
 			var tokenData map[string]interface{}
 			if err := json.Unmarshal(decrypted, &tokenData); err != nil {
+				r.logger.Warn("failed to parse oauth token for integration",
+					zap.String("provider", integ.Provider), zap.Error(err))
+				skippedIntegrations[integ.Provider] = true
 				continue
 			}
 			atStr, _ := tokenData["access_token"].(string)
 			if atStr == "" {
+				skippedIntegrations[integ.Provider] = true
 				continue
 			}
 			providerCredentials[integ.Provider] = tokenData
@@ -589,17 +671,36 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				context.Background(), r.initiatorID, "imap", integ.AccountEmail,
 			)
 			if err != nil {
+				r.logger.Warn("failed to fetch imap credentials", zap.Error(err))
+				skippedIntegrations["imap"] = true
 				continue
 			}
 			decrypted, err := crypto.Decrypt(r.hub.cryptoKey, tok.TokenEncrypted)
 			if err != nil {
+				r.logger.Warn("failed to decrypt imap credentials", zap.Error(err))
+				skippedIntegrations["imap"] = true
 				continue
 			}
 			var credData map[string]interface{}
 			if err := json.Unmarshal(decrypted, &credData); err != nil {
+				r.logger.Warn("failed to parse imap credentials", zap.Error(err))
+				skippedIntegrations["imap"] = true
 				continue
 			}
 			imapCredsByEmail[integ.AccountEmail] = credData
+		}
+
+		// Surface any integrations we couldn't load credentials for, so the user
+		// knows those tools won't be available rather than wondering why.
+		if len(skippedIntegrations) > 0 {
+			names := make([]string, 0, len(skippedIntegrations))
+			for name := range skippedIntegrations {
+				names = append(names, name)
+			}
+			r.sendWarningFrame(
+				"integration_unavailable",
+				fmt.Sprintf("Some tools are temporarily unavailable: %s.", strings.Join(names, ", ")),
+			)
 		}
 
 		// Inject provider credentials into server-side integrations that lack them
@@ -825,6 +926,8 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		finalMap["user_id"] = r.initiatorID.String()
 		finalMap["agent_storage_mode"] = agentStorageMode
 		finalMap["streaming"] = r.hub.Streaming(payload.Model)
+		// Stable request id for ACK tracking + brain-side idempotency (= message UUID).
+		finalMap["request_id"] = msgID.String()
 		if payload.AuthToken != "" {
 			finalMap["auth_token"] = payload.AuthToken
 		}
@@ -891,13 +994,37 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				default:
 				}
 			})
+
+			// Arm the ACK window: if the brain doesn't acknowledge pickup soon,
+			// the room re-publishes once. Reset per-request ACK state here.
+			r.currentRequestID = msgID.String()
+			r.ackReceived = false
+			r.republished = false
+			r.lastRequestBytes = payloadBytes
+			if r.ackTimer != nil {
+				r.ackTimer.Stop()
+			}
+			ackCh := r.ackCh
+			reqID := r.currentRequestID
+			r.ackTimer = time.AfterFunc(5*time.Second, func() {
+				select {
+				case ackCh <- reqID:
+				default:
+				}
+			})
 		}
 
 	} else if r.Type == RoomTypeChat {
 		// Pass through other frames
 		broadcast(frame)
-		payloadBytes, _ := json.Marshal(frame)
-		r.hub.redis.Publish(context.Background(), fmt.Sprintf("chat:request:%s", r.ID.String()), payloadBytes)
+		payloadBytes, marshalErr := json.Marshal(frame)
+		if marshalErr != nil {
+			r.logger.Error("failed to marshal pass-through frame", zap.Error(marshalErr))
+			return
+		}
+		if err := r.hub.redis.Publish(context.Background(), fmt.Sprintf("chat:request:%s", r.ID.String()), payloadBytes).Err(); err != nil {
+			r.logger.Error("failed to publish pass-through frame to redis", zap.Error(err))
+		}
 
 	} else {
 		// User channel - handle routing and broadcast
@@ -933,6 +1060,17 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 	// User rooms receive all frames (fallback for "user-only" clients); other chat rooms skip.
 	if r.Type == RoomTypeChat && frame.ChatID != uuid.Nil && frame.ChatID != r.ID {
 		return
+	}
+
+	// Any frame from the brain (explicit generation_started ACK, first token,
+	// reasoning, error, etc.) proves the request was picked up — cancel the
+	// re-publish window so we don't duplicate a request that's already running.
+	if r.generationInProgress && !r.ackReceived {
+		r.ackReceived = true
+		if r.ackTimer != nil {
+			r.ackTimer.Stop()
+			r.ackTimer = nil
+		}
 	}
 
 	// Broadcast to clients
@@ -1018,8 +1156,16 @@ func (r *Room) handleLLMMessage(frame Frame, forwardToUser bool) {
 			r.generationTimer.Stop()
 			r.generationTimer = nil
 		}
+		// Stop the ACK re-publish window for this request.
+		if r.ackTimer != nil {
+			r.ackTimer.Stop()
+			r.ackTimer = nil
+		}
+		r.currentRequestID = ""
 		// Touch chat activity once per generation (we only process in the matching room)
-		_ = r.store.TouchChatActivity(context.Background(), r.ID, time.Now().UTC())
+		if err := r.store.TouchChatActivity(context.Background(), r.ID, time.Now().UTC()); err != nil {
+			r.logger.Warn("failed to touch chat activity on done", zap.Error(err))
+		}
 		r.logger.Info("generation complete")
 		r.currentModelID = ""
 

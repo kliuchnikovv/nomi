@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { XmarkCircle, RefreshDouble } from 'iconoir-react-native';
+import { useTheme } from '../../../context/ThemeContext';
 
 interface ErrorBannerProps {
     error: string | null;
@@ -10,33 +11,76 @@ interface ErrorBannerProps {
     onChangeModel?: () => void;
 }
 
-export function ErrorBanner({ error, onRetry, onDismiss, theme, onChangeModel }: ErrorBannerProps) {
+export function ErrorBanner({
+    error,
+    onRetry,
+    onDismiss,
+    theme,
+    onChangeModel,
+}: ErrorBannerProps) {
+    const { effects } = useTheme();
     if (!error) return null;
 
+    const glassButton = {
+        backgroundColor:
+            effects?.glassBackground ?? 'rgba(255, 255, 255, 0.06)',
+        borderColor: effects?.glassBorderColor ?? 'rgba(255, 255, 255, 0.10)',
+        ...(effects?.buttonShadowRaised ?? {}),
+    };
+
     return (
-        <View style={[styles.container, { backgroundColor: theme.errorBackground }]}>
+        <View
+            style={[
+                styles.container,
+                {
+                    backgroundColor:
+                        effects?.glassBackground ?? 'rgba(255, 255, 255, 0.06)',
+                    borderTopColor:
+                        effects?.glassBorderColor ??
+                        'rgba(255, 255, 255, 0.10)',
+                    borderLeftColor: theme.errorText,
+                },
+            ]}
+        >
             <View style={styles.content}>
-                <Text style={[styles.errorText, { color: theme.errorText }]} numberOfLines={2}>
+                <Text
+                    style={[styles.errorText, { color: theme.errorText }]}
+                    numberOfLines={2}
+                >
                     {error}
                 </Text>
                 <View style={styles.actions}>
                     <TouchableOpacity
-                        style={[styles.button, styles.retryButton, { backgroundColor: theme.errorButtonBackground }]}
+                        style={[styles.button, glassButton]}
                         onPress={onRetry}
                         activeOpacity={0.7}
                     >
-                        <RefreshDouble width={16} height={16} color={theme.errorButtonText} />
-                        <Text style={[styles.buttonText, { color: theme.errorButtonText }]}>
+                        <RefreshDouble
+                            width={16}
+                            height={16}
+                            color={theme.errorText}
+                        />
+                        <Text
+                            style={[
+                                styles.buttonText,
+                                { color: theme.errorText },
+                            ]}
+                        >
                             Retry
                         </Text>
                     </TouchableOpacity>
                     {onChangeModel && (
                         <TouchableOpacity
-                            style={[styles.button, styles.changeModelButton, { backgroundColor: theme.errorButtonBackground }]}
+                            style={[styles.button, glassButton]}
                             onPress={onChangeModel}
                             activeOpacity={0.7}
                         >
-                            <Text style={[styles.buttonText, { color: theme.errorButtonText }]}>
+                            <Text
+                                style={[
+                                    styles.buttonText,
+                                    { color: theme.textPrimary },
+                                ]}
+                            >
                                 Change model
                             </Text>
                         </TouchableOpacity>
@@ -46,7 +90,11 @@ export function ErrorBanner({ error, onRetry, onDismiss, theme, onChangeModel }:
                         onPress={onDismiss}
                         activeOpacity={0.7}
                     >
-                        <XmarkCircle width={20} height={20} color={theme.errorText} />
+                        <XmarkCircle
+                            width={20}
+                            height={20}
+                            color={theme.textSecondary}
+                        />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -59,7 +107,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        borderLeftWidth: 3,
     },
     content: {
         flexDirection: 'row',
@@ -83,13 +131,8 @@ const styles = StyleSheet.create({
         gap: 6,
         paddingHorizontal: 12,
         paddingVertical: 8,
-        borderRadius: 6,
-    },
-    retryButton: {
-        // Additional retry button styles
-    },
-    changeModelButton: {
-        // Additional change model button styles
+        borderRadius: 12,
+        borderWidth: 1,
     },
     buttonText: {
         fontSize: 14,

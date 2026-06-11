@@ -1,4 +1,4 @@
-package com.genie
+package com.kliuchnikovv.nomi
 
 import android.app.Application
 import com.facebook.react.PackageList

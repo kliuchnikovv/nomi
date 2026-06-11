@@ -33,6 +33,12 @@ interface ChatStore {
         messageId: string,
         actions: MessageAction[],
     ) => void;
+    setMessageStatus: (
+        chatId: string,
+        messageId: string,
+        status: NonNullable<Message['status']>,
+    ) => void;
+    getLastMessage: (chatId: string) => Message | undefined;
 }
 
 // Throttling state (outside store to avoid re-renders)
@@ -233,6 +239,29 @@ export const useChatStore = create<ChatStore>()(
                 ) {
                     flushPendingUpdates(chatId, set);
                 }
+            },
+
+            setMessageStatus: (chatId, messageId, status) => {
+                set(state => {
+                    const msgs = state.chats[chatId];
+                    if (!msgs) return state;
+                    const idx = msgs.findIndex(m => m.id === messageId);
+                    if (idx === -1 || msgs[idx].status === status) return state;
+                    const updated = [...msgs];
+                    updated[idx] = { ...updated[idx], status };
+                    return {
+                        chats: {
+                            ...state.chats,
+                            [chatId]: updated,
+                        },
+                    };
+                });
+            },
+
+            getLastMessage: chatId => {
+                const msgs = get().chats[chatId];
+                if (!msgs || msgs.length === 0) return undefined;
+                return msgs[msgs.length - 1];
             },
 
             appendActions: (chatId, messageId, actions) => {
@@ -481,6 +510,17 @@ function onReceivedMessage(
 
     if (role === 'user') {
         return newMessages;
+    }
+
+    // An assistant turn has begun → the most recent unanswered user message is
+    // now answered. Clear its 'pending' status so reconciliation won't resend it.
+    for (let i = newMessages.length - 1; i >= 0; i--) {
+        if (newMessages[i].role === 'user') {
+            if (newMessages[i].status === 'pending') {
+                newMessages[i] = { ...newMessages[i], status: 'complete' };
+            }
+            break;
+        }
     }
 
     return dispatchPayload(payload, newMessages, newMessages.length - 1);

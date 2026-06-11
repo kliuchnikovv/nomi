@@ -11,7 +11,7 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.kliuchnikovv.genie</string>
+	<string>com.kliuchnikovv.nomi</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -33,7 +33,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.174083236719-ume8kgknccr5drb5qbjfrap6t4kgg88p</string>
+				<string>com.googleusercontent.apps.294499144277-u8gr39urgpdott3sheeqk3977h2486tm</string>
 			</array>
 		</dict>
 	</array>

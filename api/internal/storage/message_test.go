@@ -54,7 +54,8 @@ func newTestDBWithMessages(t *testing.T) *storage.Storage {
 			context_items TEXT,
 			created_at    DATETIME NOT NULL,
 			updated_at    DATETIME NOT NULL,
-			archived      INTEGER NOT NULL DEFAULT 0
+			archived      INTEGER NOT NULL DEFAULT 0,
+			stopped_at    DATETIME
 		)`,
 		`CREATE TABLE attachments (
 			id         TEXT PRIMARY KEY,

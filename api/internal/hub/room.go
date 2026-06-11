@@ -1,7 +1,9 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -59,6 +61,17 @@ type Room struct {
 	generationTimer      *time.Timer
 	generationTimeoutCh  chan struct{}
 
+	// Generation ACK tracking: the Python brain acknowledges pickup of a request
+	// (generation_started signal). If no ACK arrives within the ACK window, the
+	// room re-publishes the request once (workers may have been down at publish
+	// time). All fields are mutated only from the room goroutine.
+	currentRequestID string
+	ackReceived      bool
+	republished      bool
+	ackTimer         *time.Timer
+	ackCh            chan string
+	lastRequestBytes []byte
+
 	// Model for current generation (set when forwarding user message to Redis)
 	currentModelID string
 
@@ -87,6 +100,7 @@ func NewRoom(hub *Hub, id uuid.UUID, roomType RoomType, initiatorID uuid.UUID, s
 		command:             command,
 		messageBuilders:     make(map[uuid.UUID]*MessageBuilder),
 		generationTimeoutCh: make(chan struct{}, 1),
+		ackCh:               make(chan string, 1),
 		timezone:            timezone,
 	}
 }
@@ -199,8 +213,28 @@ func (r *Room) Run() {
 				r.logger.Warn("generation timeout reached, forcing stop")
 				r.generationInProgress = false
 				r.generationTimer = nil
+				if r.ackTimer != nil {
+					r.ackTimer.Stop()
+					r.ackTimer = nil
+				}
+				r.currentRequestID = ""
 				r.flushAllBuilders()
 				r.sendGenerationTimeoutError()
+			}
+
+		case reqID := <-r.ackCh:
+			// No generation_started ACK from the Python brain within the ACK
+			// window — the worker may have been down at publish time. Re-publish
+			// the request exactly once; the brain de-duplicates by request_id.
+			if r.generationInProgress && !r.ackReceived && !r.republished &&
+				reqID == r.currentRequestID && len(r.lastRequestBytes) > 0 {
+				r.republished = true
+				r.logger.Warn("no generation ACK from brain, re-publishing once",
+					zap.String("request_id", reqID))
+				if err := r.hub.redis.Publish(context.Background(),
+					fmt.Sprintf("chat:request:%s", r.ID.String()), r.lastRequestBytes).Err(); err != nil {
+					r.logger.Error("failed to re-publish request to redis", zap.Error(err))
+				}
 			}
 
 		}

@@ -11,7 +11,7 @@ import React, {
     useMemo,
     startTransition,
 } from 'react';
-import { InteractionManager } from 'react-native';
+import { AppState, InteractionManager } from 'react-native';
 import { ChatContextType, Props, Model, DetailLevel } from './models';
 import { useAuth } from '../auth/context.tsx';
 import { socket } from '../../socket';
@@ -166,6 +166,10 @@ export function ChatProvider({
     );
     const generatingForChatRef = useRef<string | null>(null);
     const skipReconnectResetRef = useRef(false);
+    // Reconciliation: id of the message currently being auto-resent (re-entrancy guard),
+    // and a ref to the reconcile fn so callbacks defined earlier (getMessages) can call it.
+    const reconcilingRef = useRef<string | null>(null);
+    const reconcileRef = useRef<((chatId?: string) => void) | null>(null);
     const RESPONSE_TIMEOUT_MS = 300_000; // 5 minutes — safety net if DONE/ERROR never arrives
 
     // Model selection state
@@ -384,6 +388,10 @@ export function ChatProvider({
 
                 // Update store (always replace so refresh shows latest from server)
                 setMessagesToStore(chatID, data);
+
+                // History loaded: if it ends on an unanswered user turn (interrupted
+                // before a reply, not stopped), auto-resend it.
+                reconcileRef.current?.(chatID);
 
                 // Sync model from last assistant message or any message that has a model field
                 if (!manualModelSelectionRef.current && data.length > 0) {
@@ -744,12 +752,32 @@ export function ChatProvider({
                         context_items: contextItems,
                         // eof: true // user message is complete
                     });
+                    // Awaiting an assistant response — eligible for reconciliation
+                    // (auto-resend) if the turn is interrupted before a reply.
+                    if (role === 'user') {
+                        useChatStore
+                            .getState()
+                            .setMessageStatus(
+                                chatIdToUse,
+                                messageID!,
+                                'pending',
+                            );
+                    }
                 } else {
                     console.log(
                         'Reusing existing message ID for retry:',
                         reuseMessageId,
                     );
                     setCurrentMessageID(reuseMessageId);
+                    if (role === 'user' && chatIdToUse) {
+                        useChatStore
+                            .getState()
+                            .setMessageStatus(
+                                chatIdToUse,
+                                reuseMessageId,
+                                'pending',
+                            );
+                    }
                 }
             }
 
@@ -783,8 +811,20 @@ export function ChatProvider({
                 setAssistantWorking(current => {
                     if (current) {
                         setActiveAgentsCount(0);
-                        reportMessageError(
-                            'No response received. Check your connection and try again.',
+                        // Transport-level stall: keep the user message in place marked
+                        // 'pending' so reconciliation auto-resends it once the socket
+                        // reconnects, rather than dropping it. Surface a soft notice.
+                        if (chatIdToUse && messageID) {
+                            useChatStore
+                                .getState()
+                                .setMessageStatus(
+                                    chatIdToUse,
+                                    messageID,
+                                    'pending',
+                                );
+                        }
+                        setError(
+                            'No response received. It will retry automatically when the connection is restored.',
                         );
                         responseTimeoutRef.current = null;
                         return false;
@@ -1006,6 +1046,45 @@ export function ChatProvider({
             );
         }
     }, [lastFailedMessage, sendStreamingMessage]);
+
+    // Guaranteed delivery: if the last message in a chat is an unanswered user
+    // message (interrupted before a reply, not explicitly stopped), auto-resend it
+    // reusing the same message ID (idempotent server-side). Runs on chat open,
+    // app resume, and socket reconnect.
+    const reconcileLastMessage = useCallback(
+        (chatId?: string) => {
+            const cid = chatId || activeChatID;
+            if (!cid || cid === emptyChatID) return;
+            if (pluginThreadMeta) return;
+            // A generation is genuinely in flight — don't double-send.
+            if (generatingForChatRef.current) return;
+
+            const last = useChatStore.getState().getLastMessage(cid);
+            if (!last || last.role !== 'user') return;
+            // Answered, explicitly stopped, or already being resent → skip.
+            if (last.status === 'complete') return;
+            if (last.stopped_at) return;
+            if (reconcilingRef.current === last.id) return;
+
+            reconcilingRef.current = last.id;
+            console.log(
+                '[ChatContext] Reconciling unanswered user message',
+                last.id,
+            );
+            sendStreamingMessage(
+                last.text,
+                last.attachments ?? [],
+                undefined,
+                undefined,
+                last.id, // reuse the existing ID — server upsert is idempotent
+                'user',
+                last.context_items,
+                cid,
+            );
+        },
+        [activeChatID, pluginThreadMeta, sendStreamingMessage],
+    );
+    reconcileRef.current = reconcileLastMessage;
 
     const handleClientAction = useCallback(
         async (payload: any, sourceChatId?: string) => {
@@ -1334,6 +1413,7 @@ export function ChatProvider({
                     responseTimeoutRef.current = null;
                 }
                 generatingForChatRef.current = null;
+                reconcilingRef.current = null;
                 // Mark as low-priority transition so in-flight gestures aren't interrupted
                 startTransition(() => {
                     setAssistantWorking(false);
@@ -1362,6 +1442,7 @@ export function ChatProvider({
                     responseTimeoutRef.current = null;
                 }
                 generatingForChatRef.current = null;
+                reconcilingRef.current = null;
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
@@ -1420,11 +1501,17 @@ export function ChatProvider({
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
                 }
+                // The in-flight generation (if any) was lost on the dropped
+                // connection. Clear local generation state, then reconcile so an
+                // unanswered user turn is automatically re-submitted.
+                generatingForChatRef.current = null;
+                reconcilingRef.current = null;
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
                     setGenerationStatus(null);
                 });
+                reconcileRef.current?.();
             },
         });
 
@@ -1433,7 +1520,25 @@ export function ChatProvider({
         return () => {
             socket.setHandlers({});
         };
-    }, [refreshToken, getChats, handleClientAction, reportMessageError]);
+    }, [
+        refreshToken,
+        getChats,
+        handleClientAction,
+        reportMessageError,
+        reconcileLastMessage,
+    ]);
+
+    // App resume: re-check the active chat for an unanswered user turn and
+    // auto-resend it (covers the case where the socket stayed connected through
+    // a brief background and no onReconnect fired).
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', state => {
+            if (state === 'active') {
+                reconcileRef.current?.();
+            }
+        });
+        return () => sub.remove();
+    }, []);
 
     // Clear "Assistant is thinking" when DONE is received on user channel (or any socket).
     useEffect(() => {
@@ -1601,6 +1706,15 @@ export function ChatProvider({
         console.log('Stopping generation');
         if (activeChatID) {
             socket.sendStop(activeChatID);
+            // User explicitly stopped: mark the trailing user message handled so
+            // reconciliation does not auto-resend it. The server also persists
+            // stopped_at, which covers a cold reload.
+            const last = useChatStore.getState().getLastMessage(activeChatID);
+            if (last && last.role === 'user' && last.status === 'pending') {
+                useChatStore
+                    .getState()
+                    .setMessageStatus(activeChatID, last.id, 'complete');
+            }
         }
         generatingForChatRef.current = null;
         setAssistantWorking(false);

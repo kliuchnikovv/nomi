@@ -27,6 +27,7 @@ from src.server.utils import (
     make_done,
     make_data,
     make_generation_status,
+    make_signal,
 )
 from src.tools.models import ToolSpec
 from src.workflows.models import PlanStatus
@@ -414,6 +415,21 @@ class RedisSession:
         self.next_id = frame.id + 1
         return self.next_id
 
+    async def _safe_deliver(self, delivery_handler, full_text: str) -> None:
+        """Deliver a reply to an external plugin channel without letting a plugin
+        failure crash the streaming response. Re-raises CancelledError."""
+        try:
+            await delivery_handler.deliver(full_text, self._delivery_context)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(
+                "[RedisSession] Delivery handler failed for source=%s: %s",
+                self._delivery_source,
+                e,
+                exc_info=True,
+            )
+
     @staticmethod
     def _should_use_workflow(session_state: dict, user_message: str = "") -> bool:
         """Return True if the planner should use the multi-stage workflow.
@@ -437,8 +453,8 @@ class RedisSession:
                 return json.loads(raw)
         except asyncio.CancelledError:
             raise
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("[PlannerSession] Failed to load state: %s", exc)
         return {}
 
     async def _save_planner_session_state(self, state: dict) -> None:
@@ -1324,7 +1340,7 @@ class RedisSession:
             logger.warning(
                 "[RedisSession] Memory extraction failed (non-fatal): %s",
                 e,
-                exc_info=False,
+                exc_info=True,
                 extra={"user_id": user_id},
             )
 
@@ -1410,6 +1426,44 @@ class RedisSession:
         if incoming_user_id:
             self.user_id = str(incoming_user_id)
             logger.info("[RedisSession] Updated user_id from payload: %s", self.user_id)
+
+        # 0-pre. Request-level idempotency + pickup ACK.
+        # The Go hub stamps a stable request_id (= user message UUID) and may
+        # re-publish a request once if it never sees a pickup ACK. Guard against
+        # processing the same turn twice, then immediately acknowledge pickup so
+        # the hub cancels its re-publish window before model latency kicks in.
+        request_id = payload.get("request_id") or payload.get("message_id")
+        if request_id and self.redis_client and payload.get("source") != "proactive":
+            try:
+                acquired = await self.redis_client.set(
+                    f"chat:req:{request_id}", "1", nx=True, ex=120
+                )
+                if not acquired:
+                    logger.warning(
+                        "[RedisSession] Duplicate request_id %s for chat %s — skipping",
+                        request_id,
+                        self.chat_id,
+                    )
+                    return
+            except Exception as e:
+                # Idempotency is best-effort; never block a real request on it.
+                logger.warning(
+                    "[RedisSession] Idempotency check failed for %s: %s",
+                    request_id,
+                    e,
+                )
+        if request_id:
+            try:
+                await self._send_frame(
+                    make_signal(
+                        self.next_id,
+                        Op.ACK,
+                        self.chat_id,
+                        {"type": "generation_started", "request_id": str(request_id)},
+                    )
+                )
+            except Exception as e:
+                logger.warning("[RedisSession] Failed to send generation_started ACK: %s", e)
 
         # 0a. Build storage backend based on per-user feature flag
         agent_storage_mode = payload.get("agent_storage_mode", "payload")
@@ -1582,9 +1636,7 @@ class RedisSession:
                     if delivery_handler and workflow_chunks:
                         full_text = "".join(workflow_chunks)
                         if full_text:
-                            await delivery_handler.deliver(
-                                full_text, self._delivery_context
-                            )
+                            await self._safe_deliver(delivery_handler, full_text)
                     # Workflow manages its own done frame below — skip agent path
                     if not done_sent:
                         await self._send_frame(
@@ -1640,9 +1692,7 @@ class RedisSession:
                             if not full_text and completed_content:
                                 full_text = str(completed_content)
                             if full_text:
-                                await delivery_handler.deliver(
-                                    full_text, self._delivery_context
-                                )
+                                await self._safe_deliver(delivery_handler, full_text)
 
                         # Profile/entity/memory extraction is deferred OFF the
                         # reply path: accumulate this turn and (re)arm the idle
@@ -1850,9 +1900,7 @@ class RedisSession:
                     if not full_text and completed_content:
                         full_text = str(completed_content)
                     if full_text:
-                        await delivery_handler.deliver(
-                            full_text, self._delivery_context
-                        )
+                        await self._safe_deliver(delivery_handler, full_text)
 
         except asyncio.CancelledError:
             logger.info("[RedisSession] Streaming cancelled by user")

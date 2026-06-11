@@ -261,6 +261,7 @@ func (s *Storage) GetMessages(ctx context.Context, userID uuid.UUID, chatID uuid
 			Sender:    msg.UserID,
 			Model:     msg.Model,
 			CreatedAt: msg.CreatedAt,
+			StoppedAt: msg.StoppedAt,
 		}
 
 		// Map attachments
@@ -355,6 +356,7 @@ func (s *Storage) GetMessagesAfter(ctx context.Context, userID uuid.UUID, chatID
 			Sender:    msg.UserID,
 			Model:     msg.Model,
 			CreatedAt: msg.CreatedAt,
+			StoppedAt: msg.StoppedAt,
 		}
 
 		// Map attachments
@@ -507,6 +509,33 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
+	return nil
+}
+
+// MarkChatStopped stamps StoppedAt on the most recent user message of a chat.
+// Called when the user explicitly stops generation, so the client can tell a
+// stopped turn apart from an interrupted one and skip auto re-submission.
+func (s *Storage) MarkChatStopped(ctx context.Context, chatID uuid.UUID, ts time.Time) error {
+	// Subquery: id of the latest user message in this chat.
+	var msgID uuid.UUID
+	err := s.DB.WithContext(ctx).
+		Model(&Message{}).
+		Where("chat_id = ? AND role = ?", chatID, "user").
+		Order("created_at DESC").
+		Limit(1).
+		Pluck("id", &msgID).Error
+	if err != nil {
+		return fmt.Errorf("failed to find latest user message to mark stopped: %w", err)
+	}
+	if msgID == ZeroUUID {
+		return nil // nothing to mark
+	}
+	if err := s.DB.WithContext(ctx).
+		Model(&Message{}).
+		Where("id = ?", msgID).
+		Update("stopped_at", ts).Error; err != nil {
+		return fmt.Errorf("failed to mark message stopped: %w", err)
+	}
 	return nil
 }
 
