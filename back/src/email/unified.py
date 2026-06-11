@@ -65,9 +65,26 @@ class UnifiedEmailTools(Toolkit):
     def _provider_for_handle(self, handle: str) -> tuple[EmailProvider, dict[str, str]]:
         ref = decode_handle(handle)
         acct = self._by_id.get(ref["account_id"])
-        if not acct:
-            raise ValueError(f"Unknown account in handle: {ref['account_id']}")
-        return acct.provider, ref
+        if acct:
+            return acct.provider, ref
+
+        # The handle's embedded account_id is unknown — this happens when the
+        # agent reuses a stale handle from chat history after the integration was
+        # reconnected (new UUID) or removed. Degrade gracefully when the target
+        # is unambiguous; otherwise tell the model how to recover.
+        if len(self._accounts) == 1:
+            acct = self._accounts[0]
+            return acct.provider, ref
+        same_provider = [
+            a for a in self._accounts if a.provider_name == ref["provider"]
+        ]
+        if len(same_provider) == 1:
+            return same_provider[0].provider, ref
+        raise ValueError(
+            "Email reference is no longer valid (the account may have been "
+            "reconnected or removed). Call search_emails or get_recent_emails to "
+            "get a fresh handle, then retry."
+        )
 
     def _provider_for_account(self, account_id: str | None) -> EmailAccount:
         if account_id:

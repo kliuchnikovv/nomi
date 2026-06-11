@@ -2,8 +2,15 @@
 
 import asyncio
 
+import pytest
+
 from src.email.filter import EmailFilter
-from src.email.providers.base import EmailAccount, EmailMessage, EmailProvider
+from src.email.providers.base import (
+    EmailAccount,
+    EmailMessage,
+    EmailProvider,
+    encode_handle,
+)
 from src.email.unified import UnifiedEmailTools
 
 
@@ -158,3 +165,43 @@ def test_list_accounts():
     tools, _, _ = _build_tools()
     out = tools.list_email_accounts()
     assert "a1" in out and "a2" in out
+
+
+def test_stale_handle_single_account_falls_back():
+    """A handle with an unknown account_id routes to the only account."""
+    p1 = FakeProvider("a1", "alice")
+    tools = UnifiedEmailTools([EmailAccount("a1", "alice", "fake", p1)])
+    stale = encode_handle("DEAD-UUID", "fake", "INBOX", "1")
+    body = asyncio.run(tools.get_email(handle=stale))
+    assert "full body" in body
+
+
+def test_stale_handle_provider_match_single():
+    """A stale handle whose provider matches exactly one account routes there."""
+    p_fake = FakeProvider("a1", "alice")
+
+    class OtherProvider(FakeProvider):
+        def __init__(self, account_id, display_name):
+            super().__init__(account_id, display_name)
+            self.provider_name = "other"
+
+    p_other = OtherProvider("a2", "bob")
+    tools = UnifiedEmailTools(
+        [
+            EmailAccount("a1", "alice", "fake", p_fake),
+            EmailAccount("a2", "bob", "other", p_other),
+        ]
+    )
+    stale = encode_handle("DEAD-UUID", "fake", "INBOX", "9")
+    result = asyncio.run(tools.mark_email(handle=stale, status="read"))
+    assert "marked:a1" in result
+    assert p_fake.marked == [("9", "read")]
+    assert p_other.marked == []
+
+
+def test_stale_handle_ambiguous_raises_instructive():
+    """A stale handle that matches multiple same-provider accounts is rejected."""
+    tools, _, _ = _build_tools()  # two "fake" accounts
+    stale = encode_handle("DEAD-UUID", "fake", "INBOX", "1")
+    with pytest.raises(ValueError, match="search_emails"):
+        asyncio.run(tools.get_email(handle=stale))

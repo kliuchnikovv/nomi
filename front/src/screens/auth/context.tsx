@@ -15,7 +15,6 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { apiClient, authApi, setupApiClient } from '../../apiClient';
 import { getApiUrl } from '../../config';
 import { AuthContextType, User, alertError } from './models';
-import { secureTokenStorage } from '../../services/auth/SecureTokenStorage';
 import { integrationStorage } from '../../services/integrations/IntegrationStorage';
 import { pluginChatStorage } from '../../services/plugins/PluginChatStorage';
 import {
@@ -86,14 +85,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 '294499144277-249g8bd226pd5fqaledtgjnl56lnsvbg.apps.googleusercontent.com',
             iosClientId:
                 '294499144277-u8gr39urgpdott3sheeqk3977h2486tm.apps.googleusercontent.com',
-            offlineAccess: true,
-            scopes: [
-                'https://www.googleapis.com/auth/gmail.readonly',
-                'https://www.googleapis.com/auth/gmail.send',
-                'https://www.googleapis.com/auth/gmail.compose',
-                'https://www.googleapis.com/auth/calendar',
-                'https://www.googleapis.com/auth/calendar.events',
-            ],
+            // Login only — identity scopes (email/profile) are requested by
+            // default. Gmail/Calendar access goes through the server-side plugin
+            // OAuth flow (separate Google Cloud projects), NOT the login token.
         });
     }, []);
 
@@ -266,144 +260,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             );
 
             await setAuthData(data.user, data.token, data.refresh_token);
-
-            // Store Google Access Token locally for Client-Side Tools (Local Hands)
-            try {
-                const tokens = await GoogleSignin.getTokens();
-                // We use 'gmail-default' and 'calendar-default' as placeholders or linked to user.id?
-                // For simplicity in this architecture, we associate the main google login with the 'gmail' tool.
-                // In a perfect world, we'd map this to a specific integration ID returned by the backend or similar.
-                // But the backend integration is "dummy" now.
-                // Let's store it under a stable ID that ClientToolExecutor looks for.
-                // GmailClient.ts uses `integrations.find(i => i.provider === 'gmail')`.
-                // We need to ensure we have an integration entry for this.
-                // The backend /auth/google might return the integration ID or we create one?
-                // For now, let's assume one main integration ID 'gmail_primary' and 'calendar_primary'.
-
-                // IMPORTANT: The backend user session (Agno) is separate from the Google OAuth session on the client.
-                // But we need to enable the tools.
-                // We'll store these tokens for specific providers.
-
-                // Since this is the main login, we can assume these are the "default" credentials.
-                // We might need to look up the integration IDs.
-                // For now, let's store them generically or iterate?
-                // Let's store for 'gmail' and 'calendar' if we don't have IDs yet.
-                // Actually, ClientToolExecutor looks up integration by provider type from storage.
-                // We need to UPDATE integration credentials in SecureStore for the integration IDs found in DB.
-
-                // Wait, if authenticating with Google logs us in, we should check if we have integrations.
-                // If not, we might need to "create" them locally or fetch from backend (which is empty).
-                // "Local Hands" means we might not even need an integration record in the backend DB?
-                // But `IntegrationStorage` is used.
-                // Let's save to SecureTokenStorage under a known key for now, or fetch integrations.
-
-                // Re-fetch integrations after login to get the IDs
-                // (Note: AuthProvider doesn't know about IntegrationStorage directly to avoid circular dependency loop if not careful)
-                // But we can import it dynamically or just use a placeholder for now if IntegrationStorage handles it.
-
-                // Better approach: Just store it as 'google_oauth_tokens' and let GmailClient look it up?
-                // GmailClient looks up integrationId.
-                // Let's try to update *all* google-based integration tokens that we can find?
-                // Or simply: The user just logged in. We can assume we want to use these tokens for future calls.
-                // We will create/update the "Primary" integration.
-
-                // Ensure we have a local integration record for Gmail and Calendar
-                // If not, create them locally.
-
-                // Check for Gmail integration
-                console.log('[Auth] Fetching existing integrations...');
-                const integrations = await integrationStorage.getIntegrations();
-                console.log(
-                    `[Auth] Found ${integrations.length} existing integrations`,
-                );
-
-                let gmailInteg = integrations.find(i => i.provider === 'gmail');
-                if (!gmailInteg) {
-                    console.log('[Auth] Creating new Gmail integration...');
-                    gmailInteg = await integrationStorage.createIntegration(
-                        {
-                            provider: 'gmail',
-                            name: userInfo.data?.user.email || 'Gmail',
-                            enabled: true,
-                            accountEmail: userInfo.data?.user.email,
-                        },
-                        {
-                            accessToken: tokens.accessToken,
-                            refreshToken: 'google-signin-managed',
-                            tokenExpiry: new Date(Date.now() + 3500 * 1000),
-                        },
-                    );
-                    console.log(
-                        '[Auth] Gmail integration created:',
-                        gmailInteg.id,
-                    );
-                } else {
-                    console.log(
-                        '[Auth] Gmail integration already exists:',
-                        gmailInteg.id,
-                    );
-                }
-
-                let calendarInteg = integrations.find(
-                    i => i.provider === 'calendar',
-                );
-                if (!calendarInteg) {
-                    console.log('[Auth] Creating new Calendar integration...');
-                    calendarInteg = await integrationStorage.createIntegration(
-                        {
-                            provider: 'calendar',
-                            name: userInfo.data?.user.email || 'Calendar',
-                            enabled: true,
-                            accountEmail: userInfo.data?.user.email,
-                        },
-                        {
-                            accessToken: tokens.accessToken,
-                            refreshToken: 'google-signin-managed',
-                            tokenExpiry: new Date(Date.now() + 3500 * 1000),
-                        },
-                    );
-                    console.log(
-                        '[Auth] Calendar integration created:',
-                        calendarInteg.id,
-                    );
-                } else {
-                    console.log(
-                        '[Auth] Calendar integration already exists:',
-                        calendarInteg.id,
-                    );
-                }
-
-                const tokenData = {
-                    accessToken: tokens.accessToken,
-                    refreshToken: 'google-signin-managed', // GoogleSignin SDK manages refresh internally on Android/iOS usually, but we store what we have.
-                    // Actually, on iOS `getTokens` might returns a fresh access token.
-                    // We'll trust `getTokens` to give us a valid one, and `GoogleSignin.signInSilently()` to refresh.
-                    expiry: Date.now() + 3500 * 1000,
-                };
-
-                console.log('[Auth] Saving Gmail tokens...');
-                await secureTokenStorage.saveToken(gmailInteg!.id, tokenData);
-                console.log('[Auth] Saving Calendar tokens...');
-                await secureTokenStorage.saveToken(
-                    calendarInteg!.id,
-                    tokenData,
-                );
-
-                console.log(
-                    '[Auth] Google tokens saved locally for Remote Brain usage',
-                );
-            } catch (tokenError: any) {
-                console.error(
-                    '[Auth] Failed to save Google tokens locally:',
-                    tokenError,
-                );
-                alertError(
-                    `Error saving Google tokens: ${
-                        tokenError.message || 'Unknown error'
-                    }`,
-                );
-                // Continue anyway - the user is logged in, just local token storage failed
-            }
         } catch (error: any) {
             console.error('[Auth] Google Sign-In error:', error);
 
