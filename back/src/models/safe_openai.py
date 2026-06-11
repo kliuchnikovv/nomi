@@ -67,6 +67,21 @@ class SafeOpenAI(OpenAIChat):
                     merged.setdefault(k, v)
                 return SafeOpenAI._sanitize_tool_schema(merged)
 
+        # Drop ``required`` entries with no matching property. Agno's
+        # client-proxy generator wraps tools as ``_proxy(**kwargs)`` and
+        # process_entrypoint() overwrites ``required`` with ``["kwargs"]`` —
+        # a required field that has no property definition, which z.ai rejects
+        # with ``400: Tool type cannot be empty`` (1214, the field's type is
+        # unresolvable). The empty-``required`` removal below then drops it
+        # entirely if nothing valid remains.
+        if isinstance(schema.get("required"), list) and isinstance(
+            schema.get("properties"), dict
+        ):
+            props = schema["properties"]
+            filtered = [r for r in schema["required"] if r in props]
+            if filtered != schema["required"]:
+                schema = {**schema, "required": filtered}
+
         result = {}
         for key, value in schema.items():
             # Drop keys that z.ai does not understand

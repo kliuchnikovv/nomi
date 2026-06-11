@@ -233,6 +233,45 @@ class TestToolSchemaSanitization:
         )
         assert out[0]["function"]["parameters"]["properties"]["status"]["type"] == "string"
 
+    def test_phantom_required_field_dropped(self):
+        """`required: ["kwargs"]` with no matching property is dropped.
+
+        Agno's client-proxy generator wraps tools as `_proxy(**kwargs)`, and
+        process_entrypoint() overwrites `required` with `["kwargs"]`. z.ai then
+        can't resolve the required field's type → 400 "Tool type cannot be empty".
+        """
+        tool = {
+            "type": "function",
+            "function": {
+                "name": "github_list_repos",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"limit": {"type": "integer"}},
+                    "required": ["kwargs"],
+                },
+            },
+        }
+        out = SafeOpenAI()._sanitize_tools([tool])
+        params = out[0]["function"]["parameters"]
+        assert "required" not in params or params["required"] == []
+        # real properties are preserved
+        assert params["properties"]["limit"]["type"] == "integer"
+
+    def test_partial_phantom_required_keeps_valid(self):
+        tool = {
+            "type": "function",
+            "function": {
+                "name": "f",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"owner": {"type": "string"}},
+                    "required": ["owner", "kwargs"],
+                },
+            },
+        }
+        out = SafeOpenAI()._sanitize_tools([tool])
+        assert out[0]["function"]["parameters"]["required"] == ["owner"]
+
     def test_format_tools_collapses_anyof(self):
         """_format_tools is always on the request path — it must fully sanitize.
 

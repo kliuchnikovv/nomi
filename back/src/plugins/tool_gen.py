@@ -244,9 +244,15 @@ def build_client_proxy_tools(
                     "name": tool_name,
                     "description": description,
                     "entrypoint": fn,
+                    # The proxy entrypoint is ``_proxy(**kwargs)``. Without this
+                    # flag, Agno's process_entrypoint() re-derives the schema from
+                    # that signature and overwrites our explicit ``required`` with
+                    # ``["kwargs"]`` (the VAR_KEYWORD param) — which z.ai rejects
+                    # with "Tool type cannot be empty" (1214). Skip processing so
+                    # our manifest-built ``parameters`` is used verbatim.
+                    "skip_entrypoint_processing": True,
+                    "parameters": params_schema or {"type": "object", "properties": {}},
                 }
-                if params_schema:
-                    tool_kwargs["parameters"] = params_schema
 
                 tool = Function(**tool_kwargs)
                 tools.append(tool)
