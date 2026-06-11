@@ -44,6 +44,29 @@ class SafeOpenAI(OpenAIChat):
         """Recursively strip fields incompatible with z.ai / GLM APIs."""
         if not isinstance(schema, dict):
             return schema
+
+        # Collapse ``anyOf`` / ``oneOf`` unions into a single concrete schema.
+        # Agno serializes ``Optional[str]`` params as
+        # ``{"anyOf": [{"type": "string"}, {"type": "null"}]}`` with no top-level
+        # ``type``. z.ai/GLM does not support union schemas and rejects them with
+        # ``400: Tool type cannot be empty`` (error 1214). Drop the ``null``
+        # variant and lift the first concrete variant up, keeping sibling keys
+        # (e.g. ``description``).
+        for union_key in ("anyOf", "oneOf"):
+            variants = schema.get(union_key)
+            if isinstance(variants, list):
+                dict_variants = [v for v in variants if isinstance(v, dict)]
+                non_null = [v for v in dict_variants if v.get("type") != "null"]
+                chosen = (
+                    non_null[0]
+                    if non_null
+                    else (dict_variants[0] if dict_variants else {"type": "string"})
+                )
+                merged = {k: v for k, v in schema.items() if k not in ("anyOf", "oneOf")}
+                for k, v in chosen.items():
+                    merged.setdefault(k, v)
+                return SafeOpenAI._sanitize_tool_schema(merged)
+
         result = {}
         for key, value in schema.items():
             # Drop keys that z.ai does not understand
@@ -209,14 +232,15 @@ class SafeOpenAI(OpenAIChat):
         return normalized_messages
 
     def _format_tools(self, tools):
-        """Override to strip 'strict' field from tool definitions.
-        z.ai GLM rejects tool schemas that include 'strict: true' (error 1214).
+        """Override to fully sanitize tool schemas for z.ai/GLM.
+
+        ``_format_tools`` is unconditionally on the request path (the base model
+        formats tools here before invoke), so we run the full sanitizer — collapse
+        ``anyOf``/``oneOf`` unions, strip ``strict`` / ``additionalProperties`` /
+        empty ``required`` — to avoid ``400: Tool type cannot be empty`` (1214).
         """
         tool_dicts = super()._format_tools(tools)
-        for tool in tool_dicts:
-            if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
-                tool["function"].pop("strict", None)
-        return tool_dicts
+        return self._sanitize_tools(tool_dicts)
 
     def invoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
         logger.info("[SafeOpenAI] invoke() called with %d messages", len(messages))
