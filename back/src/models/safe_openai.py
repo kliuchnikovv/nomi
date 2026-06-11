@@ -88,12 +88,67 @@ class SafeOpenAI(OpenAIChat):
             result[key] = value
         return result
 
+    @staticmethod
+    def _fill_missing_types(schema: dict) -> dict:
+        """Guarantee every property / items node carries a concrete ``type``.
+
+        Agno serializes unannotated params and ``**kwargs`` as an empty ``{}``
+        schema, and some shapes (e.g. nested Pydantic models) as objects without
+        a top-level ``type``. z.ai/GLM rejects any property lacking a ``type``
+        with ``400: Tool type cannot be empty`` (1214). Walk the schema tree
+        (schema-aware, so we only touch property/items/union nodes) and infer a
+        ``type`` from structure, defaulting to ``"string"`` for empty nodes.
+        """
+        if not isinstance(schema, dict):
+            return schema
+
+        if "type" not in schema and not any(
+            k in schema for k in ("anyOf", "oneOf", "allOf", "$ref")
+        ):
+            if any(
+                k in schema
+                for k in ("properties", "additionalProperties", "propertyNames")
+            ):
+                schema["type"] = "object"
+            elif "items" in schema:
+                schema["type"] = "array"
+            elif isinstance(schema.get("enum"), list) and schema["enum"]:
+                sample = schema["enum"][0]
+                if isinstance(sample, bool):
+                    schema["type"] = "boolean"
+                elif isinstance(sample, int):
+                    schema["type"] = "integer"
+                elif isinstance(sample, float):
+                    schema["type"] = "number"
+                else:
+                    schema["type"] = "string"
+            else:
+                schema["type"] = "string"
+
+        props = schema.get("properties")
+        if isinstance(props, dict):
+            for value in props.values():
+                SafeOpenAI._fill_missing_types(value)
+        items = schema.get("items")
+        if isinstance(items, dict):
+            SafeOpenAI._fill_missing_types(items)
+        addl = schema.get("additionalProperties")
+        if isinstance(addl, dict):
+            SafeOpenAI._fill_missing_types(addl)
+        for union_key in ("anyOf", "oneOf", "allOf"):
+            for variant in schema.get(union_key, []) or []:
+                SafeOpenAI._fill_missing_types(variant)
+        return schema
+
     def _sanitize_tools(self, tools: list[dict] | None) -> list[dict] | None:
         """Sanitize a list of OpenAI-style tool dicts for z.ai/GLM.
 
         For every tool the function:
         1. Guarantees ``type: "function"`` wrapper is present.
-        2. Strips ``strict``, ``additionalProperties``, empty ``required``.
+        2. Strips ``strict``, ``additionalProperties``, empty ``required`` and
+           collapses ``anyOf`` / ``oneOf`` unions (``_sanitize_tool_schema``).
+        3. Guarantees every parameter property carries a concrete ``type``
+           (``_fill_missing_types``).
         """
         if not tools:
             return tools
@@ -112,6 +167,8 @@ class SafeOpenAI(OpenAIChat):
             # Sanitize the function definition
             func = tool.get("function", {})
             func = self._sanitize_tool_schema(func)
+            if isinstance(func.get("parameters"), dict):
+                func["parameters"] = self._fill_missing_types(func["parameters"])
             tool = {**tool, "function": func}
             sanitized.append(tool)
 

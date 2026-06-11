@@ -184,6 +184,55 @@ class TestToolSchemaSanitization:
         assert "anyOf" not in props["query"]
         assert "strict" not in out[0]["function"]
 
+    def test_untyped_property_defaults_to_string(self):
+        # Unannotated params / **kwargs serialize to an empty `{}` schema.
+        schema = {
+            "type": "object",
+            "properties": {"x": {}, "y": {"type": "string"}},
+        }
+        out = SafeOpenAI._sanitize_tools(
+            SafeOpenAI(),
+            [{"type": "function", "function": {"name": "f", "parameters": schema}}],
+        )
+        props = out[0]["function"]["parameters"]["properties"]
+        assert props["x"]["type"] == "string"
+        assert props["y"]["type"] == "string"
+
+    def test_object_without_type_inferred(self):
+        schema = {
+            "type": "object",
+            "properties": {
+                "m": {"properties": {"a": {"type": "integer"}}, "required": ["a"]},
+            },
+        }
+        out = SafeOpenAI()._sanitize_tools(
+            [{"type": "function", "function": {"name": "f", "parameters": schema}}]
+        )
+        assert out[0]["function"]["parameters"]["properties"]["m"]["type"] == "object"
+
+    def test_array_items_without_type_inferred(self):
+        schema = {
+            "type": "object",
+            "properties": {"xs": {"type": "array", "items": {}}},
+        }
+        out = SafeOpenAI()._sanitize_tools(
+            [{"type": "function", "function": {"name": "f", "parameters": schema}}]
+        )
+        assert (
+            out[0]["function"]["parameters"]["properties"]["xs"]["items"]["type"]
+            == "string"
+        )
+
+    def test_enum_without_type_inferred(self):
+        schema = {
+            "type": "object",
+            "properties": {"status": {"enum": ["read", "unread"]}},
+        }
+        out = SafeOpenAI()._sanitize_tools(
+            [{"type": "function", "function": {"name": "f", "parameters": schema}}]
+        )
+        assert out[0]["function"]["parameters"]["properties"]["status"]["type"] == "string"
+
     def test_format_tools_collapses_anyof(self):
         """_format_tools is always on the request path — it must fully sanitize.
 
