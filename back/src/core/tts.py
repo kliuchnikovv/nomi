@@ -101,11 +101,16 @@ def _get_client():
     if _client is None:
         from google import genai
 
-        key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        if not key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
-        _client = genai.Client(api_key=key)
+        from src.core.gemini_keys import KEY_MANAGER
+
+        _client = genai.Client(api_key=KEY_MANAGER.current())
     return _client
+
+
+def _reset_client() -> None:
+    """Drop the cached client so the next call rebuilds it with the current key."""
+    global _client
+    _client = None
 
 
 def _pcm_to_wav(pcm: bytes) -> bytes:
@@ -137,7 +142,12 @@ def _extract_pcm(response) -> bytes:
 def _is_retryable(e: Exception) -> bool:
     from google.genai import errors
 
+    from src.core.gemini_keys import is_quota_error
+
     if isinstance(e, (errors.ServerError, _RetryableTTSError)):
+        return True
+    # Quota exhaustion (429): retry so we can rotate onto another project's key.
+    if is_quota_error(e):
         return True
     # The preview model intermittently 400s with this exact message when it
     # tries to emit text instead of audio — retrying usually succeeds.
@@ -182,6 +192,11 @@ def _gemini_synthesize_wav(text: str, voice: str | None = None) -> bytes:
                 _MAX_ATTEMPTS,
                 e,
             )
+            from src.core.gemini_keys import KEY_MANAGER, is_quota_error
+
+            if is_quota_error(e) and KEY_MANAGER.count > 1:
+                KEY_MANAGER.rotate("tts ResourceExhausted")
+                _reset_client()
             if attempt < _MAX_ATTEMPTS:
                 time.sleep(_BACKOFF_SEC * attempt)
     raise last_err  # type: ignore[misc]

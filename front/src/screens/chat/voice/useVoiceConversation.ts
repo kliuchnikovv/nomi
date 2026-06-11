@@ -130,21 +130,44 @@ const TTS_LOCALE: Record<string, string> = {
     zh: 'zh-CN',
 };
 
+// Strip Markdown so TTS doesn't read formatting characters aloud ("звёздочка",
+// "решётка", backticks, raw URLs, etc.). Keeps the inner text of emphasis/links.
+function stripMarkdownForSpeech(text: string): string {
+    return text
+        .replace(/```[\s\S]*?```/g, ' ') // fenced code blocks
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // images → alt
+        .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → text
+        .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '') // headings
+        .replace(/^[ \t]{0,3}>[ \t]?/gm, '') // blockquotes
+        .replace(/^[ \t]*[-*+][ \t]+/gm, '') // list bullets
+        .replace(/^[ \t]{0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/gm, ' ') // hr
+        .replace(/(\*\*|__)(.*?)\1/g, '$2') // bold
+        .replace(/(\*|_)(.*?)\1/g, '$2') // italic
+        .replace(/~~(.*?)~~/g, '$1') // strikethrough
+        .replace(/`+/g, '') // inline code
+        .replace(/\|/g, ' ') // table pipes
+        .replace(/[*_#`]/g, '') // stray leftover markers
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
 // Extract speakable text from a message, including team-mode member_response content_parts.
 function extractSpeakableText(msg: {
     text: string;
     content_parts?: any[];
 }): string {
     const mainText = msg.text?.trim() ?? '';
-    if (mainText) return mainText;
+    if (mainText) return stripMarkdownForSpeech(mainText);
     if (msg.content_parts && msg.content_parts.length > 0) {
-        return msg.content_parts
+        const joined = msg.content_parts
             .filter(
                 (p: any) => p.type === 'text' || p.type === 'member_response',
             )
             .map((p: any) => p.text ?? '')
             .join(' ')
             .trim();
+        return stripMarkdownForSpeech(joined);
     }
     return '';
 }
@@ -207,8 +230,16 @@ export function useVoiceConversation({
     const [errorKind, setErrorKind] = useState<ErrorKind>(null);
     const [language, setLanguageState] = useState<string>(DEFAULT_LANGUAGE);
 
-    const { sendMessage, assistantWorking, messages } = useChat();
+    const { sendMessage, assistantWorking, messages, stopGeneration } =
+        useChat();
     const { user } = useAuth();
+
+    // Kept in a ref so stop()/interrupt()/unmount cancel the in-flight backend
+    // run with the latest callback even though they don't depend on it.
+    const stopGenerationRef = useRef(stopGeneration);
+    useEffect(() => {
+        stopGenerationRef.current = stopGeneration;
+    }, [stopGeneration]);
 
     const isMountedRef = useRef(true);
     const voiceStateRef = useRef<VoiceState>('loading');
@@ -253,6 +284,9 @@ export function useVoiceConversation({
     // Sequential play chain so streamed sentences play in order.
     const serverChainRef = useRef<Promise<void>>(Promise.resolve());
     const serverPlayingRef = useRef(false); // a clip is actively playing
+    // Bumped on stop/interrupt; queued clips with a stale gen are skipped so a
+    // prefetched-but-not-yet-played sentence doesn't resume after a stop.
+    const serverGenRef = useRef(0);
     const playEndResolveRef = useRef<(() => void) | null>(null);
     const ttsFileSeqRef = useRef(0);
 
@@ -414,89 +448,98 @@ export function useVoiceConversation({
     // kills both playback and the recognizer engine).
     const playServerClip = useCallback(
         async (audioB64: string, mime?: string, durationMs?: number) => {
-        const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-        // Edge TTS returns MP3, Gemini returns WAV — pick the extension from the
-        // mime so AVAudioPlayer detects the format correctly.
-        const isMp3 =
-            !!mime && (mime.includes('mpeg') || mime.includes('mp3'));
-        const ext = isMp3 ? 'mp3' : 'wav';
-        // Rotate through a small fixed set of filenames (writeAsStringAsync
-        // overwrites) so temp clips never accumulate unbounded.
-        ttsFileSeqRef.current = (ttsFileSeqRef.current + 1) % 8;
-        const uri = `${dir}nomi-tts-${ttsFileSeqRef.current}.${ext}`;
-        await FileSystem.writeAsStringAsync(uri, audioB64, {
-            encoding: 'base64',
-        });
-
-        // Clip completion is driven by a self-computed duration, NOT the player's
-        // reported one: the singleton player reports a STALE duration from the
-        // previous clip on its first progress callbacks, which would stop
-        // playback a fraction of a second in. Prefer the server-supplied
-        // duration (codec-agnostic); fall back to WAV byte-math, then a default.
-        let expectedMs: number;
-        if (durationMs && durationMs > 0) {
-            expectedMs = Math.max(800, Math.round(durationMs + 700));
-        } else if (!isMp3) {
-            // WAV: derive from PCM byte length (24 kHz·16-bit·mono = 48 B/ms).
-            const decodedBytes = Math.floor((audioB64.length * 3) / 4);
-            const pcmBytes = Math.max(0, decodedBytes - 44); // minus WAV header
-            expectedMs = Math.max(800, Math.round(pcmBytes / 48 + 700));
-        } else {
-            expectedMs = 6000; // safe default if the server sent no duration
-        }
-
-        await new Promise<void>(resolve => {
-            let finished = false;
-            let startedAt = 0;
-            let timer: ReturnType<typeof setTimeout> | null = null;
-            const done = () => {
-                if (finished) return;
-                finished = true;
-                if (timer) clearTimeout(timer);
-                try {
-                    AudioRecorderPlayer.removePlayBackListener();
-                } catch {
-                    /* ignore */
-                }
-                try {
-                    AudioRecorderPlayer.removePlaybackEndListener();
-                } catch {
-                    /* ignore */
-                }
-                AudioRecorderPlayer.stopPlayer().catch(() => {});
-                playEndResolveRef.current = null;
-                resolve();
-            };
-            // Lets stopServerTts()/interrupt cut the current clip short.
-            playEndResolveRef.current = done;
-            // A no-op progress listener MUST be registered: without it the
-            // native player tears down its own play timer on the first tick
-            // ("player or listener is nil") which breaks end-detection. We
-            // intentionally IGNORE its position/duration (the singleton reports a
-            // stale duration from the previous clip — that was the early-cutoff
-            // bug); completion is driven by the self-computed timer below.
-            AudioRecorderPlayer.addPlayBackListener(() => {});
-            // Honor a native end event, but only after most of the clip has
-            // actually played — guards against an early/spurious end callback.
-            AudioRecorderPlayer.addPlaybackEndListener(() => {
-                const elapsed = startedAt ? Date.now() - startedAt : 0;
-                if (elapsed >= expectedMs * 0.6) done();
+            const dir =
+                FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+            // Edge TTS returns MP3, Gemini returns WAV — pick the extension from the
+            // mime so AVAudioPlayer detects the format correctly.
+            const isMp3 =
+                !!mime && (mime.includes('mpeg') || mime.includes('mp3'));
+            const ext = isMp3 ? 'mp3' : 'wav';
+            // Rotate through a small fixed set of filenames (writeAsStringAsync
+            // overwrites) so temp clips never accumulate unbounded.
+            ttsFileSeqRef.current = (ttsFileSeqRef.current + 1) % 8;
+            const uri = `${dir}nomi-tts-${ttsFileSeqRef.current}.${ext}`;
+            await FileSystem.writeAsStringAsync(uri, audioB64, {
+                encoding: 'base64',
             });
-            startedAt = Date.now();
-            // Deterministic completion: play for the clip's real duration.
-            timer = setTimeout(done, expectedMs);
-            AudioRecorderPlayer.startPlayer(uri).catch(() => done());
-        });
-    }, []);
 
-    // Synthesize `text` on the server and play it (driven by the chain below).
-    // `serverPlayingRef` stays true across BOTH synth and playback so the resume
-    // watchdog doesn't mistake a slow synthesis for a stalled turn.
-    const speakViaServer = useCallback(
-        async (text: string) => {
+            // Clip completion is driven by a self-computed duration, NOT the player's
+            // reported one: the singleton player reports a STALE duration from the
+            // previous clip on its first progress callbacks, which would stop
+            // playback a fraction of a second in. Prefer the server-supplied
+            // duration (codec-agnostic); fall back to WAV byte-math, then a default.
+            let expectedMs: number;
+            if (durationMs && durationMs > 0) {
+                expectedMs = Math.max(800, Math.round(durationMs + 700));
+            } else if (!isMp3) {
+                // WAV: derive from PCM byte length (24 kHz·16-bit·mono = 48 B/ms).
+                const decodedBytes = Math.floor((audioB64.length * 3) / 4);
+                const pcmBytes = Math.max(0, decodedBytes - 44); // minus WAV header
+                expectedMs = Math.max(800, Math.round(pcmBytes / 48 + 700));
+            } else {
+                expectedMs = 6000; // safe default if the server sent no duration
+            }
+
+            await new Promise<void>(resolve => {
+                let finished = false;
+                let startedAt = 0;
+                let timer: ReturnType<typeof setTimeout> | null = null;
+                const done = () => {
+                    if (finished) return;
+                    finished = true;
+                    if (timer) clearTimeout(timer);
+                    try {
+                        AudioRecorderPlayer.removePlayBackListener();
+                    } catch {
+                        /* ignore */
+                    }
+                    try {
+                        AudioRecorderPlayer.removePlaybackEndListener();
+                    } catch {
+                        /* ignore */
+                    }
+                    AudioRecorderPlayer.stopPlayer().catch(() => {});
+                    playEndResolveRef.current = null;
+                    resolve();
+                };
+                // Lets stopServerTts()/interrupt cut the current clip short.
+                playEndResolveRef.current = done;
+                // A no-op progress listener MUST be registered: without it the
+                // native player tears down its own play timer on the first tick
+                // ("player or listener is nil") which breaks end-detection. We
+                // intentionally IGNORE its position/duration (the singleton reports a
+                // stale duration from the previous clip — that was the early-cutoff
+                // bug); completion is driven by the self-computed timer below.
+                AudioRecorderPlayer.addPlayBackListener(() => {});
+                // Honor a native end event, but only after most of the clip has
+                // actually played — guards against an early/spurious end callback.
+                AudioRecorderPlayer.addPlaybackEndListener(() => {
+                    const elapsed = startedAt ? Date.now() - startedAt : 0;
+                    if (elapsed >= expectedMs * 0.6) done();
+                });
+                startedAt = Date.now();
+                // Deterministic completion: play for the clip's real duration.
+                timer = setTimeout(done, expectedMs);
+                AudioRecorderPlayer.startPlayer(uri).catch(() => done());
+            });
+        },
+        [],
+    );
+
+    // Play an already-started synthesis (prefetched concurrently with earlier
+    // clips so there's no synth/network gap between sentences). `serverPlayingRef`
+    // spans the await+playback so the resume watchdog doesn't see a false idle.
+    const playServerSynth = useCallback(
+        async (
+            synthP: Promise<{
+                audio: string;
+                mime?: string;
+                duration_ms?: number;
+            } | null>,
+        ) => {
             serverPlayingRef.current = true;
             try {
-                const res = await ttsApi.synthesize({ text });
+                const res = await synthP;
                 if (res?.audio)
                     await playServerClip(res.audio, res.mime, res.duration_ms);
             } finally {
@@ -508,6 +551,7 @@ export function useVoiceConversation({
 
     // Stop whatever is playing and clear the queue (server backend).
     const stopServerTts = useCallback(() => {
+        serverGenRef.current += 1; // cancel any prefetched-but-unplayed clips
         serverChainRef.current = Promise.resolve();
         AudioRecorderPlayer.stopPlayer().catch(() => {});
         AudioRecorderPlayer.removePlaybackEndListener();
@@ -566,14 +610,28 @@ export function useVoiceConversation({
             ttsActiveCountRef.current += 1;
             lastTtsActivityAtRef.current = Date.now();
 
-            // Server-side Gemini voice: synthesize + play sequentially. The
-            // chain preserves sentence order; onUtteranceDone drives resume.
+            // Server voice: PREFETCH — start synthesis now (concurrent with any
+            // earlier clips still playing) so there's no network/synth gap
+            // between sentences. The chain preserves playback order and just
+            // awaits the in-flight synth. A generation guard skips clips queued
+            // before a stop/interrupt. onUtteranceDone drives resume.
             if (serverTtsRef.current) {
+                const gen = serverGenRef.current;
+                const synthP = ttsApi.synthesize({ text: clean }).catch(e => {
+                    console.warn(
+                        '[voice] server tts synth failed',
+                        e?.message ?? e,
+                    );
+                    return null;
+                });
                 serverChainRef.current = serverChainRef.current
-                    .then(() => speakViaServer(clean))
+                    .then(() => {
+                        if (gen !== serverGenRef.current) return; // stopped
+                        return playServerSynth(synthP);
+                    })
                     .catch(e =>
                         console.warn(
-                            '[voice] server tts failed',
+                            '[voice] server tts play failed',
                             e?.message ?? e,
                         ),
                     )
@@ -598,7 +656,7 @@ export function useVoiceConversation({
                 onError: onUtteranceDone,
             });
         },
-        [onUtteranceDone, speakViaServer],
+        [onUtteranceDone, playServerSynth],
     );
 
     // Speak assistant text sentence-by-sentence as it streams in.
@@ -626,43 +684,18 @@ export function useVoiceConversation({
         const full = extractSpeakableText(lastAssistant);
         lastFullLenRef.current = full.length;
 
-        // Server Gemini TTS is billed/quota-limited per request (free tier:
-        // ~10 req/min). Per-sentence synthesis blows that budget instantly and
-        // the SDK then retries every 429, cascading. So in server mode we wait
-        // for the *complete* reply and synthesize it in a SINGLE request. The
-        // on-device path keeps the low-latency per-sentence streaming.
+        // Both backends stream per sentence with an early first clause, so audio
+        // starts on the first clause and tracks the text instead of waiting for
+        // the whole reply. (The old server-mode "first sentence + remainder in
+        // one request" batching was a Gemini free-tier 10 req/min workaround;
+        // the default Edge TTS backend has no such rate limit, so per-sentence
+        // streaming is fine. Flip VOICE_TTS_PROVIDER only with that in mind.)
         const pending = full.slice(spokenOffsetRef.current);
-        let sentences: string[];
-        let consumed: number;
-        if (serverTtsRef.current) {
-            if (assistantWorking) {
-                // Reply still streaming: synthesize ONLY the first sentence, as
-                // soon as it's complete, so audio starts tracking the text
-                // instead of waiting for the whole reply. Everything after it is
-                // sent as one more request at flush — 2 TTS calls/turn, which
-                // stays within the free-tier 10/min budget.
-                if (spokenOffsetRef.current === 0) {
-                    SENTENCE_RE.lastIndex = 0;
-                    const sm = SENTENCE_RE.exec(pending);
-                    const chunk = sm ? sm[0].trim() : '';
-                    sentences = chunk ? [chunk] : [];
-                    consumed = chunk ? SENTENCE_RE.lastIndex : 0;
-                } else {
-                    sentences = [];
-                    consumed = 0;
-                }
-            } else {
-                const whole = pending.trim();
-                sentences = whole ? [whole] : [];
-                consumed = pending.length;
-            }
-        } else {
-            ({ sentences, consumed } = takeSentences(
-                pending,
-                !assistantWorking,
-                spokenOffsetRef.current === 0, // earlyFirst: nothing spoken yet
-            ));
-        }
+        const { sentences, consumed } = takeSentences(
+            pending,
+            !assistantWorking,
+            spokenOffsetRef.current === 0, // earlyFirst: nothing spoken yet
+        );
 
         if (sentences.length > 0) {
             if (ttsLangRef.current === undefined) {
@@ -938,6 +971,14 @@ export function useVoiceConversation({
     useEffect(() => {
         return () => {
             isMountedRef.current = false;
+            // Closing/leaving the voice screen must also abort the backend run,
+            // not just local playback — else it keeps generating and a late
+            // clip can play after the screen is gone.
+            try {
+                stopGenerationRef.current();
+            } catch {
+                /* ignore */
+            }
             stopTtsRef.current();
             clearRetryTimer();
             try {
@@ -964,6 +1005,13 @@ export function useVoiceConversation({
 
     const interrupt = useCallback(() => {
         if (voiceStateRef.current === 'speaking') {
+            // Barge-in: also cancel any still-generating tail so it doesn't
+            // resume speaking after we start listening for the new turn.
+            try {
+                stopGenerationRef.current();
+            } catch {
+                /* ignore */
+            }
             stopTtsRef.current();
             ttsActiveCountRef.current = 0;
             // Abandon the cut-off reply so it isn't re-spoken before the next
@@ -975,8 +1023,20 @@ export function useVoiceConversation({
     }, []);
 
     const stop = useCallback(() => {
+        // Cancel the in-flight backend run so it stops "thinking"/generating —
+        // otherwise the reply keeps coming (and speaking) after the user leaves.
+        try {
+            stopGenerationRef.current();
+        } catch {
+            /* ignore */
+        }
         stopTtsRef.current();
         ttsActiveCountRef.current = 0;
+        // Abandon the stopped reply so its unspoken remainder isn't spoken when
+        // the next turn starts (the old message lingers as the latest assistant
+        // until the new reply arrives). The id-change reset clears this marker
+        // once a genuinely new reply streams in.
+        interruptedAssistantIdRef.current = currentAssistantIdRef.current;
         clearRetryTimer();
         try {
             ExpoSpeechRecognitionModule.abort();

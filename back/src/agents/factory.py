@@ -109,9 +109,9 @@ class AgentFactory:
             or model_name.startswith("gemini-")
             or model_name.startswith("gemma-")
         ):
-            api_key = os.getenv("GOOGLE_API_KEY")
-            if not api_key:
-                raise ValueError("GOOGLE_API_KEY environment variable not set")
+            from src.core.gemini_keys import KEY_MANAGER
+
+            api_key = KEY_MANAGER.current()
 
             # Configure thinking mode for supported models (Gemini 2.5 Pro/Flash)
             thinking_budget = None

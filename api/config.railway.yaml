@@ -11,6 +11,17 @@ database:
 oauth2:
   callback_base: ${CALLBACK_BASE}
   providers:
+    # Gmail plugin — dedicated Google Cloud project / OAuth client (separate moderation)
+    google_gmail:
+      client_id: ${GOOGLE_GMAIL_CLIENT_ID}
+      client_secret: ${GOOGLE_GMAIL_CLIENT_SECRET}
+      issuer_url: "https://accounts.google.com"
+    # Calendar plugin — dedicated Google Cloud project / OAuth client (separate moderation)
+    google_calendar:
+      client_id: ${GOOGLE_CALENDAR_CLIENT_ID}
+      client_secret: ${GOOGLE_CALENDAR_CLIENT_SECRET}
+      issuer_url: "https://accounts.google.com"
+    # Legacy combined Google client — kept for backward compatibility (unused once split)
     google:
       client_id: ${GOOGLE_CLIENT_ID}
       client_secret: ${GOOGLE_CLIENT_SECRET}

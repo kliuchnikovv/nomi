@@ -10,7 +10,12 @@ import {
     Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import {
+    useNavigation,
+    useRoute,
+    useFocusEffect,
+    RouteProp,
+} from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Xmark } from 'iconoir-react-native';
 import Markdown from 'react-native-markdown-display';
@@ -106,6 +111,16 @@ export function VoiceScreen() {
     const handleScreenTap = useCallback(() => {
         if (state === 'speaking') interrupt();
     }, [state, interrupt]);
+
+    // Leaving the screen (tab switch, push-on-top, or back) must stop playback.
+    // useFocusEffect's cleanup runs on blur and unmount, covering every exit path.
+    useFocusEffect(
+        useCallback(() => {
+            return () => {
+                stop();
+            };
+        }, [stop]),
+    );
 
     return (
         <View style={[styles.safe, { backgroundColor: theme.background }]}>

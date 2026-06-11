@@ -69,6 +69,18 @@ const FADE_OPACITIES = [
     0.147, 0.114, 0.082, 0.057, 0.033, 0.02, 0.009, 0.002, 0,
 ] as const;
 const FADE_STRIP_H = 3;
+// Bottom fade: its own finer ramp (more, thinner strips than the top fade) for a
+// smoother transition, reaching up from the dock to the "+"/model row.
+const BOTTOM_FADE_STEPS = 36;
+const BOTTOM_FADE_STRIP_H = 5;
+const BOTTOM_FADE_MAX_OPACITY = 0.82;
+const BOTTOM_FADE_OPACITIES = Array.from(
+    { length: BOTTOM_FADE_STEPS },
+    (_, i) => {
+        const t = i / (BOTTOM_FADE_STEPS - 1); // 0 = bottom (darkest) → 1 = top (clear)
+        return Number((BOTTOM_FADE_MAX_OPACITY * (1 - t) ** 2).toFixed(3));
+    },
+);
 
 export function ChatDetailScreen() {
     const route = useRoute<RouteProp<ChatStackParamList, 'ChatDetail'>>();
@@ -1022,6 +1034,47 @@ export function ChatDetailScreen() {
                     />
                 )}
             </View>
+
+            {/* Soft fade into the bottom controls — mirrors the top header fade.
+                Anchored at the bottom and follows the keyboard via fadeContainerStyle. */}
+            <Animated.View
+                pointerEvents="none"
+                style={[
+                    { position: 'absolute', left: 0, right: 0, zIndex: 7 },
+                    fadeContainerStyle,
+                ]}
+            >
+                {/* Continue the darkest shade behind the dock, down to the screen bottom */}
+                <View
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute',
+                        bottom: -(bottomInset + TAB_BAR_ICON_HEIGHT),
+                        left: 0,
+                        right: 0,
+                        height: bottomInset + TAB_BAR_ICON_HEIGHT,
+                        backgroundColor: theme.background,
+                        opacity: BOTTOM_FADE_MAX_OPACITY,
+                    }}
+                />
+                {BOTTOM_FADE_OPACITIES.map((opacity, i) => (
+                    <View
+                        key={i}
+                        pointerEvents="none"
+                        style={{
+                            position: 'absolute',
+                            // strips stack upward from the anchor: darkest at the
+                            // bottom, fading to transparent toward the +/model row
+                            bottom: i * BOTTOM_FADE_STRIP_H,
+                            left: 0,
+                            right: 0,
+                            height: BOTTOM_FADE_STRIP_H,
+                            backgroundColor: theme.background,
+                            opacity,
+                        }}
+                    />
+                ))}
+            </Animated.View>
 
             {/* Blocking project suggestion banner for new sessions (above input) */}
             {suggestedProjectForSession && (

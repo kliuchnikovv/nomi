@@ -2,6 +2,7 @@ import {
     ActivityIndicator,
     Keyboard,
     KeyboardAvoidingView,
+    Linking,
     Pressable,
     ScrollView,
     Text,
@@ -518,16 +519,34 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                                 </Text>
                             )}
                             {!imapError && isGmailEmail(imapEmail) && (
-                                <Text
-                                    style={[
-                                        modalStyles.hint,
-                                        { color: theme.fadedText },
-                                    ]}
-                                >
-                                    {
-                                        'For Gmail, use the Gmail card instead — it connects via OAuth without a password.\n\nIf you need IMAP specifically, generate an app password at myaccount.google.com → Security → App passwords (requires 2-step verification).'
-                                    }
-                                </Text>
+                                <>
+                                    <Text
+                                        style={[
+                                            modalStyles.hint,
+                                            { color: theme.fadedText },
+                                        ]}
+                                    >
+                                        {
+                                            "Gmail over IMAP needs an app password (a normal password won't work):\n1. Enable 2-Step Verification at myaccount.google.com → Security.\n2. Generate an app password and paste the 16-character code above.\nTip: the Gmail card connects via OAuth with no password if you prefer."
+                                        }
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            modalStyles.hint,
+                                            {
+                                                color: theme.accent,
+                                                fontWeight: '600',
+                                            },
+                                        ]}
+                                        onPress={() =>
+                                            Linking.openURL(
+                                                'https://myaccount.google.com/apppasswords',
+                                            )
+                                        }
+                                    >
+                                        Open app passwords →
+                                    </Text>
+                                </>
                             )}
                             {!imapError && isMailRuEmail(imapEmail) && (
                                 <Text

@@ -91,7 +91,15 @@ class ImapProvider(EmailProvider):
         conn = self._imap_connect()
         try:
             conn.select(mailbox, readonly=True)
-            typ, data = conn.uid("SEARCH", None, criteria)
+            # imaplib ASCII-encodes str args, so a non-ASCII criteria (e.g. a
+            # Cyrillic query) must be sent with an explicit CHARSET and as UTF-8
+            # bytes, which imaplib forwards verbatim.
+            if criteria.isascii():
+                typ, data = conn.uid("SEARCH", None, criteria)
+            else:
+                typ, data = conn.uid(
+                    "SEARCH", "CHARSET", "UTF-8", criteria.encode("utf-8")
+                )
             if typ != "OK" or not data or not data[0]:
                 return []
             uids = data[0].split()

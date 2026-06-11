@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from typing import Any, Iterator
 
 from agno.workflow import Workflow
@@ -52,9 +51,10 @@ def _extract_json(text: str) -> dict:
 
 
 def _build_model() -> Any:
+    from src.core.gemini_keys import KEY_MANAGER
     from src.models.safe_gemini import SafeGemini
 
-    return SafeGemini(id="gemini-2.5-flash-lite", api_key=os.getenv("GOOGLE_API_KEY", ""))
+    return SafeGemini(id="gemini-2.5-flash-lite", api_key=KEY_MANAGER.current())
 
 
 def _run_agent_text(system_prompt: str, user_prompt: str) -> str:

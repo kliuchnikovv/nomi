@@ -36,14 +36,11 @@ def build_judge_agent(model_id: str | None = None) -> Agent:
     Returns:
         An Agno Agent configured for triage decisions.
     """
+    from src.core.gemini_keys import KEY_MANAGER
     from src.models.safe_gemini import SafeGemini
 
     chosen_id = model_id or os.getenv("JUDGE_MODEL_ID", _DEFAULT_JUDGE_MODEL_ID)
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise ValueError("GOOGLE_API_KEY environment variable not set for judge agent")
-
-    model = SafeGemini(id=chosen_id, api_key=api_key)
+    model = SafeGemini(id=chosen_id, api_key=KEY_MANAGER.current())
     logger.info("[Judge] Building judge agent with model=%s", chosen_id)
     return Agent(model=model, system_prompt=JUDGE_SYSTEM_PROMPT)
 

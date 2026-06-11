@@ -7,6 +7,7 @@ import os
 
 from agno.db.postgres import PostgresDb
 from agno.knowledge.embedder.google import GeminiEmbedder
+from src.core.gemini_keys import KEY_MANAGER
 from src.models.safe_gemini import SafeGemini
 from src.tools.config import ToolConfigClient
 
@@ -40,23 +41,17 @@ class Config:
         return PostgresDb(self.db_dsn)
 
     def get_model(self) -> SafeGemini:
-        """Get Gemini model instance."""
-        if not self.google_api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
-
+        """Get Gemini model instance (key from the rotating pool)."""
         return SafeGemini(
             id="gemini-2.5-flash-lite",
-            api_key=self.google_api_key,
+            api_key=KEY_MANAGER.current(),
         )
 
     def get_embedder(self) -> GeminiEmbedder:
-        """Get Gemini embedder instance."""
-        if not self.google_api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set")
-
+        """Get Gemini embedder instance (key from the rotating pool)."""
         return GeminiEmbedder(
             id="gemini-embedding-001",
-            api_key=self.google_api_key,
+            api_key=KEY_MANAGER.current(),
             dimensions=768,
         )
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -65,10 +64,48 @@ class RoutingDecision:
 
 class ToolRouter:
     def __init__(self, api_key: str | None = None):
-        key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        self._client = genai.Client(api_key=key)
+        self._explicit_key = api_key
+        self._client = genai.Client(api_key=self._current_key())
         self._system_prompt = SYSTEM_PROMPT
         self._model_name = ROUTER_MODEL
+
+    def _current_key(self) -> str | None:
+        """Explicit key wins; else current pooled key, or None if none configured
+        (deferring failure to the API call, as before key rotation existed)."""
+        if self._explicit_key:
+            return self._explicit_key
+        from src.core.gemini_keys import KEY_MANAGER
+
+        return KEY_MANAGER.current() if KEY_MANAGER.count else None
+
+    def _rebuild_client(self) -> None:
+        self._client = genai.Client(api_key=self._current_key())
+
+    def _generate_with_rotation(self, prompt: str):
+        """Call Gemini; on a quota error rotate the key once and retry."""
+        from src.core.gemini_keys import KEY_MANAGER, is_quota_error
+
+        cfg = types.GenerateContentConfig(
+            system_instruction=self._system_prompt,
+            temperature=0,
+            response_mime_type="application/json",
+        )
+        try:
+            return self._client.models.generate_content(
+                model=self._model_name, contents=prompt, config=cfg
+            )
+        except Exception as e:
+            if (
+                self._explicit_key is None
+                and is_quota_error(e)
+                and KEY_MANAGER.count > 1
+            ):
+                KEY_MANAGER.rotate("router ResourceExhausted")
+                self._rebuild_client()
+                return self._client.models.generate_content(
+                    model=self._model_name, contents=prompt, config=cfg
+                )
+            raise
 
     def decide(
         self,
@@ -87,15 +124,7 @@ class ToolRouter:
         prompt = "\n\n".join(prompt_parts)
 
         try:
-            response = self._client.models.generate_content(
-                model=self._model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=self._system_prompt,
-                    temperature=0,
-                    response_mime_type="application/json",
-                ),
-            )
+            response = self._generate_with_rotation(prompt)
             raw = json.loads(response.text)
 
             # Handle list responses - use first element if valid

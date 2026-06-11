@@ -22,11 +22,35 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type,
-    before_sleep_log,
 )
 import google.api_core.exceptions
 
+from src.core.gemini_keys import KEY_MANAGER, is_quota_error
+
 logger = logging.getLogger(__name__)
+
+
+def _rotate_on_exhaust(retry_state) -> None:
+    """tenacity before_sleep hook: log the retry and, on a quota error, rotate
+    the Gemini API key onto the model instance so the next attempt uses a fresh
+    project's quota.
+    """
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    logger.warning(
+        "[SafeGemini] retry %d after error: %s",
+        retry_state.attempt_number,
+        exc,
+    )
+    if not is_quota_error(exc) or KEY_MANAGER.count <= 1:
+        return
+    new_key = KEY_MANAGER.rotate("ResourceExhausted")
+    # The wrapped method is `invoke(self, ...)`, so args[0] is the model instance.
+    model = retry_state.args[0] if retry_state.args else None
+    if model is not None:
+        model.api_key = new_key
+        # agno's Gemini caches the client in `self.client`; clear it to force a
+        # rebuild with the rotated key on the next call.
+        model.client = None
 
 
 class SafeGemini(Gemini):
@@ -299,7 +323,7 @@ class SafeGemini(Gemini):
                 google.api_core.exceptions.DeadlineExceeded,
             )
         ),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=_rotate_on_exhaust,
         reraise=True,
     )
     def invoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
@@ -321,7 +345,7 @@ class SafeGemini(Gemini):
                 google.api_core.exceptions.DeadlineExceeded,
             )
         ),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=_rotate_on_exhaust,
         reraise=True,
     )
     async def ainvoke(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
@@ -343,7 +367,7 @@ class SafeGemini(Gemini):
                 google.api_core.exceptions.DeadlineExceeded,
             )
         ),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=_rotate_on_exhaust,
         reraise=True,
     )
     def invoke_stream(self, messages: list[Message], *args, **kwargs) -> ModelResponse:
@@ -367,7 +391,7 @@ class SafeGemini(Gemini):
                 google.api_core.exceptions.DeadlineExceeded,
             )
         ),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=_rotate_on_exhaust,
         reraise=True,
     )
     async def ainvoke_stream(self, messages: list[Message], *args, **kwargs):
