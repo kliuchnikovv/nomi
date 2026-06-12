@@ -5,7 +5,7 @@ Registered in the main app at startup via plugin loader.
 
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -55,11 +55,17 @@ async def _get_github_token(user_id: str) -> str:
         await conn.close()
 
 
-async def _get_github_tools(user_id: str):
-    """Get GitHubTools instance for user."""
+async def _get_github_tools(user_id: str, access_token: Optional[str] = None):
+    """Get GitHubTools instance for user.
+
+    The Go API proxy decrypts the stored OAuth token and forwards it as the
+    X-Provider-Token header (see ProxyPlugins). We use it when present and only
+    fall back to a DB lookup otherwise.
+    """
     from .tools import GitHubTools
 
-    access_token = await _get_github_token(user_id)
+    if not access_token:
+        access_token = await _get_github_token(user_id)
     return GitHubTools(access_token=access_token)
 
 
@@ -86,7 +92,9 @@ async def list_repos(
                 return {"repos": repos, "cached": True}
 
         # Fetch from GitHub API
-        github_tool = await _get_github_tools(user_id)
+        github_tool = await _get_github_tools(
+            user_id, request.headers.get("X-Provider-Token")
+        )
         repos = await github_tool.list_repos(limit=limit)
 
         # Update cache
@@ -110,7 +118,9 @@ async def get_repo(request: Request, owner: str, repo: str) -> Dict[str, Any]:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        github_tool = await _get_github_tools(user_id)
+        github_tool = await _get_github_tools(
+            user_id, request.headers.get("X-Provider-Token")
+        )
         repo_data = await github_tool.get_repo(owner=owner, repo=repo)
         return repo_data
     except HTTPException:
@@ -144,7 +154,9 @@ async def list_issues(
         )
 
     try:
-        github_tool = await _get_github_tools(user_id)
+        github_tool = await _get_github_tools(
+            user_id, request.headers.get("X-Provider-Token")
+        )
         issues = await github_tool.list_issues(
             owner=owner, repo=repo, state=state, limit=limit
         )
@@ -180,7 +192,9 @@ async def list_pull_requests(
         )
 
     try:
-        github_tool = await _get_github_tools(user_id)
+        github_tool = await _get_github_tools(
+            user_id, request.headers.get("X-Provider-Token")
+        )
         pulls = await github_tool.list_pull_requests(
             owner=owner, repo=repo, state=state, limit=limit
         )
@@ -211,7 +225,9 @@ async def get_file_content(
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        github_tool = await _get_github_tools(user_id)
+        github_tool = await _get_github_tools(
+            user_id, request.headers.get("X-Provider-Token")
+        )
         file_data = await github_tool.get_file_content(
             owner=owner, repo=repo, path=path, ref=ref
         )

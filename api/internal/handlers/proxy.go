@@ -9,7 +9,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
+	"github.com/kliuchnikovv/genie-api/internal/crypto"
+	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
 
@@ -150,7 +153,12 @@ func ProxyGitHub(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 
 // ProxyPlugins forwards requests to Python plugin endpoints for all plugins.
 // Generic route: /api/{plugin}/*path -> /api/plugins/{plugin}/*path
-func ProxyPlugins(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
+//
+// For server-side OAuth integrations the access token is stored encrypted in
+// oauth_tokens (the integrations row only holds metadata), so plugin REST routes
+// can't read it from the DB themselves. We decrypt it here — the single place
+// that holds the crypto key — and forward it as the X-Provider-Token header.
+func ProxyPlugins(cfg *config.Config, logger *zap.Logger, store *storage.Storage, cryptoKey []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Extract plugin name and path from URL
 		// /api/github/repos -> plugin="github", path="repos"
@@ -193,7 +201,26 @@ func ProxyPlugins(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 
 		// Inject authenticated user ID so Python plugin can identify user
 		if userID, exists := c.Get("userID"); exists {
-			proxyReq.Header.Set("X-User-ID", fmt.Sprintf("%v", userID))
+			uidStr := fmt.Sprintf("%v", userID)
+			proxyReq.Header.Set("X-User-ID", uidStr)
+
+			// Inject the decrypted provider access token for server-side OAuth
+			// integrations. Best-effort: if there's no token (or the plugin isn't
+			// an OAuth integration) we forward without it and let the plugin decide.
+			if store != nil && len(cryptoKey) == 32 {
+				if uid, err := uuid.Parse(uidStr); err == nil {
+					if tok, err := store.GetOAuthTokenByUser(c.Request.Context(), uid, pluginName); err == nil {
+						if dec, err := crypto.Decrypt(cryptoKey, tok.TokenEncrypted); err == nil {
+							var td map[string]interface{}
+							if json.Unmarshal(dec, &td) == nil {
+								if at, ok := td["access_token"].(string); ok && at != "" {
+									proxyReq.Header.Set("X-Provider-Token", at)
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 
 		client := &http.Client{Timeout: 30 * time.Second}
