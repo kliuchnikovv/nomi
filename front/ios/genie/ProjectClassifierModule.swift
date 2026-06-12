@@ -76,16 +76,25 @@ class ProjectClassifierModule: NSObject {
         }.joined(separator: "\n")
 
         let prompt = """
-You are a project classifier. Given a user message and a list of projects, \
-decide which project (if any) the message belongs to.
+You are a strict project classifier. Decide whether a user message clearly \
+belongs to one of the user's existing projects.
 
 Projects:
 \(projectLines)
 
 User message: "\(messageText)"
 
-Reply with ONLY the number of the matching project (e.g. "2"), or "0" if none \
-of the projects is a good match. Do not explain.
+Rules:
+- Answer "0" by default. Most messages do NOT belong to any project.
+- Only answer with a project number when the message is clearly and \
+specifically about that project's topic (its name or description), not just \
+loosely or generically related.
+- A general question (e.g. trivia, a one-off factual question, small talk) \
+belongs to NO project — answer "0".
+- If you are unsure, answer "0".
+
+Reply with ONLY a single number: the matching project's number, or "0" for no \
+match. Do not explain.
 """
 
         let response = try await session.respond(to: prompt)

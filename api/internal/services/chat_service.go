@@ -25,22 +25,31 @@ func NewChatService(repo repositories.ChatRepository) *ChatService {
 
 // CreateChatRequest represents a request to create a chat
 type CreateChatRequest struct {
-	Model  string  `json:"model"`
-	Title  string  `json:"title"`
-	Mode   string  `json:"mode"`
-	TeamID *string `json:"team_id,omitempty"`
-	Type   string  `json:"type,omitempty"`
+	Model     string  `json:"model"`
+	Title     string  `json:"title"`
+	Mode      string  `json:"mode"`
+	TeamID    *string `json:"team_id,omitempty"`
+	Type      string  `json:"type,omitempty"`
+	ProjectID *string `json:"project_id,omitempty"`
 }
 
 // CreateChat creates a new chat with validation and business logic
 // Accepts chat.Chat for backward compatibility with handlers
 func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, req interface{}) (*chat.Chat, error) {
 	var createReq *CreateChatRequest
+	var projectID *uuid.UUID
 
 	// Support both formats: CreateChatRequest and chat.Chat
 	switch v := req.(type) {
 	case *CreateChatRequest:
 		createReq = v
+		if v.ProjectID != nil && *v.ProjectID != "" {
+			parsed, perr := uuid.Parse(*v.ProjectID)
+			if perr != nil {
+				return nil, ErrInvalidRequest
+			}
+			projectID = &parsed
+		}
 	case *chat.Chat:
 		createReq = &CreateChatRequest{
 			Model:  v.Model,
@@ -49,6 +58,7 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, req inte
 			TeamID: v.TeamID,
 			Type:   v.Type,
 		}
+		projectID = v.ProjectID
 	default:
 		return nil, ErrInvalidRequest
 	}
@@ -77,6 +87,7 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, req inte
 		Mode:      mode,
 		Type:      chatType,
 		TeamID:    createReq.TeamID,
+		ProjectID: projectID,
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 	}

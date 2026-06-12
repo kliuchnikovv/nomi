@@ -5,12 +5,46 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 )
+
+// resolveFileType returns a usable MIME type. Camera captures on mobile often
+// upload with an empty or generic multipart Content-Type, which breaks
+// image-detection (file_type startswith "image/") on both the client and the
+// Python agent. Fall back to inferring the type from the filename extension.
+func resolveFileType(contentType, filename string) string {
+	ct := strings.TrimSpace(contentType)
+	if ct != "" && ct != "application/octet-stream" {
+		return ct
+	}
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".heic":
+		return "image/heic"
+	case ".heif":
+		return "image/heif"
+	case ".pdf":
+		return "application/pdf"
+	default:
+		if ct != "" {
+			return ct
+		}
+		return "application/octet-stream"
+	}
+}
 
 type UploadHandler struct {
 	storage *storage.Storage
@@ -53,7 +87,7 @@ func (h *UploadHandler) UploadFile(c *gin.Context) {
 	attachment := storage.Attachment{
 		UserID:    user.ID,
 		FileName:  header.Filename,
-		FileType:  header.Header.Get("Content-Type"),
+		FileType:  resolveFileType(header.Header.Get("Content-Type"), header.Filename),
 		Size:      header.Size,
 		Content:   content,
 		CreatedAt: time.Now(),

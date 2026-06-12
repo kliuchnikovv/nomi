@@ -34,7 +34,14 @@ export function ProjectSuggestionBanner({
                 { backgroundColor: surfaceColor, borderColor },
             ]}
         >
-            <Text style={styles.projectIcon}>{project.icon}</Text>
+            <View
+                style={[
+                    styles.iconChip,
+                    { backgroundColor: `${accentColor}20` },
+                ]}
+            >
+                <Text style={styles.projectIcon}>{project.icon}</Text>
+            </View>
             <View style={styles.text}>
                 <Text style={[styles.label, { color: textSecondaryColor }]}>
                     Add to project?
@@ -63,6 +70,7 @@ export function ProjectSuggestionBanner({
                 </TouchableOpacity>
             ) : (
                 <TouchableOpacity
+                    style={styles.closeBtn}
                     onPress={onDismiss}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
@@ -76,8 +84,15 @@ export function ProjectSuggestionBanner({
             <TouchableOpacity
                 style={[styles.addBtn, { backgroundColor: accentColor }]}
                 onPress={onAccept}
+                activeOpacity={0.85}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
+                <Ionicons
+                    name="add"
+                    size={16}
+                    color="#fff"
+                    style={styles.addIcon}
+                />
                 <Text style={styles.addBtnText}>Add</Text>
             </TouchableOpacity>
         </View>
@@ -88,21 +103,41 @@ const styles = StyleSheet.create({
     container: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginHorizontal: 12,
+        marginBottom: 8,
         paddingHorizontal: 12,
         paddingVertical: 10,
-        borderTopWidth: StyleSheet.hairlineWidth,
+        borderRadius: 16,
+        borderWidth: StyleSheet.hairlineWidth,
         gap: 10,
+        shadowColor: '#000',
+        shadowOpacity: 0.18,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 6,
     },
-    projectIcon: { fontSize: 20 },
+    iconChip: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    projectIcon: { fontSize: 18 },
     text: { flex: 1 },
     label: { fontSize: 11, fontWeight: '500' },
     name: { fontSize: 14, fontWeight: '600', marginTop: 1 },
-    noBtn: { paddingHorizontal: 8 },
-    noBtnText: { fontSize: 14, fontWeight: '500' },
+    noBtn: { paddingHorizontal: 10, paddingVertical: 6 },
+    noBtnText: { fontSize: 14, fontWeight: '600' },
+    closeBtn: { padding: 4 },
     addBtn: {
-        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 12,
         paddingHorizontal: 14,
-        paddingVertical: 6,
+        paddingVertical: 8,
+        gap: 2,
     },
-    addBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+    addIcon: { marginLeft: -2 },
+    addBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 });

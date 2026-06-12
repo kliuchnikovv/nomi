@@ -946,6 +946,19 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
+		// Inject project context so the agent is aware of the project it works
+		// within. The project's description acts as the project's "document".
+		if chatRecord != nil && chatRecord.ProjectID != nil {
+			if project, perr := r.store.GetProject(ctx, r.initiatorID, *chatRecord.ProjectID); perr == nil && project != nil {
+				finalMap["project_context"] = map[string]interface{}{
+					"id":          project.ID.String(),
+					"name":        project.Name,
+					"description": project.Description,
+					"icon":        project.Icon,
+				}
+			}
+		}
+
 		if len(historyMessages) > 0 {
 			historyData := make([]map[string]interface{}, 0, len(historyMessages))
 			for _, msg := range historyMessages {

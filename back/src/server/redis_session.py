@@ -1559,6 +1559,16 @@ class RedisSession:
             # Clear context items if not provided (user removed them)
             self.context_items = []
 
+        # Project context: when the chat belongs to a project, the Go API sends
+        # the project's name/description (its "document") so the agent works with
+        # that context in mind. Injected into the agent input in _build_agent_input.
+        incoming_project_context = payload.get("project_context")
+        self._project_context = (
+            incoming_project_context
+            if isinstance(incoming_project_context, dict)
+            else None
+        )
+
         # Run memory extraction in background (does not block response).
         # Only when ENABLE_MEMORY=true to avoid extra LLM calls and storing noise.
         _enable_memory = getattr(self.agent_factory, "_enable_memory", False)
@@ -2026,6 +2036,21 @@ class RedisSession:
     def _build_agent_input(self, text: str) -> str:
         """Build agent input with context items and accumulated tool results."""
         context_parts = []
+
+        # Project context (the project's description is its "document"): keep the
+        # agent aware of the project this chat belongs to.
+        project_context = getattr(self, "_project_context", None)
+        if isinstance(project_context, dict):
+            name = (project_context.get("name") or "").strip()
+            description = (project_context.get("description") or "").strip()
+            if name or description:
+                lines = ["--- Project ---"]
+                if name:
+                    lines.append(f"Name: {name}")
+                if description:
+                    lines.append(f"Description: {description}")
+                lines.append("--- End Project ---")
+                context_parts.append("\n".join(lines))
 
         # Add context items (emails, documents, etc.)
         if self.context_items:

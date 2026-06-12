@@ -86,6 +86,15 @@ export function ChatDetailScreen() {
     const route = useRoute<RouteProp<ChatStackParamList, 'ChatDetail'>>();
     const chatId = route.params?.chatId ?? emptyChatID;
     const navigation = useNavigation();
+    // Present only when this screen is opened as a project chat (Projects stack →
+    // ProjectChatDetail). Used to show a back button instead of the updates bell
+    // and to auto-send the suggestion's pending text into the project.
+    const routeProjectId = (route.params as any)?.projectId as
+        | string
+        | undefined;
+    const routePendingText = (route.params as any)?.pendingText as
+        | string
+        | undefined;
 
     const inputAnimY = useSharedValue(0);
     const insets = useSafeAreaInsets();
@@ -210,23 +219,50 @@ export function ChatDetailScreen() {
             });
     }, [suggestedProjectId]);
 
-    const handleAcceptProjectSuggestion = useCallback(() => {
+    const handleAcceptProjectSuggestion = useCallback(async () => {
         if (!suggestedProjectId) return;
+        const targetChatId = activeChat?.id;
+        const targetProjectId = suggestedProjectId;
         clearProjectSuggestion();
-        // Navigate to a brand-new chat in the project, pre-populated with the
-        // message that triggered the suggestion — without touching the current chat.
-        (navigation as any).navigate('Projects', {
-            screen: 'ProjectChatDetail',
-            params: {
-                chatId: '',
-                projectId: suggestedProjectId,
-                pendingText: classifiedText ?? undefined,
-            },
-        });
+        // Move the existing chat (with its full history) into the project, then
+        // open that same chat inside the Projects stack. Falls back to a fresh
+        // project chat only if there is no persisted chat yet.
+        if (targetChatId && targetChatId !== emptyChatID) {
+            try {
+                await apiClient.put<void>(
+                    `${getApiUrl()}/chats/${targetChatId}`,
+                    { project_id: targetProjectId },
+                );
+                await getChats({ preserveActiveChat: true });
+            } catch (e) {
+                console.warn(
+                    '[ProjectBanner] failed to move chat to project:',
+                    e,
+                );
+            }
+            (navigation as any).navigate('Projects', {
+                screen: 'ProjectChatDetail',
+                params: {
+                    chatId: targetChatId,
+                    projectId: targetProjectId,
+                },
+            });
+        } else {
+            (navigation as any).navigate('Projects', {
+                screen: 'ProjectChatDetail',
+                params: {
+                    chatId: '',
+                    projectId: targetProjectId,
+                    pendingText: classifiedText ?? undefined,
+                },
+            });
+        }
     }, [
         suggestedProjectId,
         classifiedText,
+        activeChat?.id,
         clearProjectSuggestion,
+        getChats,
         navigation,
     ]);
 
@@ -262,6 +298,26 @@ export function ChatDetailScreen() {
         confirmProjectSuggestionForSession,
         navigation,
     ]);
+
+    // When a project chat is opened from the "Add to project" suggestion with a
+    // pending message, send it once on arrival so the conversation actually lands
+    // in the project (rather than only pre-filling the input). Guarded so it fires
+    // a single time and never on a plain project-chat open (no pendingText).
+    const projectAutoSentRef = useRef(false);
+    useEffect(() => {
+        if (
+            routeProjectId &&
+            routePendingText &&
+            routePendingText.trim() &&
+            !projectAutoSentRef.current
+        ) {
+            projectAutoSentRef.current = true;
+            setPendingInputText(null);
+            sendMessage(routePendingText);
+        }
+        // Run once on mount for this screen instance.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);
@@ -785,8 +841,30 @@ export function ChatDetailScreen() {
                     },
                 ]}
             >
-                {/* Left: Updates inbox entry point (renders a spacer when no updates chat) */}
-                <UpdatesBellButton />
+                {/* Left: back button in a project chat, otherwise the updates
+                    inbox entry point (renders a spacer when no updates chat) */}
+                {routeProjectId ? (
+                    <Pressable
+                        style={[
+                            detailStyles.pillBtn,
+                            { backgroundColor: theme.surface },
+                        ]}
+                        hitSlop={8}
+                        onPress={() =>
+                            (navigation as any).navigate('ProjectDetail', {
+                                projectId: routeProjectId,
+                            })
+                        }
+                    >
+                        <Ionicons
+                            name="chevron-back"
+                            size={22}
+                            color={theme.text}
+                        />
+                    </Pressable>
+                ) : (
+                    <UpdatesBellButton />
+                )}
 
                 {/* Center: title pill — tap to open dropdown */}
                 <Pressable

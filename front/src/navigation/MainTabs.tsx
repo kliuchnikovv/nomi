@@ -45,12 +45,14 @@ function AnimatedTabBar(props: BottomTabBarProps & { initialHeight: number }) {
     const projectsFocusedRoute = projectsRoute
         ? getFocusedRouteNameFromRoute(projectsRoute)
         : undefined;
-    const isInProjectChatDetail =
+    // Hide the dock on the Projects detail / create-edit screens, but KEEP it on
+    // the project chat (ProjectChatDetail) so it has the same bottom nav as a
+    // normal chat in the Chat tab.
+    const shouldHide =
         activeTabName === 'Projects' &&
         projectsFocusedRoute !== undefined &&
-        projectsFocusedRoute !== 'ProjectsList';
-
-    const shouldHide = isInProjectChatDetail;
+        projectsFocusedRoute !== 'ProjectsList' &&
+        projectsFocusedRoute !== 'ProjectChatDetail';
 
     // ── Shared values ─────────────────────────────────────────────────────────
     // heightSV is pre-seeded so the translateY calculation is correct on the

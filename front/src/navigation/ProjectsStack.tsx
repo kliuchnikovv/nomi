@@ -13,19 +13,24 @@ import { emptyChatID } from '../screens/main/context';
 const Stack = createNativeStackNavigator<ProjectsStackParamList>();
 
 function ProjectChatDetailWrapper() {
-    const route = useRoute<RouteProp<ProjectsStackParamList, 'ProjectChatDetail'>>();
-    const { chatId, projectId, pendingText } = route.params;
+    const route =
+        useRoute<RouteProp<ProjectsStackParamList, 'ProjectChatDetail'>>();
+    const { chatId, projectId } = route.params;
 
     // Local state — intentionally isolated from the global Chat tab.
     // Using emptyChatID sentinel so ChatProvider creates a new chat on first send.
-    const [localChatId, setLocalChatId] = useState<string>(chatId || emptyChatID);
+    const [localChatId, setLocalChatId] = useState<string>(
+        chatId || emptyChatID,
+    );
 
+    // NOTE: pendingText is intentionally NOT passed as initialPendingText.
+    // ChatDetailScreen auto-sends it once on mount (reading route.params), so
+    // pre-filling the input would leave a stale copy of the text behind.
     return (
         <ChatProvider
             activeChatID={localChatId}
             setActiveChatID={setLocalChatId}
             initialProjectId={projectId}
-            initialPendingText={pendingText}
         >
             <AskUserProvider>
                 <ChatDetailScreen />
@@ -38,9 +43,18 @@ export function ProjectsStack() {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="ProjectsList" component={ProjectsScreen} />
-            <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} />
-            <Stack.Screen name="CreateEditProject" component={CreateEditProjectScreen} />
-            <Stack.Screen name="ProjectChatDetail" component={ProjectChatDetailWrapper} />
+            <Stack.Screen
+                name="ProjectDetail"
+                component={ProjectDetailScreen}
+            />
+            <Stack.Screen
+                name="CreateEditProject"
+                component={CreateEditProjectScreen}
+            />
+            <Stack.Screen
+                name="ProjectChatDetail"
+                component={ProjectChatDetailWrapper}
+            />
         </Stack.Navigator>
     );
 }
