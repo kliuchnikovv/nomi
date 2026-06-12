@@ -52,7 +52,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         displayName: 'GitHub',
         description: 'GitHub integration for repository management',
         icon: 'github',
-        storageType: 'hybrid',
+        storageType: 'server',
         supportsBackgroundTasks: false,
         systemEventListeners: [],
         authType: 'oauth2',
