@@ -12,9 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kliuchnikovv/genie-api/sandbox-controller/internal/config"
-	"github.com/kliuchnikovv/genie-api/sandbox-controller/internal/docker"
 	"github.com/kliuchnikovv/genie-api/sandbox-controller/internal/handlers"
 	"github.com/kliuchnikovv/genie-api/sandbox-controller/internal/k8s"
+	"github.com/kliuchnikovv/genie-api/sandbox-controller/internal/local"
 	"github.com/kliuchnikovv/genie-api/sandbox-controller/internal/sandbox"
 	"go.uber.org/zap"
 )
@@ -36,18 +36,19 @@ func main() {
 
 	// Create backend
 	var backend sandbox.Backend
-	if cfg.Backend == "docker" {
-		backend, err = docker.NewClient(cfg)
-		if err != nil {
-			logger.Fatal("failed to create docker client", zap.Error(err))
-		}
-		logger.Info("Using Docker backend")
-	} else {
+	switch cfg.Backend {
+	case "k8s":
 		backend, err = k8s.NewClient(cfg)
 		if err != nil {
 			logger.Fatal("failed to create kubernetes client", zap.Error(err))
 		}
 		logger.Info("Using Kubernetes backend")
+	default: // "local"
+		backend, err = local.NewClient(cfg)
+		if err != nil {
+			logger.Fatal("failed to create local client", zap.Error(err))
+		}
+		logger.Info("Using local subprocess backend", zap.String("root", cfg.Root))
 	}
 
 	// Create manager

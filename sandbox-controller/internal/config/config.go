@@ -25,7 +25,13 @@ type Config struct {
 	MaxMemory         string
 	MaxPods           int
 
-	// Backend type: "k8s" or "docker"
+	// Local backend: base directory for per-sandbox workspaces and optional
+	// uid/gid to drop privileges to when running commands (0 = no drop).
+	Root string
+	UID  int
+	GID  int
+
+	// Backend type: "local" (default), "k8s", or "docker"
 	Backend string
 }
 
@@ -43,7 +49,10 @@ func Load() *Config {
 		MaxCPU:            getEnvString("SANDBOX_MAX_CPU", "1"),
 		MaxMemory:         getEnvString("SANDBOX_MAX_MEMORY", "512Mi"),
 		MaxPods:           getEnvInt("SANDBOX_MAX_PODS", 100),
-		Backend:           getEnvString("SANDBOX_BACKEND", "k8s"),
+		Root:              getEnvString("SANDBOX_ROOT", "/sandboxes"),
+		UID:               getEnvInt("SANDBOX_UID", 0),
+		GID:               getEnvInt("SANDBOX_GID", 0),
+		Backend:           getEnvString("SANDBOX_BACKEND", "local"),
 	}
 
 	return cfg

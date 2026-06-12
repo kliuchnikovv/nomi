@@ -62,10 +62,17 @@ class SandboxTools(Toolkit):
         timeout: int = 60,
         working_dir: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Execute a shell command in the sandbox.
+        """Execute a shell command in an isolated Linux sandbox.
+
+        Use this when no dedicated tool fits the task. The working directory is
+        /workspace and persists between calls. Preinstalled: python3, pip, node,
+        npm, git, curl, build-essential. Internet access is available, so you can
+        install extra packages (pip install, npm install, apt is not available as
+        non-root). A non-zero exit_code means the command failed; exit_code 124
+        means it timed out.
 
         Args:
-            command: Command and arguments as a list (e.g., ["ls", "-la"])
+            command: Command and arguments as a list (e.g., ["python3", "script.py"])
             timeout: Timeout in seconds (default 60)
             working_dir: Working directory (default /workspace)
 

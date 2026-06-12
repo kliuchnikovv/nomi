@@ -59,17 +59,15 @@ services:
       - "8090:8090"
     environment:
       - PORT=8090
-      - SANDBOX_BACKEND=docker
+      - SANDBOX_BACKEND=local
       - SANDBOX_CONTROLLER_TOKEN=dev-token
-      - SANDBOX_NAMESPACE=genie-sandboxes
-      - SANDBOX_IMAGE=ubuntu:22.04
+      - SANDBOX_ROOT=/sandboxes
+      - SANDBOX_UID=1000
+      - SANDBOX_GID=1000
       - SANDBOX_INACTIVITY_TIMEOUT=15m
-      - SANDBOX_PVC_RETENTION_DAYS=30
-      - SANDBOX_MAX_CPU=1
-      - SANDBOX_MAX_MEMORY=512Mi
       - SANDBOX_MAX_PODS=10
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox_workspaces:/sandboxes
 
   db:
     image: postgres:16-alpine
@@ -89,3 +87,4 @@ services:
 
 volumes:
   pgdata:
+  sandbox_workspaces:

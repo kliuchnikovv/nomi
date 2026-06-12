@@ -1,6 +1,9 @@
 name: sandbox
 display_name: Sandbox
-description: Isolated Linux environment for code execution
+description: >-
+  Linux environment for running shell commands and code when no dedicated tool
+  fits. Working directory is /workspace and persists between calls. Preinstalled:
+  python3, pip, node, npm, git, curl, build-essential. Internet access is available.
 version: 1.0.0
 
 execution:
