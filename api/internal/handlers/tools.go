@@ -326,6 +326,14 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 		if _, exists := providerMap[manifest.Name]; exists {
 			continue
 		}
+		// An email provider that requires a connected account (e.g. Gmail/OAuth) must NOT be
+		// advertised when the user hasn't connected it: it can't run without credentials, and a
+		// phantom email provider makes the discovery router think there are multiple email
+		// accounts and ask the user to disambiguate. `imap` (client-only, with a real account)
+		// is already in providerMap and handled above.
+		if manifest.UI.Category == "email" {
+			continue
+		}
 		toolParams := map[string]interface{}{}
 		if manifest.Execution.Type == "server" {
 			toolParams["user_id"] = userID.String()

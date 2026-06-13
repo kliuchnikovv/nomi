@@ -384,7 +384,7 @@ class IOSMailManager: NSObject {
                 for uid in fetchUIDs {
                     let tag = String(format: "a%03d", seq); seq += 1
                     let resp = try await sendCommand(
-                        "FETCH \(uid) (UID ENVELOPE FLAGS INTERNALDATE)",
+                        "FETCH \(uid) (UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE)])",
                         tag: tag, conn: conn)
                     if let e = parseEmail(from: resp, uid: uid, mailbox: mailbox) { emails.append(e) }
                 }
@@ -486,43 +486,145 @@ class IOSMailManager: NSObject {
     }
 
     private func parseEmail(from response: String, uid: Int, mailbox: String) -> [String: Any]? {
-        var email: [String: Any] = ["uid": uid, "mailbox": mailbox, "flags": [String]()]
-        for line in response.components(separatedBy: "\r\n") {
+        var email: [String: Any] = [
+            "uid": uid, "mailbox": mailbox, "flags": [String](),
+            "subject": "", "from": "", "to": [String](), "date": "",
+        ]
+        let lines = response.components(separatedBy: "\r\n")
+
+        // FLAGS / INTERNALDATE come from the FETCH response line itself.
+        for line in lines {
+            if email["date"] as? String == "", line.contains("INTERNALDATE"),
+               let m = line.range(of: "INTERNALDATE\\s+\"([^\"]+)\"", options: .regularExpression) {
+                email["date"] = String(line[m])
+                    .replacingOccurrences(of: "INTERNALDATE", with: "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            }
             if line.contains("FLAGS"),
-               let m = line.range(of: "FLAGS\\s+\\(([^)]+)\\)", options: .regularExpression) {
+               let m = line.range(of: "FLAGS\\s+\\(([^)]*)\\)", options: .regularExpression) {
                 email["flags"] = String(line[m])
                     .replacingOccurrences(of: "FLAGS", with: "")
                     .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
                     .components(separatedBy: " ")
                     .map { $0.trimmingCharacters(in: CharacterSet.alphanumerics.inverted) }
-            } else if line.contains("INTERNALDATE"),
-                      let m = line.range(of: "INTERNALDATE\\s+\"([^\"]+)\"", options: .regularExpression) {
-                email["date"] = String(line[m])
-                    .replacingOccurrences(of: "INTERNALDATE", with: "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
-            } else if line.contains("ENVELOPE") {
-                email["subject"] = extractQuoted(from: line, after: "SUBJECT")
-                email["from"] = extractQuoted(from: line, after: "FROM")
-                email["to"] = [extractQuoted(from: line, after: "TO")]
+                    .filter { !$0.isEmpty }
             }
         }
+
+        // Subject/From/To/Date are parsed from the BODY.PEEK[HEADER.FIELDS (...)] block, which
+        // contains raw RFC822 header lines. Unfold continuation lines (leading space/tab) and
+        // match `Header: value` case-insensitively. This is reliable, unlike parsing the
+        // positional IMAP ENVELOPE structure.
+        var currentKey: String? = nil
+        var currentVal = ""
+        func commit() {
+            guard let key = currentKey else { return }
+            let value = decodeMIMEHeader(currentVal.trimmingCharacters(in: .whitespacesAndNewlines))
+            switch key {
+            case "subject": email["subject"] = value
+            case "from": email["from"] = value
+            case "to": email["to"] = value.isEmpty ? [String]() : [value]
+            case "date": if (email["date"] as? String)?.isEmpty != false { email["date"] = value }
+            default: break
+            }
+            currentKey = nil
+            currentVal = ""
+        }
+        for line in lines {
+            // Header folding: a line beginning with whitespace continues the previous header.
+            if let _ = currentKey, let first = line.first, first == " " || first == "\t" {
+                currentVal += " " + line.trimmingCharacters(in: .whitespaces)
+                continue
+            }
+            if let colon = line.firstIndex(of: ":") {
+                let name = line[line.startIndex..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+                if ["subject", "from", "to", "date"].contains(name) {
+                    commit()
+                    currentKey = name
+                    currentVal = String(line[line.index(after: colon)...])
+                    continue
+                }
+            }
+            // Any non-header / structural line ends an in-progress header.
+            if currentKey != nil { commit() }
+        }
+        commit()
         return email
     }
 
-    private func extractQuoted(from line: String, after keyword: String) -> String {
-        guard let m = line.range(of: "\(keyword)\\s+\"([^\"]+)\"", options: .regularExpression) else { return "" }
-        return String(line[m])
-            .replacingOccurrences(of: keyword, with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+    // Decodes RFC 2047 encoded-words (=?charset?B/Q?text?=). Falls back to the raw value when
+    // no encoded-word is present or decoding fails.
+    private func decodeMIMEHeader(_ raw: String) -> String {
+        guard raw.contains("=?") else { return raw }
+        var result = ""
+        var remainder = Substring(raw)
+        while let start = remainder.range(of: "=?") {
+            result += remainder[remainder.startIndex..<start.lowerBound]
+            let afterStart = remainder[start.upperBound...]
+            guard let qMark1 = afterStart.range(of: "?"),
+                  let qMark2 = afterStart[qMark1.upperBound...].range(of: "?"),
+                  let end = afterStart[qMark2.upperBound...].range(of: "?=") else {
+                // Malformed; emit the rest verbatim.
+                result += remainder[start.lowerBound...]
+                return result
+            }
+            let charset = afterStart[afterStart.startIndex..<qMark1.lowerBound]
+            let encoding = afterStart[qMark1.upperBound..<qMark2.lowerBound].uppercased()
+            let text = String(afterStart[qMark2.upperBound..<end.lowerBound])
+            result += decodeEncodedWord(text: text, encoding: encoding, charset: String(charset)) ?? "=?\(charset)?\(encoding)?\(text)?="
+            remainder = afterStart[end.upperBound...]
+        }
+        result += remainder
+        return result
+    }
+
+    private func decodeEncodedWord(text: String, encoding: String, charset: String) -> String? {
+        let enc: String.Encoding = charset.lowercased().contains("utf-8") ? .utf8 : .isoLatin1
+        if encoding == "B" {
+            guard let data = Data(base64Encoded: text) else { return nil }
+            return String(data: data, encoding: enc) ?? String(data: data, encoding: .utf8)
+        }
+        if encoding == "Q" {
+            var bytes = [UInt8]()
+            let chars = Array(text)
+            var i = 0
+            while i < chars.count {
+                let c = chars[i]
+                if c == "_" { bytes.append(0x20); i += 1 }
+                else if c == "=", i + 2 < chars.count,
+                        let hi = chars[i + 1].hexDigitValue, let lo = chars[i + 2].hexDigitValue {
+                    bytes.append(UInt8(hi * 16 + lo)); i += 3
+                } else { bytes.append(contentsOf: Array(String(c).utf8)); i += 1 }
+            }
+            return String(bytes: bytes, encoding: enc) ?? String(bytes: bytes, encoding: .utf8)
+        }
+        return nil
     }
 
     private func parseEmailBody(from response: String) -> String {
-        var body = ""
+        // FETCH (BODY[]) returns the full RFC822 message inside an IMAP literal. Locate the
+        // body region (the FETCH line opening the literal), then skip the RFC822 headers up to
+        // and including the first blank line, returning only the message body that follows.
+        let lines = response.components(separatedBy: "\r\n")
+        var inLiteral = false
         var inBody = false
-        for line in response.components(separatedBy: "\r\n") {
-            if line.contains("FETCH") || line.contains("BODY[]") { inBody = true; continue }
-            if inBody && line == ")" { break }
-            if inBody { body += line + "\r\n" }
+        var body = ""
+        for line in lines {
+            if !inLiteral {
+                // The line that opens the literal looks like: * N FETCH (... BODY[] {12345}
+                if line.contains("FETCH") && line.contains("BODY[") { inLiteral = true }
+                continue
+            }
+            if !inBody {
+                // Blank line separates RFC822 headers from the body.
+                if line.isEmpty { inBody = true }
+                continue
+            }
+            // Closing of the IMAP response: a lone ")" or the tagged "aNNN OK" status line.
+            if line == ")" || line.range(of: "^[aA]\\d+ (OK|NO|BAD)", options: .regularExpression) != nil {
+                break
+            }
+            body += line + "\r\n"
         }
         return body.trimmingCharacters(in: .whitespacesAndNewlines)
     }
