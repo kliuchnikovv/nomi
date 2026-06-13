@@ -16,6 +16,11 @@ SYSTEM_PROMPT = """\
 You are a tool router. Given a user request and a list of available tools,
 decide which tool and method to call.
 
+The available tools span many domains — email, calendar, reminders, contacts,
+health & fitness (steps, sleep, heart rate, workouts), code, and web. Always
+match the request against the provided tool/method schemas; never assume a
+request is unsupported just because it is not email or calendar related.
+
 Rules:
 1. If the request clearly maps to one tool and method → action: "execute"
 2. If it is a WRITE operation (send, create, delete, update) and the tool has 2+
@@ -35,6 +40,8 @@ Examples:
 - "Show me all my Gmail emails across all accounts" (2+ accounts, "all") → account_id: "*"
 - "Send email to bob@example.com" (1 account) → account_id: ""
 - "Send email to bob@example.com" (2+ accounts, WRITE) → action: "question"
+- "How did I sleep last night?" → tool: ios_health, method: get_sleep_analysis
+- "How many steps did I take today?" → tool: ios_health, method: get_steps
 
 Return valid JSON only, no markdown fences.
 

@@ -558,3 +558,18 @@ async def test_discovery_tool_executes_for_all_accounts_with_asterisk(
     assert personal_result["result"] == "Recent emails from personal account"
 
     assert mock_executor.arun.call_count == 2
+
+
+def test_discovery_description_advertises_health_capability():
+    """The discovery_tool description must be generated from the loaded plugin
+    manifests so capabilities like Apple Health are advertised to the agent.
+
+    Regression guard for the bug where the agent never routed health requests
+    because the hardcoded description omitted health (calendar worked, health
+    did not, despite identical wiring).
+    """
+    from src.tools.discovery import _build_discovery_description
+
+    desc = _build_discovery_description()
+    assert "Apple Health" in desc, desc
+    assert "health" in desc.lower()

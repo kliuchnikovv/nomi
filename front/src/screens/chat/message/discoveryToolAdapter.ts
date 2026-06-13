@@ -19,6 +19,92 @@ export interface ResolvedToolCall extends ToolCall {
     icon?: string;
 }
 
+/**
+ * Built-in tools that Agno registers automatically (not routed through
+ * discovery_tool). They arrive as plain tool calls with raw snake_case names and
+ * no icon — map them to a friendly label + icon so the Details rows read like the
+ * resolved integration calls (e.g. "Clarification needed").
+ */
+const KNOWN_TOOL_DISPLAY: Record<string, { name: string; icon: string }> = {
+    // Knowledge / memory
+    search_knowledge_base: {
+        name: 'Searching memory',
+        icon: 'book-search-outline',
+    },
+    remember_this: { name: 'Saving to memory', icon: 'content-save-outline' },
+
+    // Web search
+    duckduckgo_search: { name: 'Searching the web', icon: 'web' },
+    duckduckgo_news: {
+        name: 'Searching news',
+        icon: 'newspaper-variant-outline',
+    },
+
+    // Email (unified)
+    list_email_accounts: {
+        name: 'Email accounts',
+        icon: 'email-multiple-outline',
+    },
+    search_emails: { name: 'Searching email', icon: 'email-search-outline' },
+    get_recent_emails: { name: 'Reading recent email', icon: 'email-outline' },
+    get_email: { name: 'Reading email', icon: 'email-open-outline' },
+    send_email: { name: 'Sending email', icon: 'send' },
+    reply_email: { name: 'Replying to email', icon: 'reply-outline' },
+    create_draft: { name: 'Drafting email', icon: 'email-edit-outline' },
+    mark_email: { name: 'Marking email', icon: 'email-check-outline' },
+    move_email: { name: 'Moving email', icon: 'folder-move-outline' },
+    archive_email: { name: 'Archiving email', icon: 'archive-outline' },
+    delete_email: { name: 'Deleting email', icon: 'email-remove-outline' },
+    list_mailboxes: {
+        name: 'Listing mailboxes',
+        icon: 'inbox-multiple-outline',
+    },
+
+    // User interaction (same intent as the discovery clarification flow)
+    ask_user: { name: 'Clarification needed', icon: 'chat-question-outline' },
+
+    // Planning / projects
+    patch_plan_document: {
+        name: 'Updating plan',
+        icon: 'clipboard-edit-outline',
+    },
+    list_projects: {
+        name: 'Listing projects',
+        icon: 'folder-multiple-outline',
+    },
+
+    // Maps
+    open_route: { name: 'Building route', icon: 'map-marker-path' },
+    search_places: { name: 'Searching places', icon: 'map-search-outline' },
+
+    // Reminders (self-reminders / watch) + notifications
+    create_reminder: { name: 'Setting a reminder', icon: 'bell-plus-outline' },
+    list_reminders: { name: 'Checking reminders', icon: 'bell-outline' },
+    cancel_reminder: { name: 'Canceling reminder', icon: 'bell-off-outline' },
+    schedule_notification: {
+        name: 'Scheduling notification',
+        icon: 'bell-ring-outline',
+    },
+
+    // Chat history
+    search_chat_history: { name: 'Searching chat history', icon: 'history' },
+
+    // Delegation
+    delegate_to: { name: 'Delegating', icon: 'account-arrow-right-outline' },
+};
+
+/**
+ * Decorate a known built-in tool call with a friendly label + icon.
+ * Returns null for unknown tools so callers fall back to the original.
+ */
+export function decorateKnownToolCall(
+    toolCall: ToolCall,
+): ResolvedToolCall | null {
+    const display = toolCall && KNOWN_TOOL_DISPLAY[toolCall.name];
+    if (!display) return null;
+    return { ...toolCall, name: display.name, icon: display.icon };
+}
+
 function parseMaybeJson(value: any): any {
     if (typeof value !== 'string') return value;
     try {

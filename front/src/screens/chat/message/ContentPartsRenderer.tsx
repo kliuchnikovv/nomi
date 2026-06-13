@@ -17,7 +17,10 @@ import { createMarkdownRules } from './markdownRules';
 import { SingleToolCall, ReasoningBlock, CollapsibleSteps } from './ToolCalls';
 import { DocumentBlock } from './DocumentBlock';
 import { getChatElementComponent } from '../../../plugins/chatElementRegistry';
-import { unwrapDiscoveryToolCall } from './discoveryToolAdapter';
+import {
+    unwrapDiscoveryToolCall,
+    decorateKnownToolCall,
+} from './discoveryToolAdapter';
 import { showToast } from '../../../utils/toast';
 
 const markdownRules = createMarkdownRules({
@@ -253,6 +256,7 @@ const ToolCallsGroup = memo(function ToolCallsGroup({
                     // or unparseable.
                     const resolved =
                         unwrapDiscoveryToolCall(part.tool_call) ??
+                        decorateKnownToolCall(part.tool_call) ??
                         part.tool_call;
                     return (
                         <SingleToolCall

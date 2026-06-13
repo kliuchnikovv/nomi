@@ -14,6 +14,44 @@ from src.tools.router import ToolRouter
 logger = logging.getLogger(__name__)
 
 
+def _build_discovery_description() -> str:
+    """Build the discovery_tool description from loaded plugin manifests.
+
+    The capability list is generated dynamically (never hardcoded) so newly
+    added integrations — e.g. Apple Health — are advertised to the agent
+    automatically. Without this, the agent only knows about whatever was
+    hardcoded and silently skips routing requests for unlisted capabilities.
+    """
+    capabilities: list[str] = ["web search"]
+    from src.plugins.loader import load_plugins, get_manifests
+
+    try:
+        load_plugins()
+    except Exception:
+        # load_plugins() populates manifests before registering delivery
+        # handlers; a late-stage failure there must not blank the list.
+        logger.warning("[Discovery] load_plugins raised; using manifests loaded so far", exc_info=True)
+    try:
+        for manifest in get_manifests():
+            tools_cfg = manifest.get("tools") or {}
+            if tools_cfg.get("include", True) is False:
+                continue
+            label = manifest.get("display_name") or manifest.get("name")
+            if label and label not in capabilities:
+                capabilities.append(label)
+    except Exception:
+        logger.warning("[Discovery] Failed to build capability list", exc_info=True)
+
+    return (
+        "Execute any available action by describing what you need in natural "
+        "language. Available capabilities include: " + ", ".join(capabilities) + ". "
+        "Use this for anything involving the user's connected services or device "
+        "data (email, calendar, reminders, contacts, health & fitness, code, web, "
+        "etc.) instead of answering from memory. "
+        "Returns a result, a clarifying question, or an error."
+    )
+
+
 def _account_display(tool_schema: dict, account_id: str) -> str:
     """Human-readable account label for a resolved account_id (UUID → email/name)."""
     if not account_id or account_id == "*":
@@ -425,11 +463,7 @@ def build_discovery_tool(
 
     return Function(
         name="discovery_tool",
-        description=(
-            "Execute any available action (send email, search GitHub, look up calendar events, "
-            "search the web, etc.) by describing what you need in natural language. "
-            "Returns result, a clarifying question, or an error."
-        ),
+        description=_build_discovery_description(),
         parameters={
             "type": "object",
             "properties": {
