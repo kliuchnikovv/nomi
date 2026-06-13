@@ -313,6 +313,9 @@ app.delete(
   })
 );
 
-app.listen(PORT, () => {
-  console.log(`sandbox-sidecar listening on :${PORT} (idle timeout ${IDLE_TIMEOUT_MINUTES}m)`);
+// Bind on IPv6 unspecified (`::`) — Railway's private network is IPv6-only, so
+// an IPv4-only `0.0.0.0` bind makes the service unreachable at
+// `<service>.railway.internal`. Dual-stack also accepts IPv4 locally.
+app.listen(PORT, "::", () => {
+  console.log(`sandbox-sidecar listening on [::]:${PORT} (idle timeout ${IDLE_TIMEOUT_MINUTES}m)`);
 });
