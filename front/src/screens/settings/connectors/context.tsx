@@ -603,26 +603,54 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                             method: 'DELETE',
                             headers: { Authorization: `Bearer ${token}` },
                         });
-                    } else if (
-                        integration &&
-                        integration.params?.account_email
-                    ) {
-                        const response = await fetch(`${apiUrl}/integrations`, {
-                            headers: { Authorization: `Bearer ${token}` },
-                        });
-                        if (response.ok) {
-                            const data = await response.json();
-                            const items: any[] = data.items || [];
-                            const backendInt = items.find(
-                                (i: any) =>
-                                    i.provider === integration.provider &&
-                                    JSON.parse(i.params).account_email ===
-                                        integration.params!.account_email,
+                    } else {
+                        // Server is the source of truth — delete the server row
+                        // too, otherwise the reconciler re-creates it on the next
+                        // sync. Match by id (ids align after a sync) or fall back
+                        // to provider+account_email. Note: /integrations returns a
+                        // bare array with PascalCase Go field names.
+                        try {
+                            const response = await fetch(
+                                `${apiUrl}/integrations`,
+                                {
+                                    headers: {
+                                        Authorization: `Bearer ${token}`,
+                                    },
+                                },
                             );
-
-                            if (backendInt) {
+                            if (response.ok) {
+                                const data = await response.json();
+                                const items: any[] = Array.isArray(data)
+                                    ? data
+                                    : data?.items ?? [];
+                                const prov =
+                                    integration?.provider?.toLowerCase();
+                                const email =
+                                    integration?.params?.account_email?.toLowerCase();
+                                const match = items.find((i: any) => {
+                                    const iid = i.id ?? i.ID;
+                                    if (iid === id) return true;
+                                    const iprov = (
+                                        i.provider ??
+                                        i.Provider ??
+                                        ''
+                                    ).toLowerCase();
+                                    const iemail = (
+                                        i.account_email ??
+                                        i.AccountEmail ??
+                                        ''
+                                    ).toLowerCase();
+                                    return (
+                                        !!prov &&
+                                        iprov === prov &&
+                                        (!email || iemail === email)
+                                    );
+                                });
+                                const serverId = match
+                                    ? match.id ?? match.ID
+                                    : id;
                                 await fetch(
-                                    `${apiUrl}/integrations/${backendInt.id}`,
+                                    `${apiUrl}/integrations/${serverId}`,
                                     {
                                         method: 'DELETE',
                                         headers: {
@@ -631,6 +659,11 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                                     },
                                 );
                             }
+                        } catch (e) {
+                            console.warn(
+                                '[ConnectorsProvider] server-side delete failed',
+                                e,
+                            );
                         }
                     }
                 }

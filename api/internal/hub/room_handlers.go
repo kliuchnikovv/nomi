@@ -288,6 +288,25 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 		}
 		r.currentRequestID = ""
 		r.flushAllBuilders()
+		// Forward the stop to the Python brain so it cancels the in-flight run.
+		// The local cleanup above only updates Go-side state; without this the
+		// worker keeps generating and the stop button has no real effect.
+		stopReq := Frame{
+			ID:        0,
+			ChatID:    r.ID,
+			Kind:      MetaKind,
+			Operation: StopOperation,
+			Timestamp: time.Now().UTC(),
+			Payload:   json.RawMessage(`{}`),
+		}
+		if reqBytes, merr := json.Marshal(stopReq); merr == nil {
+			channel := fmt.Sprintf("chat:request:%s", r.ID.String())
+			if perr := r.hub.redis.Publish(context.Background(), channel, reqBytes).Err(); perr != nil {
+				r.logger.Error("failed to publish stop to redis", zap.Error(perr))
+			}
+		} else {
+			r.logger.Error("failed to marshal stop request frame", zap.Error(merr))
+		}
 		// Mark the turn as explicitly stopped so the client can distinguish a
 		// user-stopped turn from an interrupted one and skip auto re-submission.
 		if err := r.store.MarkChatStopped(context.Background(), r.ID, time.Now().UTC()); err != nil {

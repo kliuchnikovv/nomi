@@ -97,3 +97,17 @@ func (s *Storage) DeleteOAuthTokenByProfileProvider(ctx context.Context, profile
 		Where("profile_id = ? AND provider = ?", profileID, provider).
 		Delete(&OAuthToken{}).Error
 }
+
+// DeleteOAuthTokenByUserAndEmail hard-deletes the credential for a user's
+// integration. Called when an integration is disconnected so the token doesn't
+// linger (a reconnect would otherwise create a second row, since SaveOAuthToken
+// only matches deleted_at IS NULL). When accountEmail is empty, all tokens for
+// the provider are removed.
+func (s *Storage) DeleteOAuthTokenByUserAndEmail(ctx context.Context, userID uuid.UUID, provider, accountEmail string) error {
+	q := s.DB.WithContext(ctx).Unscoped().
+		Where("user_id = ? AND provider = ?", userID, provider)
+	if accountEmail != "" {
+		q = q.Where("account_email = ?", accountEmail)
+	}
+	return q.Delete(&OAuthToken{}).Error
+}

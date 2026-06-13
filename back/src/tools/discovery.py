@@ -29,10 +29,13 @@ def _inject_integration_id(
 ) -> dict:
     """Supply `integration_id` for client methods that need it.
 
-    Client IMAP methods identify the account by `integration_id`, but the device
-    UUID differs from the server UUID stored in oauth_tokens. We inject the
-    account's display_name (email address) instead — the device's IMAPEmailClient
-    falls back to getIntegrationByEmail() when a UUID lookup misses.
+    Client IMAP methods identify the account by `integration_id`. The device can
+    resolve EITHER value: a UUID (matched directly against its local credential
+    store, kept in sync with the server id via reconciliation) OR an email
+    address (resolved by natural key provider+email in IMAPEmailClient). We send
+    the account's display_name (email) when available because it survives any
+    residual UUID divergence between server and device; otherwise we fall back to
+    the account UUID.
     """
     if not account_id or account_id == "*":
         return params

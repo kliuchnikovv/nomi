@@ -90,6 +90,16 @@ func (h *IntegrationsHandler) DeleteIntegration(c *gin.Context) {
 		h.logger.Warn("failed to clean up plugin data", zap.Error(err), zap.String("provider", integration.Provider))
 	}
 
+	// Clean up the stored OAuth/IMAP credential so it doesn't linger after
+	// disconnect (and so a reconnect doesn't create a duplicate row).
+	if err := h.store.DeleteOAuthTokenByUserAndEmail(
+		c.Request.Context(), userID, integration.Provider, integration.AccountEmail,
+	); err != nil {
+		h.logger.Warn("failed to delete oauth token", zap.Error(err),
+			zap.String("provider", integration.Provider),
+			zap.String("account_email", integration.AccountEmail))
+	}
+
 	// Delete the integration itself
 	if err := h.store.DB.Delete(&integration).Error; err != nil {
 		h.logger.Error("failed to delete integration", zap.Error(err))

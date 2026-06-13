@@ -55,12 +55,14 @@ class IMAPEmailClient {
             integrationId,
         );
 
-        if (!credentials) {
-            // discovery_tool passes display_name (email) as integration_id because
-            // the server UUID differs from the device-local UUID. Fall back to
-            // looking up the integration by email address.
+        if (!credentials && integrationId.includes('@')) {
+            // discovery_tool passes display_name (the email) as integration_id
+            // because the server UUID can differ from the device-local UUID.
+            // Resolve by natural key (provider + email) — the integration is
+            // stored under provider 'imap' (see manifest name + connectImap),
+            // NOT 'imap_email'.
             const byEmail = await integrationStorage.getIntegrationByEmail(
-                'imap_email',
+                'imap',
                 integrationId,
             );
             if (byEmail) {
