@@ -137,8 +137,20 @@ def _parse_steps(text: str, goal: str) -> list[str]:
 
 
 async def _agent_text(agent: Any, prompt: str) -> str:
-    """Run the agent once (non-streaming) and return its text content."""
+    """Run the agent once and return its text content.
+
+    NomiAgent.arun is an async def that returns an async generator
+    (_stream_with_dedup). Await the coroutine first, then consume the
+    generator, keeping the last non-empty content chunk.
+    """
     result = await agent.arun(prompt)
+    if hasattr(result, "__aiter__"):
+        last_content = ""
+        async for chunk in result:
+            text = getattr(chunk, "content", None)
+            if isinstance(text, str) and text:
+                last_content = text
+        return last_content
     content = getattr(result, "content", None)
     return content if isinstance(content, str) else str(result)
 
