@@ -283,8 +283,10 @@ type ProcessedPart =
     | { type: 'group'; parts: ContentPart[] };
 
 // Memoized content parts processor.
-// All tool_call and reasoning parts are merged into a single collapsible group
-// placed before the text response, regardless of interspersed short text fragments.
+// Parts are rendered in arrival order: consecutive tool_call/reasoning parts are
+// grouped into a single CollapsibleSteps block, but a group boundary resets each
+// time a text part appears. This preserves natural interleaving:
+//   text-A → [tool-1, reasoning-1] → text-B → [tool-2] → text-C
 function useProcessedParts(
     parts: ContentPart[],
     showToolCalls: boolean,
@@ -293,33 +295,38 @@ function useProcessedParts(
     return useMemo(() => {
         if (!parts || parts.length === 0) return [];
 
-        const groupParts: ContentPart[] = [];
-        const textItems: string[] = [];
+        const result: ProcessedPart[] = [];
+        let pendingGroup: ContentPart[] = [];
+
+        const flushGroup = () => {
+            if (pendingGroup.length > 0) {
+                result.push({ type: 'group', parts: pendingGroup });
+                pendingGroup = [];
+            }
+        };
 
         for (const part of parts) {
             if (part.type === 'tool_call' && !showToolCalls) continue;
             if (part.type === 'reasoning' && !showReasoning) continue;
-            if (part.type === 'text' && isLogMessage(part.text)) continue;
 
             const isTextLike =
                 part.type === 'text' ||
                 (part as any).type === 'member_response';
+
             if (isTextLike) {
                 const txt: string =
                     part.type === 'text' ? part.text : (part as any).text;
-                if (txt?.trim()) textItems.push(txt);
+                if (isLogMessage(txt)) continue;
+                if (txt?.trim()) {
+                    flushGroup();
+                    result.push({ type: 'text', text: txt });
+                }
             } else if (part.type === 'tool_call' || part.type === 'reasoning') {
-                groupParts.push(part);
+                pendingGroup.push(part);
             }
         }
 
-        const result: ProcessedPart[] = [];
-        if (groupParts.length > 0) {
-            result.push({ type: 'group', parts: groupParts });
-        }
-        for (const text of textItems) {
-            result.push({ type: 'text', text });
-        }
+        flushGroup();
         return result;
     }, [parts, showToolCalls, showReasoning]);
 }

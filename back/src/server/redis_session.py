@@ -1029,12 +1029,12 @@ class RedisSession:
             client_tool_runner = (
                 self._send_client_action_and_wait if self.redis_worker else None
             )
-            # Expose start_background_task only on a normal chat turn — never
-            # inside a task run (a task must not spawn sub-tasks via this tool).
-            suppress_bg = getattr(self, "_suppress_background_tasks", False)
+            # Inside a task run we (a) don't expose start_background_task (a task
+            # must not spawn sub-tasks) and (b) relax the sandbox engineer limits.
+            in_task_run = getattr(self, "_in_task_run", False)
             task_spawner = (
                 self._spawn_background_task
-                if (self.redis_worker and not suppress_bg)
+                if (self.redis_worker and not in_task_run)
                 else None
             )
             bot_identity = payload.get("bot_identity") or None
@@ -1058,6 +1058,7 @@ class RedisSession:
                 single_chat_mode=self.single_chat_mode,
                 storage_backend=storage_backend or self.storage_backend,
                 task_spawner=task_spawner,
+                task_mode=in_task_run,
             )
         except Exception as e:
             logger.error(

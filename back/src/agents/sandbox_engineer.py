@@ -44,6 +44,7 @@ def build_sandbox_engineer_agent(
     sandbox_tools: Toolkit,
     db=None,
     debug_mode: bool = False,
+    tool_call_limit: int = 25,
 ) -> Agent:
     """Build the Sandbox Engineer sub-agent.
 
@@ -57,6 +58,8 @@ def build_sandbox_engineer_agent(
             so the engineer operates on the same per-user/project sandbox VM.
         db: Optional db; defaults to None (the engineer is ephemeral per delegation).
         debug_mode: Enable Agno debug logging.
+        tool_call_limit: Max tool calls per delegation. Raised in task mode where
+            runs are long-lived (the task runner + STOP own cancellation).
     """
     return Agent(
         name="Sandbox Engineer",
@@ -64,7 +67,7 @@ def build_sandbox_engineer_agent(
         tools=[sandbox_tools],
         instructions=SANDBOX_ENGINEER_INSTRUCTIONS,
         description="Engineer that sets up the environment and runs code in an isolated Linux sandbox.",
-        tool_call_limit=25,
+        tool_call_limit=tool_call_limit,
         markdown=True,
         add_history_to_context=False,
         add_datetime_to_context=False,

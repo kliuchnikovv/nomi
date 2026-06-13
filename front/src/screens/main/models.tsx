@@ -162,3 +162,43 @@ export type Frame = {
     payload: any;
     error: any;
 };
+
+// Long-running autonomous agent tasks ("background work Nomi runs for you").
+export type AgentTaskStatus =
+    | 'planning'
+    | 'running'
+    | 'waiting_input'
+    | 'paused'
+    | 'done'
+    | 'failed'
+    | 'cancelled';
+
+export type AgentTaskStep = {
+    id: number;
+    title: string;
+    status: 'pending' | 'running' | 'done';
+    result: string;
+};
+
+export type AgentTask = {
+    id: string;
+    user_id: string;
+    chat_id: string;
+    goal: string;
+    status: AgentTaskStatus;
+    plan: AgentTaskStep[] | null;
+    result: string;
+    created_at: string;
+    updated_at: string;
+    finished_at: string | null;
+};
+
+export type AgentTaskEvent = {
+    id: string;
+    task_id: string;
+    seq: number;
+    // 'plan_update' | 'step_started' | 'step_done' | 'log' | 'approval_request' | 'error' | 'done'
+    kind: string;
+    payload: any;
+    created_at: string;
+};

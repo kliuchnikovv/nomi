@@ -360,6 +360,7 @@ class AgentFactory:
         single_chat_mode: bool = False,
         storage_backend: StorageBackend | None = None,
         task_spawner: Callable[[str], Awaitable[str]] | None = None,
+        task_mode: bool = False,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -615,24 +616,45 @@ class AgentFactory:
             )
             if sandbox_tool is not None:
                 from src.agents.sandbox_engineer import build_sandbox_engineer_agent
-                from src.tools.delegation import DelegationTools
+                from src.tools.delegation import DELEGATION_TIMEOUT, DelegationTools
+
+                # In task mode runs are long-lived: relax the engineer's tool-call
+                # cap and drop the per-delegation wall-clock timeout (the task
+                # runner + STOP own cancellation). Both are env-overridable.
+                if task_mode:
+                    engineer_tool_limit = int(
+                        os.getenv("TASK_SANDBOX_TOOL_CALL_LIMIT", "200")
+                    )
+                    delegation_timeout = None
+                else:
+                    engineer_tool_limit = int(
+                        os.getenv("SANDBOX_TOOL_CALL_LIMIT", "25")
+                    )
+                    delegation_timeout = DELEGATION_TIMEOUT
 
                 registry = {
                     "sandbox_engineer": (
-                        lambda sb=sandbox_tool, m=model: build_sandbox_engineer_agent(
+                        lambda sb=sandbox_tool, m=model, lim=engineer_tool_limit: build_sandbox_engineer_agent(
                             model=m,
                             sandbox_tools=sb,
                             db=None,
                             debug_mode=self._debug_mode,
+                            tool_call_limit=lim,
                         )
                     )
                 }
                 # Drop the raw sandbox toolkit from Nomi's own tools — it now reaches
                 # the sandbox only by delegating to the engineer.
                 tools = [t for t in tools if t is not sandbox_tool]
-                tools.append(DelegationTools(registry=registry))
+                tools.append(
+                    DelegationTools(registry=registry, timeout=delegation_timeout)
+                )
                 logger.info(
-                    "[Factory] Wired delegate_to(sandbox_engineer) and removed raw sandbox tool"
+                    "[Factory] Wired delegate_to(sandbox_engineer) (task_mode=%s, "
+                    "tool_limit=%s, timeout=%s)",
+                    task_mode,
+                    engineer_tool_limit,
+                    delegation_timeout,
                 )
         except Exception as e:
             logger.warning("[Factory] Failed to wire delegation tool: %s", e)

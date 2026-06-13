@@ -91,6 +91,13 @@ const KNOWN_TOOL_DISPLAY: Record<string, { name: string; icon: string }> = {
 
     // Delegation
     delegate_to: { name: 'Delegating', icon: 'account-arrow-right-outline' },
+
+    // Sandbox (isolated code-execution environment)
+    exec_command: { name: 'Running command', icon: 'console-line' },
+    upload_file: { name: 'Uploading file', icon: 'file-upload-outline' },
+    download_file: { name: 'Downloading file', icon: 'file-download-outline' },
+    list_files: { name: 'Listing files', icon: 'file-multiple-outline' },
+    clone_repo: { name: 'Cloning repository', icon: 'source-branch' },
 };
 
 /**

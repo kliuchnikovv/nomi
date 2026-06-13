@@ -420,6 +420,18 @@ export const projectsApi = {
         apiClient.delete<void>(`${API_URL()}/projects/${id}`),
 };
 
+export const tasksApi = {
+    list: () =>
+        apiClient.get<import('./screens/main/models').AgentTask[]>(
+            `${API_URL()}/tasks`,
+        ),
+    get: (id: string) =>
+        apiClient.get<{
+            task: import('./screens/main/models').AgentTask;
+            events: import('./screens/main/models').AgentTaskEvent[];
+        }>(`${API_URL()}/tasks/${id}`),
+};
+
 export const briefingApi = {
     getBriefing: (context?: any) =>
         apiClient.post<any>(`${API_URL()}/briefing`, { context }),

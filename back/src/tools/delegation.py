@@ -27,9 +27,16 @@ class DelegationTools(Toolkit):
     built lazily (only when actually delegated to).
     """
 
-    def __init__(self, registry: dict[str, AgentBuilder]):
+    def __init__(
+        self,
+        registry: dict[str, AgentBuilder],
+        timeout: float | None = DELEGATION_TIMEOUT,
+    ):
         super().__init__(name="delegation")
         self._registry = registry
+        # Wall-clock cap per delegation. None disables it (task mode, where the
+        # task runner + STOP own cancellation and runs are meant to be long).
+        self._timeout = timeout
         # Surface available targets in the tool description so the model knows who
         # it can delegate to.
         targets = ", ".join(sorted(registry)) or "(none)"
@@ -69,8 +76,9 @@ class DelegationTools(Toolkit):
         logger.info("[Delegation] Delegating to '%s'", agent)
         try:
             target = builder()
+            # timeout=None → no wall-clock cap (still cancellable via STOP).
             result: Any = await asyncio.wait_for(
-                target.arun(task), timeout=DELEGATION_TIMEOUT
+                target.arun(task), timeout=self._timeout
             )
         except asyncio.CancelledError:
             # Stop button: must propagate so the sub-agent run is actually cancelled.
@@ -78,12 +86,12 @@ class DelegationTools(Toolkit):
             raise
         except asyncio.TimeoutError:
             logger.warning(
-                "[Delegation] Delegation to '%s' timed out after %ds",
+                "[Delegation] Delegation to '%s' timed out after %ss",
                 agent,
-                DELEGATION_TIMEOUT,
+                self._timeout,
             )
             return (
-                f"Delegation to '{agent}' exceeded the {DELEGATION_TIMEOUT}s time limit "
+                f"Delegation to '{agent}' exceeded the {self._timeout}s time limit "
                 f"and was stopped. The task may be too large; try a smaller, more specific task."
             )
         except Exception as exc:  # noqa: BLE001

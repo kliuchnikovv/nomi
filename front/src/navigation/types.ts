@@ -28,6 +28,7 @@ export type SettingsStackParamList = {
 export type DashboardStackParamList = {
     DashboardHome: undefined;
     Tasks: undefined;
+    TaskDetail: { taskId: string };
 };
 
 // Projects nested stack (inside the Projects tab)

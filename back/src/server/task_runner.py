@@ -254,8 +254,8 @@ async def build_and_run(
     )
     # Force the full assistant agent so the runner can delegate to the sandbox.
     payload = {**payload, "agent_type": payload.get("agent_type") or "nomi"}
-    # A task must not be able to spawn further background tasks recursively.
-    session._suppress_background_tasks = True
+    # Task-run mode: no recursive background tasks + relaxed sandbox limits.
+    session._in_task_run = True
     await session.build_agent_instance(payload)
 
     runner = TaskRunner(
