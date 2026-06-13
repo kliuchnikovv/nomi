@@ -107,7 +107,7 @@ const CONNECTOR_COLOR_MAP: Partial<Record<string, keyof ThemePalette>> = {
 
 function buildConnectors(): Connector[] {
     const integrations = getAllIntegrations();
-    return integrations.map((m) => ({
+    return integrations.map(m => ({
         id: m.id,
         name: m.displayName,
         toolKey: m.id,
@@ -126,6 +126,7 @@ export interface ConnectorContextType {
     getIntegrations: () => Promise<void>;
     toggleTool: (configID: string, enabled: boolean) => Promise<void>;
     startOAuth: (provider: string) => Promise<void>;
+    startGitHubApp: () => Promise<void>;
     deleteIntegration: (id: string) => Promise<void>;
     connectTelegram: (code: string) => Promise<void>;
     connectImap: (email: string, password: string) => Promise<void>;

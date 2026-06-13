@@ -59,8 +59,13 @@ const isYandexEmail = (email: string) =>
     YANDEX_DOMAINS.some(d => email.toLowerCase().endsWith(`@${d}`));
 
 export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
-    const { startOAuth, toggleTool, connectTelegram, connectImap } =
-        useConnectors();
+    const {
+        startOAuth,
+        startGitHubApp,
+        toggleTool,
+        connectTelegram,
+        connectImap,
+    } = useConnectors();
     const { theme, palette } = useTheme();
     const sharedStyles = useMemo(
         () => getStyles(theme, palette),
@@ -244,6 +249,20 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
             setImapPassword('');
             setImapError(null);
             setImapModalVisible(true);
+            return;
+        }
+        // GitHub uses the GitHub App installation flow, not plain OAuth.
+        if (connector.id === 'github' || connector.oauthProvider === 'github') {
+            try {
+                await startGitHubApp();
+                onSuccess?.();
+            } catch (err) {
+                setErrorMsg(
+                    err instanceof Error
+                        ? err.message
+                        : 'Failed to start GitHub App installation',
+                );
+            }
             return;
         }
         // Default: OAuth flow

@@ -74,6 +74,7 @@ func New(
 		}()
 		toolsHandler          = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey)
 		integrationsHandler   = handlers.NewIntegrationsHandler(ctr.Storage, logger)
+		githubAppHandler      = handlers.NewGitHubAppHandler(logger, cfg, ctr.Storage)
 		botIdentityHandler    = handlers.NewBotIdentityHandler(ctr.Storage, logger)
 		planDocumentsHandler  = handlers.NewPlanDocumentsHandler(ctr.Storage, logger)
 		memoriesHandler       = handlers.NewMemoriesHandler(ctr.Storage, logger)
@@ -234,6 +235,11 @@ func New(
 	r.DELETE("/api/integrations/:id", wrapWithAuth(integrationsHandler.DeleteIntegration, authMiddleware))
 	// IMAP credentials stored server-side so the brain can run email tools without the device.
 	r.POST("/api/integrations/imap/credentials", wrapWithAuth(mobileOAuthHandler.StoreImapCredentials, authMiddleware))
+
+	// GitHub App installation flow: authed endpoint returns the install URL; the
+	// callback is public (user identified via signed state) and persists installation_id.
+	r.GET("/api/integrations/github/app/install", wrapWithAuth(githubAppHandler.Install, authMiddleware))
+	r.GET("/api/integrations/github/app/callback", githubAppHandler.Callback)
 
 	// File Upload API
 	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))

@@ -287,8 +287,14 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                     return;
                 }
 
-                // Legacy flow: backend already handled tokens
-                if (status === 'ok' && provider) {
+                // GitHub App install (no code exchange): backend already saved the
+                // installation and the integration row via the signed-state callback.
+                if (status === 'cancelled') {
+                    setAuthStatus('Connection cancelled');
+                } else if (
+                    (status === 'ok' || status === 'installed') &&
+                    provider
+                ) {
                     const labelEmail = accountEmail || email;
                     setAuthStatus(
                         `Connected ${provider}${
@@ -496,6 +502,34 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         },
         [openOAuthFlow],
     );
+
+    // GitHub uses a GitHub App installation flow (not plain OAuth): fetch the
+    // install URL, open it, and let handleOAuthUrl handle the post-install return.
+    const startGitHubApp = React.useCallback(async () => {
+        try {
+            setPendingProvider('github');
+            const apiUrl = getApiUrl();
+            const token = authStore.getToken();
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(
+                `${apiUrl}/integrations/github/app/install`,
+                { headers },
+            );
+            if (!res.ok) {
+                throw new Error('Failed to get GitHub App install URL');
+            }
+            const data = await res.json();
+            if (data.install_url) {
+                await openOAuthFlow(data.install_url);
+            }
+        } catch (err) {
+            console.warn('Failed to start GitHub App installation', err);
+            setPendingProvider(null);
+            setAuthStatus('Failed to start GitHub App installation');
+            throw err;
+        }
+    }, [openOAuthFlow]);
 
     async function toggleTool(configID: string, enabled: boolean) {
         const integration = configs.find(
@@ -763,6 +797,7 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         getIntegrations,
         toggleTool,
         startOAuth,
+        startGitHubApp,
         deleteIntegration,
         connectTelegram,
         connectImap,
