@@ -712,7 +712,7 @@ export function BrowserTab({ onSuccess }: { onSuccess?: () => void } = {}) {
                             Send{' '}
                             <Text style={{ fontWeight: '700' }}>/start</Text> to{' '}
                             <Text style={{ fontWeight: '700' }}>
-                                @genie_bot
+                                @nomi_aibot
                             </Text>{' '}
                             in Telegram, then enter the 6-digit code here.
                         </Text>

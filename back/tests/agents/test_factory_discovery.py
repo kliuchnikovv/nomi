@@ -41,7 +41,15 @@ async def test_factory_builds_only_discovery_tool_when_flag_set(monkeypatch):
         client_tool_runner=AsyncMock(),
     )
 
-    assert any(getattr(t, "name", None) == "discovery_tool" for t in captured_tools)
+    names = {getattr(t, "name", None) for t in captured_tools}
+    assert "discovery_tool" in names
+    # ask_user stays a direct tool (interactive primitive — can't route via discovery)
+    assert "user_interaction" in names
+    # The auxiliary local toolkits are consolidated behind discovery_tool, so they
+    # must NOT leak into the LLM-visible tool surface for the nomi agent.
+    assert names.isdisjoint(
+        {"maps", "watch", "notification", "planning", "projects", "user_memory"}
+    ), names
 
 
 @pytest.mark.asyncio

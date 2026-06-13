@@ -270,6 +270,76 @@ class AgentFactory:
         # Add support for other providers as needed
         raise ValueError(f"Unsupported model: {model_name}")
 
+    def _build_local_toolkits(
+        self,
+        *,
+        user_id: str | None,
+        client_tool_runner: Callable[[str, str, dict], Awaitable[str]] | None,
+        user_location: str | None,
+    ) -> list[Toolkit]:
+        """Build the in-process auxiliary toolkits (planning, projects, maps,
+        remember_this, notification, watch).
+
+        These have no plugin manifest/credentials — they carry their session deps
+        directly. They are either consolidated behind discovery_tool or appended
+        to the agent's tool list, depending on mode (see ``build``). Each toolkit
+        keeps its original guard; failures are logged and skipped.
+        """
+        local: list[Toolkit] = []
+
+        if client_tool_runner:
+            try:
+                from src.tools.planning import PlanningTools
+
+                planning_tool = PlanningTools()
+                planning_tool.client_tool_runner = client_tool_runner
+                local.append(planning_tool)
+            except Exception as e:
+                logger.warning("[Factory] Failed to build planning tool: %s", e)
+
+        if user_id:
+            try:
+                from src.tools.projects import ProjectsTools
+
+                db_url = os.getenv("DB_DSN", "")
+                if db_url:
+                    local.append(ProjectsTools(db_url=db_url, user_id=user_id))
+            except Exception as e:
+                logger.warning("[Factory] Failed to build projects tool: %s", e)
+
+        try:
+            from src.tools.maps import MapsTool
+
+            local.append(MapsTool(user_location=user_location))
+        except Exception as e:
+            logger.warning("[Factory] Failed to build MapsTool: %s", e)
+
+        if user_id and self._knowledge is not None:
+            try:
+                from src.tools.user_memory import UserMemoryTools
+
+                local.append(UserMemoryTools(knowledge=self._knowledge, user_id=user_id))
+            except Exception as e:
+                logger.warning("[Factory] Failed to build UserMemoryTools: %s", e)
+
+        if user_id:
+            try:
+                from src.tools.notification import NotificationTools
+
+                local.append(NotificationTools(user_id=user_id))
+            except Exception as e:
+                logger.warning("[Factory] Failed to build NotificationTools: %s", e)
+
+        if user_id:
+            try:
+                from src.tools.watch import WatchTools
+
+                local.append(WatchTools(user_id=user_id))
+            except Exception as e:
+                logger.warning("[Factory] Failed to build WatchTools: %s", e)
+
+        return local
+
     async def build(
         self,
         session_id: str,
@@ -310,21 +380,46 @@ class AgentFactory:
 
         tools: list[Toolkit | Any] = []
 
-        if (
+        # Effective agent type for tool-surface decisions (command_desc.type is a
+        # team override; payload agent_type is authoritative for nomi/planner/list).
+        effective_type = (
+            (command_desc.get("type") if command_desc else None) or agent_type or "nomi"
+        ).lower()
+
+        discovery_mode = (
             os.getenv("USE_DISCOVERY_TOOL") == "1"
-            and user_id
-            and client_tool_runner
-            and not (agent_type and agent_type.lower() == "list")
-        ):
+            and bool(user_id)
+            and bool(client_tool_runner)
+            and effective_type != "list"
+        )
+        # In discovery mode the per-integration tools collapse into discovery_tool.
+        # We also consolidate the in-process "auxiliary" toolkits (maps, reminders,
+        # etc.) behind discovery_tool to shrink the LLM-visible tool surface — but
+        # NOT for the planner, which calls patch_plan_document directly.
+        consolidate_local = discovery_mode and effective_type != "planner"
+
+        # Build the consolidatable local toolkits up front so they can be handed to
+        # discovery_tool (consolidate) or appended directly (legacy/planner).
+        local_tools = self._build_local_toolkits(
+            user_id=user_id,
+            client_tool_runner=client_tool_runner,
+            user_location=user_location,
+        )
+
+        if discovery_mode:
             # Discovery mode: single routing tool replaces all per-integration tools
             discovery_fn = build_discovery_tool(
                 user_id=user_id,
                 config_client=self._config_client,
                 client_tool_runner=client_tool_runner,
+                local_tools=local_tools if consolidate_local else None,
             )
             tools = [discovery_fn]
             logger.info(
-                "[Factory] Discovery mode: built discovery_tool for user=%s", user_id
+                "[Factory] Discovery mode: built discovery_tool for user=%s "
+                "(consolidated %d local toolkits)",
+                user_id,
+                len(local_tools) if consolidate_local else 0,
             )
         else:
             # Legacy mode: unchanged existing code
@@ -494,76 +589,18 @@ class AgentFactory:
             except Exception as e:
                 logger.warning("[Factory] Failed to add user_interaction tool: %s", e)
 
-        # Add planning tool (patch_plan_document) - available to all agents with client_tool_runner
-        if client_tool_runner:
-            try:
-                from src.tools.planning import PlanningTools
-
-                planning_tool = PlanningTools()
-                planning_tool.client_tool_runner = client_tool_runner
-                tools = list(tools) + [planning_tool]
-                logger.info("[Factory] Added planning tool (patch_plan_document)")
-            except Exception as e:
-                logger.warning("[Factory] Failed to add planning tool: %s", e)
-
-        # Add projects tool (list_projects) - available to all agents with a user_id
-        if user_id:
-            try:
-                from src.tools.projects import ProjectsTools
-
-                db_url = os.getenv("DB_DSN", "")
-                if db_url:
-                    projects_tool = ProjectsTools(db_url=db_url, user_id=user_id)
-                    tools = list(tools) + [projects_tool]
-                    logger.info("[Factory] Added projects tool (list_projects)")
-            except Exception as e:
-                logger.warning("[Factory] Failed to add projects tool: %s", e)
-
-        # Add maps tool (open_route, search_places) - available to all agents
-        try:
-            from src.tools.maps import MapsTool
-
-            maps_tool = MapsTool(user_location=user_location)
-            tools = list(tools) + [maps_tool]
-            logger.info("[Factory] Added MapsTool (open_route, search_places) user_location=%r", user_location)
-        except Exception as e:
-            logger.warning("[Factory] Failed to add MapsTool: %s", e)
-
-        # Capture built tools BEFORE adding SchedulerTools (to avoid including it in saved tools)
-        # We pass the actual Toolkit objects, not ToolSpec configs
-
-        # Add remember_this tool — explicit RAG indexing by agent request
-        if user_id and self._knowledge is not None:
-            try:
-                from src.tools.user_memory import UserMemoryTools
-
-                memory_tool = UserMemoryTools(knowledge=self._knowledge, user_id=user_id)
-                tools = list(tools) + [memory_tool]
-                logger.info("[Factory] Added UserMemoryTools (remember_this) for user=%s", user_id)
-            except Exception as e:
-                logger.warning("[Factory] Failed to add UserMemoryTools: %s", e)
-
-        # Add notification tool (schedule_notification) - available to all agents with a user_id
-        if user_id:
-            try:
-                from src.tools.notification import NotificationTools
-
-                notification_tool = NotificationTools(user_id=user_id)
-                tools = list(tools) + [notification_tool]
-                logger.info("[Factory] Added NotificationTools (schedule_notification) for user=%s", user_id)
-            except Exception as e:
-                logger.warning("[Factory] Failed to add NotificationTools: %s", e)
-
-        # Add watch tool (self-reminders) - available to all agents with a user_id
-        if user_id:
-            try:
-                from src.tools.watch import WatchTools
-
-                watch_tool = WatchTools(user_id=user_id)
-                tools = list(tools) + [watch_tool]
-                logger.info("[Factory] Added WatchTools (create/list/cancel reminder) for user=%s", user_id)
-            except Exception as e:
-                logger.warning("[Factory] Failed to add WatchTools: %s", e)
+        # Auxiliary in-process toolkits (planning, projects, maps, remember_this,
+        # notification, watch) were built up front as `local_tools`. In discovery
+        # mode for nomi they are consolidated behind discovery_tool to shrink the
+        # LLM-visible tool surface; otherwise (legacy mode, or the planner which
+        # calls patch_plan_document directly) expose them as direct tools.
+        if not consolidate_local:
+            tools = list(tools) + local_tools
+            logger.info(
+                "[Factory] Added %d local toolkits directly: %s",
+                len(local_tools),
+                [getattr(t, "name", "?") for t in local_tools],
+            )
 
         # Wrap sandbox access in a delegate_to sub-agent. When the user has the
         # sandbox integration enabled, Nomi delegates coding/env tasks to a Sandbox

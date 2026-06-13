@@ -2,6 +2,7 @@
 import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from agno.tools import Toolkit
 from src.tools.discovery import build_discovery_tool
 from src.tools.factory import ToolsConfig
 from src.tools.router import RoutingDecision
@@ -558,6 +559,160 @@ async def test_discovery_tool_executes_for_all_accounts_with_asterisk(
     assert personal_result["result"] == "Recent emails from personal account"
 
     assert mock_executor.arun.call_count == 2
+
+
+class _FakeFunction:
+    """Mimics the slice of agno.tools.Function that discovery_tool depends on
+    (name/description/parameters/entrypoint + lazy process_entrypoint)."""
+
+    def __init__(self, name, entrypoint, parameters):
+        self.name = name
+        self.description = (entrypoint.__doc__ or "").strip()
+        self.entrypoint = entrypoint
+        self.parameters = parameters
+
+    def process_entrypoint(self):  # no-op; parameters are pre-supplied
+        pass
+
+
+class _FakeLocalToolkit(Toolkit):
+    """In-process toolkit exposing the real-agno interface (functions /
+    async_functions) that discovery_tool reads. The test harness stubs agno's
+    Toolkit, so we wire these dicts explicitly rather than via register()."""
+
+    def __init__(self):
+        super().__init__(name="watch")
+        params = {
+            "type": "object",
+            "properties": {
+                "context": {"type": "string"},
+                "fire_at": {"type": "string"},
+            },
+        }
+        self.functions = {
+            "list_reminders": _FakeFunction(
+                "list_reminders", self.list_reminders, {"type": "object", "properties": {}}
+            )
+        }
+        self.async_functions = {
+            "create_reminder": _FakeFunction(
+                "create_reminder", self.create_reminder, params
+            )
+        }
+
+    def list_reminders(self) -> str:
+        """List the active reminders."""
+        return "no reminders"
+
+    async def create_reminder(self, context: str, fire_at: str) -> str:
+        """Create a reminder."""
+        return f"set:{context}@{fire_at}"
+
+
+@pytest.mark.asyncio
+async def test_discovery_routes_to_local_toolkit_async_method(
+    mock_config_client, mock_runner, gmail_schema, monkeypatch
+):
+    """A routed local toolkit method is dispatched in-process (no registry/creds)."""
+    monkeypatch.setattr(
+        "src.tools.discovery.ToolRegistry.build", lambda c: gmail_schema
+    )
+    mock_router = MagicMock()
+    mock_router.decide.return_value = RoutingDecision(
+        action="execute",
+        tool="watch",
+        method="create_reminder",
+        account_id="",
+        params={"context": "check PR", "fire_at": "2026-06-13T15:00:00Z"},
+    )
+
+    fn = build_discovery_tool(
+        user_id="user1",
+        config_client=mock_config_client,
+        client_tool_runner=mock_runner,
+        local_tools=[_FakeLocalToolkit()],
+        router=mock_router,
+        executor=MagicMock(),
+    )
+
+    result = json.loads(await fn.entrypoint(request="remind me", context=""))
+    assert result["type"] == "result"
+    assert result["tool"] == "watch"
+    assert result["method"] == "create_reminder"
+    assert result["result"] == "set:check PR@2026-06-13T15:00:00Z"
+    # local path bypasses the integration client runner entirely
+    mock_runner.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_discovery_local_toolkit_sync_method_and_schema(
+    mock_config_client, monkeypatch
+):
+    """Local schemas are merged into the router input; sync methods execute too.
+
+    With no integrations connected, a local-only user is still routable.
+    """
+    monkeypatch.setattr("src.tools.discovery.ToolRegistry.build", lambda c: [])
+    captured = {}
+
+    def _decide(request, context, tools):
+        captured["tools"] = tools
+        return RoutingDecision(
+            action="execute", tool="watch", method="list_reminders", params={}
+        )
+
+    mock_router = MagicMock()
+    mock_router.decide.side_effect = _decide
+
+    fn = build_discovery_tool(
+        user_id="user1",
+        config_client=mock_config_client,
+        client_tool_runner=None,
+        local_tools=[_FakeLocalToolkit()],
+        router=mock_router,
+        executor=MagicMock(),
+    )
+
+    result = json.loads(await fn.entrypoint(request="my reminders", context=""))
+    assert result["type"] == "result"
+    assert result["result"] == "no reminders"
+    # the watch schema (with its methods) was offered to the router
+    watch_schema = next(s for s in captured["tools"] if s["name"] == "watch")
+    assert watch_schema["execution"] == "local"
+    method_names = {m["name"] for m in watch_schema["methods"]}
+    assert {"list_reminders", "create_reminder"} <= method_names
+
+
+@pytest.mark.asyncio
+async def test_discovery_local_unknown_method_returns_error(
+    mock_config_client, monkeypatch
+):
+    monkeypatch.setattr("src.tools.discovery.ToolRegistry.build", lambda c: [])
+    mock_router = MagicMock()
+    mock_router.decide.return_value = RoutingDecision(
+        action="execute", tool="watch", method="nonexistent", params={}
+    )
+
+    fn = build_discovery_tool(
+        user_id="user1",
+        config_client=mock_config_client,
+        client_tool_runner=None,
+        local_tools=[_FakeLocalToolkit()],
+        router=mock_router,
+        executor=MagicMock(),
+    )
+
+    result = json.loads(await fn.entrypoint(request="x", context=""))
+    assert result["type"] == "error"
+    assert result["tool"] == "watch"
+
+
+def test_discovery_description_advertises_local_capabilities():
+    """Local toolkit capabilities are advertised so the agent routes them here."""
+    from src.tools.discovery import _build_discovery_description
+
+    desc = _build_discovery_description([_FakeLocalToolkit()])
+    assert "reminders & follow-ups" in desc, desc
 
 
 def test_discovery_description_advertises_health_capability():

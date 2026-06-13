@@ -54,6 +54,8 @@ func New(cfg *config.Config) (*Storage, error) {
 		&PendingClientAction{},
 		&Heartbeat{},
 		&GitHubAppInstallation{},
+		&AgentTask{},
+		&AgentTaskEvent{},
 	); err != nil {
 		return nil, err
 	}

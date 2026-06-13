@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from typing import Any, Callable
 
-from agno.tools import Function
+from agno.tools import Function, Toolkit
 
 from src.tools.config import ToolConfigClient
 from src.tools.executor import ServerToolExecutor
@@ -13,14 +14,31 @@ from src.tools.router import ToolRouter
 
 logger = logging.getLogger(__name__)
 
+# Human-readable capability labels for the in-process "local" toolkits that are
+# routed through discovery_tool (maps, reminders, etc.). Keyed by Toolkit.name.
+# Used both to advertise the capability in the tool description and as the
+# router schema display_name. Unknown toolkit names fall back to the raw name.
+LOCAL_TOOL_LABELS: dict[str, str] = {
+    "maps": "maps & routes",
+    "watch": "reminders & follow-ups",
+    "notification": "notifications",
+    "planning": "day planning",
+    "projects": "projects",
+    "user_memory": "saving notes to memory",
+}
 
-def _build_discovery_description() -> str:
+
+def _build_discovery_description(local_tools: list[Toolkit] | None = None) -> str:
     """Build the discovery_tool description from loaded plugin manifests.
 
     The capability list is generated dynamically (never hardcoded) so newly
     added integrations — e.g. Apple Health — are advertised to the agent
     automatically. Without this, the agent only knows about whatever was
     hardcoded and silently skips routing requests for unlisted capabilities.
+
+    ``local_tools`` are the in-process toolkits (maps, reminders, etc.) that are
+    consolidated behind discovery_tool; their capabilities are advertised too so
+    the agent routes those requests here instead of looking for a direct tool.
     """
     capabilities: list[str] = ["web search"]
     from src.plugins.loader import load_plugins, get_manifests
@@ -41,6 +59,11 @@ def _build_discovery_description() -> str:
                 capabilities.append(label)
     except Exception:
         logger.warning("[Discovery] Failed to build capability list", exc_info=True)
+
+    for tk in local_tools or []:
+        label = LOCAL_TOOL_LABELS.get(tk.name, tk.name)
+        if label and label not in capabilities:
+            capabilities.append(label)
 
     return (
         "Execute any available action by describing what you need in natural "
@@ -185,11 +208,97 @@ async def _execute_for_all_accounts(
     )
 
 
+def _toolkit_functions(tk: Toolkit) -> dict[str, Function]:
+    """All registered Functions of a toolkit (Agno splits sync vs async)."""
+    return {**tk.functions, **tk.async_functions}
+
+
+def _local_schemas(local_tools: list[Toolkit]) -> list[dict[str, Any]]:
+    """Build router schemas for in-process toolkits routed via discovery_tool.
+
+    These toolkits have no plugin manifest, credentials, or accounts — they are
+    executed directly against the pre-built instance. We expose each method's
+    name/description/parameters so the router can pick one, marking the schema
+    ``execution: "local"`` and giving it no accounts.
+    """
+    schemas: list[dict[str, Any]] = []
+    for tk in local_tools:
+        methods: list[dict[str, Any]] = []
+        for fn in _toolkit_functions(tk).values():
+            # Agno populates Function.parameters lazily from the entrypoint
+            # signature/docstring; force it so the router sees the arg schema.
+            try:
+                fn.process_entrypoint()
+            except Exception:
+                logger.debug("[Discovery] process_entrypoint failed for %s", fn.name, exc_info=True)
+            methods.append(
+                {
+                    "name": fn.name,
+                    "description": fn.description or "",
+                    "parameters": fn.parameters or {"type": "object", "properties": {}},
+                }
+            )
+        schemas.append(
+            {
+                "name": tk.name,
+                "display_name": LOCAL_TOOL_LABELS.get(tk.name, tk.name),
+                "description": "",
+                "methods": methods,
+                "accounts": [],
+                "execution": "local",
+            }
+        )
+    return schemas
+
+
+async def _execute_local(tk: Toolkit, decision) -> str:
+    """Execute a routed method directly on an in-process toolkit instance."""
+    fn = _toolkit_functions(tk).get(decision.method)
+    if fn is None or not callable(getattr(fn, "entrypoint", None)):
+        return json.dumps(
+            {
+                "type": "error",
+                "error": f"Unknown method: {decision.method}",
+                "tool": decision.tool,
+                "method": decision.method,
+            }
+        )
+    try:
+        result = fn.entrypoint(**decision.params)
+        if inspect.iscoroutine(result):
+            result = await result
+        return json.dumps(
+            {
+                "type": "result",
+                "result": str(result) if result is not None else "",
+                "tool": decision.tool,
+                "method": decision.method,
+                "account": "",
+            }
+        )
+    except Exception:
+        logger.warning(
+            "[Discovery] Local tool error: tool=%s method=%s",
+            decision.tool,
+            decision.method,
+            exc_info=True,
+        )
+        return json.dumps(
+            {
+                "type": "error",
+                "error": "Tool execution failed",
+                "tool": decision.tool,
+                "method": decision.method,
+            }
+        )
+
+
 def build_discovery_tool(
     user_id: str,
     config_client: ToolConfigClient,
     client_tool_runner: Callable | None = None,
     *,
+    local_tools: list[Toolkit] | None = None,
     router: ToolRouter | None = None,
     executor: ServerToolExecutor | None = None,
 ) -> Function:
@@ -199,6 +308,9 @@ def build_discovery_tool(
     """
     _router = router or ToolRouter()
     _executor = executor or ServerToolExecutor()
+    _local_tools = local_tools or []
+    _local_index = {tk.name: tk for tk in _local_tools}
+    _local_schema_list = _local_schemas(_local_tools)
 
     async def _discovery_tool(request: str, context: str = "") -> str:
         """
@@ -231,7 +343,9 @@ def build_discovery_tool(
             )
             return json.dumps({"type": "error", "error": "Failed to load integrations"})
 
-        schemas = ToolRegistry.build(tools_config)
+        # Local (in-process) toolkits are always routable; integrations come from
+        # the user's config. Combine both so the router can pick either.
+        schemas = ToolRegistry.build(tools_config) + _local_schema_list
         if not schemas:
             return json.dumps({"type": "error", "error": "No integrations connected"})
 
@@ -294,6 +408,13 @@ def build_discovery_tool(
             return json.dumps(
                 {"type": "error", "error": f"No tool found for: {request}"}
             )
+
+        # Local toolkit path: dispatch directly to the in-process instance. These
+        # have no manifest/credentials/accounts, so they bypass the registry and
+        # ServerToolExecutor entirely.
+        local_tk = _local_index.get(decision.tool)
+        if local_tk is not None:
+            return await _execute_local(local_tk, decision)
 
         tool_schema = next((s for s in schemas if s["name"] == decision.tool), None)
         if not tool_schema:
@@ -463,7 +584,7 @@ def build_discovery_tool(
 
     return Function(
         name="discovery_tool",
-        description=_build_discovery_description(),
+        description=_build_discovery_description(_local_tools),
         parameters={
             "type": "object",
             "properties": {

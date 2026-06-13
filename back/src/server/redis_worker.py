@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 from typing import Any
 
 import redis.asyncio as redis
@@ -28,6 +29,10 @@ class RedisWorker:
 
         # Task registry (instance variable)
         self.active_tasks: dict[str, asyncio.Task] = {}
+        # Long-running background agent tasks, keyed by task_id. Kept separate
+        # from active_tasks so a chat turn's cleanup never kills a background
+        # task, and so STOP can target a specific task by id.
+        self.active_task_runs: dict[str, asyncio.Task] = {}
         # request_id currently being processed per chat — lets us tell a genuine
         # new turn (debounce-cancel) apart from a hub re-publish of the same turn
         # (ignore, so we don't kill the in-flight generation).
@@ -257,6 +262,45 @@ class RedisWorker:
                 exc_info=True,
             )
 
+    async def _start_task_run(self, chat_id: str, frame: Frame):
+        """Launch a long-running background agent task (detached from the turn).
+
+        Registered in active_task_runs by task_id so a chat turn's cleanup never
+        kills it and STOP can target it by id.
+        """
+        payload = dict(frame.payload or {})
+        task_id = str(payload.get("task_id") or uuid.uuid4())
+        payload["task_id"] = task_id
+        payload.setdefault("chat_id", chat_id)
+        logger.info("[RedisWorker] TASK_START %s (chat %s)", task_id, chat_id)
+
+        from src.server.task_runner import build_and_run
+
+        async def task_wrapped():
+            try:
+                await build_and_run(
+                    agent_factory=self.agent_factory,
+                    redis=self.redis,
+                    go_ws=self.go_ws,
+                    redis_worker=self,
+                    payload=payload,
+                )
+            except asyncio.CancelledError:
+                logger.warning("[RedisWorker] Task run %s cancelled", task_id)
+                raise
+            except Exception as e:  # noqa: BLE001
+                logger.error(
+                    "[RedisWorker] Task run %s error: %s", task_id, e, exc_info=True
+                )
+            finally:
+                if self.active_task_runs.get(task_id) is current_task:
+                    del self.active_task_runs[task_id]
+                    logger.info("[RedisWorker] Cleaned up task run %s", task_id)
+
+        # Detached: do NOT await — the run outlives this request handler.
+        current_task = asyncio.create_task(task_wrapped())
+        self.active_task_runs[task_id] = current_task
+
     async def _process_request(self, chat_id: str, raw_data: str):
         """Process the request logic."""
         # Use chat_id as task key.
@@ -272,6 +316,13 @@ class RedisWorker:
 
             if frame.op == Op.STOP:
                 logger.info("[RedisWorker] Received STOP for chat %s", chat_id)
+                # A STOP carrying a task_id targets a specific background task run.
+                stop_task_id = (frame.payload or {}).get("task_id")
+                if stop_task_id and stop_task_id in self.active_task_runs:
+                    logger.info("[RedisWorker] Cancelling task run %s", stop_task_id)
+                    self.active_task_runs[stop_task_id].cancel()
+                    return
+
                 # Set cancellation flag in Redis (expires in 60s)
                 if self.redis:
                     await self.redis.set(
@@ -281,6 +332,10 @@ class RedisWorker:
                 if chat_id in self.active_tasks:
                     self.active_tasks[chat_id].cancel()
                     # We don't remove it here immediately, let the task finish/cleanup
+                return
+
+            if frame.op == Op.TASK_START:
+                await self._start_task_run(chat_id, frame)
                 return
 
             if frame.op != Op.MESSAGE:

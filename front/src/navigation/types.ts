@@ -24,6 +24,12 @@ export type SettingsStackParamList = {
     MemoryScreen: undefined;
 };
 
+// Dashboard nested stack (inside the Dashboard tab)
+export type DashboardStackParamList = {
+    DashboardHome: undefined;
+    Tasks: undefined;
+};
+
 // Projects nested stack (inside the Projects tab)
 export type ProjectsStackParamList = {
     ProjectsList: undefined;
@@ -38,7 +44,7 @@ export type ProjectsStackParamList = {
 
 // Main bottom tab navigator
 export type RootTabParamList = {
-    Dashboard: undefined;
+    Dashboard: NavigatorScreenParams<DashboardStackParamList>; // Dashboard tab contains DashboardStack
     Planning: undefined;
     Chat: NavigatorScreenParams<ChatStackParamList>; // Chat tab contains ChatStack
     Projects: NavigatorScreenParams<ProjectsStackParamList>;

@@ -81,6 +81,7 @@ func New(
 		memoriesHandler       = handlers.NewMemoriesHandler(ctr.Storage, logger)
 		entitiesHandler       = handlers.NewEntitiesHandler(ctr.Storage, logger)
 		notificationsHandler  = handlers.NewNotificationsHandler(ctr.Storage)
+		agentTasksHandler     = handlers.NewAgentTasksHandler(ctr.Storage)
 		devicesHandler        = handlers.NewDevicesHandler(ctr.Storage)
 		heartbeatHandler      = handlers.NewHeartbeatHandler(ctr.Storage, logger)
 		workerHandler         = handlers.NewWorkerHandler(hubInstance, logger)
@@ -200,6 +201,11 @@ func New(
 	r.POST("/api/notifications", wrapWithAuth(notificationsHandler.Create, authMiddleware))
 	r.GET("/api/notifications", wrapWithAuth(notificationsHandler.List, authMiddleware))
 	r.DELETE("/api/notifications/:id", wrapWithAuth(notificationsHandler.Cancel, authMiddleware))
+
+	// Agent tasks API (long-running autonomous tasks)
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.GET("/api/tasks", wrapWithAuth(agentTasksHandler.List, authMiddleware))
+	r.GET("/api/tasks/:id", wrapWithAuth(agentTasksHandler.Get, authMiddleware))
 
 	// Device token registration
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route

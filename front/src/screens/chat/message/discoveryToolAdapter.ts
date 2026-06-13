@@ -142,6 +142,16 @@ function mciIcon(icon?: string): string | undefined {
 function resolvedLabel(env: any): { name: string; icon?: string } | null {
     if (!env?.tool) return null;
     const meta = getIntegrationMetadata(env.tool);
+    // In-process "local" toolkits (maps, watch, notification, planning, …) routed
+    // through discovery_tool aren't in the integration registry. Fall back to the
+    // per-method display map so they render with a friendly label + icon instead
+    // of a raw `watch · create_reminder`.
+    if (!meta) {
+        const byMethod = env.method && KNOWN_TOOL_DISPLAY[env.method];
+        if (byMethod) {
+            return { name: byMethod.name, icon: mciIcon(byMethod.icon) };
+        }
+    }
     const name =
         [meta?.displayName ?? env.tool, env.method]
             .filter(Boolean)

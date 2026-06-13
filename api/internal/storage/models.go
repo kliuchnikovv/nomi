@@ -142,6 +142,40 @@ type ProactiveEvent struct {
 	ProcessedAt    *time.Time     `gorm:"default:null"`
 }
 
+// AgentTask is a long-running, autonomous agent task ("background work Nomi
+// runs for you"). The agent decomposes Goal into a Plan of steps and executes
+// them, emitting progress as AgentTaskEvent rows. The user observes and steers
+// it via the Tasks screen.
+type AgentTask struct {
+	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID uuid.UUID `gorm:"type:uuid;not null;index:idx_agent_tasks_user_status,priority:1"`
+	// ChatID is the chat the task was started from (tasks are attached to a chat).
+	ChatID uuid.UUID `gorm:"type:uuid;not null;index"`
+	Goal   string    `gorm:"type:text;not null"`
+	// Status: 'planning' | 'running' | 'waiting_input' | 'paused' | 'done' | 'failed' | 'cancelled'.
+	Status string `gorm:"type:text;not null;default:'planning';index:idx_agent_tasks_user_status,priority:2"`
+	// Plan is a JSON array of steps: [{"id","title","status","result"}].
+	Plan datatypes.JSON `gorm:"type:jsonb"`
+	// Result is the final summary once the task is done/failed.
+	Result     string     `gorm:"type:text;not null;default:''"`
+	CreatedAt  time.Time  `gorm:"not null"`
+	UpdatedAt  time.Time  `gorm:"not null"`
+	FinishedAt *time.Time `gorm:"default:null"`
+}
+
+// AgentTaskEvent is an append-only progress entry for an AgentTask. The runner
+// writes these as it works so the client can replay the activity log.
+type AgentTaskEvent struct {
+	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	TaskID uuid.UUID `gorm:"type:uuid;not null;index:idx_agent_task_events_task_seq,priority:1"`
+	// Seq orders events within a task (monotonic per task).
+	Seq int `gorm:"not null;index:idx_agent_task_events_task_seq,priority:2"`
+	// Kind: 'plan_update' | 'step_started' | 'step_done' | 'log' | 'approval_request' | 'error' | 'done'.
+	Kind      string         `gorm:"type:text;not null"`
+	Payload   datatypes.JSON `gorm:"type:jsonb"`
+	CreatedAt time.Time      `gorm:"not null"`
+}
+
 // WatchReminder is a self-reminder the agent set on the user's behalf
 // ("remind me about Y at time T"). The scheduler converts due rows into
 // proactive "watch_reminder" events on each tick.

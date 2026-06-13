@@ -19,6 +19,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/llm"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
+	"github.com/kliuchnikovv/genie-api/internal/agenttask"
 	"github.com/kliuchnikovv/genie-api/internal/proactive"
 	"github.com/kliuchnikovv/genie-api/internal/scheduler"
 	"github.com/kliuchnikovv/genie-api/internal/server"
@@ -121,6 +122,13 @@ func main() {
 	go func() {
 		if err := decisionListener.Start(ctx); err != nil && err != context.Canceled {
 			logger.Error("decision listener stopped", zap.Error(err))
+		}
+	}()
+
+	agentTaskListener := agenttask.NewListener(ctr.Storage, ctr.Hub.Redis(), logger)
+	go func() {
+		if err := agentTaskListener.Start(ctx); err != nil && err != context.Canceled {
+			logger.Error("agent task listener stopped", zap.Error(err))
 		}
 	}()
 

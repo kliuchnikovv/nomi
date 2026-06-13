@@ -20,7 +20,7 @@ import { useMain, emptyChatID } from '../screens/main/context';
 // Used by screens that need a bottom spacer to clear the dock.
 export const TAB_BAR_ICON_HEIGHT = 72; // px above insets.bottom (56 pill + 8 gap + breathing room)
 
-import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
+import { DashboardStack } from './DashboardStack';
 import { PlannerScreen } from '../screens/planner/PlannerScreen';
 import { ChatStack } from './ChatStack';
 import { ProjectsStack } from './ProjectsStack';
@@ -315,7 +315,7 @@ export function MainTabs() {
                 tabBarStyle: { display: 'none' },
             }}
         >
-            <Tab.Screen name="Dashboard" component={DashboardScreen} />
+            <Tab.Screen name="Dashboard" component={DashboardStack} />
             <Tab.Screen name="Planning" component={PlannerScreen} />
             <Tab.Screen
                 name="Chat"

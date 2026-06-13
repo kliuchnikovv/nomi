@@ -17,6 +17,7 @@ import { WeatherWidget } from './components/WeatherWidget';
 import { DateWidget } from './components/DateWidget';
 import { RecentChatsWidget } from './components/RecentChatsWidget';
 import { UpdatesCard } from './components/UpdatesCard';
+import { TasksCard } from './components/TasksCard';
 import { PlaceholderWidget } from './components/PlaceholderWidget';
 import { TAB_BAR_ICON_HEIGHT } from '../../navigation/MainTabs';
 import type { RootTabParamList } from '../../navigation/types';
@@ -87,6 +88,9 @@ export const DashboardScreen = () => {
 
                 {/* Updates card — proactive messages chat (hidden when no updates_chat_id) */}
                 <UpdatesCard />
+
+                {/* Tasks card — entry point to background autonomous tasks */}
+                <TasksCard />
 
                 {/* Row 2: Recent Chats (full width) */}
                 <RecentChatsWidget />
