@@ -42,11 +42,22 @@ func (h *AgentTasksHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// A task is attached to a chat. If the client supplies one, it MUST belong
+	// to the authenticated user — otherwise the task (and its task_start frame
+	// published to chat:request:{chat_id}) would target someone else's chat
+	// (IDOR). When none is supplied, mint a fresh chat id for this task.
 	chatID := uuid.New()
 	if req.ChatID != "" {
-		if parsed, perr := uuid.Parse(req.ChatID); perr == nil {
-			chatID = parsed
+		parsed, perr := uuid.Parse(req.ChatID)
+		if perr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid chat_id"})
+			return
 		}
+		if _, cerr := h.storage.GetChat(c.Request.Context(), user.ID, parsed); cerr != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "chat not found or not owned by user"})
+			return
+		}
+		chatID = parsed
 	}
 
 	task := &storage.AgentTask{

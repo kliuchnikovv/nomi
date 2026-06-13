@@ -232,10 +232,7 @@ export const TaskDetailScreen = () => {
                                 styles.approval,
                                 {
                                     backgroundColor: theme.surface,
-                                    borderColor: statusColor(
-                                        'failed',
-                                        theme,
-                                    ),
+                                    borderColor: statusColor('failed', theme),
                                 },
                             ]}
                         >
