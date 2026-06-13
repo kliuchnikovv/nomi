@@ -75,6 +75,21 @@ type Integration struct {
 	UpdatedAt    time.Time `gorm:"not null"`
 }
 
+// GitHubAppInstallation maps a user to their GitHub App installation. Personal
+// installs only, so one installation per user (unique index on UserID).
+type GitHubAppInstallation struct {
+	ID             uuid.UUID `gorm:"type:uuid;primaryKey"`
+	UserID         uuid.UUID `gorm:"type:uuid;uniqueIndex"`
+	InstallationID int64     `gorm:"index"`
+	AccountLogin   string    `gorm:"type:text"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (GitHubAppInstallation) TableName() string {
+	return "github_app_installations"
+}
+
 // PluginData is a generic key-value store for plugin-specific data.
 // Each plugin can store multiple records per user (e.g. linked accounts, settings).
 type PluginData struct {

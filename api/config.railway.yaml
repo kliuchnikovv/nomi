@@ -40,6 +40,15 @@ token:
   jwt_secret: ${JWT_SECRET}
   encryption_key: ${ENCRYPTION_KEY}
 
+github:
+  webhook_secret: ${GITHUB_WEBHOOK_SECRET}
+  # GitHub App (fine-grained, per-installation tokens)
+  app_id: ${GITHUB_APP_ID}
+  private_key: ${GITHUB_APP_PRIVATE_KEY}
+  client_id: ${GITHUB_APP_CLIENT_ID}
+  client_secret: ${GITHUB_APP_CLIENT_SECRET}
+  app_slug: ${GITHUB_APP_SLUG}
+
 llm:
   base_url: ${LLM_BASE_URL}
 

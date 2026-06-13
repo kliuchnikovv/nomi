@@ -65,6 +65,27 @@ methods:
           type: string
           description: Directory path (default /workspace)
       required: []
+  - name: clone_repo
+    description: >-
+      Clone a GitHub repository into the sandbox workspace. Works for public
+      repos and, when a GitHub integration is connected, for the user's private
+      repos (auth handled server-side).
+    parameters:
+      type: object
+      properties:
+        owner:
+          type: string
+          description: Repository owner (user or organization)
+        repo:
+          type: string
+          description: Repository name
+        ref:
+          type: string
+          description: Optional branch, tag, or commit to check out after cloning
+        dest:
+          type: string
+          description: Optional destination directory name (defaults to repo name)
+      required: [owner, repo]
 
 storage:
   type: server

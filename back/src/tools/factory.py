@@ -178,6 +178,28 @@ def register_tool(name: str, builder: ToolBuilder) -> None:
     TOOL_BUILDERS[name] = builder
 
 
+def _extract_github_token(config: ToolsConfig) -> str | None:
+    """Find the user's GitHub access token in the tools config, if connected.
+
+    Handles both the single-account shape (``params.access_token``) and the
+    multi-account shape (``params.credentials[account_id].access_token``).
+    """
+    for item in config:
+        if item.name.lower() != "github":
+            continue
+        token = item.params.get("access_token")
+        if isinstance(token, str) and token:
+            return token
+        creds = item.params.get("credentials")
+        if isinstance(creds, dict):
+            for account_creds in creds.values():
+                if isinstance(account_creds, dict):
+                    at = account_creds.get("access_token")
+                    if isinstance(at, str) and at:
+                        return at
+    return None
+
+
 def _collect_email_specs(
     config: ToolsConfig, user_id: str | None
 ) -> tuple[list[dict[str, Any]], set[str]]:
@@ -277,12 +299,24 @@ async def build(
         except Exception as exc:  # noqa: BLE001
             logger.warning("[Tools] Failed to build unified email tools: %s", exc)
 
+    # Make the user's GitHub token available to the sandbox tool so it can clone
+    # private repos. Used server-side only — never returned to the model.
+    github_token = _extract_github_token(config)
+
     for item in config:
         logger.debug("[Tools] Processing tool item: %s", item.name)
 
         # Email providers are handled by the unified pre-pass above.
         if item.name in email_item_names:
             continue
+
+        # Inject the GitHub token into the sandbox tool's params for clone_repo.
+        if (
+            item.name.lower() == "sandbox"
+            and github_token
+            and "github_token" not in item.params
+        ):
+            item.params["github_token"] = github_token
 
         # Check via registry if this is server-side integration
         # Client-side integrations should not be processed here

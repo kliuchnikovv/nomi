@@ -6,6 +6,7 @@ import (
 	"github.com/kliuchnikovv/genie-api/internal/auth"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/credentials"
+	"github.com/kliuchnikovv/genie-api/internal/githubapp"
 	"github.com/kliuchnikovv/genie-api/internal/hub"
 	"github.com/kliuchnikovv/genie-api/internal/services"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -36,6 +37,9 @@ type Container struct {
 
 	// Credentials store (Redis-backed)
 	CredentialsStore credentials.Store
+
+	// GitHub App installation-token minter (nil if not configured)
+	GitHubApp *githubapp.Client
 }
 
 // NewContainer creates a new container with initialized dependencies
@@ -70,8 +74,23 @@ func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
 	// Initialize credentials store with Redis from Hub
 	credStore := credentials.NewRedisStore(hubInstance.Redis())
 
+	// Initialize GitHub App minter if configured (optional — feature is off otherwise)
+	var githubAppClient *githubapp.Client
+	if cfg.GitHub.AppID != 0 && cfg.GitHub.PrivateKey != "" {
+		githubAppClient, err = githubapp.NewClient(cfg.GitHub.AppID, cfg.GitHub.PrivateKey)
+		if err != nil {
+			logger.Warn("GitHub App configured but failed to initialize; disabling", zap.Error(err))
+			githubAppClient = nil
+		} else {
+			logger.Info("GitHub App minter initialized", zap.Int64("app_id", cfg.GitHub.AppID))
+		}
+	} else {
+		logger.Warn("GitHub App not configured (GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY unset); installation tokens unavailable")
+	}
+
 	return &Container{
 		Storage:          store,
+		GitHubApp:        githubAppClient,
 		chatRepo:         chatRepo,
 		messageRepo:      messageRepo,
 		userRepo:         userRepo,

@@ -53,6 +53,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&WatchReminder{},
 		&PendingClientAction{},
 		&Heartbeat{},
+		&GitHubAppInstallation{},
 	); err != nil {
 		return nil, err
 	}

@@ -39,6 +39,16 @@ token:
   jwt_secret: "your-super-secret-key-change-in-production"
   encryption_key: "${ENCRYPTION_KEY:-00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff}"
 
+github:
+  webhook_secret: "${GITHUB_WEBHOOK_SECRET:-}"
+  # GitHub App (fine-grained, per-installation tokens). Leave app_id empty to disable.
+  # private_key accepts raw PEM or base64-encoded PEM (base64 avoids YAML newline issues).
+  app_id: ${GITHUB_APP_ID:-0}
+  private_key: "${GITHUB_APP_PRIVATE_KEY:-}"
+  client_id: "${GITHUB_APP_CLIENT_ID:-}"
+  client_secret: "${GITHUB_APP_CLIENT_SECRET:-}"
+  app_slug: "${GITHUB_APP_SLUG:-}"
+
 llm:
   base_url: "${LLM_BASE_URL:-http://localhost:7777}"
 

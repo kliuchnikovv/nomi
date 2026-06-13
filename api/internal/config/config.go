@@ -40,6 +40,13 @@ type Config struct {
 	} `yaml:"token"`
 	GitHub struct {
 		WebhookSecret string `yaml:"webhook_secret"`
+		// GitHub App (fine-grained, per-installation tokens). When AppID and
+		// PrivateKey are set, the app can mint installation access tokens.
+		AppID        int64  `yaml:"app_id"`
+		PrivateKey   string `yaml:"private_key"` // PEM, via ${GITHUB_APP_PRIVATE_KEY}
+		ClientID     string `yaml:"client_id"`
+		ClientSecret string `yaml:"client_secret"`
+		AppSlug      string `yaml:"app_slug"`
 	} `yaml:"github"`
 	// PluginsDir is the path to the plugins directory (default: env PLUGINS_DIR or "plugins")
 	PluginsDir string `yaml:"plugins_dir"`
