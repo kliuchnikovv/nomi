@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/kliuchnikovv/genie-api/internal/githubapp"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -29,6 +30,7 @@ type Hub struct {
 	llmBaseURL string
 	redis      *redis.Client
 	cryptoKey  []byte
+	githubApp  *githubapp.Client
 
 	upgrader websocket.Upgrader
 
@@ -36,7 +38,7 @@ type Hub struct {
 	streamingMap map[string]bool // model ID -> streaming
 }
 
-func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string, cryptoKey []byte) *Hub {
+func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string, cryptoKey []byte, ghApp *githubapp.Client) *Hub {
 	// Initialize Redis
 	redisAddr := os.Getenv("REDIS_URL")
 	if redisAddr == "" {
@@ -74,6 +76,7 @@ func NewHub(store *storage.Storage, logger *zap.Logger, llmBaseURL string, crypt
 		llmBaseURL: llmBaseURL,
 		redis:      rClient,
 		cryptoKey:  cryptoKey,
+		githubApp:  ghApp,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true

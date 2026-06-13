@@ -66,14 +66,6 @@ func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
 	projectRepo := repositories.NewProjectRepository(store)
 	projectService := services.NewProjectService(projectRepo)
 
-	// Initialize Hub
-	cryptoKey, _ := hex.DecodeString(cfg.Token.EncryptionKey)
-	hubInstance := hub.NewHub(store, logger, cfg.LLM.BaseURL, cryptoKey)
-	go hubInstance.Run()
-
-	// Initialize credentials store with Redis from Hub
-	credStore := credentials.NewRedisStore(hubInstance.Redis())
-
 	// Initialize GitHub App minter if configured (optional — feature is off otherwise)
 	var githubAppClient *githubapp.Client
 	if cfg.GitHub.AppID != 0 && cfg.GitHub.PrivateKey != "" {
@@ -87,6 +79,14 @@ func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
 	} else {
 		logger.Warn("GitHub App not configured (GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY unset); installation tokens unavailable")
 	}
+
+	// Initialize Hub
+	cryptoKey, _ := hex.DecodeString(cfg.Token.EncryptionKey)
+	hubInstance := hub.NewHub(store, logger, cfg.LLM.BaseURL, cryptoKey, githubAppClient)
+	go hubInstance.Run()
+
+	// Initialize credentials store with Redis from Hub
+	credStore := credentials.NewRedisStore(hubInstance.Redis())
 
 	return &Container{
 		Storage:          store,

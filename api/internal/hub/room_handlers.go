@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/chat"
 	"github.com/kliuchnikovv/genie-api/internal/crypto"
+	"github.com/kliuchnikovv/genie-api/internal/ghtoken"
 	intgr "github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -658,6 +659,17 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				continue
 			}
 			providerCredentials[integ.Provider] = tokenData
+		}
+
+		// GitHub: prefer a GitHub App installation token (scoped to the repos the
+		// user granted) over the broad OAuth token. ghtoken falls back to OAuth.
+		if _, hasGitHub := dbIntegrations["github"]; hasGitHub {
+			if ghTok := ghtoken.ForUser(
+				context.Background(), r.store, r.hub.githubApp, r.hub.cryptoKey, r.initiatorID,
+			); ghTok != "" {
+				providerCredentials["github"] = map[string]interface{}{"access_token": ghTok}
+				delete(skippedIntegrations, "github")
+			}
 		}
 
 		// IMAP credentials are stored server-side without OAuth, keyed by account

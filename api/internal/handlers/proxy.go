@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/config"
 	"github.com/kliuchnikovv/genie-api/internal/crypto"
+	"github.com/kliuchnikovv/genie-api/internal/ghtoken"
+	"github.com/kliuchnikovv/genie-api/internal/githubapp"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 )
@@ -156,9 +158,11 @@ func ProxyGitHub(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 //
 // For server-side OAuth integrations the access token is stored encrypted in
 // oauth_tokens (the integrations row only holds metadata), so plugin REST routes
-// can't read it from the DB themselves. We decrypt it here — the single place
-// that holds the crypto key — and forward it as the X-Provider-Token header.
-func ProxyPlugins(cfg *config.Config, logger *zap.Logger, store *storage.Storage, cryptoKey []byte) gin.HandlerFunc {
+// can't read it from the DB themselves. We resolve it here — the single place
+// that holds the crypto key and GitHub App minter — and forward it as the
+// X-Provider-Token header. GitHub uses a GitHub App installation token (scoped to
+// granted repos), falling back to OAuth.
+func ProxyPlugins(cfg *config.Config, logger *zap.Logger, store *storage.Storage, cryptoKey []byte, ghApp *githubapp.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Extract plugin name and path from URL
 		// /api/github/repos -> plugin="github", path="repos"
@@ -204,20 +208,29 @@ func ProxyPlugins(cfg *config.Config, logger *zap.Logger, store *storage.Storage
 			uidStr := fmt.Sprintf("%v", userID)
 			proxyReq.Header.Set("X-User-ID", uidStr)
 
-			// Inject the decrypted provider access token for server-side OAuth
-			// integrations. Best-effort: if there's no token (or the plugin isn't
-			// an OAuth integration) we forward without it and let the plugin decide.
-			if store != nil && len(cryptoKey) == 32 {
+			// Inject the provider access token. Best-effort: if there's no token
+			// (or the plugin isn't an OAuth integration) we forward without it.
+			if store != nil {
 				if uid, err := uuid.Parse(uidStr); err == nil {
-					if tok, err := store.GetOAuthTokenByUser(c.Request.Context(), uid, pluginName); err == nil {
-						if dec, err := crypto.Decrypt(cryptoKey, tok.TokenEncrypted); err == nil {
-							var td map[string]interface{}
-							if json.Unmarshal(dec, &td) == nil {
-								if at, ok := td["access_token"].(string); ok && at != "" {
-									proxyReq.Header.Set("X-Provider-Token", at)
+					var token string
+					if pluginName == "github" {
+						// GitHub App installation token (scoped to granted repos),
+						// falling back to OAuth.
+						token = ghtoken.ForUser(c.Request.Context(), store, ghApp, cryptoKey, uid)
+					} else if len(cryptoKey) == 32 {
+						if tok, err := store.GetOAuthTokenByUser(c.Request.Context(), uid, pluginName); err == nil {
+							if dec, err := crypto.Decrypt(cryptoKey, tok.TokenEncrypted); err == nil {
+								var td map[string]interface{}
+								if json.Unmarshal(dec, &td) == nil {
+									if at, ok := td["access_token"].(string); ok {
+										token = at
+									}
 								}
 							}
 						}
+					}
+					if token != "" {
+						proxyReq.Header.Set("X-Provider-Token", token)
 					}
 				}
 			}

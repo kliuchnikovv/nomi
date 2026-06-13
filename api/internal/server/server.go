@@ -227,7 +227,7 @@ func New(
 	//   /api/github/repos/owner/repo -> /api/plugins/github/repos/owner/repo
 	//   /api/telegram/messages -> /api/plugins/telegram/messages
 	// IMPORTANT: This route must be defined BEFORE /api/integrations/:id to avoid conflicts
-	r.Any("/api/:plugin/*path", wrapWithAuth(handlers.ProxyPlugins(cfg, logger, ctr.Storage, cryptoKey), authMiddleware))
+	r.Any("/api/:plugin/*path", wrapWithAuth(handlers.ProxyPlugins(cfg, logger, ctr.Storage, cryptoKey, ctr.GitHubApp), authMiddleware))
 
 	// Integrations API
 	r.GET("/api/integrations", wrapWithAuth(integrationsHandler.ListIntegrations, authMiddleware))

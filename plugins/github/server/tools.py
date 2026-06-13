@@ -3,7 +3,6 @@ GitHub tools for server-side plugin.
 Provides repository, issue, and PR management functionality.
 """
 
-import asyncio
 import base64
 import logging
 from typing import Any, Dict, List, Optional, Union
@@ -65,8 +64,21 @@ class GitHubTools(Toolkit):
         Returns:
             List of repository objects with name, full_name, description, etc.
         """
-        params = f"?per_page={limit}&sort=updated"
-        result = await self._make_request("GET", f"/user/repos{params}")
+        # With a GitHub App installation token, list only the repositories the
+        # user granted to the installation (excludes org repos the App isn't on).
+        try:
+            result = await self._make_request(
+                "GET", f"/installation/repositories?per_page={limit}"
+            )
+            if isinstance(result, dict) and "repositories" in result:
+                return result.get("repositories", [])
+        except Exception:
+            # Not an installation token (e.g. legacy OAuth) — fall back below.
+            pass
+
+        result = await self._make_request(
+            "GET", f"/user/repos?per_page={limit}&sort=updated"
+        )
         if isinstance(result, list):
             return result
         return []
