@@ -430,6 +430,11 @@ export const tasksApi = {
             task: import('./screens/main/models').AgentTask;
             events: import('./screens/main/models').AgentTaskEvent[];
         }>(`${API_URL()}/tasks/${id}`),
+    start: (goal: string, chatId?: string) =>
+        apiClient.post<import('./screens/main/models').AgentTask>(
+            `${API_URL()}/tasks`,
+            { goal, chat_id: chatId },
+        ),
     steer: (id: string, message: string) =>
         apiClient.post<void>(`${API_URL()}/tasks/${id}/steer`, { message }),
     approve: (id: string, requestId: string, approved: boolean) =>

@@ -6,6 +6,8 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
+    Modal,
+    TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -32,6 +34,9 @@ export const TasksScreen = () => {
     const insets = useSafeAreaInsets();
     const [tasks, setTasks] = useState<AgentTask[]>([]);
     const [loading, setLoading] = useState(true);
+    const [composerOpen, setComposerOpen] = useState(false);
+    const [goalText, setGoalText] = useState('');
+    const [starting, setStarting] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -56,6 +61,23 @@ export const TasksScreen = () => {
         const interval = setInterval(load, 4000);
         return () => clearInterval(interval);
     }, [tasks, load]);
+
+    const onStart = useCallback(async () => {
+        const goal = goalText.trim();
+        if (!goal || starting) return;
+        setStarting(true);
+        try {
+            const task = await tasksApi.start(goal);
+            setComposerOpen(false);
+            setGoalText('');
+            if (task) {
+                navigation.navigate('TaskDetail', { taskId: task.id });
+            }
+            load();
+        } finally {
+            setStarting(false);
+        }
+    }, [goalText, starting, navigation, load]);
 
     const renderItem = ({ item }: { item: AgentTask }) => {
         const done = item.plan?.filter(s => s.status === 'done').length ?? 0;
@@ -119,6 +141,14 @@ export const TasksScreen = () => {
                     Tasks
                 </Text>
                 <View style={styles.headerSpacer} />
+                <TouchableOpacity
+                    onPress={() => setComposerOpen(true)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="New task"
+                >
+                    <Ionicons name="add" size={28} color={theme.accent} />
+                </TouchableOpacity>
             </View>
             {loading ? (
                 <ActivityIndicator style={styles.loader} color={theme.accent} />
@@ -151,6 +181,79 @@ export const TasksScreen = () => {
                     }
                 />
             )}
+
+            {/* New-task composer */}
+            <Modal
+                visible={composerOpen}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setComposerOpen(false)}
+            >
+                <View style={styles.modalBackdrop}>
+                    <View
+                        style={[
+                            styles.modalCard,
+                            { backgroundColor: theme.surface },
+                        ]}
+                    >
+                        <Text
+                            style={[
+                                styles.modalTitle,
+                                { color: theme.textPrimary },
+                            ]}
+                        >
+                            New background task
+                        </Text>
+                        <TextInput
+                            style={[
+                                styles.modalInput,
+                                {
+                                    backgroundColor: theme.background,
+                                    color: theme.textPrimary,
+                                    borderColor: theme.border,
+                                },
+                            ]}
+                            placeholder="Describe what Nomi should do…"
+                            placeholderTextColor={theme.textSecondary}
+                            value={goalText}
+                            onChangeText={setGoalText}
+                            multiline
+                            editable={!starting}
+                            autoFocus
+                        />
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                onPress={() => setComposerOpen(false)}
+                                disabled={starting}
+                                style={[
+                                    styles.modalBtn,
+                                    { borderColor: theme.border },
+                                ]}
+                            >
+                                <Text style={{ color: theme.textPrimary }}>
+                                    Cancel
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={onStart}
+                                disabled={starting || !goalText.trim()}
+                                style={[
+                                    styles.modalBtn,
+                                    {
+                                        backgroundColor: goalText.trim()
+                                            ? theme.accent
+                                            : theme.border,
+                                    },
+                                ]}
+                            >
+                                <Text style={{ color: '#fff' }}>
+                                    {starting ? 'Starting…' : 'Start'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -181,4 +284,27 @@ const styles = StyleSheet.create({
     separator: { height: StyleSheet.hairlineWidth, marginLeft: 38 },
     empty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     emptyText: { fontSize: 15, textAlign: 'center', paddingHorizontal: 32 },
+    modalBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+    },
+    modalCard: { borderRadius: 16, padding: 18, gap: 14 },
+    modalTitle: { fontSize: 17, fontWeight: '700' },
+    modalInput: {
+        minHeight: 90,
+        borderRadius: 12,
+        borderWidth: 1,
+        padding: 12,
+        fontSize: 15,
+        textAlignVertical: 'top',
+    },
+    modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+    modalBtn: {
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
 });

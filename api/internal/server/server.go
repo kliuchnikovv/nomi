@@ -204,6 +204,7 @@ func New(
 
 	// Agent tasks API (long-running autonomous tasks)
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.POST("/api/tasks", wrapWithAuth(agentTasksHandler.Create, authMiddleware))
 	r.GET("/api/tasks", wrapWithAuth(agentTasksHandler.List, authMiddleware))
 	r.GET("/api/tasks/:id", wrapWithAuth(agentTasksHandler.Get, authMiddleware))
 	r.POST("/api/tasks/:id/steer", wrapWithAuth(agentTasksHandler.Steer, authMiddleware))

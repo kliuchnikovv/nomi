@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -17,6 +18,73 @@ type AgentTasksHandler struct {
 
 func NewAgentTasksHandler(store *storage.Storage, redisClient *redis.Client) *AgentTasksHandler {
 	return &AgentTasksHandler{storage: store, redis: redisClient}
+}
+
+type createTaskRequest struct {
+	Goal   string `json:"goal" binding:"required"`
+	ChatID string `json:"chat_id"`
+}
+
+// Create starts a background task deterministically (the "Run as task" UI
+// action). It persists the task row immediately so the client can open the
+// detail view without a race, then publishes a TASK_START frame the Python
+// worker picks up to run it. Subsequent runner events update the same row.
+func (h *AgentTasksHandler) Create(c *gin.Context) {
+	user, err := userFromCtx(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req createTaskRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	chatID := uuid.New()
+	if req.ChatID != "" {
+		if parsed, perr := uuid.Parse(req.ChatID); perr == nil {
+			chatID = parsed
+		}
+	}
+
+	task := &storage.AgentTask{
+		ID:     uuid.New(),
+		UserID: user.ID,
+		ChatID: chatID,
+		Goal:   req.Goal,
+		Status: "planning",
+	}
+	if err := h.storage.CreateAgentTask(c.Request.Context(), task); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
+		return
+	}
+
+	// Publish a TASK_START frame matching what the Python worker expects
+	// (RedisSession._spawn_background_task / RedisWorker._start_task_run).
+	frame := map[string]any{
+		"v":       "1",
+		"id":      0,
+		"ts":      time.Now().UTC().Format(time.RFC3339),
+		"kind":    "signal",
+		"op":      "task_start",
+		"chat_id": chatID.String(),
+		"payload": map[string]any{
+			"user_id":    user.ID.String(),
+			"chat_id":    chatID.String(),
+			"goal":       req.Goal,
+			"task_id":    task.ID.String(),
+			"agent_type": "nomi",
+		},
+	}
+	payload, _ := json.Marshal(frame)
+	if err := h.redis.Publish(c.Request.Context(), "chat:request:"+chatID.String(), payload).Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start task"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, task)
 }
 
 // List returns the authenticated user's agent tasks (most recent first).
