@@ -29,10 +29,10 @@ def _inject_integration_id(
 ) -> dict:
     """Supply `integration_id` for client methods that need it.
 
-    Client email/IMAP methods identify the account by an `integration_id` param
-    (the device integration UUID), but the LLM router can't know that UUID — it
-    only sees account display names. The resolved `account_id` IS that UUID, so
-    inject it when the method declares the param and the router left it blank.
+    Client IMAP methods identify the account by `integration_id`, but the device
+    UUID differs from the server UUID stored in oauth_tokens. We inject the
+    account's display_name (email address) instead — the device's IMAPEmailClient
+    falls back to getIntegrationByEmail() when a UUID lookup misses.
     """
     if not account_id or account_id == "*":
         return params
@@ -42,7 +42,14 @@ def _inject_integration_id(
     )
     props = ((method or {}).get("parameters") or {}).get("properties") or {}
     if "integration_id" in props and not params.get("integration_id"):
-        return {**params, "integration_id": account_id}
+        # Prefer display_name (email) so device can resolve by email when its
+        # local UUID differs from the server-side account_id.
+        account = next(
+            (a for a in tool_schema.get("accounts", []) if a.get("id") == account_id),
+            None,
+        )
+        integration_id_value = (account.get("display_name") if account else None) or account_id
+        return {**params, "integration_id": integration_id_value}
     return params
 
 
@@ -228,48 +235,19 @@ def build_discovery_tool(
                 decision.account_id = "*"
 
         if decision.action == "question":
-            # Don't surface the clarifying question as a chat message — pop the
-            # native ask_user window (same channel as the ask_user tool), then
-            # re-route once with the user's answer added to context.
-            if client_tool_runner:
-                try:
-                    answer = await client_tool_runner(
-                        "ask_user",
-                        "ask",
-                        {
-                            "question": decision.question,
-                            "options": decision.options,
-                            "allow_custom": True,
-                        },
-                    )
-                except Exception:
-                    logger.warning(
-                        "[Discovery] ask_user window failed", exc_info=True
-                    )
-                    answer = None
-
-                if answer and not str(answer).startswith("Error:"):
-                    context = f"{context}\n{answer}".strip() if context else str(answer)
-                    try:
-                        decision = _router.decide(request, context, schemas)
-                    except Exception:
-                        logger.warning(
-                            "[Discovery] Re-route after answer failed", exc_info=True
-                        )
-                        return json.dumps(
-                            {"type": "error", "error": "Failed to route request"}
-                        )
-
-            # Still unresolved (no client runner, no answer, or router re-asked):
-            # fall back to returning the question into chat.
-            if decision.action == "question":
-                return json.dumps(
-                    {
-                        "type": "question",
-                        "question": decision.question,
-                        "options": decision.options,
-                    }
-                )
+            # Return the clarifying question to chat. (We previously popped a
+            # native ask_user modal from here, but the nested client round-trip's
+            # answer was never delivered back to the waiting call_id — it timed
+            # out and stacked duplicate modals, hanging the chat. The LLM relays
+            # this question to the user and calls discovery_tool again with the
+            # answer in `context`.)
+            return json.dumps(
+                {
+                    "type": "question",
+                    "question": decision.question,
+                    "options": decision.options,
+                }
+            )
 
         if decision.action == "none":
             return json.dumps(

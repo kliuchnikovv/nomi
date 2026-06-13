@@ -51,9 +51,25 @@ class IMAPEmailClient {
     private async getCredentials(
         integrationId: string,
     ): Promise<IMAPCredentials> {
-        const credentials = await integrationStorage.getCredentials(
+        let credentials = await integrationStorage.getCredentials(
             integrationId,
         );
+
+        if (!credentials) {
+            // discovery_tool passes display_name (email) as integration_id because
+            // the server UUID differs from the device-local UUID. Fall back to
+            // looking up the integration by email address.
+            const byEmail = await integrationStorage.getIntegrationByEmail(
+                'imap_email',
+                integrationId,
+            );
+            if (byEmail) {
+                credentials = await integrationStorage.getCredentials(
+                    byEmail.id,
+                );
+            }
+        }
+
         if (!credentials) {
             throw new Error('Credentials not found for integration');
         }

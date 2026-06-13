@@ -8,6 +8,13 @@ import Clipboard from '@react-native-clipboard/clipboard';
 import { Brain, NavArrowDown } from 'iconoir-react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
+// Glyph map of the icon font, used to skip rendering unknown names (which would
+// otherwise show a broken "?" box).
+const MCI_GLYPHS: Record<string, number> =
+    (Icon as any).getRawGlyphMap?.() ?? {};
+const hasGlyph = (name?: string): boolean =>
+    !!name && MCI_GLYPHS[name] !== undefined;
+
 export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
     const [expanded, setExpanded] = useState(false);
     const { theme, palette } = useTheme();
@@ -135,7 +142,7 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
                         flexShrink: 1,
                     }}
                 >
-                    {toolCall.icon ? (
+                    {hasGlyph(toolCall.icon) ? (
                         <Icon
                             name={toolCall.icon}
                             size={14}

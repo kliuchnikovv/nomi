@@ -6,7 +6,7 @@ import React, {
     useEffect,
     useRef,
 } from 'react';
-import { Linking, InteractionManager } from 'react-native';
+import { Linking, InteractionManager, AppState } from 'react-native';
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 
 import { ConnectorContextType, Tool, Integration } from './models';
@@ -20,10 +20,10 @@ import {
 } from '../../../services/integrations/IntegrationStorage';
 import {
     getIntegrationMetadata,
-    isServer,
     getServerIntegrations,
     INTEGRATION_REGISTRY,
 } from '../../../services/integrations/registry';
+import { syncIntegrationsFromServer } from '../../../services/integrations/integrationSync';
 import {
     refreshBackgroundTasks,
     registerSystemEventListeners,
@@ -100,56 +100,26 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
         }
     }, [dbReady, user?.id]);
 
+    // Re-sync from the server (source of truth) when the app returns to the
+    // foreground, so integrations added/removed elsewhere stay consistent.
+    useEffect(() => {
+        const sub = AppState.addEventListener('change', state => {
+            if (state === 'active' && dbReady && user?.id) {
+                getIntegrations();
+            }
+        });
+        return () => sub.remove();
+    }, [dbReady, user?.id]);
+
     async function getTools() {
         await getIntegrations();
     }
 
     const syncFromBackend = React.useCallback(async () => {
-        try {
-            const apiUrl = getApiUrl();
-            const token = authStore.getToken();
-            if (!token) return;
-
-            const response = await fetch(`${apiUrl}/integrations`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-
-            if (!response.ok) return;
-
-            const data = await response.json();
-            const items: any[] = data.items || data || [];
-
-            // Smart sync: only sync server integrations
-            // Client integrations are loaded only from local SQLite
-            for (const item of items) {
-                const provider = item.provider || item.Provider;
-                if (!item || !provider) {
-                    console.warn(
-                        '[ConnectorsProvider] Skipping invalid integration item:',
-                        item,
-                    );
-                    continue;
-                }
-                // Check via registry if this is a server integration
-                if (!isServer(provider)) {
-                    console.log(
-                        `[ConnectorsProvider] Skipping client-only integration: ${provider} (stored locally)`,
-                    );
-                    continue;
-                }
-
-                // Server integrations are synced for metadata display
-                // But tokens are not synced (they stay on the server)
-                console.log(
-                    `[ConnectorsProvider] Server integration found: ${provider} (metadata only)`,
-                );
-
-                // Can add logic for syncing server integration metadata
-                // if needed for UI
-            }
-        } catch (e) {
-            console.warn('Failed to sync from backend', e);
-        }
+        // Server is the single source of truth for integration identity. Mirror
+        // its list into the local cache, collapsing any divergent UUIDs onto the
+        // server's (see integrationSync for the full reconcile algorithm).
+        await syncIntegrationsFromServer();
     }, []);
 
     const getIntegrations = React.useCallback(async () => {

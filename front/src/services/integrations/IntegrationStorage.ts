@@ -353,6 +353,141 @@ class IntegrationStorage {
         await db.runAsync('DELETE FROM integrations WHERE id = ?', [id]);
     }
 
+    /**
+     * Rewrite a local integration's primary key to a new id (the server's
+     * canonical UUID) while preserving its credentials and cached data.
+     *
+     * The schema uses ON DELETE CASCADE (not ON UPDATE), so we can't UPDATE the
+     * parent id in place without orphaning children. Instead we copy the row to
+     * the new id, repoint every child table, then delete the old row last (by
+     * which point nothing references it, so the cascade deletes nothing).
+     */
+    async rekeyIntegration(oldId: string, newId: string): Promise<void> {
+        if (!oldId || !newId || oldId === newId) return;
+        const db = getDatabase();
+
+        await db.withTransactionAsync(async () => {
+            const row = await db.getFirstAsync<{
+                provider: string;
+                name: string;
+                enabled: number;
+                account_email: string | null;
+                user_id?: string | null;
+                created_at: number;
+                updated_at: number;
+            }>('SELECT * FROM integrations WHERE id = ?', [oldId]);
+            if (!row) return;
+
+            // Bail if the target id already exists (avoid PK collision).
+            const existing = await db.getFirstAsync<{ id: string }>(
+                'SELECT id FROM integrations WHERE id = ?',
+                [newId],
+            );
+            if (existing) return;
+
+            const now = Date.now();
+            await db.runAsync(
+                `INSERT INTO integrations (id, provider, name, enabled, account_email, user_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    newId,
+                    row.provider,
+                    row.name,
+                    row.enabled,
+                    row.account_email ?? null,
+                    row.user_id ?? null,
+                    row.created_at,
+                    now,
+                ],
+            );
+
+            // Repoint every table keyed by the integration id before deleting
+            // the old parent.
+            await db.runAsync(
+                'UPDATE integration_credentials SET integration_id = ? WHERE integration_id = ?',
+                [newId, oldId],
+            );
+            await db.runAsync(
+                'UPDATE emails SET integration_id = ? WHERE integration_id = ?',
+                [newId, oldId],
+            );
+            await db.runAsync(
+                'UPDATE generated_content SET integration_id = ? WHERE integration_id = ?',
+                [newId, oldId],
+            );
+            // events/tasks reference the integration via source_id (no FK).
+            await db.runAsync(
+                'UPDATE events SET source_id = ? WHERE source_id = ?',
+                [newId, oldId],
+            );
+            await db.runAsync(
+                'UPDATE tasks SET source_id = ? WHERE source_id = ?',
+                [newId, oldId],
+            );
+
+            await db.runAsync('DELETE FROM integrations WHERE id = ?', [oldId]);
+        });
+    }
+
+    /**
+     * Insert a credential-less integration row with an explicit (server) id.
+     * Used when the server reports an integration the device has never seen;
+     * credentials are supplied later (OAuth via token endpoints, IMAP via
+     * re-entry).
+     */
+    async insertIntegrationStub(stub: {
+        id: string;
+        provider: string;
+        name: string;
+        accountEmail?: string;
+        enabled: boolean;
+    }): Promise<void> {
+        const userId = this.requireUserId();
+        const db = getDatabase();
+        const now = Date.now();
+
+        let hasUserIdColumn = false;
+        try {
+            const columns = await db.getAllAsync<{ name: string }>(
+                `PRAGMA table_info(integrations)`,
+            );
+            hasUserIdColumn = columns.some(col => col.name === 'user_id');
+        } catch (e) {
+            console.warn('[IntegrationStorage] Failed to check columns:', e);
+        }
+
+        if (hasUserIdColumn) {
+            await db.runAsync(
+                `INSERT OR IGNORE INTO integrations (id, provider, name, enabled, account_email, user_id, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    stub.id,
+                    stub.provider,
+                    stub.name,
+                    stub.enabled ? 1 : 0,
+                    stub.accountEmail ?? null,
+                    userId,
+                    now,
+                    now,
+                ],
+            );
+        } else {
+            await db.runAsync(
+                `INSERT OR IGNORE INTO integrations (id, provider, name, enabled, account_email, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    stub.id,
+                    stub.provider,
+                    stub.name,
+                    stub.enabled ? 1 : 0,
+                    stub.accountEmail ?? null,
+                    now,
+                    now,
+                ],
+            );
+        }
+    }
+
     // ==================== Credentials ====================
 
     async getCredentials(

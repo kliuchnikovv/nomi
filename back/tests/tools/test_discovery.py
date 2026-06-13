@@ -116,11 +116,13 @@ async def test_discovery_tool_returns_question_for_ambiguous(
 
 
 @pytest.mark.asyncio
-async def test_discovery_question_pops_ask_user_then_executes(
+async def test_discovery_question_returns_to_chat_without_popping_ask_user(
     mock_config_client, monkeypatch
 ):
-    """A clarifying question pops the ask_user window (not chat); the answer is
-    fed back into routing and the resolved tool then executes."""
+    """A clarifying question is returned to chat for the LLM to relay — discovery
+    must NOT pop a native ask_user modal (the nested round-trip's answer was never
+    delivered back, hanging the chat). The LLM re-calls discovery with the answer
+    in `context`."""
     schema = [
         {
             "name": "imap",
@@ -145,24 +147,14 @@ async def test_discovery_question_pops_ask_user_then_executes(
     ]
     monkeypatch.setattr("src.tools.discovery.ToolRegistry.build", lambda c: schema)
     mock_router = MagicMock()
-    mock_router.decide.side_effect = [
-        RoutingDecision(
-            action="question",
-            tool="imap",
-            method="search_emails_server",
-            question="Which account?",
-            options=["a@x.com", "b@x.com"],
-        ),
-        RoutingDecision(
-            action="execute",
-            tool="imap",
-            method="search_emails_server",
-            account_id="uuid-a",
-            params={"criteria": "x"},
-        ),
-    ]
-    # 1st client call = ask_user (returns the answer); 2nd = the actual tool
-    runner = AsyncMock(side_effect=["a@x.com", "found 3 emails"])
+    mock_router.decide.return_value = RoutingDecision(
+        action="question",
+        tool="imap",
+        method="search_emails_server",
+        question="Which account?",
+        options=["a@x.com", "b@x.com"],
+    )
+    runner = AsyncMock()
 
     fn = build_discovery_tool(
         user_id="user1",
@@ -173,11 +165,11 @@ async def test_discovery_question_pops_ask_user_then_executes(
     )
 
     result = json.loads(await fn.entrypoint(request="search emails", context=""))
-    assert result["type"] == "result"
-    assert result["result"] == "found 3 emails"
-    # the question was raised via the ask_user window, not returned to chat
-    assert runner.call_args_list[0].args[0] == "ask_user"
-    assert runner.call_args_list[0].args[1] == "ask"
+    assert result["type"] == "question"
+    assert result["question"] == "Which account?"
+    assert result["options"] == ["a@x.com", "b@x.com"]
+    # crucially: no native modal was popped
+    runner.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -378,11 +370,12 @@ async def test_discovery_injects_integration_id_for_client_method(
 
     result = json.loads(await fn.entrypoint(request="search emails", context=""))
     assert result["type"] == "result"
-    # integration_id injected from the resolved account_id
+    # integration_id is the display_name (email) so the device can resolve by
+    # email when its local UUID differs from the server-side account_id.
     mock_runner.assert_called_once_with(
         "imap",
         "search_emails_server",
-        {"criteria": "from:google", "integration_id": "uuid-icloud"},
+        {"criteria": "from:google", "integration_id": "me@icloud.com"},
     )
 
 
@@ -437,13 +430,13 @@ async def test_discovery_overrides_question_for_all_accounts(
             request="search emails from google across all accounts", context=""
         )
     )
-    # overridden to fan-out, each account gets its own integration_id
+    # overridden to fan-out, each account gets display_name (email) as integration_id
     assert result["type"] == "result"
     assert result["aggregated"] is True
     assert result["account_count"] == 2
     assert mock_runner.call_count == 2
     sent_ids = {c.args[2].get("integration_id") for c in mock_runner.call_args_list}
-    assert sent_ids == {"uuid-a", "uuid-b"}
+    assert sent_ids == {"a@x.com", "b@x.com"}
 
 
 @pytest.mark.asyncio

@@ -29,12 +29,16 @@ function parseMaybeJson(value: any): any {
 }
 
 /**
- * Registry icon names follow no single icon set; map the ones that aren't valid
- * MaterialCommunityIcons glyphs to their MCI equivalents so the icon actually renders.
- * (gmail/github/calendar/telegram are already valid MCI names.)
+ * Registry icon names follow no single icon set, and some are recent MCI glyphs
+ * (e.g. `gmail`) that exist in the JS glyph map but are missing from the bundled
+ * font `.ttf`, so they render as a tofu "?" box. Map those — and the non-MCI
+ * names — to core glyphs that are guaranteed present in the shipped font.
  */
 const MCI_ICON_OVERRIDES: Record<string, string> = {
+    gmail: 'email',
     mail: 'email',
+    google: 'email',
+    telegram: 'send',
     user: 'account',
     'check-square': 'checkbox-marked-outline',
     jules: 'robot-outline',
