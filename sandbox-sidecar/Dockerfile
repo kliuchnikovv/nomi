@@ -1,4 +1,6 @@
-FROM node:20-slim
+# Node >= 22 provides a global WebSocket, which the railway SDK needs to stream
+# exec output (no WebSocket → "No WebSocket implementation found" at exec time).
+FROM node:22-slim
 
 WORKDIR /app
 
