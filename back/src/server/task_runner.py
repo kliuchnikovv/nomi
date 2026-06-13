@@ -28,6 +28,32 @@ logger = logging.getLogger(__name__)
 # Hard cap so a misparsed plan can't spawn an unbounded loop.
 MAX_STEPS = 10
 
+# How long a step may wait for user approval before it is treated as rejected.
+APPROVAL_TIMEOUT_S = 600
+_APPROVAL_POLL_S = 1.0
+
+# Steps whose title matches any of these need explicit user approval before they
+# run (coarse, title-level risk heuristic — the runner can't see individual
+# shell commands the sandbox engineer issues).
+_RISKY_KEYWORDS = (
+    "push",
+    "pull request",
+    "open a pr",
+    "open pr",
+    "deploy",
+    "publish",
+    "release",
+    "delete",
+    "force",
+    "merge",
+    "drop ",
+)
+
+
+def _needs_approval(title: str) -> bool:
+    t = (title or "").lower()
+    return any(k in t for k in _RISKY_KEYWORDS)
+
 
 class TaskEventEmitter:
     """Publishes task lifecycle messages for persistence (Go) + live UI."""
@@ -135,10 +161,70 @@ class TaskRunner:
         max_steps: int = MAX_STEPS,
     ):
         self.emitter = TaskEventEmitter(redis, task_id, user_id, chat_id, goal)
+        self.redis = redis
         self.task_id = task_id
         self.goal = goal
         self.agent = agent
         self.max_steps = max_steps
+
+    async def _drain_steering(self) -> list[str]:
+        """Pop any pending user steering messages (non-blocking)."""
+        msgs: list[str] = []
+        if self.redis is None:
+            return msgs
+        key = f"agent:task:steer:{self.task_id}"
+        try:
+            while True:
+                item = await self.redis.lpop(key)
+                if item is None:
+                    break
+                if isinstance(item, bytes):
+                    item = item.decode("utf-8", errors="replace")
+                try:
+                    obj = json.loads(item)
+                    msgs.append(
+                        obj.get("message", item)
+                        if isinstance(obj, dict)
+                        else str(obj)
+                    )
+                except json.JSONDecodeError:
+                    msgs.append(item)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[TaskRunner] steering drain failed: %s", exc)
+        return msgs
+
+    async def _await_approval(self, request_id: str) -> bool:
+        """Block (cancellably) until the user approves/rejects, or timeout.
+
+        Timeout is treated as rejection (fail safe). A decision without a
+        request_id, or one matching ours, resolves the wait.
+        """
+        if self.redis is None:
+            return False
+        key = f"agent:task:approval:{self.task_id}"
+        waited = 0.0
+        while waited < APPROVAL_TIMEOUT_S:
+            try:
+                item = await self.redis.lpop(key)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[TaskRunner] approval poll failed: %s", exc)
+                item = None
+            if item is not None:
+                if isinstance(item, bytes):
+                    item = item.decode("utf-8", errors="replace")
+                try:
+                    obj = json.loads(item)
+                except json.JSONDecodeError:
+                    obj = {}
+                if not obj.get("request_id") or obj.get("request_id") == request_id:
+                    return bool(obj.get("approved"))
+                # A decision for a different request — ignore and keep waiting.
+            await asyncio.sleep(_APPROVAL_POLL_S)
+            waited += _APPROVAL_POLL_S
+        logger.warning(
+            "[TaskRunner] approval %s timed out → treating as rejected", request_id
+        )
+        return False
 
     async def run(self) -> None:
         try:
@@ -162,7 +248,53 @@ class TaskRunner:
 
             # 2. Execute each step in order.
             accumulated: list[str] = []
+            guidance: list[str] = []
             for step in plan:
+                # 2a. Absorb any user steering issued since the last step.
+                for msg in await self._drain_steering():
+                    guidance.append(msg)
+                    await self.emitter.emit(
+                        "running",
+                        plan=plan,
+                        kind="log",
+                        payload={"message": f"User guidance: {msg}"},
+                    )
+
+                # 2b. Approval gate for risky steps (push/PR/deploy/delete/...).
+                if _needs_approval(step["title"]):
+                    request_id = str(uuid.uuid4())
+                    await self.emitter.emit(
+                        "waiting_input",
+                        plan=plan,
+                        kind="approval_request",
+                        payload={
+                            "request_id": request_id,
+                            "step_id": step["id"],
+                            "title": step["title"],
+                        },
+                    )
+                    approved = await self._await_approval(request_id)
+                    if not approved:
+                        step["status"] = "done"
+                        step["result"] = "Skipped — not approved."
+                        await self.emitter.emit(
+                            "running",
+                            plan=plan,
+                            kind="step_done",
+                            payload={
+                                "step_id": step["id"],
+                                "result": "skipped (not approved)",
+                            },
+                        )
+                        continue
+                    await self.emitter.emit(
+                        "running",
+                        plan=plan,
+                        kind="log",
+                        payload={"message": f"Approved: {step['title']}"},
+                    )
+
+                # 2c. Execute the step.
                 step["status"] = "running"
                 await self.emitter.emit(
                     "running",
@@ -172,11 +304,17 @@ class TaskRunner:
                 )
 
                 context = "\n".join(accumulated[-3:]) if accumulated else "(none)"
+                guidance_text = (
+                    "\nUser guidance to follow:\n" + "\n".join(guidance)
+                    if guidance
+                    else ""
+                )
                 step_prompt = (
                     f"You are autonomously executing a multi-step task.\n"
                     f"Overall goal: {self.goal}\n"
                     f"Current step {step['id'] + 1}/{len(plan)}: {step['title']}\n"
-                    f"Results of previous steps:\n{context}\n\n"
+                    f"Results of previous steps:\n{context}\n"
+                    f"{guidance_text}\n"
                     "Carry out this step now and report what you did concisely."
                 )
                 summary = await _agent_text(self.agent, step_prompt)

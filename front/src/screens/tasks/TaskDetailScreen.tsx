@@ -6,6 +6,7 @@ import {
     StyleSheet,
     ActivityIndicator,
     TouchableOpacity,
+    TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -46,6 +47,10 @@ function eventLine(e: AgentTaskEvent): string {
             }`;
         case 'done':
             return 'Task completed';
+        case 'log':
+            return p.message ?? '';
+        case 'approval_request':
+            return `Approval requested: ${p.title ?? ''}`;
         case 'error':
             return `Error: ${p.error ?? p.reason ?? 'unknown'}`;
         default:
@@ -78,6 +83,8 @@ export const TaskDetailScreen = () => {
     const [task, setTask] = useState<AgentTask | null>(null);
     const [events, setEvents] = useState<AgentTaskEvent[]>([]);
     const [loading, setLoading] = useState(true);
+    const [steerText, setSteerText] = useState('');
+    const [busy, setBusy] = useState(false);
 
     const load = useCallback(async () => {
         try {
@@ -104,6 +111,44 @@ export const TaskDetailScreen = () => {
     }, [task, load]);
 
     const plan = task?.plan ?? [];
+    const isActive = task ? ACTIVE.includes(task.status) : false;
+
+    // The pending approval is the latest approval_request while waiting_input.
+    const pendingApproval =
+        task?.status === 'waiting_input'
+            ? [...events].reverse().find(e => e.kind === 'approval_request')
+            : undefined;
+
+    const onSteer = useCallback(async () => {
+        const text = steerText.trim();
+        if (!text || busy) return;
+        setBusy(true);
+        try {
+            await tasksApi.steer(taskId, text);
+            setSteerText('');
+            await load();
+        } finally {
+            setBusy(false);
+        }
+    }, [steerText, busy, taskId, load]);
+
+    const onApprove = useCallback(
+        async (approved: boolean) => {
+            if (!pendingApproval || busy) return;
+            setBusy(true);
+            try {
+                await tasksApi.approve(
+                    taskId,
+                    pendingApproval.payload?.request_id ?? '',
+                    approved,
+                );
+                await load();
+            } finally {
+                setBusy(false);
+            }
+        },
+        [pendingApproval, busy, taskId, load],
+    );
 
     return (
         <View
@@ -179,6 +224,66 @@ export const TaskDetailScreen = () => {
                             </Text>
                         </View>
                     </View>
+
+                    {/* Approval gate */}
+                    {pendingApproval && (
+                        <View
+                            style={[
+                                styles.approval,
+                                {
+                                    backgroundColor: theme.surface,
+                                    borderColor: statusColor(
+                                        'failed',
+                                        theme,
+                                    ),
+                                },
+                            ]}
+                        >
+                            <Text
+                                style={[
+                                    styles.approvalTitle,
+                                    { color: theme.textPrimary },
+                                ]}
+                            >
+                                Approval needed
+                            </Text>
+                            <Text
+                                style={[
+                                    styles.approvalBody,
+                                    { color: theme.textSecondary },
+                                ]}
+                            >
+                                {pendingApproval.payload?.title ??
+                                    'A risky step needs your confirmation.'}
+                            </Text>
+                            <View style={styles.approvalActions}>
+                                <TouchableOpacity
+                                    disabled={busy}
+                                    onPress={() => onApprove(false)}
+                                    style={[
+                                        styles.btn,
+                                        { borderColor: theme.border },
+                                    ]}
+                                >
+                                    <Text style={{ color: theme.textPrimary }}>
+                                        Reject
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    disabled={busy}
+                                    onPress={() => onApprove(true)}
+                                    style={[
+                                        styles.btn,
+                                        { backgroundColor: theme.accent },
+                                    ]}
+                                >
+                                    <Text style={{ color: '#fff' }}>
+                                        Approve
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
 
                     {/* Plan checklist */}
                     {plan.length > 0 && (
@@ -283,6 +388,53 @@ export const TaskDetailScreen = () => {
                     ) : null}
                 </ScrollView>
             )}
+
+            {/* Steering input — guide the task while it runs */}
+            {task && isActive && (
+                <View
+                    style={[
+                        styles.steerBar,
+                        {
+                            borderTopColor: theme.border,
+                            paddingBottom: insets.bottom + 8,
+                            backgroundColor: theme.background,
+                        },
+                    ]}
+                >
+                    <TextInput
+                        style={[
+                            styles.steerInput,
+                            {
+                                backgroundColor: theme.surface,
+                                color: theme.textPrimary,
+                            },
+                        ]}
+                        placeholder="Guide the agent…"
+                        placeholderTextColor={theme.textSecondary}
+                        value={steerText}
+                        onChangeText={setSteerText}
+                        editable={!busy}
+                        onSubmitEditing={onSteer}
+                        returnKeyType="send"
+                    />
+                    <TouchableOpacity
+                        onPress={onSteer}
+                        disabled={busy || !steerText.trim()}
+                        style={[
+                            styles.steerSend,
+                            {
+                                backgroundColor: steerText.trim()
+                                    ? theme.accent
+                                    : theme.border,
+                            },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Send guidance"
+                    >
+                        <Ionicons name="arrow-up" size={18} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+            )}
         </View>
     );
 };
@@ -316,4 +468,46 @@ const styles = StyleSheet.create({
     logTime: { fontSize: 12, width: 44 },
     logText: { fontSize: 13, flex: 1 },
     result: { fontSize: 14, lineHeight: 20 },
+    approval: {
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 14,
+        gap: 8,
+    },
+    approvalTitle: { fontSize: 15, fontWeight: '700' },
+    approvalBody: { fontSize: 13 },
+    approvalActions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 10,
+        marginTop: 4,
+    },
+    btn: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    steerBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingTop: 8,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    steerInput: {
+        flex: 1,
+        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        fontSize: 15,
+    },
+    steerSend: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });

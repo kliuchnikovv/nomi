@@ -26,6 +26,9 @@ export interface ResolvedToolCall extends ToolCall {
  * resolved integration calls (e.g. "Clarification needed").
  */
 const KNOWN_TOOL_DISPLAY: Record<string, { name: string; icon: string }> = {
+    // Discovery router itself (shown while routing, or when a request is unrouted)
+    discovery_tool: { name: 'Routing request', icon: 'compass-outline' },
+
     // Knowledge / memory
     search_knowledge_base: {
         name: 'Searching memory',
@@ -194,8 +197,8 @@ export function unwrapDiscoveryToolCall(
         // Otherwise (genuinely unrouted) keep the generic "discovery_tool".
         const label = resolvedLabel(env);
         return {
-            name: label?.name ?? 'discovery_tool',
-            icon: label?.icon,
+            name: label?.name ?? KNOWN_TOOL_DISPLAY.discovery_tool.name,
+            icon: label?.icon ?? KNOWN_TOOL_DISPLAY.discovery_tool.icon,
             arguments: requestText,
             result: env.error,
             status: toolCall.status,
@@ -220,8 +223,8 @@ export function unwrapDiscoveryToolCall(
     }
 
     return {
-        name: label?.name ?? 'discovery_tool',
-        icon: label?.icon,
+        name: label?.name ?? KNOWN_TOOL_DISPLAY.discovery_tool.name,
+        icon: label?.icon ?? KNOWN_TOOL_DISPLAY.discovery_tool.icon,
         arguments: requestText,
         result: inner,
         status: toolCall.status,

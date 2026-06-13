@@ -81,7 +81,7 @@ func New(
 		memoriesHandler       = handlers.NewMemoriesHandler(ctr.Storage, logger)
 		entitiesHandler       = handlers.NewEntitiesHandler(ctr.Storage, logger)
 		notificationsHandler  = handlers.NewNotificationsHandler(ctr.Storage)
-		agentTasksHandler     = handlers.NewAgentTasksHandler(ctr.Storage)
+		agentTasksHandler     = handlers.NewAgentTasksHandler(ctr.Storage, hubInstance.Redis())
 		devicesHandler        = handlers.NewDevicesHandler(ctr.Storage)
 		heartbeatHandler      = handlers.NewHeartbeatHandler(ctr.Storage, logger)
 		workerHandler         = handlers.NewWorkerHandler(hubInstance, logger)
@@ -206,6 +206,8 @@ func New(
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.GET("/api/tasks", wrapWithAuth(agentTasksHandler.List, authMiddleware))
 	r.GET("/api/tasks/:id", wrapWithAuth(agentTasksHandler.Get, authMiddleware))
+	r.POST("/api/tasks/:id/steer", wrapWithAuth(agentTasksHandler.Steer, authMiddleware))
+	r.POST("/api/tasks/:id/approve", wrapWithAuth(agentTasksHandler.Approve, authMiddleware))
 
 	// Device token registration
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route

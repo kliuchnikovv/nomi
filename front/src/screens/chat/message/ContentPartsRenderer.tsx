@@ -14,7 +14,7 @@ import { ContentPart } from './models';
 import { useTheme } from '../../../context/ThemeContext';
 import { createMarkdownStyles } from './dynamicStyles';
 import { createMarkdownRules } from './markdownRules';
-import { SingleToolCall, ReasoningBlock, CollapsibleSteps } from './ToolCalls';
+import { SingleToolCall, ReasoningBlock } from './ToolCalls';
 import { DocumentBlock } from './DocumentBlock';
 import { getChatElementComponent } from '../../../plugins/chatElementRegistry';
 import {
@@ -207,33 +207,16 @@ const StreamingTextPart = memo(function StreamingTextPart({
     );
 });
 
-// Pick the Details header icon by what the group surfaces, most-actionable first:
-// a clarification the user must answer > tool activity > plain reasoning.
-function groupIcon(parts: ContentPart[]): string {
-    let hasTool = false;
-    for (const part of parts) {
-        if (part.type === 'tool_call') {
-            const resolved = unwrapDiscoveryToolCall(part.tool_call);
-            if (resolved?.name === 'Clarification needed') {
-                return 'chat-question-outline';
-            }
-            hasTool = true;
-        }
-    }
-    return hasTool ? 'tools' : 'thought-bubble-outline';
-}
-
-// Memoized component for tool calls and reasoning
+// Memoized component for tool calls and reasoning — rendered inline, no outer wrapper
 const ToolCallsGroup = memo(function ToolCallsGroup({
     parts,
 }: {
     parts: ContentPart[];
 }) {
     return (
-        <CollapsibleSteps icon={groupIcon(parts)}>
+        <>
             {parts.map((part, index) => {
                 if (part.type === 'tool_call') {
-                    // Check chat element registry for custom UI
                     const CustomElement = getChatElementComponent(
                         part.tool_call.name,
                     );
@@ -250,10 +233,6 @@ const ToolCallsGroup = memo(function ToolCallsGroup({
                             />
                         );
                     }
-                    // discovery_tool: render the resolved underlying integration
-                    // call ("GitHub · list_repos" + clean result) instead of the
-                    // raw routing envelope. Falls back to the original when running
-                    // or unparseable.
                     const resolved =
                         unwrapDiscoveryToolCall(part.tool_call) ??
                         decorateKnownToolCall(part.tool_call) ??
@@ -274,7 +253,7 @@ const ToolCallsGroup = memo(function ToolCallsGroup({
                 }
                 return null;
             })}
-        </CollapsibleSteps>
+        </>
     );
 });
 

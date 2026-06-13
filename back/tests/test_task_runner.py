@@ -15,9 +15,11 @@ class FakeAgent:
         self._plan_json = plan_json
         self._calls = 0
         self._fail_on_step = fail_on_step
+        self.prompts: list[str] = []
 
     async def arun(self, prompt: str):
         self._calls += 1
+        self.prompts.append(prompt)
 
         class _R:
             content = ""
@@ -34,13 +36,23 @@ class FakeAgent:
 
 
 class FakeRedis:
-    """Captures publishes so the test can assert on the emitted messages."""
+    """Captures publishes and backs the steer/approval lists for tests."""
 
     def __init__(self):
         self.published: list[tuple[str, str]] = []
+        self.lists: dict[str, list[str]] = {}
 
     async def publish(self, channel: str, data: str):
         self.published.append((channel, data))
+
+    async def rpush(self, key: str, value: str):
+        self.lists.setdefault(key, []).append(value)
+
+    async def lpop(self, key: str):
+        lst = self.lists.get(key)
+        if not lst:
+            return None
+        return lst.pop(0)
 
     def task_msgs(self, task_id: str) -> list[dict]:
         """Decoded persistence messages for a task, in order."""
@@ -161,6 +173,74 @@ async def test_background_task_tool_reports_spawn_failure():
     tool = BackgroundTaskTools(spawner=boom)
     msg = await tool.start_background_task("do thing")
     assert "Failed to start" in msg
+
+
+@pytest.mark.asyncio
+async def test_runner_absorbs_steering():
+    redis = FakeRedis()
+    # Queue a steering message before the run starts.
+    await redis.rpush(
+        "agent:task:steer:task-s",
+        json.dumps({"message": "skip the linter"}),
+    )
+    agent = FakeAgent(json.dumps(["Clone repo", "Run tests"]))
+    runner = TaskRunner(
+        redis=redis,
+        task_id="task-s",
+        user_id="u",
+        chat_id="c",
+        goal="g",
+        agent=agent,
+    )
+
+    await runner.run()
+
+    msgs = redis.task_msgs("task-s")
+    logs = [m for m in msgs if m.get("event", {}).get("kind") == "log"]
+    assert any("skip the linter" in m["event"]["payload"]["message"] for m in logs)
+    # Guidance is threaded into a step prompt.
+    assert any("skip the linter" in p for p in agent.prompts)
+
+
+@pytest.mark.asyncio
+async def test_runner_approval_approve_runs_risky_step():
+    redis = FakeRedis()
+    await redis.rpush(
+        "agent:task:approval:task-a", json.dumps({"approved": True})
+    )
+    agent = FakeAgent(json.dumps(["Push to main"]))
+    runner = TaskRunner(
+        redis=redis, task_id="task-a", user_id="u", chat_id="c", goal="g", agent=agent
+    )
+
+    await runner.run()
+
+    msgs = redis.task_msgs("task-a")
+    kinds = [m["event"]["kind"] for m in msgs if "event" in m]
+    assert "approval_request" in kinds
+    assert "step_started" in kinds  # approved → executed
+    assert msgs[-1]["status"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_runner_approval_reject_skips_risky_step():
+    redis = FakeRedis()
+    await redis.rpush(
+        "agent:task:approval:task-r", json.dumps({"approved": False})
+    )
+    agent = FakeAgent(json.dumps(["Deploy to production"]))
+    runner = TaskRunner(
+        redis=redis, task_id="task-r", user_id="u", chat_id="c", goal="g", agent=agent
+    )
+
+    await runner.run()
+
+    msgs = redis.task_msgs("task-r")
+    kinds = [m["event"]["kind"] for m in msgs if "event" in m]
+    assert "approval_request" in kinds
+    assert "step_started" not in kinds  # rejected → never executed
+    done = [m for m in msgs if m.get("event", {}).get("kind") == "step_done"]
+    assert any("skipped" in m["event"]["payload"].get("result", "") for m in done)
 
 
 def test_parse_steps_falls_back_to_goal_on_garbage():
