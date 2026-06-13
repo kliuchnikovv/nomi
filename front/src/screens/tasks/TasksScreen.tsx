@@ -14,7 +14,9 @@ import type { DashboardStackParamList } from '../../navigation/types';
  */
 export const TasksScreen = () => {
     const navigation =
-        useNavigation<NativeStackNavigationProp<DashboardStackParamList, 'Tasks'>>();
+        useNavigation<
+            NativeStackNavigationProp<DashboardStackParamList, 'Tasks'>
+        >();
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
 
@@ -34,7 +36,9 @@ export const TasksScreen = () => {
                         color={theme.textPrimary}
                     />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.textPrimary }]}>
+                <Text
+                    style={[styles.headerTitle, { color: theme.textPrimary }]}
+                >
                     Tasks
                 </Text>
                 <View style={styles.headerSpacer} />
@@ -58,7 +62,10 @@ export const TasksScreen = () => {
                     No tasks yet
                 </Text>
                 <Text
-                    style={[styles.emptySubtitle, { color: theme.textSecondary }]}
+                    style={[
+                        styles.emptySubtitle,
+                        { color: theme.textSecondary },
+                    ]}
                 >
                     Background work Nomi runs for you will show up here.
                 </Text>

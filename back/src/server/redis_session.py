@@ -384,6 +384,34 @@ class RedisSession:
         self.next_id = frame.id + 1
         return self.next_id
 
+    async def _spawn_background_task(self, goal: str) -> str:
+        """Launch an autonomous background task and return its id immediately.
+
+        Backs the start_background_task tool. Publishes a TASK_START frame onto
+        chat:request:{chat_id}; the worker picks it up and runs it detached from
+        this turn (see RedisWorker._start_task_run).
+        """
+        import uuid as _uuid
+
+        from src.server.models import Op
+        from src.server.utils import make_signal
+
+        task_id = str(_uuid.uuid4())
+        payload = {
+            "user_id": self.user_id,
+            "chat_id": self.chat_id,
+            "goal": goal,
+            "task_id": task_id,
+            "model": self.current_model_name,
+            "agent_type": "nomi",
+        }
+        frame = make_signal(0, Op.TASK_START, self.chat_id, payload)
+        if self.redis_client:
+            await self.redis_client.publish(
+                f"chat:request:{self.chat_id}", json.dumps(frame.marshal())
+            )
+        return task_id
+
     async def _safe_deliver(self, delivery_handler, full_text: str) -> None:
         """Deliver a reply to an external plugin channel without letting a plugin
         failure crash the streaming response. Re-raises CancelledError."""
@@ -1001,6 +1029,14 @@ class RedisSession:
             client_tool_runner = (
                 self._send_client_action_and_wait if self.redis_worker else None
             )
+            # Expose start_background_task only on a normal chat turn — never
+            # inside a task run (a task must not spawn sub-tasks via this tool).
+            suppress_bg = getattr(self, "_suppress_background_tasks", False)
+            task_spawner = (
+                self._spawn_background_task
+                if (self.redis_worker and not suppress_bg)
+                else None
+            )
             bot_identity = payload.get("bot_identity") or None
             user_location = payload.get("user_location") or None
             timezone = payload.get("timezone") or None
@@ -1021,6 +1057,7 @@ class RedisSession:
                 timezone=timezone,
                 single_chat_mode=self.single_chat_mode,
                 storage_backend=storage_backend or self.storage_backend,
+                task_spawner=task_spawner,
             )
         except Exception as e:
             logger.error(

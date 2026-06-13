@@ -533,24 +533,27 @@ def build_discovery_tool(
                 bool(credentials.get("access_token") or credentials.get("token")),
             )
 
-            # Check if we have valid credentials for server execution
-            has_access_token = bool(
-                credentials.get("access_token") or credentials.get("token")
-            )
-            if not has_access_token:
-                logger.warning(
-                    "[Discovery] No access_token found in credentials for tool=%s",
-                    decision.tool,
+            # Check if we have valid credentials for server execution.
+            # Tools with auth_type="none" don't need OAuth tokens (e.g. sandbox).
+            auth_type = tool_schema.get("auth_type", "oauth") if tool_schema else "oauth"
+            if auth_type != "none":
+                has_access_token = bool(
+                    credentials.get("access_token") or credentials.get("token")
                 )
-                return json.dumps(
-                    {
-                        "type": "error",
-                        "error": f"Missing credentials for {decision.tool}. Please re-connect your account.",
-                        "tool": decision.tool,
-                        "method": decision.method,
-                        "account": _account_display(tool_schema, decision.account_id),
-                    }
-                )
+                if not has_access_token:
+                    logger.warning(
+                        "[Discovery] No access_token found in credentials for tool=%s",
+                        decision.tool,
+                    )
+                    return json.dumps(
+                        {
+                            "type": "error",
+                            "error": f"Missing credentials for {decision.tool}. Please re-connect your account.",
+                            "tool": decision.tool,
+                            "method": decision.method,
+                            "account": _account_display(tool_schema, decision.account_id),
+                        }
+                    )
 
         try:
             result = await _executor.arun(

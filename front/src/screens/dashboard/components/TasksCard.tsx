@@ -32,7 +32,11 @@ export function TasksCard() {
                     { backgroundColor: `${theme.accent}20` },
                 ]}
             >
-                <Ionicons name="rocket-outline" size={20} color={theme.accent} />
+                <Ionicons
+                    name="rocket-outline"
+                    size={20}
+                    color={theme.accent}
+                />
             </View>
             <View style={styles.textBlock}>
                 <Text style={[styles.title, { color: theme.textPrimary }]}>

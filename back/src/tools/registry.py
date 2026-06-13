@@ -63,6 +63,7 @@ class ToolRegistry:
             logger.info("[Registry] Adding schema: provider=%s, accounts=%d, execution=%s",
                        provider_name, len(accounts), exec_type)
 
+            auth_type = (manifest.get("auth") or {}).get("type", "oauth")
             schemas.append({
                 "name": provider_name,
                 "display_name": manifest.get("display_name", provider_name),
@@ -70,6 +71,7 @@ class ToolRegistry:
                 "methods": manifest.get("methods") or [],
                 "accounts": accounts,
                 "execution": exec_type,
+                "auth_type": auth_type,
             })
 
         return schemas

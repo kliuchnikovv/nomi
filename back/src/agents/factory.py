@@ -359,6 +359,7 @@ class AgentFactory:
         user_location: str | None = None,
         single_chat_mode: bool = False,
         storage_backend: StorageBackend | None = None,
+        task_spawner: Callable[[str], Awaitable[str]] | None = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -635,6 +636,21 @@ class AgentFactory:
                 )
         except Exception as e:
             logger.warning("[Factory] Failed to wire delegation tool: %s", e)
+
+        # Background task launcher — lets the agent hand substantial multi-step
+        # work to an autonomous runner that survives the turn and streams to the
+        # Tasks UI. Only for the lead nomi agent (not planner/team, and never
+        # inside a task run — see RedisSession._spawn_background_task gating).
+        if task_spawner is not None and (agent_type or "nomi").lower() == "nomi" and not (
+            command_desc and command_desc.get("type")
+        ):
+            try:
+                from src.tools.background_task import BackgroundTaskTools
+
+                tools.append(BackgroundTaskTools(spawner=task_spawner))
+                logger.info("[Factory] Added start_background_task tool")
+            except Exception as e:
+                logger.warning("[Factory] Failed to add background_task tool: %s", e)
 
         # Register chat history search tool for single chat mode
         if single_chat_mode and user_id and self._knowledge is not None:
