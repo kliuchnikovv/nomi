@@ -116,6 +116,101 @@ async def test_discovery_tool_returns_question_for_ambiguous(
 
 
 @pytest.mark.asyncio
+async def test_discovery_question_pops_ask_user_then_executes(
+    mock_config_client, monkeypatch
+):
+    """A clarifying question pops the ask_user window (not chat); the answer is
+    fed back into routing and the resolved tool then executes."""
+    schema = [
+        {
+            "name": "imap",
+            "display_name": "Email (IMAP)",
+            "description": "IMAP",
+            "methods": [
+                {
+                    "name": "search_emails_server",
+                    "description": "Search",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"integration_id": {"type": "string"}},
+                    },
+                }
+            ],
+            "accounts": [
+                {"id": "uuid-a", "display_name": "a@x.com"},
+                {"id": "uuid-b", "display_name": "b@x.com"},
+            ],
+            "execution": "client",
+        }
+    ]
+    monkeypatch.setattr("src.tools.discovery.ToolRegistry.build", lambda c: schema)
+    mock_router = MagicMock()
+    mock_router.decide.side_effect = [
+        RoutingDecision(
+            action="question",
+            tool="imap",
+            method="search_emails_server",
+            question="Which account?",
+            options=["a@x.com", "b@x.com"],
+        ),
+        RoutingDecision(
+            action="execute",
+            tool="imap",
+            method="search_emails_server",
+            account_id="uuid-a",
+            params={"criteria": "x"},
+        ),
+    ]
+    # 1st client call = ask_user (returns the answer); 2nd = the actual tool
+    runner = AsyncMock(side_effect=["a@x.com", "found 3 emails"])
+
+    fn = build_discovery_tool(
+        user_id="user1",
+        config_client=mock_config_client,
+        client_tool_runner=runner,
+        router=mock_router,
+        executor=MagicMock(),
+    )
+
+    result = json.loads(await fn.entrypoint(request="search emails", context=""))
+    assert result["type"] == "result"
+    assert result["result"] == "found 3 emails"
+    # the question was raised via the ask_user window, not returned to chat
+    assert runner.call_args_list[0].args[0] == "ask_user"
+    assert runner.call_args_list[0].args[1] == "ask"
+
+
+@pytest.mark.asyncio
+async def test_discovery_question_falls_back_to_chat_without_runner(
+    mock_config_client, gmail_schema, monkeypatch
+):
+    """No client runner (e.g. Telegram) → question is returned into chat as before."""
+    monkeypatch.setattr(
+        "src.tools.discovery.ToolRegistry.build", lambda c: gmail_schema
+    )
+    mock_router = MagicMock()
+    mock_router.decide.return_value = RoutingDecision(
+        action="question",
+        tool="gmail",
+        method="send_email",
+        question="Which account?",
+        options=["a", "b"],
+    )
+
+    fn = build_discovery_tool(
+        user_id="user1",
+        config_client=mock_config_client,
+        client_tool_runner=None,
+        router=mock_router,
+        executor=MagicMock(),
+    )
+
+    result = json.loads(await fn.entrypoint(request="send email", context=""))
+    assert result["type"] == "question"
+    assert result["question"] == "Which account?"
+
+
+@pytest.mark.asyncio
 async def test_discovery_tool_returns_error_for_no_tool(
     mock_config_client, mock_runner, gmail_schema, monkeypatch
 ):
@@ -231,6 +326,124 @@ async def test_discovery_tool_uses_client_runner_for_client_execution(
     mock_runner.assert_called_once_with(
         "ios_calendar", "create_event", {"title": "Meeting"}
     )
+
+
+@pytest.mark.asyncio
+async def test_discovery_injects_integration_id_for_client_method(
+    mock_config_client, mock_runner, monkeypatch
+):
+    """Client methods that declare `integration_id` get the resolved account_id
+    injected (the router can't know the device integration UUID)."""
+    imap_schema = [
+        {
+            "name": "imap",
+            "display_name": "Email (IMAP)",
+            "description": "IMAP",
+            "methods": [
+                {
+                    "name": "search_emails_server",
+                    "description": "Search",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "integration_id": {"type": "string"},
+                            "criteria": {"type": "string"},
+                        },
+                    },
+                }
+            ],
+            "accounts": [{"id": "uuid-icloud", "display_name": "me@icloud.com"}],
+            "execution": "client",
+        }
+    ]
+    monkeypatch.setattr(
+        "src.tools.discovery.ToolRegistry.build", lambda c: imap_schema
+    )
+    mock_router = MagicMock()
+    mock_router.decide.return_value = RoutingDecision(
+        action="execute",
+        tool="imap",
+        method="search_emails_server",
+        account_id="uuid-icloud",
+        params={"criteria": "from:google"},  # router omits integration_id
+    )
+
+    fn = build_discovery_tool(
+        user_id="user1",
+        config_client=mock_config_client,
+        client_tool_runner=mock_runner,
+        router=mock_router,
+        executor=MagicMock(),
+    )
+
+    result = json.loads(await fn.entrypoint(request="search emails", context=""))
+    assert result["type"] == "result"
+    # integration_id injected from the resolved account_id
+    mock_runner.assert_called_once_with(
+        "imap",
+        "search_emails_server",
+        {"criteria": "from:google", "integration_id": "uuid-icloud"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_discovery_overrides_question_for_all_accounts(
+    mock_config_client, mock_runner, monkeypatch
+):
+    """When the user says 'all accounts' but the router asks which one, fan out (*)."""
+    schema = [
+        {
+            "name": "imap",
+            "display_name": "Email (IMAP)",
+            "description": "IMAP",
+            "methods": [
+                {
+                    "name": "search_emails_server",
+                    "description": "Search",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"integration_id": {"type": "string"}},
+                    },
+                }
+            ],
+            "accounts": [
+                {"id": "uuid-a", "display_name": "a@x.com"},
+                {"id": "uuid-b", "display_name": "b@x.com"},
+            ],
+            "execution": "client",
+        }
+    ]
+    monkeypatch.setattr("src.tools.discovery.ToolRegistry.build", lambda c: schema)
+    mock_router = MagicMock()
+    # router (wrongly) asks which account, but still names tool/method
+    mock_router.decide.return_value = RoutingDecision(
+        action="question",
+        tool="imap",
+        method="search_emails_server",
+        question="Which account?",
+        options=["a@x.com", "b@x.com"],
+    )
+
+    fn = build_discovery_tool(
+        user_id="user1",
+        config_client=mock_config_client,
+        client_tool_runner=mock_runner,
+        router=mock_router,
+        executor=MagicMock(),
+    )
+
+    result = json.loads(
+        await fn.entrypoint(
+            request="search emails from google across all accounts", context=""
+        )
+    )
+    # overridden to fan-out, each account gets its own integration_id
+    assert result["type"] == "result"
+    assert result["aggregated"] is True
+    assert result["account_count"] == 2
+    assert mock_runner.call_count == 2
+    sent_ids = {c.args[2].get("integration_id") for c in mock_runner.call_args_list}
+    assert sent_ids == {"uuid-a", "uuid-b"}
 
 
 @pytest.mark.asyncio

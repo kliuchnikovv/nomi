@@ -29,18 +29,34 @@ function parseMaybeJson(value: any): any {
 }
 
 /**
+ * Registry icon names follow no single icon set; map the ones that aren't valid
+ * MaterialCommunityIcons glyphs to their MCI equivalents so the icon actually renders.
+ * (gmail/github/calendar/telegram are already valid MCI names.)
+ */
+const MCI_ICON_OVERRIDES: Record<string, string> = {
+    mail: 'email',
+    user: 'account',
+    'check-square': 'checkbox-marked-outline',
+    jules: 'robot-outline',
+};
+
+function mciIcon(icon?: string): string | undefined {
+    if (!icon) return undefined;
+    return MCI_ICON_OVERRIDES[icon] ?? icon;
+}
+
+/**
  * Build a display label + icon for a resolved discovery envelope.
  * Returns null when no tool was resolved (genuinely unrouted → keep "discovery_tool").
  */
-function resolvedLabel(
-    env: any,
-): { name: string; icon?: string } | null {
+function resolvedLabel(env: any): { name: string; icon?: string } | null {
     if (!env?.tool) return null;
     const meta = getIntegrationMetadata(env.tool);
     const name =
-        [meta?.displayName ?? env.tool, env.method].filter(Boolean).join(' · ') ||
-        'discovery_tool';
-    return { name, icon: meta?.icon };
+        [meta?.displayName ?? env.tool, env.method]
+            .filter(Boolean)
+            .join(' · ') || 'discovery_tool';
+    return { name, icon: mciIcon(meta?.icon) };
 }
 
 export function unwrapDiscoveryToolCall(
@@ -88,7 +104,9 @@ export function unwrapDiscoveryToolCall(
         const byAccount: Record<string, any> = {};
         for (const item of inner) {
             const key = item?.account_display || item?.account_id || 'account';
-            byAccount[key] = item?.error ? `Error: ${item.error}` : item?.result;
+            byAccount[key] = item?.error
+                ? `Error: ${item.error}`
+                : item?.result;
         }
         inner = byAccount;
     }

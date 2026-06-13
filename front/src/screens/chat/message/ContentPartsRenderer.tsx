@@ -236,9 +236,13 @@ const ToolCallsGroup = memo(function ToolCallsGroup({
                     // raw routing envelope. Falls back to the original when running
                     // or unparseable.
                     const resolved =
-                        unwrapDiscoveryToolCall(part.tool_call) ?? part.tool_call;
+                        unwrapDiscoveryToolCall(part.tool_call) ??
+                        part.tool_call;
                     return (
-                        <SingleToolCall key={`tool-${index}`} toolCall={resolved} />
+                        <SingleToolCall
+                            key={`tool-${index}`}
+                            toolCall={resolved}
+                        />
                     );
                 } else if (part.type === 'reasoning') {
                     return (

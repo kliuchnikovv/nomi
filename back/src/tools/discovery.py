@@ -24,6 +24,28 @@ def _account_display(tool_schema: dict, account_id: str) -> str:
     return ""
 
 
+def _inject_integration_id(
+    tool_schema: dict, method_name: str, params: dict, account_id: str
+) -> dict:
+    """Supply `integration_id` for client methods that need it.
+
+    Client email/IMAP methods identify the account by an `integration_id` param
+    (the device integration UUID), but the LLM router can't know that UUID — it
+    only sees account display names. The resolved `account_id` IS that UUID, so
+    inject it when the method declares the param and the router left it blank.
+    """
+    if not account_id or account_id == "*":
+        return params
+    method = next(
+        (m for m in tool_schema.get("methods", []) if m.get("name") == method_name),
+        None,
+    )
+    props = ((method or {}).get("parameters") or {}).get("properties") or {}
+    if "integration_id" in props and not params.get("integration_id"):
+        return {**params, "integration_id": account_id}
+    return params
+
+
 async def _execute_for_all_accounts(
     decision,
     tool_schema,
@@ -48,8 +70,11 @@ async def _execute_for_all_accounts(
                 tool_schema.get("execution") in ("client", "hybrid")
                 and client_tool_runner
             ):
+                client_params = _inject_integration_id(
+                    tool_schema, decision.method, decision.params, account_id
+                )
                 client_result = await client_tool_runner(
-                    decision.tool, decision.method, decision.params
+                    decision.tool, decision.method, client_params
                 )
                 results.append(
                     {
@@ -170,14 +195,81 @@ def build_discovery_tool(
             )
             return json.dumps({"type": "error", "error": "Failed to route request"})
 
-        if decision.action == "question":
-            return json.dumps(
-                {
-                    "type": "question",
-                    "question": decision.question,
-                    "options": decision.options,
-                }
+        # Deterministic safeguard: if the user explicitly asked for ALL accounts but
+        # the (LLM) router still asked which one, fan out instead of pestering them.
+        if decision.action == "question" and decision.tool and decision.method:
+            text = f"{request} {context}".lower()
+            all_accounts_kw = (
+                "all account",
+                "all my account",
+                "all of my account",
+                "every account",
+                "each account",
+                "across all",
+                "both account",
+                "все аккаунт",
+                "всех аккаунт",
+                "по всем аккаунт",
+                "каждом аккаунт",
+                "во всех",
             )
+            schema = next(
+                (s for s in schemas if s["name"] == decision.tool), None
+            )
+            if (
+                schema
+                and len(schema.get("accounts", [])) >= 2
+                and any(kw in text for kw in all_accounts_kw)
+            ):
+                logger.info(
+                    "[Discovery] Overriding question → all-accounts for: %s", request
+                )
+                decision.action = "execute"
+                decision.account_id = "*"
+
+        if decision.action == "question":
+            # Don't surface the clarifying question as a chat message — pop the
+            # native ask_user window (same channel as the ask_user tool), then
+            # re-route once with the user's answer added to context.
+            if client_tool_runner:
+                try:
+                    answer = await client_tool_runner(
+                        "ask_user",
+                        "ask",
+                        {
+                            "question": decision.question,
+                            "options": decision.options,
+                            "allow_custom": True,
+                        },
+                    )
+                except Exception:
+                    logger.warning(
+                        "[Discovery] ask_user window failed", exc_info=True
+                    )
+                    answer = None
+
+                if answer and not str(answer).startswith("Error:"):
+                    context = f"{context}\n{answer}".strip() if context else str(answer)
+                    try:
+                        decision = _router.decide(request, context, schemas)
+                    except Exception:
+                        logger.warning(
+                            "[Discovery] Re-route after answer failed", exc_info=True
+                        )
+                        return json.dumps(
+                            {"type": "error", "error": "Failed to route request"}
+                        )
+
+            # Still unresolved (no client runner, no answer, or router re-asked):
+            # fall back to returning the question into chat.
+            if decision.action == "question":
+                return json.dumps(
+                    {
+                        "type": "question",
+                        "question": decision.question,
+                        "options": decision.options,
+                    }
+                )
 
         if decision.action == "none":
             return json.dumps(
@@ -213,8 +305,14 @@ def build_discovery_tool(
                 )
             if client_tool_runner:
                 try:
+                    client_params = _inject_integration_id(
+                        tool_schema,
+                        decision.method,
+                        decision.params,
+                        decision.account_id,
+                    )
                     result = await client_tool_runner(
-                        decision.tool, decision.method, decision.params
+                        decision.tool, decision.method, client_params
                     )
                     return json.dumps(
                         {
