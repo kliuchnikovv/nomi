@@ -137,6 +137,53 @@ async def test_discovery_tool_returns_error_for_no_tool(
     result = json.loads(result_json)
     assert result["type"] == "error"
     assert "play chess" in result["error"]
+    # no tool resolved → no tool field (frontend falls back to "discovery_tool")
+    assert "tool" not in result
+
+
+@pytest.mark.asyncio
+async def test_discovery_tool_error_includes_resolved_tool(
+    mock_config_client, gmail_schema, monkeypatch
+):
+    """When a resolved tool fails to execute, the error envelope carries tool/method
+    so the frontend can label the card with the real tool instead of discovery_tool."""
+    monkeypatch.setattr(
+        "src.tools.discovery.ToolRegistry.build", lambda c: gmail_schema
+    )
+    # Mark gmail as server-execution so it hits the executor path.
+    gmail_schema[0]["execution"] = "server"
+    # credentials map keyed by account_id so server-exec finds a usable access_token
+    cfg = ToolsConfig()
+    cfg.add(
+        "gmail",
+        accounts=gmail_schema[0]["accounts"],
+        credentials={"work@gmail.com": {"access_token": "tok"}},
+    )
+    mock_config_client.fetch_tools = AsyncMock(return_value=cfg)
+
+    mock_router = MagicMock()
+    mock_router.decide.return_value = RoutingDecision(
+        action="execute",
+        tool="gmail",
+        method="search_emails",
+        account_id="work@gmail.com",
+        params={"query": "test"},
+    )
+    mock_executor = MagicMock()
+    mock_executor.arun = AsyncMock(side_effect=Exception("boom"))
+
+    fn = build_discovery_tool(
+        user_id="user1",
+        config_client=mock_config_client,
+        client_tool_runner=None,
+        router=mock_router,
+        executor=mock_executor,
+    )
+
+    result = json.loads(await fn.entrypoint(request="find emails", context=""))
+    assert result["type"] == "error"
+    assert result["tool"] == "gmail"
+    assert result["method"] == "search_emails"
 
 
 @pytest.mark.asyncio

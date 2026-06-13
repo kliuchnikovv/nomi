@@ -28,6 +28,21 @@ function parseMaybeJson(value: any): any {
     }
 }
 
+/**
+ * Build a display label + icon for a resolved discovery envelope.
+ * Returns null when no tool was resolved (genuinely unrouted → keep "discovery_tool").
+ */
+function resolvedLabel(
+    env: any,
+): { name: string; icon?: string } | null {
+    if (!env?.tool) return null;
+    const meta = getIntegrationMetadata(env.tool);
+    const name =
+        [meta?.displayName ?? env.tool, env.method].filter(Boolean).join(' · ') ||
+        'discovery_tool';
+    return { name, icon: meta?.icon };
+}
+
 export function unwrapDiscoveryToolCall(
     toolCall: ToolCall,
 ): ResolvedToolCall | null {
@@ -51,8 +66,12 @@ export function unwrapDiscoveryToolCall(
     }
 
     if (env.type === 'error') {
+        // A tool was resolved/attempted → show its name even on failure.
+        // Otherwise (genuinely unrouted) keep the generic "discovery_tool".
+        const label = resolvedLabel(env);
         return {
-            name: 'discovery_tool',
+            name: label?.name ?? 'discovery_tool',
+            icon: label?.icon,
             arguments: requestText,
             result: env.error,
             status: toolCall.status,
@@ -61,10 +80,7 @@ export function unwrapDiscoveryToolCall(
 
     if (env.type !== 'result') return null;
 
-    const meta = env.tool ? getIntegrationMetadata(env.tool) : undefined;
-    const label =
-        [meta?.displayName ?? env.tool, env.method].filter(Boolean).join(' · ') ||
-        'discovery_tool';
+    const label = resolvedLabel(env);
 
     // Multi-account aggregated result: key by human-readable account, drop UUIDs.
     let inner = env.result;
@@ -78,8 +94,8 @@ export function unwrapDiscoveryToolCall(
     }
 
     return {
-        name: label,
-        icon: meta?.icon,
+        name: label?.name ?? 'discovery_tool',
+        icon: label?.icon,
         arguments: requestText,
         result: inner,
         status: toolCall.status,

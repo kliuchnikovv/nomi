@@ -203,7 +203,13 @@ def build_discovery_tool(
         if tool_schema.get("execution") in ("client", "hybrid"):
             if tool_schema.get("execution") == "client" and not client_tool_runner:
                 return json.dumps(
-                    {"type": "error", "error": "Client tool runner not configured"}
+                    {
+                        "type": "error",
+                        "error": "Client tool runner not configured",
+                        "tool": decision.tool,
+                        "method": decision.method,
+                        "account": _account_display(tool_schema, decision.account_id),
+                    }
                 )
             if client_tool_runner:
                 try:
@@ -229,7 +235,15 @@ def build_discovery_tool(
                         exc_info=True,
                     )
                     return json.dumps(
-                        {"type": "error", "error": "Client tool execution failed"}
+                        {
+                            "type": "error",
+                            "error": "Client tool execution failed",
+                            "tool": decision.tool,
+                            "method": decision.method,
+                            "account": _account_display(
+                                tool_schema, decision.account_id
+                            ),
+                        }
                     )
             # hybrid with no runner: fall through to server execution below
 
@@ -294,6 +308,9 @@ def build_discovery_tool(
                     {
                         "type": "error",
                         "error": f"Missing credentials for {decision.tool}. Please re-connect your account.",
+                        "tool": decision.tool,
+                        "method": decision.method,
+                        "account": _account_display(tool_schema, decision.account_id),
                     }
                 )
 
@@ -317,7 +334,15 @@ def build_discovery_tool(
                 decision.method,
                 exc_info=True,
             )
-            return json.dumps({"type": "error", "error": "Tool execution failed"})
+            return json.dumps(
+                {
+                    "type": "error",
+                    "error": "Tool execution failed",
+                    "tool": decision.tool,
+                    "method": decision.method,
+                    "account": _account_display(tool_schema, decision.account_id),
+                }
+            )
 
     return Function(
         name="discovery_tool",
