@@ -1,0 +1,21 @@
+{
+  "name": "sandbox-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node sidecar that re-implements the sandbox-controller HTTP contract on top of the Railway Sandboxes TS SDK.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "railway": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

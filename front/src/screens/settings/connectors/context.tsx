@@ -288,13 +288,47 @@ export function ConnectorsProvider({ children }: { children: ReactNode }) {
                 }
 
                 // GitHub App install (no code exchange): backend already saved the
-                // installation and the integration row via the signed-state callback.
+                // installation and the server-side integration row via the
+                // signed-state callback. The UI's connected state is driven by
+                // LOCAL SQLite, so persist a metadata-only record here too (mirrors
+                // exchangeCodeForTokens for server integrations).
                 if (status === 'cancelled') {
                     setAuthStatus('Connection cancelled');
                 } else if (
                     (status === 'ok' || status === 'installed') &&
                     provider
                 ) {
+                    if (status === 'installed') {
+                        try {
+                            const existing =
+                                await integrationStorage.getIntegrationByEmail(
+                                    provider,
+                                    '',
+                                );
+                            if (!existing) {
+                                const metadata =
+                                    getIntegrationMetadata(provider);
+                                await integrationStorage.createIntegration(
+                                    {
+                                        provider:
+                                            provider as LocalIntegration['provider'],
+                                        name: metadata?.displayName || provider,
+                                        enabled: true,
+                                        accountEmail: '',
+                                        storageType: metadata?.storageType,
+                                        supportsBackgroundTasks: false,
+                                        systemEventListeners: [],
+                                    },
+                                    { accessToken: '' },
+                                );
+                            }
+                        } catch (persistErr) {
+                            console.warn(
+                                '[ConnectorsProvider] Failed to persist installed integration locally',
+                                persistErr,
+                            );
+                        }
+                    }
                     const labelEmail = accountEmail || email;
                     setAuthStatus(
                         `Connected ${provider}${

@@ -69,6 +69,23 @@ services:
     volumes:
       - sandbox_workspaces:/sandboxes
 
+  # Railway Sandboxes backend (alternative to sandbox-controller).
+  # To use it, point `back` at this service instead:
+  #   SANDBOX_CONTROLLER_URL=http://sandbox-sidecar:8090
+  # Requires real Railway credentials in the environment below.
+  sandbox-sidecar:
+    build:
+      context: ./sandbox-sidecar
+      dockerfile: Dockerfile
+    ports:
+      - "8091:8090"
+    environment:
+      - PORT=8090
+      - SANDBOX_CONTROLLER_TOKEN=dev-token
+      - SANDBOX_IDLE_TIMEOUT_MINUTES=30
+      - RAILWAY_API_TOKEN=${RAILWAY_API_TOKEN}
+      - RAILWAY_ENVIRONMENT_ID=${RAILWAY_ENVIRONMENT_ID}
+
   db:
     image: postgres:16-alpine
     environment:
