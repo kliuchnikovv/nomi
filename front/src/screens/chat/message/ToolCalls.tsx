@@ -6,7 +6,7 @@ import Markdown from 'react-native-markdown-display';
 import { createMarkdownRules } from './markdownRules';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Brain, NavArrowDown } from 'iconoir-react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 
 // Glyph map of the icon font, used to skip rendering unknown names (which would
 // otherwise show a broken "?" box).
@@ -245,7 +245,21 @@ export function ReasoningBlock({ reasoning }: { reasoning: string }) {
                     pressed && { opacity: 0.7 },
                 ]}
             >
-                <Text style={styles.reasoningHeaderText}>Thinking...</Text>
+                <View
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        flexShrink: 1,
+                    }}
+                >
+                    <Icon
+                        name="thought-bubble-outline"
+                        size={14}
+                        color={theme.textSecondary}
+                        style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.reasoningHeaderText}>Thinking...</Text>
+                </View>
                 <Text style={styles.toolCallsExpandIcon}>
                     <NavArrowDown
                         width={12}
@@ -343,9 +357,11 @@ export const MemberResponseBlock = AgentThinkingBlock;
 export function CollapsibleSteps({
     children,
     defaultExpanded = false,
+    icon,
 }: {
     children: React.ReactNode;
     defaultExpanded?: boolean;
+    icon?: string;
 }) {
     const [expanded, setExpanded] = useState(defaultExpanded);
     const { theme, palette } = useTheme();
@@ -363,7 +379,29 @@ export function CollapsibleSteps({
                     pressed && { opacity: 0.7 },
                 ]}
             >
-                <Text style={styles.collapsibleStepsHeaderText}>Details</Text>
+                <View
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        flexShrink: 1,
+                    }}
+                >
+                    {hasGlyph(icon) ? (
+                        <Icon
+                            name={
+                                icon as React.ComponentProps<
+                                    typeof Icon
+                                >['name']
+                            }
+                            size={14}
+                            color={theme.textSecondary}
+                            style={{ marginRight: 6 }}
+                        />
+                    ) : null}
+                    <Text style={styles.collapsibleStepsHeaderText}>
+                        Details
+                    </Text>
+                </View>
                 <Text style={styles.toolCallsExpandIcon}>
                     <NavArrowDown
                         width={12}

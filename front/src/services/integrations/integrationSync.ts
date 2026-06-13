@@ -16,6 +16,7 @@
 import { authStore } from '../../apiClient';
 import { getApiUrl } from '../../config';
 import { integrationStorage } from './IntegrationStorage';
+import { getIntegrationMetadata } from './registry';
 
 export interface ServerIntegration {
     id: string;
@@ -54,10 +55,18 @@ function naturalKey(provider: string, accountEmail?: string): string {
 /**
  * Compute the operations that make the local store mirror the server list.
  * Pure — no side effects.
+ *
+ * `isServerTracked` decides whether a local row absent from the server may be
+ * orphan-deleted. Client-only providers (ios_*) and providers stored outside
+ * the `integrations` table (telegram → plugin_data) are NEVER on the server, so
+ * deleting them would wipe an integration the moment it's added. The default
+ * (`() => true`) preserves the original behaviour; the real caller passes a
+ * registry-backed predicate.
  */
 export function reconcile(
     server: ServerIntegration[],
     local: LocalIntegrationRef[],
+    isServerTracked: (provider: string) => boolean = () => true,
 ): SyncOp[] {
     const ops: SyncOp[] = [];
 
@@ -96,8 +105,10 @@ export function reconcile(
     }
 
     // Local rows the server no longer has → drop them (server is authoritative).
+    // But only for providers the server actually tracks; client-only providers
+    // (ios_*, telegram) live only on the device and must never be orphaned here.
     for (const l of local) {
-        if (!matchedLocalIds.has(l.id)) {
+        if (!matchedLocalIds.has(l.id) && isServerTracked(l.provider)) {
             ops.push({ type: 'deleteOrphan', id: l.id });
         }
     }
@@ -171,7 +182,14 @@ export async function syncIntegrationsFromServer(): Promise<void> {
         accountEmail: l.accountEmail,
     }));
 
-    const ops = reconcile(server, local);
+    // Only providers persisted server-side may be orphan-deleted. Unknown /
+    // unregistered providers default to NOT server-tracked, so a transient
+    // registry gap never wipes a local integration.
+    const ops = reconcile(
+        server,
+        local,
+        provider => getIntegrationMetadata(provider)?.serverTracked ?? false,
+    );
     if (ops.length === 0) return;
 
     for (const op of ops) {

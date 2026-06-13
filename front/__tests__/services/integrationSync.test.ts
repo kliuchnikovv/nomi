@@ -110,6 +110,50 @@ describe('reconcile', () => {
         ]);
     });
 
+    it('does not orphan-delete a client-only provider absent from the server', () => {
+        // ios_calendar is never persisted server-side; the user also has a
+        // server integration, so the empty-list guard does not apply.
+        const serverTracked = (p: string) => p === 'github';
+        const ops = reconcile(
+            [server('gh', 'github', 'dev@x.com')],
+            [
+                local('gh', 'github', 'dev@x.com'),
+                local('cal', 'ios_calendar', ''),
+            ],
+            serverTracked,
+        );
+        expect(ops.some(o => o.type === 'deleteOrphan')).toBe(false);
+    });
+
+    it('does not orphan-delete telegram (stored outside the integrations table)', () => {
+        const serverTracked = (p: string) => p === 'imap';
+        const ops = reconcile(
+            [server('im', 'imap', 'me@icloud.com')],
+            [
+                local('im', 'imap', 'me@icloud.com'),
+                local('tg', 'telegram', 'Bot'),
+            ],
+            serverTracked,
+        );
+        expect(ops.some(o => o.type === 'deleteOrphan')).toBe(false);
+    });
+
+    it('still orphan-deletes a server-tracked provider absent from the server', () => {
+        const serverTracked = (p: string) => p === 'imap' || p === 'github';
+        const ops = reconcile(
+            [server('keep', 'imap', 'me@icloud.com')],
+            [
+                local('keep', 'imap', 'me@icloud.com'),
+                local('gone', 'github', 'old@x.com'),
+            ],
+            serverTracked,
+        );
+        expect(ops).toContainEqual<SyncOp>({
+            type: 'deleteOrphan',
+            id: 'gone',
+        });
+    });
+
     it('reconciles a mixed fleet in one pass', () => {
         const ops = reconcile(
             [

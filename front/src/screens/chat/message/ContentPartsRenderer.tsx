@@ -204,6 +204,22 @@ const StreamingTextPart = memo(function StreamingTextPart({
     );
 });
 
+// Pick the Details header icon by what the group surfaces, most-actionable first:
+// a clarification the user must answer > tool activity > plain reasoning.
+function groupIcon(parts: ContentPart[]): string {
+    let hasTool = false;
+    for (const part of parts) {
+        if (part.type === 'tool_call') {
+            const resolved = unwrapDiscoveryToolCall(part.tool_call);
+            if (resolved?.name === 'Clarification needed') {
+                return 'chat-question-outline';
+            }
+            hasTool = true;
+        }
+    }
+    return hasTool ? 'tools' : 'thought-bubble-outline';
+}
+
 // Memoized component for tool calls and reasoning
 const ToolCallsGroup = memo(function ToolCallsGroup({
     parts,
@@ -211,7 +227,7 @@ const ToolCallsGroup = memo(function ToolCallsGroup({
     parts: ContentPart[];
 }) {
     return (
-        <CollapsibleSteps>
+        <CollapsibleSteps icon={groupIcon(parts)}>
             {parts.map((part, index) => {
                 if (part.type === 'tool_call') {
                     // Check chat element registry for custom UI

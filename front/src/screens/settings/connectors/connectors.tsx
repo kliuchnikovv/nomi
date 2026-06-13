@@ -8,7 +8,7 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import { NavArrowRight } from 'iconoir-react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getStyles } from './styles.tsx';
 import { Props, CONNECTORS, Connector, Tool, Integration } from './models.tsx';
 import { useConnectors } from './context.tsx';
@@ -32,7 +32,9 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
     const Item = ({ c }: { c: Connector }) => {
         // Find integration config for this connector
         // We match by provider name (normalized)
-        const integration = integrations.find(i => i.provider.toLowerCase() === c.oauthProvider.toLowerCase());
+        const integration = integrations.find(
+            i => i.provider.toLowerCase() === c.oauthProvider.toLowerCase(),
+        );
 
         // If no integration found, it means backend doesn't support it or hasn't returned it yet.
         // But we can still show it if we want to allow connecting.
@@ -49,7 +51,7 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
         // `toggleTool` finds config by ID.
 
         // If the integration is not in the list, we probably can't connect it yet via toggleTool as is.
-        // But `integrations` list comes from `GET /integrations`. 
+        // But `integrations` list comes from `GET /integrations`.
         // Does `GET /integrations` return ALL supported integrations or only connected ones?
         // The prompt says: "Returns a list of supported integrations and their connection status for the current user."
         // So it should return all supported integrations.
@@ -61,8 +63,19 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
 
         return (
             <View style={styles.row}>
-                <View style={[styles.iconBubble, { backgroundColor: palette[c.colorKey] }]}>
-                    <Icon name={c.glyph} size={20} color={palette.bg} />
+                <View
+                    style={[
+                        styles.iconBubble,
+                        { backgroundColor: palette[c.colorKey] },
+                    ]}
+                >
+                    <Icon
+                        name={
+                            c.glyph as React.ComponentProps<typeof Icon>['name']
+                        }
+                        size={20}
+                        color={palette.bg}
+                    />
                 </View>
                 <View style={styles.titleBlock}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
@@ -80,7 +93,9 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
                     ) : (
                         <Switch
                             value={isConnected}
-                            onValueChange={value => handleToggle(integration.id, value)}
+                            onValueChange={value =>
+                                handleToggle(integration.id, value)
+                            }
                             trackColor={{
                                 true: palette.blue,
                                 false: 'rgba(192, 202, 245, 0.3)',
@@ -96,12 +111,16 @@ export default function ConnectorsDialog({ visible, onClose }: Props) {
     if (!visible) return null;
 
     const connectedConnectors = CONNECTORS.filter(c => {
-        const integration = integrations.find(i => i.provider.toLowerCase() === c.oauthProvider.toLowerCase());
+        const integration = integrations.find(
+            i => i.provider.toLowerCase() === c.oauthProvider.toLowerCase(),
+        );
         return integration?.connected;
     });
 
     const availableConnectors = CONNECTORS.filter(c => {
-        const integration = integrations.find(i => i.provider.toLowerCase() === c.oauthProvider.toLowerCase());
+        const integration = integrations.find(
+            i => i.provider.toLowerCase() === c.oauthProvider.toLowerCase(),
+        );
         return !integration?.connected;
     });
 

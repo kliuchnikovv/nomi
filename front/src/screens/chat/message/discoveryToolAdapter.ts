@@ -79,6 +79,7 @@ export function unwrapDiscoveryToolCall(
     if (env.type === 'question') {
         return {
             name: 'Clarification needed',
+            icon: 'chat-question-outline',
             arguments: requestText,
             result: env.question,
             status: toolCall.status,

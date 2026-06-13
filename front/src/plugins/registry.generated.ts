@@ -1,6 +1,12 @@
 /**
  * Generated from plugins manifest.yaml files.
  * Regenerate with: node scripts/generate-registry.js (from repo root)
+ *
+ * NOTE: `serverTracked` is maintained by hand here — it cannot be derived from
+ * the manifest fields (e.g. imap's manifest is `auth.type: none` / client_only
+ * yet it IS persisted server-side via a bespoke creds endpoint). If the
+ * generator is ever restored, teach it to emit `serverTracked` from an explicit
+ * manifest field (e.g. `storage.server_tracked`).
  */
 
 export type StorageType = 'client' | 'server' | 'hybrid';
@@ -15,6 +21,16 @@ export interface IntegrationMetadata {
     supportsBackgroundTasks: boolean;
     systemEventListeners: string[];
     authType: 'oauth2' | 'api_key' | 'none';
+    /**
+     * True when this provider is persisted to the server `integrations` table
+     * (via OAuth callback, GitHub App install, or the IMAP creds endpoint), so
+     * the server is authoritative for its identity. False for purely-local
+     * client integrations (ios_*) and providers stored elsewhere (telegram →
+     * plugin_data). The integration reconciler only orphan-deletes server-tracked
+     * providers — otherwise client-only integrations get wiped right after they
+     * are added. See services/integrations/integrationSync.ts.
+     */
+    serverTracked: boolean;
     category?: string;
     color?: string;
 }
@@ -30,6 +46,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: true,
         systemEventListeners: ['push_notifications', 'app_lifecycle'],
         authType: 'oauth2',
+        serverTracked: true,
         category: 'email',
         color: '#EA4335',
     },
@@ -43,6 +60,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: true,
         systemEventListeners: ['push_notifications', 'app_lifecycle'],
         authType: 'oauth2',
+        serverTracked: true,
         category: 'calendar',
         color: '#4285F4',
     },
@@ -56,6 +74,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: false,
         systemEventListeners: [],
         authType: 'oauth2',
+        serverTracked: true,
         category: 'development',
         color: '#6e7681',
     },
@@ -69,6 +88,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: false,
         systemEventListeners: [],
         authType: 'api_key',
+        serverTracked: false,
         category: 'messaging',
         color: '#0088cc',
     },
@@ -82,6 +102,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: false,
         systemEventListeners: [],
         authType: 'api_key',
+        serverTracked: true,
         category: 'development',
         color: '#9334EA',
     },
@@ -95,6 +116,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: true,
         systemEventListeners: ['app_lifecycle'],
         authType: 'none',
+        serverTracked: false,
         category: 'calendar',
         color: '#FF3B30',
     },
@@ -108,6 +130,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: true,
         systemEventListeners: ['app_lifecycle'],
         authType: 'none',
+        serverTracked: false,
         category: 'productivity',
         color: '#FF9500',
     },
@@ -121,6 +144,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: true,
         systemEventListeners: ['app_lifecycle'],
         authType: 'none',
+        serverTracked: false,
         category: 'social',
         color: '#007AFF',
     },
@@ -135,6 +159,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: true,
         systemEventListeners: ['app_lifecycle'],
         authType: 'none',
+        serverTracked: false,
         category: 'health',
         color: '#FF2D55',
     },
@@ -148,6 +173,7 @@ export const INTEGRATION_REGISTRY: Record<string, IntegrationMetadata> = {
         supportsBackgroundTasks: true,
         systemEventListeners: ['app_lifecycle'],
         authType: 'api_key',
+        serverTracked: true,
         category: 'email',
         color: '#5B8DEF',
     },
