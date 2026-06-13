@@ -72,7 +72,7 @@ func New(
 			}
 			return h
 		}()
-		toolsHandler          = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey)
+		toolsHandler          = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey, ctr.GitHubApp)
 		integrationsHandler   = handlers.NewIntegrationsHandler(ctr.Storage, logger)
 		githubAppHandler      = handlers.NewGitHubAppHandler(logger, cfg, ctr.Storage)
 		botIdentityHandler    = handlers.NewBotIdentityHandler(ctr.Storage, logger)

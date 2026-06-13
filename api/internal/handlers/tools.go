@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/kliuchnikovv/genie-api/internal/crypto"
+	"github.com/kliuchnikovv/genie-api/internal/ghtoken"
+	"github.com/kliuchnikovv/genie-api/internal/githubapp"
 	"github.com/kliuchnikovv/genie-api/internal/integrations"
 	"github.com/kliuchnikovv/genie-api/internal/plugins"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
@@ -18,13 +20,15 @@ type ToolsHandler struct {
 	store     *storage.Storage
 	logger    *zap.Logger
 	cryptoKey []byte
+	ghApp     *githubapp.Client
 }
 
-func NewToolsHandler(store *storage.Storage, logger *zap.Logger, cryptoKey []byte) *ToolsHandler {
+func NewToolsHandler(store *storage.Storage, logger *zap.Logger, cryptoKey []byte, ghApp *githubapp.Client) *ToolsHandler {
 	return &ToolsHandler{
 		store:     store,
 		logger:    logger,
 		cryptoKey: cryptoKey,
+		ghApp:     ghApp,
 	}
 }
 
@@ -204,6 +208,29 @@ func (h *ToolsHandler) ListTools(c *gin.Context) {
 			providerMap[integration.Provider] = entry
 		}
 		entry.accounts = append(entry.accounts, account)
+
+		// GitHub no longer stores an OAuth token: the App installation token is
+		// minted on demand (scoped to the repos the user granted). ghtoken returns
+		// the App token, or "" when the user has an installation but minting failed
+		// (in which case we skip GitHub rather than leaking unauthorized repos via a
+		// stale broad OAuth grant). This must mirror the room_handlers.go path.
+		if integration.Provider == "github" {
+			if ghTok := ghtoken.ForUser(
+				c.Request.Context(), h.store, h.ghApp, h.cryptoKey, userID,
+			); ghTok != "" {
+				entry.mergedParams[accountID] = map[string]interface{}{
+					"access_token":  ghTok,
+					"user_id":       userID.String(),
+					"provider":      integration.Provider,
+					"account_email": integration.AccountEmail,
+				}
+			} else {
+				h.logger.Warn("no github token available (no installation or mint failed), skipping credentials",
+					zap.String("account_email", integration.AccountEmail),
+				)
+			}
+			continue
+		}
 
 		// For server-side tools, load credentials from oauth_tokens (encrypted)
 		if provider.StorageType == integrations.StorageTypeServer || provider.StorageType == integrations.StorageTypeHybrid {

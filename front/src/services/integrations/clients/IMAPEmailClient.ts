@@ -51,11 +51,27 @@ class IMAPEmailClient {
     private async getCredentials(
         integrationId: string,
     ): Promise<IMAPCredentials> {
+        // The agent may call email tools without an integration_id (e.g. "get my
+        // latest email" when there is a single mailbox). Resolve the lone IMAP
+        // integration on this device instead of crashing on an undefined id.
+        if (!integrationId) {
+            const imapIntegrations = (
+                await integrationStorage.getIntegrations()
+            ).filter(i => i.provider === 'imap');
+            if (imapIntegrations.length === 1) {
+                integrationId = imapIntegrations[0].id;
+            }
+        }
+
         let credentials = await integrationStorage.getCredentials(
             integrationId,
         );
 
-        if (!credentials && integrationId.includes('@')) {
+        if (
+            !credentials &&
+            typeof integrationId === 'string' &&
+            integrationId.includes('@')
+        ) {
             // discovery_tool passes display_name (the email) as integration_id
             // because the server UUID can differ from the device-local UUID.
             // Resolve by natural key (provider + email) — the integration is
