@@ -31,6 +31,15 @@ class GitHubTools(Toolkit):
         self.register(self.list_pull_requests)
         self.register(self.get_file_content)
         self.register(self.create_or_update_file)
+        self.register(self.create_branch)
+        self.register(self.create_pull_request)
+
+    async def _get_default_branch(self, owner: str, repo: str) -> str:
+        """Return the repository's default branch (best-effort, defaults to main)."""
+        info = await self._make_request("GET", f"/repos/{owner}/{repo}")
+        if isinstance(info, dict):
+            return info.get("default_branch") or "main"
+        return "main"
 
     async def _make_request(
         self, method: str, endpoint: str, data: Optional[Dict] = None
@@ -226,6 +235,15 @@ class GitHubTools(Toolkit):
         Returns:
             Commit information
         """
+        # Guard: never commit directly to the default branch or master/main.
+        # The agent must work on a feature branch and open a pull request.
+        default_branch = await self._get_default_branch(owner, repo)
+        if branch == default_branch or branch.lower() in ("main", "master"):
+            raise ValueError(
+                f"Refusing to commit directly to '{branch}'. Create a feature "
+                "branch (create_branch) and open a pull request (create_pull_request)."
+            )
+
         # Encode content to base64
         content_bytes = content.encode("utf-8")
         encoded_content = base64.b64encode(content_bytes).decode("utf-8")
@@ -245,6 +263,74 @@ class GitHubTools(Toolkit):
         if isinstance(result, dict):
             return result
         return {}
+
+    async def create_branch(
+        self,
+        owner: str,
+        repo: str,
+        branch: str,
+        from_branch: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Create a new branch from another branch.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            branch: Name of the new branch
+            from_branch: Base branch to branch from (defaults to the default branch)
+
+        Returns:
+            The created git ref
+        """
+        base = from_branch or await self._get_default_branch(owner, repo)
+        ref = await self._make_request(
+            "GET", f"/repos/{owner}/{repo}/git/ref/heads/{base}"
+        )
+        sha = None
+        if isinstance(ref, dict):
+            sha = ref.get("object", {}).get("sha")
+        if not sha:
+            raise Exception(f"Could not resolve base branch '{base}'")
+
+        result = await self._make_request(
+            "POST",
+            f"/repos/{owner}/{repo}/git/refs",
+            {"ref": f"refs/heads/{branch}", "sha": sha},
+        )
+        return result if isinstance(result, dict) else {}
+
+    async def create_pull_request(
+        self,
+        owner: str,
+        repo: str,
+        title: str,
+        head: str,
+        base: Optional[str] = None,
+        body: str = "",
+    ) -> Dict[str, Any]:
+        """Open a pull request from a head branch into a base branch.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            title: Pull request title
+            head: Branch with your changes
+            base: Target branch (defaults to the repo's default branch)
+            body: Pull request description
+
+        Returns:
+            The created pull request
+        """
+        target = base or await self._get_default_branch(owner, repo)
+        if head == target:
+            raise ValueError("head and base must be different branches")
+
+        result = await self._make_request(
+            "POST",
+            f"/repos/{owner}/{repo}/pulls",
+            {"title": title, "head": head, "base": target, "body": body},
+        )
+        return result if isinstance(result, dict) else {}
 
 
 def build(params: Dict[str, Any]) -> Toolkit:

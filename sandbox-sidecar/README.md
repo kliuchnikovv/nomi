@@ -55,5 +55,5 @@ curl -s $T -X DELETE $B/api/sandboxes/$ID
 Implements create/exec/files/destroy + the per-(user,project) keying. **Not yet:**
 checkpoints / persistent workspaces (relies on `idleTimeoutMinutes` auto-destroy), durable
 user→sandbox mapping across sidecar restarts (recoverable via `Sandbox.list()` + the
-`GENIE_USER_ID`/`GENIE_PROJECT_ID` env tags set at create), streaming-exec polish,
+`NOMI_USER_ID`/`NOMI_PROJECT_ID` env tags set at create), streaming-exec polish,
 concurrency-limit handling, and cost guardrails.

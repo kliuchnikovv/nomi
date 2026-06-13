@@ -40,7 +40,7 @@ function tokenValid(provided: string | undefined): boolean {
 // replicate that with an in-memory map. This is enough for a prototype: the
 // Python client already caches sandbox ids and re-creates on 404, and idle
 // Railway sandboxes auto-destroy. On restart the map is lost and Python
-// re-creates (recoverable later via Sandbox.list() + the GENIE_* env tags).
+// re-creates (recoverable later via Sandbox.list() + the NOMI_* env tags).
 // ---------------------------------------------------------------------------
 const userIndex = new Map<string, string>(); // "user:project" -> sandboxId
 const meta = new Map<string, { userId: string; projectId: string; createdAt: string }>();
@@ -70,6 +70,44 @@ function shellQuote(arg: string): string {
 function isNotFound(err: unknown): boolean {
   const name = (err as { name?: string } | undefined)?.name ?? "";
   return name === "SandboxNotFoundError" || name === "SandboxFileNotFoundError";
+}
+
+/**
+ * Recover an existing sandbox for (user, project) after an in-memory cache miss
+ * (e.g. the sidecar restarted while a sandbox is still alive). The SDK's
+ * `Sandbox.list()` does NOT expose the sandbox env, so we can't match the
+ * NOMI_* tags from metadata — instead we connect to each RUNNING sandbox and
+ * read the tags back with a tiny exec. This only runs on a create cache miss,
+ * and the personal-scope environment holds very few sandboxes, so the probe is
+ * cheap. Returns the matching SandboxInfo, or null.
+ */
+async function recoverSandbox(
+  userId: string,
+  projectId: string
+): Promise<{ id: string; createdAt: string } | null> {
+  let infos;
+  try {
+    infos = await Sandbox.list();
+  } catch (err) {
+    console.error("recover: Sandbox.list() failed:", err);
+    return null;
+  }
+  for (const info of infos) {
+    if (info.status !== "RUNNING") continue;
+    try {
+      const sb = await Sandbox.connect(info.id);
+      const r = await sb.exec('echo "$NOMI_USER_ID|$NOMI_PROJECT_ID"', { timeoutSec: 10 });
+      const line = (r.stdout ?? "").trim();
+      const sep = line.indexOf("|");
+      if (sep === -1) continue;
+      if (line.slice(0, sep) === userId && line.slice(sep + 1) === projectId) {
+        return { id: info.id, createdAt: info.createdAt };
+      }
+    } catch {
+      // Unreachable/unreadable sandbox — skip it.
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -117,10 +155,20 @@ app.post(
       }
     }
 
+    // Cache miss — the sidecar may have restarted while a sandbox is still
+    // alive. Recover it before creating a duplicate.
+    const recovered = await recoverSandbox(userId, projectId);
+    if (recovered) {
+      userIndex.set(key, recovered.id);
+      meta.set(recovered.id, { userId, projectId, createdAt: recovered.createdAt });
+      console.log(`recovered sandbox ${recovered.id} for ${key}`);
+      return void res.status(201).json(sandboxJSON(recovered.id));
+    }
+
     const sandbox = await Sandbox.create({
       idleTimeoutMinutes: IDLE_TIMEOUT_MINUTES,
       networkIsolation: "ISOLATED",
-      env: { GENIE_USER_ID: userId, GENIE_PROJECT_ID: projectId },
+      env: { NOMI_USER_ID: userId, NOMI_PROJECT_ID: projectId },
     });
     userIndex.set(key, sandbox.id);
     meta.set(sandbox.id, { userId, projectId, createdAt: new Date().toISOString() });
