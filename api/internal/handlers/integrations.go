@@ -5,20 +5,23 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/kliuchnikovv/genie-api/internal/githubapp"
 	"github.com/kliuchnikovv/genie-api/internal/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type IntegrationsHandler struct {
-	store  *storage.Storage
-	logger *zap.Logger
+	store     *storage.Storage
+	logger    *zap.Logger
+	githubApp *githubapp.Client // may be nil if the GitHub App is unconfigured
 }
 
-func NewIntegrationsHandler(store *storage.Storage, logger *zap.Logger) *IntegrationsHandler {
+func NewIntegrationsHandler(store *storage.Storage, logger *zap.Logger, githubApp *githubapp.Client) *IntegrationsHandler {
 	return &IntegrationsHandler{
-		store:  store,
-		logger: logger,
+		store:     store,
+		logger:    logger,
+		githubApp: githubApp,
 	}
 }
 
@@ -84,6 +87,31 @@ func (h *IntegrationsHandler) DeleteIntegration(c *gin.Context) {
 		return
 	}
 
+	ctx := c.Request.Context()
+
+	// GitHub is a GitHub App install, not a stored OAuth token: disconnecting must
+	// also uninstall the app from the user's GitHub account, otherwise it lingers
+	// under their "Installed GitHub Apps" forever. Best-effort — a GitHub hiccup
+	// must not block the user from disconnecting, and we drop the local row either
+	// way so a later reconnect is clean.
+	if integration.Provider == "github" {
+		inst, err := h.store.GetGitHubInstallationByUser(ctx, userID)
+		switch {
+		case err == nil && inst.InstallationID != 0:
+			if h.githubApp != nil {
+				if err := h.githubApp.DeleteInstallation(ctx, inst.InstallationID); err != nil {
+					h.logger.Warn("failed to uninstall github app", zap.Error(err),
+						zap.Int64("installation_id", inst.InstallationID))
+				}
+			}
+		case err != nil && err != gorm.ErrRecordNotFound:
+			h.logger.Warn("failed to look up github installation", zap.Error(err))
+		}
+		if err := h.store.DeleteGitHubInstallationByUser(ctx, userID); err != nil {
+			h.logger.Warn("failed to delete github installation row", zap.Error(err))
+		}
+	}
+
 	// Clean up associated plugin_data records
 	if err := h.store.DB.Where("user_id = ? AND plugin_name = ?", userID, integration.Provider).
 		Delete(&storage.PluginData{}).Error; err != nil {
@@ -93,7 +121,7 @@ func (h *IntegrationsHandler) DeleteIntegration(c *gin.Context) {
 	// Clean up the stored OAuth/IMAP credential so it doesn't linger after
 	// disconnect (and so a reconnect doesn't create a duplicate row).
 	if err := h.store.DeleteOAuthTokenByUserAndEmail(
-		c.Request.Context(), userID, integration.Provider, integration.AccountEmail,
+		ctx, userID, integration.Provider, integration.AccountEmail,
 	); err != nil {
 		h.logger.Warn("failed to delete oauth token", zap.Error(err),
 			zap.String("provider", integration.Provider),

@@ -38,6 +38,19 @@ func (s *Storage) GetGitHubInstallationByUser(ctx context.Context, userID uuid.U
 	return &inst, nil
 }
 
+// GetGitHubInstallationByInstallationID looks up an installation by its GitHub
+// installation_id, returning gorm.ErrRecordNotFound if unknown. Used by the
+// webhook handler, which identifies the install by id rather than by user.
+func (s *Storage) GetGitHubInstallationByInstallationID(ctx context.Context, installationID int64) (*GitHubAppInstallation, error) {
+	var inst GitHubAppInstallation
+	if err := s.DB.WithContext(ctx).
+		Where("installation_id = ?", installationID).
+		First(&inst).Error; err != nil {
+		return nil, err
+	}
+	return &inst, nil
+}
+
 // DeleteGitHubInstallationByUser removes a user's installation record (e.g. on
 // uninstall). No error if the row doesn't exist.
 func (s *Storage) DeleteGitHubInstallationByUser(ctx context.Context, userID uuid.UUID) error {

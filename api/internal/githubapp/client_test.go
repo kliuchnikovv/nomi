@@ -1,11 +1,15 @@
 package githubapp
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,5 +85,64 @@ func TestAppJWT(t *testing.T) {
 	lifetime := claims.ExpiresAt.Sub(claims.IssuedAt.Time)
 	if lifetime > 11*time.Minute {
 		t.Errorf("lifetime %v exceeds GitHub's 10m cap", lifetime)
+	}
+}
+
+func TestDeleteInstallation(t *testing.T) {
+	pemStr, _ := testKeyPEM(t)
+
+	tests := []struct {
+		name       string
+		status     int
+		wantErr    bool
+		wantCalled bool
+	}{
+		{name: "success 204", status: http.StatusNoContent, wantErr: false, wantCalled: true},
+		{name: "already gone 404", status: http.StatusNotFound, wantErr: false, wantCalled: true},
+		{name: "server error", status: http.StatusInternalServerError, wantErr: true, wantCalled: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var called bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				if r.Method != http.MethodDelete {
+					t.Errorf("method = %q, want DELETE", r.Method)
+				}
+				if r.URL.Path != "/app/installations/42" {
+					t.Errorf("path = %q, want /app/installations/42", r.URL.Path)
+				}
+				if auth := r.Header.Get("Authorization"); !strings.HasPrefix(auth, "Bearer ") {
+					t.Errorf("missing Bearer auth header, got %q", auth)
+				}
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+
+			c, err := NewClient(456, pemStr)
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			c.baseURL = srv.URL
+			// Seed the cache so we can assert it's evicted on success.
+			c.cache[42] = cachedToken{token: "stale", expiresAt: time.Now().Add(time.Hour)}
+
+			err = c.DeleteInstallation(context.Background(), 42)
+			if called != tt.wantCalled {
+				t.Errorf("server called = %v, want %v", called, tt.wantCalled)
+			}
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !tt.wantErr {
+				if _, ok := c.cache[42]; ok {
+					t.Error("cached token should be evicted after delete")
+				}
+			}
+		})
 	}
 }

@@ -73,8 +73,9 @@ func New(
 			return h
 		}()
 		toolsHandler          = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey, ctr.GitHubApp)
-		integrationsHandler   = handlers.NewIntegrationsHandler(ctr.Storage, logger)
+		integrationsHandler   = handlers.NewIntegrationsHandler(ctr.Storage, logger, ctr.GitHubApp)
 		githubAppHandler      = handlers.NewGitHubAppHandler(logger, cfg, ctr.Storage)
+		webhooksHandler       = handlers.NewWebhooksHandler(ctr.Storage, logger, cfg)
 		botIdentityHandler    = handlers.NewBotIdentityHandler(ctr.Storage, logger)
 		planDocumentsHandler  = handlers.NewPlanDocumentsHandler(ctr.Storage, logger)
 		memoriesHandler       = handlers.NewMemoriesHandler(ctr.Storage, logger)
@@ -240,6 +241,9 @@ func New(
 	// callback is public (user identified via signed state) and persists installation_id.
 	r.GET("/api/integrations/github/app/install", wrapWithAuth(githubAppHandler.Install, authMiddleware))
 	r.GET("/api/integrations/github/app/callback", githubAppHandler.Callback)
+	// GitHub App webhook (public; authenticated by HMAC signature). Reacts to
+	// `installation` events so removing the app on GitHub disconnects it here too.
+	r.POST("/api/integrations/github/app/webhook", webhooksHandler.HandleGitHubWebhook)
 
 	// File Upload API
 	r.POST("/api/upload", wrapWithAuth(uploadHandler.UploadFile, authMiddleware))

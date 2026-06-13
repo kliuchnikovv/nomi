@@ -49,6 +49,7 @@ type Client struct {
 	appID      int64
 	privateKey *rsa.PrivateKey
 	httpClient *http.Client
+	baseURL    string // GitHub API base; overridable in tests.
 
 	mu    sync.Mutex
 	cache map[int64]cachedToken
@@ -82,6 +83,7 @@ func NewClient(appID int64, privateKey string) (*Client, error) {
 		appID:      appID,
 		privateKey: key,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
+		baseURL:    githubAPIBase,
 		cache:      make(map[int64]cachedToken),
 	}, nil
 }
@@ -141,7 +143,7 @@ func (c *Client) mintInstallationToken(
 		return "", time.Time{}, err
 	}
 
-	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", githubAPIBase, installationID)
+	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", c.baseURL, installationID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return "", time.Time{}, err
@@ -175,4 +177,43 @@ func (c *Client) mintInstallationToken(
 		return "", time.Time{}, fmt.Errorf("githubapp: empty token in response")
 	}
 	return parsed.Token, parsed.ExpiresAt, nil
+}
+
+// DeleteInstallation uninstalls the app from the account behind installationID,
+// authenticating as the app (the inverse of minting an installation token). This
+// is what removes the app from the user's "Installed GitHub Apps" list.
+// Idempotent: a 404 (already uninstalled) is treated as success.
+func (c *Client) DeleteInstallation(ctx context.Context, installationID int64) error {
+	appJWT, err := c.appJWT()
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/app/installations/%d", c.baseURL, installationID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+appJWT)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("githubapp: delete installation: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf(
+			"githubapp: delete installation failed (status %d): %s",
+			resp.StatusCode, string(body),
+		)
+	}
+
+	// Drop any cached token for this installation — it's now invalid.
+	c.mu.Lock()
+	delete(c.cache, installationID)
+	c.mu.Unlock()
+	return nil
 }
