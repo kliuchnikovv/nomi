@@ -565,6 +565,40 @@ class AgentFactory:
             except Exception as e:
                 logger.warning("[Factory] Failed to add WatchTools: %s", e)
 
+        # Wrap sandbox access in a delegate_to sub-agent. When the user has the
+        # sandbox integration enabled, Nomi delegates coding/env tasks to a Sandbox
+        # Engineer instead of driving raw exec_command itself, so the noisy shell
+        # loop stays out of Nomi's context. The engineer reuses the SAME SandboxTools
+        # instance (same user:project VM, cached sandbox id, server-side token).
+        try:
+            sandbox_tool = next(
+                (t for t in tools if getattr(t, "name", "") == "sandbox_tools"),
+                None,
+            )
+            if sandbox_tool is not None:
+                from src.agents.sandbox_engineer import build_sandbox_engineer_agent
+                from src.tools.delegation import DelegationTools
+
+                registry = {
+                    "sandbox_engineer": (
+                        lambda sb=sandbox_tool, m=model: build_sandbox_engineer_agent(
+                            model=m,
+                            sandbox_tools=sb,
+                            db=None,
+                            debug_mode=self._debug_mode,
+                        )
+                    )
+                }
+                # Drop the raw sandbox toolkit from Nomi's own tools — it now reaches
+                # the sandbox only by delegating to the engineer.
+                tools = [t for t in tools if t is not sandbox_tool]
+                tools.append(DelegationTools(registry=registry))
+                logger.info(
+                    "[Factory] Wired delegate_to(sandbox_engineer) and removed raw sandbox tool"
+                )
+        except Exception as e:
+            logger.warning("[Factory] Failed to wire delegation tool: %s", e)
+
         # Register chat history search tool for single chat mode
         if single_chat_mode and user_id and self._knowledge is not None:
             from src.tools.chat_history import make_search_chat_history
