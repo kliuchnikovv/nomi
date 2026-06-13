@@ -110,11 +110,6 @@ def _dedup_memories(db: Any, user_id: str) -> None:
                 seen.add(key)
         if to_delete:
             db.delete_user_memories(to_delete, user_id=user_id)
-            logger.info(
-                "[RedisSession] Deferred learning removed %d duplicate memories for user %s",
-                len(to_delete),
-                user_id,
-            )
     except Exception as e:
         logger.warning("[RedisSession] Memory dedup failed (non-fatal): %s", e)
 
@@ -150,11 +145,6 @@ async def _run_deferred_learning(chat_id: str) -> None:
             mm = MemoryManager(model=model, db=db)
             await mm.acreate_user_memories(messages=list(messages), user_id=user_id)
             _dedup_memories(db, user_id)
-            logger.info(
-                "[RedisSession] Deferred learning completed for chat %s (%d msgs)",
-                chat_id,
-                len(messages),
-            )
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -249,17 +239,10 @@ class RedisSession:
             channel = RedisConstants.CHANNEL_CLIENT_TOOL_RESULT.format(self.session_id)
             await self.pubsub.subscribe(channel)
 
-            logger.info(
-                "[RedisSession] Subscribed to client tool result channel: %s", channel
-            )
 
             # Start background listener task immediately
             # No need to wait for subscription confirmation - Redis subscription is reliable
             self._result_listener_task = asyncio.create_task(self._listen_for_results())
-            logger.info(
-                "[RedisSession] Result listener started for session %s",
-                self.session_id,
-            )
 
         except Exception as e:
             logger.error(
@@ -289,17 +272,12 @@ class RedisSession:
                         future = self.pending_client_tool_results.pop(call_id)
                         if not future.done():
                             future.set_result(result)
-                            logger.info(
-                                "[RedisSession] Resolved client tool result for call_id=%s",
-                                call_id,
-                            )
                 except Exception as e:
                     logger.warning(
                         "[RedisSession] Failed to process client tool result: %s", e
                     )
 
         except asyncio.CancelledError:
-            logger.info("[RedisSession] Result listener cancelled")
             raise
         except Exception as e:
             logger.error("[RedisSession] Result listener error: %s", e, exc_info=True)
@@ -352,7 +330,6 @@ class RedisSession:
                     pass
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
             self.redis_client = make_redis_client(redis_url)
-            logger.info("[RedisSession] Reconnected to Redis")
         except Exception as e:
             logger.error("[RedisSession] Failed to reconnect to Redis: %s", e)
             self.redis_client = None
@@ -362,10 +339,6 @@ class RedisSession:
         if self._go_ws is not None and self._go_ws.is_connected:
             try:
                 await self._go_ws.send_frame(frame)
-                logger.debug(
-                    "[RedisSession] Frame queued via GoWS op=%s chat=%s id=%d",
-                    frame.op, frame.chat_id, frame.id,
-                )
                 self.next_id = frame.id + 1
                 return self.next_id
             except Exception as e:
@@ -375,10 +348,6 @@ class RedisSession:
         data = frame.marshal()
         target_id = self.user_id or self.session_id
         channel = f"chat:user:{target_id}"
-        logger.debug(
-            "[RedisSession] Frame sent via Redis op=%s chat=%s id=%d channel=%s",
-            frame.op, frame.chat_id, frame.id, channel,
-        )
         payload_json = json.dumps(data)
 
         if self.redis_client:
@@ -957,11 +926,9 @@ class RedisSession:
                 # STOP is handled by RedisWorker via task.cancel()
                 # This path shouldn't be reached for STOP since Worker handles it directly
                 self.cancel_event.set()
-                logger.info("[RedisSession] STOP received, setting cancel flag")
             else:
                 logger.warning("[RedisSession] Unsupported op: %s", frame.op)
         except asyncio.CancelledError:
-            logger.info("[RedisSession] Task cancelled, cleaning up")
             # Proactively repair dangling tool calls to prevent corrupted history on next run
             if self.agent:
                 try:
@@ -1019,10 +986,6 @@ class RedisSession:
         rag_user_id = self.user_id or self.session_id
 
         try:
-            # Check if this is a Team mode request
-            # agent_type could be "team" (generic) and command_desc provides specific type
-            team_type = None
-
             if self.command_desc and isinstance(self.command_desc, dict):
                 # Inject auth token if available in payload but not in command_desc
                 if "auth_token" not in self.command_desc:
@@ -1033,22 +996,6 @@ class RedisSession:
                     )
                     if token:
                         self.command_desc["auth_token"] = token
-                        logger.info(
-                            "[RedisSession] Injected auth_token into command_desc"
-                        )
-
-                team_type = self.command_desc.get("type", "").lower()
-                # Known team types that require TeamFactory
-                known_teams = [
-                    "development_team",
-                    "dnd_team",
-                    "travel_planning",
-                    "nomi",
-                ]
-                if team_type in known_teams:
-                    logger.info("[RedisSession] Detected team mode: type=%s", team_type)
-            elif self.agent_type and self.agent_type.lower() == "team":
-                logger.info("[RedisSession] Detected team mode from agent_type")
 
             # Using regular agent factory
             client_tool_runner = (
@@ -1143,13 +1090,6 @@ class RedisSession:
                     self.current_model_name = cmd_obj.get("model")
                     self._model_supports_vision_cache = None
 
-        tool_names = [t.name for t in self.tools_specs]
-        logger.info(
-            "[RedisSession] Parsed tools: count=%d, names=%s",
-            len(self.tools_specs),
-            tool_names,
-        )
-
     def _parse_tool_item(self, tool_dict: Any):
         """Parse a single tool item from the tools list."""
         if not isinstance(tool_dict, dict):
@@ -1157,12 +1097,6 @@ class RedisSession:
         try:
             params = self._extract_tool_params(tool_dict)
 
-            logger.info(
-                "[RedisSession] Parsed tool item: name=%s, has_creds=%s, has_token=%s",
-                tool_dict.get("name"),
-                "creds" in params or "creds" in tool_dict,
-                "access_token" in params or "token" in params,
-            )
 
             tool_spec = ToolSpec(
                 name=tool_dict.get("name", ""),
@@ -1171,12 +1105,6 @@ class RedisSession:
                 params=params if isinstance(params, dict) else {},
             )
             self.tools_specs.append(tool_spec)
-            logger.debug(
-                "[RedisSession] Parsed tool: name=%s, enabled=%s, params_keys=%s",
-                tool_spec.name,
-                tool_spec.enabled,
-                list(params.keys()),
-            )
         except Exception as e:
             logger.warning("[RedisSession] Failed to parse tool: %s", e)
 
@@ -1222,12 +1150,6 @@ class RedisSession:
                                 "timestamp": msg.get("created_at") or msg.get("timestamp", ""),
                             }
                         )
-                logger.info(
-                    "[RedisSession] Parsed history: count=%d, first_role=%s, last_role=%s",
-                    len(self.chat_history),
-                    self.chat_history[0]["role"] if self.chat_history else "N/A",
-                    self.chat_history[-1]["role"] if self.chat_history else "N/A",
-                )
 
     async def _extract_and_store_facts(self, text: str) -> None:
         """
@@ -1246,7 +1168,6 @@ class RedisSession:
             # Check if db is available
             db = getattr(self.agent_factory, "_db", None)
             if db is None:
-                logger.debug("[RedisSession] No database available for fact extraction")
                 return
 
             model = self.agent_factory.build_model(
@@ -1291,9 +1212,6 @@ class RedisSession:
                     "exceeded",
                 )
             ):
-                logger.debug(
-                    "[RedisSession] Skipping fact extraction — response looks like an error"
-                )
                 return
             if isinstance(content, str):
                 for line in content.splitlines():
@@ -1318,16 +1236,11 @@ class RedisSession:
                                     import re
                                     return re.sub(r"\s+", " ", s.lower().strip())
                                 if _norm(top_content) == _norm(fact):
-                                    logger.debug(
-                                        "[RedisSession] Skipping duplicate fact: %s",
-                                        fact[:80],
-                                    )
                                     continue
                             knowledge.insert(
                                 text_content=fact,
                                 metadata={"user_id": user_id},
                             )
-                            logger.info("[RedisSession] Stored fact: %s", fact[:80])
                         except Exception as e:
                             logger.warning(
                                 "[RedisSession] Failed to store fact %s: %s",
@@ -1409,11 +1322,6 @@ class RedisSession:
                 "event_type": event_type,
                 "deep_link": build_proactive_deep_link(event_type, event_payload),
             }
-            logger.info(
-                "[RedisSession] Proactive event received: type=%s, synthesized prompt len=%d",
-                event_type,
-                len(text),
-            )
 
         # --- NEW LOGIC: Init from Payload ---
 
@@ -1425,7 +1333,6 @@ class RedisSession:
         incoming_user_id = payload.get("user_id")
         if incoming_user_id:
             self.user_id = str(incoming_user_id)
-            logger.info("[RedisSession] Updated user_id from payload: %s", self.user_id)
 
         # 0-pre. Request-level idempotency + pickup ACK.
         # The Go hub stamps a stable request_id (= user message UUID) and may
@@ -1495,11 +1402,6 @@ class RedisSession:
             self._delivery_context = {
                 k: v for k, v in payload.items() if k not in standard_keys
             }
-            logger.info(
-                "[RedisSession] Delivery source=%s, context_keys=%s",
-                self._delivery_source,
-                list(self._delivery_context.keys()),
-            )
 
         # 1. Check and update chat history (payload mode only; agno mode loads history internally)
         incoming_history = payload.get("history")
@@ -1510,7 +1412,6 @@ class RedisSession:
 
         # 2. Check and update tools/commands
         if payload.get("tools") or payload.get("command") or payload.get("team"):
-            logger.info("[RedisSession] Found tools/command in payload, parsing")
             self._parse_tools(payload)
             # If tools updated, we might need to assume agent needs rebuild (which happens below anyway)
 
@@ -1532,9 +1433,6 @@ class RedisSession:
                                     text_content=fact.strip(),
                                     metadata={"user_id": str(self.user_id)},
                                 )
-                                logger.info(
-                                    "[RedisSession] Stored client fact: %s", fact[:80]
-                                )
                             except Exception as e:
                                 logger.warning(
                                     "[RedisSession] Failed to store client fact: %s", e
@@ -1547,9 +1445,6 @@ class RedisSession:
         if incoming_context_items:
             if isinstance(incoming_context_items, list):
                 self.context_items = incoming_context_items
-                logger.info(
-                    "[RedisSession] Stored %d context items", len(self.context_items)
-                )
             else:
                 logger.warning(
                     "[RedisSession] Invalid context_items type: %s",
@@ -1913,7 +1808,6 @@ class RedisSession:
                         await self._safe_deliver(delivery_handler, full_text)
 
         except asyncio.CancelledError:
-            logger.info("[RedisSession] Streaming cancelled by user")
             raise  # Re-raise to propagate cancellation
         except Exception as e:
             trace_id = frame.trace_id if hasattr(frame, "trace_id") else None
@@ -1968,10 +1862,6 @@ class RedisSession:
                     "[The user attached document(s). Extracted text content "
                     f"below:\n{pdf_texts}\n]\n\n{agent_input}"
                 )
-                logger.info(
-                    "[RedisSession] Extracted %d chars of document text from attachments",
-                    len(pdf_texts),
-                )
 
             bridge_model = self._get_vision_bridge_model()
             if bridge_model:
@@ -1981,32 +1871,14 @@ class RedisSession:
                         f"[The user has attached an image. A vision model analyzed it and produced the following description:\n{descriptions}]\n\n"
                         f"{agent_input}"
                     )
-                    logger.info(
-                        "[RedisSession] Vision bridge: described %d image(s) via %s",
-                        len(attachments),
-                        bridge_model,
-                    )
             elif self._model_supports_vision():
                 images = self._process_attachments(attachments)
                 if images:
                     kwargs["images"] = images
-            else:
-                logger.info(
-                    "[RedisSession] Model %s does not support vision; skipping %d attachment(s)",
-                    self.current_model_name,
-                    len(attachments),
-                )
 
         agent = self.agent
         if not agent:
             raise ValueError("Agent not initialized")
-
-        # Log what we're sending to the agent
-        logger.info(
-            "[RedisSession] Calling agent with: text=%s, kwargs=%s",
-            text[:50] if text else "None",
-            kwargs.keys(),
-        )
 
         result = await self._invoke_agent(agent, agent_input, kwargs)
         if not result:
@@ -2249,9 +2121,6 @@ class RedisSession:
                 try:
                     repaired = await self._repair_dangling_tool_calls(agent)
                     if repaired:
-                        logger.info(
-                            "[RedisSession] History repaired. Retrying agent invocation..."
-                        )
                         # Retry invocation
                         if hasattr(agent, "arun"):
                             result = await run_fn(agent.arun)
@@ -2359,11 +2228,6 @@ class RedisSession:
 
             if to_delete:
                 db.delete_user_memories(to_delete, user_id=self.user_id)
-                logger.info(
-                    "[RedisSession] Removed %d duplicate memories for user %s",
-                    len(to_delete),
-                    self.user_id,
-                )
         except Exception as e:
             logger.warning("[RedisSession] Memory deduplication failed: %s", e)
 
@@ -2607,11 +2471,6 @@ class RedisSession:
         self.chat_history = [
             m for m in self.chat_history if m.get("id") not in archived_ids
         ]
-        logger.info(
-            "[RedisSession] Archived %d messages for chat %s",
-            len(to_archive),
-            self.chat_id,
-        )
 
     async def _repair_dangling_tool_calls(self, agent: Any) -> bool:
         """Repairs dangling tool calls in agent history."""
@@ -2670,9 +2529,6 @@ class RedisSession:
                         missing_ids.append(tc_id)
 
                 if missing_ids:
-                    logger.info(
-                        "[RedisSession] Found missing outputs for: %s", missing_ids
-                    )
                     for missing_id in missing_ids:
                         dummy_msg = Message(
                             role="tool",
@@ -2689,7 +2545,6 @@ class RedisSession:
                     await real_agent.asave_session()
                 elif hasattr(real_agent, "save_session"):
                     real_agent.save_session()
-                logger.info("[RedisSession] Saved repaired history to storage")
             except Exception as e:
                 logger.error("[RedisSession] Failed to save repaired history: %s", e)
 
@@ -2725,12 +2580,9 @@ class RedisSession:
 
         async for ev in result:
             if self.cancel_event.is_set():
-                logger.info("[RedisSession] Stream cancelled by event flag")
                 break
 
             event_type = type(ev).__name__
-            # logger.info("[RedisSession] Stream event received: %s", event_type)
-            # logger.debug("[RedisSession] Event details: %s", ev)
 
             # Check if this is a member agent event
             agent_id = getattr(ev, "agent_id", None)
@@ -2909,9 +2761,6 @@ class RedisSession:
                 tool_args = {}
                 tool_id = None
 
-            logger.info(
-                "[RedisSession] Tool call started: %s (id=%s)", tool_name, tool_id
-            )
             tool_data = {
                 "type": "tool_call",
                 "tool": {
@@ -2930,11 +2779,6 @@ class RedisSession:
             if hasattr(ev, "tool") and ev.tool:
                 tool_dict = self._extract_tool_data(ev.tool)
 
-                logger.info(
-                    "[RedisSession] Tool call completed: %s (id=%s)",
-                    tool_dict["name"],
-                    tool_dict["id"],
-                )
 
                 # Accumulate tool result for agent context
                 self._accumulated_tool_results.append(tool_dict)
@@ -3022,10 +2866,6 @@ class RedisSession:
         if val and len(str(val)) > streamed_text_len:
             remainder = str(val)[streamed_text_len:]
             if remainder.strip():
-                logger.info(
-                    "[RedisSession] Sending remaining content from RunCompleted: %s...",
-                    remainder[:50],
-                )
                 # Check if it looks like reasoning
                 if remainder.strip().startswith(
                     "My thinking process"
@@ -3050,7 +2890,6 @@ class RedisSession:
         if "StepCompletedEvent" in event_type:
             # Get content from the event
             val = getattr(ev, "content", None)
-            step_name = getattr(ev, "step_name", None)
 
             # Also check step_response for nested content
             step_response = getattr(ev, "step_response", None)
@@ -3059,11 +2898,6 @@ class RedisSession:
 
             if val and str(val).strip():
                 content = str(val)
-                logger.info(
-                    "[RedisSession] StepCompletedEvent content from %s: %s...",
-                    step_name or "unknown",
-                    content[:100],
-                )
                 # Skip yielding content here to avoid duplication with RunContentEvent
                 # RunContentEvent + RunCompletedEvent already handle the streaming
 
@@ -3076,10 +2910,6 @@ class RedisSession:
                 if len(content) > streamed_text_len:
                     remainder = content[streamed_text_len:]
                     if remainder.strip():
-                        logger.info(
-                            "[RedisSession] WorkflowCompletedEvent final content: %s...",
-                            remainder[:100],
-                        )
                         yield {"type": "text", "content": remainder}
 
     async def _handle_text_chunk_event(

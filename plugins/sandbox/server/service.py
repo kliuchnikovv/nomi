@@ -12,7 +12,7 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 SANDBOX_CONTROLLER_URL = os.getenv(
-    "SANDBOX_CONTROLLER_URL", "http://sandbox-controller:8090"
+    "SANDBOX_CONTROLLER_URL", "http://sandbox-sidecar:8090"
 )
 SANDBOX_CONTROLLER_TOKEN = os.getenv("SANDBOX_CONTROLLER_TOKEN", "")
 

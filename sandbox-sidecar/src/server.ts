@@ -1,15 +1,13 @@
 /**
- * Sandbox sidecar.
+ * Sandbox sidecar — the agent sandbox backend.
  *
- * Re-implements the HTTP contract of `sandbox-controller` (the Go service the
- * Python `plugins/sandbox` talks to) on top of the Railway Sandboxes TypeScript
- * SDK. The Python client (`plugins/sandbox/server/service.py`) and the Go JSON
- * shapes (`sandbox-controller/internal/sandbox/models.go`) are the source of
- * truth for routes and field names — match them exactly.
- *
- * Switch from the Go controller to this sidecar by pointing the plugin at it:
+ * Serves the HTTP contract that the Python sandbox plugin
+ * (`plugins/sandbox/server/service.py`) calls, backed by per-user isolated VMs
+ * via the Railway Sandboxes TypeScript SDK. The plugin reaches it through:
  *   SANDBOX_CONTROLLER_URL=http://sandbox-sidecar.railway.internal:8090
- * No Python or Go code changes required.
+ *
+ * (This contract was originally defined by the now-removed Go `sandbox-controller`;
+ * `service.py` remains the source of truth for routes and JSON field names.)
  */
 import { timingSafeEqual } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";

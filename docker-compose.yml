@@ -43,42 +43,22 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/genie?sslmode=disable
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - REDIS_URL=redis://redis:6379
-      - SANDBOX_CONTROLLER_URL=http://sandbox-controller:8090
+      - SANDBOX_CONTROLLER_URL=http://sandbox-sidecar:8090
       - SANDBOX_CONTROLLER_TOKEN=dev-token
     depends_on:
       db:
         condition: service_healthy
-      sandbox-controller:
+      sandbox-sidecar:
         condition: service_started
 
-  sandbox-controller:
-    build:
-      context: ./sandbox-controller
-      dockerfile: Dockerfile
-    ports:
-      - "8090:8090"
-    environment:
-      - PORT=8090
-      - SANDBOX_BACKEND=local
-      - SANDBOX_CONTROLLER_TOKEN=dev-token
-      - SANDBOX_ROOT=/sandboxes
-      - SANDBOX_UID=1000
-      - SANDBOX_GID=1000
-      - SANDBOX_INACTIVITY_TIMEOUT=15m
-      - SANDBOX_MAX_PODS=10
-    volumes:
-      - sandbox_workspaces:/sandboxes
-
-  # Railway Sandboxes backend (alternative to sandbox-controller).
-  # To use it, point `back` at this service instead:
-  #   SANDBOX_CONTROLLER_URL=http://sandbox-sidecar:8090
+  # Railway Sandboxes backend — the agent sandbox runs in per-user isolated VMs.
   # Requires real Railway credentials in the environment below.
   sandbox-sidecar:
     build:
       context: ./sandbox-sidecar
       dockerfile: Dockerfile
     ports:
-      - "8091:8090"
+      - "8090:8090"
     environment:
       - PORT=8090
       - SANDBOX_CONTROLLER_TOKEN=dev-token
@@ -104,4 +84,3 @@ services:
 
 volumes:
   pgdata:
-  sandbox_workspaces:

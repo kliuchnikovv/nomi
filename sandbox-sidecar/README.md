@@ -50,6 +50,34 @@ curl -s $T "$B/api/sandboxes/$ID/download?path=/workspace/a.txt"
 curl -s $T -X DELETE $B/api/sandboxes/$ID
 ```
 
+## Deploying on Railway — gotchas
+
+These all bit us during the first deploy (2026-06-13). The local smoke test passes but the
+deployed service fails differently because the container env differs from a dev machine.
+
+1. **Set `SANDBOX_CONTROLLER_TOKEN` on the service or it crash-loops.** The server fails closed
+   (`process.exit(1)`) when the token is unset. A crashed sidecar shows up at `back` as a
+   `ClientConnectorError`, not an auth error.
+
+2. **Pin `PORT=8090`.** Railway injects its own `PORT` (we saw `8080`), the app obeys it
+   (`process.env.PORT`), but `back` targets `…railway.internal:8090` → connection refused →
+   `ClientConnectorError`. Set `PORT=8090` as a service variable so the listen port, the
+   healthcheck, and `back`'s URL all agree. (Alternatively point `back` at the injected port,
+   but pinning is deterministic and matches the Go controller.)
+
+3. **Bind IPv6 (`::`), not `0.0.0.0`.** Railway's private network is IPv6-only. `app.listen`
+   already passes `"::"` in `server.ts` — keep it; an IPv4-only bind makes the service
+   unreachable at `<service>.railway.internal` (also surfaces as `ClientConnectorError`).
+
+4. **Node ≥ 22 base image.** The `railway` SDK streams `exec` over a WebSocket and uses the
+   global `WebSocket`, which only exists in Node ≥ 22 (`Dockerfile` uses `node:22-slim`). On
+   Node 20 exec fails with *"No WebSocket implementation found. Pass `webSocketImpl`…"*. (The
+   alternative is installing `ws` and passing `webSocketImpl` in the SDK config.)
+
+Note the shared failure mode: gotchas 1–3 all manifest as `ClientConnectorError` at `back`.
+First check the **sidecar's own logs** — a healthy boot prints `listening on [::]:8090`; if a
+request reached it, you'll see the route log line (e.g. `POST …/exec failed: …`).
+
 ## Prototype scope / follow-ups
 
 Implements create/exec/files/destroy + the per-(user,project) keying. **Not yet:**
