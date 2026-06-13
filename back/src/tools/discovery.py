@@ -14,6 +14,16 @@ from src.tools.router import ToolRouter
 logger = logging.getLogger(__name__)
 
 
+def _account_display(tool_schema: dict, account_id: str) -> str:
+    """Human-readable account label for a resolved account_id (UUID → email/name)."""
+    if not account_id or account_id == "*":
+        return ""
+    for account in tool_schema.get("accounts", []):
+        if account.get("id") == account_id:
+            return account.get("display_name") or account_id
+    return ""
+
+
 async def _execute_for_all_accounts(
     decision,
     tool_schema,
@@ -96,6 +106,8 @@ async def _execute_for_all_accounts(
             "result": results,
             "aggregated": True,
             "account_count": len(results),
+            "tool": decision.tool,
+            "method": decision.method,
         }
     )
 
@@ -198,7 +210,17 @@ def build_discovery_tool(
                     result = await client_tool_runner(
                         decision.tool, decision.method, decision.params
                     )
-                    return json.dumps({"type": "result", "result": result})
+                    return json.dumps(
+                        {
+                            "type": "result",
+                            "result": result,
+                            "tool": decision.tool,
+                            "method": decision.method,
+                            "account": _account_display(
+                                tool_schema, decision.account_id
+                            ),
+                        }
+                    )
                 except Exception:
                     logger.warning(
                         "[Discovery] Client tool error: tool=%s method=%s",
@@ -279,7 +301,15 @@ def build_discovery_tool(
             result = await _executor.arun(
                 decision.tool, decision.method, decision.params, credentials
             )
-            return json.dumps({"type": "result", "result": result})
+            return json.dumps(
+                {
+                    "type": "result",
+                    "result": result,
+                    "tool": decision.tool,
+                    "method": decision.method,
+                    "account": _account_display(tool_schema, decision.account_id),
+                }
+            )
         except Exception:
             logger.warning(
                 "[Discovery] Server tool error: tool=%s method=%s",

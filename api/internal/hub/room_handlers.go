@@ -627,6 +627,12 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			if !ok || provider.OAuthConfigKey == "" {
 				continue
 			}
+			// GitHub is resolved exclusively via the GitHub App path below. Never
+			// load its broad OAuth token here, otherwise a stale OAuth grant would
+			// shadow the (narrowly scoped) App installation token.
+			if integ.Provider == "github" {
+				continue
+			}
 			if _, exists := providerCredentials[integ.Provider]; exists {
 				continue
 			}
@@ -661,14 +667,19 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			providerCredentials[integ.Provider] = tokenData
 		}
 
-		// GitHub: prefer a GitHub App installation token (scoped to the repos the
-		// user granted) over the broad OAuth token. ghtoken falls back to OAuth.
+		// GitHub uses ONLY a GitHub App installation token (scoped to the repos the
+		// user granted). ghtoken returns the App token, or "" when the user has an
+		// installation but minting failed / has no installation and no legacy OAuth.
+		// We never bundle the broad OAuth token; if no App token is available the
+		// integration is skipped this turn rather than leaking unauthorized repos.
 		if _, hasGitHub := dbIntegrations["github"]; hasGitHub {
 			if ghTok := ghtoken.ForUser(
 				context.Background(), r.store, r.hub.githubApp, r.hub.cryptoKey, r.initiatorID,
 			); ghTok != "" {
 				providerCredentials["github"] = map[string]interface{}{"access_token": ghTok}
 				delete(skippedIntegrations, "github")
+			} else {
+				skippedIntegrations["github"] = true
 			}
 		}
 
@@ -824,8 +835,41 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 					}
 				}
 
+				// GitHub: never trust a client-supplied token (it may be a stale,
+				// broadly-scoped OAuth token from before the GitHub App migration).
+				// Strip any client token and use ONLY the server-resolved App token.
+				// If no App token is available, drop GitHub entirely so we neither
+				// leak unauthorized repos nor send empty credentials that crash the
+				// Python tool builder.
+				if ghEntry, ok := providerMap["github"]; ok {
+					ghCreds, hasGhCreds := providerCredentials["github"]
+					if !hasGhCreds {
+						delete(providerMap, "github")
+						r.logger.Warn("dropping GitHub client tool: no GitHub App token available",
+							zap.String("provider", "github"),
+						)
+					} else {
+						for accID, accParams := range ghEntry.mergedParams {
+							if cm, ok := accParams.(map[string]interface{}); ok {
+								delete(cm, "access_token")
+								delete(cm, "github_access_token")
+								for k, v := range ghCreds {
+									cm[k] = v
+								}
+								r.logger.Info("injected GitHub App token into client-sent tool",
+									zap.String("provider", "github"),
+									zap.String("account_id", accID),
+								)
+							}
+						}
+					}
+				}
+
 				// Inject provider credentials into client-sent tools
 				for providerName, entry := range providerMap {
+					if providerName == "github" {
+						continue // handled above with App-token-only policy
+					}
 					providerCreds, hasCreds := providerCredentials[providerName]
 					if !hasCreds {
 						continue
@@ -896,6 +940,15 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 				params := dbIntegrations[integ.Provider]
 				if params == nil {
 					params = make(map[string]interface{})
+				}
+				// GitHub: only bundle when an App token was resolved (App-token-only
+				// policy). Without it we'd either leak unauthorized repos or send
+				// empty credentials that crash the Python tool builder.
+				if integ.Provider == "github" {
+					if at, _ := params["access_token"].(string); at == "" {
+						r.logger.Warn("skipping GitHub DB integration: no GitHub App token available")
+						continue
+					}
 				}
 				// Ensure provider name is set for manifest matching in Python
 				toolItem := map[string]interface{}{

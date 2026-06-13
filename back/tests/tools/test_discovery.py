@@ -77,6 +77,10 @@ async def test_discovery_tool_returns_result_on_success(
     assert result["type"] == "result"
     # hybrid execution with client runner present: client runner takes precedence
     assert result["result"] == "client tool result"
+    # resolved tool/method/account surfaced for the frontend
+    assert result["tool"] == "gmail"
+    assert result["method"] == "send_email"
+    assert result["account"] == "work@gmail.com"
     mock_runner.assert_called_once_with(
         "gmail", "send_email", {"to": "pete@x.com", "subject": "Hi", "body": "Hello"}
     )
@@ -174,6 +178,9 @@ async def test_discovery_tool_uses_client_runner_for_client_execution(
     result_json = await fn.entrypoint(request="create calendar event", context="")
     result = json.loads(result_json)
     assert result["type"] == "result"
+    assert result["tool"] == "ios_calendar"
+    assert result["method"] == "create_event"
+    assert result["account"] == ""  # no account_id resolved
     mock_runner.assert_called_once_with(
         "ios_calendar", "create_event", {"title": "Meeting"}
     )
@@ -276,6 +283,8 @@ async def test_discovery_tool_executes_for_all_accounts_with_asterisk(
     assert result["type"] == "result"
     assert result["aggregated"] is True
     assert result["account_count"] == 2
+    assert result["tool"] == "gmail"
+    assert result["method"] == "get_recent_emails"
 
     results = result["result"]
     assert len(results) == 2

@@ -6,6 +6,7 @@ import Markdown from 'react-native-markdown-display';
 import { createMarkdownRules } from './markdownRules';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Brain, NavArrowDown } from 'iconoir-react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
     const [expanded, setExpanded] = useState(false);
@@ -95,9 +96,19 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
                     pressed && { opacity: 0.7 },
                 ]}
             >
-                <Text style={styles.singleToolCallName}>
-                    {toolCall.name === 'delegate_task_to_member' ? 'Delegating...' : toolCall.name}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
+                    {toolCall.icon ? (
+                        <Icon
+                            name={toolCall.icon}
+                            size={14}
+                            color={theme.textSecondary}
+                            style={{ marginRight: 6 }}
+                        />
+                    ) : null}
+                    <Text style={styles.singleToolCallName} numberOfLines={1}>
+                        {toolCall.name === 'delegate_task_to_member' ? 'Delegating...' : toolCall.name}
+                    </Text>
+                </View>
                 <Text style={styles.toolCallsExpandIcon}>
                     <NavArrowDown width={12} height={12} color={theme.textSecondary} style={{ transform: [{ rotate: expanded ? '0deg' : '-90deg' }] }} />
                 </Text>

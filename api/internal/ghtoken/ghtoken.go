@@ -27,16 +27,23 @@ func ForUser(
 		return ""
 	}
 
-	// Preferred: GitHub App installation token.
+	// Preferred: GitHub App installation token. If the user has installed the
+	// app, we use ONLY the installation token (scoped to the repos they granted)
+	// and never fall back to the broad OAuth token — a stale OAuth grant would
+	// otherwise leak repos (e.g. whole orgs) the user never authorized for the app.
 	if ghApp != nil {
 		if inst, err := store.GetGitHubInstallationByUser(ctx, userID); err == nil && inst.InstallationID != 0 {
 			if tok, _, err := ghApp.InstallationToken(ctx, inst.InstallationID, githubapp.TokenOptions{}); err == nil && tok != "" {
 				return tok
 			}
+			// Installation exists but the token could not be minted this turn.
+			// Do NOT fall back to the broad OAuth token; return empty so the
+			// caller skips GitHub instead of leaking unauthorized repos.
+			return ""
 		}
 	}
 
-	// Fallback: stored OAuth token.
+	// Legacy fallback (user has no app installation): stored OAuth token.
 	if len(cryptoKey) == 32 {
 		if oauthTok, err := store.GetOAuthTokenByUser(ctx, userID, "github"); err == nil {
 			if dec, err := crypto.Decrypt(cryptoKey, oauthTok.TokenEncrypted); err == nil {

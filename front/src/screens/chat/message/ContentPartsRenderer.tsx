@@ -17,6 +17,7 @@ import { createMarkdownRules } from './markdownRules';
 import { SingleToolCall, ReasoningBlock, CollapsibleSteps } from './ToolCalls';
 import { DocumentBlock } from './DocumentBlock';
 import { getChatElementComponent } from '../../../plugins/chatElementRegistry';
+import { unwrapDiscoveryToolCall } from './discoveryToolAdapter';
 import { showToast } from '../../../utils/toast';
 
 const markdownRules = createMarkdownRules({
@@ -230,11 +231,14 @@ const ToolCallsGroup = memo(function ToolCallsGroup({
                             />
                         );
                     }
+                    // discovery_tool: render the resolved underlying integration
+                    // call ("GitHub · list_repos" + clean result) instead of the
+                    // raw routing envelope. Falls back to the original when running
+                    // or unparseable.
+                    const resolved =
+                        unwrapDiscoveryToolCall(part.tool_call) ?? part.tool_call;
                     return (
-                        <SingleToolCall
-                            key={`tool-${index}`}
-                            toolCall={part.tool_call}
-                        />
+                        <SingleToolCall key={`tool-${index}`} toolCall={resolved} />
                     );
                 } else if (part.type === 'reasoning') {
                     return (
