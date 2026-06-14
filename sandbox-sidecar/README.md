@@ -78,10 +78,33 @@ Note the shared failure mode: gotchas 1–3 all manifest as `ClientConnectorErro
 First check the **sidecar's own logs** — a healthy boot prints `listening on [::]:8090`; if a
 request reached it, you'll see the route log line (e.g. `POST …/exec failed: …`).
 
+## Lifecycle: reaping + workspace checkpoints
+
+Railway's `idleTimeoutMinutes` only destroys *idle* sandboxes — a leftover process (a
+server, `tail -f`, a hung install) keeps a sandbox "active" forever, so it leaks. A
+server-side **reaper** (`setInterval`, every `SANDBOX_REAP_INTERVAL_MS`) backstops this:
+it lists sandboxes via `Sandbox.list()` and destroys any that are idle past
+`SANDBOX_REAP_IDLE_MINUTES` (no sidecar request touched them — a leftover process makes no
+calls, so this catches it) or older than `SANDBOX_MAX_AGE_MINUTES` (hard cap). Active tasks
+delegate `exec`/`files` every step, so their sandbox stays fresh and is never reaped. The
+reaper queries Railway directly, so it works across sidecar restarts.
+
+**Workspace continuity** (`SANDBOX_CHECKPOINTS=1`, default on): before the reaper destroys a
+sandbox it snapshots the disk into a checkpoint keyed by a hash of the (user, project) pair
+(one kept per key — older ones pruned). The name is hashed, not `nomi-{user}-{project}`,
+because user ids are dash-containing UUIDs and `project_id` is client-supplied, so a readable
+form is ambiguous and two tenants could craft a colliding key. The reaper checkpoints **only**
+when it has trusted in-process metadata for the sandbox — never tags read from inside the
+sandbox (the agent could spoof another tenant's id). The next get-or-create boots from that checkpoint, so a cloned
+repo + edits + generated files survive a reap and the user resumes where they left off. The
+reaper's idle threshold is intentionally `< idleTimeoutMinutes`, so *we* destroy first and
+get to checkpoint (Railway's own idle-destroy can't be hooked). Disable with
+`SANDBOX_CHECKPOINTS=0` to avoid snapshot storage cost.
+
 ## Prototype scope / follow-ups
 
-Implements create/exec/files/destroy + the per-(user,project) keying. **Not yet:**
-checkpoints / persistent workspaces (relies on `idleTimeoutMinutes` auto-destroy), durable
-user→sandbox mapping across sidecar restarts (recoverable via `Sandbox.list()` + the
-`NOMI_USER_ID`/`NOMI_PROJECT_ID` env tags set at create), streaming-exec polish,
-concurrency-limit handling, and cost guardrails.
+Implements create/exec/files/destroy, per-(user,project) keying, destroyed-state recovery
+(maps dead sandboxes to 404 so the Python client recreates), the reaper, and workspace
+checkpoints. **Not yet:** durable user→sandbox mapping across sidecar restarts (recoverable
+via `Sandbox.list()` + the `NOMI_USER_ID`/`NOMI_PROJECT_ID` env tags set at create),
+artifact export to durable storage, streaming-exec polish, and concurrency-limit handling.

@@ -9,13 +9,31 @@
  * (This contract was originally defined by the now-removed Go `sandbox-controller`;
  * `service.py` remains the source of truth for routes and JSON field names.)
  */
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { Sandbox } from "railway";
 
 const PORT = Number(process.env.PORT ?? 8090);
 const CONTROLLER_TOKEN = process.env.SANDBOX_CONTROLLER_TOKEN ?? "";
 const IDLE_TIMEOUT_MINUTES = Number(process.env.SANDBOX_IDLE_TIMEOUT_MINUTES ?? 30);
+
+// Server-side reaper. Railway's idle timeout doesn't fire if the agent leaves a
+// process running (a server, `tail -f`, a hung install) — the sandbox never
+// looks idle and leaks. We reap on two rules, checked periodically:
+//   1. Inactivity: no sidecar request touched the sandbox for REAP_IDLE_MINUTES.
+//      A leftover process generates no sidecar calls, so this catches it; an
+//      active task delegates exec/files every step, so its sandbox stays fresh.
+//   2. Absolute cap: any sandbox older than MAX_AGE_MINUTES, no matter what.
+const REAP_IDLE_MS = Number(process.env.SANDBOX_REAP_IDLE_MINUTES ?? 20) * 60_000;
+const MAX_AGE_MS = Number(process.env.SANDBOX_MAX_AGE_MINUTES ?? 180) * 60_000;
+const REAP_INTERVAL_MS = Number(process.env.SANDBOX_REAP_INTERVAL_MS ?? 300_000);
+
+// Workspace continuity: before we destroy a sandbox, snapshot its disk into a
+// named checkpoint keyed by (user, project). The next get-or-create boots from
+// that checkpoint, so a user's cloned repo + edits + generated files survive a
+// reap and they resume where they left off. (Railway's own idle-destroy can't be
+// hooked, but our reaper's idle threshold is < Railway's, so we destroy first.)
+const CHECKPOINTS_ENABLED = (process.env.SANDBOX_CHECKPOINTS ?? "1") !== "0";
 
 // Fail closed: never run without a token (an unset token must not disable auth).
 if (!CONTROLLER_TOKEN) {
@@ -42,6 +60,10 @@ function tokenValid(provided: string | undefined): boolean {
 // ---------------------------------------------------------------------------
 const userIndex = new Map<string, string>(); // "user:project" -> sandboxId
 const meta = new Map<string, { userId: string; projectId: string; createdAt: string }>();
+// id -> last-access ISO timestamp. Decoupled from `meta` so it survives even
+// when the full metadata is unknown (e.g. an in-flight sandbox after a sidecar
+// restart): the first request re-arms its inactivity clock immediately.
+const lastSeen = new Map<string, string>();
 
 const userKey = (userId: string, projectId: string) => `${userId}:${projectId}`;
 
@@ -96,6 +118,116 @@ function isDeadSandbox(err: unknown): boolean {
 function evictById(id: string): void {
   for (const [key, sid] of userIndex) if (sid === id) userIndex.delete(key);
   meta.delete(id);
+  lastSeen.delete(id);
+}
+
+// ---------------------------------------------------------------------------
+// Checkpoints (workspace continuity)
+// ---------------------------------------------------------------------------
+
+/**
+ * Deterministic checkpoint name for a (user, project) pair. Hashed over the RAW
+ * inputs so it's collision-free: a readable `nomi-{user}-{project}` form is
+ * ambiguous because user ids are dash-containing UUIDs and `project_id` is
+ * client-supplied, so two tenants could craft the same key and share a checkpoint.
+ */
+function checkpointName(userId: string, projectId: string): string {
+  const digest = createHash("sha256")
+    .update(JSON.stringify([userId, projectId]))
+    .digest("hex");
+  return `nomi-${digest.slice(0, 32)}`;
+}
+
+/** Find an existing checkpoint by its key, or null. */
+async function findCheckpoint(name: string): Promise<{ id: string; key: string } | null> {
+  try {
+    const list = await Sandbox.checkpoints();
+    return list.find((c: { key: string }) => c.key === name) ?? null;
+  } catch (err) {
+    console.error("checkpoint: list failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Snapshot a sandbox's disk so the next get-or-create can boot from it. Keeps a
+ * single checkpoint per (user, project): after creating the fresh one, deletes
+ * older checkpoints with the same key to bound storage. Best-effort — a failure
+ * here must never block the destroy that follows it.
+ */
+async function snapshotForReuse(
+  sb: Sandbox,
+  userId: string,
+  projectId: string
+): Promise<void> {
+  if (!CHECKPOINTS_ENABLED) return;
+  const name = checkpointName(userId, projectId);
+  try {
+    const created = await sb.checkpoint(name);
+    console.log(`checkpointed ${sb.id} -> "${name}" (${created.id})`);
+    try {
+      const list = await Sandbox.checkpoints();
+      for (const c of list) {
+        if (c.key === name && c.id !== created.id) {
+          await Sandbox.deleteCheckpoint(c.id);
+        }
+      }
+    } catch (err) {
+      console.error("checkpoint: prune failed:", err);
+    }
+  } catch (err) {
+    console.error(`checkpoint: snapshot ${sb.id} failed:`, err);
+  }
+}
+
+/**
+ * Reap sandboxes that are idle past REAP_IDLE_MS or older than MAX_AGE_MS, and
+ * sweep terminal leftovers out of the local maps. Queries Railway directly via
+ * Sandbox.list() so it works across sidecar restarts (in-memory maps may be empty).
+ */
+async function reap(): Promise<void> {
+  let infos;
+  try {
+    infos = await Sandbox.list();
+  } catch (err) {
+    console.error("reap: Sandbox.list() failed:", err);
+    return;
+  }
+  const now = Date.now();
+  for (const info of infos) {
+    if (isTerminalStatus(info.status)) {
+      evictById(info.id); // already gone — just drop stale local references
+      continue;
+    }
+    const createdMs = Date.parse(info.createdAt) || now;
+    const seen = lastSeen.get(info.id);
+    const lastActMs = seen ? Date.parse(seen) : createdMs;
+    const idleMs = now - lastActMs;
+    const ageMs = now - createdMs;
+    if (idleMs < REAP_IDLE_MS && ageMs < MAX_AGE_MS) continue;
+    const reason =
+      ageMs >= MAX_AGE_MS
+        ? `max age ${Math.round(ageMs / 60_000)}m`
+        : `idle ${Math.round(idleMs / 60_000)}m`;
+    try {
+      const sb = await Sandbox.connect(info.id);
+      // Snapshot the workspace before destroying so the user can resume. Use
+      // ONLY the trusted in-process meta for the (user, project) name — never
+      // tags read from inside the sandbox: the agent has shell access there and
+      // could spoof another tenant's id, poisoning their checkpoint. If meta is
+      // missing (e.g. created before a sidecar restart), skip the checkpoint.
+      if (CHECKPOINTS_ENABLED) {
+        const m = meta.get(info.id);
+        if (m) await snapshotForReuse(sb, m.userId, m.projectId);
+        else console.warn(`reap: no trusted meta for ${info.id} — skipping checkpoint`);
+      }
+      await sb.destroy();
+      console.log(`reaped sandbox ${info.id} (${reason})`);
+    } catch (err) {
+      console.error(`reap: destroy ${info.id} failed:`, err);
+    }
+    evictById(info.id);
+  }
 }
 
 /** True if a no-longer-usable sandbox should be reported as not-found (404). */
@@ -157,6 +289,14 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Re-arm the inactivity clock on every access to a specific sandbox (any
+// :id route — exec, files, upload, download, status). Keeps actively-used
+// sandboxes (including in-flight tasks) from being reaped.
+app.param("id", (_req, _res, next, id: string) => {
+  lastSeen.set(id, new Date().toISOString());
+  next();
+});
+
 // Wrap an async handler so rejections become 500s instead of crashing.
 const h =
   (fn: (req: Request, res: Response) => Promise<void>) =>
@@ -181,6 +321,7 @@ app.post(
         // connect() succeeds even on a destroyed/failed sandbox — the fetched
         // status tells us if it's still usable. Reuse only a live one.
         if (!isTerminalStatus(sb.status)) {
+          lastSeen.set(existing, new Date().toISOString());
           return void res.status(201).json(sandboxJSON(existing));
         }
         evictById(existing);
@@ -196,17 +337,32 @@ app.post(
     if (recovered) {
       userIndex.set(key, recovered.id);
       meta.set(recovered.id, { userId, projectId, createdAt: recovered.createdAt });
+      lastSeen.set(recovered.id, new Date().toISOString());
       console.log(`recovered sandbox ${recovered.id} for ${key}`);
       return void res.status(201).json(sandboxJSON(recovered.id));
     }
 
-    const sandbox = await Sandbox.create({
+    // No live sandbox — boot from a saved checkpoint if one exists (resume the
+    // user's workspace), otherwise create a fresh one. Either way re-set the
+    // NOMI_* tags so recovery/checkpointing keep working.
+    const createOpts = {
       idleTimeoutMinutes: IDLE_TIMEOUT_MINUTES,
-      networkIsolation: "ISOLATED",
+      networkIsolation: "ISOLATED" as const,
       env: { NOMI_USER_ID: userId, NOMI_PROJECT_ID: projectId },
-    });
+    };
+    let sandbox: Sandbox;
+    const cpName = CHECKPOINTS_ENABLED ? checkpointName(userId, projectId) : "";
+    const cp = cpName ? await findCheckpoint(cpName) : null;
+    if (cp) {
+      sandbox = await Sandbox.create(cpName, createOpts);
+      console.log(`booted sandbox ${sandbox.id} from checkpoint "${cpName}"`);
+    } else {
+      sandbox = await Sandbox.create(createOpts);
+    }
     userIndex.set(key, sandbox.id);
-    meta.set(sandbox.id, { userId, projectId, createdAt: new Date().toISOString() });
+    const nowIso = new Date().toISOString();
+    meta.set(sandbox.id, { userId, projectId, createdAt: nowIso });
+    lastSeen.set(sandbox.id, nowIso);
     res.status(201).json(sandboxJSON(sandbox.id));
   })
 );
@@ -381,5 +537,14 @@ app.delete(
 // an IPv4-only `0.0.0.0` bind makes the service unreachable at
 // `<service>.railway.internal`. Dual-stack also accepts IPv4 locally.
 app.listen(PORT, "::", () => {
-  console.log(`sandbox-sidecar listening on [::]:${PORT} (idle timeout ${IDLE_TIMEOUT_MINUTES}m)`);
+  console.log(
+    `sandbox-sidecar listening on [::]:${PORT} ` +
+      `(idle ${IDLE_TIMEOUT_MINUTES}m, reap idle ${REAP_IDLE_MS / 60_000}m / ` +
+      `max age ${MAX_AGE_MS / 60_000}m every ${REAP_INTERVAL_MS / 60_000}m)`
+  );
 });
+
+// Periodic reaper. unref() so it never keeps the process alive on its own.
+setInterval(() => {
+  reap().catch((err) => console.error("reap: unexpected failure:", err));
+}, REAP_INTERVAL_MS).unref();
