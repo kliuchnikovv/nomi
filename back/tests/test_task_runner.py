@@ -17,7 +17,7 @@ class FakeAgent:
         self._fail_on_step = fail_on_step
         self.prompts: list[str] = []
 
-    async def arun(self, prompt: str):
+    async def arun(self, prompt: str, **kwargs):
         self._calls += 1
         self.prompts.append(prompt)
 
@@ -123,7 +123,7 @@ async def test_runner_cancellation_marks_cancelled_and_reraises():
     redis = FakeRedis()
 
     class HangingAgent:
-        async def arun(self, prompt: str):
+        async def arun(self, prompt: str, **kwargs):
             await asyncio.sleep(10)
 
     runner = TaskRunner(

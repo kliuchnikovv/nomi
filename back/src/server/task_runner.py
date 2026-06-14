@@ -289,7 +289,11 @@ class TaskRunner:
             # 1. Plan: decompose the goal into concrete steps.
             plan_prompt = (
                 "Break the following goal into 3-7 concrete, ordered steps. "
-                "Return ONLY a JSON array of short step titles, nothing else.\n\n"
+                "You have full filesystem and shell access via an isolated Linux "
+                "sandbox (clone repos, read/write files, run commands, analyze "
+                "code), so plan real execution steps — do not assume any capability "
+                "is missing. Return ONLY a JSON array of short step titles, nothing "
+                "else.\n\n"
                 f"Goal: {self.goal}"
             )
             plan_text = await _agent_text(self.agent, plan_prompt)
@@ -371,7 +375,14 @@ class TaskRunner:
                     f"Current step {step['id'] + 1}/{len(plan)}: {step['title']}\n"
                     f"Results of previous steps:\n{context}\n"
                     f"{guidance_text}\n"
-                    "Carry out this step now and report what you did concisely."
+                    "You have full filesystem and shell access: for ANY code, "
+                    "file, or command-line work, call delegate_to(\"sandbox_engineer\", "
+                    "...) — it runs in an isolated Linux sandbox where you can clone "
+                    "repos, read/write files, run commands, and analyze codebases. "
+                    "Never claim you lack the ability to access files, run code, or "
+                    "analyze a codebase; if a tool errors, report the concrete error "
+                    "and what you tried. Carry out this step now and report what you "
+                    "did concisely."
                 )
                 summary = await _agent_text(self.agent, step_prompt)
 

@@ -5,11 +5,26 @@ Sandbox service singleton for HTTP client to controller.
 import asyncio
 import logging
 import os
+import re
 from typing import Any, Dict, Optional
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
+
+# An idle sandbox can be auto-destroyed while its id is still cached. The sidecar
+# normally maps that to a 404 (→ recreate), but if it returns a 5xx with a
+# dead-state message instead, treat it as not-found here too so the recreate
+# path still fires. Matched against the response body (prose), so anchor "FAILED"
+# to a status token — a bare "Failed to ..." message must NOT trigger recreation.
+_DEAD_SANDBOX_RE = re.compile(
+    r"not running|status:\s*(?:DESTROYED|DESTROYING|FAILED)|SandboxFailedError",
+    re.IGNORECASE,
+)
+
+
+def _is_dead_sandbox_body(text: str) -> bool:
+    return bool(text) and bool(_DEAD_SANDBOX_RE.search(text))
 
 SANDBOX_CONTROLLER_URL = os.getenv(
     "SANDBOX_CONTROLLER_URL", "http://sandbox-sidecar:8090"
@@ -131,6 +146,10 @@ class SandboxService:
                         raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
                     else:
                         error_text = await response.text()
+                        if _is_dead_sandbox_body(error_text):
+                            raise SandboxNotFoundError(
+                                f"Sandbox {sandbox_id} not running"
+                            )
                         raise Exception(f"Failed to execute command: {error_text}")
             except aiohttp.ClientError as e:
                 raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__})")
@@ -163,6 +182,8 @@ class SandboxService:
             else:
                 error_text = await response.text()
                 await session.close()
+                if _is_dead_sandbox_body(error_text):
+                    raise SandboxNotFoundError(f"Sandbox {sandbox_id} not running")
                 raise Exception(f"Failed to execute command: {error_text}")
         except Exception:
             await session.close()
@@ -184,6 +205,10 @@ class SandboxService:
                         raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
                     else:
                         error_text = await response.text()
+                        if _is_dead_sandbox_body(error_text):
+                            raise SandboxNotFoundError(
+                                f"Sandbox {sandbox_id} not running"
+                            )
                         raise Exception(f"Failed to upload file: {error_text}")
             except aiohttp.ClientError as e:
                 raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__})")
@@ -203,6 +228,10 @@ class SandboxService:
                         raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
                     else:
                         error_text = await response.text()
+                        if _is_dead_sandbox_body(error_text):
+                            raise SandboxNotFoundError(
+                                f"Sandbox {sandbox_id} not running"
+                            )
                         raise Exception(f"Failed to download file: {error_text}")
             except aiohttp.ClientError as e:
                 raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__})")
@@ -223,6 +252,10 @@ class SandboxService:
                         raise SandboxNotFoundError(f"Sandbox {sandbox_id} not found")
                     else:
                         error_text = await response.text()
+                        if _is_dead_sandbox_body(error_text):
+                            raise SandboxNotFoundError(
+                                f"Sandbox {sandbox_id} not running"
+                            )
                         raise Exception(f"Failed to list files: {error_text}")
             except aiohttp.ClientError as e:
                 raise Exception(f"Sandbox is currently unavailable. Please try again later. (Connection error: {type(e).__name__})")

@@ -6,7 +6,7 @@ Provides isolated Linux environment for code execution.
 import base64
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from agno.tools import Toolkit
 
@@ -60,24 +60,30 @@ class SandboxTools(Toolkit):
             )
         return self._sandbox_id
 
+    async def _with_retry(self, op: Callable[[str], Awaitable[Any]]) -> Any:
+        """Run a sandbox op, recreating the sandbox once if it was GC'd/destroyed.
+
+        ``op`` receives the (possibly freshly created) sandbox id. A
+        ``SandboxNotFoundError`` — raised on a 404 or a dead-state 5xx (see
+        service.py) — clears the cached id and retries once against a new sandbox.
+        """
+        try:
+            sandbox_id = await self._get_sandbox()
+            return await op(sandbox_id)
+        except SandboxNotFoundError:
+            logger.info("Sandbox was GC'd/destroyed, recreating...")
+            self._service.clear_cache_for_user(self.user_id, self.project_id)
+            self._sandbox_id = None
+            sandbox_id = await self._get_sandbox()
+            return await op(sandbox_id)
+
     async def _exec_with_retry(
         self, command: List[str], timeout: int = 60, stream: bool = False
     ) -> Dict[str, Any]:
         """Execute command with automatic retry on sandbox recreation."""
-        try:
-            sandbox_id = await self._get_sandbox()
-            return await self._service.exec_command(
-                sandbox_id, command, timeout, stream
-            )
-        except SandboxNotFoundError:
-            # Sandbox was GC'd, clear cache and retry once
-            logger.info("Sandbox was GC'd, recreating...")
-            self._service.clear_cache_for_user(self.user_id, self.project_id)
-            self._sandbox_id = None
-            sandbox_id = await self._get_sandbox()
-            return await self._service.exec_command(
-                sandbox_id, command, timeout, stream
-            )
+        return await self._with_retry(
+            lambda sid: self._service.exec_command(sid, command, timeout, stream)
+        )
 
     async def exec_command(
         self,
@@ -121,8 +127,9 @@ class SandboxTools(Toolkit):
         Returns:
             True if successful
         """
-        sandbox_id = await self._get_sandbox()
-        return await self._service.upload_file(sandbox_id, path, content)
+        return await self._with_retry(
+            lambda sid: self._service.upload_file(sid, path, content)
+        )
 
     async def download_file(self, path: str) -> str:
         """Download a file from the sandbox.
@@ -133,8 +140,9 @@ class SandboxTools(Toolkit):
         Returns:
             File content as string
         """
-        sandbox_id = await self._get_sandbox()
-        return await self._service.download_file(sandbox_id, path)
+        return await self._with_retry(
+            lambda sid: self._service.download_file(sid, path)
+        )
 
     async def list_files(self, path: str = "/workspace") -> List[Dict[str, Any]]:
         """List files in a directory.
@@ -145,8 +153,9 @@ class SandboxTools(Toolkit):
         Returns:
             List of file info dictionaries
         """
-        sandbox_id = await self._get_sandbox()
-        return await self._service.list_files(sandbox_id, path)
+        return await self._with_retry(
+            lambda sid: self._service.list_files(sid, path)
+        )
 
     async def clone_repo(
         self,

@@ -24,13 +24,19 @@ class BackgroundTaskTools(Toolkit):
         self._spawner = spawner
         self.add_instructions = True
         self.instructions = (
-            "You have start_background_task(goal). Use it when the user asks for "
-            "substantial, multi-step work that should run autonomously in the "
-            "background (e.g. 'clone my repo, fix the failing tests, and open a PR'). "
-            "It returns immediately with a task id; the work then proceeds on its own "
-            "and the user can watch progress and steer it on the Tasks screen. Pass a "
-            "complete, self-contained goal in `goal`. Do NOT use it for quick answers "
-            "or a single tool call — handle those yourself."
+            "You have start_background_task(goal). Use it whenever the user asks for "
+            "substantial, multi-step work — especially anything that needs the "
+            "sandbox (code, files, the shell) for more than a couple of steps, or "
+            "that would take longer than a single reply to finish. Examples: "
+            "'clone my repo, fix the failing tests, and open a PR'; 'analyze this "
+            "whole codebase and write an architecture report'; 'go through every "
+            "file in src/ and summarize it'; 'build and run the project, then "
+            "report what broke'. It returns immediately with a task id; the work "
+            "then proceeds on its own and the user can watch progress and steer it "
+            "on the Tasks screen. Pass a complete, self-contained goal in `goal`. "
+            "Do NOT start the work inline yourself when it fits this description — "
+            "hand it to start_background_task instead. Only handle quick answers or "
+            "a single tool call directly."
         )
         self.register(self.start_background_task)
 

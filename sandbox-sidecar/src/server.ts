@@ -70,6 +70,39 @@ function isNotFound(err: unknown): boolean {
   return name === "SandboxNotFoundError" || name === "SandboxFileNotFoundError";
 }
 
+// A sandbox can be idle-destroyed (or fail) while its id is still cached. The
+// SDK doesn't surface that as a not-found error: `Sandbox.connect()` succeeds,
+// but the actual exec/files op throws a RailwayConnectionError ("...is not
+// running (status: DESTROYED)") or a SandboxFailedError. Treat those like a
+// 404 so the Python client's recreate-on-404 path kicks in instead of failing.
+// A bare SDK status token (`sb.status` is exactly "RUNNING" / "DESTROYED" / …).
+function isTerminalStatus(status: string): boolean {
+  return status === "DESTROYED" || status === "DESTROYING" || status === "FAILED";
+}
+// Matched against an error *message* (prose) — anchor FAILED to a status token so
+// an unrelated "...request failed" message doesn't evict a live sandbox.
+const DEAD_MSG_RE = /not running|status:\s*(?:DESTROYED|DESTROYING|FAILED)/i;
+function isDeadSandbox(err: unknown): boolean {
+  const e = err as { name?: string; message?: string } | undefined;
+  const name = e?.name ?? "";
+  return (
+    name === "SandboxFailedError" ||
+    name === "RailwayConnectionError" ||
+    DEAD_MSG_RE.test(e?.message ?? "")
+  );
+}
+
+/** Forget a sandbox id everywhere (cache miss → recover/create on next call). */
+function evictById(id: string): void {
+  for (const [key, sid] of userIndex) if (sid === id) userIndex.delete(key);
+  meta.delete(id);
+}
+
+/** True if a no-longer-usable sandbox should be reported as not-found (404). */
+function isGone(err: unknown): boolean {
+  return isNotFound(err) || isDeadSandbox(err);
+}
+
 /**
  * Recover an existing sandbox for (user, project) after an in-memory cache miss
  * (e.g. the sidecar restarted while a sandbox is still alive). The SDK's
@@ -144,12 +177,16 @@ app.post(
     const existing = userIndex.get(key);
     if (existing) {
       try {
-        await Sandbox.connect(existing);
-        return void res.status(201).json(sandboxJSON(existing));
+        const sb = await Sandbox.connect(existing);
+        // connect() succeeds even on a destroyed/failed sandbox — the fetched
+        // status tells us if it's still usable. Reuse only a live one.
+        if (!isTerminalStatus(sb.status)) {
+          return void res.status(201).json(sandboxJSON(existing));
+        }
+        evictById(existing);
       } catch (err) {
-        if (!isNotFound(err)) throw err;
-        userIndex.delete(key);
-        meta.delete(existing);
+        if (!isGone(err)) throw err;
+        evictById(existing);
       }
     }
 
@@ -179,10 +216,17 @@ app.get(
   "/api/sandboxes/:id",
   h(async (req, res) => {
     try {
-      await Sandbox.connect(req.params.id);
+      const sb = await Sandbox.connect(req.params.id);
+      if (isTerminalStatus(sb.status)) {
+        evictById(req.params.id);
+        return void res.status(404).json({ error: "not found" });
+      }
       res.status(200).json(sandboxJSON(req.params.id));
     } catch (err) {
-      if (isNotFound(err)) return void res.status(404).json({ error: "not found" });
+      if (isGone(err)) {
+        evictById(req.params.id);
+        return void res.status(404).json({ error: "not found" });
+      }
       throw err;
     }
   })
@@ -195,9 +239,16 @@ app.get(
     try {
       const sandbox = await Sandbox.connect(req.params.id);
       await sandbox.refresh?.();
+      if (isTerminalStatus(sandbox.status)) {
+        evictById(req.params.id);
+        return void res.status(404).json({ error: "not found" });
+      }
       res.status(200).json({ phase: "Running", ready: true });
     } catch (err) {
-      if (isNotFound(err)) return void res.status(404).json({ error: "not found" });
+      if (isGone(err)) {
+        evictById(req.params.id);
+        return void res.status(404).json({ error: "not found" });
+      }
       throw err;
     }
   })
@@ -212,29 +263,35 @@ app.post(
     const stream: boolean = req.body?.stream ?? false;
     const cmd = command.map(shellQuote).join(" ");
 
-    let sandbox: Sandbox;
+    // connect() succeeds on a destroyed sandbox — the dead-state error only
+    // surfaces from exec() itself, so the whole op must be inside this try.
     try {
-      sandbox = await Sandbox.connect(req.params.id);
+      const sandbox = await Sandbox.connect(req.params.id);
+
+      if (stream) {
+        // Best-effort streaming: pipe stdout/stderr chunks straight to the body.
+        res.status(200);
+        res.setHeader("Content-Type", "application/octet-stream");
+        const write = (chunk: string) => res.write(chunk);
+        await sandbox.exec(cmd, { timeoutSec: timeout, onStdout: write, onStderr: write });
+        return void res.end();
+      }
+
+      const result = await sandbox.exec(cmd, { timeoutSec: timeout });
+      res.status(200).json({
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
+        exit_code: result.exitCode ?? -1,
+      });
     } catch (err) {
-      if (isNotFound(err)) return void res.status(404).json({ error: "not found" });
+      // If a stream already flushed headers we can't change the status; the
+      // wrapper `h` will swallow it. Otherwise map a gone sandbox to 404.
+      if (isGone(err) && !res.headersSent) {
+        evictById(req.params.id);
+        return void res.status(404).json({ error: "not found" });
+      }
       throw err;
     }
-
-    if (stream) {
-      // Best-effort streaming: pipe stdout/stderr chunks straight to the body.
-      res.status(200);
-      res.setHeader("Content-Type", "application/octet-stream");
-      const write = (chunk: string) => res.write(chunk);
-      await sandbox.exec(cmd, { timeoutSec: timeout, onStdout: write, onStderr: write });
-      return void res.end();
-    }
-
-    const result = await sandbox.exec(cmd, { timeoutSec: timeout });
-    res.status(200).json({
-      stdout: result.stdout ?? "",
-      stderr: result.stderr ?? "",
-      exit_code: result.exitCode ?? -1,
-    });
   })
 );
 
@@ -249,7 +306,10 @@ app.post(
       await sandbox.files.write(path, content);
       res.status(200).json({ ok: true });
     } catch (err) {
-      if (isNotFound(err)) return void res.status(404).json({ error: "not found" });
+      if (isGone(err)) {
+        evictById(req.params.id);
+        return void res.status(404).json({ error: "not found" });
+      }
       throw err;
     }
   })
@@ -265,7 +325,10 @@ app.get(
       const content = await sandbox.files.read(path);
       res.status(200).type("text/plain").send(content);
     } catch (err) {
-      if (isNotFound(err)) return void res.status(404).json({ error: "not found" });
+      if (isGone(err)) {
+        evictById(req.params.id);
+        return void res.status(404).json({ error: "not found" });
+      }
       throw err;
     }
   })
@@ -288,7 +351,10 @@ app.get(
       }));
       res.status(200).json({ files });
     } catch (err) {
-      if (isNotFound(err)) return void res.status(404).json({ error: "not found" });
+      if (isGone(err)) {
+        evictById(req.params.id);
+        return void res.status(404).json({ error: "not found" });
+      }
       throw err;
     }
   })
