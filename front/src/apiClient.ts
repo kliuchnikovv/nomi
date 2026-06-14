@@ -442,6 +442,8 @@ export const tasksApi = {
             request_id: requestId,
             approved,
         }),
+    stop: (id: string) =>
+        apiClient.post<void>(`${API_URL()}/tasks/${id}/stop`, {}),
 };
 
 export const briefingApi = {

@@ -322,9 +322,6 @@ export function ChatDetailScreen() {
     const lastMessageIdRef = useRef<string>('');
     const refreshTriggerRef = useRef<number>(0);
     const appStateRef = useRef(AppState.currentState);
-    const snapshotUpdatedAtRef = useRef<number>(activeChat?.updated_at ?? 0);
-    const shouldRefreshRef = useRef(false);
-    const activeChatRef = useRef(activeChat);
     const extraData = useMemo(() => {
         const lastMsg = messages[0];
         const lastId = lastMsg?.id || '';
@@ -359,10 +356,6 @@ export function ChatDetailScreen() {
     }, [assistantWorking, chatMode, selectedTeamId]);
 
     useEffect(() => {
-        activeChatRef.current = activeChat;
-    }, [activeChat]);
-
-    useEffect(() => {
         if (chatId && chatId !== emptyChatID && !isPluginThread) {
             getMessages(chatId);
         }
@@ -380,14 +373,14 @@ export function ChatDetailScreen() {
                     | 'unknown'
                     | 'extension',
             ) => {
-                if (nextState === 'background' || nextState === 'inactive') {
-                    snapshotUpdatedAtRef.current =
-                        activeChatRef.current?.updated_at ?? 0;
-                } else if (
+                if (
                     appStateRef.current.match(/inactive|background/) &&
                     nextState === 'active'
                 ) {
-                    shouldRefreshRef.current = true;
+                    // Refresh the chat list (title/timestamps). Message refresh
+                    // for the active chat is handled centrally in ChatContext's
+                    // resume/reconnect path, which is guarded against clobbering
+                    // an in-flight stream.
                     getChats({ preserveActiveChat: true });
                 }
                 appStateRef.current = nextState;
@@ -395,18 +388,6 @@ export function ChatDetailScreen() {
         );
         return () => sub.remove();
     }, [chatId, isPluginThread, getChats]);
-
-    useEffect(() => {
-        if (!shouldRefreshRef.current) return;
-        if (!chatId || chatId === emptyChatID || isPluginThread) return;
-        shouldRefreshRef.current = false;
-        if (
-            activeChat &&
-            activeChat.updated_at > snapshotUpdatedAtRef.current
-        ) {
-            getMessages(chatId, { isRefresh: true });
-        }
-    }, [activeChat?.updated_at, chatId, isPluginThread, getMessages]);
 
     useEffect(() => {
         // Scan for dice roll tool calls

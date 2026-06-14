@@ -209,6 +209,7 @@ func New(
 	r.GET("/api/tasks/:id", wrapWithAuth(agentTasksHandler.Get, authMiddleware))
 	r.POST("/api/tasks/:id/steer", wrapWithAuth(agentTasksHandler.Steer, authMiddleware))
 	r.POST("/api/tasks/:id/approve", wrapWithAuth(agentTasksHandler.Approve, authMiddleware))
+	r.POST("/api/tasks/:id/stop", wrapWithAuth(agentTasksHandler.Stop, authMiddleware))
 
 	// Device token registration
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route

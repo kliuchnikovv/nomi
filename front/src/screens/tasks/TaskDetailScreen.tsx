@@ -132,6 +132,17 @@ export const TaskDetailScreen = () => {
         }
     }, [steerText, busy, taskId, load]);
 
+    const onStop = useCallback(async () => {
+        if (busy) return;
+        setBusy(true);
+        try {
+            await tasksApi.stop(taskId);
+            await load();
+        } finally {
+            setBusy(false);
+        }
+    }, [busy, taskId, load]);
+
     const onApprove = useCallback(
         async (approved: boolean) => {
             if (!pendingApproval || busy) return;
@@ -177,6 +188,33 @@ export const TaskDetailScreen = () => {
                     Task
                 </Text>
                 <View style={styles.headerSpacer} />
+                {isActive && (
+                    <TouchableOpacity
+                        onPress={onStop}
+                        disabled={busy}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Stop task"
+                        style={[
+                            styles.stopBtn,
+                            { borderColor: statusColor('failed', theme) },
+                        ]}
+                    >
+                        <Ionicons
+                            name="stop"
+                            size={14}
+                            color={statusColor('failed', theme)}
+                        />
+                        <Text
+                            style={[
+                                styles.stopText,
+                                { color: statusColor('failed', theme) },
+                            ]}
+                        >
+                            Stop
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             {loading && !task ? (
@@ -447,6 +485,16 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 20, fontWeight: '700' },
     headerSpacer: { flex: 1 },
+    stopBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 14,
+        borderWidth: 1,
+    },
+    stopText: { fontSize: 13, fontWeight: '600' },
     loader: { flex: 1 },
     emptyText: { fontSize: 15, textAlign: 'center', marginTop: 40 },
     goal: { fontSize: 18, fontWeight: '700' },

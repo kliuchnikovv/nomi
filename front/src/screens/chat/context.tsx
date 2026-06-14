@@ -170,6 +170,25 @@ export function ChatProvider({
     // and a ref to the reconcile fn so callbacks defined earlier (getMessages) can call it.
     const reconcilingRef = useRef<string | null>(null);
     const reconcileRef = useRef<((chatId?: string) => void) | null>(null);
+    // Ref to getMessages so socket-handler closures (onReconnect) and the
+    // AppState listener can re-fetch the active chat without stale closures.
+    const getMessagesRef = useRef<
+        ((chatID: string, opts?: { isRefresh?: boolean }) => void) | null
+    >(null);
+    // Set when a reconnect happens mid-generation: arms a fallback timer so we
+    // only treat the generation as dead (clear + reconcile) if no frame/DONE
+    // arrives before it fires. Cleared by DONE/error/frames.
+    const reconnectGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+    // Latest activeChatID for socket-handler closures (their effect deps don't
+    // include activeChatID, so the closure value would otherwise be stale).
+    const activeChatIDRef = useRef<string>(activeChatID);
+    activeChatIDRef.current = activeChatID;
+    // Grace window before treating a mid-generation reconnect as a dead
+    // generation. Long enough for the room's replay buffer + live frames to
+    // arrive, short enough that a truly-dropped turn still gets re-sent.
+    const RECONNECT_GRACE_MS = 25_000;
     const RESPONSE_TIMEOUT_MS = 300_000; // 5 minutes — safety net if DONE/ERROR never arrives
 
     // Model selection state
@@ -369,6 +388,19 @@ export function ChatProvider({
     const getMessages = useCallback(
         async (chatID: string, opts?: { isRefresh?: boolean }) => {
             if (!chatID || chatID === emptyChatID) return;
+            // A generation is streaming into this chat right now. The DB snapshot
+            // only has the user turn (the assistant reply isn't persisted until
+            // DONE), so replacing the store here would wipe the in-flight assistant
+            // bubble and the live frames would rebuild it from empty — looking like
+            // a brand-new generation. Skip; the store already holds the latest, and
+            // the resume path re-fetches once generation clears.
+            if (generatingForChatRef.current === chatID) {
+                console.log(
+                    '[ChatContext] Skipping getMessages refresh — generation in flight for',
+                    chatID,
+                );
+                return;
+            }
             const isRefresh = opts?.isRefresh === true;
             if (isRefresh) {
                 setRefreshing(true);
@@ -432,6 +464,7 @@ export function ChatProvider({
         },
         [setSelectedModel, setMessagesToStore],
     );
+    getMessagesRef.current = getMessages;
 
     // Define createChat early so sendStreamingMessage can use it
     const createChat = useCallback(
@@ -1400,6 +1433,10 @@ export function ChatProvider({
                 clearTimeout(responseTimeoutRef.current);
                 responseTimeoutRef.current = null;
             }
+            if (reconnectGraceTimerRef.current) {
+                clearTimeout(reconnectGraceTimerRef.current);
+                reconnectGraceTimerRef.current = null;
+            }
         };
     }, []);
 
@@ -1411,6 +1448,11 @@ export function ChatProvider({
                 if (responseTimeoutRef.current) {
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
+                }
+                // Generation resolved — cancel any reconnect recovery fallback.
+                if (reconnectGraceTimerRef.current) {
+                    clearTimeout(reconnectGraceTimerRef.current);
+                    reconnectGraceTimerRef.current = null;
                 }
                 generatingForChatRef.current = null;
                 reconcilingRef.current = null;
@@ -1440,6 +1482,10 @@ export function ChatProvider({
                 if (responseTimeoutRef.current) {
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
+                }
+                if (reconnectGraceTimerRef.current) {
+                    clearTimeout(reconnectGraceTimerRef.current);
+                    reconnectGraceTimerRef.current = null;
                 }
                 generatingForChatRef.current = null;
                 reconcilingRef.current = null;
@@ -1473,6 +1519,14 @@ export function ChatProvider({
                 }
             },
             onMessage: (frame: Frame) => {
+                // A live frame after a mid-generation reconnect proves the
+                // generation is still alive (replay or fresh tokens). Cancel the
+                // recovery fallback so it can't tear down a healthy long stream;
+                // DONE/error will resolve it normally.
+                if (reconnectGraceTimerRef.current) {
+                    clearTimeout(reconnectGraceTimerRef.current);
+                    reconnectGraceTimerRef.current = null;
+                }
                 const payload = frame.payload;
                 if (payload?.type === 'client_action') {
                     console.log(
@@ -1494,24 +1548,71 @@ export function ChatProvider({
                     skipReconnectResetRef.current = false;
                     return;
                 }
-                // Socket reconnected after interruption — any in-progress generation was
-                // likely lost. Clear loading state so the UI doesn't stay stuck.
-                // The final message (if completed) is persisted in DB and will load on refresh.
                 if (responseTimeoutRef.current) {
                     clearTimeout(responseTimeoutRef.current);
                     responseTimeoutRef.current = null;
                 }
-                // The in-flight generation (if any) was lost on the dropped
-                // connection. Clear local generation state, then reconcile so an
-                // unanswered user turn is automatically re-submitted.
-                generatingForChatRef.current = null;
+                const generatingChat = generatingForChatRef.current;
+                if (generatingChat) {
+                    // A generation was in flight. Don't tear it down: the room
+                    // replays its buffered frames (and continues streaming live)
+                    // to a client that re-joins while generation is in progress.
+                    // Keep the loader and let those frames flow in. Only if the
+                    // grace window elapses with no DONE/error (generation truly
+                    // died on the dropped connection) do we clear + reconcile.
+                    console.log(
+                        '[ChatContext] Reconnected mid-generation — awaiting replay for',
+                        generatingChat,
+                    );
+                    if (reconnectGraceTimerRef.current) {
+                        clearTimeout(reconnectGraceTimerRef.current);
+                    }
+                    reconnectGraceTimerRef.current = setTimeout(() => {
+                        reconnectGraceTimerRef.current = null;
+                        if (!generatingForChatRef.current) return; // already resolved
+                        console.warn(
+                            '[ChatContext] Reconnect grace elapsed — generation appears dead, recovering',
+                        );
+                        const cid = generatingForChatRef.current;
+                        generatingForChatRef.current = null;
+                        reconcilingRef.current = null;
+                        startTransition(() => {
+                            setAssistantWorking(false);
+                            setActiveAgentsCount(0);
+                            setGenerationStatus(null);
+                        });
+                        // Re-fetch from DB (loads the reply if it actually
+                        // completed) — getMessages reconciles an unanswered turn.
+                        const target =
+                            typeof cid === 'string' && cid !== 'pending'
+                                ? cid
+                                : activeChatIDRef.current;
+                        if (target) {
+                            getMessagesRef.current?.(target, {
+                                isRefresh: true,
+                            });
+                        } else {
+                            reconcileRef.current?.();
+                        }
+                    }, RECONNECT_GRACE_MS);
+                    return;
+                }
+                // No generation believed in flight. The reply (if one completed
+                // while we were disconnected) is persisted in the DB but not yet
+                // in the local store — re-fetch the active chat so it shows up.
+                // getMessages also reconciles an unanswered user turn.
                 reconcilingRef.current = null;
                 startTransition(() => {
                     setAssistantWorking(false);
                     setActiveAgentsCount(0);
                     setGenerationStatus(null);
                 });
-                reconcileRef.current?.();
+                const cid = activeChatIDRef.current;
+                if (cid && cid !== emptyChatID) {
+                    getMessagesRef.current?.(cid, { isRefresh: true });
+                } else {
+                    reconcileRef.current?.();
+                }
             },
         });
 
@@ -1528,13 +1629,21 @@ export function ChatProvider({
         reconcileLastMessage,
     ]);
 
-    // App resume: re-check the active chat for an unanswered user turn and
-    // auto-resend it (covers the case where the socket stayed connected through
-    // a brief background and no onReconnect fired).
+    // App resume: re-fetch the active chat so a reply that completed while we
+    // were backgrounded shows up, and auto-resend an unanswered user turn.
+    // Covers the case where the socket stayed connected through a brief
+    // background and no onReconnect fired. getMessages is a no-op while a
+    // generation is in flight (guarded) and reconciles internally after loading;
+    // fall back to a bare reconcile when there's no concrete chat to refresh.
     useEffect(() => {
         const sub = AppState.addEventListener('change', state => {
             if (state === 'active') {
-                reconcileRef.current?.();
+                const cid = activeChatIDRef.current;
+                if (cid && cid !== emptyChatID) {
+                    getMessagesRef.current?.(cid, { isRefresh: true });
+                } else {
+                    reconcileRef.current?.();
+                }
             }
         });
         return () => sub.remove();
