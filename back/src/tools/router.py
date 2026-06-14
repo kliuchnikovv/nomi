@@ -12,6 +12,58 @@ logger = logging.getLogger(__name__)
 
 ROUTER_MODEL = "gemini-2.5-flash-lite"
 
+# Valid JSON string escapes per the spec; any other char after a backslash is an
+# illegal escape that crashes json.loads. The model sometimes echoes user text
+# (e.g. a path like "\workspace") verbatim into a JSON string value.
+_VALID_JSON_ESCAPES = set('"\\/bfnrtu')
+
+
+def _repair_json_escapes(text: str) -> str:
+    """Escape stray backslashes that aren't part of a valid JSON escape.
+
+    Turns an illegal ``\\w`` (as in ``"\\workspace"``) into ``\\\\w`` so the
+    string parses, leaving valid escapes (``\\n``, ``\\"``, ``\\uXXXX``, ...)
+    untouched.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\\" and i + 1 < n:
+            nxt = text[i + 1]
+            if nxt in _VALID_JSON_ESCAPES:
+                out.append(ch)
+                out.append(nxt)
+                i += 2
+                continue
+            # Illegal escape: double the backslash so it becomes a literal.
+            out.append("\\\\")
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _parse_router_json(text: str) -> Any:
+    """Best-effort parse of the router model's JSON response.
+
+    Strips markdown code fences, then tries json.loads; on an escape error,
+    repairs stray backslashes and retries once.
+    """
+    s = (text or "").strip()
+    if s.startswith("```"):
+        # Drop the opening fence (``` or ```json) and the trailing fence.
+        s = s.split("\n", 1)[1] if "\n" in s else s.lstrip("`")
+        if s.endswith("```"):
+            s = s[: s.rfind("```")]
+        s = s.strip()
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        return json.loads(_repair_json_escapes(s))
+
 SYSTEM_PROMPT = """\
 You are a tool router. Given a user request and a list of available tools,
 decide which tool and method to call.
@@ -132,7 +184,7 @@ class ToolRouter:
 
         try:
             response = self._generate_with_rotation(prompt)
-            raw = json.loads(response.text)
+            raw = _parse_router_json(response.text)
 
             # Handle list responses - use first element if valid
             if isinstance(raw, list) and len(raw) > 0 and isinstance(raw[0], dict):
