@@ -43,6 +43,25 @@ methods:
           type: string
           description: Repository name
       required: [owner, repo]
+  - name: list_commits
+    description: List commits in a repository, most recent first
+    parameters:
+      type: object
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        sha:
+          type: string
+          description: Branch, tag, or commit SHA to start from (defaults to the repo's default branch)
+        path:
+          type: string
+          description: Only list commits that touch this file path
+        limit:
+          type: integer
+          default: 10
+      required: [owner, repo]
   - name: list_issues
     description: List issues in a repository
     parameters:

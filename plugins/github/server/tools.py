@@ -26,6 +26,7 @@ class GitHubTools(Toolkit):
         }
         self.register(self.list_repos)
         self.register(self.get_repo)
+        self.register(self.list_commits)
         self.register(self.list_issues)
         self.register(self.create_issue)
         self.register(self.list_pull_requests)
@@ -106,6 +107,39 @@ class GitHubTools(Toolkit):
         if isinstance(result, dict):
             return result
         return {}
+
+    async def list_commits(
+        self,
+        owner: str,
+        repo: str,
+        sha: Optional[str] = None,
+        path: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """List commits in a repository, most recent first.
+
+        Args:
+            owner: Repository owner
+            repo: Repository name
+            sha: Branch, tag, or commit SHA to start listing from
+                (defaults to the repository's default branch)
+            path: Only list commits that touch this file path
+            limit: Maximum number of commits to return
+
+        Returns:
+            List of commit objects (sha, commit.message, commit.author, etc.)
+        """
+        query = f"?per_page={limit}"
+        if sha:
+            query += f"&sha={sha}"
+        if path:
+            query += f"&path={path}"
+        result = await self._make_request(
+            "GET", f"/repos/{owner}/{repo}/commits{query}"
+        )
+        if isinstance(result, list):
+            return result
+        return []
 
     async def list_issues(
         self, owner: str, repo: str, state: str = "open", limit: int = 10
