@@ -1,0 +1,32 @@
+name: e2e-regression
+
+on:
+  pull_request:
+    paths:
+      - "api/**"
+      - "back/**"
+      - "e2e/**"
+      - "docker-compose.yml"
+      - "docker-compose.e2e.yml"
+      - ".github/workflows/e2e.yml"
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install e2e harness deps
+        run: pip install -r e2e/requirements.txt
+
+      - name: Run e2e regression suite
+        # conftest brings the stub-brain stack up via docker-compose, runs the
+        # tests, dumps `docker compose logs` to this step's output on teardown,
+        # then tears everything down. No secrets needed (BRAIN_TEST_MODE=1).
+        run: pytest e2e/ -v

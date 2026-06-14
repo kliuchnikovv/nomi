@@ -20,6 +20,7 @@ import logging
 import uuid
 from typing import Any
 
+from src.server import stub_brain
 from src.server.models import Op
 from src.server.utils import make_signal
 
@@ -238,7 +239,50 @@ class TaskRunner:
         )
         return False
 
+    async def _run_stub(self) -> None:
+        """Drive a fixed, deterministic lifecycle for e2e regression tests.
+
+        Mirrors the real plan -> execute -> done emit sequence (so persisted
+        events/status are identical in shape) but skips every agent call.
+        """
+        await self.emitter.emit("planning")
+        plan = [
+            {"id": i, "title": t, "status": "pending", "result": ""}
+            for i, t in enumerate(stub_brain.stub_task_steps())
+        ]
+        await self.emitter.emit(
+            "running", plan=plan, kind="plan_update", payload={"plan": plan}
+        )
+        for step in plan:
+            step["status"] = "running"
+            await self.emitter.emit(
+                "running",
+                plan=plan,
+                kind="step_started",
+                payload={"step_id": step["id"], "title": step["title"]},
+            )
+            step["status"] = "done"
+            step["result"] = f"{step['title']} ok"
+            await self.emitter.emit(
+                "running",
+                plan=plan,
+                kind="step_done",
+                payload={"step_id": step["id"], "result": step["result"]},
+            )
+        await self.emitter.emit(
+            "done",
+            plan=plan,
+            result="stub task complete",
+            finished=True,
+            kind="done",
+            payload={"result": "stub task complete"},
+        )
+        logger.info("[TaskRunner] stub task %s completed", self.task_id)
+
     async def run(self) -> None:
+        if stub_brain.is_enabled() and self.goal.strip() == stub_brain.TASK:
+            await self._run_stub()
+            return
         try:
             await self.emitter.emit("planning")
 

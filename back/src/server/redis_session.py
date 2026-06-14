@@ -19,6 +19,7 @@ from src.agents.nomi import NomiAgent, build_learning_machine
 from src.storage.backend import PayloadBackend, StorageBackend
 from src.storage.factory import create_storage_backend
 from src.constants import Redis as RedisConstants
+from src.server import stub_brain
 from src.server.models import Frame, Op, Kind
 from src.server.redis_client import make_redis_client
 from src.server.utils import (
@@ -1409,6 +1410,16 @@ class RedisSession:
                 )
             except Exception as e:
                 logger.warning("[RedisSession] Failed to send generation_started ACK: %s", e)
+
+        # 0-stub. Deterministic e2e regression mode: known magic inputs emit a
+        # fixed frame sequence and skip the real agent/LLM path entirely. The
+        # ACK above is already sent, so the contract is ACK -> <stub frames>.
+        if stub_brain.is_enabled():
+            stub_frames = stub_brain.stub_message_frames(text, self.chat_id, message_id)
+            if stub_frames is not None:
+                for make_frame in stub_frames:
+                    await self._send_frame(make_frame(self.next_id))
+                return
 
         # 0a. Build storage backend based on per-user feature flag
         agent_storage_mode = payload.get("agent_storage_mode", "payload")
