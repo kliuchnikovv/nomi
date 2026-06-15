@@ -49,6 +49,22 @@ async def test_known_agent_returns_final_content():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("alias", ["devops", "DevOps", "  engineer  ", "developer", "sandbox"])
+async def test_alias_resolves_to_sandbox_engineer(alias):
+    tk = _toolkit(_FakeAgent(content="env ready"))
+    result = await tk.delegate_to(agent=alias, task="set up the dev environment")
+    assert result == "env ready"
+
+
+@pytest.mark.asyncio
+async def test_unknown_non_alias_still_errors():
+    tk = _toolkit(_FakeAgent())
+    result = await tk.delegate_to(agent="totally_unknown", task="x")
+    assert "Unknown agent" in result
+    assert "sandbox_engineer" in result
+
+
+@pytest.mark.asyncio
 async def test_cancelled_error_propagates():
     tk = _toolkit(_FakeAgent(raises=asyncio.CancelledError()))
     with pytest.raises(asyncio.CancelledError):

@@ -15,6 +15,18 @@ DELEGATION_TIMEOUT = 300
 
 AgentBuilder = Callable[[], Agent]
 
+# Common names users (and the LLM) reach for, mapped to the real registry key.
+# Applied case-insensitively before the registry lookup so delegate_to("devops", ...)
+# resolves to the sandbox engineer instead of failing as "Unknown agent".
+AGENT_ALIASES = {
+    "devops": "sandbox_engineer",
+    "dev_ops": "sandbox_engineer",
+    "engineer": "sandbox_engineer",
+    "sandbox": "sandbox_engineer",
+    "developer": "sandbox_engineer",
+    "coder": "sandbox_engineer",
+}
+
 
 class DelegationTools(Toolkit):
     """Generic delegation tool.
@@ -47,7 +59,12 @@ class DelegationTools(Toolkit):
             f"Available agents: {targets}. "
             "Pass everything the sub-agent needs in `task` — it does not see the chat history. "
             "Use 'sandbox_engineer' for anything that needs running, building, installing, or "
-            "testing code in an isolated Linux sandbox."
+            "testing code in an isolated Linux sandbox — including setting up a development "
+            "environment, installing dependencies, and writing or running tests (e2e, unit, etc.). "
+            "If the user asks to delegate work to a 'devops', 'engineer', or 'developer' agent, "
+            "that is sandbox_engineer. "
+            "Do NOT create a GitHub issue or pull request to hand work to a sub-agent — "
+            "delegating to yourself by filing a ticket is never correct; call delegate_to instead."
         )
         self.register(self.delegate_to)
 
@@ -65,7 +82,10 @@ class DelegationTools(Toolkit):
         Returns:
             The sub-agent's final summary, or an error message string.
         """
-        builder = self._registry.get(agent)
+        # Normalize common aliases (e.g. "devops" → "sandbox_engineer") so a natural
+        # agent name from the user/LLM still resolves to a registered target.
+        resolved = AGENT_ALIASES.get(agent.strip().lower(), agent)
+        builder = self._registry.get(resolved)
         if builder is None:
             available = ", ".join(sorted(self._registry)) or "(none)"
             return (
@@ -73,7 +93,7 @@ class DelegationTools(Toolkit):
                 f"Call delegate_to with one of those."
             )
 
-        logger.info("[Delegation] Delegating to '%s'", agent)
+        logger.info("[Delegation] Delegating to '%s'", resolved)
         try:
             target = builder()
             # timeout=None → no wall-clock cap (still cancellable via STOP).
