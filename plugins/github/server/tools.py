@@ -35,6 +35,45 @@ class GitHubTools(Toolkit):
         self.register(self.create_branch)
         self.register(self.create_pull_request)
 
+    async def _resolve_repo(
+        self, owner: Optional[str], repo: str
+    ) -> tuple[str, str]:
+        """Resolve (owner, repo), tolerating a missing or wrong owner.
+
+        With a GitHub App installation token the agent usually knows only the
+        repo name and guesses the owner, causing 404s. Look the repo up among
+        the installation's accessible repositories by name and use the
+        authoritative owner. Falls back to the provided owner when the repo
+        isn't found in the listing (e.g. legacy OAuth tokens).
+        """
+        # Accept "owner/repo" passed as the repo argument.
+        if repo and "/" in repo:
+            first, repo = repo.split("/", 1)
+            owner = owner or first
+
+        target = repo.lower()
+        try:
+            for r in await self.list_repos(limit=100):
+                if not isinstance(r, dict) or r.get("name", "").lower() != target:
+                    continue
+                full = r.get("full_name") or ""
+                resolved_owner = (
+                    full.split("/", 1)[0]
+                    if "/" in full
+                    else (r.get("owner") or {}).get("login", "")
+                )
+                if resolved_owner:
+                    return resolved_owner, r.get("name", repo)
+        except Exception as e:
+            logger.warning("Repo resolution lookup failed for '%s': %s", repo, e)
+
+        if not owner:
+            raise Exception(
+                f"Could not resolve owner for repository '{repo}'. "
+                "Call list_repos to find the exact owner."
+            )
+        return owner, repo
+
     async def _get_default_branch(self, owner: str, repo: str) -> str:
         """Return the repository's default branch (best-effort, defaults to main)."""
         info = await self._make_request("GET", f"/repos/{owner}/{repo}")
@@ -110,8 +149,8 @@ class GitHubTools(Toolkit):
 
     async def list_commits(
         self,
-        owner: str,
         repo: str,
+        owner: Optional[str] = None,
         sha: Optional[str] = None,
         path: Optional[str] = None,
         limit: int = 10,
@@ -119,8 +158,9 @@ class GitHubTools(Toolkit):
         """List commits in a repository, most recent first.
 
         Args:
-            owner: Repository owner
-            repo: Repository name
+            repo: Repository name (may be given as "owner/repo")
+            owner: Repository owner; resolved automatically from your
+                accessible repositories when omitted or incorrect
             sha: Branch, tag, or commit SHA to start listing from
                 (defaults to the repository's default branch)
             path: Only list commits that touch this file path
@@ -129,6 +169,7 @@ class GitHubTools(Toolkit):
         Returns:
             List of commit objects (sha, commit.message, commit.author, etc.)
         """
+        owner, repo = await self._resolve_repo(owner, repo)
         query = f"?per_page={limit}"
         if sha:
             query += f"&sha={sha}"

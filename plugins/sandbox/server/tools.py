@@ -44,6 +44,9 @@ class SandboxTools(Toolkit):
         # Never exposed to the model.
         self.github_token = github_token
         self._sandbox_id: Optional[str] = None
+        # Last token written to the sandbox's ~/.gitconfig via ensure_git_auth().
+        # "" means "decided to skip" (no token); None means "not yet provisioned".
+        self._git_auth_token: Optional[str] = None
         self._service = get_service()
 
         self.register(self.exec_command)
@@ -74,6 +77,8 @@ class SandboxTools(Toolkit):
             logger.info("Sandbox was GC'd/destroyed, recreating...")
             self._service.clear_cache_for_user(self.user_id, self.project_id)
             self._sandbox_id = None
+            # The fresh VM has no ~/.gitconfig — force re-provisioning of git auth.
+            self._git_auth_token = None
             sandbox_id = await self._get_sandbox()
             return await op(sandbox_id)
 
@@ -84,6 +89,50 @@ class SandboxTools(Toolkit):
         return await self._with_retry(
             lambda sid: self._service.exec_command(sid, command, timeout, stream)
         )
+
+    async def ensure_git_auth(self) -> None:
+        """Authenticate ALL github.com git ops in this sandbox for the current run.
+
+        Writes a global, host-scoped ``http.extraHeader`` into ~/.gitconfig so that
+        raw ``git clone``/``pull``/``push``, submodules and ``pip install
+        git+https://github.com/...`` all carry the user's token — not just the
+        dedicated ``clone_repo`` tool. The header is host-scoped to github.com so it
+        is never sent to other hosts, and lives only in ~/.gitconfig (never in a
+        repo's .git/config or remote URL, so ``git remote -v`` stays clean).
+
+        Idempotent per token value. A no-op when no token is available. Each agent
+        run gets a fresh SandboxTools (and thus a fresh token), so the first
+        git-touching call of the run rewrites the header — keeping it valid despite
+        the ~1h installation-token TTL and the sandbox persisting across runs.
+
+        Separate ``exec`` calls do NOT share environment, so an env var / credential
+        helper would not survive — persisting through ~/.gitconfig is required.
+        """
+        token = self.github_token
+        if self._git_auth_token == token:
+            return
+        if not token:
+            # No token: skip and remember so we don't re-check on every call.
+            self._git_auth_token = ""
+            return
+        auth = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+        command = [
+            "git",
+            "config",
+            "--global",
+            "--replace-all",
+            "http.https://github.com/.extraHeader",
+            f"Authorization: Basic {auth}",
+        ]
+        result = await self._exec_with_retry(command, timeout=30)
+        if isinstance(result, dict) and result.get("exit_code") not in (0, None):
+            logger.warning(
+                "ensure_git_auth: git config exited %s: %s",
+                result.get("exit_code"),
+                str(result.get("stderr", ""))[:200],
+            )
+            return  # don't mark done -> retry on the next call
+        self._git_auth_token = token
 
     async def exec_command(
         self,
@@ -108,6 +157,8 @@ class SandboxTools(Toolkit):
         Returns:
             Dict with stdout, stderr, and exit_code
         """
+        # Make github.com git ops authenticated even for raw `git clone <url>`.
+        await self.ensure_git_auth()
         if working_dir:
             # Sanitize working_dir to prevent shell injection
             if not re.match(r'^[a-zA-Z0-9_./-]+$', working_dir):
@@ -180,6 +231,7 @@ class SandboxTools(Toolkit):
         Returns:
             Dict with stdout, stderr, and exit_code
         """
+        await self.ensure_git_auth()
         _check_git_arg("owner", owner)
         _check_git_arg("repo", repo)
         target = dest or repo

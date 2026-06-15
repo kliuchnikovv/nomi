@@ -48,10 +48,12 @@ methods:
     parameters:
       type: object
       properties:
-        owner:
-          type: string
         repo:
           type: string
+          description: Repository name (may be given as "owner/repo")
+        owner:
+          type: string
+          description: Repository owner; resolved automatically from accessible repositories when omitted
         sha:
           type: string
           description: Branch, tag, or commit SHA to start from (defaults to the repo's default branch)
@@ -61,7 +63,7 @@ methods:
         limit:
           type: integer
           default: 10
-      required: [owner, repo]
+      required: [repo]
   - name: list_issues
     description: List issues in a repository
     parameters:

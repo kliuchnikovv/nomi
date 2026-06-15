@@ -34,6 +34,10 @@ const KNOWN_TOOL_DISPLAY: Record<string, { name: string; icon: string }> = {
         name: 'Searching memory',
         icon: 'book-search-outline',
     },
+    search_entities: {
+        name: 'Searching entities',
+        icon: 'account-search-outline',
+    },
     remember_this: { name: 'Saving to memory', icon: 'content-save-outline' },
 
     // Web search
