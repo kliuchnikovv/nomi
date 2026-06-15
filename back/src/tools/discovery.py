@@ -28,6 +28,30 @@ LOCAL_TOOL_LABELS: dict[str, str] = {
 }
 
 
+def _github_token_from_config(tools_config: Any) -> str | None:
+    """Find the user's GitHub access token across the whole tools config.
+
+    The token lives on the ``github`` entry (single-account ``access_token`` or
+    multi-account ``credentials[id].access_token``), not on the sandbox entry.
+    Defined locally to avoid importing factory (which imports this module).
+    """
+    entry = tools_config.entries.get("github") if tools_config else None
+    if entry is None:
+        return None
+    params = entry.params or {}
+    token = params.get("access_token")
+    if isinstance(token, str) and token:
+        return token
+    creds = params.get("credentials")
+    if isinstance(creds, dict):
+        for account_creds in creds.values():
+            if isinstance(account_creds, dict):
+                at = account_creds.get("access_token")
+                if isinstance(at, str) and at:
+                    return at
+    return None
+
+
 def _build_discovery_description(local_tools: list[Toolkit] | None = None) -> str:
     """Build the discovery_tool description from loaded plugin manifests.
 
@@ -554,6 +578,18 @@ def build_discovery_tool(
                             "account": _account_display(tool_schema, decision.account_id),
                         }
                     )
+
+        # The sandbox clones private repos but its own config entry has no
+        # GitHub token (auth_type="none"). The token lives on the github tool
+        # entry, so thread it through here — mirrors what factory.build() does
+        # via _extract_github_token() on the direct (non-discovery) path.
+        # Without this, clone_repo falls back to an unauthenticated clone and
+        # fails with "could not read Username for 'https://github.com'".
+        if decision.tool == "sandbox" and isinstance(credentials, dict):
+            gh_token = _github_token_from_config(tools_config)
+            if gh_token and not credentials.get("github_token"):
+                credentials = {**credentials, "github_token": gh_token}
+                logger.info("[Discovery] Injected GitHub token into sandbox build")
 
         try:
             result = await _executor.arun(

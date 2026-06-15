@@ -728,3 +728,35 @@ def test_discovery_description_advertises_health_capability():
     desc = _build_discovery_description()
     assert "Apple Health" in desc, desc
     assert "health" in desc.lower()
+
+
+def test_github_token_from_config_single_account():
+    """Sandbox clones private repos using the GitHub token from the github
+    entry. Single-account shape stores it as params.access_token."""
+    from src.tools.discovery import _github_token_from_config
+
+    config = ToolsConfig()
+    config.add("github", access_token="ghs_single")
+    config.add("sandbox", user_id="u1")
+    assert _github_token_from_config(config) == "ghs_single"
+
+
+def test_github_token_from_config_multi_account():
+    """Multi-account shape nests the token under credentials[id].access_token."""
+    from src.tools.discovery import _github_token_from_config
+
+    config = ToolsConfig()
+    config.add(
+        "github",
+        credentials={"acct-1": {"access_token": "ghs_multi"}},
+    )
+    assert _github_token_from_config(config) == "ghs_multi"
+
+
+def test_github_token_from_config_absent():
+    """No github entry → no token (sandbox clones unauthenticated, as before)."""
+    from src.tools.discovery import _github_token_from_config
+
+    config = ToolsConfig()
+    config.add("sandbox", user_id="u1")
+    assert _github_token_from_config(config) is None
