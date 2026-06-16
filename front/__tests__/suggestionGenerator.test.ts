@@ -1,0 +1,129 @@
+import { Platform } from 'react-native';
+import {
+    generateFollowUps,
+    generateStarterChips,
+} from '../src/services/suggestionGenerator';
+
+// Mock react-native Platform
+jest.mock('react-native', () => ({
+    Platform: { OS: 'ios' },
+}));
+
+// Mock @react-native-ai/apple and ai
+const mockGenerateText = jest.fn<Promise<{ text?: string }>, [object]>();
+jest.mock('@react-native-ai/apple', () => ({
+    apple: () => 'apple-model',
+}));
+jest.mock('ai', () => ({
+    generateText: (args: object) => mockGenerateText(args),
+}));
+
+describe('generateFollowUps', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (Platform as any).OS = 'ios';
+    });
+
+    it('returns [] on Android without calling AFM', async () => {
+        (Platform as any).OS = 'android';
+        const result = await generateFollowUps('Here is your summary.');
+        expect(result).toEqual([]);
+        expect(mockGenerateText).not.toHaveBeenCalled();
+    });
+
+    it('returns [] for empty assistant text', async () => {
+        const result = await generateFollowUps('   ');
+        expect(result).toEqual([]);
+        expect(mockGenerateText).not.toHaveBeenCalled();
+    });
+
+    it('parses a valid JSON array of strings', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: '["Tell me more", "Show an example"]',
+        });
+        const result = await generateFollowUps('Here is your summary.');
+        expect(result).toEqual(['Tell me more', 'Show an example']);
+    });
+
+    it('includes the user message in the prompt when provided', async () => {
+        mockGenerateText.mockResolvedValueOnce({ text: '[]' });
+        await generateFollowUps('A reply', 'My question');
+        const callArgs = mockGenerateText.mock.calls[0][0] as {
+            prompt: string;
+        };
+        expect(callArgs.prompt).toContain('My question');
+        expect(callArgs.prompt).toContain('A reply');
+    });
+
+    it('filters out non-strings and over-long items, caps at 4', async () => {
+        const longStr = 'x'.repeat(100);
+        mockGenerateText.mockResolvedValueOnce({
+            text: JSON.stringify([
+                'a',
+                123,
+                longStr,
+                'b',
+                'c',
+                'd',
+                'e',
+            ]),
+        });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual(['a', 'b', 'c', 'd']);
+    });
+
+    it('returns [] when AFM returns malformed JSON', async () => {
+        mockGenerateText.mockResolvedValueOnce({ text: 'not json' });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual([]);
+    });
+
+    it('returns [] when AFM times out', async () => {
+        jest.useFakeTimers();
+        mockGenerateText.mockImplementation(
+            () =>
+                new Promise<{ text?: string }>(resolve =>
+                    setTimeout(() => resolve({}), 10_000),
+                ),
+        );
+        const promise = generateFollowUps('A reply');
+        jest.advanceTimersByTime(6000);
+        const result = await promise;
+        expect(result).toEqual([]);
+        jest.useRealTimers();
+    });
+
+    it('returns [] when AFM rejects with an error', async () => {
+        mockGenerateText.mockRejectedValueOnce(new Error('AFM crash'));
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual([]);
+    });
+});
+
+describe('generateStarterChips', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        (Platform as any).OS = 'ios';
+    });
+
+    it('returns [] for empty context without calling AFM', async () => {
+        const result = await generateStarterChips('   ');
+        expect(result).toEqual([]);
+        expect(mockGenerateText).not.toHaveBeenCalled();
+    });
+
+    it('parses a valid JSON array of strings', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: '["Plan my week", "Summarize my emails"]',
+        });
+        const result = await generateStarterChips('Recent: travel, email');
+        expect(result).toEqual(['Plan my week', 'Summarize my emails']);
+    });
+
+    it('returns [] on Android without calling AFM', async () => {
+        (Platform as any).OS = 'android';
+        const result = await generateStarterChips('Recent: travel');
+        expect(result).toEqual([]);
+        expect(mockGenerateText).not.toHaveBeenCalled();
+    });
+});
