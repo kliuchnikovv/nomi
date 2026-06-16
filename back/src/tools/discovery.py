@@ -429,6 +429,22 @@ def build_discovery_tool(
             )
 
         if decision.action == "none":
+            # Fallback: don't dead-end on requests the router couldn't map to a
+            # specific tool. If web search is available, answer general/current-
+            # info questions (weather, news, facts) with it instead of returning
+            # an error the agent treats as "I can't do that".
+            web_tk = _local_index.get("web_search")
+            if web_tk is not None:
+                logger.info(
+                    "[Discovery] No specific tool matched; falling back to "
+                    "web_search for: %s",
+                    request,
+                )
+                query = f"{request} {context}".strip() if context else request
+                decision.tool = "web_search"
+                decision.method = "duckduckgo_search"
+                decision.params = {"query": query}
+                return await _execute_local(web_tk, decision)
             return json.dumps(
                 {"type": "error", "error": f"No tool found for: {request}"}
             )

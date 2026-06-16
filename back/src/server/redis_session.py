@@ -419,6 +419,27 @@ class RedisSession:
             )
         return task_id
 
+    def _make_sync_delegation_emitter(self, task_id: str, goal: str, agent: str):
+        """Build a lifecycle emitter that persists a synchronous delegation as a
+        hidden AgentTask row.
+
+        Backs DelegationTools' synchronous path: the row exists for audit + chat
+        linkage but is filtered out of the Tasks screen (background=False) and the
+        live UI (live=False), so it never surfaces as a visible task.
+        """
+        from src.server.task_runner import TaskEventEmitter
+
+        return TaskEventEmitter(
+            self.redis_client,
+            task_id,
+            self.user_id or "",
+            self.chat_id,
+            goal,
+            live=False,
+            background=False,
+            agent=agent,
+        )
+
     async def _safe_deliver(self, delivery_handler, full_text: str) -> None:
         """Deliver a reply to an external plugin channel without letting a plugin
         failure crash the streaming response. Re-raises CancelledError."""
@@ -1045,11 +1066,18 @@ class RedisSession:
             client_tool_runner = (
                 self._send_client_action_and_wait if self.redis_worker else None
             )
-            # Inside a task run we (a) don't expose start_background_task (a task
-            # must not spawn sub-tasks) and (b) relax the sandbox engineer limits.
+            # Inside a task run we (a) don't allow delegate_to(background=True)
+            # (a task must not spawn sub-tasks) and (b) relax the sandbox engineer
+            # limits. We also skip persisting synchronous delegations there, since
+            # the parent task already owns its AgentTask row.
             in_task_run = getattr(self, "_in_task_run", False)
             task_spawner = (
                 self._spawn_background_task
+                if (self.redis_worker and not in_task_run)
+                else None
+            )
+            sync_delegation_emitter = (
+                self._make_sync_delegation_emitter
                 if (self.redis_worker and not in_task_run)
                 else None
             )
@@ -1074,6 +1102,7 @@ class RedisSession:
                 single_chat_mode=self.single_chat_mode,
                 storage_backend=storage_backend or self.storage_backend,
                 task_spawner=task_spawner,
+                sync_delegation_emitter=sync_delegation_emitter,
                 task_mode=in_task_run,
                 byok=self.byok,
                 byok_default=self.byok_default,

@@ -148,10 +148,17 @@ type ProactiveEvent struct {
 // it via the Tasks screen.
 type AgentTask struct {
 	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UserID uuid.UUID `gorm:"type:uuid;not null;index:idx_agent_tasks_user_status,priority:1" json:"user_id"`
+	UserID uuid.UUID `gorm:"type:uuid;not null;index:idx_agent_tasks_user_status,priority:1;index:idx_agent_tasks_user_bg,priority:1" json:"user_id"`
 	// ChatID is the chat the task was started from (tasks are attached to a chat).
 	ChatID uuid.UUID `gorm:"type:uuid;not null;index" json:"chat_id"`
 	Goal   string    `gorm:"type:text;not null" json:"goal"`
+	// Background distinguishes an autonomous background task (true — shown on the
+	// Tasks screen) from a synchronous delegation persisted only for audit/chat
+	// linkage (false — filtered out of the task list).
+	Background bool `gorm:"not null;default:false;index:idx_agent_tasks_user_bg,priority:2" json:"background"`
+	// Agent records which sub-agent ran a synchronous delegation
+	// ('sandbox_engineer' | 'developer'); empty for multi-agent background runs.
+	Agent string `gorm:"type:text;not null;default:''" json:"agent"`
 	// Status: 'planning' | 'running' | 'waiting_input' | 'paused' | 'done' | 'failed' | 'cancelled'.
 	Status string `gorm:"type:text;not null;default:'planning';index:idx_agent_tasks_user_status,priority:2" json:"status"`
 	// Plan is a JSON array of steps: [{"id","title","status","result"}].

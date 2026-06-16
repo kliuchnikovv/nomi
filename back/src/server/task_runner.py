@@ -59,12 +59,30 @@ def _needs_approval(title: str) -> bool:
 class TaskEventEmitter:
     """Publishes task lifecycle messages for persistence (Go) + live UI."""
 
-    def __init__(self, redis: Any, task_id: str, user_id: str, chat_id: str, goal: str):
+    def __init__(
+        self,
+        redis: Any,
+        task_id: str,
+        user_id: str,
+        chat_id: str,
+        goal: str,
+        *,
+        live: bool = True,
+        background: bool = True,
+        agent: str = "",
+    ):
         self.redis = redis
         self.task_id = task_id
         self.user_id = user_id
         self.chat_id = chat_id
         self.goal = goal
+        # background=True → autonomous task that shows on the Tasks screen.
+        # background=False → a synchronous delegation persisted for audit/chat
+        # linkage but filtered out of the task list (live=False keeps it from
+        # flashing in the live UI too). ``agent`` records which sub-agent ran.
+        self.live = live
+        self.background = background
+        self.agent = agent
         self._seq = 0
         self._frame_id = 0
 
@@ -85,6 +103,8 @@ class TaskEventEmitter:
             "goal": self.goal,
             "status": status,
             "finished": finished,
+            "background": self.background,
+            "agent": self.agent,
         }
         if plan is not None:
             msg["plan"] = plan
@@ -106,6 +126,10 @@ class TaskEventEmitter:
             logger.warning("[TaskRunner] persist publish failed: %s", exc)
 
         # 2. Live UI frame — best-effort; the mobile Tasks view streams these.
+        # Synchronous delegations (live=False) skip this: they're meant to be
+        # invisible, surfacing only as the in-chat tool bubble.
+        if not self.live:
+            return
         try:
             ui_payload = {"type": "task_progress", "task_id": self.task_id, **msg}
             frame = make_signal(self._frame_id, Op.SIGNAL, self.chat_id, ui_payload)

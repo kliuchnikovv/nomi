@@ -105,3 +105,94 @@ async def test_subagent_exception_returns_error_string():
     result = await tk.delegate_to(agent_name="sandbox_engineer", task="run code")
     assert "failed" in result.lower()
     assert "boom" in result
+
+
+@pytest.mark.asyncio
+async def test_background_uses_spawner_and_returns_task_id():
+    seen = {}
+
+    async def fake_spawner(goal: str) -> str:
+        seen["goal"] = goal
+        return "task-xyz"
+
+    tk = DelegationTools(
+        registry={"sandbox_engineer": lambda: _FakeAgent()}, spawner=fake_spawner
+    )
+    msg = await tk.delegate_to(
+        agent_name="sandbox_engineer", task="clone repo and fix tests", background=True
+    )
+    assert seen["goal"] == "clone repo and fix tests"
+    assert "task-xyz" in msg
+
+
+@pytest.mark.asyncio
+async def test_background_spawn_failure_returns_error_string():
+    async def boom(goal: str) -> str:
+        raise RuntimeError("redis down")
+
+    tk = DelegationTools(
+        registry={"sandbox_engineer": lambda: _FakeAgent()}, spawner=boom
+    )
+    msg = await tk.delegate_to(agent_name="sandbox_engineer", task="x", background=True)
+    assert "Failed to start" in msg
+
+
+@pytest.mark.asyncio
+async def test_background_without_spawner_falls_back_to_sync():
+    # No spawner wired (planner/team/inside a task run) → run synchronously.
+    tk = _toolkit(_FakeAgent(content="ran inline"))
+    result = await tk.delegate_to(
+        agent_name="sandbox_engineer", task="do thing", background=True
+    )
+    assert result == "ran inline"
+
+
+class _RecordingEmitter:
+    def __init__(self):
+        self.calls = []
+
+    async def emit(self, status, **kwargs):
+        self.calls.append((status, kwargs))
+
+
+@pytest.mark.asyncio
+async def test_sync_delegation_emits_start_and_done_and_returns_summary():
+    emitter = _RecordingEmitter()
+    tk = DelegationTools(
+        registry={"sandbox_engineer": lambda: _FakeAgent(content="all green")},
+        emitter_factory=lambda task_id, goal, agent: emitter,
+    )
+    result = await tk.delegate_to(agent_name="sandbox_engineer", task="run tests")
+    assert result == "all green"  # summary still flows back to the caller
+    statuses = [s for s, _ in emitter.calls]
+    assert statuses[0] == "running"
+    assert statuses[-1] == "done"
+    assert emitter.calls[-1][1]["finished"] is True
+    assert emitter.calls[-1][1]["result"] == "all green"
+
+
+@pytest.mark.asyncio
+async def test_sync_delegation_emits_failed_on_exception():
+    emitter = _RecordingEmitter()
+    tk = DelegationTools(
+        registry={"sandbox_engineer": lambda: _FakeAgent(raises=RuntimeError("boom"))},
+        emitter_factory=lambda task_id, goal, agent: emitter,
+    )
+    result = await tk.delegate_to(agent_name="sandbox_engineer", task="run tests")
+    assert "boom" in result
+    assert emitter.calls[-1][0] == "failed"
+    assert emitter.calls[-1][1]["finished"] is True
+
+
+@pytest.mark.asyncio
+async def test_emitter_failure_never_breaks_delegation():
+    class _BrokenEmitter:
+        async def emit(self, status, **kwargs):
+            raise RuntimeError("redis down")
+
+    tk = DelegationTools(
+        registry={"sandbox_engineer": lambda: _FakeAgent(content="done anyway")},
+        emitter_factory=lambda task_id, goal, agent: _BrokenEmitter(),
+    )
+    result = await tk.delegate_to(agent_name="sandbox_engineer", task="x")
+    assert result == "done anyway"

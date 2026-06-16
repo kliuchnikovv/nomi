@@ -56,6 +56,7 @@ async def test_sandbox_present_swaps_to_delegate(monkeypatch):
     names = _names(captured)
     assert "delegation" in names  # delegate_to toolkit was added
     assert "sandbox_tools" not in names  # raw sandbox tool was removed
+    assert "background_tasks" not in names  # folded into delegate_to(background=True)
     assert sandbox not in captured
 
 

@@ -20,11 +20,13 @@ func (s *Storage) CreateAgentTask(ctx context.Context, t *AgentTask) error {
 	return s.DB.WithContext(ctx).Create(t).Error
 }
 
-// ListAgentTasksForUser returns the user's tasks, most recent first.
+// ListAgentTasksForUser returns the user's background tasks, most recent first.
+// Synchronous delegations (background=false) are persisted for audit/chat
+// linkage but excluded here so they don't clutter the Tasks screen.
 func (s *Storage) ListAgentTasksForUser(ctx context.Context, userID uuid.UUID) ([]AgentTask, error) {
 	var tasks []AgentTask
 	err := s.DB.WithContext(ctx).
-		Where("user_id = ?", userID).
+		Where("user_id = ? AND background = ?", userID, true).
 		Order("created_at DESC").
 		Limit(100).
 		Find(&tasks).Error

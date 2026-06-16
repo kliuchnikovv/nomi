@@ -1673,7 +1673,22 @@ export function ChatProvider({
                 const lastAssistant = [...msgs]
                     .reverse()
                     .find(m => m.role === 'assistant');
-                if (lastAssistant?.text) {
+                // In team mode the reply lives in content_parts (member_response /
+                // text), not in `.text` (which stays a placeholder). Reconstruct it.
+                const assistantText = (() => {
+                    const direct = (lastAssistant?.text ?? '').trim();
+                    if (direct) return direct;
+                    return (lastAssistant?.content_parts ?? [])
+                        .filter(
+                            (p: any) =>
+                                p?.type === 'text' ||
+                                p?.type === 'member_response',
+                        )
+                        .map((p: any) => p?.text ?? '')
+                        .join('\n')
+                        .trim();
+                })();
+                if (lastAssistant && assistantText) {
                     // Generate follow-up chips FIRST (user-visible) — Apple FM runs
                     // one request at a time, so whatever is enqueued first wins the
                     // model. Action-button extraction follows.
@@ -1685,10 +1700,10 @@ export function ChatProvider({
                             '[FollowUps] generating for',
                             chatId,
                             'replyLen=',
-                            lastAssistant.text.length,
+                            assistantText.length,
                         );
                     }
-                    generateFollowUps(lastAssistant.text, lastUser?.text)
+                    generateFollowUps(assistantText, lastUser?.text)
                         .then(items => {
                             if (__DEV__) {
                                 console.log(
@@ -1712,7 +1727,7 @@ export function ChatProvider({
                         });
 
                     // Fire-and-forget: extract action buttons from final assistant text via AFM (iOS only)
-                    extractActions(lastAssistant.text)
+                    extractActions(assistantText)
                         .then(actions => {
                             if (actions.length > 0) {
                                 useChatStore

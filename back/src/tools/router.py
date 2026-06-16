@@ -81,8 +81,12 @@ Rules:
     - If the request contains "each" "every" "all" "every" "все" "каждый" "во всех" "по всем"  # Russian: all, each, in all, across all
       or similar phrasing indicating ALL accounts → account_id: "*"
     - Otherwise, try to infer from the request or context; if unclear → action: "question"
-4. If no tool matches the request → action: "none"
-5. For action "execute", always include: tool, method, account_id (empty string if
+4. If the request asks for general knowledge, current events, news, weather, prices,
+    or any external fact NOT covered by a more specific tool, AND a web search tool
+    (e.g. "web_search") is available → route to it (action: "execute"). Never answer
+    "none" for an answerable factual/current-info question when web search exists.
+5. If no tool matches the request and no web search tool is available → action: "none"
+6. For action "execute", always include: tool, method, account_id (empty string if
     no accounts, "*" for all accounts), params (JSON object matching the method's parameter schema)
 
 Examples:
@@ -94,6 +98,8 @@ Examples:
 - "Send email to bob@example.com" (2+ accounts, WRITE) → action: "question"
 - "How did I sleep last night?" → tool: ios_health, method: get_sleep_analysis
 - "How many steps did I take today?" → tool: ios_health, method: get_steps
+- "What's the weather today?" (web_search available) → tool: web_search, method: duckduckgo_search, params: {"query": "weather today"}
+- "Who won the game last night?" (web_search available) → tool: web_search, method: duckduckgo_search
 
 Return valid JSON only, no markdown fences.
 

@@ -41,14 +41,16 @@ func NewListener(store *storage.Storage, redisClient *redis.Client, logger *zap.
 // eventEnvelope is the message the Python runner publishes. Task fields update
 // the AgentTask row; the optional event is appended to the log.
 type eventEnvelope struct {
-	UserID   string           `json:"user_id"`
-	ChatID   string           `json:"chat_id"`
-	Goal     string           `json:"goal"`
-	Status   string           `json:"status"`
-	Plan     *json.RawMessage `json:"plan"`     // present only when the plan changes
-	Result   *string          `json:"result"`   // present on completion
-	Finished bool             `json:"finished"` // true on done/failed/cancelled
-	Event    *struct {
+	UserID     string           `json:"user_id"`
+	ChatID     string           `json:"chat_id"`
+	Goal       string           `json:"goal"`
+	Status     string           `json:"status"`
+	Background *bool            `json:"background"` // omitted by old runners → treat as background
+	Agent      *string          `json:"agent"`      // which sub-agent ran (sync delegations)
+	Plan       *json.RawMessage `json:"plan"`       // present only when the plan changes
+	Result     *string          `json:"result"`     // present on completion
+	Finished   bool             `json:"finished"`   // true on done/failed/cancelled
+	Event      *struct {
 		Seq     int             `json:"seq"`
 		Kind    string          `json:"kind"`
 		Payload json.RawMessage `json:"payload"`
@@ -155,12 +157,26 @@ func (l *Listener) createTask(ctx context.Context, taskID uuid.UUID, e *eventEnv
 		return fmt.Errorf("invalid chat_id %q: %w", e.ChatID, err)
 	}
 
+	// A bare emission without an explicit background flag comes from an
+	// autonomous task runner, so default to true; only the synchronous
+	// delegation path sends background=false.
+	background := true
+	if e.Background != nil {
+		background = *e.Background
+	}
+	agent := ""
+	if e.Agent != nil {
+		agent = *e.Agent
+	}
+
 	task := &storage.AgentTask{
-		ID:     taskID,
-		UserID: userID,
-		ChatID: chatID,
-		Goal:   e.Goal,
-		Status: firstNonEmpty(e.Status, "planning"),
+		ID:         taskID,
+		UserID:     userID,
+		ChatID:     chatID,
+		Goal:       e.Goal,
+		Status:     firstNonEmpty(e.Status, "planning"),
+		Background: background,
+		Agent:      agent,
 	}
 	if e.Plan != nil {
 		task.Plan = datatypes.JSON(*e.Plan)

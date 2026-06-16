@@ -61,11 +61,12 @@ func (h *AgentTasksHandler) Create(c *gin.Context) {
 	}
 
 	task := &storage.AgentTask{
-		ID:     uuid.New(),
-		UserID: user.ID,
-		ChatID: chatID,
-		Goal:   req.Goal,
-		Status: "planning",
+		ID:         uuid.New(),
+		UserID:     user.ID,
+		ChatID:     chatID,
+		Goal:       req.Goal,
+		Status:     "planning",
+		Background: true, // the "Run as task" action always starts a background task
 	}
 	if err := h.storage.CreateAgentTask(c.Request.Context(), task); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create task"})
@@ -87,6 +88,7 @@ func (h *AgentTasksHandler) Create(c *gin.Context) {
 			"goal":       req.Goal,
 			"task_id":    task.ID.String(),
 			"agent_type": "nomi",
+			"background": true,
 		},
 	}
 	payload, _ := json.Marshal(frame)

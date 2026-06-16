@@ -147,35 +147,6 @@ async def test_runner_cancellation_marks_cancelled_and_reraises():
 
 
 @pytest.mark.asyncio
-async def test_background_task_tool_invokes_spawner():
-    from src.tools.background_task import BackgroundTaskTools
-
-    seen = {}
-
-    async def fake_spawner(goal: str) -> str:
-        seen["goal"] = goal
-        return "task-xyz"
-
-    tool = BackgroundTaskTools(spawner=fake_spawner)
-    msg = await tool.start_background_task("clone repo and fix tests")
-
-    assert seen["goal"] == "clone repo and fix tests"
-    assert "task-xyz" in msg
-
-
-@pytest.mark.asyncio
-async def test_background_task_tool_reports_spawn_failure():
-    from src.tools.background_task import BackgroundTaskTools
-
-    async def boom(goal: str) -> str:
-        raise RuntimeError("redis down")
-
-    tool = BackgroundTaskTools(spawner=boom)
-    msg = await tool.start_background_task("do thing")
-    assert "Failed to start" in msg
-
-
-@pytest.mark.asyncio
 async def test_runner_absorbs_steering():
     redis = FakeRedis()
     # Queue a steering message before the run starts.

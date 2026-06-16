@@ -364,6 +364,7 @@ class AgentFactory:
         single_chat_mode: bool = False,
         storage_backend: StorageBackend | None = None,
         task_spawner: Callable[[str], Awaitable[str]] | None = None,
+        sync_delegation_emitter: Callable[[str, str, str], Any] | None = None,
         task_mode: bool = False,
         byok: dict[str, str] | None = None,
         byok_default: str = "",
@@ -416,6 +417,24 @@ class AgentFactory:
         )
 
         if discovery_mode:
+            # Web search has no plugin manifest or credentials, so it never comes
+            # from config_client.fetch_tools() — the legacy path adds it via
+            # tools_config.add("web_search"). In discovery mode the router only
+            # sees the connected integrations plus the consolidated local
+            # toolkits, so without this it has no web_search schema to route to
+            # and dead-ends with "No tool found" on factual/current-info queries
+            # (e.g. weather). Add it as a local toolkit so it's routable.
+            if consolidate_local:
+                try:
+                    from src.tools.factory import _build_web_search
+
+                    local_tools.append(_build_web_search({}))
+                    logger.info("[Factory] Discovery mode: added web_search to local toolkits")
+                except Exception as e:
+                    logger.warning(
+                        "[Factory] Discovery mode: failed to add web_search: %s", e
+                    )
+
             # Discovery mode: single routing tool replaces all per-integration tools
             discovery_fn = build_discovery_tool(
                 user_id=user_id,
@@ -715,36 +734,39 @@ class AgentFactory:
                         sorted(byok_keys),
                     )
 
+                # delegate_to(background=True) hands substantial multi-step work to
+                # the autonomous task runner. Only the lead nomi agent may spawn
+                # background tasks (not planner/team, and never inside a task run —
+                # task_spawner is already None there; see RedisSession gating).
+                allow_background = (
+                    task_spawner is not None
+                    and (agent_type or "nomi").lower() == "nomi"
+                    and not (command_desc and command_desc.get("type"))
+                )
+                spawner_for_delegation = task_spawner if allow_background else None
+
                 # Drop the raw sandbox toolkit from Nomi's own tools — it now reaches
                 # the sandbox only by delegating to the engineer.
                 tools = [t for t in tools if t is not sandbox_tool]
                 tools.append(
-                    DelegationTools(registry=registry, timeout=delegation_timeout)
+                    DelegationTools(
+                        registry=registry,
+                        timeout=delegation_timeout,
+                        spawner=spawner_for_delegation,
+                        emitter_factory=sync_delegation_emitter,
+                    )
                 )
                 logger.info(
                     "[Factory] Wired delegate_to(sandbox_engineer) (task_mode=%s, "
-                    "tool_limit=%s, timeout=%s)",
+                    "tool_limit=%s, timeout=%s, background=%s, persist_sync=%s)",
                     task_mode,
                     engineer_tool_limit,
                     delegation_timeout,
+                    spawner_for_delegation is not None,
+                    sync_delegation_emitter is not None,
                 )
         except Exception as e:
             logger.warning("[Factory] Failed to wire delegation tool: %s", e)
-
-        # Background task launcher — lets the agent hand substantial multi-step
-        # work to an autonomous runner that survives the turn and streams to the
-        # Tasks UI. Only for the lead nomi agent (not planner/team, and never
-        # inside a task run — see RedisSession._spawn_background_task gating).
-        if task_spawner is not None and (agent_type or "nomi").lower() == "nomi" and not (
-            command_desc and command_desc.get("type")
-        ):
-            try:
-                from src.tools.background_task import BackgroundTaskTools
-
-                tools.append(BackgroundTaskTools(spawner=task_spawner))
-                logger.info("[Factory] Added start_background_task tool")
-            except Exception as e:
-                logger.warning("[Factory] Failed to add background_task tool: %s", e)
 
         # Register chat history search tool for single chat mode
         if single_chat_mode and user_id and self._knowledge is not None:
