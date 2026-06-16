@@ -38,6 +38,10 @@ type Container struct {
 	// Credentials store (Redis-backed)
 	CredentialsStore credentials.Store
 
+	// CryptoKey is the AES-256 key (decoded from cfg.Token.EncryptionKey) used to
+	// encrypt/decrypt at-rest secrets such as BYOK API keys.
+	CryptoKey []byte
+
 	// GitHub App installation-token minter (nil if not configured)
 	GitHubApp *githubapp.Client
 }
@@ -102,5 +106,6 @@ func NewContainer(cfg *config.Config, logger *zap.Logger) (*Container, error) {
 		Logger:           logger,
 		TokenManager:     tokenManager,
 		CredentialsStore: credStore,
+		CryptoKey:        cryptoKey,
 	}, nil
 }

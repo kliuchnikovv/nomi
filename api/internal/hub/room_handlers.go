@@ -1030,6 +1030,25 @@ func (r *Room) handleUserMessage(msg *ClientMessage) {
 			}
 		}
 
+		// Inject user-supplied LLM provider keys (BYOK). Decrypt at-rest keys and
+		// expose them as "<provider>_api_key" (the field name the brain already
+		// reads) plus the user's preferred default provider. Used by the developer
+		// agent to drive opencode in the sandbox on the user's own key.
+		if byokKeys, err := r.store.ListUserAPIKeys(ctx, r.initiatorID); err == nil {
+			for _, k := range byokKeys {
+				decrypted, derr := crypto.Decrypt(r.hub.cryptoKey, k.KeyEncrypted)
+				if derr != nil {
+					r.logger.Warn("failed to decrypt BYOK key",
+						zap.String("provider", k.Provider), zap.Error(derr))
+					continue
+				}
+				finalMap[k.Provider+"_api_key"] = string(decrypted)
+				if k.IsDefault {
+					finalMap["byok_default_provider"] = k.Provider
+				}
+			}
+		}
+
 		// Inject project context so the agent is aware of the project it works
 		// within. The project's description acts as the project's "document".
 		if chatRecord != nil && chatRecord.ProjectID != nil {

@@ -23,8 +23,18 @@ AGENT_ALIASES = {
     "dev_ops": "sandbox_engineer",
     "engineer": "sandbox_engineer",
     "sandbox": "sandbox_engineer",
-    "developer": "sandbox_engineer",
     "coder": "sandbox_engineer",
+    # The opencode-driven Developer (BYOK). Only registered when the user has an
+    # LLM key configured; otherwise delegate_to falls back to sandbox_engineer.
+    "developer": "developer",
+    "opencode": "developer",
+    "opencoder": "developer",
+}
+
+# When an alias resolves to a target that isn't registered (e.g. "developer"
+# without a BYOK key), fall back to this registered target if present.
+AGENT_FALLBACKS = {
+    "developer": "sandbox_engineer",
 }
 
 
@@ -61,8 +71,13 @@ class DelegationTools(Toolkit):
             "Use 'sandbox_engineer' for anything that needs running, building, installing, or "
             "testing code in an isolated Linux sandbox — including setting up a development "
             "environment, installing dependencies, and writing or running tests (e2e, unit, etc.). "
-            "If the user asks to delegate work to a 'devops', 'engineer', or 'developer' agent, "
-            "that is sandbox_engineer. "
+            "If the user asks to delegate work to a 'devops' or 'engineer' agent, that is "
+            "sandbox_engineer. "
+            "Use 'developer' (also 'opencode') for autonomous feature implementation: it drives "
+            "the opencode coding agent in the sandbox on the user's own LLM key (BYOK) to write "
+            "and edit code from a high-level task description. Prefer 'developer' when the user "
+            "asks to 'implement', 'build a feature', or delegate to a 'developer' agent; it is "
+            "only available when the user has configured a BYOK key. "
             "Do NOT call sandbox tools directly (via discovery_tool or any other route) for "
             "coding/env work — always go through delegate_to so the noisy shell loop runs in "
             "the engineer's context, not yours. "
@@ -89,6 +104,17 @@ class DelegationTools(Toolkit):
         # agent name from the user/LLM still resolves to a registered target.
         resolved = AGENT_ALIASES.get(agent.strip().lower(), agent)
         builder = self._registry.get(resolved)
+        if builder is None and resolved in AGENT_FALLBACKS:
+            # e.g. "developer" requested but no BYOK key → use sandbox_engineer.
+            fallback = AGENT_FALLBACKS[resolved]
+            builder = self._registry.get(fallback)
+            if builder is not None:
+                logger.info(
+                    "[Delegation] '%s' unavailable, falling back to '%s'",
+                    resolved,
+                    fallback,
+                )
+                resolved = fallback
         if builder is None:
             available = ", ".join(sorted(self._registry)) or "(none)"
             return (

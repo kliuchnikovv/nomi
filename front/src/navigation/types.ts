@@ -22,6 +22,7 @@ export type SettingsStackParamList = {
     BotIdentityScreen: undefined;
     IntegrationsScreen: undefined;
     MemoryScreen: undefined;
+    BYOKScreen: undefined;
 };
 
 // Dashboard nested stack (inside the Dashboard tab)

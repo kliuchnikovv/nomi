@@ -69,8 +69,10 @@ class Container:
     def knowledge(self):
         """Get shared Agno Knowledge instance (lazy initialization)."""
         if self._knowledge is None:
-            from agno.knowledge import Knowledge
             from agno.vectordb.pgvector import PgVector
+            from agno.vectordb.search import SearchType
+
+            from src.core.knowledge import ProjectAwareKnowledge
 
             db_url = self.config.db_dsn or ""
             if db_url.startswith("postgres://"):
@@ -80,8 +82,15 @@ class Container:
                 table_name="personal_vectors",
                 db_url=db_url,
                 embedder=self.embedder,
+                # Hybrid search: vector similarity + full-text over the existing
+                # `content` column (to_tsvector). Improves recall for short fact
+                # entries where keyword overlap matters. No schema migration or new
+                # deps required; full-text is computed in-query. Weight is 0.7 vector
+                # / 0.3 full-text — tune by retrieval quality.
+                search_type=SearchType.hybrid,
+                vector_score_weight=0.7,
             )
-            self._knowledge = Knowledge(vector_db=vector_db)
+            self._knowledge = ProjectAwareKnowledge(vector_db=vector_db)
             logger.info("[Container] Knowledge initialized")
         return self._knowledge
 

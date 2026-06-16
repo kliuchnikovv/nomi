@@ -12,10 +12,11 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DocumentPicker from 'react-native-document-picker';
 import { useTheme } from '../../context/ThemeContext';
-import { projectsApi, apiClient } from '../../apiClient';
+import { projectsApi, projectDocsApi, apiClient } from '../../apiClient';
 import { getApiUrl } from '../../config';
-import type { Project, Chat } from '../main/models';
+import type { Project, Chat, ProjectDocument } from '../main/models';
 import type { ProjectsStackParamList } from '../../navigation/types';
 
 type Nav = NativeStackNavigationProp<ProjectsStackParamList, 'ProjectDetail'>;
@@ -29,18 +30,22 @@ export function ProjectDetailScreen() {
     const insets = useSafeAreaInsets();
     const [project, setProject] = useState<Project | null>(null);
     const [chats, setChats] = useState<Chat[]>([]);
+    const [documents, setDocuments] = useState<ProjectDocument[]>([]);
     const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const [allProjects, allChats] = await Promise.all([
+            const [allProjects, allChats, docs] = await Promise.all([
                 projectsApi.list(),
                 apiClient.get<Chat[]>(`${getApiUrl()}/chats`),
+                projectDocsApi.list(projectId).catch(() => [] as ProjectDocument[]),
             ]);
             const found = (allProjects ?? []).find((p) => p.id === projectId) ?? null;
             setProject(found);
             setChats((allChats ?? []).filter((c) => c.project_id === projectId));
+            setDocuments(docs ?? []);
         } finally {
             setLoading(false);
         }
@@ -63,6 +68,78 @@ export function ProjectDetailScreen() {
                 },
             },
         ]);
+    };
+
+    const handleAddDocument = useCallback(async () => {
+        try {
+            const result = await DocumentPicker.pick({
+                type: [
+                    DocumentPicker.types.pdf,
+                    DocumentPicker.types.plainText,
+                    DocumentPicker.types.allFiles,
+                ],
+                copyTo: 'cachesDirectory',
+            });
+            const asset = result?.[0];
+            if (!asset) return;
+
+            const name = asset.name || 'document';
+            const lower = name.toLowerCase();
+            const allowed =
+                lower.endsWith('.txt') ||
+                lower.endsWith('.md') ||
+                lower.endsWith('.pdf');
+            if (!allowed) {
+                Alert.alert(
+                    'Unsupported file',
+                    'Only .txt, .md and .pdf files are supported.',
+                );
+                return;
+            }
+
+            setUploading(true);
+            await projectDocsApi.upload(projectId, {
+                uri: asset.fileCopyUri || asset.uri,
+                name,
+                type: asset.type || 'application/octet-stream',
+            });
+            await load();
+        } catch (err: any) {
+            if (DocumentPicker.isCancel(err)) return;
+            Alert.alert(
+                'Upload failed',
+                err?.message ? String(err.message) : 'Could not upload the document.',
+            );
+        } finally {
+            setUploading(false);
+        }
+    }, [projectId, load]);
+
+    const handleDeleteDocument = useCallback(
+        (doc: ProjectDocument) => {
+            Alert.alert('Remove document', `Remove "${doc.file_name}"?`, [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+                        try {
+                            await projectDocsApi.delete(projectId, doc.id);
+                        } catch {
+                            await load();
+                        }
+                    },
+                },
+            ]);
+        },
+        [projectId, load],
+    );
+
+    const statusColor = (status: ProjectDocument['status']): string => {
+        if (status === 'ready') return '#34C759';
+        if (status === 'failed') return '#FF3B30';
+        return theme.accent;
     };
 
     const renderChat = ({ item }: { item: Chat }) => (
@@ -117,7 +194,55 @@ export function ProjectDetailScreen() {
                 )}
             </View>
 
-            <View style={styles.chatsHeader}>
+            <View style={styles.sectionHeaderRow}>
+                <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Documents</Text>
+                <TouchableOpacity
+                    onPress={handleAddDocument}
+                    disabled={uploading}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    {uploading ? (
+                        <ActivityIndicator size="small" color={theme.accent} />
+                    ) : (
+                        <Text style={[styles.newChatBtn, { color: theme.accent }]}>Add document</Text>
+                    )}
+                </TouchableOpacity>
+            </View>
+
+            {documents.length === 0 ? (
+                <Text style={[styles.docHint, { color: theme.textSecondary }]}>
+                    Attach .txt, .md or .pdf files. Their content becomes searchable by the assistant in this project's chats.
+                </Text>
+            ) : (
+                documents.map((doc) => (
+                    <View
+                        key={doc.id}
+                        style={[styles.docRow, { backgroundColor: theme.surface }]}
+                    >
+                        <Ionicons name="document-text-outline" size={18} color={theme.textSecondary} />
+                        <View style={styles.docInfo}>
+                            <Text style={[styles.docName, { color: theme.textPrimary }]} numberOfLines={1}>
+                                {doc.file_name}
+                            </Text>
+                            <Text style={[styles.docStatus, { color: statusColor(doc.status) }]}>
+                                {doc.status === 'ready'
+                                    ? `Ready · ${doc.chunk_count} chunks`
+                                    : doc.status === 'failed'
+                                      ? 'Failed to index'
+                                      : 'Indexing…'}
+                            </Text>
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => handleDeleteDocument(doc)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                            <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                        </TouchableOpacity>
+                    </View>
+                ))
+            )}
+
+            <View style={styles.sectionHeaderRow}>
                 <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Chats</Text>
                 <TouchableOpacity
                     onPress={() => navigation.navigate('ProjectChatDetail', { chatId: '', projectId })}
@@ -168,7 +293,7 @@ const styles = StyleSheet.create({
     },
     projectIcon: { fontSize: 32 },
     description: { fontSize: 14, lineHeight: 20 },
-    chatsHeader: {
+    sectionHeaderRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -177,6 +302,25 @@ const styles = StyleSheet.create({
     },
     sectionTitle: { fontSize: 16, fontWeight: '600' },
     newChatBtn: { fontSize: 14, fontWeight: '500' },
+    docHint: {
+        fontSize: 13,
+        lineHeight: 18,
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+    },
+    docRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginHorizontal: 16,
+        marginBottom: 8,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        gap: 12,
+    },
+    docInfo: { flex: 1, gap: 2 },
+    docName: { fontSize: 14, fontWeight: '500' },
+    docStatus: { fontSize: 12 },
     chatRow: {
         flexDirection: 'row',
         alignItems: 'center',

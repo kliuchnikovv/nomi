@@ -27,27 +27,31 @@ logger = logging.getLogger(__name__)
 class AgentRunWrapper:
     """
     Thin wrapper that injects knowledge_filters={"user_id": rag_user_id} into every
-    run/arun call so agentic search is scoped to the user. Call sites do not need
+    run/arun call so agentic search is scoped to the user. When the chat belongs to
+    a project, also injects project_id so ProjectAwareKnowledge can union this
+    project's documents with the user's general knowledge. Call sites do not need
     to pass knowledge_filters explicitly.
     """
 
-    def __init__(self, agent: Agent, rag_user_id: str):
+    def __init__(self, agent: Agent, rag_user_id: str, project_id: str | None = None):
         self._agent = agent
         self._rag_user_id = rag_user_id
+        self._project_id = project_id
+
+    def _with_scope(self, kwargs: dict) -> dict:
+        filters = kwargs.get("knowledge_filters") or {}
+        if isinstance(filters, dict):
+            filters = {**filters, "user_id": self._rag_user_id}
+            if self._project_id:
+                filters["project_id"] = self._project_id
+        kwargs["knowledge_filters"] = filters
+        return kwargs
 
     def arun(self, input, **kwargs):
-        filters = kwargs.get("knowledge_filters") or {}
-        if isinstance(filters, dict):
-            filters = {**filters, "user_id": self._rag_user_id}
-        kwargs["knowledge_filters"] = filters
-        return self._agent.arun(input, **kwargs)
+        return self._agent.arun(input, **self._with_scope(kwargs))
 
     def run(self, input, **kwargs):
-        filters = kwargs.get("knowledge_filters") or {}
-        if isinstance(filters, dict):
-            filters = {**filters, "user_id": self._rag_user_id}
-        kwargs["knowledge_filters"] = filters
-        return self._agent.run(input, **kwargs)
+        return self._agent.run(input, **self._with_scope(kwargs))
 
     def __getattr__(self, name):
         return getattr(self._agent, name)
@@ -361,6 +365,9 @@ class AgentFactory:
         storage_backend: StorageBackend | None = None,
         task_spawner: Callable[[str], Awaitable[str]] | None = None,
         task_mode: bool = False,
+        byok: dict[str, str] | None = None,
+        byok_default: str = "",
+        project_id: str | None = None,
     ) -> Agent:
         # Use provided model or default
         # If command_desc has model, use it if model_name is not provided
@@ -682,6 +689,32 @@ class AgentFactory:
                         )
                     )
                 }
+
+                # When the user supplied an LLM key (BYOK), also offer a Developer
+                # sub-agent that drives the opencode CLI in the same sandbox on the
+                # user's own key. Built lazily; reuses the SAME SandboxTools VM.
+                byok_keys = {k: v for k, v in (byok or {}).items() if v}
+                if byok_keys:
+                    from src.agents.developer import build_developer_agent
+                    from plugins.sandbox.server.opencode_tools import OpenCodeTools
+
+                    registry["developer"] = (
+                        lambda sb=sandbox_tool, m=model, lim=engineer_tool_limit, bk=byok_keys, bd=byok_default: build_developer_agent(
+                            model=m,
+                            sandbox_tools=sb,
+                            opencode_tools=OpenCodeTools(
+                                sandbox_tools=sb, byok_keys=bk, byok_default=bd
+                            ),
+                            db=None,
+                            debug_mode=self._debug_mode,
+                            tool_call_limit=lim,
+                        )
+                    )
+                    logger.info(
+                        "[Factory] Wired delegate_to(developer) with BYOK providers: %s",
+                        sorted(byok_keys),
+                    )
+
                 # Drop the raw sandbox toolkit from Nomi's own tools — it now reaches
                 # the sandbox only by delegating to the engineer.
                 tools = [t for t in tools if t is not sandbox_tool]
@@ -799,7 +832,7 @@ class AgentFactory:
                 session_id,
                 agent.name,
             )
-            return AgentRunWrapper(agent, rag_user_id)
+            return AgentRunWrapper(agent, rag_user_id, project_id=project_id)
         except Exception as e:
             logger.error(
                 "[WS] Failed to create agent: session_id=%s model=%s agent_type=%s error=%s",

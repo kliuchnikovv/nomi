@@ -420,6 +420,47 @@ export const projectsApi = {
         apiClient.delete<void>(`${API_URL()}/projects/${id}`),
 };
 
+export const projectDocsApi = {
+    list: (projectId: string) =>
+        apiClient.get<import('./screens/main/models').ProjectDocument[]>(
+            `${API_URL()}/projects/${projectId}/documents`,
+        ),
+    upload: async (
+        projectId: string,
+        file: { uri: string; name: string; type: string },
+    ) => {
+        const formData = new FormData();
+        formData.append('file', {
+            uri: file.uri,
+            name: file.name,
+            type: file.type,
+        } as any);
+
+        const response = await fetch(
+            `${API_URL()}/projects/${projectId}/documents`,
+            {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    Authorization: `Bearer ${authStore.getToken()}`,
+                },
+            },
+        );
+
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            throw new Error(text || 'Document upload failed');
+        }
+
+        return (await response.json()) as import('./screens/main/models').ProjectDocument;
+    },
+    delete: (projectId: string, docId: string) =>
+        apiClient.delete<void>(
+            `${API_URL()}/projects/${projectId}/documents/${docId}`,
+        ),
+};
+
 export const tasksApi = {
     list: () =>
         apiClient.get<import('./screens/main/models').AgentTask[]>(
@@ -597,6 +638,30 @@ export interface EntityEntry {
 
 export const entityApi = {
     list: () => apiClient.get<EntityEntry[]>(`${API_URL()}/user/entities`),
+};
+
+export type BYOKProvider = 'anthropic' | 'google' | 'openrouter' | 'zai';
+
+export interface BYOKProviderInfo {
+    provider: BYOKProvider;
+    is_default: boolean;
+}
+
+// BYOK (bring your own key): user-supplied LLM provider keys. Keys are stored
+// encrypted server-side and never returned; list only reports which providers
+// are configured and which is the default.
+export const byokApi = {
+    list: () =>
+        apiClient.get<{ providers: BYOKProviderInfo[] }>(`${API_URL()}/byok`),
+    save: (provider: BYOKProvider, apiKey: string, isDefault?: boolean) =>
+        apiClient.put<{ ok: boolean }>(`${API_URL()}/byok/${provider}`, {
+            api_key: apiKey,
+            is_default: !!isDefault,
+        }),
+    setDefault: (provider: BYOKProvider) =>
+        apiClient.put<{ ok: boolean }>(`${API_URL()}/byok/${provider}/default`, {}),
+    delete: (provider: BYOKProvider) =>
+        apiClient.delete<{ ok: boolean }>(`${API_URL()}/byok/${provider}`),
 };
 
 export const credentialsApi = {

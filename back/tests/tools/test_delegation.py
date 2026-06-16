@@ -65,6 +65,26 @@ async def test_unknown_non_alias_still_errors():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("alias", ["developer", "opencode", "OpenCode", "  opencoder "])
+async def test_developer_aliases_resolve_when_registered(alias):
+    dev = _FakeAgent(content="feature shipped")
+    eng = _FakeAgent(content="env ready")
+    tk = DelegationTools(
+        registry={"sandbox_engineer": lambda: eng, "developer": lambda: dev}
+    )
+    result = await tk.delegate_to(agent=alias, task="implement a feature")
+    assert result == "feature shipped"
+
+
+@pytest.mark.asyncio
+async def test_developer_falls_back_to_sandbox_engineer_without_byok():
+    # No "developer" in registry (no BYOK key) → fall back to sandbox_engineer.
+    tk = _toolkit(_FakeAgent(content="env ready"))
+    result = await tk.delegate_to(agent="opencode", task="implement a feature")
+    assert result == "env ready"
+
+
+@pytest.mark.asyncio
 async def test_cancelled_error_propagates():
     tk = _toolkit(_FakeAgent(raises=asyncio.CancelledError()))
     with pytest.raises(asyncio.CancelledError):

@@ -29,6 +29,7 @@ import {
     generateChatEmoji,
 } from '../../services/chatTitleGenerator';
 import { extractActions } from '../../services/actionExtractor';
+import { generateFollowUps } from '../../services/suggestionGenerator';
 import { getStoredLocation } from '../../services/location/locationService';
 
 function generateId(): string {
@@ -785,6 +786,8 @@ export function ChatProvider({
                         context_items: contextItems,
                         // eof: true // user message is complete
                     });
+                    // A new user turn invalidates any follow-up chips from the previous reply.
+                    useChatStore.getState().clearFollowUps(chatIdToUse);
                     // Awaiting an assistant response — eligible for reconciliation
                     // (auto-resend) if the turn is interrupted before a reply.
                     if (role === 'user') {
@@ -1011,32 +1014,37 @@ export function ChatProvider({
             role?: string,
             contextItems?: any[],
         ) => {
-            if (isNewSession && !sessionClassified) {
-                try {
-                    const projects = await projectsApi.list();
-                    if (projects && projects.length > 0) {
-                        const projectId = await classifyMessageForProject(
-                            text,
-                            projects,
-                        );
-                        if (projectId) {
-                            const matched =
-                                projects.find(p => p.id === projectId) ?? null;
-                            if (matched) {
-                                setPendingMessage(text);
-                                setSuggestedProjectForSession(matched);
-                                return;
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn(
-                        '[SessionClassify] classification failed, sending anyway:',
-                        e,
-                    );
-                }
-                setSessionClassified(true);
-            }
+            // NOTE: The blocking "Add to project?" banner on the first message of
+            // a new session is temporarily disabled. It used to classify the first
+            // message and, on a match, halt sending until the user chose a project.
+            // The non-blocking open-chat banner (see ChatDetailScreen) remains active.
+            // To re-enable, restore the block below.
+            // if (isNewSession && !sessionClassified) {
+            //     try {
+            //         const projects = await projectsApi.list();
+            //         if (projects && projects.length > 0) {
+            //             const projectId = await classifyMessageForProject(
+            //                 text,
+            //                 projects,
+            //             );
+            //             if (projectId) {
+            //                 const matched =
+            //                     projects.find(p => p.id === projectId) ?? null;
+            //                 if (matched) {
+            //                     setPendingMessage(text);
+            //                     setSuggestedProjectForSession(matched);
+            //                     return;
+            //                 }
+            //             }
+            //         }
+            //     } catch (e) {
+            //         console.warn(
+            //             '[SessionClassify] classification failed, sending anyway:',
+            //             e,
+            //         );
+            //     }
+            //     setSessionClassified(true);
+            // }
             sendMessageInternal(
                 text,
                 attachments,
@@ -1676,6 +1684,20 @@ export function ChatProvider({
                                         lastAssistant.id,
                                         actions,
                                     );
+                            }
+                        })
+                        .catch(() => {});
+
+                    // Fire-and-forget: generate topic-aware follow-up chips via AFM (iOS only)
+                    const lastUser = [...msgs]
+                        .reverse()
+                        .find(m => m.role === 'user');
+                    generateFollowUps(lastAssistant.text, lastUser?.text)
+                        .then(items => {
+                            if (items.length > 0) {
+                                useChatStore
+                                    .getState()
+                                    .setFollowUps(chatId, items);
                             }
                         })
                         .catch(() => {});

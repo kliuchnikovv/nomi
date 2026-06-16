@@ -201,12 +201,18 @@ class RedisSession:
 
         # Single chat mode state
         self.single_chat_mode: bool = False  # Set from session state payload
+        self.byok: dict[str, str] = {}  # BYOK LLM keys; set from payload
+        self.byok_default: str = ""
         self._model_context_limit: int | None = None  # Loaded lazily
         self._model_supports_vision_cache: bool | None = None  # Loaded lazily
 
         # Context items (emails, documents, etc.)
         # Context items (emails, documents, etc.)
         self.context_items: list[dict[str, Any]] = []
+
+        # Project context (set from payload in handle_user_message); carries the
+        # project's id/name/description when the chat belongs to a project.
+        self._project_context: dict[str, Any] | None = None
 
         # Plugin delivery context (set from payload in handle_user_message)
         self._delivery_source: str | None = None
@@ -997,6 +1003,15 @@ class RedisSession:
 
         self.agent_type = payload.get("agent_type", "nomi")
         self.single_chat_mode = bool(payload.get("single_chat_mode", False))
+
+        # BYOK: user-supplied LLM provider keys injected by the Go API as
+        # "<provider>_api_key". Collected for the opencode-driven developer agent.
+        self.byok = {
+            p: payload[f"{p}_api_key"]
+            for p in ("anthropic", "google", "openrouter", "zai")
+            if payload.get(f"{p}_api_key")
+        }
+        self.byok_default = payload.get("byok_default_provider", "")
         self.command_desc = payload.get("command") or payload.get("team")
         if self.command_desc is None:
             self.command_desc = {}
@@ -1060,6 +1075,13 @@ class RedisSession:
                 storage_backend=storage_backend or self.storage_backend,
                 task_spawner=task_spawner,
                 task_mode=in_task_run,
+                byok=self.byok,
+                byok_default=self.byok_default,
+                project_id=(
+                    (self._project_context or {}).get("id")
+                    if isinstance(getattr(self, "_project_context", None), dict)
+                    else None
+                ),
             )
         except Exception as e:
             logger.error(
@@ -1466,6 +1488,18 @@ class RedisSession:
 
         # ------------------------------------
 
+        # Project context: when the chat belongs to a project, the Go API sends
+        # the project's id/name/description so (a) the project is injected into the
+        # agent input in _build_agent_input and (b) the agent's knowledge search is
+        # scoped to this project's documents (union with general knowledge). Must be
+        # set BEFORE build_agent_instance so project_id reaches the agent wrapper.
+        incoming_project_context = payload.get("project_context")
+        self._project_context = (
+            incoming_project_context
+            if isinstance(incoming_project_context, dict)
+            else None
+        )
+
         # Build agent
         await self.build_agent_instance(payload, storage_backend=self.storage_backend)
 
@@ -1502,16 +1536,6 @@ class RedisSession:
         else:
             # Clear context items if not provided (user removed them)
             self.context_items = []
-
-        # Project context: when the chat belongs to a project, the Go API sends
-        # the project's name/description (its "document") so the agent works with
-        # that context in mind. Injected into the agent input in _build_agent_input.
-        incoming_project_context = payload.get("project_context")
-        self._project_context = (
-            incoming_project_context
-            if isinstance(incoming_project_context, dict)
-            else None
-        )
 
         # Run memory extraction in background (does not block response).
         # Only when ENABLE_MEMORY=true to avoid extra LLM calls and storing noise.

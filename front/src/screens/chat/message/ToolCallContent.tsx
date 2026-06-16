@@ -38,11 +38,8 @@ export function normalizeToolValue(value: any): NormalizedValue {
 
     if (typeof value === 'string') {
         const trimmed = value.trim();
-        const looksJson =
-            trimmed.startsWith('{') ||
-            trimmed.startsWith('[') ||
-            trimmed.startsWith('"');
-        if (looksJson) {
+        const isStructured = trimmed.startsWith('{') || trimmed.startsWith('[');
+        if (isStructured || trimmed.startsWith('"')) {
             try {
                 const parsed = JSON.parse(trimmed);
                 if (typeof parsed === 'string') {
@@ -57,8 +54,13 @@ export function normalizeToolValue(value: any): NormalizedValue {
                     };
                 }
             } catch {
-                // not JSON, fall through to plain text
+                // not strict JSON — fall through
             }
+        }
+        // Python-style dict/list repr (single quotes, True/False/None) is not
+        // valid JSON but is still structured — highlight it in place.
+        if (isStructured) {
+            return { text: value, kind: 'json' };
         }
         return { text: value, kind: 'text' };
     }
@@ -74,19 +76,22 @@ export function normalizeToolValue(value: any): NormalizedValue {
     return { text: String(value), kind: 'text' };
 }
 
-// Token regex for pretty-printed JSON: strings (optionally a key when followed
-// by a colon), literals, and numbers. Everything between matches (whitespace,
-// braces, brackets, commas, colons) is rendered with the base color.
+// Token regex for structured content (JSON or Python-style dict/list repr):
+// double- or single-quoted strings (optionally a key when followed by a colon),
+// literals, and numbers. Everything between matches (whitespace, braces,
+// brackets, commas, colons) is rendered with the base color.
 const JSON_TOKEN =
-    /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?)|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+    /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')(\s*:)?|\b(true|false|null|True|False|None)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
 
-// Unescape the common sequences inside a JSON string token so multi-line values
-// show as real line breaks instead of literal `\n`.
+// Unescape the common sequences inside a string token so multi-line values
+// show as real line breaks instead of literal `\n`. Order matters: handle the
+// escaped backslash last so it doesn't consume the others.
 function unescapeJsonString(token: string): string {
     return token
         .replace(/\\n/g, '\n')
         .replace(/\\t/g, '\t')
         .replace(/\\"/g, '"')
+        .replace(/\\'/g, "'")
         .replace(/\\\\/g, '\\');
 }
 

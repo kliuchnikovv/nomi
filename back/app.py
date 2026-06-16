@@ -312,6 +312,114 @@ async def rag_index(
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+def _parse_document(file_type: str, raw: bytes) -> str:
+    """Extract plain text from a project document. Supports text/markdown/pdf."""
+    ft = (file_type or "").lower()
+    if "pdf" in ft:
+        import io as _io
+
+        from pypdf import PdfReader
+
+        reader = PdfReader(_io.BytesIO(raw))
+        parts = []
+        for page in reader.pages:
+            try:
+                parts.append(page.extract_text() or "")
+            except Exception:
+                continue
+        return "\n".join(parts)
+    # text/plain, text/markdown (and any other text-ish type)
+    return raw.decode("utf-8", errors="replace")
+
+
+def _chunk_text(text: str, size: int = 1000, overlap: int = 200) -> list[str]:
+    """Split text into overlapping chunks for embedding."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    step = max(1, size - overlap)
+    while start < len(text):
+        chunks.append(text[start : start + size])
+        start += step
+    return chunks
+
+
+@app.post("/rag/index_document")
+async def rag_index_document(request: dict):
+    """Parse, chunk and embed a project document into the vector store, scoped by
+    project_id. Called by the Go API after a file is uploaded to a project."""
+    import base64
+
+    document_id = request.get("document_id")
+    project_id = request.get("project_id")
+    user_id = request.get("user_id")
+    file_name = request.get("file_name") or ""
+    file_type = request.get("file_type") or ""
+    content_b64 = request.get("content_b64")
+
+    if not document_id or not project_id or not user_id or not content_b64:
+        return JSONResponse(
+            {"error": "document_id, project_id, user_id and content_b64 are required"},
+            status_code=400,
+        )
+
+    try:
+        raw = base64.b64decode(content_b64)
+        text = _parse_document(file_type, raw)
+        chunks = _chunk_text(text)
+        if not chunks:
+            return JSONResponse(
+                {"error": "no extractable text in document"}, status_code=400
+            )
+
+        for i, chunk in enumerate(chunks):
+            await container.knowledge.ainsert(
+                name=f"{document_id}:{i}",
+                text_content=chunk,
+                metadata={
+                    "user_id": str(user_id),
+                    "project_id": str(project_id),
+                    "source": "project_document",
+                    "document_id": str(document_id),
+                    "file_name": file_name,
+                    "chunk_index": i,
+                },
+                upsert=True,
+            )
+        return {"chunk_count": len(chunks)}
+    except Exception as e:
+        logging.error("Failed to index project document: %s", e, exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/rag/remove")
+async def rag_remove(request: dict):
+    """Remove all vectors for a project document by metadata. Called by the Go API
+    when a project document is deleted."""
+    user_id = request.get("user_id")
+    project_id = request.get("project_id")
+    document_id = request.get("document_id")
+
+    if not document_id or not user_id:
+        return JSONResponse(
+            {"error": "user_id and document_id are required"}, status_code=400
+        )
+
+    try:
+        metadata = {"user_id": str(user_id), "document_id": str(document_id)}
+        if project_id:
+            metadata["project_id"] = str(project_id)
+        ok = container.knowledge.remove_vectors_by_metadata(metadata)
+        return {"ok": bool(ok)}
+    except Exception as e:
+        logging.error("Failed to remove project document vectors: %s", e, exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.post("/voice/tts")
 async def voice_tts(
     request: dict,

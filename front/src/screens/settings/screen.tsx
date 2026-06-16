@@ -238,6 +238,11 @@ export default function SettingsHomeScreen() {
                             navigation.navigate('IntegrationsScreen')
                         }
                         isFirst
+                    />
+                    <SettingsRow
+                        label="AI Keys (BYOK)"
+                        onPress={() => navigation.navigate('BYOKScreen')}
+                        isFirst={false}
                         isLast
                     />
                 </SettingsSection>

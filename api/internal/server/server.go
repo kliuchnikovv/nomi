@@ -47,6 +47,7 @@ func New(
 	var (
 		chatHandler        = handlers.NewChatHandler(ctr.ChatService)
 		projectHandler     = handlers.NewProjectHandler(ctr.ProjectService)
+		projectDocHandler  = handlers.NewProjectDocumentHandler(ctr.Storage, cfg, logger)
 		messageHandler     = handlers.NewMessageHandler(ctr.MessageService)
 		authMiddleware     = auth.NewAuthMiddleware(ctr.TokenManager, ctr.Storage)
 		authHandler        = handlers.NewAuthHandler(ctr.AuthService)
@@ -72,6 +73,7 @@ func New(
 			}
 			return h
 		}()
+		byokHandler           = handlers.NewBYOKHandler(logger, ctr.Storage, cryptoKey)
 		toolsHandler          = handlers.NewToolsHandler(ctr.Storage, logger, cryptoKey, ctr.GitHubApp)
 		integrationsHandler   = handlers.NewIntegrationsHandler(ctr.Storage, logger, ctr.GitHubApp)
 		githubAppHandler      = handlers.NewGitHubAppHandler(logger, cfg, ctr.Storage)
@@ -133,6 +135,10 @@ func New(
 	r.POST("/api/projects", wrapWithAuth(projectHandler.CreateProject, authMiddleware))
 	r.PUT("/api/projects/:id", wrapWithAuth(projectHandler.UpdateProject, authMiddleware))
 	r.DELETE("/api/projects/:id", wrapWithAuth(projectHandler.DeleteProject, authMiddleware))
+	// Project documents (files attached to a project; parsed + embedded by the brain)
+	r.POST("/api/projects/:id/documents", wrapWithAuth(projectDocHandler.UploadProjectDocument, authMiddleware))
+	r.GET("/api/projects/:id/documents", wrapWithAuth(projectDocHandler.ListProjectDocuments, authMiddleware))
+	r.DELETE("/api/projects/:id/documents/:docId", wrapWithAuth(projectDocHandler.DeleteProjectDocument, authMiddleware))
 
 	// Chat streaming API (WebSocket only)
 	r.GET("/api/chat/ws", wrapWithAuth(streamHandler.ChatWS, authMiddleware))
@@ -277,6 +283,12 @@ func New(
 	r.GET("/api/credentials/:provider/check", wrapWithAuth(credentialsHandler.Check, authMiddleware))
 	r.DELETE("/api/credentials/:provider", wrapWithAuth(credentialsHandler.Delete, authMiddleware))
 	r.POST("/api/credentials/request", wrapWithAuth(credentialsHandler.Request, authMiddleware))
+
+	// BYOK API - user-supplied LLM provider API keys (encrypted at rest in Postgres)
+	r.GET("/api/byok", wrapWithAuth(byokHandler.List, authMiddleware))
+	r.PUT("/api/byok/:provider", wrapWithAuth(byokHandler.Save, authMiddleware))
+	r.PUT("/api/byok/:provider/default", wrapWithAuth(byokHandler.SetDefault, authMiddleware))
+	r.DELETE("/api/byok/:provider", wrapWithAuth(byokHandler.Delete, authMiddleware))
 
 	return &Server{
 		httpServer: &http.Server{

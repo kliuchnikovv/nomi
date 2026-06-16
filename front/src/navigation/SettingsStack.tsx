@@ -7,6 +7,7 @@ import { LocationScreen } from '../screens/settings/screens/LocationScreen';
 import { BotIdentityScreen } from '../screens/settings/screens/BotIdentityScreen';
 import { IntegrationsScreen } from '../screens/integrations/IntegrationsScreen';
 import { MemoryScreen } from '../screens/settings/screens/MemoryScreen';
+import { BYOKScreen } from '../screens/settings/screens/BYOKScreen';
 
 const Stack = createNativeStackNavigator<SettingsStackParamList>();
 
@@ -25,6 +26,7 @@ export function SettingsStack() {
                 component={IntegrationsScreen}
             />
             <Stack.Screen name="MemoryScreen" component={MemoryScreen} />
+            <Stack.Screen name="BYOKScreen" component={BYOKScreen} />
         </Stack.Navigator>
     );
 }

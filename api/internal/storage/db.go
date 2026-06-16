@@ -39,6 +39,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&AuditSecurity{},
 		&User{},
 		&Project{},
+		&ProjectDocument{},
 		&Chat{},
 		&Message{},
 		&RefreshToken{},
@@ -56,6 +57,7 @@ func New(cfg *config.Config) (*Storage, error) {
 		&GitHubAppInstallation{},
 		&AgentTask{},
 		&AgentTaskEvent{},
+		&UserAPIKey{},
 	); err != nil {
 		return nil, err
 	}

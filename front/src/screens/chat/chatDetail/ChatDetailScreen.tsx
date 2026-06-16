@@ -50,6 +50,8 @@ import { getApiUrl } from '../../../config';
 import type { Project } from '../../main/models';
 import { ProjectSuggestionBanner } from './ProjectSuggestionBanner';
 import { PersistentChatEmptyState, useChips } from './PersistentChatEmptyState';
+import { SuggestionChips } from './SuggestionChips';
+import { useChatStore } from '../../../store/chatStore';
 import { SessionHistorySheet, formatSessionDate } from './SessionHistorySheet';
 import { AVAILABLE_TEAMS } from '../teams';
 import { DiceRollOverlay } from '../components/DiceRollOverlay';
@@ -147,6 +149,7 @@ export function ChatDetailScreen() {
     const { theme } = useTheme();
     const {
         activeChat,
+        activeChatID,
         chats,
         getChats,
         isNewSession,
@@ -154,6 +157,18 @@ export function ChatDetailScreen() {
         renameChat,
         deleteChat,
     } = useMain();
+    const followUps = useChatStore(s =>
+        activeChatID ? s.followUps[activeChatID] : undefined,
+    );
+    const handleFollowUpPress = useCallback(
+        (text: string) => {
+            setPendingInputText(text);
+            if (activeChatID) {
+                useChatStore.getState().clearFollowUps(activeChatID);
+            }
+        },
+        [setPendingInputText, activeChatID],
+    );
     const [dropdownVisible, setDropdownVisible] = useState(false);
 
     const styles = useMemo(() => createStyles(theme), [theme]);
@@ -163,7 +178,17 @@ export function ChatDetailScreen() {
     const inputBarHeight = 112;
 
     const giftedMessages = useGiftedMessages(messages, user?.id);
-    const chips = useChips();
+    // Recent chat titles seed topic-aware starter chips (on-device, iOS).
+    const starterContext = useMemo(
+        () =>
+            (chats ?? [])
+                .map(c => c.title)
+                .filter((t): t is string => !!t && t !== 'New Chat')
+                .slice(0, 8)
+                .join('\n'),
+        [chats],
+    );
+    const chips = useChips(isNewSession, starterContext);
 
     // Attachment state
     const [imageViewerVisible, setImageViewerVisible] = useState(false);
@@ -1161,7 +1186,22 @@ export function ChatDetailScreen() {
                     floatingInputStyle,
                 ]}
             >
-                {/* Banner stays interactive even while the input below is disabled */}
+                {/* Generated follow-up suggestion chips, shown once the reply is done */}
+                {!assistantWorking &&
+                    !suggestedProjectForSession &&
+                    !!followUps?.length && (
+                        <SuggestionChips
+                            suggestions={followUps}
+                            onPress={handleFollowUpPress}
+                            accentColor={theme.accent}
+                            surfaceColor={theme.surface}
+                            textPrimaryColor={theme.textPrimary}
+                        />
+                    )}
+                {/* Blocking new-session "Add to project?" banner. Temporarily
+                    disabled: `suggestedProjectForSession` is never set anymore
+                    (see ChatContext.sendMessage), so this never renders and the
+                    input is never dimmed. Kept here to make re-enabling trivial. */}
                 {suggestedProjectForSession && (
                     <ProjectSuggestionBanner
                         project={suggestedProjectForSession}

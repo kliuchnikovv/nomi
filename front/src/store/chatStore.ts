@@ -22,6 +22,10 @@ interface PendingUpdate {
 
 interface ChatStore {
     chats: Record<string, Message[]>;
+    // Ephemeral, non-persisted follow-up suggestion chips keyed by chatId.
+    followUps: Record<string, string[]>;
+    setFollowUps: (chatId: string, items: string[]) => void;
+    clearFollowUps: (chatId: string) => void;
     addMessage: (chatId: string, payload: any) => void;
     setMessages: (chatId: string, messages: Message[]) => void;
     mergeMessages: (chatId: string, incoming: Message[]) => void;
@@ -155,6 +159,25 @@ export const useChatStore = create<ChatStore>()(
     persist(
         (set, get) => ({
             chats: {},
+            followUps: {},
+
+            setFollowUps: (chatId, items) => {
+                set(state => ({
+                    followUps: {
+                        ...state.followUps,
+                        [chatId]: items,
+                    },
+                }));
+            },
+
+            clearFollowUps: chatId => {
+                set(state => {
+                    if (!state.followUps[chatId]?.length) return state;
+                    const next = { ...state.followUps };
+                    delete next[chatId];
+                    return { followUps: next };
+                });
+            },
 
             setMessages: (chatId, messages) => {
                 // Flush any pending streaming updates before replacing messages

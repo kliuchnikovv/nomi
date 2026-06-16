@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAuth } from '../../auth/context';
 import { useConnectors } from '../../settings/connectors/context';
+import { generateStarterChips } from '../../../services/suggestionGenerator';
 
 interface Chip {
     label: string;
@@ -17,29 +18,62 @@ interface Props {
     showChips?: boolean;
 }
 
-export function useChips(): Chip[] {
+/**
+ * Starter chips for the empty chat. Returns static, integration-aware chips, and
+ * (on iOS, when `enabled` and `recentContext` is non-empty) replaces them with
+ * topic-aware chips generated on-device from the user's recent activity.
+ */
+export function useChips(
+    enabled: boolean = true,
+    recentContext: string = '',
+): Chip[] {
     const { integrations } = useConnectors();
-    const chips: Chip[] = [];
+    const [generated, setGenerated] = useState<Chip[] | null>(null);
 
-    const hasGmail = integrations.some(c => c.id === 'gmail' && c.connected);
-    const hasCalendar = integrations.some(
-        c => c.id === 'calendar' && c.connected,
-    );
+    // Static, integration-aware fallback chips (used until/unless AFM produces some).
+    const staticChips = useMemo(() => {
+        const chips: Chip[] = [];
+        const hasGmail = integrations.some(
+            c => c.id === 'gmail' && c.connected,
+        );
+        const hasCalendar = integrations.some(
+            c => c.id === 'calendar' && c.connected,
+        );
+        if (hasGmail)
+            chips.push({
+                label: '📧 Check email',
+                text: 'Check my email and highlight important items',
+            });
+        if (hasCalendar)
+            chips.push({
+                label: '📅 Meetings',
+                text: 'What do I have planned today?',
+            });
+        chips.push({ label: '💻 Write code', text: 'Help me write code' });
+        chips.push({ label: '🔍 Find info', text: 'Find information about' });
+        return chips.slice(0, 4);
+    }, [integrations]);
 
-    if (hasGmail)
-        chips.push({
-            label: '📧 Check email',
-            text: 'Check my email and highlight important items',
-        });
-    if (hasCalendar)
-        chips.push({
-            label: '📅 Meetings',
-            text: 'What do I have planned today?',
-        });
-    chips.push({ label: '💻 Write code', text: 'Help me write code' });
-    chips.push({ label: '🔍 Find info', text: 'Find information about' });
+    // On-device (iOS) generation of topic-aware starter chips; silent no-op otherwise.
+    useEffect(() => {
+        if (!enabled || !recentContext) {
+            setGenerated(null);
+            return;
+        }
+        let cancelled = false;
+        generateStarterChips(recentContext)
+            .then(items => {
+                if (!cancelled && items.length > 0) {
+                    setGenerated(items.map(t => ({ label: t, text: t })));
+                }
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, [enabled, recentContext]);
 
-    return chips.slice(0, 4);
+    return (generated ?? staticChips).slice(0, 4);
 }
 
 export function PersistentChatEmptyState({
@@ -51,7 +85,7 @@ export function PersistentChatEmptyState({
     showChips = true,
 }: Props) {
     const { user } = useAuth();
-    const chips = useChips();
+    const chips = useChips(showChips);
     const firstName = user?.name?.split(' ')[0] ?? 'friend';
 
     return (

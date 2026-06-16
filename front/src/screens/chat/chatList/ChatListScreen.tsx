@@ -118,8 +118,11 @@ export function ChatListScreen() {
     }, [theme]);
 
     const filteredChats = useMemo(() => {
-        // Always exclude the Updates (proactive) chat — it has its own entry on Dashboard
-        let data = chats.filter(c => c.chat_type !== 'updates');
+        // Always exclude the Updates (proactive) chat and chats that belong to a
+        // project — project chats are shown only inside the Projects section.
+        let data = chats.filter(
+            c => c.chat_type !== 'updates' && !c.project_id,
+        );
         if (sidebarFilter === 'agent') {
             data = data.filter(
                 c => (!c.mode || c.mode === 'agent') && !isPlannerChat(c),

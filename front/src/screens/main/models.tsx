@@ -152,6 +152,20 @@ export type Project = {
     updated_at: string;
 };
 
+export type ProjectDocument = {
+    id: string;
+    project_id: string;
+    user_id: string;
+    file_name: string;
+    file_type: string;
+    size: number;
+    status: 'indexing' | 'ready' | 'failed';
+    chunk_count: number;
+    error: string;
+    created_at: string;
+    updated_at: string;
+};
+
 export type Frame = {
     id: number;
     chat_id: string;
