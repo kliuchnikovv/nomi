@@ -17,6 +17,9 @@ import { runAfm } from './ai/afmQueue';
 // On-device generation is slow (~2-5s) and serialized; give it room.
 const SUGGESTION_TIMEOUT_MS = 12_000;
 const MAX_INPUT_LENGTH = 1_500;
+// Follow-ups: keep prompts small so on-device latency stays under the timeout.
+const FOLLOWUP_REPLY_LENGTH = 700;
+const FOLLOWUP_USER_LENGTH = 300;
 const MAX_SUGGESTIONS = 4;
 const MAX_SUGGESTION_LENGTH = 80;
 const LOG_TAG = '[SuggestionGenerator]';
@@ -152,11 +155,15 @@ export async function generateFollowUps(
     assistantText: string,
     userText?: string,
 ): Promise<string[]> {
-    const reply = assistantText.trim().slice(0, MAX_INPUT_LENGTH);
+    // Use the TAIL of the reply: the actionable "what next" (questions, options)
+    // lives at the end, and a shorter prompt keeps on-device latency well under
+    // the timeout on long, code-heavy replies.
+    const trimmedReply = assistantText.trim();
+    const reply = trimmedReply.slice(-FOLLOWUP_REPLY_LENGTH);
     if (!reply) {
         return [];
     }
-    const lastUser = userText?.trim().slice(0, MAX_INPUT_LENGTH);
+    const lastUser = userText?.trim().slice(0, FOLLOWUP_USER_LENGTH);
 
     const prompt = `You suggest what the USER might say next in a chat with an AI assistant.
 

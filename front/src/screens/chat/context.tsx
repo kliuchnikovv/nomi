@@ -1680,15 +1680,36 @@ export function ChatProvider({
                     const lastUser = [...msgs]
                         .reverse()
                         .find(m => m.role === 'user');
+                    if (__DEV__) {
+                        console.log(
+                            '[FollowUps] generating for',
+                            chatId,
+                            'replyLen=',
+                            lastAssistant.text.length,
+                        );
+                    }
                     generateFollowUps(lastAssistant.text, lastUser?.text)
                         .then(items => {
+                            if (__DEV__) {
+                                console.log(
+                                    '[FollowUps] got',
+                                    items.length,
+                                    'item(s) for',
+                                    chatId,
+                                    items,
+                                );
+                            }
                             if (items.length > 0) {
                                 useChatStore
                                     .getState()
                                     .setFollowUps(chatId, items);
                             }
                         })
-                        .catch(() => {});
+                        .catch(e => {
+                            if (__DEV__) {
+                                console.log('[FollowUps] error', e);
+                            }
+                        });
 
                     // Fire-and-forget: extract action buttons from final assistant text via AFM (iOS only)
                     extractActions(lastAssistant.text)
