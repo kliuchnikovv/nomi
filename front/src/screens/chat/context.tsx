@@ -1674,6 +1674,23 @@ export function ChatProvider({
                     .reverse()
                     .find(m => m.role === 'assistant');
                 if (lastAssistant?.text) {
+                    // Generate follow-up chips FIRST (user-visible) — Apple FM runs
+                    // one request at a time, so whatever is enqueued first wins the
+                    // model. Action-button extraction follows.
+                    const lastUser = [...msgs]
+                        .reverse()
+                        .find(m => m.role === 'user');
+                    generateFollowUps(lastAssistant.text, lastUser?.text)
+                        .then(items => {
+                            if (items.length > 0) {
+                                useChatStore
+                                    .getState()
+                                    .setFollowUps(chatId, items);
+                            }
+                        })
+                        .catch(() => {});
+
+                    // Fire-and-forget: extract action buttons from final assistant text via AFM (iOS only)
                     extractActions(lastAssistant.text)
                         .then(actions => {
                             if (actions.length > 0) {
@@ -1684,20 +1701,6 @@ export function ChatProvider({
                                         lastAssistant.id,
                                         actions,
                                     );
-                            }
-                        })
-                        .catch(() => {});
-
-                    // Fire-and-forget: generate topic-aware follow-up chips via AFM (iOS only)
-                    const lastUser = [...msgs]
-                        .reverse()
-                        .find(m => m.role === 'user');
-                    generateFollowUps(lastAssistant.text, lastUser?.text)
-                        .then(items => {
-                            if (items.length > 0) {
-                                useChatStore
-                                    .getState()
-                                    .setFollowUps(chatId, items);
                             }
                         })
                         .catch(() => {});

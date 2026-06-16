@@ -3,7 +3,6 @@ import { View, Text, ScrollView } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useTheme } from '../../../context/ThemeContext';
-import { ThemePalette } from '../../../themes';
 import { createStyles, createMarkdownStyles } from './dynamicStyles';
 import { createMarkdownRules } from './markdownRules';
 
@@ -95,21 +94,23 @@ function unescapeJsonString(token: string): string {
         .replace(/\\\\/g, '\\');
 }
 
+type SyntaxColors = {
+    key: string;
+    string: string;
+    number: string;
+    literal: string;
+    base: string;
+};
+
 /**
  * Cheap JSON syntax highlighter — tokenizes the pretty-printed JSON and renders
- * colored <Text> spans using the theme palette. No external deps.
+ * colored <Text> spans using theme colors. No external deps.
  */
 function renderHighlightedJson(
     jsonText: string,
-    palette: ThemePalette,
-    baseColor: string,
+    colors: SyntaxColors,
 ): React.ReactNode {
-    const colors = {
-        key: palette.blue,
-        string: palette.green,
-        number: palette.orange,
-        literal: palette.magenta,
-    };
+    const baseColor = colors.base;
 
     const nodes: React.ReactNode[] = [];
     let lastIndex = 0;
@@ -195,15 +196,25 @@ export function ToolCallContent({ value, label }: ToolCallContentProps) {
     );
 
     const normalized = useMemo(() => normalizeToolValue(value), [value]);
-    if (!normalized.text) return null;
 
-    const baseColor = theme.codeText || '#a9b1d6';
+    const syntaxColors = useMemo<SyntaxColors>(
+        () => ({
+            key: theme.accent,
+            string: theme.success || palette.green,
+            number: theme.warning || palette.orange,
+            literal: theme.info || palette.cyan,
+            base: theme.codeText || palette.fg,
+        }),
+        [theme, palette],
+    );
+
+    if (!normalized.text) return null;
 
     let body: React.ReactNode;
     if (normalized.kind === 'json') {
         body = (
             <Text style={styles.toolCallArgs}>
-                {renderHighlightedJson(normalized.text, palette, baseColor)}
+                {renderHighlightedJson(normalized.text, syntaxColors)}
             </Text>
         );
     } else if (hasMarkdown(normalized.text)) {

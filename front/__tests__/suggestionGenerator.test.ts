@@ -124,14 +124,15 @@ describe('generateFollowUps', () => {
 
     it('returns [] when AFM times out', async () => {
         jest.useFakeTimers();
+        // Never resolves → the queue's per-task timeout must fire.
         mockGenerateText.mockImplementation(
-            () =>
-                new Promise<{ text?: string }>(resolve =>
-                    setTimeout(() => resolve({}), 10_000),
-                ),
+            () => new Promise<{ text?: string }>(() => {}),
         );
         const promise = generateFollowUps('A reply');
-        jest.advanceTimersByTime(6000);
+        // Flush the queue's microtask chain so the timeout timer is scheduled.
+        await Promise.resolve();
+        await Promise.resolve();
+        jest.advanceTimersByTime(13_000);
         const result = await promise;
         expect(result).toEqual([]);
         jest.useRealTimers();

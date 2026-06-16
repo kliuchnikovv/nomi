@@ -12,8 +12,10 @@
  */
 
 import { Platform } from 'react-native';
+import { runAfm } from './ai/afmQueue';
 
-const SUGGESTION_TIMEOUT_MS = 5_000;
+// On-device generation is slow (~2-5s) and serialized; give it room.
+const SUGGESTION_TIMEOUT_MS = 12_000;
 const MAX_INPUT_LENGTH = 1_500;
 const MAX_SUGGESTIONS = 4;
 const MAX_SUGGESTION_LENGTH = 80;
@@ -92,15 +94,12 @@ async function runStringSuggestions(prompt: string): Promise<string[]> {
         const { apple } = require('@react-native-ai/apple');
         const { generateText } = require('ai');
 
-        const resultPromise = generateText({ model: apple(), prompt });
-        const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(
-                () => reject(new Error('Suggestion generation timeout')),
-                SUGGESTION_TIMEOUT_MS,
-            ),
+        // Serialize through the shared AFM queue so this doesn't contend with
+        // action extraction / title generation (Apple FM runs one at a time).
+        const result = await runAfm<{ text?: string }>(
+            () => generateText({ model: apple(), prompt }),
+            SUGGESTION_TIMEOUT_MS,
         );
-
-        const result = await Promise.race([resultPromise, timeoutPromise]);
         const raw = (result as { text?: string })?.text?.trim() ?? '';
         if (!raw) {
             return [];
