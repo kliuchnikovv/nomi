@@ -937,18 +937,30 @@ export function ChatDetailScreen() {
                 </View>
             )}
 
-            {/* Non-session project suggestion banner (existing chats) */}
+            {/* Non-session project suggestion banner (existing chats) —
+                absolute, offset below the (absolute, translucent) header so it
+                doesn't bleed behind it. Mirrors the UpdatesInlineBanner wrapper. */}
             {!isNewSession && suggestedProject && (
-                <ProjectSuggestionBanner
-                    project={suggestedProject}
-                    onAccept={handleAcceptProjectSuggestion}
-                    onDismiss={clearProjectSuggestion}
-                    accentColor={theme.accent}
-                    surfaceColor={theme.surface}
-                    textPrimaryColor={theme.textPrimary}
-                    textSecondaryColor={theme.textSecondary}
-                    borderColor={theme.border}
-                />
+                <View
+                    style={{
+                        position: 'absolute',
+                        top: headerHeight,
+                        left: 0,
+                        right: 0,
+                        zIndex: 11,
+                    }}
+                >
+                    <ProjectSuggestionBanner
+                        project={suggestedProject}
+                        onAccept={handleAcceptProjectSuggestion}
+                        onDismiss={clearProjectSuggestion}
+                        accentColor={theme.accent}
+                        surfaceColor={theme.surface}
+                        textPrimaryColor={theme.textPrimary}
+                        textSecondaryColor={theme.textSecondary}
+                        borderColor={theme.border}
+                    />
+                </View>
             )}
 
             {/* Loaded history separator */}

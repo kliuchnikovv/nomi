@@ -423,6 +423,45 @@ class AgentFactory:
                 user_id,
                 len(local_tools) if consolidate_local else 0,
             )
+
+            # In discovery mode sandbox_tools never appear in the direct tool list
+            # (they are consolidated behind discovery_tool), so the delegation block
+            # below would never find them and DelegationTools would not be wired.
+            # Eagerly build sandbox_tools here so delegation wiring picks it up —
+            # mirrors what build_tools() does in the non-discovery (legacy) path.
+            try:
+                _disc_config = await self._config_client.fetch_tools(user_id=user_id)
+                _sb_entry = next(
+                    (e for e in _disc_config.entries.values() if e.name.lower() == "sandbox"),
+                    None,
+                )
+                if _sb_entry is not None:
+                    from src.tools.discovery import _github_token_from_config
+
+                    _sb_config = ToolsConfig()
+                    _sb_params = dict(_sb_entry.params or {})
+                    _gh_token = _github_token_from_config(_disc_config)
+                    if _gh_token and "github_token" not in _sb_params:
+                        _sb_params["github_token"] = _gh_token
+                    _sb_config.add("sandbox", provider=_sb_entry.provider, **_sb_params)
+                    _sb_tools = await build_tools(
+                        _sb_config, user_id=user_id, knowledge=self._knowledge
+                    )
+                    _sandbox_toolkit = next(
+                        (t for t in _sb_tools if getattr(t, "name", "") == "sandbox_tools"),
+                        None,
+                    )
+                    if _sandbox_toolkit is not None:
+                        tools.append(_sandbox_toolkit)
+                        logger.info(
+                            "[Factory] Discovery mode: eagerly built sandbox_tools "
+                            "for delegation wiring (user=%s)",
+                            user_id,
+                        )
+            except Exception as _e:
+                logger.warning(
+                    "[Factory] Discovery mode: failed to eagerly build sandbox: %s", _e
+                )
         else:
             # Legacy mode: unchanged existing code
             config_used: ToolsConfig | None = None

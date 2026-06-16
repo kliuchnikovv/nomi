@@ -63,6 +63,9 @@ class DelegationTools(Toolkit):
             "environment, installing dependencies, and writing or running tests (e2e, unit, etc.). "
             "If the user asks to delegate work to a 'devops', 'engineer', or 'developer' agent, "
             "that is sandbox_engineer. "
+            "Do NOT call sandbox tools directly (via discovery_tool or any other route) for "
+            "coding/env work — always go through delegate_to so the noisy shell loop runs in "
+            "the engineer's context, not yours. "
             "Do NOT create a GitHub issue or pull request to hand work to a sub-agent — "
             "delegating to yourself by filing a ticket is never correct; call delegate_to instead."
         )

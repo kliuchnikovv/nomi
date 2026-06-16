@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { useTheme } from '../../../context/ThemeContext';
 import { createStyles, createMarkdownStyles } from './dynamicStyles';
 import Markdown from 'react-native-markdown-display';
 import { createMarkdownRules } from './markdownRules';
+import { ToolCallContent } from './ToolCallContent';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Brain, NavArrowDown } from 'iconoir-react-native';
 import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
@@ -60,52 +61,13 @@ export function ToolCallsSection({ toolCalls }: { toolCalls: any[] }) {
                                     : toolCall.name}
                             </Text>
                             {toolCall.arguments && (
-                                <ScrollView
-                                    style={styles.toolCallScrollable}
-                                    nestedScrollEnabled={true}
-                                    persistentScrollbar={true}
-                                    indicatorStyle="white"
-                                >
-                                    <Text style={styles.toolCallArgs}>
-                                        {typeof toolCall.arguments === 'string'
-                                            ? toolCall.arguments
-                                            : JSON.stringify(
-                                                  toolCall.arguments,
-                                                  null,
-                                                  2,
-                                              )}
-                                    </Text>
-                                </ScrollView>
+                                <ToolCallContent value={toolCall.arguments} />
                             )}
                             {toolCall.result && (
-                                <View style={{ marginTop: 8 }}>
-                                    <Text
-                                        style={{
-                                            fontSize: 12,
-                                            fontWeight: '600',
-                                            color: theme.textSecondary,
-                                            marginBottom: 4,
-                                        }}
-                                    >
-                                        Result:
-                                    </Text>
-                                    <ScrollView
-                                        style={styles.toolCallScrollable}
-                                        nestedScrollEnabled={true}
-                                        persistentScrollbar={true}
-                                        indicatorStyle="white"
-                                    >
-                                        <Text style={styles.toolCallArgs}>
-                                            {typeof toolCall.result === 'string'
-                                                ? toolCall.result
-                                                : JSON.stringify(
-                                                      toolCall.result,
-                                                      null,
-                                                      2,
-                                                  )}
-                                        </Text>
-                                    </ScrollView>
-                                </View>
+                                <ToolCallContent
+                                    value={toolCall.result}
+                                    label="Result:"
+                                />
                             )}
                         </View>
                     ))}
@@ -172,52 +134,13 @@ export function SingleToolCall({ toolCall }: { toolCall: any }) {
             {expanded && (
                 <View style={styles.singleToolCallDetails}>
                     {toolCall.arguments && (
-                        <ScrollView
-                            style={styles.toolCallScrollable}
-                            nestedScrollEnabled={true}
-                            persistentScrollbar={true}
-                            indicatorStyle="white"
-                        >
-                            <Text style={styles.toolCallArgs}>
-                                {typeof toolCall.arguments === 'string'
-                                    ? toolCall.arguments
-                                    : JSON.stringify(
-                                          toolCall.arguments,
-                                          null,
-                                          2,
-                                      )}
-                            </Text>
-                        </ScrollView>
+                        <ToolCallContent value={toolCall.arguments} />
                     )}
                     {toolCall.result && (
-                        <View style={{ marginTop: 4 }}>
-                            <Text
-                                style={{
-                                    fontSize: 11,
-                                    fontWeight: '600',
-                                    color: theme.textSecondary,
-                                    marginBottom: 2,
-                                }}
-                            >
-                                Result:
-                            </Text>
-                            <ScrollView
-                                style={styles.toolCallScrollable}
-                                nestedScrollEnabled={true}
-                                persistentScrollbar={true}
-                                indicatorStyle="white"
-                            >
-                                <Text style={styles.toolCallArgs}>
-                                    {typeof toolCall.result === 'string'
-                                        ? toolCall.result
-                                        : JSON.stringify(
-                                              toolCall.result,
-                                              null,
-                                              2,
-                                          )}
-                                </Text>
-                            </ScrollView>
-                        </View>
+                        <ToolCallContent
+                            value={toolCall.result}
+                            label="Result:"
+                        />
                     )}
                 </View>
             )}
@@ -304,7 +227,12 @@ export function AgentThinkingBlock({
     };
 
     const markdownRules = useMemo(
-        () => createMarkdownRules(handleCodeCopy),
+        () =>
+            createMarkdownRules({
+                onCodeCopy: handleCodeCopy,
+                onLinkPress: () => {},
+                onLinkCopy: (url: string) => Clipboard.setString(url),
+            }),
         [],
     );
 
