@@ -659,7 +659,10 @@ export const byokApi = {
             is_default: !!isDefault,
         }),
     setDefault: (provider: BYOKProvider) =>
-        apiClient.put<{ ok: boolean }>(`${API_URL()}/byok/${provider}/default`, {}),
+        apiClient.put<{ ok: boolean }>(
+            `${API_URL()}/byok/${provider}/default`,
+            {},
+        ),
     delete: (provider: BYOKProvider) =>
         apiClient.delete<{ ok: boolean }>(`${API_URL()}/byok/${provider}`),
 };

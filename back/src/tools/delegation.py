@@ -41,7 +41,7 @@ AGENT_FALLBACKS = {
 class DelegationTools(Toolkit):
     """Generic delegation tool.
 
-    Exposes ``delegate_to(agent, task)`` so a lead agent (Nomi) can hand a task to a
+    Exposes ``delegate_to(agent_name, task)`` so a lead agent (Nomi) can hand a task to a
     registered specialist sub-agent/team. The sub-agent owns its own multi-step loop
     and only its final summary flows back, keeping the caller's context clean.
 
@@ -64,7 +64,7 @@ class DelegationTools(Toolkit):
         targets = ", ".join(sorted(registry)) or "(none)"
         self.add_instructions = True
         self.instructions = (
-            "You have access to delegate_to(agent, task). Use it to hand a self-contained "
+            "You have access to delegate_to(agent_name, task). Use it to hand a self-contained "
             "task to a specialist sub-agent that owns the work and returns a concise summary. "
             f"Available agents: {targets}. "
             "Pass everything the sub-agent needs in `task` — it does not see the chat history. "
@@ -86,7 +86,7 @@ class DelegationTools(Toolkit):
         )
         self.register(self.delegate_to)
 
-    async def delegate_to(self, agent: str, task: str) -> str:
+    async def delegate_to(self, agent_name: str, task: str) -> str:
         """Delegate a self-contained task to a specialist sub-agent.
 
         The sub-agent runs its own multi-step loop and returns a concise summary.
@@ -94,15 +94,17 @@ class DelegationTools(Toolkit):
         in `task`.
 
         Args:
-            agent: Name of the sub-agent to delegate to (e.g. "sandbox_engineer").
+            agent_name: Name of the sub-agent to delegate to (e.g. "sandbox_engineer").
             task: A complete, self-contained description of what to do.
 
         Returns:
             The sub-agent's final summary, or an error message string.
         """
+        # NOTE: this parameter must NOT be named `agent` — Agno reserves that name
+        # and injects the calling Agent instance over it, hiding it from the LLM.
         # Normalize common aliases (e.g. "devops" → "sandbox_engineer") so a natural
         # agent name from the user/LLM still resolves to a registered target.
-        resolved = AGENT_ALIASES.get(agent.strip().lower(), agent)
+        resolved = AGENT_ALIASES.get(agent_name.strip().lower(), agent_name)
         builder = self._registry.get(resolved)
         if builder is None and resolved in AGENT_FALLBACKS:
             # e.g. "developer" requested but no BYOK key → use sandbox_engineer.
@@ -118,7 +120,7 @@ class DelegationTools(Toolkit):
         if builder is None:
             available = ", ".join(sorted(self._registry)) or "(none)"
             return (
-                f"Unknown agent '{agent}'. Available agents: {available}. "
+                f"Unknown agent '{agent_name}'. Available agents: {available}. "
                 f"Call delegate_to with one of those."
             )
 
@@ -131,21 +133,21 @@ class DelegationTools(Toolkit):
             )
         except asyncio.CancelledError:
             # Stop button: must propagate so the sub-agent run is actually cancelled.
-            logger.warning("[Delegation] Delegation to '%s' cancelled", agent)
+            logger.warning("[Delegation] Delegation to '%s' cancelled", agent_name)
             raise
         except asyncio.TimeoutError:
             logger.warning(
                 "[Delegation] Delegation to '%s' timed out after %ss",
-                agent,
+                agent_name,
                 self._timeout,
             )
             return (
-                f"Delegation to '{agent}' exceeded the {self._timeout}s time limit "
+                f"Delegation to '{agent_name}' exceeded the {self._timeout}s time limit "
                 f"and was stopped. The task may be too large; try a smaller, more specific task."
             )
         except Exception as exc:  # noqa: BLE001
-            logger.error("[Delegation] Delegation to '%s' failed: %s", agent, exc, exc_info=True)
-            return f"Delegation to '{agent}' failed: {exc}"
+            logger.error("[Delegation] Delegation to '%s' failed: %s", agent_name, exc, exc_info=True)
+            return f"Delegation to '{agent_name}' failed: {exc}"
 
         content = getattr(result, "content", None)
         if content is None:

@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    StyleSheet,
-} from 'react-native';
+import { ScrollView, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 interface Props {
     suggestions: string[];

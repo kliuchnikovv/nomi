@@ -58,15 +58,7 @@ describe('generateFollowUps', () => {
     it('filters out non-strings and over-long items, caps at 4', async () => {
         const longStr = 'x'.repeat(100);
         mockGenerateText.mockResolvedValueOnce({
-            text: JSON.stringify([
-                'a',
-                123,
-                longStr,
-                'b',
-                'c',
-                'd',
-                'e',
-            ]),
+            text: JSON.stringify(['a', 123, longStr, 'b', 'c', 'd', 'e']),
         });
         const result = await generateFollowUps('A reply');
         expect(result).toEqual(['a', 'b', 'c', 'd']);
@@ -76,6 +68,58 @@ describe('generateFollowUps', () => {
         mockGenerateText.mockResolvedValueOnce({ text: 'not json' });
         const result = await generateFollowUps('A reply');
         expect(result).toEqual([]);
+    });
+
+    it('parses arrays wrapped in markdown code fences', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: '```json\n["Yes, do it", "Show the tests"]\n```',
+        });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual(['Yes, do it', 'Show the tests']);
+    });
+
+    it('extracts the array when surrounded by prose', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: 'Sure! Here are some: ["Option A", "Option B"] hope that helps',
+        });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual(['Option A', 'Option B']);
+    });
+
+    it('parses newline-separated suggestions (no JSON)', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: 'Tell me more\nShow an example\nWrite the code',
+        });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual([
+            'Tell me more',
+            'Show an example',
+            'Write the code',
+        ]);
+    });
+
+    it('strips bullets/numbering from newline output', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: '1. First option\n2. Second option',
+        });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual(['First option', 'Second option']);
+    });
+
+    it('ignores a single prose line (needs >= 2 lines)', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: 'Here are some ideas for you to consider next.',
+        });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual([]);
+    });
+
+    it('coerces array-of-objects into strings', async () => {
+        mockGenerateText.mockResolvedValueOnce({
+            text: '[{"text":"Write it here"},{"label":"Try later"}]',
+        });
+        const result = await generateFollowUps('A reply');
+        expect(result).toEqual(['Write it here', 'Try later']);
     });
 
     it('returns [] when AFM times out', async () => {

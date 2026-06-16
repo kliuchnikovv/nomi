@@ -8,7 +8,11 @@ import {
     ActivityIndicator,
     Alert,
 } from 'react-native';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+    useNavigation,
+    useRoute,
+    type RouteProp,
+} from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,11 +44,14 @@ export function ProjectDetailScreen() {
             const [allProjects, allChats, docs] = await Promise.all([
                 projectsApi.list(),
                 apiClient.get<Chat[]>(`${getApiUrl()}/chats`),
-                projectDocsApi.list(projectId).catch(() => [] as ProjectDocument[]),
+                projectDocsApi
+                    .list(projectId)
+                    .catch(() => [] as ProjectDocument[]),
             ]);
-            const found = (allProjects ?? []).find((p) => p.id === projectId) ?? null;
+            const found =
+                (allProjects ?? []).find(p => p.id === projectId) ?? null;
             setProject(found);
-            setChats((allChats ?? []).filter((c) => c.project_id === projectId));
+            setChats((allChats ?? []).filter(c => c.project_id === projectId));
             setDocuments(docs ?? []);
         } finally {
             setLoading(false);
@@ -57,17 +64,21 @@ export function ProjectDetailScreen() {
     }, [navigation, load]);
 
     const handleDelete = () => {
-        Alert.alert('Delete project', 'Are you sure? Chats will not be deleted.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: async () => {
-                    await projectsApi.delete(projectId);
-                    navigation.goBack();
+        Alert.alert(
+            'Delete project',
+            'Are you sure? Chats will not be deleted.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        await projectsApi.delete(projectId);
+                        navigation.goBack();
+                    },
                 },
-            },
-        ]);
+            ],
+        );
     };
 
     const handleAddDocument = useCallback(async () => {
@@ -108,7 +119,9 @@ export function ProjectDetailScreen() {
             if (DocumentPicker.isCancel(err)) return;
             Alert.alert(
                 'Upload failed',
-                err?.message ? String(err.message) : 'Could not upload the document.',
+                err?.message
+                    ? String(err.message)
+                    : 'Could not upload the document.',
             );
         } finally {
             setUploading(false);
@@ -123,7 +136,7 @@ export function ProjectDetailScreen() {
                     text: 'Remove',
                     style: 'destructive',
                     onPress: async () => {
-                        setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+                        setDocuments(prev => prev.filter(d => d.id !== doc.id));
                         try {
                             await projectDocsApi.delete(projectId, doc.id);
                         } catch {
@@ -145,18 +158,37 @@ export function ProjectDetailScreen() {
     const renderChat = ({ item }: { item: Chat }) => (
         <TouchableOpacity
             style={[styles.chatRow, { backgroundColor: theme.surface }]}
-            onPress={() => navigation.navigate('ProjectChatDetail', { chatId: item.id })}
+            onPress={() =>
+                navigation.navigate('ProjectChatDetail', { chatId: item.id })
+            }
             activeOpacity={0.7}
         >
             <Text style={styles.chatIcon}>{item.icon || '💬'}</Text>
-            <Text style={[styles.chatTitle, { color: theme.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-            <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+            <Text
+                style={[styles.chatTitle, { color: theme.textPrimary }]}
+                numberOfLines={1}
+            >
+                {item.title}
+            </Text>
+            <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={theme.textSecondary}
+            />
         </TouchableOpacity>
     );
 
     if (loading) {
         return (
-            <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
+            <View
+                style={[
+                    styles.container,
+                    {
+                        backgroundColor: theme.background,
+                        paddingTop: insets.top,
+                    },
+                ]}
+            >
                 <ActivityIndicator style={styles.loader} color={theme.accent} />
             </View>
         );
@@ -164,38 +196,92 @@ export function ProjectDetailScreen() {
 
     if (!project) {
         return (
-            <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
-                <Text style={[styles.errorText, { color: theme.textSecondary }]}>Project not found.</Text>
+            <View
+                style={[
+                    styles.container,
+                    {
+                        backgroundColor: theme.background,
+                        paddingTop: insets.top,
+                    },
+                ]}
+            >
+                <Text
+                    style={[styles.errorText, { color: theme.textSecondary }]}
+                >
+                    Project not found.
+                </Text>
             </View>
         );
     }
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
+        <View
+            style={[
+                styles.container,
+                { backgroundColor: theme.background, paddingTop: insets.top },
+            ]}
+        >
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="chevron-back" size={24} color={theme.textPrimary} />
-                </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.textPrimary }]} numberOfLines={1}>{project.name}</Text>
                 <TouchableOpacity
-                    onPress={() => navigation.navigate('CreateEditProject', { projectId })}
+                    onPress={() => navigation.goBack()}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Ionicons
+                        name="chevron-back"
+                        size={24}
+                        color={theme.textPrimary}
+                    />
+                </TouchableOpacity>
+                <Text
+                    style={[styles.headerTitle, { color: theme.textPrimary }]}
+                    numberOfLines={1}
+                >
+                    {project.name}
+                </Text>
+                <TouchableOpacity
+                    onPress={() =>
+                        navigation.navigate('CreateEditProject', { projectId })
+                    }
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                     <Ionicons name="pencil" size={20} color={theme.accent} />
                 </TouchableOpacity>
             </View>
 
-            <View style={[styles.descriptionCard, { backgroundColor: theme.surface }]}>
+            <View
+                style={[
+                    styles.descriptionCard,
+                    { backgroundColor: theme.surface },
+                ]}
+            >
                 <Text style={styles.projectIcon}>{project.icon}</Text>
                 {project.description ? (
-                    <Text style={[styles.description, { color: theme.textSecondary }]}>{project.description}</Text>
+                    <Text
+                        style={[
+                            styles.description,
+                            { color: theme.textSecondary },
+                        ]}
+                    >
+                        {project.description}
+                    </Text>
                 ) : (
-                    <Text style={[styles.description, { color: theme.textSecondary, fontStyle: 'italic' }]}>No description.</Text>
+                    <Text
+                        style={[
+                            styles.description,
+                            { color: theme.textSecondary, fontStyle: 'italic' },
+                        ]}
+                    >
+                        No description.
+                    </Text>
                 )}
             </View>
 
             <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Documents</Text>
+                <Text
+                    style={[styles.sectionTitle, { color: theme.textPrimary }]}
+                >
+                    Documents
+                </Text>
                 <TouchableOpacity
                     onPress={handleAddDocument}
                     disabled={uploading}
@@ -204,51 +290,89 @@ export function ProjectDetailScreen() {
                     {uploading ? (
                         <ActivityIndicator size="small" color={theme.accent} />
                     ) : (
-                        <Text style={[styles.newChatBtn, { color: theme.accent }]}>Add document</Text>
+                        <Text
+                            style={[styles.newChatBtn, { color: theme.accent }]}
+                        >
+                            Add document
+                        </Text>
                     )}
                 </TouchableOpacity>
             </View>
 
             {documents.length === 0 ? (
                 <Text style={[styles.docHint, { color: theme.textSecondary }]}>
-                    Attach .txt, .md or .pdf files. Their content becomes searchable by the assistant in this project's chats.
+                    Attach .txt, .md or .pdf files. Their content becomes
+                    searchable by the assistant in this project's chats.
                 </Text>
             ) : (
-                documents.map((doc) => (
+                documents.map(doc => (
                     <View
                         key={doc.id}
-                        style={[styles.docRow, { backgroundColor: theme.surface }]}
+                        style={[
+                            styles.docRow,
+                            { backgroundColor: theme.surface },
+                        ]}
                     >
-                        <Ionicons name="document-text-outline" size={18} color={theme.textSecondary} />
+                        <Ionicons
+                            name="document-text-outline"
+                            size={18}
+                            color={theme.textSecondary}
+                        />
                         <View style={styles.docInfo}>
-                            <Text style={[styles.docName, { color: theme.textPrimary }]} numberOfLines={1}>
+                            <Text
+                                style={[
+                                    styles.docName,
+                                    { color: theme.textPrimary },
+                                ]}
+                                numberOfLines={1}
+                            >
                                 {doc.file_name}
                             </Text>
-                            <Text style={[styles.docStatus, { color: statusColor(doc.status) }]}>
+                            <Text
+                                style={[
+                                    styles.docStatus,
+                                    { color: statusColor(doc.status) },
+                                ]}
+                            >
                                 {doc.status === 'ready'
                                     ? `Ready · ${doc.chunk_count} chunks`
                                     : doc.status === 'failed'
-                                      ? 'Failed to index'
-                                      : 'Indexing…'}
+                                    ? 'Failed to index'
+                                    : 'Indexing…'}
                             </Text>
                         </View>
                         <TouchableOpacity
                             onPress={() => handleDeleteDocument(doc)}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
-                            <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                            <Ionicons
+                                name="trash-outline"
+                                size={18}
+                                color="#FF3B30"
+                            />
                         </TouchableOpacity>
                     </View>
                 ))
             )}
 
             <View style={styles.sectionHeaderRow}>
-                <Text style={[styles.sectionTitle, { color: theme.textPrimary }]}>Chats</Text>
+                <Text
+                    style={[styles.sectionTitle, { color: theme.textPrimary }]}
+                >
+                    Chats
+                </Text>
                 <TouchableOpacity
-                    onPress={() => navigation.navigate('ProjectChatDetail', { chatId: '', projectId })}
+                    onPress={() =>
+                        navigation.navigate('ProjectChatDetail', {
+                            chatId: '',
+                            projectId,
+                        })
+                    }
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                    <Text style={[styles.newChatBtn, { color: theme.accent }]}>New chat</Text>
+                    <Text style={[styles.newChatBtn, { color: theme.accent }]}>
+                        New chat
+                    </Text>
                 </TouchableOpacity>
             </View>
 
@@ -256,9 +380,23 @@ export function ProjectDetailScreen() {
                 data={chats}
                 keyExtractor={(c: Chat) => c.id}
                 renderItem={renderChat}
-                ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.border }]} />}
+                ItemSeparatorComponent={() => (
+                    <View
+                        style={[
+                            styles.separator,
+                            { backgroundColor: theme.border },
+                        ]}
+                    />
+                )}
                 ListEmptyComponent={
-                    <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No chats in this project yet.</Text>
+                    <Text
+                        style={[
+                            styles.emptyText,
+                            { color: theme.textSecondary },
+                        ]}
+                    >
+                        No chats in this project yet.
+                    </Text>
                 }
             />
 
@@ -331,7 +469,12 @@ const styles = StyleSheet.create({
     chatIcon: { fontSize: 18 },
     chatTitle: { flex: 1, fontSize: 15 },
     separator: { height: StyleSheet.hairlineWidth, marginLeft: 56 },
-    emptyText: { textAlign: 'center', marginTop: 24, fontSize: 14, paddingHorizontal: 32 },
+    emptyText: {
+        textAlign: 'center',
+        marginTop: 24,
+        fontSize: 14,
+        paddingHorizontal: 32,
+    },
     deleteBtn: {
         margin: 16,
         borderRadius: 10,

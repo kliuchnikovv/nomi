@@ -35,7 +35,7 @@ async def test_unknown_agent_returns_error_without_building():
     tk = DelegationTools(
         registry={"sandbox_engineer": lambda: built.append(1) or _FakeAgent()}
     )
-    result = await tk.delegate_to(agent="nope", task="do thing")
+    result = await tk.delegate_to(agent_name="nope", task="do thing")
     assert "Unknown agent" in result
     assert "sandbox_engineer" in result  # lists available targets
     assert built == []  # nothing was constructed
@@ -44,7 +44,7 @@ async def test_unknown_agent_returns_error_without_building():
 @pytest.mark.asyncio
 async def test_known_agent_returns_final_content():
     tk = _toolkit(_FakeAgent(content="prime numbers computed"))
-    result = await tk.delegate_to(agent="sandbox_engineer", task="run code")
+    result = await tk.delegate_to(agent_name="sandbox_engineer", task="run code")
     assert result == "prime numbers computed"
 
 
@@ -52,14 +52,14 @@ async def test_known_agent_returns_final_content():
 @pytest.mark.parametrize("alias", ["devops", "DevOps", "  engineer  ", "developer", "sandbox"])
 async def test_alias_resolves_to_sandbox_engineer(alias):
     tk = _toolkit(_FakeAgent(content="env ready"))
-    result = await tk.delegate_to(agent=alias, task="set up the dev environment")
+    result = await tk.delegate_to(agent_name=alias, task="set up the dev environment")
     assert result == "env ready"
 
 
 @pytest.mark.asyncio
 async def test_unknown_non_alias_still_errors():
     tk = _toolkit(_FakeAgent())
-    result = await tk.delegate_to(agent="totally_unknown", task="x")
+    result = await tk.delegate_to(agent_name="totally_unknown", task="x")
     assert "Unknown agent" in result
     assert "sandbox_engineer" in result
 
@@ -72,7 +72,7 @@ async def test_developer_aliases_resolve_when_registered(alias):
     tk = DelegationTools(
         registry={"sandbox_engineer": lambda: eng, "developer": lambda: dev}
     )
-    result = await tk.delegate_to(agent=alias, task="implement a feature")
+    result = await tk.delegate_to(agent_name=alias, task="implement a feature")
     assert result == "feature shipped"
 
 
@@ -80,7 +80,7 @@ async def test_developer_aliases_resolve_when_registered(alias):
 async def test_developer_falls_back_to_sandbox_engineer_without_byok():
     # No "developer" in registry (no BYOK key) → fall back to sandbox_engineer.
     tk = _toolkit(_FakeAgent(content="env ready"))
-    result = await tk.delegate_to(agent="opencode", task="implement a feature")
+    result = await tk.delegate_to(agent_name="opencode", task="implement a feature")
     assert result == "env ready"
 
 
@@ -88,20 +88,20 @@ async def test_developer_falls_back_to_sandbox_engineer_without_byok():
 async def test_cancelled_error_propagates():
     tk = _toolkit(_FakeAgent(raises=asyncio.CancelledError()))
     with pytest.raises(asyncio.CancelledError):
-        await tk.delegate_to(agent="sandbox_engineer", task="run code")
+        await tk.delegate_to(agent_name="sandbox_engineer", task="run code")
 
 
 @pytest.mark.asyncio
 async def test_timeout_returns_error_string(monkeypatch):
     monkeypatch.setattr("src.tools.delegation.DELEGATION_TIMEOUT", 0.01)
     tk = _toolkit(_FakeAgent(hang=True))
-    result = await tk.delegate_to(agent="sandbox_engineer", task="run code")
+    result = await tk.delegate_to(agent_name="sandbox_engineer", task="run code")
     assert "time limit" in result.lower()
 
 
 @pytest.mark.asyncio
 async def test_subagent_exception_returns_error_string():
     tk = _toolkit(_FakeAgent(raises=RuntimeError("boom")))
-    result = await tk.delegate_to(agent="sandbox_engineer", task="run code")
+    result = await tk.delegate_to(agent_name="sandbox_engineer", task="run code")
     assert "failed" in result.lower()
     assert "boom" in result
