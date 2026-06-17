@@ -640,6 +640,8 @@ export function ChatDetailScreen() {
                 return true;
             if ((current as any).tool_calls !== (next as any).tool_calls)
                 return true;
+            if ((current as any).task_progress !== (next as any).task_progress)
+                return true;
             return false;
         },
         [],

@@ -27,6 +27,7 @@ import ChatInput from '../input/component';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { MessageAttachments } from '../components/MessageAttachments';
 import { MessageContextItems } from '../components/MessageContextItems';
+import { TaskProgressCard } from '../components/TaskProgressCard';
 import { MessageActions } from '../message/MessageActions';
 import { Attachment, MessageAction } from '../../main/models';
 import { createStyles, createMarkdownStyles } from '../message/dynamicStyles';
@@ -454,6 +455,12 @@ export function useGiftedChatRenderers({
                 combineWithPrevious,
                 previousMessageToolCalls,
             } = props;
+
+            // In-chat background-task card (rendered before the system branch,
+            // since the synthetic task message maps to the 'system' user).
+            if (currentMessage?.task_progress) {
+                return <TaskProgressCard task={currentMessage.task_progress} />;
+            }
 
             const attachments = currentMessage?.attachments;
             const hasAttachments = attachments && attachments.length > 0;

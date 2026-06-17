@@ -735,12 +735,16 @@ class AgentFactory:
                     )
 
                 # delegate_to(background=True) hands substantial multi-step work to
-                # the autonomous task runner. Only the lead nomi agent may spawn
-                # background tasks (not planner/team, and never inside a task run —
-                # task_spawner is already None there; see RedisSession gating).
+                # the autonomous task runner. Only the lead assistant may spawn
+                # background tasks — exclude planner/team and any team command, and
+                # never inside a task run (task_spawner is already None there; see
+                # RedisSession gating). NOTE: the lead assistant's agent_type is
+                # "nomi" OR "agent" (the mobile app sends "agent"); both build a
+                # NomiAgent, so we must not require it to be literally "nomi".
+                agent_type_l = (agent_type or "nomi").lower()
                 allow_background = (
                     task_spawner is not None
-                    and (agent_type or "nomi").lower() == "nomi"
+                    and agent_type_l not in ("planner", "team")
                     and not (command_desc and command_desc.get("type"))
                 )
                 spawner_for_delegation = task_spawner if allow_background else None

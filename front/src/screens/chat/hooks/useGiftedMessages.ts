@@ -9,6 +9,7 @@ export interface ExtendedIMessage extends IMessage {
     actions?: any[];
     content_parts?: any[];
     context_items?: any[];
+    task_progress?: any; // background-task card metadata (in-chat task widget)
 }
 
 const getTimestamp = (value?: number | string | null): number => {
@@ -38,6 +39,8 @@ const shouldShowMessage = (msg: NomiMessage): boolean => {
     if (msg.actions?.length) return true;
     if (msg.content_parts?.length) return true;
     if (msg.context_items?.length) return true;
+    // Task progress cards carry no text — surface them by metadata type.
+    if (msg.metadata?.type === 'task_progress') return true;
     return false;
 };
 
@@ -61,13 +64,18 @@ export function useGiftedMessages(messages: NomiMessage[], userId?: string) {
         if (isSortedAscending(messages)) {
             // Fast reverse: create new array in reverse order
             sorted = new Array(messages.length);
-            for (let i = 0, j = messages.length - 1; i < messages.length; i++, j--) {
+            for (
+                let i = 0, j = messages.length - 1;
+                i < messages.length;
+                i++, j--
+            ) {
                 sorted[i] = messages[j];
             }
         } else {
             // Fallback to full sort only when needed
             sorted = [...messages].sort(
-                (a, b) => getTimestamp(b.created_at) - getTimestamp(a.created_at)
+                (a, b) =>
+                    getTimestamp(b.created_at) - getTimestamp(a.created_at),
             );
         }
 
@@ -112,6 +120,10 @@ export function useGiftedMessages(messages: NomiMessage[], userId?: string) {
                 actions: msg.actions,
                 content_parts: msg.content_parts,
                 context_items: msg.context_items,
+                task_progress:
+                    msg.metadata?.type === 'task_progress'
+                        ? msg.metadata
+                        : undefined,
             });
         }
 

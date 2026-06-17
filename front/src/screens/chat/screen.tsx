@@ -421,6 +421,8 @@ export default function ChatScreen({
             if ((current as any).actions !== (next as any).actions) return true;
             if ((current as any).attachments !== (next as any).attachments)
                 return true;
+            if ((current as any).task_progress !== (next as any).task_progress)
+                return true;
 
             return false;
         },

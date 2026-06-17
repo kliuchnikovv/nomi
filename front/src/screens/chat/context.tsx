@@ -16,7 +16,7 @@ import { ChatContextType, Props, Model, DetailLevel } from './models';
 import { useAuth } from '../auth/context.tsx';
 import { socket } from '../../socket';
 import { getApiUrl } from '../../config.ts';
-import { modelsApi, sidebarApi, projectsApi } from '../../apiClient';
+import { modelsApi, sidebarApi, projectsApi, tasksApi } from '../../apiClient';
 import { classifyMessageForProject } from '../../services/projects/ProjectClassifier';
 import { AVAILABLE_TEAMS } from './teams';
 import { useMain } from '../main/context';
@@ -374,6 +374,62 @@ export function ChatProvider({
         if (!socket.isReady()) {
             socket.connect();
         }
+    }, [activeChatID, token]);
+
+    // Reconstruct in-chat task cards when (re)opening a chat. Live task_progress
+    // frames are ephemeral, but background tasks are persisted server-side and
+    // attached to a chat, so seed a card per task belonging to this chat. For
+    // tasks awaiting approval, recover the pending request_id from their events.
+    useEffect(() => {
+        if (!activeChatID || activeChatID === emptyChatID || !token) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const all = await tasksApi.list();
+                if (cancelled || !Array.isArray(all)) return;
+                const mine = all.filter(t => t.chat_id === activeChatID);
+                for (const t of mine) {
+                    let approvalRequestId: string | undefined;
+                    if (t.status === 'waiting_input') {
+                        try {
+                            const detail = await tasksApi.get(t.id);
+                            if (cancelled) return;
+                            const req = (detail?.events ?? [])
+                                .filter(e => e.kind === 'approval_request')
+                                .pop();
+                            approvalRequestId = req?.payload?.request_id;
+                        } catch {
+                            // Fall through without approval controls.
+                        }
+                    }
+                    if (cancelled) return;
+                    useChatStore.getState().upsertTaskProgress(activeChatID, {
+                        task_id: t.id,
+                        goal: t.goal,
+                        status: t.status,
+                        plan: t.plan,
+                        finished: !!t.finished_at,
+                        result: t.result,
+                        created_at: t.created_at,
+                        ...(approvalRequestId
+                            ? {
+                                  event: {
+                                      kind: 'approval_request',
+                                      payload: {
+                                          request_id: approvalRequestId,
+                                      },
+                                  },
+                              }
+                            : {}),
+                    });
+                }
+            } catch {
+                // Non-fatal: cards will still appear from live frames.
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
     }, [activeChatID, token]);
 
     const [selectedTeamId, setSelectedTeamId] = useState<string | null>(
@@ -1483,6 +1539,16 @@ export function ChatProvider({
                     startTransition(() => {
                         setGenerationStatus(signalPayload.status ?? null);
                     });
+                }
+                // Live progress for a background task spawned from this chat →
+                // upsert its in-chat card. Sync delegations never publish here.
+                if (signalPayload?.type === 'task_progress') {
+                    const chatId = frame?.chat_id ?? signalPayload.chat_id;
+                    if (chatId) {
+                        useChatStore
+                            .getState()
+                            .upsertTaskProgress(chatId, signalPayload);
+                    }
                 }
             },
             onError: (err: any) => {

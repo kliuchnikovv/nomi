@@ -43,6 +43,9 @@ interface ChatStore {
         status: NonNullable<Message['status']>,
     ) => void;
     getLastMessage: (chatId: string) => Message | undefined;
+    // Upserts an in-chat background-task progress card from a task_progress
+    // signal frame (or a seeded snapshot). Keyed by task_id, not message_id.
+    upsertTaskProgress: (chatId: string, payload: any) => void;
 }
 
 // Throttling state (outside store to avoid re-renders)
@@ -304,6 +307,73 @@ export const useChatStore = create<ChatStore>()(
                             ...state.chats,
                             [chatId]: updated,
                         },
+                    };
+                });
+            },
+
+            upsertTaskProgress: (chatId, payload) => {
+                const taskId = payload?.task_id;
+                if (!taskId) return;
+                const id = `task_${taskId}`;
+                set(state => {
+                    const msgs = state.chats[chatId] || [];
+                    const idx = msgs.findIndex(m => m.id === id);
+                    const prevMeta = idx !== -1 ? msgs[idx].metadata ?? {} : {};
+
+                    const status = payload.status ?? prevMeta.status;
+
+                    // Track the pending approval request id across frames: set it
+                    // when an approval_request event arrives, clear it once the
+                    // task moves out of waiting_input.
+                    let approvalRequestId = prevMeta.approvalRequestId;
+                    if (payload.event?.kind === 'approval_request') {
+                        approvalRequestId =
+                            payload.event.payload?.request_id ??
+                            approvalRequestId;
+                    }
+                    if (status && status !== 'waiting_input') {
+                        approvalRequestId = undefined;
+                    }
+
+                    // Intermediate frames (e.g. a log event) omit plan/result —
+                    // preserve the last known values.
+                    const metadata = {
+                        ...prevMeta,
+                        type: 'task_progress',
+                        task_id: taskId,
+                        goal: payload.goal ?? prevMeta.goal,
+                        status,
+                        plan: payload.plan ?? prevMeta.plan ?? null,
+                        finished:
+                            payload.finished ?? prevMeta.finished ?? false,
+                        result: payload.result ?? prevMeta.result,
+                        agent: payload.agent ?? prevMeta.agent,
+                        approvalRequestId,
+                    };
+
+                    if (idx !== -1) {
+                        const updated = [...msgs];
+                        updated[idx] = { ...updated[idx], metadata };
+                        return {
+                            chats: { ...state.chats, [chatId]: updated },
+                        };
+                    }
+
+                    const createdAt =
+                        typeof payload.created_at === 'string'
+                            ? Date.parse(payload.created_at) || Date.now()
+                            : payload.created_at ?? Date.now();
+                    const message: Message = {
+                        id,
+                        chat_id: chatId,
+                        sender: 'system',
+                        role: 'system',
+                        text: '',
+                        created_at: createdAt,
+                        metadata,
+                    };
+                    return {
+                        chats: { ...state.chats, [chatId]: [...msgs, message] },
                     };
                 });
             },
