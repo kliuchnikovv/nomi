@@ -428,7 +428,13 @@ class RedisWorker:
                     # Cleanup: Remove from active tasks registry
                     if self.active_tasks.get(chat_id) == current_task:
                         del self.active_tasks[chat_id]
-                        if self.active_request_ids.get(chat_id) == request_id:
+                        # request_id is only registered for MESSAGE frames; for
+                        # command_call frames it stays absent. Guard the delete
+                        # so cleanup doesn't blow up with a KeyError.
+                        if (
+                            request_id
+                            and self.active_request_ids.get(chat_id) == request_id
+                        ):
                             del self.active_request_ids[chat_id]
                         logger.info(
                             "[RedisWorker] Cleaned up task registry for chat %s",
