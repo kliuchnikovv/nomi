@@ -484,6 +484,14 @@ func (s *Storage) UpsertMessage(ctx context.Context, userID uuid.UUID, m *chat.M
 		}
 	}
 
+	// Handle Meta if provided
+	if m.Meta != nil {
+		metaJSON, err := json.Marshal(m.Meta)
+		if err == nil {
+			messageModel.Meta = metaJSON
+		}
+	}
+
 	// Use OnConflict to handle race conditions between Create and Update.
 	// We only update fields that should be changed during an upsert.
 	// We don't update user_id, chat_id, or created_at to prevent accidental reassignment.

@@ -60,7 +60,8 @@ type Message struct {
 	Archived     bool           `gorm:"not null;default:false"`
 	// StoppedAt is set when the user explicitly stopped generation for this turn.
 	// The client uses it to suppress automatic re-submission of the user message.
-	StoppedAt *time.Time `gorm:"default:null"`
+	StoppedAt *time.Time     `gorm:"default:null"`
+	Meta      datatypes.JSON `gorm:"type:jsonb"` // Optional metadata (e.g. {"command_call":true,"name":"..."})
 }
 
 type Integration struct {

@@ -19,12 +19,13 @@ const (
 type Operation string
 
 const (
-	ErrorOperation      Operation = "error"
-	MessageOperation    Operation = "message"
-	DoneOperation       Operation = "done"
-	SignalOperation     Operation = "signal"
-	StoreFactsOperation Operation = "store_facts"
-	StopOperation       Operation = "stop"
+	ErrorOperation       Operation = "error"
+	MessageOperation     Operation = "message"
+	DoneOperation        Operation = "done"
+	SignalOperation      Operation = "signal"
+	StoreFactsOperation  Operation = "store_facts"
+	StopOperation        Operation = "stop"
+	CommandCallOperation Operation = "command_call"
 )
 
 type Frame struct {
