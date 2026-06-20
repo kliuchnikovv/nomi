@@ -147,11 +147,15 @@ async def test_discovery_routes_to_command():
         params = {"text": "hello", "tags": ["t"]}
         account_id = ""
 
+    # Mock knowledge object for command context
+    mock_knowledge = MagicMock()
+
     fn = build_discovery_tool(
         user_id="u1",
         config_client=_stub_config_client(),
         router=_stub_router(Decision()),
         executor=MagicMock(),
+        knowledge=mock_knowledge,
     )
 
     # Ensure memory.note is registered
@@ -160,8 +164,8 @@ async def test_discovery_routes_to_command():
 
     raw = await fn.entrypoint(request="remember vegan", context="")
     parsed = json.loads(raw)
-    # Handler may fail on missing knowledge (returns error), but dispatch succeeded
-    assert parsed["type"] in ("result", "error")
+    # With knowledge properly wired, the command should execute successfully
+    assert parsed["type"] == "result", f"Expected result, got {parsed.get('type')}: {parsed.get('message', '')}"
     assert parsed["tool"] == "memory.note"
 
 
