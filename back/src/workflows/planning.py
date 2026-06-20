@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any, Iterator
 
 from agno.workflow import Workflow
@@ -21,6 +22,26 @@ from .tools import (  # noqa: F401
 )
 
 logger = logging.getLogger(__name__)
+
+
+def parse_tasks_from_message(message: str) -> list[dict]:
+    """Parse task items from message text.
+
+    Expected format: "ID:xxx Task description" or "[Current plan:\\nID:xxx Task...]"
+    Returns list of {"id": "...", "title": "..."} dicts (matches PlanTask schema).
+    """
+    tasks: list[dict] = []
+    pattern = r"ID:(\S+)\s+([^\n]+)"
+    for task_id, task_text in re.findall(pattern, message):
+        task_text = task_text.strip()
+        # Strip trailing chips like [time:xxx 09:00-10:00], [location:...], or closing brackets
+        task_text = re.sub(r"\s*\[time:\S+\s+[^]]+\]$", "", task_text)
+        task_text = re.sub(r"\s*\[location:\S+\s+[^]]+\]$", "", task_text)
+        task_text = re.sub(r"\s*\]+$", "", task_text)
+        task_text = task_text.strip()
+        if task_text:
+            tasks.append({"id": task_id, "title": task_text})
+    return tasks
 
 
 def _extract_json(text: str) -> dict:

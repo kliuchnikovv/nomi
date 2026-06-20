@@ -7,12 +7,11 @@ import pytest
 from unittest.mock import MagicMock
 
 
-def test_souperagent_importable():
+def test_nomiagent_importable():
     from src.agents.nomi import NomiAgent
     # Verify it's the real class, not a MagicMock
     assert isinstance(NomiAgent, type), f"NomiAgent should be a real type, got {type(NomiAgent)}"
     assert NomiAgent.__module__ == "src.agents.nomi", "NomiAgent should be loaded from src.agents.nomi"
-    # _mark_stale_memories will be added in Task 2 — just confirm real class loads
 
 
 def _make_agent(user_id="user1"):

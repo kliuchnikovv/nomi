@@ -24,6 +24,19 @@ from agno.tools import Toolkit
 logger = logging.getLogger(__name__)
 
 
+def _normalize_llm_endpoint(endpoint: str) -> tuple[str, str | None]:
+    """Strip trailing slash and known LLM endpoint suffixes.
+
+    Returns (base_url, matched_suffix) where matched_suffix is one of
+    "chat/completions", "responses", or None when no known suffix was present.
+    """
+    ep = endpoint.strip().rstrip("/")
+    for suffix in ("chat/completions", "responses"):
+        if ep.endswith(suffix):
+            return ep[: -len(suffix)].rstrip("/"), suffix
+    return ep, None
+
+
 class AgentRunWrapper:
     """
     Thin wrapper that injects knowledge_filters={"user_id": rag_user_id} into every
@@ -156,19 +169,12 @@ class AgentFactory:
             if not api_key:
                 raise ValueError("OPENCODE_API_KEY environment variable not set")
 
-            # Prefer endpoint from config (payload). Normalize: strip trailing slash and
-            # if full .../chat/completions or .../responses URL, use base only.
+            # Prefer endpoint from config (payload). Normalize: strip trailing
+            # slash and known endpoint suffixes; the matched suffix selects the
+            # API mode for OpenCode (Responses vs Chat Completions).
             if endpoint and endpoint.strip():
-                ep = endpoint.strip().rstrip("/")
-                if ep.endswith("chat/completions"):
-                    base_url = ep[: -len("chat/completions")].rstrip("/")
-                    use_responses_api = False
-                elif ep.endswith("responses"):
-                    base_url = ep[: -len("responses")].rstrip("/")
-                    use_responses_api = True
-                else:
-                    base_url = ep
-                    use_responses_api = False
+                base_url, suffix = _normalize_llm_endpoint(endpoint)
+                use_responses_api = suffix == "responses"
             else:
                 base_url = "https://opencode.ai/zen/v1"  # fallback for legacy configs
                 use_responses_api = False
@@ -216,11 +222,7 @@ class AgentFactory:
 
             # Prefer endpoint from config (payload)
             if endpoint and endpoint.strip():
-                ep = endpoint.strip().rstrip("/")
-                if ep.endswith("chat/completions"):
-                    base_url = ep[: -len("chat/completions")].rstrip("/")
-                else:
-                    base_url = ep
+                base_url, _ = _normalize_llm_endpoint(endpoint)
             else:
                 base_url = "https://api.z.ai/api/coding/paas/v4"  # z.ai GLM API default endpoint
             logger.info(
@@ -253,11 +255,7 @@ class AgentFactory:
 
             # Prefer endpoint from config (payload)
             if endpoint and endpoint.strip():
-                ep = endpoint.strip().rstrip("/")
-                if ep.endswith("chat/completions"):
-                    base_url = ep[: -len("chat/completions")].rstrip("/")
-                else:
-                    base_url = ep
+                base_url, _ = _normalize_llm_endpoint(endpoint)
             else:
                 base_url = "https://openrouter.ai/api/v1"  # fallback for legacy configs
             logger.info(
@@ -492,7 +490,9 @@ class AgentFactory:
             # Legacy mode: unchanged existing code
             config_used: ToolsConfig | None = None
 
-            # List agent: only list tools (knowledge_search with list_id), no web_search
+            # List chat: narrow tool set (knowledge_search scoped to list_id, no web_search).
+            # No dedicated ListAgent class — agent_type="list" still builds a NomiAgent
+            # downstream; only the tools differ.
             if agent_type and agent_type.lower() == "list" and user_id:
                 config = ToolsConfig()
                 params = {"user_id": user_id, "list_id": list_id}
@@ -502,7 +502,7 @@ class AgentFactory:
                 config_used = config
                 try:
                     tools = await build_tools(config, user_id=user_id, knowledge=self._knowledge)
-                    logger.info("[Factory] Built %d tools for ListAgent", len(tools))
+                    logger.info("[Factory] Built %d tools for list chat", len(tools))
                 except Exception as e:
                     logger.warning("[Factory] Failed to build list tools: %s", e)
             # If user_id provided but no tools_specs, fetch tools from config_client
@@ -542,14 +542,6 @@ class AgentFactory:
                 for tool_spec in tools_specs:
                     if tool_spec.enabled:
                         params = dict(tool_spec.params)
-                        # # Inject command_desc auth_token and list_id for knowledge_search (list chat)
-                        # if tool_spec.name == "knowledge_search" and command_desc:
-                        #     if "auth_token" not in params and command_desc.get(
-                        #         "auth_token"
-                        #     ):
-                        #         params["auth_token"] = command_desc["auth_token"]
-                        #     if "list_id" not in params and command_desc.get("list_id"):
-                        #         params["list_id"] = command_desc["list_id"]
                         config.add(
                             tool_spec.name, provider=tool_spec.provider, **params
                         )
@@ -795,11 +787,11 @@ class AgentFactory:
         try:
             if command_desc and command_desc.get("type"):
                 agent_type = command_desc["type"]
-            # List chat: list_id takes precedence so we use ListAgent
+            # List chat: list_id takes precedence and selects the list tool set above.
             if list_id:
                 agent_type = "list"
                 logger.info(
-                    "[Factory] List chat detected, building ListAgent for list_id=%s",
+                    "[Factory] List chat detected, building list-scoped agent for list_id=%s",
                     list_id,
                 )
 
@@ -851,8 +843,6 @@ class AgentFactory:
                     enable_session_summaries=use_agno_sessions and supports_json_summaries,
                 )
 
-            # _attach_tool_context removed - ChatHistoryTool is disabled
-            # self._attach_tool_context(agent, tools)
             logger.info(
                 "[WS] Agent created successfully: session_id=%s type=%s",
                 session_id,

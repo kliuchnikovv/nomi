@@ -227,7 +227,7 @@ def test_build_returns_empty_patches_on_bad_json():
 # ── RECON with user_location ──────────────────────────────────────────────────
 
 def test_recon_geocodes_user_location_as_origin():
-    with patch("src.workflows.planning.ors_client.geocode", return_value=(37.6, 55.7)) as mock_geo, \
+    with patch("src.workflows.planning.ors_client.geocode", return_value=(37.6, 55.7)), \
          patch("src.workflows.planning.search_place_hours", return_value=""), \
          patch("src.workflows.planning.search_transport_news", return_value=""), \
          patch("src.workflows.planning.search_city_events", return_value=""):

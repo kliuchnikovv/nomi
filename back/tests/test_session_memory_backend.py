@@ -86,7 +86,6 @@ class TestBuildHistoryMessages:
         session = make_session(chat_history=history)
         msgs = session._build_history_messages("follow-up")
         # Empty-content entry is skipped; 3 real messages + current = 3
-        roles = [m.role for m in msgs]
         contents = [m.content for m in msgs]
         assert "" not in contents
         assert "real message" in contents

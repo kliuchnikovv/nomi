@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -35,7 +36,7 @@ from src.workflows.models import PlanStatus
 from src.workflows.planning import build_planning_workflow
 from src.workflows.planning import PlanningInput as WorkflowPlanningInput
 from src.workflows.planning import _planning_steps as _run_planning_steps
-from src.workflows.planning import STAGE_STATUS_TEXT
+from src.workflows.planning import STAGE_STATUS_TEXT, parse_tasks_from_message
 
 logger = logging.getLogger(__name__)
 
@@ -47,30 +48,6 @@ _GO_API_URL = os.getenv("GO_API_URL", "http://localhost:8080").rstrip("/")
 _READ_METHOD_PREFIXES = ("get", "list", "search", "read", "find", "fetch")
 _DEFERRED_READ_TTL_SECONDS = 5 * 60
 _DEFERRED_WRITE_TTL_SECONDS = 24 * 60 * 60
-
-
-def _parse_tasks_from_message(message: str) -> list[dict]:
-    """Parse task items from message text.
-
-    Expected format: "ID:xxx Task description" or "[Current plan:\nID:xxx Task...]"
-    Returns list of {"id": "...", "title": "..."} dicts (matches PlanTask schema).
-    """
-    import re
-
-    tasks = []
-    # Match patterns like "ID:abc123 Task text" - stop at newline or end
-    pattern = r"ID:(\S+)\s+([^\n]+)"
-    matches = re.findall(pattern, message)
-    for task_id, task_text in matches:
-        task_text = task_text.strip()
-        # Strip trailing chips like [time:xxx 09:00-10:00], [location:...], or closing brackets
-        task_text = re.sub(r"\s*\[time:\S+\s+[^]]+\]$", "", task_text)
-        task_text = re.sub(r"\s*\[location:\S+\s+[^]]+\]$", "", task_text)
-        task_text = re.sub(r"\s*\]+$", "", task_text)
-        task_text = task_text.strip()
-        if task_text:
-            tasks.append({"id": task_id, "title": task_text})
-    return tasks
 
 
 # --- Deferred, debounced learning (profile + entity + memory extraction) ------
@@ -206,7 +183,6 @@ class RedisSession:
         self._model_context_limit: int | None = None  # Loaded lazily
         self._model_supports_vision_cache: bool | None = None  # Loaded lazily
 
-        # Context items (emails, documents, etc.)
         # Context items (emails, documents, etc.)
         self.context_items: list[dict[str, Any]] = []
 
@@ -398,12 +374,10 @@ class RedisSession:
         chat:request:{chat_id}; the worker picks it up and runs it detached from
         this turn (see RedisWorker._start_task_run).
         """
-        import uuid as _uuid
-
         from src.server.models import Op
         from src.server.utils import make_signal
 
-        task_id = str(_uuid.uuid4())
+        task_id = str(uuid.uuid4())
         payload = {
             "user_id": self.user_id,
             "chat_id": self.chat_id,
@@ -505,10 +479,8 @@ class RedisSession:
                 "get_events",
                 {"start_date": start, "end_date": end, "limit": 30},
             )
-            import re
-            import json as _json
             match = re.search(r"```json\s*(\[.*?\])\s*```", raw, re.DOTALL)
-            return _json.loads(match.group(1)) if match else []
+            return json.loads(match.group(1)) if match else []
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -526,7 +498,6 @@ class RedisSession:
                 "get_daily_summary",
                 {"date": yesterday_date},
             )
-            import re
             result: dict = {}
             dm = re.search(r"Duration:\s*([\d.]+)\s*hours", raw)
             qm = re.search(r"Quality:\s*(\w+)", raw)
@@ -567,7 +538,7 @@ class RedisSession:
 
         # If no tasks in payload, try to parse from message text
         if not raw_tasks and user_message:
-            raw_tasks = _parse_tasks_from_message(user_message)
+            raw_tasks = parse_tasks_from_message(user_message)
 
         tasks = [PlanTask(**t) if isinstance(t, dict) else t for t in raw_tasks]
         planning_input = WorkflowPlanningInput(
@@ -1323,7 +1294,6 @@ class RedisSession:
                                 top_content = getattr(top, "content", "") or ""
                                 # Normalise both strings for comparison
                                 def _norm(s: str) -> str:
-                                    import re
                                     return re.sub(r"\s+", " ", s.lower().strip())
                                 if _norm(top_content) == _norm(fact):
                                     continue
@@ -2111,8 +2081,6 @@ class RedisSession:
 
     def _process_attachments(self, attachments: list) -> list[Image]:
         """Process attachments and extract images."""
-        import base64 as _base64
-
         images = []
         for att in attachments:
             if isinstance(att, dict) and att.get("file_type", "").startswith("image/"):
@@ -2120,7 +2088,7 @@ class RedisSession:
                 if not content:
                     continue
                 try:
-                    image_bytes = _base64.b64decode(content)
+                    image_bytes = base64.b64decode(content)
                     mime = att.get("file_type", "image/jpeg")
                     fmt = mime.split("/")[-1] if "/" in mime else mime
                     images.append(
@@ -2136,8 +2104,6 @@ class RedisSession:
         Returns the concatenated text, or "" if nothing could be extracted.
         Truncates very large documents to keep the prompt within budget.
         """
-        import base64 as _base64
-
         MAX_CHARS_PER_DOC = 50_000
 
         sections: list[str] = []
@@ -2159,7 +2125,7 @@ class RedisSession:
             try:
                 import io
 
-                pdf_bytes = _base64.b64decode(content)
+                pdf_bytes = base64.b64decode(content)
                 reader = PdfReader(io.BytesIO(pdf_bytes))
                 pages = [page.extract_text() or "" for page in reader.pages]
                 text = "\n".join(pages).strip()
@@ -2313,8 +2279,6 @@ class RedisSession:
             if not all_memories or len(all_memories) < 2:
                 return
 
-            import re
-
             def _norm(s: str) -> str:
                 return re.sub(r"\s+", " ", (s or "").lower().strip())
 
@@ -2350,8 +2314,6 @@ class RedisSession:
 
     def _get_model_context_limit(self, model_name: str) -> int:
         """Return token context limit for the model from config/models.json. Falls back to 128_000."""
-        import json as _json
-
         if self._model_context_limit is not None:
             return self._model_context_limit
 
@@ -2359,7 +2321,7 @@ class RedisSession:
         if config_path:
             try:
                 with open(config_path) as f:
-                    data = _json.load(f)
+                    data = json.load(f)
                 for m in data.get("models", []):
                     if m.get("id") == model_name:
                         self._model_context_limit = m.get("context_window", 128_000)
@@ -2372,8 +2334,6 @@ class RedisSession:
 
     def _model_supports_vision(self) -> bool:
         """Return True if current model supports vision input per config/models.json."""
-        import json as _json
-
         if not self.current_model_name:
             return False
 
@@ -2384,7 +2344,7 @@ class RedisSession:
         if config_path:
             try:
                 with open(config_path) as f:
-                    data = _json.load(f)
+                    data = json.load(f)
                 for m in data.get("models", []):
                     if m.get("id") == self.current_model_name:
                         self._model_supports_vision_cache = bool(m.get("supports_vision", False))
@@ -2397,8 +2357,6 @@ class RedisSession:
 
     def _get_vision_bridge_model(self) -> str | None:
         """Return the vision bridge model ID for the current model, or None if not configured."""
-        import json as _json
-
         if not self.current_model_name:
             return None
 
@@ -2406,7 +2364,7 @@ class RedisSession:
         if config_path:
             try:
                 with open(config_path) as f:
-                    data = _json.load(f)
+                    data = json.load(f)
                 for m in data.get("models", []):
                     if m.get("id") == self.current_model_name:
                         return m.get("vision_bridge") or None
@@ -2423,8 +2381,6 @@ class RedisSession:
         Calls the z.ai vision model to convert images to text descriptions,
         mirroring the Vision Understanding MCP pattern for non-vision GLM models.
         """
-        import httpx
-
         api_key = os.getenv("ZAI_API_KEY")
         if not api_key:
             logger.warning("[RedisSession] ZAI_API_KEY not set; cannot use vision bridge")
@@ -2549,8 +2505,6 @@ class RedisSession:
         # Mark archived in Go API
         message_ids = [m["id"] for m in to_archive if m.get("id")]
         if message_ids:
-            import httpx
-
             api_url = os.getenv("API_URL", "http://localhost:8080")
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:

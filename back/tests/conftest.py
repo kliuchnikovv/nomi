@@ -178,8 +178,8 @@ def _setup_all_mocks():
 
     # ── src.agents (depends on agno) ──
     _install_mock_module("src.agents", {"__path__": [os.path.join(_SRC_DIR, "agents")]})
-    # src.agents.factory, src.agents.planner, and src.agents.souper are NOT mocked — tests test the real modules.
-    # agno.memory, agno.learn, and agno.db.schemas stubs above enable souper.py to load from disk.
+    # src.agents.factory, src.agents.planner, and src.agents.nomi are NOT mocked — tests test the real modules.
+    # agno.memory, agno.learn, and agno.db.schemas stubs above enable nomi.py to load from disk.
 
     # ── src.models (depends on agno) ──
     # Do NOT mock safe_gemini or safe_openai — tests test those real classes.

@@ -104,7 +104,7 @@ class TestAgentFactorySessionWiring:
         return factory
 
     @pytest.mark.asyncio
-    async def test_agno_backend_passes_real_session_id_to_souper(self, monkeypatch):
+    async def test_agno_backend_passes_real_session_id_to_nomi(self, monkeypatch):
         """AgnoBackend → NomiAgent receives the actual session_id."""
         from src.storage.backend import AgnoBackend
 
@@ -132,7 +132,7 @@ class TestAgentFactorySessionWiring:
         )
 
     @pytest.mark.asyncio
-    async def test_payload_backend_passes_none_session_id_to_souper(self, monkeypatch):
+    async def test_payload_backend_passes_none_session_id_to_nomi(self, monkeypatch):
         """PayloadBackend → NomiAgent receives session_id=None (ephemeral)."""
         from src.storage.backend import PayloadBackend
 
@@ -159,7 +159,7 @@ class TestAgentFactorySessionWiring:
             f"Expected session_id=None, got {captured.get('session_id')!r}"
         )
 
-    def test_souper_always_built_with_add_history_to_context(self):
+    def test_nomi_always_built_with_add_history_to_context(self):
         """add_history_to_context=True must be present in NomiAgent's constructor.
         This is what tells Agno to inject session history into every run's context."""
         import inspect
