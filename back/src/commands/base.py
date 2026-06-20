@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Sequence
+from typing import Any, Awaitable, Callable, Sequence
 
 from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from src.commands.context import CommandContext
+from src.commands.context import CommandContext
 
 
 def _make_ok(text: str = "", data: dict[str, Any] | None = None) -> "CommandResult":
