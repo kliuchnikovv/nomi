@@ -19,6 +19,9 @@ from dotenv import load_dotenv
 from src.core.config import Config
 from src.core.container import Container
 from src.plugins.loader import load_plugins, register_plugin_routes
+from src.commands import load_commands
+from src.commands.registry import CommandRegistry
+from src.tools.config import ToolConfigClient
 
 # Load environment variables from .env file if it exists
 # If file not found, use system environment variables (for production)
@@ -133,6 +136,12 @@ except Exception as e:
     logging.critical("[Startup] FAILED to create AgentOS/NomiAgent: %s", e, exc_info=True)
     raise
 
+# Initialize ToolConfigClient singleton for GET /commands endpoint
+# Points to Go API at localhost:8000 by default; override with GENIE_API_BASE_URL env var
+_tool_config_client = ToolConfigClient(
+    base_url=os.getenv("GENIE_API_BASE_URL", "http://localhost:8000")
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -207,6 +216,24 @@ async def health_check():
     from datetime import datetime
 
     return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
+
+@app.get("/commands")
+async def list_commands(x_user_id: str = Header(..., alias="X-User-Id")):
+    """Return per-user command listing with missing integrations computed.
+
+    Uses the user's connected integrations (fetched via ToolConfigClient)
+    to determine which integrations each command requires but the user hasn't connected.
+    """
+    load_commands()
+    cfg = await _tool_config_client.fetch_tools(user_id=x_user_id)
+    connected = set(cfg.entries.keys()) if cfg and getattr(cfg, "entries", None) else set()
+
+    def missing_resolver(requires):
+        """Return list of integrations required by a command that aren't connected."""
+        return [r for r in requires if r not in connected]
+
+    return {"commands": CommandRegistry.public_listing(missing_resolver)}
 
 
 class EmailAnalyzeRequest(BaseModel):
