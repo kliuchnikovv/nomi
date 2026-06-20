@@ -6,7 +6,7 @@
  * the task brief: string/number/integer/boolean/enum/array + required +
  * minLength/maxLength. No extra dependency needed.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import type { CommandSpec } from './types';
+import { useTheme } from '../context/ThemeContext';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -113,6 +114,8 @@ export function CommandArgForm({
   onSubmit,
   onCancel,
 }: CommandArgFormProps): React.ReactElement {
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const schema = castSchema(spec.args_schema);
   const properties = schema.properties ?? {};
   const required = schema.required ?? [];
@@ -159,7 +162,7 @@ export function CommandArgForm({
       <Text style={styles.title}>{spec.title}</Text>
 
       {Object.entries(properties).map(([key, prop]) =>
-        renderField(key, prop, required, values[key], errors[key], set),
+        renderField(key, prop, required, values[key], errors[key], set, styles, theme),
       )}
 
       <View style={styles.actions}>
@@ -193,6 +196,8 @@ function renderField(
   value: unknown,
   error: string | undefined,
   onChange: (key: string, val: unknown) => void,
+  styles: ReturnType<typeof makeStyles>,
+  theme: ReturnType<typeof useTheme>['theme'],
 ): React.ReactElement {
   const label = prop.description ?? key;
   const isRequired = required.includes(key);
@@ -204,7 +209,7 @@ function renderField(
         {isRequired ? ' *' : ''}
       </Text>
 
-      {renderInput(key, prop, value, onChange)}
+      {renderInput(key, prop, value, onChange, styles, theme)}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
@@ -216,6 +221,8 @@ function renderInput(
   prop: PropSchema,
   value: unknown,
   onChange: (key: string, val: unknown) => void,
+  styles: ReturnType<typeof makeStyles>,
+  theme: ReturnType<typeof useTheme>['theme'],
 ): React.ReactElement {
   // boolean → Switch
   if (prop.type === 'boolean') {
@@ -234,6 +241,7 @@ function renderInput(
       <TextInput
         accessibilityLabel={key}
         style={styles.input}
+        placeholderTextColor={theme.fadedText}
         keyboardType="numeric"
         value={value != null && value !== '' ? String(value) : ''}
         onChangeText={(t) =>
@@ -250,6 +258,7 @@ function renderInput(
       <TextInput
         accessibilityLabel={key}
         style={styles.input}
+        placeholderTextColor={theme.fadedText}
         value={arr.join(', ')}
         placeholder="comma-separated"
         onChangeText={(t) =>
@@ -298,6 +307,7 @@ function renderInput(
     <TextInput
       accessibilityLabel={key}
       style={[styles.input, isLong && styles.inputMultiline]}
+      placeholderTextColor={theme.fadedText}
       keyboardType={keyboardType}
       multiline={isLong}
       value={typeof value === 'string' ? value : ''}
@@ -307,88 +317,98 @@ function renderInput(
 }
 
 // ---------------------------------------------------------------------------
-// Styles (no ThemeContext dependency — safe for tests without ThemeProvider)
+// Styles (themed via useTheme)
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  field: {
-    marginBottom: 12,
-  },
-  label: {
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-  },
-  inputMultiline: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  error: {
-    color: '#d32f2f',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  chipSelected: {
-    backgroundColor: '#1976d2',
-    borderColor: '#1976d2',
-  },
-  chipText: {
-    fontSize: 13,
-  },
-  chipTextSelected: {
-    fontSize: 13,
-    color: '#fff',
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 8,
-  },
-  button: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  cancelButton: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-  },
-  submitButton: {
-    backgroundColor: '#1976d2',
-  },
-  cancelText: {
-    fontSize: 14,
-  },
-  submitText: {
-    fontSize: 14,
-    color: '#fff',
-  },
-});
+function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  return StyleSheet.create({
+    container: {
+      padding: 16,
+      backgroundColor: theme.surface,
+      borderRadius: 12,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 12,
+      color: theme.textPrimary,
+    },
+    field: {
+      marginBottom: 12,
+    },
+    label: {
+      fontSize: 13,
+      marginBottom: 4,
+      color: theme.textSecondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      fontSize: 14,
+      color: theme.textPrimary,
+      backgroundColor: theme.background,
+    },
+    inputMultiline: {
+      minHeight: 80,
+      textAlignVertical: 'top',
+    },
+    error: {
+      color: theme.attention,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    chip: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    chipSelected: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    chipText: {
+      fontSize: 13,
+      color: theme.textPrimary,
+    },
+    chipTextSelected: {
+      fontSize: 13,
+      color: theme.background,
+    },
+    actions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: 8,
+      marginTop: 8,
+    },
+    button: {
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 6,
+    },
+    cancelButton: {
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    submitButton: {
+      backgroundColor: theme.accent,
+    },
+    cancelText: {
+      fontSize: 14,
+      color: theme.textPrimary,
+    },
+    submitText: {
+      fontSize: 14,
+      color: theme.background,
+    },
+  });
+}

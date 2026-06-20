@@ -2,6 +2,11 @@ import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { CommandArgForm } from '../CommandArgForm';
 import type { CommandSpec } from '../types';
+import { ThemeProvider } from '../../context/ThemeContext';
+
+const wrap = (node: React.ReactElement) => (
+  <ThemeProvider>{node}</ThemeProvider>
+);
 
 const spec: CommandSpec = {
   name: 'memory.note',
@@ -24,7 +29,7 @@ describe('CommandArgForm', () => {
   it('submits valid args', async () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
     const { getByLabelText, getByText } = render(
-      <CommandArgForm spec={spec} onSubmit={onSubmit} onCancel={() => {}} />,
+      wrap(<CommandArgForm spec={spec} onSubmit={onSubmit} onCancel={() => {}} />),
     );
     fireEvent.changeText(getByLabelText('text'), 'hello');
     fireEvent.press(getByText('Send'));
@@ -36,7 +41,7 @@ describe('CommandArgForm', () => {
   it('blocks submit on required-field violation', async () => {
     const onSubmit = jest.fn();
     const { getByText, queryByText } = render(
-      <CommandArgForm spec={spec} onSubmit={onSubmit} onCancel={() => {}} />,
+      wrap(<CommandArgForm spec={spec} onSubmit={onSubmit} onCancel={() => {}} />),
     );
     fireEvent.press(getByText('Send'));
     await waitFor(() => expect(queryByText(/required/i)).toBeTruthy());
@@ -46,7 +51,7 @@ describe('CommandArgForm', () => {
   it('cancel calls onCancel', () => {
     const onCancel = jest.fn();
     const { getByText } = render(
-      <CommandArgForm spec={spec} onSubmit={() => {}} onCancel={onCancel} />,
+      wrap(<CommandArgForm spec={spec} onSubmit={() => {}} onCancel={onCancel} />),
     );
     fireEvent.press(getByText('Cancel'));
     expect(onCancel).toHaveBeenCalledTimes(1);
