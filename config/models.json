@@ -102,6 +102,23 @@
       "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
     },
     {
+      "id": "glm-5.2",
+      "name": "GLM 5.2",
+      "provider": "z.ai",
+      "description": "GLM-5.2 is a 754B parameter MoE model (40B activated) optimized for long-horizon agent tasks and SWE benchmarks. Thinking enabled by default; streams reasoning via reasoning_content. SWE-Bench Pro: 58.4 (SOTA).",
+      "context_window": 202752,
+      "max_output_tokens": 131072,
+      "rpm_limit": 20,
+      "rpd_limit": 2000,
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_thinking": true,
+      "supports_vision": true,
+      "vision_bridge": "glm-4.6v",
+      "streaming": true,
+      "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions"
+    },
+    {
       "id": "gemini-2.5-flash-lite",
       "name": "Gemini 2.5 Flash-Lite",
       "provider": "google",
