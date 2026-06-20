@@ -91,6 +91,8 @@ export interface ChatContextType {
     sessionClassified: boolean;
     clearProjectSuggestionForSession: () => void;
     confirmProjectSuggestionForSession: () => void;
+    // Slash-command execution
+    runCommand: (name: string, args: object) => Promise<import('../../commands/types').CommandResult>;
 }
 
 
