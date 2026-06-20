@@ -184,6 +184,10 @@ func New(
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.POST("/api/rag/index", wrapWithAuth(handlers.ProxyRagIndex(cfg, logger), authMiddleware))
 
+	// Commands — forward slash-command listing requests to Python backend
+	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
+	r.GET("/api/commands", wrapWithAuth(handlers.ProxyCommands(cfg, logger), authMiddleware))
+
 	// Voice TTS — forward server-side Gemini speech synthesis to Python backend
 	// IMPORTANT: Must be registered before the wildcard /api/:plugin/*path route
 	r.POST("/api/voice/tts", wrapWithAuth(handlers.ProxyVoiceTTS(cfg, logger), authMiddleware))
